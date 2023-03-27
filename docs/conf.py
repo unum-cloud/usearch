@@ -14,7 +14,8 @@ with open('_static/custom.js', 'r+') as js:
     content = js.read()
     js.seek(0)
     js.truncate()
-    js.write(content.replace("$(VERSION)", release))
+    js.write(content.replace('$(VERSION)', release))
+
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
@@ -39,13 +40,8 @@ googleanalytics_enabled = True
 html_logo = '../assets/unum.png'
 html_theme = 'furo'
 html_static_path = ['_static']
-html_css_files = [
-    'custom.css'
-]
-html_js_files = [
-    'custom.js'
-]
-
+html_css_files = ['custom.css']
+html_js_files = ['custom.js']
 
 breathe_projects = {'UNSW': '../build/xml'}
 breathe_default_project = 'UNSW'
