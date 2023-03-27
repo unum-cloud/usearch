@@ -1,0 +1,26 @@
+p.caption {
+    font-size: 0 !important;
+    margin: 8px 0px !important;
+    padding: 0 !important;
+    border-bottom: 1px solid #8b7f8b12;
+}
+
+article>section>h1:nth-child(1) {
+    display: none;
+}
+
+.sidebar-brand-text {
+    cursor: initial;
+}
+
+table>tbody>tr>td {
+    text-align: center;
+}
+
+table>tbody>tr>td:first-child {
+    text-align: left;
+}
+
+#overview>p>a>img {
+    height: 25px !important;
+}
