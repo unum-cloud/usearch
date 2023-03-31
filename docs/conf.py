@@ -24,7 +24,7 @@ extensions = [
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '*.md']
 
 
-googleanalytics_id = 'UA-150644745-1'
+googleanalytics_id = '341385789'
 googleanalytics_enabled = True
 
 # -- Options for HTML output -------------------------------------------------
