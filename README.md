@@ -1,6 +1,6 @@
-<h1 align="center">Uncluttered Navigable Small Worlds</h1>
+<h1 align="center">Uncluttered Search</h1>
 <h3 align="center">
-Stochastic k-Approximate Nearest Neighbors Search<br/>
+Lightweight Approximate Nearest Neighbors Search<br/>
 Over Large Collections of High-Dimensional Vectors<br/>
 </h3>
 <br/>
