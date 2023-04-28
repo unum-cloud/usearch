@@ -251,7 +251,6 @@ int main(int, char**) {
 
     omp_set_dynamic(true);
     omp_set_num_threads(std::thread::hardware_concurrency());
-    omp_set_num_threads(1);
     std::printf("- OpenMP threads: %d\n", omp_get_max_threads());
 
     auto path_vectors = getenv_or("path_vectors", "");

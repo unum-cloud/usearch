@@ -614,8 +614,10 @@ class index_gt {
         scalar_t* vector{};
 
         inline point_ref_t(mutex_t& m, point_head_t& h, scalar_t* s) noexcept : mutex_(&m), head(h), vector(s) {}
-        inline operator point_and_vector_t() const noexcept { return {(byte_t*)&head, vector}; }
         inline lock_t lock() const noexcept { return mutex_ ? lock_t{*mutex_} : lock_t{}; }
+        inline operator point_and_vector_t() const noexcept {
+            return {mutex_ ? (byte_t*)mutex_ : (byte_t*)&head, vector};
+        }
     };
 
     struct usearch_align_m thread_context_t {
@@ -701,11 +703,11 @@ class index_gt {
     }
 
     static config_t optimize(config_t const& config) noexcept {
-        config_t result = config;
         precomputed_constants_t pre = precompute(config);
         std::size_t bytes_per_point_base = bytes_per_head_k + pre.bytes_per_neighbors_base + pre.bytes_per_mutex;
         std::size_t rounded_size = divide_round_up<64>(bytes_per_point_base) * 64;
         std::size_t added_connections = (rounded_size - rounded_size) / sizeof(id_t);
+        config_t result = config;
         result.connectivity = config.connectivity + added_connections / base_level_multiple_k;
         return result;
     }
@@ -1014,7 +1016,8 @@ class index_gt {
 
         point_head_t const& head = *(point_head_t const*)(pair.point_ + pre_.bytes_per_mutex);
         std::size_t size_levels = pre_.bytes_per_neighbors_base + pre_.bytes_per_neighbors * head.level;
-        bool store_vector = pair.point_ + bytes_per_head_k + size_levels == (byte_t*)pair.vector_;
+        bool store_vector = (byte_t*)(pair.point_ + pre_.bytes_per_mutex + bytes_per_head_k + size_levels) == //
+                            (byte_t*)(pair.vector_);
         std::size_t size_point =                       //
             pre_.bytes_per_mutex +                     // Optional concurrency-control
             bytes_per_head_k + size_levels +           // Obligatory neighborhood index
