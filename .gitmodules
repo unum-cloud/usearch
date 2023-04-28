@@ -1,0 +1,6 @@
+[submodule "simsimd"]
+	path = simsimd
+	url = https://github.com/ashvardanian/simsimd
+[submodule "fp16"]
+	path = fp16
+	url = https://github.com/maratyszcza/fp16

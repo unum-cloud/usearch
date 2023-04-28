@@ -11,7 +11,7 @@ if sys.platform == 'darwin':
 ext_modules = [
     Pybind11Extension(
         'usearch',
-        ['python.cpp'],
+        ['src/python.cpp'],
         extra_compile_args=compile_args,
     ),
 ]
@@ -45,6 +45,6 @@ setup(
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
     ],
 
-    include_dirs=['.'],
+    include_dirs=['include', 'fp16/include', 'simsimd/include'],
     ext_modules=ext_modules,
 )

@@ -19,12 +19,15 @@ Compact, yet Powerful<br/>
 
 - [x] Single C++11 header, easily extendible.
 - [x] 4B+ sized space efficient point-clouds with `uint40_t`.
-- [ ] Half-precision support with `maratyszcza/fp16`.
-- [x] View from disk, without loading into RAM. 
+- [x] Half-precision support with `maratyszcza/fp16`.
+- [x] View from disk, without loading into RAM.
+- [x] Multiple vectors per label.
 - [x] Any metric, includes: 
   - [x] Euclidean, Dot-product, Cosine,
   - [x] Jaccard, Hamming, Haversine.
   - [x] Hardware-accelerated `ashvardanian/simsimd`. 
+- [x] Variable dimensionality vectors.
+- [x] Don't copy vectors if not needed.
 - [x] Bring your threads.
 - [x] CPython bindings for Python 3.
 - [ ] Node.js bindings for JavaScript.
@@ -32,5 +35,16 @@ Compact, yet Powerful<br/>
 - [x] For Linux: GCC, Clang.
 - [x] For MacOS: Apple Clang.
 - [ ] For Windows.
+- [ ] Distributed construction.
+- [ ] Multi-index lookups.
+
+|                | Pinecone | Weaviate | USearch |
+| :------------- | :------: | :------: | :-----: |
+| 4B+ indexes    |    ❌     |    ❌     |    ✅    |
+| Half-precision |    ❌     |    ❌     |    ✅    |
+| Non-ML metrics |    ❌     |    ❌     |    ✅    |
+| Variable dims  |    ❌     |    ❌     |    ✅    |
+| Open-source    |    ❌     |    ✅     |    ✅    |
+| Performance    |          |          |         |
 
 

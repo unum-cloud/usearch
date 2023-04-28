@@ -6,8 +6,10 @@ __pycache__
 *.fbin
 *.ibin
 *.egg-info
+package-lock.json
 dist/
 datasets
+node_modules/
 *.usearch
 
 gmon.out # GProf profiler
