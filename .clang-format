@@ -1,0 +1,9 @@
+Language: Cpp
+BasedOnStyle:  LLVM
+IndentWidth: 4
+TabWidth: 4
+NamespaceIndentation: None
+ColumnLimit: 120
+ReflowComments: true
+UseTab: Never
+PointerAlignment: Left

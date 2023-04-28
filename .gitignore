@@ -1,0 +1,47 @@
+.DS_Store
+build
+build_release
+build_debug
+__pycache__
+*.fbin
+*.ibin
+*.egg-info
+dist/
+datasets
+*.usearch
+
+gmon.out # GProf profiler
+perf.data # Linux "perf" profiler
+
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
