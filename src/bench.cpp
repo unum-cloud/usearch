@@ -245,6 +245,12 @@ void handler(int sig) {
     exit(1);
 }
 
+template <typename distance_function_at>
+static float type_punned_distance_function(void const* a, void const* b, dim_t a_dim, dim_t b_dim) noexcept {
+    using scalar_t = typename distance_function_at::scalar_t;
+    return distance_function_at{}((scalar_t const*)a, (scalar_t const*)b, a_dim, b_dim);
+}
+
 int main(int, char**) {
 
     signal(SIGSEGV, handler); // install our handler
@@ -284,7 +290,6 @@ int main(int, char**) {
         config.max_threads_add = config.max_threads_search = omp_get_max_threads();
         config.max_elements = dataset.vectors_count();
         config.dim = dataset.dimensions();
-        // config = index_t::optimize(config);
         index_t index(config);
         single_shot(dataset, index, true);
         index.save("index.usearch");

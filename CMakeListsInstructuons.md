@@ -5,7 +5,7 @@
 ### Linux
 
 ```
-cmake -B ./build_release && make -C ./build_release -j
+cmake -B ./build_release -DCMAKE_BUILD_TYPE=RelWithDebInfo && make -C ./build_release -j && mv build_release/usearch.cpython* src/
 ```
 
 ### MacOS

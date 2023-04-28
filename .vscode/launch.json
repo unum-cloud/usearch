@@ -95,6 +95,36 @@
             "stopAtEntry": false,
             "preLaunchTask": "Linux Build C++ Bench Release",
             "MIMode": "gdb"
+        },
+        {
+            "name": "Debug PyBind11 Test",
+            "type": "pythoncpp",
+            "request": "launch",
+            "pythonLaunchName": "Python: Current File",
+            "cppAttachName": "Debug PyBind11: Attach with GDB"
+        },
+        {
+            "name": "Debug PyBind11: Attach with GDB",
+            "type": "cppdbg",
+            "request": "attach",
+            "program": "/home/ubuntu/miniconda3/bin/python",
+            "processId": "",
+            "MIMode": "gdb",
+            "sudo": true,
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
         }
     ]
 }
