@@ -1,0 +1,35 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Linux Build C++ Bench Debug",
+            "command": "cmake -DCMAKE_CXX_COMPILER=gcc-12 -DCMAKE_CXX_COMPILER=g++-12 -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make bench -C ./build_debug",
+            "args": [],
+            "type": "shell",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Linux Build C++ Bench Release",
+            "command": "cmake -DCMAKE_CXX_COMPILER=gcc-12 -DCMAKE_CXX_COMPILER=g++-12 -DCMAKE_BUILD_TYPE=RelWithDebInfo -B ./build_release && make bench -C ./build_release",
+            "args": [],
+            "type": "shell",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "MacOS Build C++ Bench Debug",
+            "command": "cmake -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++ -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make bench -C ./build_debug",
+            "args": [],
+            "type": "shell",
+        },
+        {
+            "label": "MacOS Build C++ Bench Release",
+            "command": "cmake -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++ -DCMAKE_BUILD_TYPE=RelWithDebInfo -B ./build_release && make bench -C ./build_release",
+            "args": [],
+            "type": "shell"
+        }
+    ]
+}

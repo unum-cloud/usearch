@@ -1,0 +1,100 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug C++ Bench on Wiki 1M @Cos",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/bench",
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "path_vectors",
+                    "value": "datasets/wiki_1M/base.1M.fbin",
+                },
+                {
+                    "name": "path_queries",
+                    "value": "datasets/wiki_1M/query.public.100K.fbin",
+                },
+                {
+                    "name": "path_neighbors",
+                    "value": "datasets/wiki_1M/groundtruth.public.100K.ibin",
+                },
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
+                }
+            ],
+            "stopAtEntry": false,
+            "linux": {
+                "preLaunchTask": "Linux Build C++ Bench Debug",
+                "MIMode": "gdb"
+            },
+            "osx": {
+                "preLaunchTask": "MacOS Build C++ Bench Debug",
+                "MIMode": "lldb"
+            }
+        },
+        {
+            "name": "Debug C++ Bench on Text-to-Image 1M @Cos",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/bench",
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "path_vectors",
+                    "value": "datasets/t2i_1M/base.1M.fbin",
+                },
+                {
+                    "name": "path_queries",
+                    "value": "datasets/t2i_1M/query.public.100K.fbin",
+                },
+                {
+                    "name": "path_neighbors",
+                    "value": "datasets/t2i_1M/groundtruth.public.100K.ibin",
+                },
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
+                }
+            ],
+            "stopAtEntry": false,
+            "linux": {
+                "preLaunchTask": "Linux Build C++ Bench Debug",
+                "MIMode": "gdb"
+            },
+            "osx": {
+                "preLaunchTask": "MacOS Build C++ Bench Debug",
+                "MIMode": "lldb"
+            }
+        },
+        {
+            "name": "Run C++ Bench on Text-to-Image 1M @Cos",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_release/bench",
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "path_vectors",
+                    "value": "datasets/t2i_1M/base.1M.fbin",
+                },
+                {
+                    "name": "path_queries",
+                    "value": "datasets/t2i_1M/query.public.100K.fbin",
+                },
+                {
+                    "name": "path_neighbors",
+                    "value": "datasets/t2i_1M/groundtruth.public.100K.ibin",
+                }
+            ],
+            "stopAtEntry": false,
+            "preLaunchTask": "Linux Build C++ Bench Release",
+            "MIMode": "gdb"
+        }
+    ]
+}
