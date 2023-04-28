@@ -21,6 +21,7 @@
 #include <stdlib.h>   // `posix_memalign`
 #include <sys/mman.h> // `mmap`
 #include <sys/stat.h> // `fstat` for file size
+#include <unistd.h>   // `open`, `close`
 
 #if defined(__GNUC__)
 // https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html
@@ -735,7 +736,7 @@ class index_gt {
 
         // Allocate the neighbors
         new_dim = new_dim ? new_dim : static_cast<dim_t>(config_.dim);
-        point_ref_t new_point = point_malloc(new_label, new_vector, new_dim, new_id, new_target_level, store_vector);
+        point_ref_t new_point = point_malloc(new_label, new_vector, new_dim, new_target_level, store_vector);
         lock_t new_lock = new_point.lock();
         points_and_vectors_[new_id] = new_point;
 
@@ -920,7 +921,7 @@ class index_gt {
             }
 
             std::size_t bytes_to_dump = point_dump_size(head.dim, head.level);
-            point_ref_t point_ref = point_malloc(head.label, nullptr, head.dim, static_cast<id_t>(i), head.level, true);
+            point_ref_t point_ref = point_malloc(head.label, nullptr, head.dim, head.level, true);
             read = std::fread((byte_t*)&point_ref.head + bytes_per_head_k, bytes_to_dump - bytes_per_head_k, 1, file);
             if (!read) {
                 std::fclose(file);
@@ -1032,7 +1033,7 @@ class index_gt {
 
     point_ref_t point_malloc(                             //
         label_t label, scalar_t const* vector, dim_t dim, //
-        id_t id, level_t level, bool store_vector = true) noexcept(false) {
+        level_t level, bool store_vector = true) noexcept(false) {
 
         // This function is rarely called and can be as expensive as needed for higher space-efficiency.
         std::size_t size_levels = pre_.bytes_per_neighbors_base + pre_.bytes_per_neighbors * level;
