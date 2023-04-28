@@ -17,6 +17,20 @@ Compact, yet Powerful<br/>
 <a href="https://github.com/unum-cloud/usearch"><img height="25" src="https://github.com/unum-cloud/.github/raw/main/assets/github.svg" alt="GitHub"></a>
 </p>
 
----
+- [x] Single C++11 header, easily extendible.
+- [x] 4B+ sized space efficient point-clouds with `uint40_t`.
+- [ ] Half-precision support with `maratyszcza/fp16`.
+- [x] View from disk, without loading into RAM. 
+- [x] Any metric, includes: 
+  - [x] Euclidean, Dot-product, Cosine,
+  - [x] Jaccard, Hamming, Haversine.
+  - [x] Hardware-accelerated `ashvardanian/simsimd`. 
+- [x] Bring your threads.
+- [x] CPython bindings for Python 3.
+- [ ] Node.js bindings for JavaScript.
+- [ ] Wolfram language bindings.
+- [x] For Linux: GCC, Clang.
+- [x] For MacOS: Apple Clang.
+- [ ] For Windows.
 
-Coming Soon!
+
