@@ -18,12 +18,47 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 
+#include <fp16/fp16.h>
+
 #include <usearch/usearch.hpp>
 
 using namespace unum::usearch;
 using namespace unum;
 
 namespace py = pybind11;
+
+struct f16_converted_t {
+    uint16_t uint16{};
+
+    inline f16_converted_t() noexcept : uint16(0) {}
+    inline f16_converted_t(f16_converted_t&&) = default;
+    inline f16_converted_t& operator=(f16_converted_t&&) = default;
+    inline f16_converted_t(f16_converted_t const&) = default;
+    inline f16_converted_t& operator=(f16_converted_t const&) = default;
+
+    inline f16_converted_t(float v) noexcept : uint16(fp16_ieee_from_fp32_value(v)) {}
+    inline operator float() const noexcept { return fp16_ieee_to_fp32_value(uint16); }
+
+    inline f16_converted_t& operator+=(float v) noexcept {
+        uint16 = fp16_ieee_from_fp32_value(v + fp16_ieee_to_fp32_value(uint16));
+        return *this;
+    }
+
+    inline f16_converted_t& operator-=(float v) noexcept {
+        uint16 = fp16_ieee_from_fp32_value(v - fp16_ieee_to_fp32_value(uint16));
+        return *this;
+    }
+
+    inline f16_converted_t& operator*=(float v) noexcept {
+        uint16 = fp16_ieee_from_fp32_value(v * fp16_ieee_to_fp32_value(uint16));
+        return *this;
+    }
+
+    inline f16_converted_t& operator/=(float v) noexcept {
+        uint16 = fp16_ieee_from_fp32_value(v / fp16_ieee_to_fp32_value(uint16));
+        return *this;
+    }
+};
 
 class py_search_api_t {
   public:
@@ -173,12 +208,12 @@ class py_index_gt final : public py_search_api_t {
         for (ssize_t i = 0; i < vectors_count; ++i) {
             std::size_t matches_found = 0;
             scalar_t const* vector = reinterpret_cast<scalar_t const*>(vectors_data + i * vectors_info.strides[0]);
-            native_.search(vector, vectors_dimensions, matches_wanted, omp_get_thread_num(),
-                           [&](label_t id, distance_t distance) {
-                               labels_py2d(i, matches_found) = id;
-                               distances_py2d(i, matches_found) = distance;
-                               matches_found++;
-                           });
+            auto callback = [&](label_t id, distance_t distance) {
+                labels_py2d(i, matches_found) = id;
+                distances_py2d(i, matches_found) = distance;
+                matches_found++;
+            };
+            native_.search(vector, vectors_dimensions, matches_wanted, omp_get_thread_num(), callback);
             std::reverse(&labels_py2d(i, 0), &labels_py2d(i, matches_found));
             std::reverse(&distances_py2d(i, 0), &distances_py2d(i, matches_found));
             counts_py1d(i) = static_cast<Py_ssize_t>(matches_found);
@@ -196,11 +231,13 @@ class py_index_gt final : public py_search_api_t {
     void view(std::string const& path) override { native_.view(path.c_str()); }
 };
 
+using py_index_f16u32_t = py_index_gt<f16_converted_t, std::uint32_t>;
 using py_index_f32u32_t = py_index_gt<float, std::uint32_t>;
 using py_index_f64u32_t = py_index_gt<double, std::uint32_t>;
 using py_index_i32u32_t = py_index_gt<std::int32_t, std::uint32_t>;
 using py_index_i8u32_t = py_index_gt<std::int8_t, std::uint32_t>;
 
+using py_index_f16u40_t = py_index_gt<f16_converted_t, uint40_t>;
 using py_index_f32u40_t = py_index_gt<float, uint40_t>;
 using py_index_f64u40_t = py_index_gt<double, uint40_t>;
 using py_index_i32u40_t = py_index_gt<std::int32_t, uint40_t>;
@@ -234,6 +271,8 @@ static std::unique_ptr<py_search_api_t> make_index( //
             return std::unique_ptr<py_search_api_t>(new py_index_i32u32_t(config));
         if (scalar_type == "i8")
             return std::unique_ptr<py_search_api_t>(new py_index_i8u32_t(config));
+        if (scalar_type == "f16")
+            return std::unique_ptr<py_search_api_t>(new py_index_f16u32_t(config));
     } else {
         if (scalar_type == "f32")
             return std::unique_ptr<py_search_api_t>(new py_index_f32u40_t(config));
@@ -243,6 +282,8 @@ static std::unique_ptr<py_search_api_t> make_index( //
             return std::unique_ptr<py_search_api_t>(new py_index_i32u40_t(config));
         if (scalar_type == "i8")
             return std::unique_ptr<py_search_api_t>(new py_index_i8u40_t(config));
+        if (scalar_type == "f16")
+            return std::unique_ptr<py_search_api_t>(new py_index_f16u40_t(config));
     }
 
     return {};

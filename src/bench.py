@@ -47,16 +47,26 @@ def measure(f) -> float:
     return c.seconds
 
 
-index_meta = faiss.IndexHNSWFlat(d, M)
-index_meta.hnsw.efSearch = efSearch
-index_meta.hnsw.efConstruction = efConstruction
-dt = measure(lambda: index_meta.add(xb))
-print(f'- Vectors per second: {xb.shape[0]/dt:.2f}')
+def construct_both() -> tuple:
 
-index_unum = usearch.make_index(
-    expansion_construction=efConstruction,
-    expansion_search=efSearch,
-    connectivity=M,
-)
-dt = measure(lambda: index_unum.add(labels, xb, copy=True))
-print(f'- Vectors per second: {xb.shape[0]/dt:.2f}')
+    index_meta = faiss.IndexHNSWFlat(d, M)
+    index_meta.hnsw.efSearch = efSearch
+    index_meta.hnsw.efConstruction = efConstruction
+    dt_meta = measure(lambda: index_meta.add(xb))
+
+    index_unum = usearch.make_index(
+        expansion_construction=efConstruction,
+        expansion_search=efSearch,
+        connectivity=M,
+    )
+    dt_unum = measure(lambda: index_unum.add(labels, xb, copy=False))
+
+    return dt_meta, dt_unum
+
+
+experiments = 10
+durations = [construct_both() for _ in range(experiments)]
+dt_meta = sum(x[0] for x in durations)
+dt_unum = sum(x[1] for x in durations)
+print(f'- FAISS vectors per second: {xb.shape[0]*experiments/dt_meta:.2f}')
+print(f'- USearch vectors per second: {xb.shape[0]*experiments/dt_unum:.2f}')
