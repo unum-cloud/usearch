@@ -490,11 +490,35 @@ template <typename scalar_at> class span_gt {
     operator scalar_at*() const noexcept { return data(); }
 };
 
+/**
+ *  @brief
+ *      Configuration settings for the index construction.
+ *      Includes the main `::connectivity` parameter (`M` in the paper)
+ *      and two expansion factors - for construction and search.
+ */
 struct config_t {
+
+    /// @brief Number of neighbors per graph node.
+    /// Defaults to 32 in FAISS and 16 in hnswlib.
+    /// > It is called `M` in the paper.
+    static constexpr std::size_t connectivity_default_k = 16;
+
+    /// @brief Hyper-parameter controlling the quality of indexing.
+    /// Defaults to 40 in FAISS and 200 in hnswlib.
+    /// > It is called `efConstruction` in the paper.
+    static constexpr std::size_t expansion_construction_default_k = 128;
+
+    /// @brief Hyper-parameter controlling the quality of search.
+    /// Defaults to 16 in FAISS and 10 in hnswlib.
+    /// > It is called `ef` in the paper.
+    static constexpr std::size_t expansion_search_default_k = 64;
+
+    std::size_t connectivity = connectivity_default_k;
+    std::size_t expansion_add = expansion_construction_default_k;
+    std::size_t expansion_search = expansion_search_default_k;
+
+    ///
     std::size_t max_elements = 0;
-    std::size_t connectivity = 16;
-    std::size_t expansion_construction = 200;
-    std::size_t expansion_search = 100;
     std::size_t max_threads_add = 64;
     std::size_t max_threads_search = 64;
 };
@@ -639,10 +663,10 @@ class index_gt {
     bool is_immutable() const noexcept { return viewed_file_descriptor_ != 0; }
     bool synchronize() const noexcept { return config_.max_threads_add > 1; }
 
-    index_gt(config_t config = {}, metric_t metric = {}, allocator_t allocator = {}) : config_(config) {
+    index_gt(config_t config = {}, metric_t metric = {}, allocator_t = {}) : config_(config) {
 
         // Externally defined hyper-parameters:
-        config_.expansion_construction = std::max(config_.expansion_construction, config_.connectivity);
+        config_.expansion_add = std::max(config_.expansion_add, config_.connectivity);
         pre_ = precompute(config);
 
         // Configure initial empty state:
@@ -1186,7 +1210,7 @@ class index_gt {
         while (!candidates_set.empty()) {
 
             distance_and_id_t candidacy = candidates_set.top();
-            if ((-candidacy.first) > closest_dist && top_candidates.size() == config_.expansion_construction)
+            if ((-candidacy.first) > closest_dist && top_candidates.size() == config_.expansion_add)
                 break;
 
             candidates_set.pop();
@@ -1203,11 +1227,11 @@ class index_gt {
                 node_ref_t successor_node = node(successor_id);
                 distance_t successor_dist =
                     context.metric(query_vec, successor_node.vector, query_dim, successor_node.head.dim);
-                if (top_candidates.size() < config_.expansion_construction || closest_dist > successor_dist) {
+                if (top_candidates.size() < config_.expansion_add || closest_dist > successor_dist) {
                     candidates_set.emplace(-successor_dist, successor_id);
 
                     top_candidates.emplace(successor_dist, successor_id);
-                    if (top_candidates.size() > config_.expansion_construction)
+                    if (top_candidates.size() > config_.expansion_add)
                         top_candidates.pop();
                     if (!top_candidates.empty())
                         closest_dist = top_candidates.top().first;

@@ -72,7 +72,7 @@ def construct_both() -> tuple:
     dt_meta = measure(lambda: index_meta.add(xb))
 
     index_unum = usearch.make_index(
-        expansion_construction=efConstruction,
+        expansion_add=efConstruction,
         expansion_search=efSearch,
         connectivity=M,
     )

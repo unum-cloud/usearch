@@ -254,10 +254,15 @@ struct args_t {
     std::string path_vectors;
     std::string path_queries;
     std::string path_neighbors;
+
+    std::size_t connectivity = config_t::connectivity_default_k;
+    std::size_t expansion_add = config_t::expansion_construction_default_k;
+    std::size_t expansion_search = config_t::expansion_search_default_k;
     std::size_t threads = std::thread::hardware_concurrency();
-    std::size_t connectivity = config_t{}.connectivity;
 
     bool help = false;
+
+    bool big = false;
     bool native = false;
     bool quantize_f16 = false;
     bool quantize_i8 = false;
@@ -268,7 +273,7 @@ struct args_t {
     bool metric_haversine = false;
 };
 
-template <typename dataset_at> //
+template <typename index_at, typename dataset_at> //
 void run_type_punned(dataset_at& dataset, args_t const& args, config_t config) {
 
     accuracy_t accuracy = accuracy_t::f32_k;
@@ -277,15 +282,15 @@ void run_type_punned(dataset_at& dataset, args_t const& args, config_t config) {
     if (args.quantize_i8)
         accuracy = accuracy_t::i8q100_k;
 
-    auto_index_t index;
+    index_at index;
     if (args.metric_ip)
-        index = auto_index_t::ip(dataset.dimensions(), accuracy, config);
+        index = index_at::ip(dataset.dimensions(), accuracy, config);
     if (args.metric_l2)
-        index = auto_index_t::l2(dataset.dimensions(), accuracy, config);
+        index = index_at::l2(dataset.dimensions(), accuracy, config);
     if (args.metric_cos)
-        index = auto_index_t::cos(dataset.dimensions(), accuracy, config);
+        index = index_at::cos(dataset.dimensions(), accuracy, config);
     if (args.metric_haversine)
-        index = auto_index_t::haversine(accuracy, config);
+        index = index_at::haversine(accuracy, config);
 
     std::printf("- Hardware acceleration: %s\n", isa(index.acceleration()));
     std::printf("-- Will benchmark in-memory\n");
@@ -296,7 +301,7 @@ void run_type_punned(dataset_at& dataset, args_t const& args, config_t config) {
     std::printf("-------\n");
     std::printf("-- Will benchmark an on-disk view\n");
 
-    auto_index_t index_view = index.fork();
+    index_at index_view = index.fork();
     index_view.view("tmp.usearch");
     single_shot(dataset, index_view, false);
 }
@@ -318,6 +323,21 @@ void run_typed(dataset_at& dataset, config_t config) {
     single_shot(dataset, index_view, false);
 }
 
+template <typename neighbor_id_at, typename dataset_at> //
+void run_big_or_small(dataset_at& dataset, args_t const& args, config_t config) {
+    if (args.native) {
+        if (args.metric_cos)
+            run_typed<index_gt<ip_gt<float>, std::size_t, neighbor_id_at>>(dataset, config);
+        else if (args.metric_l2)
+            run_typed<index_gt<l2_squared_gt<float>, std::size_t, neighbor_id_at>>(dataset, config);
+        else if (args.metric_haversine)
+            run_typed<index_gt<haversine_gt<float>, std::size_t, neighbor_id_at>>(dataset, config);
+        else
+            run_typed<index_gt<ip_gt<float>, std::size_t, neighbor_id_at>>(dataset, config);
+    } else
+        run_type_punned<auto_index_gt<std::size_t, neighbor_id_at>>(dataset, args, config);
+}
+
 int main(int argc, char** argv) {
 
     // Print backtrace if something goes wrong.
@@ -330,8 +350,11 @@ int main(int argc, char** argv) {
         (option("--vectors") & value("path", args.path_vectors)).doc(".fbin file path to construct the index"),
         (option("--queries") & value("path", args.path_queries)).doc(".fbin file path to query the index"),
         (option("--neighbors") & value("path", args.path_neighbors)).doc(".ibin file path with ground truth"),
-        (option("-j", "--threads") & value("threads", args.threads)).doc("Uses all available cores by default"),
-        (option("-c", "--connectivity") & value("connectivity", args.connectivity)).doc("Index granularity"),
+        (option("-b", "--big").set(args.big)).doc("Will switch to uint40_t for neighbors lists with over 4B entries"),
+        (option("-j", "--threads") & value("integer", args.threads)).doc("Uses all available cores by default"),
+        (option("-c", "--connectivity") & value("integer", args.connectivity)).doc("Index granularity"),
+        (option("--expansion-add") & value("integer", args.expansion_add)).doc("Affects indexing depth"),
+        (option("--expansion-search") & value("integer", args.expansion_search)).doc("Affects search depth"),
         ( //
             option("--native").set(args.native).doc("Use raw templates instead of type-punned classes") |
             option("--f16quant").set(args.quantize_f16).doc("Enable `f16_t` quantization") |
@@ -378,20 +401,15 @@ int main(int argc, char** argv) {
 
     config_t config;
     config.connectivity = args.connectivity;
+    config.expansion_add = args.expansion_add;
+    config.expansion_search = args.expansion_search;
     config.max_threads_add = config.max_threads_search = args.threads;
     config.max_elements = dataset.vectors_count();
 
-    if (args.native) {
-        if (args.metric_cos)
-            run_typed<index_gt<ip_gt<float>, std::size_t, std::uint32_t>>(dataset, config);
-        else if (args.metric_l2)
-            run_typed<index_gt<l2_squared_gt<float>, std::size_t, std::uint32_t>>(dataset, config);
-        else if (args.metric_haversine)
-            run_typed<index_gt<haversine_gt<float>, std::size_t, std::uint32_t>>(dataset, config);
-        else
-            run_typed<index_gt<ip_gt<float>, std::size_t, std::uint32_t>>(dataset, config);
-    } else
-        run_type_punned(dataset, args, config);
+    if (args.big)
+        run_big_or_small<uint40_t>(dataset, args, config);
+    else
+        run_big_or_small<std::uint32_t>(dataset, args, config);
 
     return 0;
 }
