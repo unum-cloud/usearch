@@ -306,7 +306,6 @@ int main(int argc, char** argv) {
     std::printf("-- Ground truth neighbors path: %s\n", path_neighbors.c_str());
 
     using vector_id_t = std::uint32_t;
-    using real_t = float;
 
     persisted_dataset_gt<float, vector_id_t> dataset{
         path_vectors.c_str(),

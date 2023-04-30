@@ -81,12 +81,12 @@ template <typename scalar_at> struct ip_gt {
 
     inline scalar_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_type ab{};
-#if defined(_OPENMP)
-#pragma omp simd reduction(+ : ab)
-#elif defined(__GNUC__)
+#if defined(__GNUC__)
 #pragma GCC ivdep
 #elif defined(__clang__)
 #pragma clang loop vectorize(enable)
+#elif defined(_OPENMP)
+#pragma omp simd reduction(+ : ab)
 #endif
         for (std::size_t i = 0; i != dim; ++i)
             ab += a[i] * b[i];
@@ -100,12 +100,12 @@ template <typename scalar_at> struct cos_gt {
 
     inline scalar_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_type ab{}, a2{}, b2{};
-#if defined(_OPENMP)
-#pragma omp simd reduction(+ : ab, a2, b2)
-#elif defined(__GNUC__)
+#if defined(__GNUC__)
 #pragma GCC ivdep
 #elif defined(__clang__)
 #pragma clang loop vectorize(enable)
+#elif defined(_OPENMP)
+#pragma omp simd reduction(+ : ab, a2, b2)
 #endif
         for (std::size_t i = 0; i != dim; ++i)
             ab += a[i] * b[i], a2 += a[i] * a[i], b2 += b[i] * b[i];
@@ -119,12 +119,12 @@ template <typename scalar_at> struct l2_squared_gt {
 
     inline scalar_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_type ab_deltas_sq{};
-#if defined(_OPENMP)
-#pragma omp simd reduction(+ : ab_deltas_sq)
-#elif defined(__GNUC__)
+#if defined(__GNUC__)
 #pragma GCC ivdep
 #elif defined(__clang__)
 #pragma clang loop vectorize(enable)
+#elif defined(_OPENMP)
+#pragma omp simd reduction(+ : ab_deltas_sq)
 #endif
         for (std::size_t i = 0; i != dim; ++i)
             ab_deltas_sq += (a[i] - b[i]) * (a[i] - b[i]);
@@ -146,12 +146,12 @@ template <typename scalar_at> struct bit_hamming_gt {
     inline std::size_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words,
                                   std::size_t = 0) const noexcept {
         std::size_t matches{};
-#if defined(_OPENMP)
-#pragma omp simd reduction(+ : matches)
-#elif defined(__GNUC__)
+#if defined(__GNUC__)
 #pragma GCC ivdep
 #elif defined(__clang__)
 #pragma clang loop vectorize(enable)
+#elif defined(_OPENMP)
+#pragma omp simd reduction(+ : matches)
 #endif
         for (std::size_t i = 0; i != words; ++i)
             matches += std::bitset<bits_per_word_k>(a[i] ^ b[i]).count();
@@ -196,12 +196,12 @@ template <typename scalar_at> struct pearson_correlation_gt {
         scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         scalar_t a_sum{}, b_sum{}, ab_sum{};
         scalar_t a_sq_sum{}, b_sq_sum{};
-#if defined(_OPENMP)
-#pragma omp simd reduction(+ : a_sum, b_sum, ab_sum, a_sq_sum, b_sq_sum)
-#elif defined(__GNUC__)
+#if defined(__GNUC__)
 #pragma GCC ivdep
 #elif defined(__clang__)
 #pragma clang loop vectorize(enable)
+#elif defined(_OPENMP)
+#pragma omp simd reduction(+ : a_sum, b_sum, ab_sum, a_sq_sum, b_sq_sum)
 #endif
         for (std::size_t i = 0; i != dim; ++i) {
             a_sum += a[i];

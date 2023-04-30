@@ -53,6 +53,11 @@ class f16_converted_t {
     inline f16_converted_t(float v) noexcept : uint16_(fp16_ieee_from_fp32_value(v)) {}
     inline f16_converted_t(double v) noexcept : uint16_(fp16_ieee_from_fp32_value(v)) {}
 
+    inline f16_converted_t operator+(f16_converted_t other) const noexcept { return {float(*this) + float(other)}; }
+    inline f16_converted_t operator-(f16_converted_t other) const noexcept { return {float(*this) - float(other)}; }
+    inline f16_converted_t operator*(f16_converted_t other) const noexcept { return {float(*this) * float(other)}; }
+    inline f16_converted_t operator/(f16_converted_t other) const noexcept { return {float(*this) / float(other)}; }
+
     inline f16_converted_t& operator+=(float v) noexcept {
         uint16_ = fp16_ieee_from_fp32_value(v + fp16_ieee_to_fp32_value(uint16_));
         return *this;
@@ -193,6 +198,29 @@ inline bool supports_arm_sve() {
     return false;
 }
 
+template <typename from_scalar_at, typename to_scalar_at> struct cast_gt {
+    bool operator()(byte_t const* input, std::size_t bytes_in_input, byte_t* output) noexcept {
+        from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
+        to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
+        std::transform( //
+            typed_input, typed_input + bytes_in_input / sizeof(from_scalar_at), typed_output,
+            [](from_scalar_at from) { return to_scalar_at(from); });
+        return true;
+    }
+};
+
+template <> struct cast_gt<f32_t, f32_t> {
+    bool operator()(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
+};
+
+template <> struct cast_gt<f64_t, f64_t> {
+    bool operator()(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
+};
+
+template <> struct cast_gt<f16_converted_t, f16_converted_t> {
+    bool operator()(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
+};
+
 /**
  *  @brief  Oversimplified type-punned index for equidimensional floating-point
  *          vectors with automatic down-casting and isa acceleration.
@@ -205,7 +233,7 @@ class auto_index_gt {
     using distance_t = punned_distance_t;
 
     using f32_t = float;
-    using f64_t = f64_t;
+    using f64_t = double;
 
   private:
     /// @brief Schema: input buffer, bytes in input buffer, output buffer.
@@ -312,29 +340,6 @@ class auto_index_gt {
         result.acceleration_ = metric_and_meta.acceleration;
         return result;
     }
-
-    template <typename from_scalar_at, typename to_scalar_at> struct cast_gt {
-        bool operator()(byte_t const* input, std::size_t bytes_in_input, byte_t* output) noexcept {
-            from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
-            to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
-            std::transform( //
-                typed_input, typed_input + bytes_in_input / sizeof(from_scalar_at), typed_output,
-                [](from_scalar_at from) { return to_scalar_at(from); });
-            return true;
-        }
-    };
-
-    template <> struct cast_gt<f32_t, f32_t> {
-        bool operator()(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
-    };
-
-    template <> struct cast_gt<f64_t, f64_t> {
-        bool operator()(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
-    };
-
-    template <> struct cast_gt<f16_converted_t, f16_converted_t> {
-        bool operator()(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
-    };
 
     template <typename to_scalar_at> static casts_t make_casts() {
         casts_t result;
