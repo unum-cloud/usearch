@@ -7,3 +7,4 @@ ColumnLimit: 120
 ReflowComments: true
 UseTab: Never
 PointerAlignment: Left
+AllowShortCaseLabelsOnASingleLine: True

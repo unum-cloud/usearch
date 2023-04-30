@@ -80,7 +80,7 @@ template <typename scalar_at> struct ip_gt {
     using result_type = scalar_t;
 
     inline scalar_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
-        result_type ab = 0;
+        result_type ab{};
 #if defined(_OPENMP)
 #pragma omp simd reduction(+ : ab)
 #elif defined(__GNUC__)
@@ -99,7 +99,7 @@ template <typename scalar_at> struct cos_gt {
     using result_type = scalar_t;
 
     inline scalar_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
-        result_type ab = 0, a2 = 0, b2 = 0;
+        result_type ab{}, a2{}, b2{};
 #if defined(_OPENMP)
 #pragma omp simd reduction(+ : ab, a2, b2)
 #elif defined(__GNUC__)
@@ -118,7 +118,7 @@ template <typename scalar_at> struct l2_squared_gt {
     using result_type = scalar_t;
 
     inline scalar_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
-        result_type ab_deltas_sq = 0;
+        result_type ab_deltas_sq{};
 #if defined(_OPENMP)
 #pragma omp simd reduction(+ : ab_deltas_sq)
 #elif defined(__GNUC__)
@@ -145,7 +145,7 @@ template <typename scalar_at> struct bit_hamming_gt {
 
     inline std::size_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words,
                                   std::size_t = 0) const noexcept {
-        std::size_t matches = 0;
+        std::size_t matches{};
 #if defined(_OPENMP)
 #pragma omp simd reduction(+ : matches)
 #elif defined(__GNUC__)
@@ -171,9 +171,9 @@ template <typename scalar_at> struct jaccard_gt {
 
     inline result_type operator()( //
         scalar_t const* a, scalar_t const* b, std::size_t a_length, std::size_t b_length) const noexcept {
-        std::size_t intersection = 0;
-        std::size_t i = 0;
-        std::size_t j = 0;
+        std::size_t intersection{};
+        std::size_t i{};
+        std::size_t j{};
         while (i != a_length && j != b_length) {
             intersection += a[i] == b[j];
             i += a[i] < b[j];
@@ -194,8 +194,8 @@ template <typename scalar_at> struct pearson_correlation_gt {
 
     inline result_type operator()( //
         scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
-        scalar_t a_sum = 0, b_sum = 0, ab_sum = 0;
-        scalar_t a_sq_sum = 0, b_sq_sum = 0;
+        scalar_t a_sum{}, b_sum{}, ab_sum{};
+        scalar_t a_sq_sum{}, b_sq_sum{};
 #if defined(_OPENMP)
 #pragma omp simd reduction(+ : a_sum, b_sum, ab_sum, a_sq_sum, b_sq_sum)
 #elif defined(__GNUC__)

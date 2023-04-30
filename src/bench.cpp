@@ -339,15 +339,16 @@ int main(int argc, char** argv) {
     if (metric_haversine)
         index = auto_index_t::haversine(accuracy, config);
 
+    std::printf("- Hardware acceleration: %s\n", isa(index.acceleration()));
     single_shot(dataset, index, true);
-    index.save("tmp/index.usearch");
+    index.save("tmp.usearch");
 
     auto_index_t index_copy;
-    index_copy.load("tmp/index.usearch");
+    index_copy.load("tmp.usearch");
     single_shot(dataset, index_copy, false);
 
     auto_index_t index_view;
-    index_view.view("tmp/index.usearch");
+    index_view.view("tmp.usearch");
     single_shot(dataset, index_view, false);
 
     // Test compilation of more obscure index types.
