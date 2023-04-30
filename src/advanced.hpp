@@ -286,7 +286,7 @@ class auto_index_gt {
             copy = true;
         }
 
-        index_->add(label, vector_data, vector_bytes, thread_idx, copy);
+        index_->add(label, {vector_data, vector_bytes}, thread_idx, copy);
     }
 
     std::size_t search(                          //
@@ -303,14 +303,7 @@ class auto_index_gt {
             vector_bytes = casted_vector_bytes_;
         }
 
-        std::size_t found = 0;
-        auto callback = [&](label_t label, f32_t distance) {
-            matches[found] = label;
-            distances[found] = distance;
-            ++found;
-        };
-        index_->search(vector_data, vector_bytes, wanted, callback, thread_idx);
-        return found;
+        return index_->search({vector_data, vector_bytes}, wanted, matches, distances, thread_idx);
     }
 
     static auto_index_gt ip(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) {

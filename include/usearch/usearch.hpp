@@ -478,6 +478,18 @@ class usearch_pack_m uint40_t {
 
 static_assert(sizeof(uint40_t) == 5, "uint40_t must be exactly 5 bytes");
 
+template <typename scalar_at> class span_gt {
+    scalar_at* data_;
+    std::size_t size_;
+
+  public:
+    span_gt(scalar_at* begin, scalar_at* end) noexcept : data_(begin), size_(end - begin) {}
+    span_gt(scalar_at* begin, std::size_t size) noexcept : data_(begin), size_(size) {}
+    scalar_at* data() const noexcept { return data_; }
+    std::size_t size() const noexcept { return size_; }
+    operator scalar_at*() const noexcept { return data(); }
+};
+
 struct config_t {
     std::size_t max_elements = 0;
     std::size_t connectivity = 16;
@@ -683,12 +695,14 @@ class index_gt {
 
 #pragma region Construction and Search
 
-    id_t add(                                                               //
-        label_t new_label, scalar_t const* new_vector, std::size_t new_dim, //
+    id_t add(                                                //
+        label_t new_label, span_gt<scalar_t const> new_span, //
         std::size_t thread_idx = 0, bool store_vector = true) {
 
         assert_m(!is_immutable(), "Can't add to an immutable index");
         id_t new_id = static_cast<id_t>(size_.fetch_add(1));
+        scalar_t const* new_vector = new_span.data();
+        std::size_t new_dim = new_span.size();
 
         // Determining how much memory to allocate depends on the target level.
         lock_t new_level_lock(global_mutex_);
@@ -748,12 +762,15 @@ class index_gt {
     }
 
     template <typename label_and_distance_callback_at>
-    void search( //
-        scalar_t const* query_vec, std::size_t query_dim, std::size_t k, label_and_distance_callback_at&& callback,
-        std::size_t thread_idx = 0) const {
+    void search(                                                //
+        span_gt<scalar_t const> query_span, std::size_t wanted, //
+        label_and_distance_callback_at&& callback, std::size_t thread_idx = 0) const {
 
         if (!size_)
             return;
+
+        scalar_t const* query_vec = query_span.data();
+        std::size_t query_dim = query_span.size();
 
         // Go down the level, tracking only the closest match
         thread_context_t& context = thread_contexts_[thread_idx];
@@ -782,8 +799,8 @@ class index_gt {
 
         // For bottom layer we need a more optimized procedure
         search_to_find_in_base( //
-            closest_id, query_vec, query_dim, std::max(config_.expansion_search, k), context);
-        while (context.top_candidates.size() > k)
+            closest_id, query_vec, query_dim, std::max(config_.expansion_search, wanted), context);
+        while (context.top_candidates.size() > wanted)
             context.top_candidates.pop();
 
         while (context.top_candidates.size()) {
@@ -791,6 +808,25 @@ class index_gt {
             callback(node(top.second).head.label, top.first);
             context.top_candidates.pop();
         }
+    }
+
+    std::size_t search(                                         //
+        span_gt<scalar_t const> query_span, std::size_t wanted, //
+        label_t* matches, distance_t* distances,                //
+        std::size_t thread_idx = 0) const {
+
+        std::size_t found = 0;
+        auto callback = [&](label_t label, distance_t distance) noexcept {
+            if (matches)
+                matches[found] = label;
+            if (distances)
+                distances[found] = distance;
+            ++found;
+        };
+        search(query_span, wanted, callback, thread_idx);
+        std::reverse(matches, matches + found * (matches != nullptr));
+        std::reverse(distances, distances + found * (distances != nullptr));
+        return found;
     }
 
 #pragma endregion
