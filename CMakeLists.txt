@@ -45,7 +45,6 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
 
 endif()
 
-
 if(APPLE)
     set(CMAKE_THREAD_LIBS_INIT "-lpthread")
     set(CMAKE_HAVE_THREADS_LIBRARY 1)
@@ -55,36 +54,6 @@ if(APPLE)
 endif()
 find_package(Threads REQUIRED)
 
-# Get external content: Google Benchmark, Thrust
-include(FetchContent)
-
-# Fetch SimSIMD for hardware-accelerated measures for Python.
-FetchContent_Declare(
-    simsimd
-    GIT_REPOSITORY https://github.com/ashvardanian/simsimd.git
-    GIT_TAG origin/main
-    GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(simsimd)
-
-# Fetch laf-precision floating point type for Python.
-set(FP16_BUILD_TESTS OFF)
-set(FP16_BUILD_BENCHMARKS OFF)
-FetchContent_Declare(
-    fp16
-    GIT_REPOSITORY https://github.com/Maratyszcza/FP16.git
-    GIT_TAG origin/master
-    GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(fp16)
-
-FetchContent_Declare(
-    pybind11
-    GIT_REPOSITORY https://github.com/pybind/pybind11
-    GIT_TAG        v2.10.4
-)
-FetchContent_MakeAvailable(pybind11)
-
 if(${USEARCH_USE_OPENMP})
     find_package(OpenMP REQUIRED)
     include_directories(${OPENMP_INCLUDE_DIRS})
@@ -93,8 +62,11 @@ endif()
 if(${USEARCH_USE_JEMALLOC})
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jemalloc.cmake")
 endif()
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/clipp.cmake")
 
-include_directories(./include)
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/fp16/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/simsimd/include")
 
 # Define the targets
 add_executable(bench src/bench.cpp)

@@ -10,19 +10,15 @@
             "request": "launch",
             "program": "${workspaceFolder}/build_debug/bench",
             "cwd": "${workspaceFolder}",
+            "args": [
+                "--vectors",
+                "datasets/wiki_1M/base.1M.fbin",
+                "--queries",
+                "datasets/wiki_1M/query.public.100K.fbin",
+                "--neighbors",
+                "datasets/wiki_1M/groundtruth.public.100K.ibin",
+            ],
             "environment": [
-                {
-                    "name": "path_vectors",
-                    "value": "datasets/wiki_1M/base.1M.fbin",
-                },
-                {
-                    "name": "path_queries",
-                    "value": "datasets/wiki_1M/query.public.100K.fbin",
-                },
-                {
-                    "name": "path_neighbors",
-                    "value": "datasets/wiki_1M/groundtruth.public.100K.ibin",
-                },
                 {
                     "name": "ASAN_OPTIONS",
                     "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
@@ -44,19 +40,15 @@
             "request": "launch",
             "program": "${workspaceFolder}/build_debug/bench",
             "cwd": "${workspaceFolder}",
+            "args": [
+                "--vectors",
+                "datasets/t2i_1M/base.1M.fbin",
+                "--queries",
+                "datasets/t2i_1M/query.public.100K.fbin",
+                "--neighbors",
+                "datasets/t2i_1M/groundtruth.public.100K.ibin",
+            ],
             "environment": [
-                {
-                    "name": "path_vectors",
-                    "value": "datasets/t2i_1M/base.1M.fbin",
-                },
-                {
-                    "name": "path_queries",
-                    "value": "datasets/t2i_1M/query.public.100K.fbin",
-                },
-                {
-                    "name": "path_neighbors",
-                    "value": "datasets/t2i_1M/groundtruth.public.100K.ibin",
-                },
                 {
                     "name": "ASAN_OPTIONS",
                     "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
@@ -78,19 +70,13 @@
             "request": "launch",
             "program": "${workspaceFolder}/build_release/bench",
             "cwd": "${workspaceFolder}",
-            "environment": [
-                {
-                    "name": "path_vectors",
-                    "value": "datasets/t2i_1M/base.1M.fbin",
-                },
-                {
-                    "name": "path_queries",
-                    "value": "datasets/t2i_1M/query.public.100K.fbin",
-                },
-                {
-                    "name": "path_neighbors",
-                    "value": "datasets/t2i_1M/groundtruth.public.100K.ibin",
-                }
+            "args": [
+                "--vectors",
+                "datasets/t2i_1M/base.1M.fbin",
+                "--queries",
+                "datasets/t2i_1M/query.public.100K.fbin",
+                "--neighbors",
+                "datasets/t2i_1M/groundtruth.public.100K.ibin",
             ],
             "stopAtEntry": false,
             "preLaunchTask": "Linux Build C++ Bench Release",
@@ -107,10 +93,9 @@
             "name": "Debug PyBind11: Attach with GDB",
             "type": "cppdbg",
             "request": "attach",
-            "program": "/home/ubuntu/miniconda3/bin/python",
+            "program": "/Users/av/miniconda3/bin/python",
             "processId": "",
-            "MIMode": "gdb",
-            "sudo": true,
+            "MIMode": "lldb",
             "setupCommands": [
                 {
                     "description": "Enable pretty-printing for gdb",
