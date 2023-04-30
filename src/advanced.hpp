@@ -260,6 +260,9 @@ class auto_index_gt {
         cast_t from_f64{};
     } casts_;
 
+    punned_stateful_metric_t root_metric_;
+    config_t root_config_;
+
   public:
     std::size_t dimensions() const noexcept { return dimensions_; }
     std::size_t connectivity() const noexcept { return index_->connectivity(); }
@@ -323,6 +326,23 @@ class auto_index_gt {
     }
     static auto_index_gt haversine(accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return {}; }
 
+    auto_index_gt fork() const {
+        auto_index_gt result;
+
+        result.dimensions_ = dimensions_;
+        result.accuracy_ = accuracy_;
+        result.acceleration_ = acceleration_;
+        result.casted_vector_bytes_ = casted_vector_bytes_;
+        result.cast_buffer_ = cast_buffer_;
+        result.casts_ = casts_;
+
+        result.root_metric_ = root_metric_;
+        result.root_config_ = root_config_;
+        result.index_.reset(new index_t(result.root_config_, result.root_metric_));
+
+        return result;
+    }
+
   private:
     static auto_index_gt make(                            //
         std::size_t dimensions, accuracy_t accuracy,      //
@@ -338,6 +358,8 @@ class auto_index_gt {
         result.casts_ = casts;
         result.index_.reset(new index_t(config, metric_and_meta.metric));
         result.acceleration_ = metric_and_meta.acceleration;
+        result.root_metric_ = metric_and_meta.metric;
+        result.root_config_ = config;
         return result;
     }
 
@@ -367,6 +389,7 @@ class auto_index_gt {
     }
 
     static metric_and_meta_t ip_metric_f32(std::size_t dimensions) {
+#if 0
 #if defined(__x86_64__)
         if (dimensions % 4 == 0)
             return {
@@ -391,10 +414,12 @@ class auto_index_gt {
                 isa_t::neon_k,
             };
 #endif
+#endif
         return {pun_metric<f32_t>(ip_gt<f32_t>{}), isa_t::auto_k};
     }
 
     static metric_and_meta_t ip_metric_f16(std::size_t dimensions) {
+#if 0
 #if defined(__x86_64__)
 #elif defined(__aarch64__)
         if (supports_arm_sve())
@@ -411,6 +436,7 @@ class auto_index_gt {
                 }),
                 isa_t::neon_k,
             };
+#endif
 #endif
         return {pun_metric<f16_converted_t>(ip_gt<f16_converted_t>{}), isa_t::auto_k};
     }

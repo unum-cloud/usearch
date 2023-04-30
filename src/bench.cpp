@@ -342,11 +342,11 @@ int main(int argc, char** argv) {
     single_shot(dataset, index, true);
     index.save("tmp.usearch");
 
-    auto_index_t index_copy;
+    auto_index_t index_copy = index.fork();
     index_copy.load("tmp.usearch");
     single_shot(dataset, index_copy, false);
 
-    auto_index_t index_view;
+    auto_index_t index_view = index.fork();
     index_view.view("tmp.usearch");
     single_shot(dataset, index_view, false);
 
