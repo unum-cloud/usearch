@@ -68,6 +68,11 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/fp16/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/simsimd/include")
 
+# Define our header-only library.
+add_library(usearch INTERFACE)
+target_sources(usearch INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include/usearch/usearch.hpp")
+target_include_directories(usearch INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
 # Define the targets
 add_executable(bench src/bench.cpp)
 target_link_libraries(bench PRIVATE Threads::Threads)
