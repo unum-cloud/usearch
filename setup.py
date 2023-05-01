@@ -21,7 +21,7 @@ __version__ = open('VERSION', 'r').read().strip()
 __lib_name__ = 'usearch'
 
 
-this_directory = os.path.abspath(dirname(__file__))
+this_directory = os.path.abspath(os.path.dirname(__file__))
 with open(os.path.join(this_directory, 'README.md')) as f:
     long_description = f.read()
 
