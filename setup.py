@@ -16,12 +16,24 @@ ext_modules = [
     ),
 ]
 
+__version__ = open('VERSION', 'r').read().strip()
+__lib_name__ = 'usearch'
+
+
+this_directory = os.path.abspath(dirname(__file__))
+with open(os.path.join(this_directory, 'README.md')) as f:
+    long_description = f.read()
+
 
 setup(
 
-    name='usearch',
-    version='0.1.0',
+    name=__lib_name__,
+    version=__version__,
     packages=find_packages(),
+
+    description='The Tiny Vector Search Engine',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     license='Apache-2.0',
 
     classifiers=[
@@ -30,7 +42,7 @@ setup(
         'Natural Language :: English',
         'Intended Audience :: Developers',
         'Intended Audience :: Information Technology',
-        'License :: OSI Approved :: Apache Software License 2.0 (Apache-2.0)',
+        'License :: OSI Approved :: Apache Software License',
 
         'Programming Language :: Python :: 3 :: Only',
         'Programming Language :: Python :: Implementation :: CPython',
