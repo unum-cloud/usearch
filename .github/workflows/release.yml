@@ -62,7 +62,9 @@ jobs:
     environment:
       name: pypi
       url: https://pypi.org/p/usearch
-    
+    permissions:
+      id-token: write
+
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v3.0.2
@@ -70,7 +72,7 @@ jobs:
           path: ./dist/
 
       - name: Publish to PyPi
-        uses: pypa/gh-action-pypi-publish@v1.6.4
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages_dir: ./dist/artifact
           verbose: true
