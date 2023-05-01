@@ -1,6 +1,6 @@
 {
     "name": "usearch",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "The Mighty Tiny Vector Search Engine with Automatic Quantization and Hardware Acceleration",
     "author": "Ashot Vardanian",
     "license": "Apache 2.0",
