@@ -29,9 +29,9 @@ Compact, yet Powerful<br/>
 - [x] Don't copy vectors if not needed.
 - [x] Bring your threads.
 - [x] Multiple vectors per label.
-- [x] CPython bindings for Python 3: `pip install usearch`
-- [x] Node.js bindings for JavaScript: `npm install usearch`
-- [x] Rust language bindings.
+- [x] Python bindings: `pip install usearch`
+- [x] JavaScript bindings: `npm install usearch`
+- [x] Rust bindings: `cargo add usearch`
 - [ ] Wolfram language bindings.
 - [x] For Linux: GCC, Clang.
 - [x] For MacOS: Apple Clang.

@@ -5,7 +5,7 @@ authors = ["Ashot Vardanian <1983160+ashvardanian@users.noreply.github.com>"]
 description = "The Tiny Vector Search Engine from Unum"
 edition = "2021"
 license = "Apache-2.0"
-publish = false
+publish = true
 repository = "https://github.com/unum-cloud/usearch"
 
 [dependencies]
