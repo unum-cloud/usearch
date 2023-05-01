@@ -1,0 +1,62 @@
+# Temporary files
+.DS_Store
+*.fbin
+*.ibin
+datasets
+*.usearch
+
+# C++ builds
+build
+build_release
+build_debug
+
+# Profiling with GProf and `perf` on Linux
+gmon.out 
+perf.data
+
+# Python wrappers
+__pycache__
+*.egg-info
+dist/
+
+# JS wrappers
+package-lock.json
+node_modules/
+
+# Rust builds
+Cargo.lock
+target/ 
+
+
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app

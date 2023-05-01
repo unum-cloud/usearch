@@ -6,7 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'Unum · UNSW'
+project = 'Unum · USearch'
 copyright = '2023, Unum'
 author = 'Unum'
 release = open('../VERSION', 'r').read().strip()
@@ -44,5 +44,5 @@ html_css_files = ['custom.css']
 html_js_files = ['custom.js']
 html_baseurl = '/docs/usearch/'
 
-breathe_projects = {'UNSW': '../build/xml'}
-breathe_default_project = 'UNSW'
+breathe_projects = {'USearch': '../build/xml'}
+breathe_default_project = 'USearch'
