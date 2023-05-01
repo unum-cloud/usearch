@@ -59,9 +59,9 @@ using f32_t = float;
  */
 enum class f16_t : std::uint16_t {};
 
-template <typename at> constexpr at angle_to_radians(at angle) noexcept { return angle * M_PI / 180; }
+template <typename at> at angle_to_radians(at angle) noexcept { return angle * M_PI / 180.f; }
 
-template <typename at> constexpr at square(at value) noexcept { return value * value; }
+template <typename at> at square(at value) noexcept { return value * value; }
 
 inline std::size_t ceil2(std::size_t v) noexcept {
     v--;
@@ -223,22 +223,22 @@ template <typename scalar_at> struct pearson_correlation_gt {
 template <typename scalar_at> struct haversine_gt {
     using scalar_t = scalar_at;
     using result_type = scalar_t;
-    static_assert(std::is_floating_point<scalar_t>::value, "Latitude and longitude must be floating-node");
+    static_assert(!std::is_integral<scalar_t>::value, "Latitude and longitude must be floating-node");
 
     inline scalar_t operator()(scalar_t const* a, scalar_t const* b, std::size_t = 2, std::size_t = 2) const noexcept {
         scalar_t lat_a = a[0], lon_a = a[1];
         scalar_t lat_b = b[0], lon_b = b[1];
 
-        scalar_t lat_delta = angle_to_radians(lat_b - lat_a);
-        scalar_t lon_delta = angle_to_radians(lon_b - lon_a);
+        scalar_t lat_delta = angle_to_radians<scalar_t>(lat_b - lat_a);
+        scalar_t lon_delta = angle_to_radians<scalar_t>(lon_b - lon_a);
 
-        scalar_t converted_lat_a = angle_to_radians(lat_a);
-        scalar_t converted_lat_b = angle_to_radians(lat_b);
+        scalar_t converted_lat_a = angle_to_radians<scalar_t>(lat_a);
+        scalar_t converted_lat_b = angle_to_radians<scalar_t>(lat_b);
 
-        scalar_t x = square(std::sin(lat_delta / 2)) +
-                     std::cos(converted_lat_a) * std::cos(converted_lat_b) * square(std::sin(lon_delta / 2));
+        scalar_t x = square(std::sin(lat_delta / 2.f)) +
+                     std::cos(converted_lat_a) * std::cos(converted_lat_b) * square(std::sin(lon_delta / 2.f));
 
-        return std::atan2(std::sqrt(x), std::sqrt(1 - x));
+        return std::atan2(std::sqrt(x), std::sqrt(1.f - x));
     }
 };
 
@@ -506,7 +506,7 @@ struct config_t {
     /// @brief Hyper-parameter controlling the quality of indexing.
     /// Defaults to 40 in FAISS and 200 in hnswlib.
     /// > It is called `efConstruction` in the paper.
-    static constexpr std::size_t expansion_construction_default_k = 128;
+    static constexpr std::size_t expansion_add_default_k = 128;
 
     /// @brief Hyper-parameter controlling the quality of search.
     /// Defaults to 16 in FAISS and 10 in hnswlib.
@@ -514,7 +514,7 @@ struct config_t {
     static constexpr std::size_t expansion_search_default_k = 64;
 
     std::size_t connectivity = connectivity_default_k;
-    std::size_t expansion_add = expansion_construction_default_k;
+    std::size_t expansion_add = expansion_add_default_k;
     std::size_t expansion_search = expansion_search_default_k;
 
     ///

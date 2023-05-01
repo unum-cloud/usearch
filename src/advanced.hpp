@@ -59,6 +59,14 @@ class f16_converted_t {
     inline f16_converted_t operator-(f16_converted_t other) const noexcept { return {float(*this) - float(other)}; }
     inline f16_converted_t operator*(f16_converted_t other) const noexcept { return {float(*this) * float(other)}; }
     inline f16_converted_t operator/(f16_converted_t other) const noexcept { return {float(*this) / float(other)}; }
+    inline f16_converted_t operator+(float other) const noexcept { return {float(*this) + other}; }
+    inline f16_converted_t operator-(float other) const noexcept { return {float(*this) - other}; }
+    inline f16_converted_t operator*(float other) const noexcept { return {float(*this) * other}; }
+    inline f16_converted_t operator/(float other) const noexcept { return {float(*this) / other}; }
+    inline f16_converted_t operator+(double other) const noexcept { return {float(*this) + other}; }
+    inline f16_converted_t operator-(double other) const noexcept { return {float(*this) - other}; }
+    inline f16_converted_t operator*(double other) const noexcept { return {float(*this) * other}; }
+    inline f16_converted_t operator/(double other) const noexcept { return {float(*this) / other}; }
 
     inline f16_converted_t& operator+=(float v) noexcept {
         uint16_ = fp16_ieee_from_fp32_value(v + fp16_ieee_to_fp32_value(uint16_));
@@ -164,6 +172,26 @@ enum class accuracy_t {
     i8q100_k,
 };
 
+bool str_equals(char const* begin, size_t len, char const* other_begin) noexcept {
+    size_t other_len = strlen(other_begin);
+    return len == other_len && strncmp(begin, other_begin, len) == 0;
+}
+
+accuracy_t accuracy(char const* str, size_t len) {
+    accuracy_t accuracy;
+    if (str_equals(str, len, "f32"))
+        accuracy = accuracy_t::f32_k;
+    else if (str_equals(str, len, "f64"))
+        accuracy = accuracy_t::f64_k;
+    else if (str_equals(str, len, "f16"))
+        accuracy = accuracy_t::f16_k;
+    else if (str_equals(str, len, "i8q100"))
+        accuracy = accuracy_t::i8q100_k;
+    else
+        throw std::runtime_error("Unknown type, choose: f32, f16, f64, i8q100");
+    return accuracy;
+}
+
 enum class isa_t {
     auto_k,
     neon_k,
@@ -252,11 +280,11 @@ class auto_index_gt {
     };
 
     std::size_t dimensions_ = 0;
-    accuracy_t accuracy_ = accuracy_t::f32_k;
-    std::unique_ptr<index_t> index_;
-
-    isa_t acceleration_ = isa_t::auto_k;
     std::size_t casted_vector_bytes_ = 0;
+    accuracy_t accuracy_ = accuracy_t::f32_k;
+    isa_t acceleration_ = isa_t::auto_k;
+
+    std::unique_ptr<index_t> index_;
     mutable std::vector<byte_t> cast_buffer_;
     struct casts_t {
         cast_t from_i8q100{};
@@ -269,6 +297,13 @@ class auto_index_gt {
     config_t root_config_;
 
   public:
+    auto_index_gt() = default;
+    auto_index_gt(auto_index_gt&& other)
+        : dimensions_(other.dimensions_), casted_vector_bytes_(other.casted_vector_bytes_), accuracy_(other.accuracy_),
+          acceleration_(other.acceleration_), index_(std::move(other.index_)),
+          cast_buffer_(std::move(other.cast_buffer_)), casts_(std::move(other.casts_)),
+          root_metric_(std::move(other.root_metric_)), root_config_(std::move(other.root_config_)) {}
+
     std::size_t dimensions() const noexcept { return dimensions_; }
     std::size_t connectivity() const noexcept { return index_->connectivity(); }
     std::size_t size() const noexcept { return index_->size(); }
@@ -292,20 +327,12 @@ class auto_index_gt {
     std::size_t search(f16_converted_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread = 0) const { return search(vector, wanted, matches, distances, thread, casts_.from_f16); }
     std::size_t search(f32_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread = 0) const { return search(vector, wanted, matches, distances, thread, casts_.from_f32); }
     std::size_t search(f64_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread = 0) const { return search(vector, wanted, matches, distances, thread, casts_.from_f64); }
+
+    static auto_index_gt ip(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make(dimensions, accuracy, ip_metric(dimensions, accuracy), make_casts(accuracy), config); }
+    static auto_index_gt l2(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make(dimensions, accuracy, l2_metric(dimensions, accuracy), make_casts(accuracy), config); }
+    static auto_index_gt cos(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return make(dimensions, accuracy, cos_metric(dimensions, accuracy), make_casts(accuracy), config); }
+    static auto_index_gt haversine(accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return make(2, accuracy, haversine_metric(accuracy), make_casts(accuracy), config); }
     // clang-format on
-
-    static auto_index_gt ip(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) {
-        return make(dimensions, accuracy, ip_metric(dimensions, accuracy), make_casts(accuracy), config);
-    }
-
-    static auto_index_gt l2(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) {
-        return make(dimensions, accuracy, l2_metric(dimensions, accuracy), make_casts(accuracy), config);
-    }
-
-    static auto_index_gt cos(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) {
-        return {};
-    }
-    static auto_index_gt haversine(accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return {}; }
 
     auto_index_gt fork() const {
         auto_index_gt result;
@@ -339,8 +366,10 @@ class auto_index_gt {
     }
 
     template <typename scalar_at>
-    std::size_t search(scalar_at const* vector, std::size_t wanted, label_t* matches, distance_t* distances,
-                       std::size_t thread, cast_t const& cast) const {
+    std::size_t search(                              //
+        scalar_at const* vector, std::size_t wanted, //
+        label_t* matches, distance_t* distances,     //
+        std::size_t thread, cast_t const& cast) const {
 
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
         std::size_t vector_bytes = dimensions_ * sizeof(scalar_at);
@@ -412,7 +441,7 @@ class auto_index_gt {
         if (supports_arm_sve())
             return {
                 pun_metric<simsimd_f32_t>([](simsimd_f32_t const* a, simsimd_f32_t const* b, size_t d) noexcept {
-                    return 1 - simsimd_dot_f32sve(a, b, d);
+                return 1 - simsimd_dot_f32sve(a, b, d);
                 }),
                 isa_t::sve_k,
             };
@@ -461,7 +490,7 @@ class auto_index_gt {
         }
     }
 
-    static metric_and_meta_t l2_metric(std::size_t dimensions, accuracy_t accuracy) {
+    static metric_and_meta_t l2_metric(std::size_t, accuracy_t accuracy) {
         switch (accuracy) {
         case accuracy_t::i8q100_k: return {};
         case accuracy_t::f16_k: return {pun_metric<f16_converted_t>(l2_squared_gt<f16_converted_t>{}), isa_t::auto_k};
@@ -471,12 +500,22 @@ class auto_index_gt {
         }
     }
 
-    static metric_and_meta_t cos_metric(std::size_t dimensions, accuracy_t accuracy) {
+    static metric_and_meta_t cos_metric(std::size_t, accuracy_t accuracy) {
         switch (accuracy) {
         case accuracy_t::i8q100_k: return {};
         case accuracy_t::f16_k: return {pun_metric<f16_converted_t>(cos_gt<f16_converted_t>{}), isa_t::auto_k};
         case accuracy_t::f32_k: return {pun_metric<f32_t>(cos_gt<f32_t>{}), isa_t::auto_k};
         case accuracy_t::f64_k: return {pun_metric<f64_t>(cos_gt<f64_t>{}), isa_t::auto_k};
+        default: return {};
+        }
+    }
+
+    static metric_and_meta_t haversine_metric(accuracy_t accuracy) {
+        switch (accuracy) {
+        case accuracy_t::i8q100_k: return {};
+        case accuracy_t::f16_k: return {pun_metric<f16_converted_t>(haversine_gt<f16_converted_t>{}), isa_t::auto_k};
+        case accuracy_t::f32_k: return {pun_metric<f32_t>(haversine_gt<f32_t>{}), isa_t::auto_k};
+        case accuracy_t::f64_k: return {pun_metric<f64_t>(haversine_gt<f64_t>{}), isa_t::auto_k};
         default: return {};
         }
     }
