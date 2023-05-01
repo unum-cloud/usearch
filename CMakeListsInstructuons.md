@@ -68,7 +68,7 @@ npm publish
 ### Rust
 
 ```sh
-cargo run
+cargo test -p usearch
 cargo publish
 ```
 

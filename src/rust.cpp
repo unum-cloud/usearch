@@ -1,5 +1,5 @@
 #include "usearch/src/rust.hpp"
-#include "usearch/src/main.rs.h"
+#include "usearch/src/lib.rs.h"
 
 using namespace unum::usearch;
 using namespace unum;

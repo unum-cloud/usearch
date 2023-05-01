@@ -1,5 +1,5 @@
 fn main() {
-    cxx_build::bridge("src/main.rs")
+    cxx_build::bridge("src/lib.rs")
         .file("src/rust.cpp")
         .flag_if_supported("-std=c++11")
         .include("include")
@@ -8,7 +8,7 @@ fn main() {
         .include("simsimd/include")
         .compile("usearch");
 
-    println!("cargo:rerun-if-changed=src/main.rs");
+    println!("cargo:rerun-if-changed=src/lib.rs");
     println!("cargo:rerun-if-changed=src/rust.cpp");
     println!("cargo:rerun-if-changed=src/rust.hpp");
     println!("cargo:rerun-if-changed=src/advanced.hpp");

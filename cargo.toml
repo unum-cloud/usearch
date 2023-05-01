@@ -8,6 +8,10 @@ license = "Apache-2.0"
 publish = true
 repository = "https://github.com/unum-cloud/usearch"
 
+[lib]
+name = "usearch"
+path = "src/lib.rs"
+
 [dependencies]
 cxx = "1.0"
 

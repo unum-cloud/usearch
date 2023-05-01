@@ -172,12 +172,12 @@ enum class accuracy_t {
     i8q100_k,
 };
 
-bool str_equals(char const* begin, size_t len, char const* other_begin) noexcept {
+inline bool str_equals(char const* begin, size_t len, char const* other_begin) noexcept {
     size_t other_len = strlen(other_begin);
     return len == other_len && strncmp(begin, other_begin, len) == 0;
 }
 
-accuracy_t accuracy(char const* str, size_t len) {
+inline accuracy_t accuracy(char const* str, size_t len) {
     accuracy_t accuracy;
     if (str_equals(str, len, "f32"))
         accuracy = accuracy_t::f32_k;
