@@ -10,5 +10,7 @@ fn main() {
 
     println!("cargo:rerun-if-changed=src/main.rs");
     println!("cargo:rerun-if-changed=src/rust.cpp");
-    println!("cargo:rerun-if-changed=src/rust.h");
+    println!("cargo:rerun-if-changed=src/rust.hpp");
+    println!("cargo:rerun-if-changed=src/advanced.hpp");
+    println!("cargo:rerun-if-changed=include/usearch/usearch.hpp");
 }

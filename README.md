@@ -17,7 +17,7 @@ Compact, yet Powerful<br/>
 <a href="https://github.com/unum-cloud/usearch"><img height="25" src="https://github.com/unum-cloud/.github/raw/main/assets/github.svg" alt="GitHub"></a>
 </p>
 
-- [x] Single C++11 header, easily extendible.
+- [x] Single C++11 header implementation, easily extendible.
 - [x] 4B+ sized space efficient point-clouds with `uint40_t`.
 - [x] Half-precision support with [`maratyszcza/fp16`](https://github.com/maratyszcza/fp16).
 - [x] View from disk, without loading into RAM.
@@ -29,14 +29,16 @@ Compact, yet Powerful<br/>
 - [x] Don't copy vectors if not needed.
 - [x] Bring your threads.
 - [x] Multiple vectors per label.
-- [x] CPython bindings for Python 3.
-- [ ] Node.js bindings for JavaScript.
+- [x] CPython bindings for Python 3: `pip install usearch`
+- [x] Node.js bindings for JavaScript: `npm install usearch`
+- [x] Rust language bindings.
 - [ ] Wolfram language bindings.
 - [x] For Linux: GCC, Clang.
 - [x] For MacOS: Apple Clang.
 - [ ] For Windows.
+- [ ] Multi-index lookups in Python.
+- [ ] Thread-safe `reserve`.
 - [ ] Distributed construction.
-- [ ] Multi-index lookups.
 
 ## Usage
 
@@ -67,3 +69,9 @@ FetchContent_MakeAvailable(usearch)
 ### Bring your Threads
 
 ## Performance
+
+
+## TODO
+
+- JavaScript: Allow calling from "worker threads".
+- Rust: Allow passing a custom thread ID.

@@ -195,15 +195,15 @@ PYBIND11_MODULE(usearch, m) {
 
     auto i = py::class_<native_index_t>(m, "Index");
 
-    i.def(py::init(&make_index),                                                 //
-          py::kw_only(),                                                         //
-          py::arg("dim"),                                                        //
-          py::arg("capacity") = 0,                                               //
-          py::arg("dtype") = std::string("f32"),                                 //
-          py::arg("metric") = std::string("ip"),                                 //
-          py::arg("connectivity") = config_t::connectivity_default_k,            //
-          py::arg("expansion_add") = config_t::expansion_construction_default_k, //
-          py::arg("expansion_search") = config_t::expansion_search_default_k     //
+    i.def(py::init(&make_index),                                             //
+          py::kw_only(),                                                     //
+          py::arg("dim"),                                                    //
+          py::arg("capacity") = 0,                                           //
+          py::arg("dtype") = std::string("f32"),                             //
+          py::arg("metric") = std::string("ip"),                             //
+          py::arg("connectivity") = config_t::connectivity_default_k,        //
+          py::arg("expansion_add") = config_t::expansion_add_default_k,      //
+          py::arg("expansion_search") = config_t::expansion_search_default_k //
     );
 
     i.def(                     //

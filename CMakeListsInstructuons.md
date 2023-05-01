@@ -65,11 +65,16 @@ node src/test.js
 npm publish
 ```
 
-### JavaScript
+### Rust
 
 ```sh
 cargo run
+cargo publish
 ```
+
+### Java
+
+### Wolfram
 
 ## Benchmarks
 

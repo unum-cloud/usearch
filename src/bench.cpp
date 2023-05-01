@@ -256,7 +256,7 @@ struct args_t {
     std::string path_neighbors;
 
     std::size_t connectivity = config_t::connectivity_default_k;
-    std::size_t expansion_add = config_t::expansion_construction_default_k;
+    std::size_t expansion_add = config_t::expansion_add_default_k;
     std::size_t expansion_search = config_t::expansion_search_default_k;
     std::size_t threads = std::thread::hardware_concurrency();
 
