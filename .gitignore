@@ -18,6 +18,7 @@ perf.data
 __pycache__
 *.egg-info
 dist/
+wheelhouse/
 
 # JS wrappers
 package-lock.json

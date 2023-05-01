@@ -2,13 +2,22 @@
 
 ## Build
 
+Before building the first time, please pull submodules.
+
+```sh
+git submodule update --init --recursive
+```
+
 ### Linux
 
-```
-cmake -B ./build_release -DCMAKE_BUILD_TYPE=Release -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_JEMALLOC=0 && make -C ./build_release -j
+```sh
+cmake -B ./build_release \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DUSEARCH_USE_OPENMP=1 \
+    -DUSEARCH_USE_JEMALLOC=1 && \
+    make -C ./build_release -j
 
-cmake -B ./build_release -DCMAKE_BUILD_TYPE=Release -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_JEMALLOC=1 && make -C ./build_release -j
-
+# To benchmark:
 ./build_release/bench \
     --vectors datasets/wiki_1M/base.1M.fbin \
     --queries datasets/wiki_1M/query.public.100K.fbin \
@@ -18,7 +27,7 @@ cmake -B ./build_release -DCMAKE_BUILD_TYPE=Release -DUSEARCH_USE_OPENMP=1 -DUSE
 
 ### MacOS
 
-```
+```sh
 brew install libomp llvm
 cmake \
     -DCMAKE_C_COMPILER="/opt/homebrew/opt/llvm/bin/clang" \
@@ -26,18 +35,12 @@ cmake \
      -B ./build_release && \
     make -C ./build_release -j
 
+# To benchmark:
 ./build_release/bench \
     --vectors datasets/wiki_1M/base.1M.fbin \
     --queries datasets/wiki_1M/query.public.100K.fbin \
     --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin \
-    --ip
-
-mv build_release/usearch.cpython* src/ && \
-    python src/bench.py \
-    --vectors datasets/wiki_1M/base.1M.fbin \
-    --queries datasets/wiki_1M/query.public.100K.fbin \
-    --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin \
-    --ip    
+    --ip     
 ```
 
 ### Python
@@ -45,6 +48,13 @@ mv build_release/usearch.cpython* src/ && \
 ```sh
 pip install -e .
 python src/test.py
+
+# To benchmark:
+python src/bench.py \
+    --vectors datasets/wiki_1M/base.1M.fbin \
+    --queries datasets/wiki_1M/query.public.100K.fbin \
+    --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin \
+    --ip 
 ```
 
 ### JavaScript

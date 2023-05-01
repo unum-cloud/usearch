@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=42", "wheel", "cmake>=3.22", "pybind11"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
@@ -12,7 +12,8 @@ filterwarnings = ["error"]
 build-verbosity = 0
 before-build = [
     "rm -rf {project}/CMakeCache.txt {project}/build {project}/build_debug {project}/CMakeFiles.txt {project}/_deps",
-    "mkdir -p build/usearch"
+    "mkdir -p build/usearch",
+    "git submodule update --init --recursive"
 ]
 
 skip = ["*musllinux*", "*i686*", "pp*"]
