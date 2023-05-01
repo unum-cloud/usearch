@@ -32,7 +32,7 @@ setup(
     version=__version__,
     packages=find_packages(),
 
-    description='The Tiny Vector Search Engine',
+    description='The Mighty Tiny Vector Search Engine with Automatic Quantization and Hardware Acceleration',
     long_description=long_description,
     long_description_content_type='text/markdown',
     license='Apache-2.0',

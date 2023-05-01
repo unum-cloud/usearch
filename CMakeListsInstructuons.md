@@ -62,6 +62,7 @@ python src/bench.py \
 ```sh
 npm install
 node src/test.js
+npm publish
 ```
 
 ### JavaScript

@@ -62,7 +62,7 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
     Napi::Env env = ctx.Env();
 
     int length = ctx.Length();
-    if (length == 1 && ctx[0].IsObject()) {
+    if (length == 0 || length >= 2 || !ctx[0].IsObject()) {
         Napi::TypeError::New(
             env, "Pass args as named objects: dimensions: uint, capacity: uint, metric: [ip, cos, l2_sq, haversine]")
             .ThrowAsJavaScriptException();

@@ -1,14 +1,13 @@
 {
     "name": "usearch",
     "version": "0.1.0",
-    "description": "",
+    "description": "The Mighty Tiny Vector Search Engine with Automatic Quantization and Hardware Acceleration",
     "author": "Ashot Vardanian",
     "license": "Apache 2.0",
     "repository": {
         "type": "git",
         "url": "https://github.com/unum-cloud/usearch.git"
     },
-    "private": true,
     "gypfile": true,
     "engines": {
         "node": "~10 >=10.20 || >=12.17"
