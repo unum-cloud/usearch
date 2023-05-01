@@ -55,8 +55,8 @@ jobs:
           path: ./wheelhouse/*.whl
   
   
-  publish_wheels:
-    name: Publish Wheels to PyPi
+  publish_python:
+    name: Publish Python
     runs-on: ubuntu-20.04
     needs: build_wheels
     environment:
@@ -78,8 +78,8 @@ jobs:
           verbose: true
           print_hash: true
 
-  publish_npm:
-    name: Publish to NPM
+  publish_javascript:
+    name: Publish JavaScript
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -93,13 +93,26 @@ jobs:
         with:
           token: ${{ secrets.NPM_TOKEN }}
 
+  publish_rust:
+    name: Publish Rust
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: stable
+          override: true
+    - uses: katyo/publish-crates@v2
+      with:
+          registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}          
+
   deploy_docs:
     name: Deploy Docs
     environment: 
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-22.04
-    needs: publish_wheels
+    needs: publish_python
     steps:
       - name: Checkout
         uses: actions/checkout@v3
