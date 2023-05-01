@@ -32,7 +32,9 @@ using punned_stateful_metric_t =
 template <typename at, typename compare_at> inline at clamp(at v, at lo, at hi, compare_at comp) noexcept {
     return comp(v, lo) ? lo : comp(hi, v) ? hi : v;
 }
-template <typename at> inline at clamp(at v, at lo, at hi) noexcept { return clamp(v, lo, hi, std::less<at>{}); }
+template <typename at> inline at clamp(at v, at lo, at hi) noexcept {
+    return usearch::clamp(v, lo, hi, std::less<at>{});
+}
 
 class i8q100_converted_t;
 class f16_converted_t;
@@ -94,9 +96,9 @@ class i8q100_converted_t {
     inline operator double() const noexcept { return double(int8_) / 100.0; }
 
     inline i8q100_converted_t(float v) noexcept
-        : int8_(clamp<std::int8_t>(static_cast<std::int8_t>(v * 100.f), -100, 100)) {}
+        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * 100.f), -100, 100)) {}
     inline i8q100_converted_t(double v) noexcept
-        : int8_(clamp<std::int8_t>(static_cast<std::int8_t>(v * 100.0), -100, 100)) {}
+        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * 100.0), -100, 100)) {}
 };
 
 inline f16_converted_t::f16_converted_t(i8q100_converted_t v) noexcept : f16_converted_t(float(v)) {}
@@ -280,32 +282,15 @@ class auto_index_gt {
     void view(char const* path) { index_->view(path); }
     void reserve(std::size_t capacity) { index_->reserve(capacity); }
 
-    void add(label_t label, f32_t const* vector, std::size_t thread = 0, bool copy = true) {
-        return add(label, vector, thread, copy, casts_.from_f32);
-    }
-
-    std::size_t search(f32_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances,
-                       std::size_t thread = 0) const {
-        return search(vector, wanted, matches, distances, thread, casts_.from_f32);
-    }
-
-    void add(label_t label, f64_t const* vector, std::size_t thread = 0, bool copy = true) {
-        return add(label, vector, thread, copy, casts_.from_f64);
-    }
-
-    std::size_t search(f64_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances,
-                       std::size_t thread = 0) const {
-        return search(vector, wanted, matches, distances, thread, casts_.from_f64);
-    }
-
-    void add(label_t label, f16_converted_t const* vector, std::size_t thread = 0, bool copy = true) {
-        return add(label, vector, thread, copy, casts_.from_f16);
-    }
-
-    std::size_t search(f16_converted_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances,
-                       std::size_t thread = 0) const {
-        return search(vector, wanted, matches, distances, thread, casts_.from_f16);
-    }
+    // clang-format off
+    void add(label_t label, f16_converted_t const* vector, std::size_t thread = 0, bool copy = true) { return add(label, vector, thread, copy, casts_.from_f16); }
+    void add(label_t label, f32_t const* vector, std::size_t thread = 0, bool copy = true) { return add(label, vector, thread, copy, casts_.from_f32); }
+    void add(label_t label, f64_t const* vector, std::size_t thread = 0, bool copy = true) { return add(label, vector, thread, copy, casts_.from_f64); }
+    
+    std::size_t search(f16_converted_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread = 0) const { return search(vector, wanted, matches, distances, thread, casts_.from_f16); }
+    std::size_t search(f32_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread = 0) const { return search(vector, wanted, matches, distances, thread, casts_.from_f32); }
+    std::size_t search(f64_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread = 0) const { return search(vector, wanted, matches, distances, thread, casts_.from_f64); }
+    // clang-format on
 
     static auto_index_gt ip(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) {
         return make(dimensions, accuracy, ip_metric(dimensions, accuracy), make_casts(accuracy), config);

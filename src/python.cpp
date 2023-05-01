@@ -27,9 +27,9 @@ namespace py = pybind11;
 
 using label_t = Py_ssize_t;
 using distance_t = punned_distance_t;
-using index_t = auto_index_gt<label_t>;
+using native_index_t = auto_index_gt<label_t>;
 
-static index_t make_index(          //
+static native_index_t make_index(   //
     std::size_t dimensions,         //
     std::size_t capacity,           //
     std::string const& scalar_type, //
@@ -60,20 +60,20 @@ static index_t make_index(          //
         throw std::runtime_error("Unknown type, choose: f32, f16, f64, i8q100");
 
     if (metric == "l2_sq" || metric == "euclidean_sq")
-        return index_t::l2(dimensions, accuracy, config);
+        return native_index_t::l2(dimensions, accuracy, config);
     else if (metric == "ip" || metric == "inner" || metric == "dot")
-        return index_t::ip(dimensions, accuracy, config);
+        return native_index_t::ip(dimensions, accuracy, config);
     else if (metric == "cos" || metric == "angular")
-        return index_t::cos(dimensions, accuracy, config);
+        return native_index_t::cos(dimensions, accuracy, config);
     else if (metric == "haversine")
-        return index_t::haversine(accuracy, config);
+        return native_index_t::haversine(accuracy, config);
     else
         throw std::runtime_error("Unknown distance, choose: l2_sq, ip, cos, hamming, jaccard");
 
     return {};
 }
 
-static void add_to_index(index_t& index, py::buffer labels, py::buffer vectors, bool copy) {
+static void add_to_index(native_index_t& index, py::buffer labels, py::buffer vectors, bool copy) {
 
     py::buffer_info labels_info = labels.request();
     py::buffer_info vectors_info = vectors.request();
@@ -137,7 +137,7 @@ static void add_to_index(index_t& index, py::buffer labels, py::buffer vectors, 
  *      2. matrix of distances,
  *      3. array with match counts.
  */
-static py::tuple search_in_index(index_t& index, py::buffer vectors, ssize_t wanted) {
+static py::tuple search_in_index(native_index_t& index, py::buffer vectors, ssize_t wanted) {
 
     py::buffer_info vectors_info = vectors.request();
     if (vectors_info.ndim != 2)
@@ -186,14 +186,14 @@ static py::tuple search_in_index(index_t& index, py::buffer vectors, ssize_t wan
     return results;
 }
 
-static void save_index(index_t const& index, std::string const& path) { index.save(path.c_str()); }
-static void load_index(index_t& index, std::string const& path) { index.load(path.c_str()); }
-static void view_index(index_t& index, std::string const& path) { index.view(path.c_str()); }
+static void save_index(native_index_t const& index, std::string const& path) { index.save(path.c_str()); }
+static void load_index(native_index_t& index, std::string const& path) { index.load(path.c_str()); }
+static void view_index(native_index_t& index, std::string const& path) { index.view(path.c_str()); }
 
 PYBIND11_MODULE(usearch, m) {
     m.doc() = "Unum USearch Python bindings";
 
-    auto i = py::class_<index_t>(m, "Index");
+    auto i = py::class_<native_index_t>(m, "Index");
 
     i.def(py::init(&make_index),                                                 //
           py::kw_only(),                                                         //
