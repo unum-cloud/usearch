@@ -16,12 +16,76 @@ permissions:
 
 jobs:
 
+#   versioning:
+#     name: Semantic Release
+#     runs-on: ubuntu-latest
+#     steps:
+#     - uses: actions/checkout@v3
+#       with:
+#         persist-credentials: false
+#     - uses: actions/setup-node@v3
+#     - run: cp .github/workflows/package.json . && npm install && npx semantic-release
+
+  build_wheels:
+    name: Build Wheels for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+#     needs: versioning
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, macOS-11]
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: 'main'      
+      - uses: actions/setup-python@v3
+      - uses: crazy-max/ghaction-setup-docker@v1.0.0
+        with:
+          version: 23.0.1
+      - uses: docker/setup-qemu-action@v2.1.0
+
+      - name: Install CIBuildWheel
+        run: python -m pip install cibuildwheel
+
+      - name: Build wheels
+        run: python -m cibuildwheel
+        
+      - uses: actions/upload-artifact@v3
+        with:
+          path: ./wheelhouse/*.whl
+  
+  
+  publish_wheels:
+    name: Publish Wheels to PyPi
+    runs-on: ubuntu-20.04
+    needs: build_wheels
+    environment:
+      name: pypi
+      url: https://pypi.org/p/usearch
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v3.0.2
+        with:
+          path: ./dist/
+
+      - name: Publish to PyPi
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages_dir: ./dist/artifact
+          verbose: true
+          print_hash: true
+
+
   deploy_docs:
     name: Deploy Docs
     environment: 
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-22.04
+    needs: publish_wheels
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -31,6 +95,8 @@ jobs:
         uses: actions/configure-pages@v2
       - name: Install dependencies
         run: sudo apt update && sudo apt install -y doxygen graphviz dia git && pip install sphinx breathe furo m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery
+      - name: Install USearch from PyPi
+        run: pip install usearch
       - name: Build documentation
         run: cd docs && make html
       - name: Copy assets

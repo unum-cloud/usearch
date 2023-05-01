@@ -193,10 +193,12 @@ inline std::size_t bytes_per_scalar(accuracy_t accuracy) noexcept {
 }
 
 inline bool supports_arm_sve() {
+#if defined(__aarch64__)
 #if __linux__
     unsigned long hwcaps = getauxval(AT_HWCAP);
     if (hwcaps & HWCAP_SVE)
         return true;
+#endif
 #endif
     return false;
 }
