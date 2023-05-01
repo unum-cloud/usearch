@@ -1,3 +1,4 @@
+import os
 import sys
 from setuptools import setup, find_packages
 from pybind11.setup_helpers import Pybind11Extension
