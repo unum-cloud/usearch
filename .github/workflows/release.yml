@@ -83,6 +83,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
       - uses: actions/setup-node@v3
         with:
           node-version: 18
@@ -98,6 +99,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    - run: git submodule update --init --recursive
     - uses: actions-rs/toolchain@v1
       with:
           toolchain: stable
