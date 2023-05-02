@@ -91,13 +91,32 @@ index.view("index.usearch"); // Memory-mapping from disk
 ```
 
 The `add` is thread-safe for concurrent index construction.
+For advanced users, more compile-time abstraction are available.
+
+```cpp
+template <typename metric_at = ip_gt<float>,            //
+          typename label_at = std::size_t,              // `uint32_t`, `uuid_t`...
+          typename id_at = std::uint32_t,               // `uint40_t`, `uint64_t`...
+          typename scalar_at = float,                   // `double`, `half`, `char`...
+          typename allocator_at = std::allocator<char>> //
+class index_gt;
+```
+
+One may also define a custom metric, such as Damerau–Levenshtein distance, to compute the similarity between variable length strings.
+The only constraint is the function signature:
+
+```cpp
+struct custom_metric_t {
+    T operator()(T const* a, T const* b, std::size_t a_length, std::size_t b_length) const;
+};
+```
 
 ### Python
 
 Python bindings are implemented with [`pybind/pybind11`](https://github.com/pybind/pybind11).
 Assuming the presence of Global Interpreter Lock in Python, on large insertions we spawn threads in the C++ layer.
 
-```sh
+```python
 $ pip install usearch
 
 import numpy as np
@@ -125,11 +144,185 @@ assert len(index) == n
 matches, distances, counts = index.search(vectors, 10)
 ```
 
+### JavaScript
+
+```js
+// npm install usearch
+
+var index = new usearch.Index({ metric: 'cos', connectivity: 16, dimensions: 2 })
+assert.equal(index.connectivity(), 16)
+assert.equal(index.dimensions(), 2)
+assert.equal(index.size(), 0)
+
+index.add(15, new Float32Array([10, 20]))
+assert.equal(index.size(), 2)
+
+var results = index.search(new Float32Array([13, 14]), 2)
+assert.deepEqual(results.labels, new Uint32Array([15, 16]))
+assert.deepEqual(results.distances, new Float32Array([45, 130]))
+```
+
+### Rust
+
+Being a systems-programming language, Rust has better control over memory management and concurrency, but lacks function overloading.
+Aside from the `add` and `search`, it also provides `add_in_thread` and `search_in_thread` which let users identify the calling thread to use underlying temporary memory more efficiently.
+
+```rust
+// cargo add usearch
+
+let quant: &str = "f16";
+let index = new_ip(5,  &quant, 0, 0, 0).unwrap();
+
+assert!(index.reserve(10).is_ok());
+assert!(index.capacity() >= 10);
+assert!(index.connectivity() != 0);
+assert_eq!(index.dimensions(), 5);
+assert_eq!(index.size(), 0);
+
+let first: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
+let second: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
+
+assert!(index.add(42, &first).is_ok());
+assert!(index.add(43, &second).is_ok());
+assert_eq!(index.size(), 2);
+
+// Read back the tags
+let results = index.search(&first, 10).unwrap();
+assert_eq!(results.count, 2);
+
+// Validate serialization
+assert!(index.save("index.usearch").is_ok());
+assert!(index.load("index.usearch").is_ok());
+assert!(index.view("index.usearch").is_ok());
+
+// There are more "metrics" available
+assert!(new_l2(5,  &quant, 0, 0, 0).is_ok());
+assert!(new_cos(5,  &quant, 0, 0, 0).is_ok());
+assert!(new_haversine(&quant, 0, 0, 0).is_ok());
+```
+
+### Java
+
+```java
+Index index = new Index.Config().metric("cos").dimensions(2).build();
+float vec[] = {10, 20};
+index.add(42, vec);
+int[] labels = index.search(vec, 5);
+```
+
+### GoLang
+
+### Wolfram
+
 ## Features
 
 ### Bring your Threads
 
+Most AI, HPC, or Big Data packages use some form of a thread pool.
+Instead of spawning additional threads within USearch, we focus on thread-safety of the `add` function.
+
+```cpp
+#pragma omp parallel for
+    for (std::size_t i = 0; i < n; ++i)
+        native.add(label, span_t{vector, dims}, omp_get_thread_num());
+```
+
+During initialization we allocate enough temporary memory for all the cores on the machine.
+On call, the user can simply supply the identifier of the current thread, making this library easy to integrate with OpenMP and similar tools.
+
+### Go Beyond 4B Entries
+
+### View Larger Indexes from Disk
+
+### Quantize on the Fly
+
 ## Performance
+
+Below are the performance numbers for a benchmark running on the 64 cores of AWS `c7g.metal` "Graviton 3"-based instances.
+We fix the default configuration in the top line and show the affects of various parameters by changing one parameter at a time.
+
+|  Vectors   | Connectivity | EF @ A | EF @ S | Add, QPS | Search, QPS | Recall @ 1 |
+| :--------: | :----------: | :----: | :----: | :------: | :---------: | ---------: |
+| `f32` x256 |      16      |  128   |   64   |  75'640  |   131'654   |      99.3% |
+|            |              |        |        |          |             |            |
+| `f32` x256 |      12      |  128   |   64   |  81'747  |   149'728   |      99.0% |
+| `f32` x256 |      32      |  128   |   64   |  64'368  |   104'050   |      99.4% |
+|            |              |        |        |          |             |            |
+| `f32` x256 |      16      |   64   |   32   | 128'644  |   228'422   |      97.2% |
+| `f32` x256 |      16      |  256   |  128   |  39'981  |   69'065    |      99.2% |
+|            |              |        |        |          |             |            |
+| `f16` x256 |      16      |   64   |   32   | 128'644  |   228'422   |      97.2% |
+| `f32` x256 |      16      |  256   |  128   |  39'981  |   69'065    |      99.2% |
+
+All major HNSW implementation share an identical list of hyper-parameters:
+
+- connectivity (often called `M`),
+- expansion on additions (often called `efConstruction`),
+- expansion on search (often called `ef`).
+
+The default values vary drastically.
+
+|  Library  | Connectivity | EF @ A | EF @ S |
+| :-------: | :----------: | :----: | :----: |
+| `hnswlib` |      16      |  200   |   10   |
+|  `FAISS`  |      32      |   40   |   16   |
+| `USearch` |      16      |  128   |   64   |
+
+### Benchmarking
+
+To achieve best results, please compile locally and check out various configuration options.
+
+```sh
+cmake -B ./build_release \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DUSEARCH_USE_OPENMP=1 \
+    -DUSEARCH_USE_JEMALLOC=1 && \
+    make -C ./build_release -j
+
+./build_release/bench --help
+```
+
+Which would print the following instructions:
+
+```txt
+SYNOPSIS
+        ./build_release/bench [--vectors <path>] [--queries <path>] [--neighbors <path>] [-b] [-j
+                              <integer>] [-c <integer>] [--expansion-add <integer>]
+                              [--expansion-search <integer>] [--native|--f16quant|--i8quant]
+                              [--ip|--l2|--cos|--haversine] [-h]
+
+OPTIONS
+        --vectors <path>
+                    .fbin file path to construct the index
+
+        --queries <path>
+                    .fbin file path to query the index
+
+        --neighbors <path>
+                    .ibin file path with ground truth
+
+        -b, --big   Will switch to uint40_t for neighbors lists with over 4B entries
+        -j, --threads <integer>
+                    Uses all available cores by default
+
+        -c, --connectivity <integer>
+                    Index granularity
+
+        --expansion-add <integer>
+                    Affects indexing depth
+
+        --expansion-search <integer>
+                    Affects search depth
+
+        --native    Use raw templates instead of type-punned classes
+        --f16quant  Enable `f16_t` quantization
+        --i8quant   Enable `int8_t` quantization
+        --ip        Choose Inner Product metric
+        --l2        Choose L2 Euclidean metric
+        --cos       Choose Angular metric
+        --haversine Choose Haversine metric
+        -h, --help  Print this help information on this tool and exit
+```
 
 ## TODO
 
