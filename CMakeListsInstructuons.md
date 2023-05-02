@@ -75,12 +75,27 @@ cargo publish
 ### Java
 
 ```sh
-cs java
+cs java/unum/cloud/usearch
 javac -h . Index.java
-
+# Ubuntu:
+g++ -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
+g++ -shared -fPIC -o libUSearchJNI.so cloud_unum_usearch_Index.o -lc
+# Windows
+g++ -c -I%JAVA_HOME%\include -I%JAVA_HOME%\include\win32 cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
+g++ -shared -o USearchJNI.dll cloud_unum_usearch_Index.o -Wl,--add-stdcall-alias
+# MacOS
+g++ -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/darwin cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
+g++ -dynamiclib -o libUSearchJNI.dylib cloud_unum_usearch_Index.o -lc
+# Run linking to that directory
+java -cp . -Djava.library.path=/Users/av/github/usearch/java/cloud/unum/usearch/ Index.java
+java -cp . -Djava.library.path=/Users/av/github/usearch/java cloud.unum.usearch.Index
 ```
 
 ### Wolfram
+
+```sh
+brew install --cask wolfram-engine
+```
 
 ## Benchmarks
 

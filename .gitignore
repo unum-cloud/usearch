@@ -28,6 +28,9 @@ node_modules/
 Cargo.lock
 target/ 
 
+# Java binings
+.gradle
+*.class
 
 # Prerequisites
 *.d
@@ -61,3 +64,4 @@ target/
 *.exe
 *.out
 *.app
+

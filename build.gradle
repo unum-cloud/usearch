@@ -1,0 +1,111 @@
+import org.gradle.internal.jvm.Jvm
+
+plugins {
+    id 'java-library'
+    id 'c'
+    id 'cpp'
+    id 'maven-publish'
+}
+
+group "cloud.unum.usearch"
+version = file("VERSION").text.trim()
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir "java/"
+            exclude "java/test/"
+        }
+    }
+    test {
+        java {
+            srcDir "java/test"
+        }
+    }
+}
+
+dependencies {
+    testImplementation('junit:junit:4.13.2')
+}
+
+model {
+
+    components {
+        usearch(NativeLibrarySpec) {
+            sources {
+                cpp {
+                    source {
+                        srcDirs "cloud/unum/usearch"
+                        include "**/*.cpp"
+                    }
+                    exportedHeaders {
+                        srcDirs "include", "src", "${Jvm.current().javaHome}/include"
+                    }
+                }
+            }
+            binaries.withType(StaticLibraryBinarySpec) {
+                buildable = false
+            }
+            binaries.withType(SharedLibraryBinarySpec) {
+                if (targetPlatform.operatingSystem.linux) {
+                    cppCompiler.args '-I', "${Jvm.current().javaHome}/include/linux"
+                    cppCompiler.args '-D_FILE_OFFSET_BITS=64'
+                } else if (targetPlatform.operatingSystem.macOsX) {
+                    cppCompiler.args '-I', "${Jvm.current().javaHome}/include/darwin"
+                    cppCompiler.args '-D_FILE_OFFSET_BITS=64'
+                }
+            }
+        }
+    }
+}
+
+test {
+    forkEvery 1
+
+    dependsOn jar
+
+    // Rearrange test classpath, add compiled JAR instead of main classes
+    classpath = project.sourceSets.test.output + configurations.testRuntimeClasspath + files(jar.archiveFile)
+}
+
+jar {
+    dependsOn("usearchSharedLibrary")
+    from("$buildDir/libs/usearch/shared/libUSearchJNI.dylib")
+}
+
+publishing {
+    publications {
+        library(MavenPublication) {
+            from components.java
+
+            pom {
+                name = "USearch"
+                description = "The Mighty Tiny Vector Search Engine with Automatic Quantization and Hardware Acceleration"
+                url = "https://github.com/unum-cloud/usearch"
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = "OSSRH"
+            url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
+            credentials {
+                username = System.getenv("MAVEN_USERNAME")
+                password = System.getenv("MAVEN_PASSWORD")
+            }
+        }
+    }
+}
