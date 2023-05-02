@@ -29,9 +29,11 @@ Compact, yet Powerful<br/>
 - [x] Don't copy vectors if not needed.
 - [x] Bring your threads.
 - [x] Multiple vectors per label.
-- [x] Python bindings: `pip install usearch`
-- [x] JavaScript bindings: `npm install usearch`
-- [x] Rust bindings: `cargo add usearch`
+- [x] Python bindings: `pip install usearch`.
+- [x] JavaScript bindings: `npm install usearch`.
+- [x] Rust bindings: `cargo add usearch`.
+- [x] Java bindings: `cloud.unum:usearch` on GitHub.
+- [ ] GoLang bindings.
 - [ ] Wolfram language bindings.
 - [x] For Linux: GCC, Clang.
 - [x] For MacOS: Apple Clang.
@@ -55,6 +57,10 @@ index.add(/* label: */ 42, /* vector: */ {&vec, 3});
 index.search(
   /* query: */ {&vec, 3}, 10 /* results */,
   /* callback: */ [](std::size_t label, float distance) { });
+
+index.save("index.usearch"); // Serializing to disk
+index.load("index.usearch"); // Reconstructing from disk
+index.view("index.usearch"); // Memory-mapping from disk
 ```
 
 Alternatively fetch it with CMake:
@@ -63,6 +69,8 @@ Alternatively fetch it with CMake:
 FetchContent_Declare(usearch GIT_REPOSITORY https://github.com/unum-cloud/usearch.git)
 FetchContent_MakeAvailable(usearch)
 ```
+
+
 
 ## Features
 

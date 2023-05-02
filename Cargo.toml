@@ -1,6 +1,6 @@
 [package]
 name = "usearch"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["Ashot Vardanian <1983160+ashvardanian@users.noreply.github.com>"]
 description = "The Mighty Tiny Vector Search Engine with Automatic Quantization and Hardware Acceleration"
 edition = "2021"
