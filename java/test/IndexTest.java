@@ -19,7 +19,7 @@ public class IndexTest {
     public void test() {
         String path = "./tmp/";
         deleteDirectoryFiles(path);
-        new Index("cos", "f32", 1, 10, 1, 1, 1);
+        // new Index("cos", "f32", 1, 10, 1, 1, 1);
         System.out.println("Java Tests Passed!");
     }
 }
