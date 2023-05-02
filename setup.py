@@ -58,6 +58,6 @@ setup(
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
     ],
 
-    include_dirs=['include', 'fp16/include', 'simsimd/include'],
+    include_dirs=['include', 'fp16/include', 'simsimd/include', 'src'],
     ext_modules=ext_modules,
 )
