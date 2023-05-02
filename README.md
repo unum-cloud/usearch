@@ -41,6 +41,7 @@ Compact, yet Powerful<br/>
 - [ ] Multi-index lookups in Python.
 - [ ] Thread-safe `reserve`.
 - [ ] Distributed construction.
+- [x] AI + Vector Search = Semantic Search.
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/usearch.hpp
 
@@ -52,7 +53,7 @@ Most vector-search packages focus on just 2 metrics - "Inner Product distance" a
 The lack of dedicated "Cosine distance" can be justified with the simplicity of normalizing such vectors on the fly.
 But that hardly exhausts the list of possible metrics.
 
-![USearch: Vector Search Approaches](assets/usearch-approaches-transparent.png)
+![USearch: Vector Search Approaches](assets/usearch-approaches-white.png)
 
 Older approaches indexing high-dimensional spaces, like KD-Trees and Locality Sensitive Hashing are hardly extendible to vectors/objects of variable length.
 Modern NSW-like approaches, however, only require two objects to be comparable.
@@ -378,3 +379,39 @@ OPTIONS
 
 - JavaScript: Allow calling from "worker threads".
 - Rust: Allow passing a custom thread ID.
+
+## AI + Vector Search = Semantic Search
+
+AI has a growing number of applications, but one of the coolest classic ideas is to use it for Semantic Search.
+One can take an encoder model, like the multi-modal UForm, and a web-programming framework, like UCall, and build an image search platform in just 20 lines of Python.
+
+```python
+import ucall.rich_posix as ucall
+import uform
+import usearch
+
+import numpy as np
+from PIL import Image
+
+server = ucall.Server()
+model = uform.get_model('unum-cloud/uform-vl-multilingual')
+index = usearch.Index(dim=256)
+
+@server
+def add(label: int, photo: Image.Image):
+    image = model.preprocess_image(photo)
+    vector = model.encode_image(image).detach().numpy()
+    labels = np.array([label], dtype=np.longlong)
+    index.add(labels, vector, copy=True)
+
+@server
+def search(query: str) -> np.ndarray:
+    tokens = model.preprocess_text(query)
+    vector = model.encode_text(tokens).detach().numpy()
+    neighbors = index.search(vector, 3)
+    return neighbors[0][:neighbors[2][0]]
+
+server.run()
+```
+
+Check [that](https://github.com/ashvardanian/image-search) and [other](https://github.com/unum-cloud/examples) examples on our corporate GitHub 🤗
