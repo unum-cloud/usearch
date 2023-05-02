@@ -47,10 +47,10 @@ cmake \
 
 ```sh
 pip install -e .
-python src/test.py
+python python/test.py
 
 # To benchmark:
-python src/bench.py \
+python python/bench.py \
     --vectors datasets/wiki_1M/base.1M.fbin \
     --queries datasets/wiki_1M/query.public.100K.fbin \
     --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin \
@@ -61,7 +61,7 @@ python src/bench.py \
 
 ```sh
 npm install
-node src/test.js
+node javascript/test.js
 npm publish
 ```
 
@@ -73,6 +73,12 @@ cargo publish
 ```
 
 ### Java
+
+```sh
+cs java
+javac -h . Index.java
+
+```
 
 ### Wolfram
 

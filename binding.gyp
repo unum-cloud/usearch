@@ -3,7 +3,7 @@
         {
             "target_name": "usearch",
             "sources": [
-                "src/javascript.cpp"
+                "javascript/lib.cpp"
             ],
             "include_dirs": [
                 "<!@(node -p \"require('node-addon-api').include\")",

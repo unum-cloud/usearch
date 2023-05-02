@@ -1,6 +1,6 @@
 {
     "name": "usearch",
-    "version": "0.1.4",
+    "version": "0.1.5",
     "description": "The Mighty Tiny Vector Search Engine with Automatic Quantization and Hardware Acceleration",
     "author": "Ashot Vardanian",
     "license": "Apache 2.0",
@@ -17,6 +17,6 @@
         "node-addon-api": "^3.0.0"
     },
     "scripts": {
-        "test": "node src/test.js"
+        "test": "node javascript/test.js"
     }
 }

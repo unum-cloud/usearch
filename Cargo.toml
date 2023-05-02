@@ -1,8 +1,8 @@
 [package]
 name = "usearch"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["Ashot Vardanian <1983160+ashvardanian@users.noreply.github.com>"]
-description = "The Tiny Vector Search Engine from Unum"
+description = "The Mighty Tiny Vector Search Engine with Automatic Quantization and Hardware Acceleration"
 edition = "2021"
 license = "Apache-2.0"
 publish = true
@@ -10,7 +10,7 @@ repository = "https://github.com/unum-cloud/usearch"
 
 [lib]
 name = "usearch"
-path = "src/lib.rs"
+path = "rust/lib.rs"
 
 [dependencies]
 cxx = "1.0"

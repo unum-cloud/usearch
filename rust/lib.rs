@@ -10,7 +10,7 @@ pub mod ffi {
 
     // C++ types and signatures exposed to Rust.
     unsafe extern "C++" {
-        include!("rust.hpp");
+        include!("lib.hpp");
 
         type Index;
 

@@ -12,7 +12,7 @@ if sys.platform == 'darwin':
 ext_modules = [
     Pybind11Extension(
         'usearch',
-        ['src/python.cpp'],
+        ['python/lib.cpp'],
         extra_compile_args=compile_args,
     ),
 ]
