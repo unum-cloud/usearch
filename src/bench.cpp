@@ -274,6 +274,19 @@ struct args_t {
 };
 
 template <typename index_at, typename dataset_at> //
+index_at type_punned_index_for_metric(dataset_at& dataset, args_t const& args, config_t config, accuracy_t accuracy) {
+    if (args.metric_ip)
+        return index_at::ip(dataset.dimensions(), accuracy, config);
+    if (args.metric_l2)
+        return index_at::l2(dataset.dimensions(), accuracy, config);
+    if (args.metric_cos)
+        return index_at::cos(dataset.dimensions(), accuracy, config);
+    if (args.metric_haversine)
+        return index_at::haversine(accuracy, config);
+    return index_at{};
+}
+
+template <typename index_at, typename dataset_at> //
 void run_type_punned(dataset_at& dataset, args_t const& args, config_t config) {
 
     accuracy_t accuracy = accuracy_t::f32_k;
@@ -282,16 +295,7 @@ void run_type_punned(dataset_at& dataset, args_t const& args, config_t config) {
     if (args.quantize_i8)
         accuracy = accuracy_t::i8q100_k;
 
-    index_at index;
-    if (args.metric_ip)
-        index = index_at::ip(dataset.dimensions(), accuracy, config);
-    if (args.metric_l2)
-        index = index_at::l2(dataset.dimensions(), accuracy, config);
-    if (args.metric_cos)
-        index = index_at::cos(dataset.dimensions(), accuracy, config);
-    if (args.metric_haversine)
-        index = index_at::haversine(accuracy, config);
-
+    index_at index{type_punned_index_for_metric<index_at>(dataset, args, config, accuracy)};
     std::printf("- Hardware acceleration: %s\n", isa(index.acceleration()));
     std::printf("-- Will benchmark in-memory\n");
 
