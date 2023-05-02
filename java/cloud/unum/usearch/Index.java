@@ -129,35 +129,7 @@ public class Index {
   }
 
   static {
-    try {
-
-      String lib_path = "/USearchJNI/";
-      String lib_name;
-      String osName = System.getProperty("os.name");
-      if (osName.indexOf("mac") > 0) {
-        lib_name = "libUSearchJNI.dylib";
-      } else {
-        lib_name = "libusearch.so";
-      }
-      lib_path += lib_name;
-      File file = File.createTempFile(lib_name, "");
-
-      if (file.exists()) {
-        InputStream link = (Index.class.getResourceAsStream(lib_path));
-
-        if (link != null) {
-
-          Files.copy(
-              link,
-              file.getAbsoluteFile().toPath(),
-              StandardCopyOption.REPLACE_EXISTING);
-          System.load(file.getAbsoluteFile().toPath().toString());
-        }
-      }
-
-    } catch (Exception e) {
-      System.out.println("Failed to extract library");
-    }
+    System.loadLibrary("usearch");
   }
 
   public static void main(String[] args) {

@@ -60,6 +60,7 @@ model {
                     cppCompiler.args '-I', "${Jvm.current().javaHome}/include/darwin"
                     cppCompiler.args '-D_FILE_OFFSET_BITS=64'
                 }
+                cppCompiler.args '-std=c++11'
             }
         }
     }
@@ -76,8 +77,8 @@ test {
 
 jar {
     dependsOn("usearchSharedLibrary")
-    into("USearchJNI"){
-        from("$buildDir/libs/usearch/shared/libUSearchJNI.dylib")
+    into("usearch") {
+        from("$buildDir/libs/usearch/shared/libusearch.dylib")
         from("$buildDir/libs/usearch/shared/libusearch.so")
     }
 }
@@ -100,13 +101,26 @@ publishing {
             }
         }
     }
+
+    // Publishing to GitHub is much easier ;)
+    // repositories {
+    //     maven {
+    //         name = "OSSRH"
+    //         url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
+    //         credentials {
+    //             username = System.getenv("MAVEN_USERNAME")
+    //             password = System.getenv("MAVEN_PASSWORD")
+    //         }
+    //     }
+    // }
+
     repositories {
         maven {
-            name = "OSSRH"
-            url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
+            name = "GitHubPackages"
+            url = "https://maven.pkg.github.com/unum-cloud/usearch"
             credentials {
-                username = System.getenv("MAVEN_USERNAME")
-                password = System.getenv("MAVEN_PASSWORD")
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
             }
         }
     }

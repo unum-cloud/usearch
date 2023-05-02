@@ -105,5 +105,6 @@
         "ndim",
         "simsimd",
         "usearch"
-    ]
+    ],
+    "java.configuration.updateBuildConfiguration": "interactive"
 }
