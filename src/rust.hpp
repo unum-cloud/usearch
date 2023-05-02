@@ -1,6 +1,8 @@
 #pragma once
 #include "rust/cxx.h"
 
+#include <memory> // `std::shared_ptr`
+
 #include "advanced.hpp"
 
 struct Matches;
