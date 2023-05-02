@@ -198,6 +198,12 @@ PYBIND11_MODULE(usearch, m) {
         py::arg("count") = 10       //
     );
 
+    i.def("__len__", &native_index_t::size);
+    i.def_property_readonly("size", &native_index_t::size);
+    i.def_property_readonly("ndim", &native_index_t::dimensions);
+    i.def_property_readonly("connectivity", &native_index_t::connectivity);
+    i.def_property_readonly("capacity", &native_index_t::capacity);
+
     i.def("save", &save_index, py::arg("path"));
     i.def("load", &load_index, py::arg("path"));
     i.def("view", &view_index, py::arg("path"));
