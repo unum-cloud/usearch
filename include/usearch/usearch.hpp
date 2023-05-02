@@ -7,21 +7,25 @@
  *  @copyright Copyright (c) 2023
  */
 #pragma once
-#include <atomic>
-#include <bitset>  // `std::bitset`
-#include <climits> // `CHAR_BIT`
-#include <cmath>   // `std::sqrt`
-#include <cstring> // `std::memset`
-#include <mutex>
-#include <random>
-#include <utility> // `std::exchange`
-#include <vector>
+#include <algorithm> // `std::sort_heap`
+#include <atomic>    // `std::atomic`
+#include <bitset>    // `std::bitset`
+#include <climits>   // `CHAR_BIT`
+#include <cmath>     // `std::sqrt`
+#include <cstring>   // `std::memset`
+#include <mutex>     // `std::unique_lock` - replacement candidate
+#include <random>    // `std::default_random_engine` - replacement candidate
+#include <unistd.h>  // `open`, `close`
+#include <utility>   // `std::exchange`
+#include <vector>    // `std::vector`
 
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+#else
 #include <fcntl.h>    // `fallocate`
 #include <stdlib.h>   // `posix_memalign`
 #include <sys/mman.h> // `mmap`
 #include <sys/stat.h> // `fstat` for file size
-#include <unistd.h>   // `open`, `close`
+#endif
 
 #if defined(__GNUC__)
 // https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html
@@ -965,6 +969,9 @@ class index_gt {
      *  Compatibility: Linux, MacOS.
      */
     void view(char const* file_path) noexcept(false) {
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+        throw std::logic_error("Memory-mapping is not yet available for Windows");
+#else
         state_t state;
         int open_flags = O_RDONLY;
 #if __linux__
@@ -1012,6 +1019,7 @@ class index_gt {
         }
 
         viewed_file_descriptor_ = descriptor;
+#endif
     }
 
 #pragma endregion
