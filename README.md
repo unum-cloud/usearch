@@ -17,11 +17,11 @@ Compact, yet Powerful<br/>
 <a href="https://github.com/unum-cloud/usearch"><img height="25" src="https://github.com/unum-cloud/.github/raw/main/assets/github.svg" alt="GitHub"></a>
 </p>
 
-- [x] Single C++11 header implementation, easily extendible.
-- [x] 4B+ sized space efficient point-clouds with `uint40_t`.
-- [x] Half-precision support with [`maratyszcza/fp16`](https://github.com/maratyszcza/fp16).
-- [x] View from disk, without loading into RAM.
-- [x] Any metric, includes: 
+- [x] [Single C++11 header][usearch-header] implementation, easily extendible.
+- [x] [4B+](#go-beyond-4b-entries) sized space efficient point-clouds with `uint40_t`.
+- [x] [Half-precision](#quantize-on-the-fly) support with [`maratyszcza/fp16`](https://github.com/maratyszcza/fp16).
+- [x] [View from disk](#view-larger-indexes-from-disk), without loading into RAM.
+- [x] [Any metric](#define-custom-metrics), includes: 
   - [x] Euclidean, Dot-product, Cosine,
   - [x] Jaccard, Hamming, Haversine.
   - [x] Hardware-accelerated [`ashvardanian/simsimd`](https://github.com/ashvardanian/simsimd). 
@@ -29,10 +29,10 @@ Compact, yet Powerful<br/>
 - [x] Don't copy vectors if not needed.
 - [x] Bring your threads.
 - [x] Multiple vectors per label.
-- [x] Python bindings: `pip install usearch`.
-- [x] JavaScript bindings: `npm install usearch`.
-- [x] Rust bindings: `cargo add usearch`.
-- [x] Java bindings: `cloud.unum:usearch` on GitHub.
+- [x] [Python](#python) bindings: `pip install usearch`.
+- [x] [JavaScript](#java) bindings: `npm install usearch`.
+- [x] [Rust](#rust) bindings: `cargo add usearch`.
+- [x] [Java](#java) bindings: `cloud.unum:usearch` on GitHub.
 - [ ] GoLang bindings.
 - [ ] Wolfram language bindings.
 - [x] For Linux: GCC, Clang.
@@ -41,6 +41,95 @@ Compact, yet Powerful<br/>
 - [ ] Multi-index lookups in Python.
 - [ ] Thread-safe `reserve`.
 - [ ] Distributed construction.
+
+[usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/usearch.hpp
+
+## Features
+
+### Define Custom Metrics
+
+Most vector-search packages focus on just 2 metrics - "Inner Product distance" and "Euclidean distance".
+The lack of dedicated "Cosine distance" can be justified with the simplicity of normalizing such vectors on the fly.
+But that hardly exhausts the list of possible metrics.
+
+![USearch: Vector Search Approaches](assets/usearch-approaches-transparent.png)
+
+Older approaches indexing high-dimensional spaces, like KD-Trees and Locality Sensitive Hashing are hardly extendible to vectors/objects of variable length.
+Modern NSW-like approaches, however, only require two objects to be comparable.
+This means, the index can be extended to support fuzzy search with Levenstein distance over strings.
+USearch implements HNSW, and provides some uncommon-to-vector-search "similarity measures" and "distances" out of the box: Haversine, Jaccard, Hamming, etc.
+
+### Bring your Threads
+
+Most AI, HPC, or Big Data packages use some form of a thread pool.
+Instead of spawning additional threads within USearch, we focus on thread-safety of the `add` function.
+
+```cpp
+#pragma omp parallel for
+    for (std::size_t i = 0; i < n; ++i)
+        native.add(label, span_t{vector, dims}, omp_get_thread_num());
+```
+
+During initialization we allocate enough temporary memory for all the cores on the machine.
+On call, the user can simply supply the identifier of the current thread, making this library easy to integrate with OpenMP and similar tools.
+
+### Go Beyond 4B Entries
+
+Constructing a vector index is a memory-intensive task.
+Depending on your configuration parameters, part of the memory will be allocated towards copies of vectors, and another part to the Small World Graph, common to NSW-like algorithms.
+Choosing the right data-structures and numeric types can have profound implications on both.
+
+---
+
+Internally, some point "label" is mapped into an integer identifier for every stored vector.
+Most implementations hard-code it to `uint32_t`, as people rarely store more than 4 Billion vectors.
+But when they do, software becomes unusable.
+
+Others hard-code it to `uint64_t`, which hardly space-efficient.
+We added a tiny class - `uint40_t`, that should be enough for collections up to 1 Trillion vectors.
+
+### View Larger Indexes from Disk
+
+To construct a large index one may use a beefy RAM-optimized machine, like the AWS `u-24tb1.metal` instances with 24 TB of RAM.
+Those are, however, pricy, and would cost you over $200/hour.
+
+You wouldn't want to have them running all the time.
+So, if you are working on large datasets, but don't need the in-RAM throughput, you can simply view an existing dataset from disk, without ever loading it fully into memory.
+
+Construct on large machines, deploy on the cheap ones.
+
+### Quantize on the Fly
+
+Most modern CPU have at least partial support for `half`-precision `f16_t` arithmetic.
+USearch supports automatic down-casting and up-casting between `f32_t`, `f16_t`, `f64_t`, and `i8q100_t` representations.
+
+Making vectors smaller will help pack more of them in-memory, while also increasing performance on CPUs implementing native support for target type.
+
+## Performance
+
+Below are the performance numbers for a benchmark running on the 64 cores of AWS `c7g.metal` "Graviton 3"-based instances.
+We fix the default configuration in the top line and show the affects of various parameters by changing one parameter at a time.
+
+|  Vectors   | Connectivity | EF @ A | EF @ S | **Add**, QPS | **Search**, QPS | **Recall @1** |
+| :--------: | :----------: | :----: | :----: | :----------: | :-------------: | ------------: |
+| `f32` x256 |      16      |  128   |   64   |    75'640    |     131'654     |         99.3% |
+|            |              |        |        |              |                 |               |
+| `f32` x256 |      12      |  128   |   64   |    81'747    |     149'728     |         99.0% |
+| `f32` x256 |      32      |  128   |   64   |    64'368    |     104'050     |         99.4% |
+|            |              |        |        |              |                 |               |
+| `f32` x256 |      16      |   64   |   32   |   128'644    |     228'422     |         97.2% |
+| `f32` x256 |      16      |  256   |  128   |    39'981    |     69'065      |         99.2% |
+|            |              |        |        |              |                 |               |
+| `f16` x256 |      16      |   64   |   32   |   128'644    |     228'422     |         97.2% |
+| `f32` x256 |      16      |  256   |  128   |    39'981    |     69'065      |         99.2% |
+
+The main columns are:
+
+- Add: Number of insertion Queries Per Second.
+- Search: Number search Queries Per Second.
+- Recall @1: How often does approximate search yield the exact best match?
+
+To read more and reproduce, jump to [benchmarking section](#benchmarking).
 
 ## Usage
 
@@ -214,45 +303,7 @@ int[] labels = index.search(vec, 5);
 
 ### Wolfram
 
-## Features
-
-### Bring your Threads
-
-Most AI, HPC, or Big Data packages use some form of a thread pool.
-Instead of spawning additional threads within USearch, we focus on thread-safety of the `add` function.
-
-```cpp
-#pragma omp parallel for
-    for (std::size_t i = 0; i < n; ++i)
-        native.add(label, span_t{vector, dims}, omp_get_thread_num());
-```
-
-During initialization we allocate enough temporary memory for all the cores on the machine.
-On call, the user can simply supply the identifier of the current thread, making this library easy to integrate with OpenMP and similar tools.
-
-### Go Beyond 4B Entries
-
-### View Larger Indexes from Disk
-
-### Quantize on the Fly
-
-## Performance
-
-Below are the performance numbers for a benchmark running on the 64 cores of AWS `c7g.metal` "Graviton 3"-based instances.
-We fix the default configuration in the top line and show the affects of various parameters by changing one parameter at a time.
-
-|  Vectors   | Connectivity | EF @ A | EF @ S | Add, QPS | Search, QPS | Recall @ 1 |
-| :--------: | :----------: | :----: | :----: | :------: | :---------: | ---------: |
-| `f32` x256 |      16      |  128   |   64   |  75'640  |   131'654   |      99.3% |
-|            |              |        |        |          |             |            |
-| `f32` x256 |      12      |  128   |   64   |  81'747  |   149'728   |      99.0% |
-| `f32` x256 |      32      |  128   |   64   |  64'368  |   104'050   |      99.4% |
-|            |              |        |        |          |             |            |
-| `f32` x256 |      16      |   64   |   32   | 128'644  |   228'422   |      97.2% |
-| `f32` x256 |      16      |  256   |  128   |  39'981  |   69'065    |      99.2% |
-|            |              |        |        |          |             |            |
-| `f16` x256 |      16      |   64   |   32   | 128'644  |   228'422   |      97.2% |
-| `f32` x256 |      16      |  256   |  128   |  39'981  |   69'065    |      99.2% |
+## Benchmarking
 
 All major HNSW implementation share an identical list of hyper-parameters:
 
@@ -268,7 +319,6 @@ The default values vary drastically.
 |  `FAISS`  |      32      |   40   |   16   |
 | `USearch` |      16      |  128   |   64   |
 
-### Benchmarking
 
 To achieve best results, please compile locally and check out various configuration options.
 
