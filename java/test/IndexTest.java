@@ -6,7 +6,6 @@ import org.junit.Test;
 import cloud.unum.usearch.Index;
 
 public class IndexTest {
-
     public static void deleteDirectoryFiles(String path) {
         File directory = new File(path);
         if (!directory.isDirectory())
@@ -20,7 +19,7 @@ public class IndexTest {
     public void test() {
         String path = "./tmp/";
         deleteDirectoryFiles(path);
-        new Index();
+        new Index("cos", "f32", 1, 10, 1, 1, 1);
         System.out.println("Java Tests Passed!");
     }
 }

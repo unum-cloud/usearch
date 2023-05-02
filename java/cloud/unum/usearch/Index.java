@@ -1,5 +1,10 @@
 package cloud.unum.usearch;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+import java.io.InputStream;
+
 /**
  * @brief Java bindings for Unum USearch.
  * 
@@ -124,7 +129,35 @@ public class Index {
   }
 
   static {
-    System.loadLibrary("USearchJNI");
+    try {
+
+      String lib_path = "/USearchJNI/";
+      String lib_name;
+      String osName = System.getProperty("os.name");
+      if (osName.indexOf("mac") > 0) {
+        lib_name = "libUSearchJNI.dylib";
+      } else {
+        lib_name = "libusearch.so";
+      }
+      lib_path += lib_name;
+      File file = File.createTempFile(lib_name, "");
+
+      if (file.exists()) {
+        InputStream link = (Index.class.getResourceAsStream(lib_path));
+
+        if (link != null) {
+
+          Files.copy(
+              link,
+              file.getAbsoluteFile().toPath(),
+              StandardCopyOption.REPLACE_EXISTING);
+          System.load(file.getAbsoluteFile().toPath().toString());
+        }
+      }
+
+    } catch (Exception e) {
+      System.out.println("Failed to extract library");
+    }
   }
 
   public static void main(String[] args) {
