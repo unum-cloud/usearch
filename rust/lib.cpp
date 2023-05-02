@@ -40,7 +40,7 @@ void Index::save(rust::Str path) const { index_->save(std::string(path).c_str())
 void Index::load(rust::Str path) const { index_->load(std::string(path).c_str()); }
 void Index::view(rust::Str path) const { index_->view(std::string(path).c_str()); }
 
-accuracy_t accuracy(rust::Str quant) { return accuracy(quant.data(), quant.size()); }
+accuracy_t accuracy(rust::Str quant) { return accuracy_from_name(quant.data(), quant.size()); }
 
 std::unique_ptr<Index> wrap(native_index_t&& index) {
     std::shared_ptr<native_index_t> native = std::make_shared<native_index_t>(std::move(index));

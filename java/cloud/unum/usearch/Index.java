@@ -3,8 +3,9 @@ package cloud.unum.usearch;
 /**
  * @brief Java bindings for Unum USearch.
  * 
- * @see Tutorial:
+ * @see Tutorials:
  *      https://nachtimwald.com/2017/06/06/wrapping-a-c-library-in-java/
+ *      https://www3.ntu.edu.sg/home/ehchua/programming/java/javanativeinterface.html
  */
 public class Index {
 

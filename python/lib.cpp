@@ -47,30 +47,8 @@ static native_index_t make_index(   //
     config.max_threads_add = std::thread::hardware_concurrency();
     config.max_threads_search = std::thread::hardware_concurrency();
 
-    accuracy_t accuracy;
-    if (scalar_type == "f32")
-        accuracy = accuracy_t::f32_k;
-    else if (scalar_type == "f64")
-        accuracy = accuracy_t::f64_k;
-    else if (scalar_type == "f16")
-        accuracy = accuracy_t::f16_k;
-    else if (scalar_type == "i8q100")
-        accuracy = accuracy_t::i8q100_k;
-    else
-        throw std::runtime_error("Unknown type, choose: f32, f16, f64, i8q100");
-
-    if (metric == "l2_sq" || metric == "euclidean_sq")
-        return native_index_t::l2(dimensions, accuracy, config);
-    else if (metric == "ip" || metric == "inner" || metric == "dot")
-        return native_index_t::ip(dimensions, accuracy, config);
-    else if (metric == "cos" || metric == "angular")
-        return native_index_t::cos(dimensions, accuracy, config);
-    else if (metric == "haversine")
-        return native_index_t::haversine(accuracy, config);
-    else
-        throw std::runtime_error("Unknown distance, choose: l2_sq, ip, cos, hamming, jaccard");
-
-    return {};
+    accuracy_t accuracy = accuracy_from_name(scalar_type.c_str(), scalar_type.size());
+    return index_from_name<native_index_t>(metric.c_str(), metric.size(), dimensions, accuracy, config);
 }
 
 static void add_to_index(native_index_t& index, py::buffer labels, py::buffer vectors, bool copy) {

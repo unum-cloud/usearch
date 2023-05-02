@@ -172,24 +172,41 @@ enum class accuracy_t {
     i8q100_k,
 };
 
-inline bool str_equals(char const* begin, size_t len, char const* other_begin) noexcept {
-    size_t other_len = strlen(other_begin);
+inline bool str_equals(char const* begin, std::size_t len, char const* other_begin) noexcept {
+    std::size_t other_len = strlen(other_begin);
     return len == other_len && strncmp(begin, other_begin, len) == 0;
 }
 
-inline accuracy_t accuracy(char const* str, size_t len) {
+inline accuracy_t accuracy_from_name(char const* name, std::size_t len) {
     accuracy_t accuracy;
-    if (str_equals(str, len, "f32"))
+    if (str_equals(name, len, "f32"))
         accuracy = accuracy_t::f32_k;
-    else if (str_equals(str, len, "f64"))
+    else if (str_equals(name, len, "f64"))
         accuracy = accuracy_t::f64_k;
-    else if (str_equals(str, len, "f16"))
+    else if (str_equals(name, len, "f16"))
         accuracy = accuracy_t::f16_k;
-    else if (str_equals(str, len, "i8q100"))
+    else if (str_equals(name, len, "i8q100"))
         accuracy = accuracy_t::i8q100_k;
     else
         throw std::runtime_error("Unknown type, choose: f32, f16, f64, i8q100");
     return accuracy;
+}
+
+template <typename index_at>
+inline index_at index_from_name( //
+    char const* name, std::size_t len, std::size_t dimensions, accuracy_t accuracy, config_t const& config) {
+
+    if (str_equals(name, len, "l2_sq") || str_equals(name, len, "euclidean_sq"))
+        return index_at::l2(dimensions, accuracy, config);
+    else if (str_equals(name, len, "ip") || str_equals(name, len, "inner") || str_equals(name, len, "dot"))
+        return index_at::ip(dimensions, accuracy, config);
+    else if (str_equals(name, len, "cos") || str_equals(name, len, "angular"))
+        return index_at::cos(dimensions, accuracy, config);
+    else if (str_equals(name, len, "haversine"))
+        return index_at::haversine(accuracy, config);
+    else
+        throw std::runtime_error("Unknown distance, choose: l2_sq, ip, cos, hamming, jaccard");
+    return {};
 }
 
 enum class isa_t {
