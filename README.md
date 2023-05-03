@@ -1,7 +1,7 @@
 <h1 align="center">USearch</h1>
 <h3 align="center">
-C++11 Single Header Vector Search<br/>
-Compact, yet Powerful<br/>
+Smaller & Faster Single-File<br/>
+Vector Search Engine<br/>
 </h3>
 <br/>
 
@@ -80,12 +80,11 @@ Constructing a vector index is a memory-intensive task.
 Depending on your configuration parameters, part of the memory will be allocated towards copies of vectors, and another part to the Small World Graph, common to NSW-like algorithms.
 Choosing the right data-structures and numeric types can have profound implications on both.
 
----
+![USearch uint40_t support](assets/usearch-neighbor-types.png)
 
 Internally, some point "label" is mapped into an integer identifier for every stored vector.
 Most implementations hard-code it to `uint32_t`, as people rarely store more than 4 Billion vectors.
 But when they do, software becomes unusable.
-
 Others hard-code it to `uint64_t`, which hardly space-efficient.
 We added a tiny class - `uint40_t`, that should be enough for collections up to 1 Trillion vectors.
 
@@ -94,17 +93,24 @@ We added a tiny class - `uint40_t`, that should be enough for collections up to 
 To construct a large index one may use a beefy RAM-optimized machine, like the AWS `u-24tb1.metal` instances with 24 TB of RAM.
 Those are, however, pricy, and would cost you over $200/hour.
 
+|          |   To Build    |    To Serve    |
+| :------- | :-----------: | :------------: |
+| Instance | u-24tb1.metal | is4gen.8xlarge |
+| Price    |   ~ $200/h    |    ~$4.5/h     |
+| RAM      |     24 TB     |     192 GB     |
+| SSD      |      EBS      |     30 TB      |
+
 You wouldn't want to have them running all the time.
 So, if you are working on large datasets, but don't need the in-RAM throughput, you can simply view an existing dataset from disk, without ever loading it fully into memory.
 
-Construct on large machines, deploy on the cheap ones.
+> Construct on large machines, deploy on the cheap ones.
 
 ### Quantize on the Fly
 
 Most modern CPU have at least partial support for `half`-precision `f16_t` arithmetic.
 USearch supports automatic down-casting and up-casting between `f32_t`, `f16_t`, `f64_t`, and `i8q100_t` representations.
 
-Making vectors smaller will help pack more of them in-memory, while also increasing performance on CPUs implementing native support for target type.
+> Making vectors smaller will help pack more of them in-memory, while also increasing performance on CPUs implementing native support for target type.
 
 ## Performance
 
