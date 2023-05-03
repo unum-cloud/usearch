@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 include_directories("../src")
 
 if(NOT WOLFRAM_PATH)
-    set(WOLFRAM_PATH "/home/ishkhan/wolfram/")
+    set(WOLFRAM_PATH "/usr/local/Wolfram/Mathematica")
 endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${WOLFRAM_PATH}/SystemFiles/Links/WSTP/DeveloperKit/Linux-x86-64/CompilerAdditions/")
