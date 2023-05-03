@@ -77,7 +77,9 @@ def construct_both() -> tuple:
         expansion_search=efSearch,
         connectivity=M,
     )
+    assert len(index_unum) == 0
     dt_unum = measure(lambda: index_unum.add(labels, xb))
+    assert len(index_unum) == xb.shape[0]
 
     return dt_meta, dt_unum
 

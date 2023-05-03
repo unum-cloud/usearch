@@ -127,17 +127,17 @@ void multithreaded(std::size_t threads, std::size_t tasks, callback_at&& callbac
     }
 
     std::vector<std::thread> threads_pool;
-    std::size_t tasks_per_thread = threads / tasks + (threads % tasks) != 0;
-    for (std::size_t thread = 0; thread != threads; ++thread) {
+    std::size_t tasks_per_thread = tasks / threads + (tasks % threads) != 0;
+    for (std::size_t thread_idx = 0; thread_idx != threads; ++thread_idx) {
         threads_pool.emplace_back([=]() {
-            for (std::size_t task_idx = thread * tasks_per_thread;
-                 task_idx < std::min(tasks, thread * tasks_per_thread + tasks_per_thread); ++task_idx)
-                callback(thread, task_idx);
+            for (std::size_t task_idx = thread_idx * tasks_per_thread;
+                 task_idx < std::min(tasks, thread_idx * tasks_per_thread + tasks_per_thread); ++task_idx)
+                callback(thread_idx, task_idx);
         });
     }
 
-    for (std::size_t thread = 0; thread != threads; ++thread)
-        threads_pool[thread].join();
+    for (std::size_t thread_idx = 0; thread_idx != threads; ++thread_idx)
+        threads_pool[thread_idx].join();
 }
 
 /**
