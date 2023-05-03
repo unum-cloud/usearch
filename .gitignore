@@ -3,15 +3,21 @@
 *.fbin
 *.ibin
 datasets
+bin
 *.usearch
 
 # C++ builds
 build
 build_release
 build_debug
+_deps
+CMakeCache.txt
+CMakeFiles
+Makefile
+cmake_install.cmake
 
 # Profiling with GProf and `perf` on Linux
-gmon.out 
+gmon.out
 perf.data
 
 # Python wrappers
@@ -26,7 +32,7 @@ node_modules/
 
 # Rust builds
 Cargo.lock
-target/ 
+target/
 
 # Java binings
 .gradle
@@ -64,4 +70,3 @@ target/
 *.exe
 *.out
 *.app
-
