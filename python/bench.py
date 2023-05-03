@@ -60,7 +60,7 @@ def measure(f) -> float:
     f()
     b = datetime.datetime.now()
     c = b - a
-    print(f'Took: {c.seconds} seconds')
+    print(f'Took: {c.seconds:.2f} seconds')
     return c.seconds
 
 
@@ -71,12 +71,13 @@ def construct_both() -> tuple:
     index_meta.hnsw.efConstruction = efConstruction
     dt_meta = measure(lambda: index_meta.add(xb))
 
-    index_unum = usearch.make_index(
+    index_unum = usearch.Index(
+        dim=d,
         expansion_add=efConstruction,
         expansion_search=efSearch,
         connectivity=M,
     )
-    dt_unum = measure(lambda: index_unum.add(labels, xb, copy=False))
+    dt_unum = measure(lambda: index_unum.add(labels, xb))
 
     return dt_meta, dt_unum
 

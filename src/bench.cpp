@@ -295,8 +295,10 @@ void run_type_punned(dataset_at& dataset, args_t const& args, config_t config) {
     if (args.quantize_i8)
         accuracy = accuracy_t::i8q100_k;
 
+    std::printf("-- Accuracy: %s\n", accuracy_name(accuracy));
+
     index_at index{type_punned_index_for_metric<index_at>(dataset, args, config, accuracy)};
-    std::printf("- Hardware acceleration: %s\n", isa(index.acceleration()));
+    std::printf("- Hardware acceleration: %s\n", isa_name(index.acceleration()));
     std::printf("-- Will benchmark in-memory\n");
 
     single_shot(dataset, index, true);
@@ -409,6 +411,11 @@ int main(int argc, char** argv) {
     config.expansion_search = args.expansion_search;
     config.max_threads_add = config.max_threads_search = args.threads;
     config.max_elements = dataset.vectors_count();
+
+    std::printf("- Index: \n");
+    std::printf("-- Connectivity: %zu\n", config.connectivity);
+    std::printf("-- Expansion @ Add: %zu\n", config.expansion_add);
+    std::printf("-- Expansion @ Search: %zu\n", config.expansion_search);
 
     if (args.big)
         run_big_or_small<uint40_t>(dataset, args, config);

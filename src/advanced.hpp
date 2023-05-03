@@ -172,6 +172,16 @@ enum class accuracy_t {
     i8q100_k,
 };
 
+inline char const* accuracy_name(accuracy_t accuracy) noexcept {
+    switch (accuracy) {
+    case accuracy_t::f32_k: return "f32";
+    case accuracy_t::f16_k: return "f16";
+    case accuracy_t::f64_k: return "f64";
+    case accuracy_t::i8q100_k: return "i8q100";
+    default: return "";
+    }
+}
+
 inline bool str_equals(char const* begin, std::size_t len, char const* other_begin) noexcept {
     std::size_t other_len = strlen(other_begin);
     return len == other_len && strncmp(begin, other_begin, len) == 0;
@@ -217,13 +227,14 @@ enum class isa_t {
     avx512_k,
 };
 
-inline char const* isa(isa_t isa) noexcept {
+inline char const* isa_name(isa_t isa) noexcept {
     switch (isa) {
     case isa_t::auto_k: return "auto";
     case isa_t::neon_k: return "neon";
     case isa_t::sve_k: return "sve";
     case isa_t::avx2_k: return "avx2";
     case isa_t::avx512_k: return "avx512";
+    default: return "";
     }
 }
 
@@ -445,7 +456,6 @@ class auto_index_gt {
     }
 
     static metric_and_meta_t ip_metric_f32(std::size_t dimensions) {
-#if 0
 #if defined(__x86_64__)
         if (dimensions % 4 == 0)
             return {
@@ -458,7 +468,7 @@ class auto_index_gt {
         if (supports_arm_sve())
             return {
                 pun_metric<simsimd_f32_t>([](simsimd_f32_t const* a, simsimd_f32_t const* b, size_t d) noexcept {
-                return 1 - simsimd_dot_f32sve(a, b, d);
+                    return 1 - simsimd_dot_f32sve(a, b, d);
                 }),
                 isa_t::sve_k,
             };
@@ -470,12 +480,10 @@ class auto_index_gt {
                 isa_t::neon_k,
             };
 #endif
-#endif
         return {pun_metric<f32_t>(ip_gt<f32_t>{}), isa_t::auto_k};
     }
 
     static metric_and_meta_t ip_metric_f16(std::size_t dimensions) {
-#if 0
 #if defined(__x86_64__)
 #elif defined(__aarch64__)
         if (supports_arm_sve())
@@ -492,7 +500,6 @@ class auto_index_gt {
                 }),
                 isa_t::neon_k,
             };
-#endif
 #endif
         return {pun_metric<f16_converted_t>(ip_gt<f16_converted_t>{}), isa_t::auto_k};
     }
