@@ -1,6 +1,5 @@
 #include "WolframLibrary.h"
 #include "advanced.hpp"
-#include "exception"
 
 using namespace unum::usearch;
 using distance_t = punned_distance_t;
@@ -32,7 +31,7 @@ EXTERN_C DLLEXPORT int IndexCreate(WolframLibraryData libData, mint Argc, MArgum
         native_index_t* result_ptr = new native_index_t(std::move(index));
         MArgument_setInteger(Res, (long)result_ptr);
 
-    } catch (std::exception const& ex) {
+    } catch (...) {
         return LIBRARY_FUNCTION_ERROR;
     }
 
