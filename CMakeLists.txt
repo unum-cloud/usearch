@@ -42,7 +42,6 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "NVIDIA" OR CMAKE_CXX_COMPILER_ID STREQUAL
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ferror-limit=1")
-
 endif()
 
 if(APPLE)
@@ -52,6 +51,7 @@ if(APPLE)
     set(CMAKE_USE_PTHREADS_INIT 1)
     set(THREADS_PREFER_PTHREAD_FLAG ON)
 endif()
+
 find_package(Threads REQUIRED)
 
 if(${USEARCH_USE_OPENMP})
@@ -62,6 +62,7 @@ endif()
 if(${USEARCH_USE_JEMALLOC})
     include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jemalloc.cmake")
 endif()
+
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/clipp.cmake")
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -76,9 +77,13 @@ target_include_directories(usearch INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/includ
 # Define the targets
 add_executable(bench src/bench.cpp)
 target_link_libraries(bench PRIVATE Threads::Threads)
+
 if(${USEARCH_USE_OPENMP})
     target_link_libraries(bench PRIVATE ${OPENMP_LIBRARIES})
 endif()
+
 if(${USEARCH_USE_JEMALLOC})
     target_link_libraries(bench PRIVATE ${JEMALLOC_LIBRARIES})
 endif()
+
+add_subdirectory(wolfram)
