@@ -8,6 +8,9 @@ set(CMAKE_CXX_EXTENSIONS NO)
 option(USEARCH_USE_JEMALLOC "Use JeMalloc for Faster Memory Allocations" OFF)
 option(USEARCH_USE_OPENMP "Use OpenMP for a thread pool" OFF)
 
+option(USEARCH_BUILD_BENCHMARK "Compile a native benchmark in C++" ON)
+option(USEARCH_BUILD_WOLFRAM "Compile Wolfram Language bindings" OFF)
+
 # Make "Release" by default
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -68,6 +71,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/clipp.cmake")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/fp16/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/simsimd/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 # Define our header-only library.
 add_library(usearch INTERFACE)
@@ -75,15 +79,19 @@ target_sources(usearch INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include/usearch/us
 target_include_directories(usearch INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 # Define the targets
-add_executable(bench src/bench.cpp)
-target_link_libraries(bench PRIVATE Threads::Threads)
+if(${USEARCH_BUILD_BENCHMARK})
+    add_executable(bench src/bench.cpp)
+    target_link_libraries(bench PRIVATE Threads::Threads)
 
-if(${USEARCH_USE_OPENMP})
-    target_link_libraries(bench PRIVATE ${OPENMP_LIBRARIES})
+    if(${USEARCH_USE_OPENMP})
+        target_link_libraries(bench PRIVATE ${OPENMP_LIBRARIES})
+    endif()
+
+    if(${USEARCH_USE_JEMALLOC})
+        target_link_libraries(bench PRIVATE ${JEMALLOC_LIBRARIES})
+    endif()
 endif()
 
-if(${USEARCH_USE_JEMALLOC})
-    target_link_libraries(bench PRIVATE ${JEMALLOC_LIBRARIES})
+if(${USEARCH_BUILD_WOLFRAM})
+    add_subdirectory(wolfram)
 endif()
-
-add_subdirectory(wolfram)
