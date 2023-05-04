@@ -1,0 +1,27 @@
+#!/usr/bin/env wolframscript
+
+IndexCreate = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexCreate", {"UTF8String", "UTF8String", Integer,Integer,Integer,Integer,Integer}, Integer]
+IndexSave = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexSave", {Integer, "UTF8String"}, "Void"]
+IndexLoad = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexLoad", {Integer, "UTF8String"}, "Void"]
+IndexView = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexView", {Integer, "UTF8String"}, "Void"]
+IndexDestroy = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexDestroy", {Integer}, "Void"]
+IndexSize = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexSize", {Integer}, Integer]
+IndexConnectivity = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexConnectivity", {Integer}, Integer]
+IndexDimensions = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexDimensions", {Integer}, Integer]
+IndexCapacity = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexCapacity", {Integer}, Integer]
+IndexAdd = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexAdd", {Integer, Integer, {Real, 1}}, "Void"]
+IndexSearch = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexSearch", {Integer, {Real, 1}, Integer}, {Integer, 1}]
+Print["Functions Loaded"]
+
+$index = IndexCreate["cos", "f16", 10,10,10,10,10]
+Print["New Index Address: ", $index]
+Print["Index Size: ", IndexSize[$index]]
+Print["Index Capacity: ", IndexCapacity[$index]]
+Print["Index Connectivity: ", IndexConnectivity[$index]]
+$arr = {1.0, 2.0, 3.0, 4.0, 5.0};
+IndexAdd[$index, 42, $arr]
+Print["Added Array: ", $arr]
+$res = IndexSearch[$index, $arr, 42]
+Print["Searched: ", $res]
+IndexDestroy[$index]
+Print["Index Destroyed"]

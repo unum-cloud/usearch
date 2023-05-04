@@ -144,6 +144,8 @@ EXTERN_C DLLEXPORT int IndexSearch(WolframLibraryData libData, mint Argc, MArgum
 
         matches_data = (int*)std::malloc(sizeof(int) * wanted);
         found = c_ptr->search(vector_span, (size_t)wanted, matches_data, nullptr);
+        for (mint i = 0; i < found; i++)
+            libData->MTensor_setInteger(matches, &i, matches_data[i]);
 
         MArgument_setMTensor(Res, matches);
     } catch (...) {
