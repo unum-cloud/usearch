@@ -34,7 +34,7 @@ Vector Search Engine<br/>
 - [x] [Rust](#rust) bindings: `cargo add usearch`.
 - [x] [Java](#java) bindings: `cloud.unum:usearch` on GitHub.
 - [ ] GoLang bindings.
-- [ ] Wolfram language bindings.
+- [x] Wolfram language bindings.
 - [x] For Linux: GCC, Clang.
 - [x] For MacOS: Apple Clang.
 - [ ] For Windows.
@@ -221,7 +221,7 @@ import usearch
 index = usearch.Index(
     dim=256, # Define the number of dimensions in input vectors
     metric='cos', # Choose the "metric" or "distance", default = 'ip', optional
-    dtype='f16', # Quantize to 'f16' or 'i8q100' if needed, default = 'f32', optional
+    dtype='f32', # Quantize to 'f16' or 'i8q100' if needed, default = 'f32', optional
     connectivity=16, # How frequent should the connections in the graph be, optional
     expansion_add=128, # Control the recall of indexing, optional
     expansion_search=64, # Control the quality of search, optional

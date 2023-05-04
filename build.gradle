@@ -90,7 +90,7 @@ publishing {
 
             pom {
                 name = "USearch"
-                description = "The Mighty Tiny Vector Search Engine with Automatic Quantization and Hardware Acceleration"
+                description = "Smaller & Faster Single-File Vector Search Engine from Unum"
                 url = "https://github.com/unum-cloud/usearch"
                 licenses {
                     license {

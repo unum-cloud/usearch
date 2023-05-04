@@ -32,7 +32,7 @@ setup(
     version=__version__,
     packages=find_packages(),
 
-    description='The Mighty Tiny Vector Search Engine with Automatic Quantization and Hardware Acceleration',
+    description='Smaller & Faster Single-File Vector Search Engine from Unum',
     long_description=long_description,
     long_description_content_type='text/markdown',
     license='Apache-2.0',
