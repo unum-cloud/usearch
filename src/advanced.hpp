@@ -7,6 +7,10 @@
 #include <sys/auxv.h>
 #endif
 
+#if defined(__aarch64__)
+#include <arm_fp16.h>
+#endif
+
 #include <fp16/fp16.h>
 #include <simsimd/simsimd.h>
 
@@ -39,6 +43,21 @@ template <typename at> inline at clamp(at v, at lo, at hi) noexcept {
 class i8q100_converted_t;
 class f16_converted_t;
 
+inline float f16_to_f32(std::uint16_t u16) noexcept {
+    // __fp16 f16;
+    // std::memcpy(&f16, &u16, sizeof(std::uint16_t));
+    // return float(f16);
+    return fp16_ieee_to_fp32_value(u16);
+}
+
+inline std::uint16_t f32_to_f16(float f32) noexcept {
+    // __fp16 f16 = __fp16(f32);
+    // std::uint16_t u16;
+    // std::memcpy(&u16, &f16, sizeof(std::uint16_t));
+    // return u16;
+    return fp16_ieee_from_fp32_value(f32);
+}
+
 class f16_converted_t {
     std::uint16_t uint16_{};
 
@@ -49,11 +68,11 @@ class f16_converted_t {
     inline f16_converted_t(f16_converted_t const&) = default;
     inline f16_converted_t& operator=(f16_converted_t const&) = default;
 
-    inline operator float() const noexcept { return fp16_ieee_to_fp32_value(uint16_); }
+    inline operator float() const noexcept { return f16_to_f32(uint16_); }
 
     inline f16_converted_t(i8q100_converted_t) noexcept;
-    inline f16_converted_t(float v) noexcept : uint16_(fp16_ieee_from_fp32_value(v)) {}
-    inline f16_converted_t(double v) noexcept : uint16_(fp16_ieee_from_fp32_value(v)) {}
+    inline f16_converted_t(float v) noexcept : uint16_(f32_to_f16(v)) {}
+    inline f16_converted_t(double v) noexcept : uint16_(f32_to_f16(v)) {}
 
     inline f16_converted_t operator+(f16_converted_t other) const noexcept { return {float(*this) + float(other)}; }
     inline f16_converted_t operator-(f16_converted_t other) const noexcept { return {float(*this) - float(other)}; }
@@ -69,22 +88,22 @@ class f16_converted_t {
     inline f16_converted_t operator/(double other) const noexcept { return {float(*this) / other}; }
 
     inline f16_converted_t& operator+=(float v) noexcept {
-        uint16_ = fp16_ieee_from_fp32_value(v + fp16_ieee_to_fp32_value(uint16_));
+        uint16_ = f32_to_f16(v + f16_to_f32(uint16_));
         return *this;
     }
 
     inline f16_converted_t& operator-=(float v) noexcept {
-        uint16_ = fp16_ieee_from_fp32_value(v - fp16_ieee_to_fp32_value(uint16_));
+        uint16_ = f32_to_f16(v - f16_to_f32(uint16_));
         return *this;
     }
 
     inline f16_converted_t& operator*=(float v) noexcept {
-        uint16_ = fp16_ieee_from_fp32_value(v * fp16_ieee_to_fp32_value(uint16_));
+        uint16_ = f32_to_f16(v * f16_to_f32(uint16_));
         return *this;
     }
 
     inline f16_converted_t& operator/=(float v) noexcept {
-        uint16_ = fp16_ieee_from_fp32_value(v / fp16_ieee_to_fp32_value(uint16_));
+        uint16_ = f32_to_f16(v / f16_to_f32(uint16_));
         return *this;
     }
 };
@@ -127,7 +146,7 @@ void multithreaded(std::size_t threads, std::size_t tasks, callback_at&& callbac
     }
 
     std::vector<std::thread> threads_pool;
-    std::size_t tasks_per_thread = tasks / threads + (tasks % threads) != 0;
+    std::size_t tasks_per_thread = (tasks / threads) + (tasks % threads) != 0;
     for (std::size_t thread_idx = 0; thread_idx != threads; ++thread_idx) {
         threads_pool.emplace_back([=]() {
             for (std::size_t task_idx = thread_idx * tasks_per_thread;
@@ -282,9 +301,25 @@ template <> struct cast_gt<f16_converted_t, f16_converted_t> {
     bool operator()(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
 
+struct ip_i8q100_converted_t {
+    float operator()(i8q100_converted_t const* a, i8q100_converted_t const* b, std::size_t d) const noexcept {
+        float ab = 0;
+#if defined(__GNUC__)
+#pragma GCC ivdep
+#elif defined(__clang__)
+#pragma clang loop vectorize(enable)
+#elif defined(_OPENMP)
+#pragma omp simd reduction(+ : ab)
+#endif
+        for (std::size_t i = 0; i < d; ++i)
+            ab += float(a[i]) * float(b[i]);
+        return 1.f - ab;
+    }
+};
+
 /**
  *  @brief  Oversimplified type-punned index for equidimensional floating-point
- *          vectors with automatic down-casting and isa acceleration.
+ *          vectors with automatic down-casting and hardware acceleration.
  */
 template <typename label_at = std::int64_t, typename id_at = std::uint32_t> //
 class auto_index_gt {
@@ -510,7 +545,7 @@ class auto_index_gt {
 
     static metric_and_meta_t ip_metric(std::size_t dimensions, accuracy_t accuracy) {
         switch (accuracy) {
-        case accuracy_t::i8q100_k: return {};
+        case accuracy_t::i8q100_k: return {pun_metric<i8q100_converted_t>(ip_i8q100_converted_t{}), isa_t::auto_k};
         case accuracy_t::f16_k: return ip_metric_f16(dimensions);
         case accuracy_t::f32_k: return ip_metric_f32(dimensions);
         case accuracy_t::f64_k: return {pun_metric<f64_t>(ip_gt<f64_t>{}), isa_t::auto_k};
