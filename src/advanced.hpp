@@ -44,18 +44,24 @@ class i8q100_converted_t;
 class f16_converted_t;
 
 inline float f16_to_f32(std::uint16_t u16) noexcept {
-    // __fp16 f16;
-    // std::memcpy(&f16, &u16, sizeof(std::uint16_t));
-    // return float(f16);
+#if defined(__aarch64__)
+    __fp16 f16;
+    std::memcpy(&f16, &u16, sizeof(std::uint16_t));
+    return float(f16);
+#else
     return fp16_ieee_to_fp32_value(u16);
+#endif
 }
 
 inline std::uint16_t f32_to_f16(float f32) noexcept {
-    // __fp16 f16 = __fp16(f32);
-    // std::uint16_t u16;
-    // std::memcpy(&u16, &f16, sizeof(std::uint16_t));
-    // return u16;
+#if defined(__aarch64__)
+    __fp16 f16 = __fp16(f32);
+    std::uint16_t u16;
+    std::memcpy(&u16, &f16, sizeof(std::uint16_t));
+    return u16;
+#else
     return fp16_ieee_from_fp32_value(f32);
+#endif
 }
 
 class f16_converted_t {
@@ -121,6 +127,10 @@ class i8q100_converted_t {
     inline operator float() const noexcept { return float(int8_) / 100.f; }
     inline operator f16_converted_t() const noexcept { return float(int8_) / 100.f; }
     inline operator double() const noexcept { return double(int8_) / 100.0; }
+    inline operator std::int8_t() const noexcept { return int8_; }
+    inline operator std::int16_t() const noexcept { return int8_; }
+    inline operator std::int32_t() const noexcept { return int8_; }
+    inline operator std::int64_t() const noexcept { return int8_; }
 
     inline i8q100_converted_t(float v) noexcept
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * 100.f), -100, 100)) {}
@@ -303,7 +313,7 @@ template <> struct cast_gt<f16_converted_t, f16_converted_t> {
 
 struct ip_i8q100_converted_t {
     float operator()(i8q100_converted_t const* a, i8q100_converted_t const* b, std::size_t d) const noexcept {
-        float ab = 0;
+        std::int64_t ab = 0;
 #if defined(__GNUC__)
 #pragma GCC ivdep
 #elif defined(__clang__)
@@ -312,8 +322,8 @@ struct ip_i8q100_converted_t {
 #pragma omp simd reduction(+ : ab)
 #endif
         for (std::size_t i = 0; i < d; ++i)
-            ab += float(a[i]) * float(b[i]);
-        return 1.f - ab;
+            ab += std::int16_t(a[i]) * std::int16_t(b[i]);
+        return 1.f - ab / 10000.f;
     }
 };
 
@@ -491,7 +501,7 @@ class auto_index_gt {
     }
 
     static metric_and_meta_t ip_metric_f32(std::size_t dimensions) {
-#if 0
+#if 1
 #if defined(__x86_64__)
         if (dimensions % 4 == 0)
             return {
@@ -521,7 +531,7 @@ class auto_index_gt {
     }
 
     static metric_and_meta_t ip_metric_f16(std::size_t dimensions) {
-#if 0
+#if 1
 #if defined(__x86_64__)
 #elif defined(__aarch64__)
         if (supports_arm_sve())
