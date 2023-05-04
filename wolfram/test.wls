@@ -1,6 +1,6 @@
 #!/usr/bin/env wolframscript
 
-IndexCreate = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexCreate", {"UTF8String", "UTF8String", Integer,Integer,Integer,Integer,Integer}, Integer]
+IndexCreate = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexCreate", {"UTF8String", "UTF8String", Integer, Integer, Integer, Integer, Integer}, Integer]
 IndexSave = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexSave", {Integer, "UTF8String"}, "Void"]
 IndexLoad = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexLoad", {Integer, "UTF8String"}, "Void"]
 IndexView = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexView", {Integer, "UTF8String"}, "Void"]
@@ -13,7 +13,7 @@ IndexAdd = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexAdd", {Integer, In
 IndexSearch = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexSearch", {Integer, {Real, 1}, Integer}, {Integer, 1}]
 Print["Functions Loaded"]
 
-$index = IndexCreate["cos", "f16", 10,10,10,10,10]
+$index = IndexCreate["cos", "f16", 10, 10, 10, 10, 10]
 Print["New Index Address: ", $index]
 Print["Index Size: ", IndexSize[$index]]
 Print["Index Capacity: ", IndexCapacity[$index]]
