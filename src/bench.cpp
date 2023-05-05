@@ -3,12 +3,26 @@
  * and the resulting accuracy (recall) of the Approximate Nearest Neighbors
  * Search queries.
  */
+
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+#define NOMINMAX // define this macro to prevent the definition of min/max macros in Windows.h
+#define _USE_MATH_DEFINES
+
+#include <DbgHelp.h>
+#include <Windows.h>
+
+#pragma comment(lib, "Dbghelp.lib")
+
+#define STDERR_FILENO HANDLE(2)
+#else
 #include <execinfo.h>
-#include <fcntl.h>    // `open`
-#include <stdlib.h>   // `getenv`
+#include <fcntl.h>    // `fallocate`
+#include <stdlib.h>   // `posix_memalign`
 #include <sys/mman.h> // `mmap`
-#include <sys/stat.h> // `stat`
 #include <unistd.h>
+#endif
+
+#include <sys/stat.h> // `stat`
 
 #include <csignal>
 #include <cstdio>
@@ -53,6 +67,34 @@ struct alignas(32) persisted_matrix_gt {
     persisted_matrix_gt(char const* path) noexcept(false) {
         if (!path || !std::strlen(path))
             throw std::invalid_argument("The file path is empty");
+#ifdef WINDOWS
+
+        HANDLE file_handle =
+            CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+
+        if (file_handle == INVALID_HANDLE_VALUE)
+            throw std::invalid_argument("Couldn't open provided file path");
+
+        LARGE_INTEGER file_size;
+        if (!GetFileSizeEx(file_handle, &file_size))
+            throw std::invalid_argument("Couldn't obtain file stats");
+
+        raw_length = file_size.QuadPart;
+        HANDLE mapping_handle = CreateFileMapping(file_handle, nullptr, PAGE_READONLY, 0, 0, nullptr);
+
+        if (mapping_handle == nullptr)
+            throw std::invalid_argument("Couldn't create file mapping");
+
+        raw_handle = (std::uint8_t*)MapViewOfFile(mapping_handle, FILE_MAP_READ, 0, 0, raw_length);
+
+        if (raw_handle == nullptr)
+            throw std::invalid_argument("Couldn't memory-map the file");
+
+        std::memcpy(&rows, raw_handle, sizeof(rows));
+        std::memcpy(&cols, raw_handle + sizeof(rows), sizeof(cols));
+        scalars = (scalar_t*)(raw_handle + sizeof(rows) + sizeof(cols));
+
+#else
         auto file_descriptor = open(path, O_RDONLY | O_CLOEXEC);
         if (file_descriptor == -1)
             throw std::invalid_argument("Couldn't open provided file path");
@@ -66,11 +108,16 @@ struct alignas(32) persisted_matrix_gt {
         std::memcpy(&rows, raw_handle, sizeof(rows));
         std::memcpy(&cols, raw_handle + sizeof(rows), sizeof(cols));
         scalars = (scalar_t*)(raw_handle + sizeof(rows) + sizeof(cols));
+#endif // WINDOWS
     }
 
     ~persisted_matrix_gt() {
         if (raw_handle != nullptr)
+#ifdef WINDOWS
+            UnmapViewOfFile(raw_handle);
+#else
             munmap((void*)raw_handle, raw_length);
+#endif // WINDOWS
     }
 
     scalar_t const* row(std::size_t i) const noexcept { return scalars + i * cols; }
@@ -238,11 +285,34 @@ void handler(int sig) {
     size_t size;
 
     // get void*'s for all entries on the stack
+#ifdef WINDOWS
+    size = CaptureStackBackTrace(0, 10, array, NULL);
+#else
     size = backtrace(array, 10);
+#endif // WINDOWS
 
     // print out all the frames to stderr
     fprintf(stderr, "Error: signal %d:\n", sig);
+
+#ifdef WINDOWS
+    SYMBOL_INFO* symbol = (SYMBOL_INFO*)calloc(sizeof(SYMBOL_INFO) + 256 * sizeof(char), 1);
+    symbol->MaxNameLen = 255;
+    symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+    for (int i = 0; i < size; i++) {
+        SymFromAddr(GetCurrentProcess(), (DWORD64)(array[i]), 0, symbol);
+        const char* name = symbol->Name;
+        if (name == NULL) {
+            name = "<unknown>";
+        }
+        DWORD bytes_written;
+        WriteFile(STDERR_FILENO, name, strlen(name), &bytes_written, NULL);
+        WriteFile(STDERR_FILENO, "\n", 1, &bytes_written, NULL);
+    }
+    free(symbol);
+#else
     backtrace_symbols_fd(array, size, STDERR_FILENO);
+#endif // WINDOWS
+
     exit(1);
 }
 

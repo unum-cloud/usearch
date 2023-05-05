@@ -7,25 +7,38 @@
  *  @copyright Copyright (c) 2023
  */
 #pragma once
-#include <algorithm> // `std::sort_heap`
-#include <atomic>    // `std::atomic`
-#include <bitset>    // `std::bitset`
-#include <climits>   // `CHAR_BIT`
-#include <cmath>     // `std::sqrt`
-#include <cstring>   // `std::memset`
-#include <mutex>     // `std::unique_lock` - replacement candidate
-#include <random>    // `std::default_random_engine` - replacement candidate
-#include <unistd.h>  // `open`, `close`
-#include <utility>   // `std::exchange`
-#include <vector>    // `std::vector`
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+#define NOMINMAX // define this macro to prevent the definition of min/max macros in Windows.h
+#define _USE_MATH_DEFINES
+
+#include <Windows.h>
+
+#define usearch_pack_m
+#define usearch_align_m __declspec(align(64))
+#define WINDOWS
+
 #else
 #include <fcntl.h>    // `fallocate`
 #include <stdlib.h>   // `posix_memalign`
 #include <sys/mman.h> // `mmap`
-#include <sys/stat.h> // `fstat` for file size
+#include <unistd.h>   // `open`, `close`
+
+#define usearch_pack_m __attribute__((packed))
+#define usearch_align_m __attribute__((aligned(64)))
 #endif
+
+#include <algorithm>  // `std::sort_heap`
+#include <atomic>     // `std::atomic`
+#include <bitset>     // `std::bitset`
+#include <climits>    // `CHAR_BIT`
+#include <cmath>      // `std::sqrt`
+#include <cstring>    // `std::memset`
+#include <mutex>      // `std::unique_lock` - replacement candidate
+#include <random>     // `std::default_random_engine` - replacement candidate
+#include <sys/stat.h> // `fstat` for file size
+#include <utility>    // `std::exchange`
+#include <vector>     // `std::vector`
 
 #if defined(__GNUC__)
 // https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html
@@ -47,9 +60,6 @@
         throw std::runtime_error(message);                                                                             \
     }
 #endif
-
-#define usearch_align_m __attribute__((aligned(64)))
-#define usearch_pack_m __attribute__((packed))
 
 namespace unum {
 namespace usearch {
@@ -412,7 +422,12 @@ class max_heap_gt {
  *
  */
 class mutex_t {
+#ifdef WINDOWS
+    using slot_t = volatile LONG;
+#else
     using slot_t = std::int32_t;
+#endif // WINDOWS
+
     slot_t flag_;
 
   public:
@@ -421,18 +436,32 @@ class mutex_t {
 
     inline bool try_lock() noexcept {
         slot_t raw = 0;
+#ifdef WINDOWS
+        return InterlockedCompareExchange(&flag_, 1, raw);
+#else
         return __atomic_compare_exchange_n(&flag_, &raw, 1, true, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED);
+#endif // WINDOWS
     }
 
     inline void lock() noexcept {
-        slot_t raw;
+        slot_t raw = 0;
+#ifdef WINDOWS
+        InterlockedCompareExchange(&flag_, 1, raw);
+#else
     lock_again:
         raw = 0;
         if (!__atomic_compare_exchange_n(&flag_, &raw, 1, true, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
             goto lock_again;
+#endif // WINDOWS
     }
 
-    inline void unlock() noexcept { __atomic_store_n(&flag_, 0, __ATOMIC_RELEASE); }
+    inline void unlock() noexcept {
+#ifdef WINDOWS
+        InterlockedExchange(&flag_, 0);
+#else
+        __atomic_store_n(&flag_, 0, __ATOMIC_RELEASE);
+#endif
+    }
 };
 
 static_assert(sizeof(mutex_t) == sizeof(std::int32_t), "Mutex is larger than expected");
@@ -442,7 +471,11 @@ using lock_t = std::unique_lock<mutex_t>;
 /**
  *  @brief Five-byte integer type to address node clouds with over 4B entries.
  */
-class usearch_pack_m uint40_t {
+#ifdef WINDOWS
+__pragma(pack(push, 1))
+#endif // WINDOWS
+
+    class usearch_pack_m uint40_t {
     unsigned char octets[5];
 
   public:
@@ -479,8 +512,11 @@ class usearch_pack_m uint40_t {
         return old;
     }
 };
+#ifdef WINDOWS
+__pragma(pack(push, 1))
+#endif // WINDOWS
 
-static_assert(sizeof(uint40_t) == 5, "uint40_t must be exactly 5 bytes");
+    static_assert(sizeof(uint40_t) == 5, "uint40_t must be exactly 5 bytes");
 
 template <typename scalar_at> class span_gt {
     scalar_at* data_;
