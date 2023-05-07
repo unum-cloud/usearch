@@ -12,7 +12,9 @@
 #endif
 
 #include <fp16/fp16.h>
+#if defined(USEARCH_USE_SIMD)
 #include <simsimd/simsimd.h>
+#endif
 
 #include <usearch/usearch.hpp>
 
@@ -507,7 +509,8 @@ class auto_index_gt {
     }
 
     static metric_and_meta_t ip_metric_f32(std::size_t dimensions) {
-#if 1
+        (void)dimensions;
+#if defined(USEARCH_USE_SIMD)
 #if defined(__x86_64__)
         if (dimensions % 4 == 0)
             return {
@@ -537,7 +540,8 @@ class auto_index_gt {
     }
 
     static metric_and_meta_t ip_metric_f16(std::size_t dimensions) {
-#if 1
+        (void)dimensions;
+#if defined(USEARCH_USE_SIMD)
 #if defined(__x86_64__)
 #elif defined(__aarch64__)
         if (supports_arm_sve())

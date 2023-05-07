@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS NO)
 
 option(USEARCH_USE_JEMALLOC "Use JeMalloc for Faster Memory Allocations" OFF)
 option(USEARCH_USE_OPENMP "Use OpenMP for a thread pool" OFF)
+option(USEARCH_USE_SIMD "Use SIMD hardware acceleration" OFF)
 
 option(USEARCH_BUILD_BENCHMARK "Compile a native benchmark in C++" ON)
 option(USEARCH_BUILD_WOLFRAM "Compile Wolfram Language bindings" OFF)
@@ -82,6 +83,10 @@ target_include_directories(usearch INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/includ
 if(${USEARCH_BUILD_BENCHMARK})
     add_executable(bench src/bench.cpp)
     target_link_libraries(bench PRIVATE Threads::Threads)
+
+    if(${USEARCH_USE_SIMD})
+        target_compile_definitions(bench PRIVATE USEARCH_USE_SIMD=1)
+    endif()
 
     if(${USEARCH_USE_OPENMP})
         target_link_libraries(bench PRIVATE ${OPENMP_LIBRARIES})
