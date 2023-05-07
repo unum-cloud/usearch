@@ -407,6 +407,12 @@ class auto_index_gt {
     static auto_index_gt haversine(accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return make(2, accuracy, haversine_metric(accuracy), make_casts(accuracy), config); }
     // clang-format on
 
+    static auto_index_gt udf(                                    //
+        std::size_t dimensions, punned_stateful_metric_t metric, //
+        accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) {
+        return make(dimensions, accuracy, {metric, isa_t::auto_k}, make_casts(accuracy), config);
+    }
+
     auto_index_gt fork() const {
         auto_index_gt result;
 

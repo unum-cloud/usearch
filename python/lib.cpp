@@ -36,7 +36,8 @@ static native_index_t make_index(   //
     std::string const& metric,      //
     std::size_t connectivity,       //
     std::size_t expansion_add,      //
-    std::size_t expansion_search    //
+    std::size_t expansion_search,   //
+    std::size_t metric_uintptr      //
 ) {
 
     config_t config;
@@ -48,7 +49,11 @@ static native_index_t make_index(   //
     config.max_threads_search = std::thread::hardware_concurrency();
 
     accuracy_t accuracy = accuracy_from_name(scalar_type.c_str(), scalar_type.size());
-    return index_from_name<native_index_t>(metric.c_str(), metric.size(), dimensions, accuracy, config);
+    punned_metric_t metric_ptr = reinterpret_cast<punned_metric_t>(metric_uintptr);
+    if (metric_ptr)
+        return native_index_t::udf(dimensions, metric_ptr, accuracy, config);
+    else
+        return index_from_name<native_index_t>(metric.c_str(), metric.size(), dimensions, accuracy, config);
 }
 
 static void add_to_index(native_index_t& index, py::buffer labels, py::buffer vectors, bool copy) {
@@ -173,15 +178,16 @@ PYBIND11_MODULE(usearch, m) {
 
     auto i = py::class_<native_index_t>(m, "Index");
 
-    i.def(py::init(&make_index),                                             //
-          py::kw_only(),                                                     //
-          py::arg("dim"),                                                    //
-          py::arg("capacity") = 0,                                           //
-          py::arg("dtype") = std::string("f32"),                             //
-          py::arg("metric") = std::string("ip"),                             //
-          py::arg("connectivity") = config_t::connectivity_default_k,        //
-          py::arg("expansion_add") = config_t::expansion_add_default_k,      //
-          py::arg("expansion_search") = config_t::expansion_search_default_k //
+    i.def(py::init(&make_index),                                              //
+          py::kw_only(),                                                      //
+          py::arg("dim"),                                                     //
+          py::arg("capacity") = 0,                                            //
+          py::arg("dtype") = std::string("f32"),                              //
+          py::arg("metric") = std::string("ip"),                              //
+          py::arg("connectivity") = config_t::connectivity_default_k,         //
+          py::arg("expansion_add") = config_t::expansion_add_default_k,       //
+          py::arg("expansion_search") = config_t::expansion_search_default_k, //
+          py::arg("metric_pointer") = 0                                       //
     );
 
     i.def(                     //
