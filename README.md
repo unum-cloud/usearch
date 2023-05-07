@@ -27,7 +27,7 @@ Vector Search Engine<br/>
   - [x] Hardware-accelerated [`ashvardanian/simsimd`](https://github.com/ashvardanian/simsimd). 
 - [x] Variable dimensionality vectors.
 - [x] Don't copy vectors if not needed.
-- [x] Bring your threads.
+- [x] [Bring your threads](#bring-your-threads), like OpenMP.
 - [x] Multiple vectors per label.
 - [x] [Python](#python) bindings: `pip install usearch`.
 - [x] [JavaScript](#java) bindings: `npm install usearch`.
@@ -40,7 +40,7 @@ Vector Search Engine<br/>
 - [ ] For Windows.
 - [ ] Multi-index lookups in Python.
 - [ ] Thread-safe `reserve`.
-- [ ] Distributed construction.
+- [ ] Distributed construction with MPI.
 - [x] AI + Vector Search = Semantic Search.
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/usearch.hpp
