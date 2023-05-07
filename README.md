@@ -219,7 +219,7 @@ import numpy as np
 import usearch
 
 index = usearch.Index(
-    dim=256, # Define the number of dimensions in input vectors
+    ndim=256, # Define the number of dimensions in input vectors
     metric='cos', # Choose the "metric" or "distance", default = 'ip', optional
     dtype='f32', # Quantize to 'f16' or 'i8q100' if needed, default = 'f32', optional
     connectivity=16, # How frequent should the connections in the graph be, optional
@@ -401,7 +401,7 @@ from PIL import Image
 
 server = ucall.Server()
 model = uform.get_model('unum-cloud/uform-vl-multilingual')
-index = usearch.Index(dim=256)
+index = usearch.Index(ndim=256)
 
 @server
 def add(label: int, photo: Image.Image):

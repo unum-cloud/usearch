@@ -180,7 +180,7 @@ PYBIND11_MODULE(usearch, m) {
 
     i.def(py::init(&make_index),                                              //
           py::kw_only(),                                                      //
-          py::arg("dim"),                                                     //
+          py::arg("ndim"),                                                    //
           py::arg("capacity") = 0,                                            //
           py::arg("dtype") = std::string("f32"),                              //
           py::arg("metric") = std::string("ip"),                              //

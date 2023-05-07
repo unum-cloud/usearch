@@ -6,10 +6,10 @@ import numpy as np
 from PIL import Image
 
 
-def serve(dim: int, metric: str = 'ip'):
+def serve(ndim: int, metric: str = 'ip'):
 
     server = ucall.Server()
-    index = usearch.Index(dim=dim, metric=metric)
+    index = usearch.Index(ndim=ndim, metric=metric)
 
     @server
     def add_one(label: int, vector: np.array):
