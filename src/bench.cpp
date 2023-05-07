@@ -26,6 +26,8 @@
 using namespace unum::usearch;
 using namespace unum;
 
+using vector_id_t = std::uint32_t;
+
 template <typename element_at>
 std::size_t offset_of(element_at const* begin, element_at const* end, element_at v) noexcept {
     auto iterator = begin;
@@ -344,6 +346,34 @@ void run_big_or_small(dataset_at& dataset, args_t const& args, config_t config) 
         run_type_punned<auto_index_gt<std::size_t, neighbor_id_at>>(dataset, args, config);
 }
 
+void report_expected_losses(persisted_dataset_gt<float, vector_id_t> const& dataset) {
+
+    auto vec1 = dataset.vector(0);
+    auto vec2 = dataset.query(0);
+    std::vector<f16_converted_t> vec1f16(dataset.dimensions());
+    std::vector<f16_converted_t> vec2f16(dataset.dimensions());
+    std::transform(vec1, vec1 + dataset.dimensions(), vec1f16.data(), [](float v) { return v; });
+    std::transform(vec2, vec2 + dataset.dimensions(), vec2f16.data(), [](float v) { return v; });
+    std::vector<i8q100_converted_t> vec1i8(dataset.dimensions());
+    std::vector<i8q100_converted_t> vec2i8(dataset.dimensions());
+    std::transform(vec1, vec1 + dataset.dimensions(), vec1i8.data(), [](float v) { return v; });
+    std::transform(vec2, vec2 + dataset.dimensions(), vec2i8.data(), [](float v) { return v; });
+
+#if 0
+    auto ip_default = ip_gt<float>{}(vec1, vec2, dataset.dimensions());
+    auto ip_sve = 1.f - simsimd_dot_f32sve(vec1, vec2, dataset.dimensions());
+    auto ip_neon = 1.f - simsimd_dot_f32x4neon(vec1, vec2, dataset.dimensions());
+    auto ip_f16 = ip_gt<f16_converted_t>{}(vec1f16.data(), vec2f16.data(), dataset.dimensions());
+    auto ip_f16sve = 1.f - simsimd_dot_f16sve((simsimd_f16_t const*)vec1f16.data(),
+                                              (simsimd_f16_t const*)vec2f16.data(), dataset.dimensions());
+    auto ip_f16neon = 1.f - simsimd_dot_f16x8neon((simsimd_f16_t const*)vec1f16.data(),
+                                                  (simsimd_f16_t const*)vec2f16.data(), dataset.dimensions());
+    auto ip_i8 = ip_i8q100_converted_t{}(vec1i8.data(), vec2i8.data(), dataset.dimensions());
+
+    exit(0);
+#endif
+}
+
 int main(int argc, char** argv) {
 
     // Print backtrace if something goes wrong.
@@ -392,8 +422,6 @@ int main(int argc, char** argv) {
     std::printf("-- Base vectors path: %s\n", args.path_vectors.c_str());
     std::printf("-- Query vectors path: %s\n", args.path_queries.c_str());
     std::printf("-- Ground truth neighbors path: %s\n", args.path_neighbors.c_str());
-
-    using vector_id_t = std::uint32_t;
 
     persisted_dataset_gt<float, vector_id_t> dataset{
         args.path_vectors.c_str(),

@@ -7,8 +7,14 @@
 #include <sys/auxv.h>
 #endif
 
+#if defined(__aarch64__)
+#include <arm_fp16.h>
+#endif
+
 #include <fp16/fp16.h>
+#if defined(USEARCH_USE_SIMD)
 #include <simsimd/simsimd.h>
+#endif
 
 #include <usearch/usearch.hpp>
 
@@ -39,6 +45,27 @@ template <typename at> inline at clamp(at v, at lo, at hi) noexcept {
 class i8q100_converted_t;
 class f16_converted_t;
 
+inline float f16_to_f32(std::uint16_t u16) noexcept {
+#if defined(__aarch64__)
+    __fp16 f16;
+    std::memcpy(&f16, &u16, sizeof(std::uint16_t));
+    return float(f16);
+#else
+    return fp16_ieee_to_fp32_value(u16);
+#endif
+}
+
+inline std::uint16_t f32_to_f16(float f32) noexcept {
+#if defined(__aarch64__)
+    __fp16 f16 = __fp16(f32);
+    std::uint16_t u16;
+    std::memcpy(&u16, &f16, sizeof(std::uint16_t));
+    return u16;
+#else
+    return fp16_ieee_from_fp32_value(f32);
+#endif
+}
+
 class f16_converted_t {
     std::uint16_t uint16_{};
 
@@ -49,11 +76,11 @@ class f16_converted_t {
     inline f16_converted_t(f16_converted_t const&) = default;
     inline f16_converted_t& operator=(f16_converted_t const&) = default;
 
-    inline operator float() const noexcept { return fp16_ieee_to_fp32_value(uint16_); }
+    inline operator float() const noexcept { return f16_to_f32(uint16_); }
 
     inline f16_converted_t(i8q100_converted_t) noexcept;
-    inline f16_converted_t(float v) noexcept : uint16_(fp16_ieee_from_fp32_value(v)) {}
-    inline f16_converted_t(double v) noexcept : uint16_(fp16_ieee_from_fp32_value(v)) {}
+    inline f16_converted_t(float v) noexcept : uint16_(f32_to_f16(v)) {}
+    inline f16_converted_t(double v) noexcept : uint16_(f32_to_f16(v)) {}
 
     inline f16_converted_t operator+(f16_converted_t other) const noexcept { return {float(*this) + float(other)}; }
     inline f16_converted_t operator-(f16_converted_t other) const noexcept { return {float(*this) - float(other)}; }
@@ -69,22 +96,22 @@ class f16_converted_t {
     inline f16_converted_t operator/(double other) const noexcept { return {float(*this) / other}; }
 
     inline f16_converted_t& operator+=(float v) noexcept {
-        uint16_ = fp16_ieee_from_fp32_value(v + fp16_ieee_to_fp32_value(uint16_));
+        uint16_ = f32_to_f16(v + f16_to_f32(uint16_));
         return *this;
     }
 
     inline f16_converted_t& operator-=(float v) noexcept {
-        uint16_ = fp16_ieee_from_fp32_value(v - fp16_ieee_to_fp32_value(uint16_));
+        uint16_ = f32_to_f16(v - f16_to_f32(uint16_));
         return *this;
     }
 
     inline f16_converted_t& operator*=(float v) noexcept {
-        uint16_ = fp16_ieee_from_fp32_value(v * fp16_ieee_to_fp32_value(uint16_));
+        uint16_ = f32_to_f16(v * f16_to_f32(uint16_));
         return *this;
     }
 
     inline f16_converted_t& operator/=(float v) noexcept {
-        uint16_ = fp16_ieee_from_fp32_value(v / fp16_ieee_to_fp32_value(uint16_));
+        uint16_ = f32_to_f16(v / f16_to_f32(uint16_));
         return *this;
     }
 };
@@ -102,6 +129,10 @@ class i8q100_converted_t {
     inline operator float() const noexcept { return float(int8_) / 100.f; }
     inline operator f16_converted_t() const noexcept { return float(int8_) / 100.f; }
     inline operator double() const noexcept { return double(int8_) / 100.0; }
+    inline operator std::int8_t() const noexcept { return int8_; }
+    inline operator std::int16_t() const noexcept { return int8_; }
+    inline operator std::int32_t() const noexcept { return int8_; }
+    inline operator std::int64_t() const noexcept { return int8_; }
 
     inline i8q100_converted_t(float v) noexcept
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * 100.f), -100, 100)) {}
@@ -127,7 +158,7 @@ void multithreaded(std::size_t threads, std::size_t tasks, callback_at&& callbac
     }
 
     std::vector<std::thread> threads_pool;
-    std::size_t tasks_per_thread = tasks / threads + (tasks % threads) != 0;
+    std::size_t tasks_per_thread = (tasks / threads) + ((tasks % threads) != 0);
     for (std::size_t thread_idx = 0; thread_idx != threads; ++thread_idx) {
         threads_pool.emplace_back([=]() {
             for (std::size_t task_idx = thread_idx * tasks_per_thread;
@@ -282,9 +313,25 @@ template <> struct cast_gt<f16_converted_t, f16_converted_t> {
     bool operator()(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
 
+struct ip_i8q100_converted_t {
+    float operator()(i8q100_converted_t const* a, i8q100_converted_t const* b, std::size_t d) const noexcept {
+        std::int64_t ab = 0;
+#if defined(__GNUC__)
+#pragma GCC ivdep
+#elif defined(__clang__)
+#pragma clang loop vectorize(enable)
+#elif defined(_OPENMP)
+#pragma omp simd reduction(+ : ab)
+#endif
+        for (std::size_t i = 0; i < d; ++i)
+            ab += std::int16_t(a[i]) * std::int16_t(b[i]);
+        return 1.f - ab / 10000.f;
+    }
+};
+
 /**
  *  @brief  Oversimplified type-punned index for equidimensional floating-point
- *          vectors with automatic down-casting and isa acceleration.
+ *          vectors with automatic down-casting and hardware acceleration.
  */
 template <typename label_at = std::int64_t, typename id_at = std::uint32_t> //
 class auto_index_gt {
@@ -361,6 +408,12 @@ class auto_index_gt {
     static auto_index_gt cos(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return make(dimensions, accuracy, cos_metric(dimensions, accuracy), make_casts(accuracy), config); }
     static auto_index_gt haversine(accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return make(2, accuracy, haversine_metric(accuracy), make_casts(accuracy), config); }
     // clang-format on
+
+    static auto_index_gt udf(                                    //
+        std::size_t dimensions, punned_stateful_metric_t metric, //
+        accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) {
+        return make(dimensions, accuracy, {metric, isa_t::auto_k}, make_casts(accuracy), config);
+    }
 
     auto_index_gt fork() const {
         auto_index_gt result;
@@ -456,7 +509,8 @@ class auto_index_gt {
     }
 
     static metric_and_meta_t ip_metric_f32(std::size_t dimensions) {
-#if 0
+        (void)dimensions;
+#if defined(USEARCH_USE_SIMD)
 #if defined(__x86_64__)
         if (dimensions % 4 == 0)
             return {
@@ -486,7 +540,8 @@ class auto_index_gt {
     }
 
     static metric_and_meta_t ip_metric_f16(std::size_t dimensions) {
-#if 0
+        (void)dimensions;
+#if defined(USEARCH_USE_SIMD)
 #if defined(__x86_64__)
 #elif defined(__aarch64__)
         if (supports_arm_sve())
@@ -510,7 +565,7 @@ class auto_index_gt {
 
     static metric_and_meta_t ip_metric(std::size_t dimensions, accuracy_t accuracy) {
         switch (accuracy) {
-        case accuracy_t::i8q100_k: return {};
+        case accuracy_t::i8q100_k: return {pun_metric<i8q100_converted_t>(ip_i8q100_converted_t{}), isa_t::auto_k};
         case accuracy_t::f16_k: return ip_metric_f16(dimensions);
         case accuracy_t::f32_k: return ip_metric_f32(dimensions);
         case accuracy_t::f64_k: return {pun_metric<f64_t>(ip_gt<f64_t>{}), isa_t::auto_k};

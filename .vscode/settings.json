@@ -102,6 +102,7 @@
     "cSpell.words": [
         "equidimensional",
         "jaccard",
+        "memmap",
         "ndim",
         "simsimd",
         "usearch"
