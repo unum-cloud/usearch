@@ -156,7 +156,7 @@ void multithreaded(std::size_t threads, std::size_t tasks, callback_at&& callbac
     }
 
     std::vector<std::thread> threads_pool;
-    std::size_t tasks_per_thread = (tasks / threads) + (tasks % threads) != 0;
+    std::size_t tasks_per_thread = (tasks / threads) + ((tasks % threads) != 0);
     for (std::size_t thread_idx = 0; thread_idx != threads; ++thread_idx) {
         threads_pool.emplace_back([=]() {
             for (std::size_t task_idx = thread_idx * tasks_per_thread;
