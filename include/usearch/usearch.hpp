@@ -339,8 +339,9 @@ class max_heap_gt {
     bool empty() const noexcept { return !size_; }
     std::size_t size() const noexcept { return size_; }
     std::size_t capacity() const noexcept { return capacity_; }
+    /// @brief  Selects the largest element in the heap.
+    /// @return Reference to the stored element.
     element_t const& top() const noexcept { return elements_[0]; }
-    element_t const& max() const noexcept { return elements_[0]; }
 
     void clear() noexcept {
         while (size_) {
