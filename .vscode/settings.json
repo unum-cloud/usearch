@@ -103,6 +103,7 @@
         "astype",
         "dtype",
         "equidimensional",
+        "hashable",
         "jaccard",
         "longlong",
         "memmap",
