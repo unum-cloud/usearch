@@ -29,6 +29,12 @@ using label_t = Py_ssize_t;
 using distance_t = punned_distance_t;
 using native_index_t = auto_index_gt<label_t>;
 
+using set_member_t = std::uint32_t;
+using set_view_t = span_gt<set_member_t const>;
+using sets_index_t = index_gt<jaccard_gt<set_member_t>, label_t, std::uint32_t, set_member_t>;
+
+using hash_index_t = index_gt<bit_hamming_gt<std::uint32_t>, label_t, std::uint32_t, std::size_t>;
+
 static native_index_t make_index(   //
     std::size_t dimensions,         //
     std::size_t capacity,           //
@@ -54,6 +60,23 @@ static native_index_t make_index(   //
         return native_index_t::udf(dimensions, metric_ptr, accuracy, config);
     else
         return index_from_name<native_index_t>(metric.c_str(), metric.size(), dimensions, accuracy, config);
+}
+
+static std::unique_ptr<sets_index_t> make_sets_index( //
+    std::size_t capacity,                             //
+    std::size_t connectivity,                         //
+    std::size_t expansion_add,                        //
+    std::size_t expansion_search                      //
+) {
+    config_t config;
+    config.expansion_add = expansion_add;
+    config.expansion_search = expansion_search;
+    config.connectivity = connectivity;
+    config.max_elements = capacity;
+    config.max_threads_add = 1;
+    config.max_threads_search = 1;
+
+    return std::unique_ptr<sets_index_t>(new sets_index_t(config));
 }
 
 static void add_one_to_index(native_index_t& index, label_t label, py::buffer vector, bool copy) {
@@ -104,10 +127,8 @@ static void add_many_to_index(native_index_t& index, py::buffer labels, py::buff
     if (labels_count != vectors_count)
         throw std::invalid_argument("Number of labels and vectors must match!");
 
-    if (index.size() + vectors_count >= index.capacity()) {
-        std::size_t next_capacity = ceil2(index.size() + vectors_count);
-        index.reserve(next_capacity);
-    }
+    if (index.size() + vectors_count >= index.capacity())
+        index.reserve(ceil2(index.size() + vectors_count));
 
     char const* vectors_data = reinterpret_cast<char const*>(vectors_info.ptr);
     char const* labels_data = reinterpret_cast<char const*>(labels_info.ptr);
@@ -235,9 +256,20 @@ static py::tuple search_many_in_index(native_index_t& index, py::buffer vectors,
     return results;
 }
 
-static void save_index(native_index_t const& index, std::string const& path) { index.save(path.c_str()); }
-static void load_index(native_index_t& index, std::string const& path) { index.load(path.c_str()); }
-static void view_index(native_index_t& index, std::string const& path) { index.view(path.c_str()); }
+template <typename index_at = native_index_t> //
+static void save_index(index_at const& index, std::string const& path) {
+    index.save(path.c_str());
+}
+
+template <typename index_at = native_index_t> //
+static void load_index(index_at& index, std::string const& path) {
+    index.load(path.c_str());
+}
+
+template <typename index_at = native_index_t> //
+static void view_index(index_at& index, std::string const& path) {
+    index.view(path.c_str());
+}
 
 PYBIND11_MODULE(usearch, m) {
     m.doc() = "Unum USearch Python bindings";
@@ -284,7 +316,66 @@ PYBIND11_MODULE(usearch, m) {
     i.def_property_readonly("connectivity", &native_index_t::connectivity);
     i.def_property_readonly("capacity", &native_index_t::capacity);
 
-    i.def("save", &save_index, py::arg("path"));
-    i.def("load", &load_index, py::arg("path"));
-    i.def("view", &view_index, py::arg("path"));
+    i.def("save", &save_index<native_index_t>, py::arg("path"));
+    i.def("load", &load_index<native_index_t>, py::arg("path"));
+    i.def("view", &view_index<native_index_t>, py::arg("path"));
+
+    auto si = py::class_<sets_index_t>(m, "SetsIndex");
+
+    si.def(                                                                //
+        py::init(&make_sets_index),                                        //
+        py::kw_only(),                                                     //
+        py::arg("capacity") = 0,                                           //
+        py::arg("connectivity") = config_t::connectivity_default_k,        //
+        py::arg("expansion_add") = config_t::expansion_add_default_k,      //
+        py::arg("expansion_search") = config_t::expansion_search_default_k //
+    );
+
+    si.def( //
+        "add",
+        [](sets_index_t& index, label_t label, py::array_t<set_member_t> set, bool copy) {
+            if (set.ndim() != 1)
+                throw std::runtime_error("Set can't be multi-dimensional!");
+            if (set.strides(0) != sizeof(set_member_t))
+                throw std::runtime_error("Set can't be strided!");
+            if (index.size() + 1 >= index.capacity())
+                index.reserve(ceil2(index.size() + 1));
+            std::cout << "index size " << index.size() << std::endl;
+            auto proxy = set.unchecked<1>();
+            auto view = set_view_t{proxy.data(0), static_cast<std::size_t>(proxy.shape(0))};
+            index.add(label, view, copy);
+        },                     //
+        py::arg("label"),      //
+        py::arg("set"),        //
+        py::kw_only(),         //
+        py::arg("copy") = true //
+    );
+
+    si.def( //
+        "search",
+        [](sets_index_t& index, py::array_t<set_member_t> set, std::size_t count) -> py::array_t<label_t> {
+            auto proxy = set.unchecked<1>();
+            auto view = set_view_t{proxy.data(0), static_cast<std::size_t>(proxy.shape(0))};
+            auto labels_py = py::array_t<label_t>({static_cast<ssize_t>(count)});
+            auto labels_proxy = labels_py.mutable_unchecked<1>();
+            auto found = 0ul;
+            index.search(view, count, [&](label_t label, distance_t) {
+                labels_proxy(found) = label;
+                found++;
+            });
+            // labels_py.resize({found});
+            return labels_py;
+        },
+        py::arg("set"),       //
+        py::arg("count") = 10 //
+    );
+
+    si.def("__len__", &sets_index_t::size);
+    si.def_property_readonly("size", &sets_index_t::size);
+    si.def_property_readonly("connectivity", &sets_index_t::connectivity);
+    si.def_property_readonly("capacity", &sets_index_t::capacity);
+
+    si.def("save", &save_index<sets_index_t>, py::arg("path"));
+    si.def("load", &load_index<sets_index_t>, py::arg("path"));
+    si.def("view", &view_index<sets_index_t>, py::arg("path"));
 }

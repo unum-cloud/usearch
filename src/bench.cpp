@@ -346,6 +346,18 @@ void run_big_or_small(dataset_at& dataset, args_t const& args, config_t config) 
         run_type_punned<auto_index_gt<std::size_t, neighbor_id_at>>(dataset, args, config);
 }
 
+void report_alternative_setups() {
+    using set_member_t = std::uint32_t;
+    using sets_index_t = index_gt<jaccard_gt<set_member_t>, std::size_t, std::uint32_t, set_member_t>;
+    set_member_t set_a[] = {10, 12, 15};
+    set_member_t set_b[] = {11, 12, 15, 16};
+    sets_index_t index;
+    index.reserve(100);
+    index.add(10, span_gt<set_member_t const>{&set_a[0], 3});
+    index.add(11, span_gt<set_member_t const>{&set_b[0], 4});
+    exit(0);
+}
+
 void report_expected_losses(persisted_dataset_gt<float, vector_id_t> const& dataset) {
 
     auto vec1 = dataset.vector(0);
@@ -432,6 +444,9 @@ int main(int argc, char** argv) {
     std::printf("-- Vectors count: %zu\n", dataset.vectors_count());
     std::printf("-- Queries count: %zu\n", dataset.queries_count());
     std::printf("-- Neighbors per query: %zu\n", dataset.neighborhood_size());
+
+    report_alternative_setups();
+    report_expected_losses(dataset);
 
     config_t config;
     config.connectivity = args.connectivity;

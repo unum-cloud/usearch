@@ -43,3 +43,10 @@ assert len(index) == count_vectors
 
 results = index.search(vectors, 10)
 print('found', results[0].shape, results[1].shape, results[2].shape)
+
+
+index_sets = usearch.SetsIndex()
+index_sets.add(10, np.array([10, 12, 15], dtype=np.uint32))
+index_sets.add(11, np.array([11, 12, 15, 16], dtype=np.uint32))
+results = index_sets.search(np.array([12, 15], dtype=np.uint32), 20)
+print(results)
