@@ -392,6 +392,7 @@ class auto_index_gt {
     std::size_t connectivity() const noexcept { return index_->connectivity(); }
     std::size_t size() const noexcept { return index_->size(); }
     std::size_t capacity() const noexcept { return index_->capacity(); }
+    void clear() noexcept { return index_->clear(); }
 
     isa_t acceleration() const noexcept { return acceleration_; }
     std::size_t concurrency() const noexcept {

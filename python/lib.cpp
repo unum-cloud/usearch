@@ -271,6 +271,11 @@ static void view_index(index_at& index, std::string const& path) {
     index.view(path.c_str());
 }
 
+template <typename index_at = native_index_t> //
+static void clear_index(index_at& index) {
+    index.clear();
+}
+
 PYBIND11_MODULE(usearch, m) {
     m.doc() = "Unum USearch Python bindings";
 
@@ -319,6 +324,7 @@ PYBIND11_MODULE(usearch, m) {
     i.def("save", &save_index<native_index_t>, py::arg("path"));
     i.def("load", &load_index<native_index_t>, py::arg("path"));
     i.def("view", &view_index<native_index_t>, py::arg("path"));
+    i.def("clear", &clear_index<native_index_t>);
 
     auto si = py::class_<sets_index_t>(m, "SetsIndex");
 
@@ -340,10 +346,9 @@ PYBIND11_MODULE(usearch, m) {
                 throw std::runtime_error("Set can't be strided!");
             if (index.size() + 1 >= index.capacity())
                 index.reserve(ceil2(index.size() + 1));
-            std::cout << "index size " << index.size() << std::endl;
             auto proxy = set.unchecked<1>();
             auto view = set_view_t{proxy.data(0), static_cast<std::size_t>(proxy.shape(0))};
-            index.add(label, view, copy);
+            index.add(label, view, 0, copy);
         },                     //
         py::arg("label"),      //
         py::arg("set"),        //
@@ -358,12 +363,8 @@ PYBIND11_MODULE(usearch, m) {
             auto view = set_view_t{proxy.data(0), static_cast<std::size_t>(proxy.shape(0))};
             auto labels_py = py::array_t<label_t>({static_cast<ssize_t>(count)});
             auto labels_proxy = labels_py.mutable_unchecked<1>();
-            auto found = 0ul;
-            index.search(view, count, [&](label_t label, distance_t) {
-                labels_proxy(found) = label;
-                found++;
-            });
-            // labels_py.resize({found});
+            auto found = index.search(view, count, &labels_proxy(0), nullptr, 0);
+            labels_py.resize({static_cast<ssize_t>(found)});
             return labels_py;
         },
         py::arg("set"),       //
