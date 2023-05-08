@@ -100,10 +100,14 @@
         "version": "cpp"
     },
     "cSpell.words": [
+        "astype",
+        "dtype",
         "equidimensional",
         "jaccard",
+        "longlong",
         "memmap",
         "ndim",
+        "preprocess",
         "simsimd",
         "usearch"
     ],
