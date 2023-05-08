@@ -472,10 +472,10 @@ using lock_t = std::unique_lock<mutex_t>;
  *  @brief Five-byte integer type to address node clouds with over 4B entries.
  */
 #ifdef WINDOWS
-__pragma(pack(push, 1))
-#endif // WINDOWS
+#pragma pack(push, 1) // Pack struct members on 1-byte alignment
+#endif
 
-    class usearch_pack_m uint40_t {
+class usearch_pack_m uint40_t {
     unsigned char octets[5];
 
   public:
@@ -513,10 +513,10 @@ __pragma(pack(push, 1))
     }
 };
 #ifdef WINDOWS
-__pragma(pack(push, 1))
-#endif // WINDOWS
+#pragma pack(pop) // Reset alignment to default
+#endif
 
-    static_assert(sizeof(uint40_t) == 5, "uint40_t must be exactly 5 bytes");
+static_assert(sizeof(uint40_t) == 5, "uint40_t must be exactly 5 bytes");
 
 template <typename scalar_at> class span_gt {
     scalar_at* data_;
@@ -642,6 +642,9 @@ class index_gt {
             : count(*(neighbors_count_t*)tape), neighbors((neighbors_count_t*)tape + 1) {}
     };
 
+#ifdef WINDOWS
+#pragma pack(push, 1) // Pack struct members on 1-byte alignment
+#endif
     struct usearch_pack_m node_head_t {
         label_t label;
         dim_t dim;
@@ -650,6 +653,10 @@ class index_gt {
         // Each starts with a `neighbors_count_t` and is followed by such number of `id_t`s.
         byte_t neighbors[1];
     };
+#ifdef WINDOWS
+#pragma pack(pop) // Reset alignment to default
+#endif
+
     static constexpr std::size_t head_bytes_k = sizeof(label_t) + sizeof(dim_t) + sizeof(level_t);
 
     struct node_t {

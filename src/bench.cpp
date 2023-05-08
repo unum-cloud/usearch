@@ -8,9 +8,9 @@
 #define NOMINMAX // define this macro to prevent the definition of min/max macros in Windows.h
 #define _USE_MATH_DEFINES
 
-#include <DbgHelp.h>
 #include <Windows.h>
 
+#include <DbgHelp.h>
 #pragma comment(lib, "Dbghelp.lib")
 
 #define STDERR_FILENO HANDLE(2)
