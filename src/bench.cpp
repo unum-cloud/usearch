@@ -16,8 +16,8 @@
 #define STDERR_FILENO HANDLE(2)
 #else
 #include <execinfo.h>
-#include <fcntl.h>    // `fallocate`
-#include <stdlib.h>   // `posix_memalign`
+#include <fcntl.h>    // `open`
+#include <stdlib.h>   // `getenv`
 #include <sys/mman.h> // `mmap`
 #include <unistd.h>
 #endif
