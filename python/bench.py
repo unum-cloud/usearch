@@ -2,11 +2,11 @@ import datetime
 import numpy as np
 import fire
 
-from usearchh.io import load_matrix
-
 import faiss
 import usearch
 
+import struct
+import numpy as np
 
 def measure(f) -> float:
     a = datetime.datetime.now()
@@ -44,11 +44,23 @@ def main(
     neighbors_mat = load_matrix(neighbors)
     dim = vectors_mat.shape[1]
 
+    # Test FAISS
     index = faiss.IndexHNSWFlat(dim, connectivity)
     index.hnsw.efSearch = expansion_search
     index.hnsw.efConstruction = expansion_add
     bench_faiss(index, vectors_mat, queries_mat, neighbors_mat)
 
+    # Test FAISS with default Product Quantization
+    nlist = 10000  # Number of inverted lists (number of partitions or cells).
+    nsegment = 16  # Number of segments for PQ (number of subquantizers).
+    nbit = 8       # Number of bits to encode each segment.
+    coarse_quantizer = faiss.IndexHNSWFlat(dim, connectivity)
+    index = faiss.IndexIVFPQ(coarse_quantizer, dim, nlist, nsegment, nbit)
+    index.train(vectors_mat)
+    index.nprobe = 10
+    bench_faiss(index, vectors_mat, queries_mat, neighbors_mat)
+
+    # Test USearch `Index`
     index = usearch.Index(
         ndim=dim,
         expansion_add=expansion_add,

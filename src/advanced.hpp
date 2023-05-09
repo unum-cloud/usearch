@@ -1,5 +1,6 @@
 #pragma once
 #include <functional>
+#include <stdexcept> // `std::invalid_argument`
 #include <thread>
 #include <vector>
 
@@ -229,7 +230,7 @@ inline accuracy_t accuracy_from_name(char const* name, std::size_t len) {
     else if (str_equals(name, len, "i8q100"))
         accuracy = accuracy_t::i8q100_k;
     else
-        throw std::runtime_error("Unknown type, choose: f32, f16, f64, i8q100");
+        throw std::invalid_argument("Unknown type, choose: f32, f16, f64, i8q100");
     return accuracy;
 }
 
@@ -237,16 +238,24 @@ template <typename index_at>
 inline index_at index_from_name( //
     char const* name, std::size_t len, std::size_t dimensions, accuracy_t accuracy, config_t const& config) {
 
-    if (str_equals(name, len, "l2_sq") || str_equals(name, len, "euclidean_sq"))
+    if (str_equals(name, len, "l2_sq") || str_equals(name, len, "euclidean_sq")) {
+        if (dimensions == 0)
+            throw std::invalid_argument("The number of dimensions must be positive");
         return index_at::l2(dimensions, accuracy, config);
-    else if (str_equals(name, len, "ip") || str_equals(name, len, "inner") || str_equals(name, len, "dot"))
+    } else if (str_equals(name, len, "ip") || str_equals(name, len, "inner") || str_equals(name, len, "dot")) {
+        if (dimensions == 0)
+            throw std::invalid_argument("The number of dimensions must be positive");
         return index_at::ip(dimensions, accuracy, config);
-    else if (str_equals(name, len, "cos") || str_equals(name, len, "angular"))
+    } else if (str_equals(name, len, "cos") || str_equals(name, len, "angular")) {
+        if (dimensions == 0)
+            throw std::invalid_argument("The number of dimensions must be positive");
         return index_at::cos(dimensions, accuracy, config);
-    else if (str_equals(name, len, "haversine"))
+    } else if (str_equals(name, len, "haversine")) {
+        if (dimensions != 2 && dimensions != 0)
+            throw std::invalid_argument("The number of dimensions must be equal to two");
         return index_at::haversine(accuracy, config);
-    else
-        throw std::runtime_error("Unknown distance, choose: l2_sq, ip, cos, hamming, jaccard");
+    } else
+        throw std::invalid_argument("Unknown distance, choose: l2_sq, ip, cos, hamming, jaccard");
     return {};
 }
 
@@ -383,6 +392,7 @@ class auto_index_gt {
     std::size_t connectivity() const noexcept { return index_->connectivity(); }
     std::size_t size() const noexcept { return index_->size(); }
     std::size_t capacity() const noexcept { return index_->capacity(); }
+    void clear() noexcept { return index_->clear(); }
 
     isa_t acceleration() const noexcept { return acceleration_; }
     std::size_t concurrency() const noexcept {
