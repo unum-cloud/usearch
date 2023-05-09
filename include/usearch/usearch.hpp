@@ -336,6 +336,23 @@ class max_heap_gt {
     max_heap_gt(std::size_t max_capacity = 0) noexcept
         : elements_(nullptr), size_(0), capacity_(0), max_capacity_(max_capacity) {}
 
+    max_heap_gt(max_heap_gt&& other) noexcept {
+        std::swap(elements_, other.elements_);
+        std::swap(size_, other.size_);
+        std::swap(capacity_, other.capacity_);
+        std::swap(max_capacity_, other.max_capacity_);
+    }
+    max_heap_gt& operator=(max_heap_gt&& other) noexcept {
+        std::swap(elements_, other.elements_);
+        std::swap(size_, other.size_);
+        std::swap(capacity_, other.capacity_);
+        std::swap(max_capacity_, other.max_capacity_);
+        return *this;
+    }
+
+    max_heap_gt(max_heap_gt const&) = delete;
+    max_heap_gt& operator=(max_heap_gt const&) = delete;
+
     bool empty() const noexcept { return !size_; }
     std::size_t size() const noexcept { return size_; }
     std::size_t capacity() const noexcept { return capacity_; }
