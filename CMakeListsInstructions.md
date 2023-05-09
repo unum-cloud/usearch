@@ -24,6 +24,14 @@ cmake -B ./build_release \
     --queries datasets/wiki_1M/query.public.100K.fbin \
     --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin
 
+# Large benchmark on a 1TB dataset:
+./build_release/bench \
+    --vectors datasets/t2i_1B/base.1B.fbin \
+    --queries datasets/t2i_1B/query.public.100K.fbin \
+    --neighbors datasets/t2i_1B/groundtruth.public.100K.ibin \
+    --output datasets/t2i_1B/index.usearch \
+    --cos
+
 # To benchmark in Python:
 python python/bench.py \
     --vectors datasets/wiki_1M/base.1M.fbin \
@@ -129,7 +137,7 @@ Luckily, smaller samples of those datasets are available.
 There is a 10M subset available.
 
 ```sh
-mkdir -p datasets/deep/ && \
+mkdir -p datasets/deep_1B/ && \
     wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/base.1B.fbin -P datasets/deep_1B/ &&
     wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/base.10M.fbin -P datasets/deep_1B/ &&
     wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/query.public.10K.fbin -P datasets/deep_1B/ &&
@@ -141,7 +149,7 @@ mkdir -p datasets/deep/ && \
 There is a 1M subset available.
 
 ```sh
-mkdir -p datasets/t2i/ && \
+mkdir -p datasets/t2i_1B/ && \
     wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/T2I/base.1B.fbin -P datasets/t2i_1B/ &&
     wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/T2I/base.1M.fbin -P datasets/t2i_1B/ &&
     wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/T2I/query.public.100K.fbin -P datasets/t2i_1B/ &&
