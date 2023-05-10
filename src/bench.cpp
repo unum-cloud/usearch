@@ -158,17 +158,73 @@ struct in_memory_dataset_gt {
 
 char const* getenv_or(char const* name, char const* default_) { return getenv(name) ? getenv(name) : default_; }
 
+using timestamp_t = std::chrono::time_point<std::chrono::high_resolution_clock>;
+
+struct running_stats_printer_t {
+    std::size_t total{};
+    std::atomic<std::size_t> progress{};
+    std::size_t last_printed_progress{};
+    timestamp_t last_printed_time{};
+    timestamp_t start_time{};
+
+    running_stats_printer_t(std::size_t n, char const* msg) {
+        std::printf("%s. %zu items\n", msg, n);
+        total = n;
+        start_time = std::chrono::high_resolution_clock::now();
+    }
+
+    ~running_stats_printer_t() {
+        std::size_t count = progress.load();
+        timestamp_t time = std::chrono::high_resolution_clock::now();
+        std::size_t duration = std::chrono::duration_cast<std::chrono::nanoseconds>(time - start_time).count();
+        float vectors_per_second = count * 1e9 / duration;
+        std::printf("\r\33[2K100 %% completed, %.0f vectors/s\n", vectors_per_second);
+    }
+
+    void refresh(std::size_t step = 1024 * 32) {
+        std::size_t new_progress = progress.load();
+        if (new_progress - last_printed_progress < step)
+            return;
+        print(new_progress);
+    }
+
+    void print(std::size_t progress) {
+
+        constexpr char* bars_k = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";
+        constexpr std::size_t bars_len_k = 60;
+
+        float percentage = progress * 1.f / total;
+        int lpad = (int)(percentage * bars_len_k);
+        int rpad = bars_len_k - lpad;
+
+        std::size_t count_new = progress - last_printed_progress;
+        timestamp_t time_new = std::chrono::high_resolution_clock::now();
+        std::size_t duration =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(time_new - last_printed_time).count();
+        float vectors_per_second = count_new * 1e9 / duration;
+
+        std::printf("\r%3.3f%% [%.*s%*s] %.0f vectors/s, finished %zu/%zu", percentage * 100.f, lpad, bars_k, rpad, "",
+                    vectors_per_second, progress, total);
+        std::fflush(stdout);
+
+        last_printed_progress = progress;
+        last_printed_time = time_new;
+    }
+};
+
 template <typename index_at, typename vector_id_at, typename real_at>
 void index_many(index_at& native, std::size_t n, vector_id_at const* ids, real_at const* vectors, std::size_t dims,
                 std::size_t vectors_to_copy = 0) {
 
     using span_t = span_gt<float const>;
+    running_stats_printer_t printer{n, "Indexing"};
 
 #pragma omp parallel for schedule(static, 32)
     for (std::size_t i = 0; i < n; ++i) {
         native.add(ids[i], span_t{vectors + dims * i, dims}, omp_get_thread_num(), i < vectors_to_copy);
-        if (((i + 1) % 100000) == 0)
-            std::printf("-- added point # %zu\n", i + 1);
+        printer.progress++;
+        if (omp_get_thread_num() == 0)
+            printer.refresh();
     }
 }
 
@@ -177,6 +233,7 @@ void search_many(index_at& native, std::size_t n, real_at const* vectors, std::s
                  vector_id_at* ids, real_at* distances) {
 
     using span_t = span_gt<float const>;
+    running_stats_printer_t printer{n, "Search"};
 
 #pragma omp parallel for schedule(static, 32)
     for (std::size_t i = 0; i < n; ++i) {
@@ -184,15 +241,10 @@ void search_many(index_at& native, std::size_t n, real_at const* vectors, std::s
             span_t{vectors + dims * i, dims}, wanted, //
             ids + wanted * i, distances + wanted * i, //
             omp_get_thread_num());
+        printer.progress++;
+        if (omp_get_thread_num() == 0)
+            printer.refresh();
     }
-}
-
-template <typename callback_at> std::size_t nanoseconds(callback_at&& callback) {
-    auto t_start = std::chrono::high_resolution_clock::now();
-    callback();
-    auto t_end = std::chrono::high_resolution_clock::now();
-    auto dt_add = std::chrono::duration_cast<std::chrono::nanoseconds>(t_end - t_start).count();
-    return dt_add;
 }
 
 template <typename dataset_at, typename index_at> //
@@ -200,32 +252,21 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
     using label_t = typename index_at::label_t;
     using distance_t = typename index_at::distance_t;
 
+    std::printf("\n");
+    std::printf("------------\n");
     if (construct) {
         // Perform insertions, evaluate speed
         std::vector<label_t> ids(dataset.vectors_count());
         std::iota(ids.begin(), ids.end(), 0);
-        std::printf("- Will begin construction\n");
-        auto dt_add = nanoseconds([&] {
-            index_many(index, dataset.vectors_count(), ids.data(), dataset.vector(0), dataset.dimensions(),
-                       vectors_to_copy);
-        });
-        std::printf("-- Added %.2f vectors/sec\n", dataset.vectors_count() * 1e9 / dt_add);
+        index_many(index, dataset.vectors_count(), ids.data(), dataset.vector(0), dataset.dimensions(),
+                   vectors_to_copy);
     }
 
     // Perform search, evaluate speed
     std::vector<label_t> found_neighbors(dataset.queries_count() * dataset.neighborhood_size());
     std::vector<distance_t> found_distances(dataset.queries_count() * dataset.neighborhood_size());
-    std::size_t executed_search_queries = 0;
-
-    auto dt_search = nanoseconds([&] {
-        while (executed_search_queries < dataset.vectors_count()) {
-            search_many(index, dataset.queries_count(), dataset.query(0), dataset.dimensions(),
-                        dataset.neighborhood_size(), found_neighbors.data(), found_distances.data());
-            executed_search_queries += dataset.queries_count();
-            std::printf("-- Searched %zu vectors\n", executed_search_queries);
-        }
-    });
-    std::printf("-- Searched %.2f vectors/sec\n", executed_search_queries * 1e9 / dt_search);
+    search_many(index, dataset.queries_count(), dataset.query(0), dataset.dimensions(), dataset.neighborhood_size(),
+                found_neighbors.data(), found_distances.data());
 
     // Evaluate quality
     std::size_t recall_at_1 = 0, recall_full = 0;
@@ -235,8 +276,11 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
         recall_at_1 += expected[0] == received[0];
         recall_full += contains(received, received + dataset.neighborhood_size(), label_t{expected[0]});
     }
-    std::printf("-- Recall@1 %.2f %%\n", recall_at_1 * 100.f / dataset.queries_count());
-    std::printf("-- Recall %.2f %%\n", recall_full * 100.f / dataset.queries_count());
+
+    std::printf("Recall@1 %.2f %%\n", recall_at_1 * 100.f / dataset.queries_count());
+    std::printf("Recall %.2f %%\n", recall_full * 100.f / dataset.queries_count());
+    std::printf("------------\n");
+    std::printf("\n");
 }
 
 void handler(int sig) {
@@ -322,7 +366,6 @@ void run_type_punned(dataset_at& dataset, args_t const& args, config_t config) {
     single_shot(dataset, index, true, args.vectors_to_copy);
     index.save(args.path_output.c_str());
 
-    std::printf("-------\n");
     std::printf("Will benchmark an on-disk view\n");
 
     index_at index_view = index.fork();
@@ -339,7 +382,6 @@ void run_typed(dataset_at& dataset, args_t const& args, config_t config) {
     single_shot(dataset, index, true, args.vectors_to_copy);
     index.save(args.path_output.c_str());
 
-    std::printf("-------\n");
     std::printf("Will benchmark an on-disk view\n");
 
     auto_index_t index_view;
