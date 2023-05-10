@@ -1,7 +1,6 @@
 #pragma once
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
-#define NOMINMAX // define this macro to prevent the definition of min/max macros in Windows.h
 #define _USE_MATH_DEFINES
 
 #define WINDOWS
