@@ -371,7 +371,7 @@ void hash_buffer(hash_index_w_meta_t& index, py::buffer vector) {
         throw std::invalid_argument("Array elements must be 16, 32, or 64 bit hashable integers!");
 }
 
-PYBIND11_MODULE(usearch, m) {
+PYBIND11_MODULE(index, m) {
     m.doc() = "Unum USearch Python bindings";
 
     auto i = py::class_<native_index_t>(m, "Index");
