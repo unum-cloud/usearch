@@ -12,6 +12,7 @@ git submodule update --init --recursive
 
 ```sh
 cmake -B ./build_release \
+    -DCMAKE_CXX_COMPILER="g++-12" \
     -DCMAKE_BUILD_TYPE=Release \
     -DUSEARCH_USE_SIMD=1 \
     -DUSEARCH_USE_OPENMP=1 \
@@ -118,35 +119,38 @@ brew install --cask wolfram-engine
 BigANN benchmark is a good starting point, if you are searching for large collections of high-dimensional vectors.
 Those often come with precomputed ground-truth neighbors, which is handy for recall evaluation.
 
-| Dataset                         | Scalar Type | Dimensions | Metric |  Size  |
-| :------------------------------ | :---------: | :--------: | :----: | :----: |
-| [Microsoft SPACEV][spacev]      |    int8     |    100     |   L2   | 93 GB  |
-| [Microsoft Turing-ANNS][turing] |   float32   |    100     |   L2   | 373 GB |
-| [Yandex Deep1B][deep]           |   float32   |     96     |   L2   | 358 GB |
-| [Yandex Text-to-Image][t2i]     |   float32   |    200     |  Cos   | 750 GB |
+| Dataset                                 | Scalar Type | Dimensions | Metric |   Size    |
+| :-------------------------------------- | :---------: | :--------: | :----: | :-------: |
+| [Unum UForm Wiki][unum-wiki]            |   float32   |    256     |   IP   |   1 GB    |
+| [Yandex Text-to-Image Sample][unum-t2i] |   float32   |    200     |  Cos   |   1 GB    |
+|                                         |             |            |        |           |
+| [Microsoft SPACEV][spacev]              |    int8     |    100     |   L2   |   93 GB   |
+| [Microsoft Turing-ANNS][turing]         |   float32   |    100     |   L2   |  373 GB   |
+| [Yandex Deep1B][deep]                   |   float32   |     96     |   L2   |  358 GB   |
+| [Yandex Text-to-Image][t2i]             |   float32   |    200     |  Cos   |  750 GB   |
+|                                         |             |            |        |           |
+| [ViT-L/12 LAION][laion]                 |   float32   |    2048    |  Cos   | 2 - 10 TB |
 
 Luckily, smaller samples of those datasets are available.
 
+[unum-wiki]: https://huggingface.co/datasets/unum-cloud/ann-wiki-1m
+[unum-t2i]: https://huggingface.co/datasets/unum-cloud/ann-t2i-1m
 [spacev]: https://github.com/microsoft/SPTAG/tree/main/datasets/SPACEV1B
 [turing]: https://learning2hash.github.io/publications/microsoftturinganns1B/
 [t2i]: https://research.yandex.com/blog/benchmarks-for-billion-scale-similarity-search
 [deep]: https://research.yandex.com/blog/benchmarks-for-billion-scale-similarity-search
+[laion]: https://laion.ai/blog/laion-5b/#download-the-data
 
-### Yandex Deep1B
-
-There is a 10M subset available.
+### Unum UForm Wiki
 
 ```sh
-mkdir -p datasets/deep_1B/ && \
-    wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/base.1B.fbin -P datasets/deep_1B/ &&
-    wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/base.10M.fbin -P datasets/deep_1B/ &&
-    wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/query.public.10K.fbin -P datasets/deep_1B/ &&
-    wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/groundtruth.public.10K.ibin -P datasets/deep_1B/
+mkdir -p datasets/wiki_1M/ && \
+    wget -nc https://huggingface.co/datasets/unum-cloud/ann-wiki-1m/resolve/main/base.1M.fbin -P datasets/wiki_1M/ &&
+    wget -nc https://huggingface.co/datasets/unum-cloud/ann-wiki-1m/resolve/main/query.public.100K.fbin -P datasets/wiki_1M/ &&
+    wget -nc https://huggingface.co/datasets/unum-cloud/ann-wiki-1m/resolve/main/groundtruth.public.100K.ibin -P datasets/wiki_1M/
 ```
 
 ### Yandex Text-to-Image
-
-There is a 1M subset available.
 
 ```sh
 mkdir -p datasets/t2i_1B/ && \
@@ -154,6 +158,16 @@ mkdir -p datasets/t2i_1B/ && \
     wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/T2I/base.1M.fbin -P datasets/t2i_1B/ &&
     wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/T2I/query.public.100K.fbin -P datasets/t2i_1B/ &&
     wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/T2I/groundtruth.public.100K.ibin -P datasets/t2i_1B/
+```
+
+### Yandex Deep1B
+
+```sh
+mkdir -p datasets/deep_1B/ && \
+    wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/base.1B.fbin -P datasets/deep_1B/ &&
+    wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/base.10M.fbin -P datasets/deep_1B/ &&
+    wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/query.public.10K.fbin -P datasets/deep_1B/ &&
+    wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/groundtruth.public.10K.ibin -P datasets/deep_1B/
 ```
 
 ### Profiling
