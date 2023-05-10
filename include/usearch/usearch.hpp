@@ -422,7 +422,7 @@ class max_heap_gt {
  *
  */
 class mutex_t {
-#ifdef WINDOWS
+#if defined(WINDOWS)
     using slot_t = volatile LONG;
 #else
     using slot_t = std::int32_t;
@@ -436,7 +436,7 @@ class mutex_t {
 
     inline bool try_lock() noexcept {
         slot_t raw = 0;
-#ifdef WINDOWS
+#if defined(WINDOWS)
         return InterlockedCompareExchange(&flag_, 1, raw);
 #else
         return __atomic_compare_exchange_n(&flag_, &raw, 1, true, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED);
@@ -445,7 +445,7 @@ class mutex_t {
 
     inline void lock() noexcept {
         slot_t raw = 0;
-#ifdef WINDOWS
+#if defined(WINDOWS)
         InterlockedCompareExchange(&flag_, 1, raw);
 #else
     lock_again:
@@ -456,7 +456,7 @@ class mutex_t {
     }
 
     inline void unlock() noexcept {
-#ifdef WINDOWS
+#if defined(WINDOWS)
         InterlockedExchange(&flag_, 0);
 #else
         __atomic_store_n(&flag_, 0, __ATOMIC_RELEASE);
@@ -471,7 +471,7 @@ using lock_t = std::unique_lock<mutex_t>;
 /**
  *  @brief Five-byte integer type to address node clouds with over 4B entries.
  */
-#ifdef WINDOWS
+#if defined(WINDOWS)
 #pragma pack(push, 1) // Pack struct members on 1-byte alignment
 #endif
 
@@ -512,7 +512,7 @@ class usearch_pack_m uint40_t {
         return old;
     }
 };
-#ifdef WINDOWS
+#if defined(WINDOWS)
 #pragma pack(pop) // Reset alignment to default
 #endif
 
@@ -642,7 +642,7 @@ class index_gt {
             : count(*(neighbors_count_t*)tape), neighbors((neighbors_count_t*)tape + 1) {}
     };
 
-#ifdef WINDOWS
+#if defined(WINDOWS)
 #pragma pack(push, 1) // Pack struct members on 1-byte alignment
 #endif
     struct usearch_pack_m node_head_t {
@@ -653,7 +653,7 @@ class index_gt {
         // Each starts with a `neighbors_count_t` and is followed by such number of `id_t`s.
         byte_t neighbors[1];
     };
-#ifdef WINDOWS
+#if defined(WINDOWS)
 #pragma pack(pop) // Reset alignment to default
 #endif
 

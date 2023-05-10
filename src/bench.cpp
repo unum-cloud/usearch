@@ -67,7 +67,7 @@ struct alignas(32) persisted_matrix_gt {
     persisted_matrix_gt(char const* path) noexcept(false) {
         if (!path || !std::strlen(path))
             throw std::invalid_argument("The file path is empty");
-#ifdef WINDOWS
+#if defined(WINDOWS)
 
         HANDLE file_handle =
             CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -113,7 +113,7 @@ struct alignas(32) persisted_matrix_gt {
 
     ~persisted_matrix_gt() {
         if (raw_handle != nullptr)
-#ifdef WINDOWS
+#if defined(WINDOWS)
             UnmapViewOfFile(raw_handle);
 #else
             munmap((void*)raw_handle, raw_length);
@@ -285,7 +285,7 @@ void handler(int sig) {
     size_t size;
 
     // get void*'s for all entries on the stack
-#ifdef WINDOWS
+#if defined(WINDOWS)
     size = CaptureStackBackTrace(0, 10, array, NULL);
 #else
     size = backtrace(array, 10);
@@ -294,7 +294,7 @@ void handler(int sig) {
     // print out all the frames to stderr
     fprintf(stderr, "Error: signal %d:\n", sig);
 
-#ifdef WINDOWS
+#if defined(WINDOWS)
     SYMBOL_INFO* symbol = (SYMBOL_INFO*)calloc(sizeof(SYMBOL_INFO) + 256 * sizeof(char), 1);
     symbol->MaxNameLen = 255;
     symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
