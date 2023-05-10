@@ -30,7 +30,7 @@ Vector Search Engine<br/>
 - [x] [Bring your threads](#bring-your-threads), like OpenMP.
 - [x] Multiple vectors per label.
 - [x] [Python](#python) bindings: `pip install usearch`.
-- [x] [JavaScript](#java) bindings: `npm install usearch`.
+- [x] [JavaScript](#javascript) bindings: `npm install usearch`.
 - [x] [Rust](#rust) bindings: `cargo add usearch`.
 - [x] [Java](#java) bindings: `cloud.unum:usearch` on GitHub.
 - [ ] GoLang bindings.
