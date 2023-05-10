@@ -56,11 +56,15 @@ model {
                 if (targetPlatform.operatingSystem.linux) {
                     cppCompiler.args '-I', "${Jvm.current().javaHome}/include/linux"
                     cppCompiler.args '-D_FILE_OFFSET_BITS=64'
+                    cppCompiler.args '-std=c++11'
                 } else if (targetPlatform.operatingSystem.macOsX) {
                     cppCompiler.args '-I', "${Jvm.current().javaHome}/include/darwin"
                     cppCompiler.args '-D_FILE_OFFSET_BITS=64'
+                    cppCompiler.args '-std=c++11'
+                } else if (targetPlatform.operatingSystem.windows){
+                    cppCompiler.args "-I${Jvm.current().javaHome}/include/win32"
+                    cppCompiler.args '/std:c++11'
                 }
-                cppCompiler.args '-std=c++11'
             }
         }
     }

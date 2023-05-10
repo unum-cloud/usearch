@@ -1,4 +1,11 @@
 #pragma once
+
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+#define _USE_MATH_DEFINES
+
+#define WINDOWS
+#endif
+
 #include <functional>
 #include <stdexcept> // `std::invalid_argument`
 #include <thread>
@@ -182,9 +189,7 @@ class aligned_allocator_gt {
     using size_type = std::size_t;
     using pointer = element_at*;
     using const_pointer = element_at const*;
-    template <typename other_element_at> struct rebind {
-        using other = aligned_allocator_gt<other_element_at>;
-    };
+    template <typename other_element_at> struct rebind { using other = aligned_allocator_gt<other_element_at>; };
 
     pointer allocate(size_type length) const noexcept {
         void* result = nullptr;
