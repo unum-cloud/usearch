@@ -39,7 +39,7 @@
 #define prefetch_m(ptr)
 #endif
 
-#ifdef NDEBUG
+#if defined(NDEBUG)
 #define assert_m(must_be_true, message)
 #else
 #define assert_m(must_be_true, message)                                                                                \
@@ -687,6 +687,9 @@ class index_gt {
     config_t config_{};
     precomputed_constants_t pre_;
     int viewed_file_descriptor_{};
+#if defined(USEARCH_IOURING)
+    struct io_uring ring_ {};
+#endif
 
     usearch_align_m mutable std::atomic<std::size_t> capacity_{};
     usearch_align_m mutable std::atomic<std::size_t> size_{};
@@ -694,6 +697,7 @@ class index_gt {
     mutex_t global_mutex_{};
     level_t max_level_{};
     id_t entry_id_{};
+    id_t base_id_{};
 
     using node_allocator_t = typename allocator_traits_t::template rebind_alloc<node_t>;
     std::vector<node_t, node_allocator_t> nodes_{};
@@ -726,9 +730,19 @@ class index_gt {
         for (thread_context_t& context : thread_contexts_)
             context.metric = metric;
         reserve(config.max_elements);
+
+        // Prefetching:
+#if defined(USEARCH_IOURING)
+        io_uring_queue_init(config.max_threads_search * pre_.connectivity_max_base, &ring_, 0);
+#endif
     }
 
-    ~index_gt() noexcept { clear(); }
+    ~index_gt() noexcept {
+        clear();
+#if defined(USEARCH_IOURING)
+        io_uring_queue_exit(&ring_);
+#endif
+    }
 
 #pragma region Adjusting Configuration
 
@@ -899,6 +913,31 @@ class index_gt {
         return found;
     }
 
+    /**
+     *  @brief  Assuming minor point drift, adjusts the coordinates
+     *          of a point, reassembling a new neighbors lists for it
+     *          and it's older neighbors.
+     */
+    void update(id_t existing_id, span_gt<scalar_t const> new_span, //
+                std::size_t thread_idx = 0, bool store_vector = true) {}
+
+    struct extracted_node_t {
+        node_t node;
+        index_gt&& source;
+    };
+
+    extracted_node_t extract();
+
+    /**
+     *  @brief  Imports a separate index.
+     *
+     *  @warning Not thread-safe!
+     */
+    std::size_t merge(index_gt&& imported) {
+        // For every point in the `imported` index - find nearest neighbors in existing.
+        return 0;
+    }
+
 #pragma endregion
 
 #pragma region Serialization
@@ -1060,8 +1099,15 @@ class index_gt {
             max_level_ = std::max(max_level_, head.level);
         }
 
+        bool replaced_existing_map = viewed_file_descriptor_ != 0;
         viewed_file_descriptor_ = descriptor;
-#endif
+        (void)replaced_existing_map;
+
+#if defined(USEARCH_IOURING)
+        io_uring_register(ring_., replaced_existing_map ? IORING_REGISTER_FILES : IORING_REGISTER_FILES_UPDATE,
+                          &viewed_file_descriptor_, 1);
+#endif // USEARCH_IOURING
+#endif // POSIX
     }
 
 #pragma endregion
@@ -1083,7 +1129,7 @@ class index_gt {
 
     void node_free(std::size_t id) noexcept {
 
-        if (viewed_file_descriptor_)
+        if (viewed_file_descriptor_ != 0)
             return;
 
         // This function is rarely called and can be as expensive as needed for higher space-efficiency.
@@ -1317,6 +1363,30 @@ class index_gt {
 
             id_t candidate_id = current_node_node.second;
             neighbors_ref_t candidate_header = neighbors_base(node(candidate_id));
+
+            // Prefetch from disk
+            if (viewed_file_descriptor_ != 0)
+                iterate_through_neighbors(candidate_header, [&](id_t successor_id) noexcept {
+                    if (visits.test(successor_id))
+                        return;
+
+                    node_head_t& head = node(successor_id).head;
+
+                    // Naive
+                    __builtin_prefetch(&head);
+
+                    // Old-school
+                    // std::size_t length = node_dump_size(head.dim, 0);
+                    // madvise(&head, length, MADV_WILLNEED);
+
+                    // Async
+#if defined(USEARCH_IOURING)
+                    struct io_uring_sqe* sqe = io_uring_get_sqe(ring_);
+                    io_uring_prep_madvice(sqe, &head, length, MADV_WILLNEED);
+                    io_uring_sqe_set_data(sqe, fi);
+                    io_uring_submit(ring_);
+#endif
+                });
 
             iterate_through_neighbors(candidate_header, [&](id_t successor_id) noexcept {
                 if (visits.test(successor_id))
