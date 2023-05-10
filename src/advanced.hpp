@@ -43,11 +43,15 @@ template <typename at> inline at clamp(at v, at lo, at hi) noexcept {
     return usearch::clamp(v, lo, hi, std::less<at>{});
 }
 
-class i8q100_converted_t;
-class f16_converted_t;
+class f8_bits_t;
+class f16_bits_t;
 
 inline float f16_to_f32(std::uint16_t u16) noexcept {
-#if defined(__aarch64__)
+#if defined(__AVX512F__)
+    _Float16 f16;
+    std::memcpy(&f16, &u16, sizeof(std::uint16_t));
+    return float(f16);
+#elif defined(__aarch64__)
     __fp16 f16;
     std::memcpy(&f16, &u16, sizeof(std::uint16_t));
     return float(f16);
@@ -57,7 +61,12 @@ inline float f16_to_f32(std::uint16_t u16) noexcept {
 }
 
 inline std::uint16_t f32_to_f16(float f32) noexcept {
-#if defined(__aarch64__)
+#if defined(__AVX512F__)
+    _Float16 f16 = _Float16(f32);
+    std::uint16_t u16;
+    std::memcpy(&u16, &f16, sizeof(std::uint16_t));
+    return u16;
+#elif defined(__aarch64__)
     __fp16 f16 = __fp16(f32);
     std::uint16_t u16;
     std::memcpy(&u16, &f16, sizeof(std::uint16_t));
@@ -67,81 +76,89 @@ inline std::uint16_t f32_to_f16(float f32) noexcept {
 #endif
 }
 
-class f16_converted_t {
+class f16_bits_t {
     std::uint16_t uint16_{};
 
   public:
-    inline f16_converted_t() noexcept : uint16_(0) {}
-    inline f16_converted_t(f16_converted_t&&) = default;
-    inline f16_converted_t& operator=(f16_converted_t&&) = default;
-    inline f16_converted_t(f16_converted_t const&) = default;
-    inline f16_converted_t& operator=(f16_converted_t const&) = default;
+    inline f16_bits_t() noexcept : uint16_(0) {}
+    inline f16_bits_t(f16_bits_t&&) = default;
+    inline f16_bits_t& operator=(f16_bits_t&&) = default;
+    inline f16_bits_t(f16_bits_t const&) = default;
+    inline f16_bits_t& operator=(f16_bits_t const&) = default;
 
     inline operator float() const noexcept { return f16_to_f32(uint16_); }
 
-    inline f16_converted_t(i8q100_converted_t) noexcept;
-    inline f16_converted_t(float v) noexcept : uint16_(f32_to_f16(v)) {}
-    inline f16_converted_t(double v) noexcept : uint16_(f32_to_f16(v)) {}
+    inline f16_bits_t(f8_bits_t) noexcept;
+    inline f16_bits_t(float v) noexcept : uint16_(f32_to_f16(v)) {}
+    inline f16_bits_t(double v) noexcept : uint16_(f32_to_f16(v)) {}
 
-    inline f16_converted_t operator+(f16_converted_t other) const noexcept { return {float(*this) + float(other)}; }
-    inline f16_converted_t operator-(f16_converted_t other) const noexcept { return {float(*this) - float(other)}; }
-    inline f16_converted_t operator*(f16_converted_t other) const noexcept { return {float(*this) * float(other)}; }
-    inline f16_converted_t operator/(f16_converted_t other) const noexcept { return {float(*this) / float(other)}; }
-    inline f16_converted_t operator+(float other) const noexcept { return {float(*this) + other}; }
-    inline f16_converted_t operator-(float other) const noexcept { return {float(*this) - other}; }
-    inline f16_converted_t operator*(float other) const noexcept { return {float(*this) * other}; }
-    inline f16_converted_t operator/(float other) const noexcept { return {float(*this) / other}; }
-    inline f16_converted_t operator+(double other) const noexcept { return {float(*this) + other}; }
-    inline f16_converted_t operator-(double other) const noexcept { return {float(*this) - other}; }
-    inline f16_converted_t operator*(double other) const noexcept { return {float(*this) * other}; }
-    inline f16_converted_t operator/(double other) const noexcept { return {float(*this) / other}; }
+    inline f16_bits_t operator+(f16_bits_t other) const noexcept { return {float(*this) + float(other)}; }
+    inline f16_bits_t operator-(f16_bits_t other) const noexcept { return {float(*this) - float(other)}; }
+    inline f16_bits_t operator*(f16_bits_t other) const noexcept { return {float(*this) * float(other)}; }
+    inline f16_bits_t operator/(f16_bits_t other) const noexcept { return {float(*this) / float(other)}; }
+    inline f16_bits_t operator+(float other) const noexcept { return {float(*this) + other}; }
+    inline f16_bits_t operator-(float other) const noexcept { return {float(*this) - other}; }
+    inline f16_bits_t operator*(float other) const noexcept { return {float(*this) * other}; }
+    inline f16_bits_t operator/(float other) const noexcept { return {float(*this) / other}; }
+    inline f16_bits_t operator+(double other) const noexcept { return {float(*this) + other}; }
+    inline f16_bits_t operator-(double other) const noexcept { return {float(*this) - other}; }
+    inline f16_bits_t operator*(double other) const noexcept { return {float(*this) * other}; }
+    inline f16_bits_t operator/(double other) const noexcept { return {float(*this) / other}; }
 
-    inline f16_converted_t& operator+=(float v) noexcept {
+    inline f16_bits_t& operator+=(float v) noexcept {
         uint16_ = f32_to_f16(v + f16_to_f32(uint16_));
         return *this;
     }
 
-    inline f16_converted_t& operator-=(float v) noexcept {
+    inline f16_bits_t& operator-=(float v) noexcept {
         uint16_ = f32_to_f16(v - f16_to_f32(uint16_));
         return *this;
     }
 
-    inline f16_converted_t& operator*=(float v) noexcept {
+    inline f16_bits_t& operator*=(float v) noexcept {
         uint16_ = f32_to_f16(v * f16_to_f32(uint16_));
         return *this;
     }
 
-    inline f16_converted_t& operator/=(float v) noexcept {
+    inline f16_bits_t& operator/=(float v) noexcept {
         uint16_ = f32_to_f16(v / f16_to_f32(uint16_));
         return *this;
     }
 };
 
-class i8q100_converted_t {
+/**
+ *  @brief  Numeric type for uniformly-distributed floating point
+ *          values within [-1,1] range, quantized to integers [-100,100].
+ */
+class f8_bits_t {
     std::int8_t int8_{};
 
   public:
-    inline i8q100_converted_t() noexcept : int8_(0) {}
-    inline i8q100_converted_t(i8q100_converted_t&&) = default;
-    inline i8q100_converted_t& operator=(i8q100_converted_t&&) = default;
-    inline i8q100_converted_t(i8q100_converted_t const&) = default;
-    inline i8q100_converted_t& operator=(i8q100_converted_t const&) = default;
+    constexpr static float divisor_k = 100.f;
+    constexpr static std::int8_t min_k = -100;
+    constexpr static std::int8_t max_k = 100;
 
-    inline operator float() const noexcept { return float(int8_) / 100.f; }
-    inline operator f16_converted_t() const noexcept { return float(int8_) / 100.f; }
-    inline operator double() const noexcept { return double(int8_) / 100.0; }
-    inline operator std::int8_t() const noexcept { return int8_; }
-    inline operator std::int16_t() const noexcept { return int8_; }
-    inline operator std::int32_t() const noexcept { return int8_; }
-    inline operator std::int64_t() const noexcept { return int8_; }
+    inline f8_bits_t() noexcept : int8_(0) {}
+    inline f8_bits_t(f8_bits_t&&) = default;
+    inline f8_bits_t& operator=(f8_bits_t&&) = default;
+    inline f8_bits_t(f8_bits_t const&) = default;
+    inline f8_bits_t& operator=(f8_bits_t const&) = default;
 
-    inline i8q100_converted_t(float v) noexcept
-        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * 100.f), -100, 100)) {}
-    inline i8q100_converted_t(double v) noexcept
-        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * 100.0), -100, 100)) {}
+    inline operator float() const noexcept { return float(int8_) / divisor_k; }
+    inline operator f16_bits_t() const noexcept { return float(int8_) / divisor_k; }
+    inline operator double() const noexcept { return double(int8_) / divisor_k; }
+    inline explicit operator std::int8_t() const noexcept { return int8_; }
+    inline explicit operator std::int16_t() const noexcept { return int8_; }
+    inline explicit operator std::int32_t() const noexcept { return int8_; }
+    inline explicit operator std::int64_t() const noexcept { return int8_; }
+
+    inline f8_bits_t(float v) noexcept
+        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
+    inline f8_bits_t(double v) noexcept
+        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
 };
 
-inline f16_converted_t::f16_converted_t(i8q100_converted_t v) noexcept : f16_converted_t(float(v)) {}
+inline f16_bits_t::f16_bits_t(f8_bits_t v) noexcept : f16_bits_t(float(v)) {}
 
 struct uuid_t {
     std::uint8_t octets[16];
@@ -201,7 +218,7 @@ enum class accuracy_t {
     f32_k,
     f16_k,
     f64_k,
-    i8q100_k,
+    f8_k,
 };
 
 inline char const* accuracy_name(accuracy_t accuracy) noexcept {
@@ -209,7 +226,7 @@ inline char const* accuracy_name(accuracy_t accuracy) noexcept {
     case accuracy_t::f32_k: return "f32";
     case accuracy_t::f16_k: return "f16";
     case accuracy_t::f64_k: return "f64";
-    case accuracy_t::i8q100_k: return "i8q100";
+    case accuracy_t::f8_k: return "f8";
     default: return "";
     }
 }
@@ -227,10 +244,10 @@ inline accuracy_t accuracy_from_name(char const* name, std::size_t len) {
         accuracy = accuracy_t::f64_k;
     else if (str_equals(name, len, "f16"))
         accuracy = accuracy_t::f16_k;
-    else if (str_equals(name, len, "i8q100"))
-        accuracy = accuracy_t::i8q100_k;
+    else if (str_equals(name, len, "f8"))
+        accuracy = accuracy_t::f8_k;
     else
-        throw std::invalid_argument("Unknown type, choose: f32, f16, f64, i8q100");
+        throw std::invalid_argument("Unknown type, choose: f32, f16, f64, f8");
     return accuracy;
 }
 
@@ -283,7 +300,7 @@ inline std::size_t bytes_per_scalar(accuracy_t accuracy) noexcept {
     case accuracy_t::f32_k: return 4;
     case accuracy_t::f16_k: return 2;
     case accuracy_t::f64_k: return 8;
-    case accuracy_t::i8q100_k: return 1;
+    case accuracy_t::f8_k: return 1;
     default: return 0;
     }
 }
@@ -318,24 +335,8 @@ template <> struct cast_gt<f64_t, f64_t> {
     bool operator()(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
 
-template <> struct cast_gt<f16_converted_t, f16_converted_t> {
+template <> struct cast_gt<f16_bits_t, f16_bits_t> {
     bool operator()(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
-};
-
-struct ip_i8q100_converted_t {
-    float operator()(i8q100_converted_t const* a, i8q100_converted_t const* b, std::size_t d) const noexcept {
-        std::int64_t ab = 0;
-#if defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(__clang__)
-#pragma clang loop vectorize(enable)
-#elif defined(_OPENMP)
-#pragma omp simd reduction(+ : ab)
-#endif
-        for (std::size_t i = 0; i < d; ++i)
-            ab += std::int16_t(a[i]) * std::int16_t(b[i]);
-        return 1.f - ab / 10000.f;
-    }
 };
 
 /**
@@ -371,7 +372,7 @@ class auto_index_gt {
     std::unique_ptr<index_t> index_;
     mutable std::vector<byte_t> cast_buffer_;
     struct casts_t {
-        cast_t from_i8q100{};
+        cast_t from_f8{};
         cast_t from_f16{};
         cast_t from_f32{};
         cast_t from_f64{};
@@ -405,11 +406,11 @@ class auto_index_gt {
     void reserve(std::size_t capacity) { index_->reserve(capacity); }
 
     // clang-format off
-    void add(label_t label, f16_converted_t const* vector, std::size_t thread = 0, bool copy = true) { return add(label, vector, thread, copy, casts_.from_f16); }
+    void add(label_t label, f16_bits_t const* vector, std::size_t thread = 0, bool copy = true) { return add(label, vector, thread, copy, casts_.from_f16); }
     void add(label_t label, f32_t const* vector, std::size_t thread = 0, bool copy = true) { return add(label, vector, thread, copy, casts_.from_f32); }
     void add(label_t label, f64_t const* vector, std::size_t thread = 0, bool copy = true) { return add(label, vector, thread, copy, casts_.from_f64); }
     
-    std::size_t search(f16_converted_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread = 0) const { return search(vector, wanted, matches, distances, thread, casts_.from_f16); }
+    std::size_t search(f16_bits_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread = 0) const { return search(vector, wanted, matches, distances, thread, casts_.from_f16); }
     std::size_t search(f32_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread = 0) const { return search(vector, wanted, matches, distances, thread, casts_.from_f32); }
     std::size_t search(f64_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread = 0) const { return search(vector, wanted, matches, distances, thread, casts_.from_f64); }
 
@@ -494,8 +495,8 @@ class auto_index_gt {
 
     template <typename to_scalar_at> static casts_t make_casts() {
         casts_t result;
-        result.from_i8q100 = cast_gt<i8q100_converted_t, to_scalar_at>{};
-        result.from_f16 = cast_gt<f16_converted_t, to_scalar_at>{};
+        result.from_f8 = cast_gt<f8_bits_t, to_scalar_at>{};
+        result.from_f16 = cast_gt<f16_bits_t, to_scalar_at>{};
         result.from_f32 = cast_gt<f32_t, to_scalar_at>{};
         result.from_f64 = cast_gt<f64_t, to_scalar_at>{};
         return result;
@@ -505,8 +506,8 @@ class auto_index_gt {
         switch (accuracy) {
         case accuracy_t::f64_k: return make_casts<f64_t>();
         case accuracy_t::f32_k: return make_casts<f32_t>();
-        case accuracy_t::f16_k: return make_casts<f16_converted_t>();
-        case accuracy_t::i8q100_k: return make_casts<i8q100_converted_t>();
+        case accuracy_t::f16_k: return make_casts<f16_bits_t>();
+        case accuracy_t::f8_k: return make_casts<f8_bits_t>();
         default: return {};
         }
     }
@@ -525,7 +526,7 @@ class auto_index_gt {
         if (dimensions % 4 == 0)
             return {
                 pun_metric<simsimd_f32_t>([](simsimd_f32_t const* a, simsimd_f32_t const* b, size_t d) noexcept {
-                    return 1 - simsimd_dot_f32x4avx2(a, b, d);
+                    return 1.f - simsimd_dot_f32x4avx2(a, b, d);
                 }),
                 isa_t::avx2_k,
             };
@@ -533,14 +534,14 @@ class auto_index_gt {
         if (supports_arm_sve())
             return {
                 pun_metric<simsimd_f32_t>([](simsimd_f32_t const* a, simsimd_f32_t const* b, size_t d) noexcept {
-                    return 1 - simsimd_dot_f32sve(a, b, d);
+                    return 1.f - simsimd_dot_f32sve(a, b, d);
                 }),
                 isa_t::sve_k,
             };
         if (dimensions % 4 == 0)
             return {
                 pun_metric<simsimd_f32_t>([](simsimd_f32_t const* a, simsimd_f32_t const* b, size_t d) noexcept {
-                    return 1 - simsimd_dot_f32x4neon(a, b, d);
+                    return 1.f - simsimd_dot_f32x4neon(a, b, d);
                 }),
                 isa_t::neon_k,
             };
@@ -553,31 +554,39 @@ class auto_index_gt {
         (void)dimensions;
 #if defined(USEARCH_USE_SIMD)
 #if defined(__x86_64__)
+        if (dimensions % 32 == 0)
+            return {
+                pun_metric<simsimd_f16_t>([](simsimd_f16_t const* a, simsimd_f16_t const* b, size_t d) noexcept {
+                    return 1.f - simsimd_dot_f16x16avx512(a, b, d);
+                }),
+                isa_t::avx512_k,
+            };
 #elif defined(__aarch64__)
         if (supports_arm_sve())
             return {
                 pun_metric<simsimd_f16_t>([](simsimd_f16_t const* a, simsimd_f16_t const* b, size_t d) noexcept {
-                    return 1 - simsimd_dot_f16sve(a, b, d);
+                    return 1.f - simsimd_dot_f16sve(a, b, d);
                 }),
                 isa_t::sve_k,
             };
         if (dimensions % 8 == 0)
             return {
                 pun_metric<simsimd_f16_t>([](simsimd_f16_t const* a, simsimd_f16_t const* b, size_t d) noexcept {
-                    return 1 - simsimd_dot_f16x8neon(a, b, d);
+                    return 1.f - simsimd_dot_f16x8neon(a, b, d);
                 }),
                 isa_t::neon_k,
             };
 #endif
 #endif
-        return {pun_metric<f16_converted_t>(ip_gt<f16_converted_t>{}), isa_t::auto_k};
+        return {pun_metric<f16_bits_t>(ip_gt<f16_bits_t, f32_t>{}), isa_t::auto_k};
     }
 
     static metric_and_meta_t ip_metric(std::size_t dimensions, accuracy_t accuracy) {
         switch (accuracy) {
-        case accuracy_t::i8q100_k: return {pun_metric<i8q100_converted_t>(ip_i8q100_converted_t{}), isa_t::auto_k};
+            // The tow most common numeric types for the most common metric have  afew optimized versions:
         case accuracy_t::f16_k: return ip_metric_f16(dimensions);
         case accuracy_t::f32_k: return ip_metric_f32(dimensions);
+        case accuracy_t::f8_k: return {pun_metric<f8_bits_t>(ip_gt<f8_bits_t, f32_t>{}), isa_t::auto_k};
         case accuracy_t::f64_k: return {pun_metric<f64_t>(ip_gt<f64_t>{}), isa_t::auto_k};
         default: return {};
         }
@@ -585,18 +594,18 @@ class auto_index_gt {
 
     static metric_and_meta_t l2_metric(std::size_t, accuracy_t accuracy) {
         switch (accuracy) {
-        case accuracy_t::i8q100_k: return {};
-        case accuracy_t::f16_k: return {pun_metric<f16_converted_t>(l2_squared_gt<f16_converted_t>{}), isa_t::auto_k};
-        case accuracy_t::f32_k: return {pun_metric<f32_t>(l2_squared_gt<f32_t>{}), isa_t::auto_k};
-        case accuracy_t::f64_k: return {pun_metric<f64_t>(l2_squared_gt<f64_t>{}), isa_t::auto_k};
+        case accuracy_t::f8_k: return {pun_metric<f8_bits_t>(l2sq_gt<f8_bits_t, f32_t>{}), isa_t::auto_k};
+        case accuracy_t::f16_k: return {pun_metric<f16_bits_t>(l2sq_gt<f16_bits_t, f32_t>{}), isa_t::auto_k};
+        case accuracy_t::f32_k: return {pun_metric<f32_t>(l2sq_gt<f32_t>{}), isa_t::auto_k};
+        case accuracy_t::f64_k: return {pun_metric<f64_t>(l2sq_gt<f64_t>{}), isa_t::auto_k};
         default: return {};
         }
     }
 
     static metric_and_meta_t cos_metric(std::size_t, accuracy_t accuracy) {
         switch (accuracy) {
-        case accuracy_t::i8q100_k: return {};
-        case accuracy_t::f16_k: return {pun_metric<f16_converted_t>(cos_gt<f16_converted_t>{}), isa_t::auto_k};
+        case accuracy_t::f8_k: return {pun_metric<f8_bits_t>(cos_gt<f8_bits_t, f32_t>{}), isa_t::auto_k};
+        case accuracy_t::f16_k: return {pun_metric<f16_bits_t>(cos_gt<f16_bits_t, f32_t>{}), isa_t::auto_k};
         case accuracy_t::f32_k: return {pun_metric<f32_t>(cos_gt<f32_t>{}), isa_t::auto_k};
         case accuracy_t::f64_k: return {pun_metric<f64_t>(cos_gt<f64_t>{}), isa_t::auto_k};
         default: return {};
@@ -605,8 +614,8 @@ class auto_index_gt {
 
     static metric_and_meta_t haversine_metric(accuracy_t accuracy) {
         switch (accuracy) {
-        case accuracy_t::i8q100_k: return {};
-        case accuracy_t::f16_k: return {pun_metric<f16_converted_t>(haversine_gt<f16_converted_t>{}), isa_t::auto_k};
+        case accuracy_t::f8_k: return {pun_metric<f8_bits_t>(haversine_gt<f8_bits_t, f32_t>{}), isa_t::auto_k};
+        case accuracy_t::f16_k: return {pun_metric<f16_bits_t>(haversine_gt<f16_bits_t, f32_t>{}), isa_t::auto_k};
         case accuracy_t::f32_k: return {pun_metric<f32_t>(haversine_gt<f32_t>{}), isa_t::auto_k};
         case accuracy_t::f64_k: return {pun_metric<f64_t>(haversine_gt<f64_t>{}), isa_t::auto_k};
         default: return {};

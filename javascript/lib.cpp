@@ -87,8 +87,8 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
             accuracy = accuracy_t::f64_k;
         else if (accuracy_str == "f16")
             accuracy = accuracy_t::f16_k;
-        else if (accuracy_str == "i8q100")
-            accuracy = accuracy_t::i8q100_k;
+        else if (accuracy_str == "f8")
+            accuracy = accuracy_t::f8_k;
         else {
             Napi::TypeError::New(env, "Supported metrics are: [ip, cos, l2_sq, haversine]")
                 .ThrowAsJavaScriptException();

@@ -21,6 +21,8 @@
 #include <clipp.h> // Command Line Interface
 #include <omp.h>   // `omp_get_num_threads()`
 
+#include <simsimd/simsimd.h>
+
 #include "advanced.hpp"
 
 using namespace unum::usearch;
@@ -165,7 +167,7 @@ void index_many(index_at& native, std::size_t n, vector_id_at const* ids, real_a
 #pragma omp parallel for schedule(static, 32)
     for (std::size_t i = 0; i < n; ++i) {
         native.add(ids[i], span_t{vectors + dims * i, dims}, omp_get_thread_num(), i < vectors_to_copy);
-        if (((i + 1) % 10000) == 0)
+        if (((i + 1) % 100000) == 0)
             std::printf("-- added point # %zu\n", i + 1);
     }
 }
@@ -273,7 +275,7 @@ struct args_t {
     bool big = false;
     bool native = false;
     bool quantize_f16 = false;
-    bool quantize_i8 = false;
+    bool quantize_f8 = false;
 
     bool metric_ip = true;
     bool metric_l2 = false;
@@ -308,8 +310,8 @@ void run_type_punned(dataset_at& dataset, args_t const& args, config_t config) {
     accuracy_t accuracy = accuracy_t::f32_k;
     if (args.quantize_f16)
         accuracy = accuracy_t::f16_k;
-    if (args.quantize_i8)
-        accuracy = accuracy_t::i8q100_k;
+    if (args.quantize_f8)
+        accuracy = accuracy_t::f8_k;
 
     std::printf("-- Accuracy: %s\n", accuracy_name(accuracy));
 
@@ -353,7 +355,7 @@ void run_big_or_small(dataset_at& dataset, args_t const& args, config_t config) 
             run_typed<index_gt<ip_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config);
         } else if (args.metric_l2) {
             std::printf("-- Metric: Euclidean\n");
-            run_typed<index_gt<l2_squared_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config);
+            run_typed<index_gt<l2sq_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config);
         } else if (args.metric_haversine) {
             std::printf("-- Metric: Angular\n");
             run_typed<index_gt<haversine_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config);
@@ -381,26 +383,34 @@ void report_expected_losses(persisted_dataset_gt<float, vector_id_t> const& data
 
     auto vec1 = dataset.vector(0);
     auto vec2 = dataset.query(0);
-    std::vector<f16_converted_t> vec1f16(dataset.dimensions());
-    std::vector<f16_converted_t> vec2f16(dataset.dimensions());
+    std::vector<f16_bits_t> vec1f16(dataset.dimensions());
+    std::vector<f16_bits_t> vec2f16(dataset.dimensions());
     std::transform(vec1, vec1 + dataset.dimensions(), vec1f16.data(), [](float v) { return v; });
     std::transform(vec2, vec2 + dataset.dimensions(), vec2f16.data(), [](float v) { return v; });
-    std::vector<i8q100_converted_t> vec1i8(dataset.dimensions());
-    std::vector<i8q100_converted_t> vec2i8(dataset.dimensions());
-    std::transform(vec1, vec1 + dataset.dimensions(), vec1i8.data(), [](float v) { return v; });
-    std::transform(vec2, vec2 + dataset.dimensions(), vec2i8.data(), [](float v) { return v; });
+    std::vector<f8_bits_t> vec1f8(dataset.dimensions());
+    std::vector<f8_bits_t> vec2f8(dataset.dimensions());
+    std::transform(vec1, vec1 + dataset.dimensions(), vec1f8.data(), [](float v) { return v; });
+    std::transform(vec2, vec2 + dataset.dimensions(), vec2f8.data(), [](float v) { return v; });
 
 #if 0
     auto ip_default = ip_gt<float>{}(vec1, vec2, dataset.dimensions());
+    auto ip_f16 = ip_gt<f16_bits_t, float>{}(vec1f16.data(), vec2f16.data(), dataset.dimensions());
+    auto ip_f8 = ip_gt<f8_bits_t, float>{}(vec1f8.data(), vec2f8.data(), dataset.dimensions());
+
+#if defined(__AVX512F__)
+    auto ip_f16avx512 = 1.f - simsimd_dot_f16x16avx512((simsimd_f16_t const*)vec1f16.data(),
+                                                       (simsimd_f16_t const*)vec2f16.data(), dataset.dimensions());
+#endif
+#if defined(__ARM_FEATURE_SVE)
     auto ip_sve = 1.f - simsimd_dot_f32sve(vec1, vec2, dataset.dimensions());
-    auto ip_neon = 1.f - simsimd_dot_f32x4neon(vec1, vec2, dataset.dimensions());
-    auto ip_f16 = ip_gt<f16_converted_t>{}(vec1f16.data(), vec2f16.data(), dataset.dimensions());
     auto ip_f16sve = 1.f - simsimd_dot_f16sve((simsimd_f16_t const*)vec1f16.data(),
                                               (simsimd_f16_t const*)vec2f16.data(), dataset.dimensions());
+#endif
+#if defined(__ARM_NEON)
+    auto ip_neon = 1.f - simsimd_dot_f32x4neon(vec1, vec2, dataset.dimensions());
     auto ip_f16neon = 1.f - simsimd_dot_f16x8neon((simsimd_f16_t const*)vec1f16.data(),
                                                   (simsimd_f16_t const*)vec2f16.data(), dataset.dimensions());
-    auto ip_i8 = ip_i8q100_converted_t{}(vec1i8.data(), vec2i8.data(), dataset.dimensions());
-
+#endif
     exit(0);
 #endif
 }
@@ -427,7 +437,7 @@ int main(int argc, char** argv) {
         ( //
             option("--native").set(args.native).doc("Use raw templates instead of type-punned classes") |
             option("--f16quant").set(args.quantize_f16).doc("Enable `f16_t` quantization") |
-            option("--i8quant").set(args.quantize_i8).doc("Enable `int8_t` quantization")),
+            option("--f8quant").set(args.quantize_f8).doc("Enable `f8_t` quantization")),
         ( //
             option("--ip").set(args.metric_ip).doc("Choose Inner Product metric") |
             option("--l2").set(args.metric_l2).doc("Choose L2 Euclidean metric") |
