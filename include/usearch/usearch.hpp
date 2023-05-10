@@ -147,6 +147,30 @@ template <typename scalar_at> struct l2_squared_gt {
 };
 
 /**
+ *  @brief  Hamming distance computes the number of differing elements in
+ *          two arrays. An example would be a chess board.
+ */
+template <typename scalar_at> struct hamming_gt {
+    using scalar_t = scalar_at;
+    using result_type = std::size_t;
+
+    inline std::size_t operator()(scalar_t const* a, scalar_t const* b, std::size_t elements,
+                                  std::size_t = 0) const noexcept {
+        std::size_t matches{};
+#if defined(__GNUC__)
+#pragma GCC ivdep
+#elif defined(__clang__)
+#pragma clang loop vectorize(enable)
+#elif defined(_OPENMP)
+#pragma omp simd reduction(+ : matches)
+#endif
+        for (std::size_t i = 0; i != elements; ++i)
+            matches += a[i] != b[i];
+        return matches;
+    }
+};
+
+/**
  *  @brief  Hamming distance computes the number of differing bits in
  *          two arrays of integers. An example would be a textual document,
  *          tokenized and hashed into a fixed-capacity bitset.

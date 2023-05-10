@@ -36,7 +36,8 @@ static native_index_t make_index(   //
     std::string const& metric,      //
     std::size_t connectivity,       //
     std::size_t expansion_add,      //
-    std::size_t expansion_search    //
+    std::size_t expansion_search,   //
+    std::size_t metric_uintptr      //
 ) {
 
     config_t config;
@@ -48,31 +49,60 @@ static native_index_t make_index(   //
     config.max_threads_search = std::thread::hardware_concurrency();
 
     accuracy_t accuracy = accuracy_from_name(scalar_type.c_str(), scalar_type.size());
-    return index_from_name<native_index_t>(metric.c_str(), metric.size(), dimensions, accuracy, config);
+    punned_metric_t metric_ptr = reinterpret_cast<punned_metric_t>(metric_uintptr);
+    if (metric_ptr)
+        return native_index_t::udf(dimensions, metric_ptr, accuracy, config);
+    else
+        return index_from_name<native_index_t>(metric.c_str(), metric.size(), dimensions, accuracy, config);
 }
 
-static void add_to_index(native_index_t& index, py::buffer labels, py::buffer vectors, bool copy) {
+static void add_one_to_index(native_index_t& index, label_t label, py::buffer vector, bool copy) {
+
+    py::buffer_info vector_info = vector.request();
+    if (vector_info.ndim != 1)
+        throw std::invalid_argument("Expects a vector, not a higher-rank tensor!");
+
+    ssize_t vector_dimensions = vector_info.shape[0];
+    char const* vector_data = reinterpret_cast<char const*>(vector_info.ptr);
+    if (vector_dimensions != static_cast<ssize_t>(index.dimensions()))
+        throw std::invalid_argument("The number of vector dimensions doesn't match!");
+
+    if (index.size() + 1 >= index.capacity())
+        index.reserve(ceil2(index.size() + 1));
+
+    // https://docs.python.org/3/library/struct.html#format-characters
+    if (vector_info.format == "e")
+        index.add(label, reinterpret_cast<f16_converted_t const*>(vector_data), 0, copy);
+    else if (vector_info.format == "f")
+        index.add(label, reinterpret_cast<float const*>(vector_data), 0, copy);
+    else if (vector_info.format == "d")
+        index.add(label, reinterpret_cast<double const*>(vector_data), 0, copy);
+    else
+        throw std::invalid_argument("Incompatible scalars in the vector!");
+}
+
+static void add_many_to_index(native_index_t& index, py::buffer labels, py::buffer vectors, bool copy) {
 
     py::buffer_info labels_info = labels.request();
     py::buffer_info vectors_info = vectors.request();
 
     if (labels_info.format != py::format_descriptor<label_t>::format())
-        throw std::runtime_error("Incompatible label type!");
+        throw std::invalid_argument("Incompatible label type!");
 
     if (labels_info.ndim != 1)
-        throw std::runtime_error("Labels must be placed in a single-dimensional array!");
+        throw std::invalid_argument("Labels must be placed in a single-dimensional array!");
 
     if (vectors_info.ndim != 2)
-        throw std::runtime_error("Expects a matrix of vectors to add!");
+        throw std::invalid_argument("Expects a matrix of vectors to add!");
 
     ssize_t labels_count = labels_info.shape[0];
     ssize_t vectors_count = vectors_info.shape[0];
     ssize_t vectors_dimensions = vectors_info.shape[1];
-    if (vectors_dimensions != index.dimensions())
-        throw std::runtime_error("The number of vector dimensions doesn't match!");
+    if (vectors_dimensions != static_cast<ssize_t>(index.dimensions()))
+        throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
     if (labels_count != vectors_count)
-        throw std::runtime_error("Number of labels and vectors must match!");
+        throw std::invalid_argument("Number of labels and vectors must match!");
 
     if (index.size() + vectors_count >= index.capacity()) {
         std::size_t next_capacity = ceil2(index.size() + vectors_count);
@@ -103,11 +133,48 @@ static void add_to_index(native_index_t& index, py::buffer labels, py::buffer ve
             index.add(label, vector, thread_idx, copy);
         });
     else
-        throw std::runtime_error("Incompatible scalars in the vectors matrix!");
+        throw std::invalid_argument("Incompatible scalars in the vectors matrix!");
+}
+
+static py::tuple search_one_in_index(native_index_t& index, py::buffer vector, std::size_t wanted) {
+
+    py::buffer_info vector_info = vector.request();
+    ssize_t vector_dimensions = vector_info.shape[0];
+    char const* vector_data = reinterpret_cast<char const*>(vector_info.ptr);
+    if (vector_dimensions != static_cast<ssize_t>(index.dimensions()))
+        throw std::invalid_argument("The number of vector dimensions doesn't match!");
+
+    py::array_t<label_t> labels_py(static_cast<ssize_t>(wanted));
+    py::array_t<distance_t> distances_py(static_cast<ssize_t>(wanted));
+    std::size_t count{};
+    auto labels_py1d = labels_py.mutable_unchecked<1>();
+    auto distances_py1d = distances_py.mutable_unchecked<1>();
+
+    // https://docs.python.org/3/library/struct.html#format-characters
+    if (vector_info.format == "e")
+        count = index.search( //
+            reinterpret_cast<f16_converted_t const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), 0);
+    else if (vector_info.format == "f")
+        count = index.search( //
+            reinterpret_cast<float const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), 0);
+    else if (vector_info.format == "d")
+        count = index.search( //
+            reinterpret_cast<double const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), 0);
+    else
+        throw std::invalid_argument("Incompatible scalars in the query vector!");
+
+    labels_py.resize({static_cast<ssize_t>(count)});
+    distances_py.resize({static_cast<ssize_t>(count)});
+
+    py::tuple results(3);
+    results[0] = labels_py;
+    results[1] = distances_py;
+    results[2] = static_cast<Py_ssize_t>(count);
+    return results;
 }
 
 /**
- *  @param vectors Matrix of vectors to search for..
+ *  @param vectors Matrix of vectors to search for.
  *  @param wanted Number of matches per request.
  *
  *  @return Tuple with:
@@ -115,25 +182,29 @@ static void add_to_index(native_index_t& index, py::buffer labels, py::buffer ve
  *      2. matrix of distances,
  *      3. array with match counts.
  */
-static py::tuple search_in_index(native_index_t& index, py::buffer vectors, ssize_t wanted) {
+static py::tuple search_many_in_index(native_index_t& index, py::buffer vectors, std::size_t wanted) {
+
+    if (wanted == 0)
+        return py::tuple(3);
 
     py::buffer_info vectors_info = vectors.request();
+    if (vectors_info.ndim == 1)
+        return search_one_in_index(index, vectors, wanted);
     if (vectors_info.ndim != 2)
-        throw std::runtime_error("Expects a matrix of vectors to add!");
+        throw std::invalid_argument("Expects a matrix of vectors to add!");
 
     ssize_t vectors_count = vectors_info.shape[0];
     ssize_t vectors_dimensions = vectors_info.shape[1];
-    if (vectors_dimensions != index.dimensions())
-        throw std::runtime_error("The number of vector dimensions doesn't match!");
+    char const* vectors_data = reinterpret_cast<char const*>(vectors_info.ptr);
+    if (vectors_dimensions != static_cast<ssize_t>(index.dimensions()))
+        throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
-    py::array_t<label_t> labels_py({vectors_count, wanted});
-    py::array_t<distance_t> distances_py({vectors_count, wanted});
+    py::array_t<label_t> labels_py({vectors_count, static_cast<ssize_t>(wanted)});
+    py::array_t<distance_t> distances_py({vectors_count, static_cast<ssize_t>(wanted)});
     py::array_t<Py_ssize_t> counts_py(vectors_count);
     auto labels_py2d = labels_py.mutable_unchecked<2>();
     auto distances_py2d = distances_py.mutable_unchecked<2>();
     auto counts_py1d = counts_py.mutable_unchecked<1>();
-
-    char const* vectors_data = reinterpret_cast<char const*>(vectors_info.ptr);
 
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vectors_info.format == "e")
@@ -155,7 +226,7 @@ static py::tuple search_in_index(native_index_t& index, py::buffer vectors, ssiz
                 index.search(vector, wanted, &labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0), thread_idx));
         });
     else
-        throw std::runtime_error("Incompatible scalars in the query matrix!");
+        throw std::invalid_argument("Incompatible scalars in the query matrix!");
 
     py::tuple results(3);
     results[0] = labels_py;
@@ -173,29 +244,38 @@ PYBIND11_MODULE(usearch, m) {
 
     auto i = py::class_<native_index_t>(m, "Index");
 
-    i.def(py::init(&make_index),                                             //
-          py::kw_only(),                                                     //
-          py::arg("dim"),                                                    //
-          py::arg("capacity") = 0,                                           //
-          py::arg("dtype") = std::string("f32"),                             //
-          py::arg("metric") = std::string("ip"),                             //
-          py::arg("connectivity") = config_t::connectivity_default_k,        //
-          py::arg("expansion_add") = config_t::expansion_add_default_k,      //
-          py::arg("expansion_search") = config_t::expansion_search_default_k //
+    i.def(py::init(&make_index),                                              //
+          py::kw_only(),                                                      //
+          py::arg("ndim") = 0,                                                //
+          py::arg("capacity") = 0,                                            //
+          py::arg("dtype") = std::string("f32"),                              //
+          py::arg("metric") = std::string("ip"),                              //
+          py::arg("connectivity") = config_t::connectivity_default_k,         //
+          py::arg("expansion_add") = config_t::expansion_add_default_k,       //
+          py::arg("expansion_search") = config_t::expansion_search_default_k, //
+          py::arg("metric_pointer") = 0                                       //
     );
 
-    i.def(                     //
-        "add", &add_to_index,  //
-        py::arg("labels"),     //
-        py::arg("vectors"),    //
-        py::kw_only(),         //
-        py::arg("copy") = true //
+    i.def(                         //
+        "add", &add_many_to_index, //
+        py::arg("labels"),         //
+        py::arg("vectors"),        //
+        py::kw_only(),             //
+        py::arg("copy") = true     //
     );
 
-    i.def(                          //
-        "search", &search_in_index, //
-        py::arg("vectors"),         //
-        py::arg("count") = 10       //
+    i.def(                        //
+        "add", &add_one_to_index, //
+        py::arg("label"),         //
+        py::arg("vector"),        //
+        py::kw_only(),            //
+        py::arg("copy") = true    //
+    );
+
+    i.def(                               //
+        "search", &search_many_in_index, //
+        py::arg("query"),                //
+        py::arg("count") = 10            //
     );
 
     i.def("__len__", &native_index_t::size);

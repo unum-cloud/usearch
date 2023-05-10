@@ -8,6 +8,7 @@
 #endif
 
 #include <functional>
+#include <stdexcept> // `std::invalid_argument`
 #include <thread>
 #include <vector>
 
@@ -20,7 +21,9 @@
 #endif
 
 #include <fp16/fp16.h>
+#if defined(USEARCH_USE_SIMD)
 #include <simsimd/simsimd.h>
+#endif
 
 #include <usearch/usearch.hpp>
 
@@ -164,7 +167,7 @@ void multithreaded(std::size_t threads, std::size_t tasks, callback_at&& callbac
     }
 
     std::vector<std::thread> threads_pool;
-    std::size_t tasks_per_thread = (tasks / threads) + (tasks % threads) != 0;
+    std::size_t tasks_per_thread = (tasks / threads) + ((tasks % threads) != 0);
     for (std::size_t thread_idx = 0; thread_idx != threads; ++thread_idx) {
         threads_pool.emplace_back([=]() {
             for (std::size_t task_idx = thread_idx * tasks_per_thread;
@@ -233,7 +236,7 @@ inline accuracy_t accuracy_from_name(char const* name, std::size_t len) {
     else if (str_equals(name, len, "i8q100"))
         accuracy = accuracy_t::i8q100_k;
     else
-        throw std::runtime_error("Unknown type, choose: f32, f16, f64, i8q100");
+        throw std::invalid_argument("Unknown type, choose: f32, f16, f64, i8q100");
     return accuracy;
 }
 
@@ -241,16 +244,24 @@ template <typename index_at>
 inline index_at index_from_name( //
     char const* name, std::size_t len, std::size_t dimensions, accuracy_t accuracy, config_t const& config) {
 
-    if (str_equals(name, len, "l2_sq") || str_equals(name, len, "euclidean_sq"))
+    if (str_equals(name, len, "l2_sq") || str_equals(name, len, "euclidean_sq")) {
+        if (dimensions == 0)
+            throw std::invalid_argument("The number of dimensions must be positive");
         return index_at::l2(dimensions, accuracy, config);
-    else if (str_equals(name, len, "ip") || str_equals(name, len, "inner") || str_equals(name, len, "dot"))
+    } else if (str_equals(name, len, "ip") || str_equals(name, len, "inner") || str_equals(name, len, "dot")) {
+        if (dimensions == 0)
+            throw std::invalid_argument("The number of dimensions must be positive");
         return index_at::ip(dimensions, accuracy, config);
-    else if (str_equals(name, len, "cos") || str_equals(name, len, "angular"))
+    } else if (str_equals(name, len, "cos") || str_equals(name, len, "angular")) {
+        if (dimensions == 0)
+            throw std::invalid_argument("The number of dimensions must be positive");
         return index_at::cos(dimensions, accuracy, config);
-    else if (str_equals(name, len, "haversine"))
+    } else if (str_equals(name, len, "haversine")) {
+        if (dimensions != 2 && dimensions != 0)
+            throw std::invalid_argument("The number of dimensions must be equal to two");
         return index_at::haversine(accuracy, config);
-    else
-        throw std::runtime_error("Unknown distance, choose: l2_sq, ip, cos, hamming, jaccard");
+    } else
+        throw std::invalid_argument("Unknown distance, choose: l2_sq, ip, cos, hamming, jaccard");
     return {};
 }
 
@@ -413,6 +424,12 @@ class auto_index_gt {
     static auto_index_gt haversine(accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return make(2, accuracy, haversine_metric(accuracy), make_casts(accuracy), config); }
     // clang-format on
 
+    static auto_index_gt udf(                                    //
+        std::size_t dimensions, punned_stateful_metric_t metric, //
+        accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) {
+        return make(dimensions, accuracy, {metric, isa_t::auto_k}, make_casts(accuracy), config);
+    }
+
     auto_index_gt fork() const {
         auto_index_gt result;
 
@@ -507,7 +524,8 @@ class auto_index_gt {
     }
 
     static metric_and_meta_t ip_metric_f32(std::size_t dimensions) {
-#if 1
+        (void)dimensions;
+#if defined(USEARCH_USE_SIMD)
 #if defined(__x86_64__)
         if (dimensions % 4 == 0)
             return {
@@ -537,7 +555,8 @@ class auto_index_gt {
     }
 
     static metric_and_meta_t ip_metric_f16(std::size_t dimensions) {
-#if 1
+        (void)dimensions;
+#if defined(USEARCH_USE_SIMD)
 #if defined(__x86_64__)
 #elif defined(__aarch64__)
         if (supports_arm_sve())

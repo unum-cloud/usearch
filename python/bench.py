@@ -50,7 +50,7 @@ def main(
     bench_faiss(index, vectors_mat, queries_mat, neighbors_mat)
 
     index = usearch.Index(
-        dim=dim,
+        ndim=dim,
         expansion_add=expansion_add,
         expansion_search=expansion_search,
         connectivity=connectivity,

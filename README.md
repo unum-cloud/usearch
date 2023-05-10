@@ -27,7 +27,7 @@ Vector Search Engine<br/>
   - [x] Hardware-accelerated [`ashvardanian/simsimd`](https://github.com/ashvardanian/simsimd). 
 - [x] Variable dimensionality vectors.
 - [x] Don't copy vectors if not needed.
-- [x] Bring your threads.
+- [x] [Bring your threads](#bring-your-threads), like OpenMP.
 - [x] Multiple vectors per label.
 - [x] [Python](#python) bindings: `pip install usearch`.
 - [x] [JavaScript](#java) bindings: `npm install usearch`.
@@ -40,7 +40,7 @@ Vector Search Engine<br/>
 - [ ] For Windows.
 - [ ] Multi-index lookups in Python.
 - [ ] Thread-safe `reserve`.
-- [ ] Distributed construction.
+- [ ] Distributed construction with MPI.
 - [x] AI + Vector Search = Semantic Search.
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/usearch.hpp
@@ -219,7 +219,7 @@ import numpy as np
 import usearch
 
 index = usearch.Index(
-    dim=256, # Define the number of dimensions in input vectors
+    ndim=256, # Define the number of dimensions in input vectors
     metric='cos', # Choose the "metric" or "distance", default = 'ip', optional
     dtype='f32', # Quantize to 'f16' or 'i8q100' if needed, default = 'f32', optional
     connectivity=16, # How frequent should the connections in the graph be, optional
@@ -227,6 +227,15 @@ index = usearch.Index(
     expansion_search=64, # Control the quality of search, optional
 )
 
+vector = np.random.uniform(0, 0.3, (index.ndim)).astype(np.float32)
+index.add(42, vector)
+matches, distances, count = index.search(vector, 10)
+```
+
+Same can be done with batches, rather than single entries.
+Under the hood, worker threads will be spawned, to parallelize the procedure.
+
+```py
 n = 100
 labels = np.array(range(n), dtype=np.longlong)
 vectors = np.random.uniform(0, 0.3, (n, index.ndim)).astype(np.float32)
@@ -234,9 +243,6 @@ vectors = np.random.uniform(0, 0.3, (n, index.ndim)).astype(np.float32)
 # You can avoid copying the data
 # Handy when build 1B+ indexes of memory-mapped files
 index.add(labels, vectors, copy=True)
-assert len(index) == n
-
-# You can search a batch at once
 matches, distances, counts = index.search(vectors, 10)
 ```
 
@@ -401,21 +407,20 @@ from PIL import Image
 
 server = ucall.Server()
 model = uform.get_model('unum-cloud/uform-vl-multilingual')
-index = usearch.Index(dim=256)
+index = usearch.Index(ndim=256)
 
 @server
 def add(label: int, photo: Image.Image):
     image = model.preprocess_image(photo)
     vector = model.encode_image(image).detach().numpy()
-    labels = np.array([label], dtype=np.longlong)
-    index.add(labels, vector, copy=True)
+    index.add(label, vector.flatten(), copy=True)
 
 @server
 def search(query: str) -> np.ndarray:
     tokens = model.preprocess_text(query)
     vector = model.encode_text(tokens).detach().numpy()
-    neighbors = index.search(vector, 3)
-    return neighbors[0][:neighbors[2][0]]
+    neighbors, _, _ = index.search(vector.flatten(), 3)
+    return neighbors
 
 server.run()
 ```

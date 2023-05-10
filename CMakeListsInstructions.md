@@ -13,6 +13,7 @@ git submodule update --init --recursive
 ```sh
 cmake -B ./build_release \
     -DCMAKE_BUILD_TYPE=Release \
+    -DUSEARCH_USE_SIMD=1 \
     -DUSEARCH_USE_OPENMP=1 \
     -DUSEARCH_USE_JEMALLOC=1 && \
     make -C ./build_release -j
@@ -37,6 +38,8 @@ brew install libomp llvm
 cmake \
     -DCMAKE_C_COMPILER="/opt/homebrew/opt/llvm/bin/clang" \
     -DCMAKE_CXX_COMPILER="/opt/homebrew/opt/llvm/bin/clang++" \
+    -DUSEARCH_USE_SIMD=1 \
+    -DUSEARCH_USE_OPENMP=1 \
      -B ./build_release && \
     make -C ./build_release -j 
 ```
