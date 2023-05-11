@@ -572,8 +572,8 @@ struct config_t {
 
     ///
     std::size_t max_elements = 0;
-    std::size_t max_threads_add = 64;
-    std::size_t max_threads_search = 64;
+    std::size_t max_threads_add = 0;
+    std::size_t max_threads_search = 0;
 };
 
 /**

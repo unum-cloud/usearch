@@ -1,8 +1,9 @@
 #pragma once
-#include <functional>
-#include <stdexcept> // `std::invalid_argument`
-#include <thread>
-#include <vector>
+#include <functional> // `std::function`
+#include <numeric>    // `std::iota`
+#include <stdexcept>  // `std::invalid_argument`
+#include <thread>     // `std::thread`
+#include <vector>     // `std::vector`
 
 #if __linux__
 #include <sys/auxv.h>
@@ -381,13 +382,17 @@ class auto_index_gt {
     punned_stateful_metric_t root_metric_;
     config_t root_config_;
 
+    mutable std::vector<std::size_t> available_threads_;
+    mutable std::mutex available_threads_mutex_;
+
   public:
     auto_index_gt() = default;
     auto_index_gt(auto_index_gt&& other)
         : dimensions_(other.dimensions_), casted_vector_bytes_(other.casted_vector_bytes_), accuracy_(other.accuracy_),
           acceleration_(other.acceleration_), index_(std::move(other.index_)),
           cast_buffer_(std::move(other.cast_buffer_)), casts_(std::move(other.casts_)),
-          root_metric_(std::move(other.root_metric_)), root_config_(std::move(other.root_config_)) {}
+          root_metric_(std::move(other.root_metric_)), root_config_(std::move(other.root_config_)),
+          available_threads_(std::move(other.available_threads_)) {}
 
     std::size_t dimensions() const noexcept { return dimensions_; }
     std::size_t connectivity() const noexcept { return index_->connectivity(); }
@@ -406,13 +411,21 @@ class auto_index_gt {
     void reserve(std::size_t capacity) { index_->reserve(capacity); }
 
     // clang-format off
-    void add(label_t label, f16_bits_t const* vector, std::size_t thread = 0, bool copy = true) { return add(label, vector, thread, copy, casts_.from_f16); }
-    void add(label_t label, f32_t const* vector, std::size_t thread = 0, bool copy = true) { return add(label, vector, thread, copy, casts_.from_f32); }
-    void add(label_t label, f64_t const* vector, std::size_t thread = 0, bool copy = true) { return add(label, vector, thread, copy, casts_.from_f64); }
-    
-    std::size_t search(f16_bits_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread = 0) const { return search(vector, wanted, matches, distances, thread, casts_.from_f16); }
-    std::size_t search(f32_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread = 0) const { return search(vector, wanted, matches, distances, thread, casts_.from_f32); }
-    std::size_t search(f64_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread = 0) const { return search(vector, wanted, matches, distances, thread, casts_.from_f64); }
+    void add(label_t label, f16_bits_t const* vector) { return add(label, vector, true, casts_.from_f16); }
+    void add(label_t label, f32_t const* vector) { return add(label, vector, true, casts_.from_f32); }
+    void add(label_t label, f64_t const* vector) { return add(label, vector, true, casts_.from_f64); }
+
+    void add(label_t label, f16_bits_t const* vector, std::size_t thread, bool copy) { return add(label, vector, thread, copy, casts_.from_f16); }
+    void add(label_t label, f32_t const* vector, std::size_t thread, bool copy) { return add(label, vector, thread, copy, casts_.from_f32); }
+    void add(label_t label, f64_t const* vector, std::size_t thread, bool copy) { return add(label, vector, thread, copy, casts_.from_f64); }
+
+    std::size_t search(f16_bits_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances) const { return search(vector, wanted, matches, distances, casts_.from_f16); }
+    std::size_t search(f32_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances) const { return search(vector, wanted, matches, distances, casts_.from_f32); }
+    std::size_t search(f64_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances) const { return search(vector, wanted, matches, distances, casts_.from_f64); }
+
+    std::size_t search(f16_bits_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread) const { return search(vector, wanted, matches, distances, thread, casts_.from_f16); }
+    std::size_t search(f32_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread) const { return search(vector, wanted, matches, distances, thread, casts_.from_f32); }
+    std::size_t search(f64_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread) const { return search(vector, wanted, matches, distances, thread, casts_.from_f64); }
 
     static auto_index_gt ip(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make(dimensions, accuracy, ip_metric(dimensions, accuracy), make_casts(accuracy), config); }
     static auto_index_gt l2(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make(dimensions, accuracy, l2_metric(dimensions, accuracy), make_casts(accuracy), config); }
@@ -444,6 +457,27 @@ class auto_index_gt {
     }
 
   private:
+    struct thread_lock_t {
+        auto_index_gt& parent;
+        std::size_t thread_id;
+
+        ~thread_lock_t() { parent.thread_unlock(thread_id); }
+    };
+
+    thread_lock_t thread_lock() const {
+        available_threads_mutex_.lock();
+        std::size_t thread_id = available_threads_.back();
+        available_threads_.pop_back();
+        available_threads_mutex_.unlock();
+        return {*this, thread_id};
+    }
+
+    void thread_unlock(std::size_t thread_id) const {
+        available_threads_mutex_.lock();
+        available_threads_.push_back(thread_id);
+        available_threads_mutex_.unlock();
+    }
+
     template <typename scalar_at>
     void add(label_t label, scalar_at const* vector, std::size_t thread, bool copy, cast_t const& cast) {
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
@@ -474,11 +508,28 @@ class auto_index_gt {
         return index_->search({vector_data, vector_bytes}, wanted, matches, distances, thread);
     }
 
+    template <typename scalar_at> void add(label_t label, scalar_at const* vector, bool copy, cast_t const& cast) {
+        thread_lock_t lock = thread_lock();
+        return add(label, vector, lock.thread_id, copy, cast);
+    }
+
+    template <typename scalar_at>
+    std::size_t search(                              //
+        scalar_at const* vector, std::size_t wanted, //
+        label_t* matches, distance_t* distances,     //
+        cast_t const& cast) const {
+        thread_lock_t lock = thread_lock();
+        return search(vector, wanted, matches, distances, lock.thread_id, cast);
+    }
+
     static auto_index_gt make(                            //
         std::size_t dimensions, accuracy_t accuracy,      //
         metric_and_meta_t metric_and_meta, casts_t casts, //
         config_t config) {
 
+        std::size_t hardware_threads = std::thread::hardware_concurrency();
+        config.max_threads_add = config.max_threads_add ? config.max_threads_add : hardware_threads;
+        config.max_threads_search = config.max_threads_search ? config.max_threads_search : hardware_threads;
         std::size_t max_threads = std::max(config.max_threads_add, config.max_threads_search);
         auto_index_gt result;
         result.dimensions_ = dimensions;
@@ -490,6 +541,8 @@ class auto_index_gt {
         result.acceleration_ = metric_and_meta.acceleration;
         result.root_metric_ = metric_and_meta.metric;
         result.root_config_ = config;
+        result.available_threads_.resize(max_threads);
+        std::iota(result.available_threads_.begin(), result.available_threads_.end());
         return result;
     }
 
