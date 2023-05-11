@@ -6,7 +6,9 @@
  *
  *  @copyright Copyright (c) 2023
  */
-#pragma once
+#ifndef UNUM_USEARCH_H
+#define UNUM_USEARCH_H
+
 #include <algorithm> // `std::sort_heap`
 #include <atomic>    // `std::atomic`
 #include <bitset>    // `std::bitset`
@@ -1320,6 +1322,7 @@ class index_gt {
             lock_t candidate_lock = candidate_node.lock();
             neighbors_ref_t candidate_header = neighbors(candidate_node, level);
 
+            prefetch_neighbors(candidate_header, visits);
             iterate_through_neighbors(candidate_header, [&](id_t successor_id) noexcept {
                 if (visits.test(successor_id))
                     return;
@@ -1369,30 +1372,7 @@ class index_gt {
             id_t candidate_id = current_node_node.second;
             neighbors_ref_t candidate_header = neighbors_base(node(candidate_id));
 
-            // Prefetch from disk
-            if (viewed_file_descriptor_ != 0)
-                iterate_through_neighbors(candidate_header, [&](id_t successor_id) noexcept {
-                    if (visits.test(successor_id))
-                        return;
-
-                    node_head_t& head = node(successor_id).head;
-
-                    // Naive
-                    __builtin_prefetch(&head);
-
-                    // Old-school
-                    // std::size_t length = node_dump_size(head.dim, 0);
-                    // madvise(&head, length, MADV_WILLNEED);
-
-                    // Async
-#if defined(USEARCH_IOURING)
-                    struct io_uring_sqe* sqe = io_uring_get_sqe(ring_);
-                    io_uring_prep_madvice(sqe, &head, length, MADV_WILLNEED);
-                    io_uring_sqe_set_data(sqe, fi);
-                    io_uring_submit(ring_);
-#endif
-                });
-
+            prefetch_neighbors(candidate_header, visits);
             iterate_through_neighbors(candidate_header, [&](id_t successor_id) noexcept {
                 if (visits.test(successor_id))
                     return;
@@ -1425,10 +1405,42 @@ class index_gt {
             callback(head.neighbors[j]);
     }
 
+    void prefetch_neighbors(neighbors_ref_t head, visits_bitset_t const& visits) const noexcept {
+
+        // Prefetch from disk
+        if (viewed_file_descriptor_ != 0)
+            iterate_through_neighbors(head, [&](id_t successor_id) noexcept {
+                if (visits.test(successor_id))
+                    return;
+
+                node_ref_t node_ref = node(successor_id);
+                node_head_t& head = node_ref.head;
+
+                // Naive
+                __builtin_prefetch(node(successor_id).vector);
+
+                // Old-school
+                // std::size_t length = node_dump_size(head.dim, 0);
+                // madvise(&head, length, MADV_WILLNEED);
+
+                // Async
+#if defined(USEARCH_IOURING)
+                struct io_uring_sqe* sqe = io_uring_get_sqe(ring_);
+                io_uring_prep_madvice(sqe, &head, length, MADV_WILLNEED);
+                io_uring_sqe_set_data(sqe, fi);
+                io_uring_submit(ring_);
+#endif
+            });
+        else
+            iterate_through_neighbors(head, [&](id_t successor_id) noexcept {
+                if (!visits.test(successor_id))
+                    __builtin_prefetch(node(successor_id).vector);
+            });
+    }
+
     void filter_top_candidates_with_heuristic( //
         distances_and_ids_t& top_candidates, distances_and_ids_t& temporary, std::size_t needed,
         thread_context_t& context) const noexcept(false) {
-
         if (top_candidates.size() < needed)
             return;
 
@@ -1468,3 +1480,5 @@ class index_gt {
 
 } // namespace usearch
 } // namespace unum
+
+#endif

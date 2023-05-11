@@ -99,9 +99,14 @@ struct persisted_dataset_gt {
     persisted_matrix_gt<scalar_t> vectors_;
     persisted_matrix_gt<scalar_t> queries_;
     persisted_matrix_gt<vector_id_t> neighborhoods_;
+    std::size_t vectors_to_skip_{};
+    std::size_t vectors_to_take_{};
 
-    persisted_dataset_gt(char const* path_vectors, char const* path_queries, char const* path_neighbors) noexcept(false)
-        : vectors_(path_vectors), queries_(path_queries), neighborhoods_(path_neighbors) {
+    persisted_dataset_gt(char const* path_vectors, char const* path_queries, char const* path_neighbors,
+                         std::size_t vectors_to_skip = 0, std::size_t vectors_to_take = 0) noexcept(false)
+        : vectors_(path_vectors), queries_(path_queries), neighborhoods_(path_neighbors),
+          vectors_to_skip_(vectors_to_skip), vectors_to_take_(vectors_to_take) {
+
         if (vectors_.cols != queries_.cols)
             throw std::invalid_argument("Contents and queries have different dimensionality");
         if (queries_.rows != neighborhoods_.rows)
@@ -109,14 +114,18 @@ struct persisted_dataset_gt {
     }
 
     std::size_t dimensions() const noexcept { return vectors_.cols; }
-    std::size_t vectors_count() const noexcept { return vectors_.rows; }
     std::size_t queries_count() const noexcept { return queries_.rows; }
     std::size_t neighborhood_size() const noexcept { return neighborhoods_.cols; }
-    scalar_t const* vector(std::size_t i) const noexcept { return vectors_.row(i); }
+    scalar_t const* vector(std::size_t i) const noexcept { return vectors_.row(i + vectors_to_skip_); }
     scalar_t const* query(std::size_t i) const noexcept { return queries_.row(i); }
     vector_id_t const* neighborhood(std::size_t i) const noexcept { return neighborhoods_.row(i); }
 
-    vectors_view_gt<scalar_t> vectors_view() const noexcept { return {vector(0), vectors_count(), dimensions()}; }
+    std::size_t vectors_count() const noexcept {
+        return vectors_to_take_ ? vectors_to_take_ : (vectors_.rows - vectors_to_skip_);
+    }
+    vectors_view_gt<scalar_t> vectors_view() const noexcept {
+        return {vector(vectors_to_skip_), vectors_count(), dimensions()};
+    }
 };
 
 template <typename scalar_at, typename vector_id_at> //
@@ -190,7 +199,7 @@ struct running_stats_printer_t {
 
     void print(std::size_t progress) {
 
-        constexpr char* bars_k = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";
+        constexpr char bars_k[] = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";
         constexpr std::size_t bars_len_k = 60;
 
         float percentage = progress * 1.f / total;
@@ -213,15 +222,14 @@ struct running_stats_printer_t {
 };
 
 template <typename index_at, typename vector_id_at, typename real_at>
-void index_many(index_at& native, std::size_t n, vector_id_at const* ids, real_at const* vectors, std::size_t dims,
-                std::size_t vectors_to_copy = 0) {
+void index_many(index_at& native, std::size_t n, vector_id_at const* ids, real_at const* vectors, std::size_t dims) {
 
     using span_t = span_gt<float const>;
     running_stats_printer_t printer{n, "Indexing"};
 
 #pragma omp parallel for schedule(static, 32)
     for (std::size_t i = 0; i < n; ++i) {
-        native.add(ids[i], span_t{vectors + dims * i, dims}, omp_get_thread_num(), i < vectors_to_copy);
+        native.add(ids[i], span_t{vectors + dims * i, dims}, omp_get_thread_num(), true);
         printer.progress++;
         if (omp_get_thread_num() == 0)
             printer.refresh();
@@ -248,7 +256,7 @@ void search_many(index_at& native, std::size_t n, real_at const* vectors, std::s
 }
 
 template <typename dataset_at, typename index_at> //
-static void single_shot(dataset_at& dataset, index_at& index, bool construct = true, std::size_t vectors_to_copy = 0) {
+static void single_shot(dataset_at& dataset, index_at& index, bool construct = true) {
     using label_t = typename index_at::label_t;
     using distance_t = typename index_at::distance_t;
 
@@ -258,8 +266,7 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
         // Perform insertions, evaluate speed
         std::vector<label_t> ids(dataset.vectors_count());
         std::iota(ids.begin(), ids.end(), 0);
-        index_many(index, dataset.vectors_count(), ids.data(), dataset.vector(0), dataset.dimensions(),
-                   vectors_to_copy);
+        index_many(index, dataset.vectors_count(), ids.data(), dataset.vector(0), dataset.dimensions());
     }
 
     // Perform search, evaluate speed
@@ -312,7 +319,9 @@ struct args_t {
     std::size_t expansion_add = config_t::expansion_add_default_k;
     std::size_t expansion_search = config_t::expansion_search_default_k;
     std::size_t threads = std::thread::hardware_concurrency();
-    std::size_t vectors_to_copy = 0;
+
+    std::size_t vectors_to_skip = 0;
+    std::size_t vectors_to_take = 0;
 
     bool help = false;
 
@@ -363,7 +372,7 @@ void run_type_punned(dataset_at& dataset, args_t const& args, config_t config) {
     std::printf("-- Hardware acceleration: %s\n", isa_name(index.acceleration()));
     std::printf("Will benchmark in-memory\n");
 
-    single_shot(dataset, index, true, args.vectors_to_copy);
+    single_shot(dataset, index, true);
     index.save(args.path_output.c_str());
 
     std::printf("Will benchmark an on-disk view\n");
@@ -379,7 +388,7 @@ void run_typed(dataset_at& dataset, args_t const& args, config_t config) {
     index_at index(config);
     std::printf("Will benchmark in-memory\n");
 
-    single_shot(dataset, index, true, args.vectors_to_copy);
+    single_shot(dataset, index, true);
     index.save(args.path_output.c_str());
 
     std::printf("Will benchmark an on-disk view\n");
@@ -473,9 +482,10 @@ int main(int argc, char** argv) {
         (option("-b", "--big").set(args.big)).doc("Will switch to uint40_t for neighbors lists with over 4B entries"),
         (option("-j", "--threads") & value("integer", args.threads)).doc("Uses all available cores by default"),
         (option("-c", "--connectivity") & value("integer", args.connectivity)).doc("Index granularity"),
-        (option("-n") & value("integer", args.vectors_to_copy)).doc("Number of vectors to explicitly copy into index"),
         (option("--expansion-add") & value("integer", args.expansion_add)).doc("Affects indexing depth"),
         (option("--expansion-search") & value("integer", args.expansion_search)).doc("Affects search depth"),
+        (option("--rows-skip") & value("integer", args.vectors_to_skip)).doc("Number of vectors to skip"),
+        (option("--rows-take") & value("integer", args.vectors_to_take)).doc("Number of vectors to take"),
         ( //
             option("--native").set(args.native).doc("Use raw templates instead of type-punned classes") |
             option("--f16quant").set(args.quantize_f16).doc("Enable `f16_t` quantization") |
@@ -509,9 +519,11 @@ int main(int argc, char** argv) {
     std::printf("-- Ground truth neighbors path: %s\n", args.path_neighbors.c_str());
 
     persisted_dataset_gt<float, vector_id_t> dataset{
-        args.path_vectors.c_str(),
-        args.path_queries.c_str(),
-        args.path_neighbors.c_str(),
+        args.path_vectors.c_str(),   //
+        args.path_queries.c_str(),   //
+        args.path_neighbors.c_str(), //
+        args.vectors_to_skip,        //
+        args.vectors_to_take,        //
     };
     std::printf("-- Dimensions: %zu\n", dataset.dimensions());
     std::printf("-- Vectors count: %zu\n", dataset.vectors_count());
