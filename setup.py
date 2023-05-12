@@ -9,6 +9,10 @@ compile_args = ['-std=c++11', '-O3']
 if sys.platform == 'darwin':
     compile_args.append('-mmacosx-version-min=10.13')
 
+if sys.platform == 'win32':
+    compile_args = ['/std:c++14', '/O2']
+
+
 ext_modules = [
     Pybind11Extension(
         'usearch',
