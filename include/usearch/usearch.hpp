@@ -1004,8 +1004,8 @@ class index_gt {
             pre_ = precompute(config_);
             reserve(state.size);
             size_ = state.size;
-            max_level_ = state.max_level;
-            entry_id_ = state.entry_id;
+            max_level_ = static_cast<level_t>(state.max_level);
+            entry_id_ = static_cast<id_t>(state.entry_id);
         }
 
         // Load nodes one by one
@@ -1070,8 +1070,8 @@ class index_gt {
             pre_ = precompute(config_);
             reserve(state.size);
             size_ = state.size;
-            max_level_ = state.max_level;
-            entry_id_ = state.entry_id;
+            max_level_ = static_cast<level_t>(state.max_level);
+            entry_id_ = static_cast<id_t>(state.entry_id);
         }
 
         // Locate every node packed into file
@@ -1266,7 +1266,7 @@ class index_gt {
     }
 
     void search_to_insert(                                         //
-        id_t start_id, scalar_t const* query_vec, dim_t query_dim, //
+        id_t start_id, scalar_t const* query_vec, std::size_t query_dim, //
         level_t level, thread_context_t& context) noexcept(false) {
 
         visits_bitset_t& visits = context.visits;
@@ -1316,7 +1316,7 @@ class index_gt {
     }
 
     void search_to_find_in_base(                                   //
-        id_t start_id, scalar_t const* query_vec, dim_t query_dim, //
+        id_t start_id, scalar_t const* query_vec, std::size_t query_dim, //
         std::size_t expansion, thread_context_t& context) const noexcept(false) {
 
         visits_bitset_t& visits = context.visits;
