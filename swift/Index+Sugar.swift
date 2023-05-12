@@ -41,15 +41,17 @@ extension Index {
         distances.removeLast(count - Int(results!))
         return (matches, distances)
     }
-    
-    @available(macOS 11.0, *)
+
+#if arch(arm64)
+
+    @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, *)
     public func add(label: UInt32, vector: ArraySlice<Float16>) -> () {
         vector.withContiguousStorageIfAvailable { buffer in
             addImprecise(label: label, vector: buffer.baseAddress!)
         }
     }
 
-    @available(macOS 11.0, *)
+    @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, *)
     public func search(vector: ArraySlice<Float16>, count: Int) -> ([UInt32], [Float]) {
         var matches: [UInt32] = Array(repeating: 0, count: count)
         var distances: [Float] = Array(repeating: 0, count: count)
@@ -61,6 +63,8 @@ extension Index {
         return (matches, distances)
     }
     
+#endif
+
     public var count: Int { get { return Int(length) } }
     
 }
