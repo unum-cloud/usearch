@@ -365,9 +365,9 @@ class max_heap_gt {
         if (max_capacity_ && capacity_ == max_capacity_)
             return false;
 
-        auto new_capacity = std::max<std::size_t>(capacity_ * 2u, 16u);
+        auto new_capacity = (std::max<std::size_t>)(capacity_ * 2u, 16u);
         if (max_capacity_)
-            new_capacity = std::min(new_capacity, max_capacity_);
+            new_capacity = (std::min)(new_capacity, max_capacity_);
 
         auto allocator = allocator_t{};
         auto new_elements = allocator.allocate(new_capacity);
@@ -737,7 +737,7 @@ class index_gt {
     index_gt(config_t config = {}, metric_t metric = {}, allocator_t = {}) : config_(config) {
 
         // Externally defined hyper-parameters:
-        config_.expansion_add = std::max(config_.expansion_add, config_.connectivity);
+        config_.expansion_add = (std::max)(config_.expansion_add, config_.connectivity);
         pre_ = precompute(config);
 
         // Configure initial empty state:
@@ -747,7 +747,7 @@ class index_gt {
         viewed_file_descriptor_ = 0;
 
         // Dynamic memory:
-        thread_contexts_.resize(std::max(config.max_threads_search, config.max_threads_add));
+        thread_contexts_.resize((std::max)(config.max_threads_search, config.max_threads_add));
         for (thread_context_t& context : thread_contexts_)
             context.metric = metric;
         reserve(config.max_elements);
@@ -843,7 +843,7 @@ class index_gt {
         }
 
         // From `new_target_level` down perform proper extensive search.
-        for (level_t level = std::min(new_target_level, max_level); level >= 0; level--) {
+        for (level_t level = (std::min)(new_target_level, max_level); level >= 0; level--) {
             search_to_insert(closest_id, new_vector, new_dim, level, context);
             closest_id = connect_new_element(new_id, level, context);
         }
@@ -894,7 +894,7 @@ class index_gt {
 
         // For bottom layer we need a more optimized procedure
         search_to_find_in_base( //
-            closest_id, query_vec, query_dim, std::max(config_.expansion_search, wanted), context);
+            closest_id, query_vec, query_dim, (std::max)(config_.expansion_search, wanted), context);
         while (context.top_candidates.size() > wanted)
             context.top_candidates.pop();
 
@@ -1082,7 +1082,7 @@ class index_gt {
             nodes_[i].tape_ = (byte_t*)(file + progress);
             nodes_[i].vector_ = (scalar_t*)(file + progress + bytes_to_dump - head.dim);
             progress += bytes_to_dump;
-            max_level_ = std::max(max_level_, head.level);
+            max_level_ = (std::max)(max_level_, head.level);
         }
 
         viewed_file_descriptor_ = descriptor;

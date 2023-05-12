@@ -170,7 +170,7 @@ void multithreaded(std::size_t threads, std::size_t tasks, callback_at&& callbac
     for (std::size_t thread_idx = 0; thread_idx != threads; ++thread_idx) {
         threads_pool.emplace_back([=]() {
             for (std::size_t task_idx = thread_idx * tasks_per_thread;
-                 task_idx < std::min(tasks, thread_idx * tasks_per_thread + tasks_per_thread); ++task_idx)
+                 task_idx < (std::min)(tasks, thread_idx * tasks_per_thread + tasks_per_thread); ++task_idx)
                 callback(thread_idx, task_idx);
         });
     }
@@ -401,7 +401,7 @@ class auto_index_gt {
 
     isa_t acceleration() const noexcept { return acceleration_; }
     std::size_t concurrency() const noexcept {
-        return std::min(root_config_.max_threads_add, root_config_.max_threads_search);
+        return (std::min)(root_config_.max_threads_add, root_config_.max_threads_search);
     }
 
     void save(char const* path) const { index_->save(path); }
@@ -483,7 +483,7 @@ class auto_index_gt {
         metric_and_meta_t metric_and_meta, casts_t casts, //
         config_t config) {
 
-        std::size_t max_threads = std::max(config.max_threads_add, config.max_threads_search);
+        std::size_t max_threads = (std::max)(config.max_threads_add, config.max_threads_search);
         auto_index_gt result;
         result.dimensions_ = dimensions;
         result.accuracy_ = accuracy;
