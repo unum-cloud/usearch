@@ -9,6 +9,12 @@
  *  @see NodeJS docs: https://nodejs.org/api/addons.html#hello-world
  *
  */
+
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+#define _USE_MATH_DEFINES
+#define NAPI_CPP_EXCEPTIONS
+#endif
+
 #include <napi.h>
 #include <node_api.h>
 
