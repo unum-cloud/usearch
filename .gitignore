@@ -38,6 +38,10 @@ target/
 .gradle
 *.class
 
+# ObjC and Swift
+.build
+.swiftpm
+
 # Prerequisites
 *.d
 
