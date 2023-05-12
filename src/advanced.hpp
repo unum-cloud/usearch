@@ -189,7 +189,9 @@ class aligned_allocator_gt {
     using size_type = std::size_t;
     using pointer = element_at*;
     using const_pointer = element_at const*;
-    template <typename other_element_at> struct rebind { using other = aligned_allocator_gt<other_element_at>; };
+    template <typename other_element_at> struct rebind {
+        using other = aligned_allocator_gt<other_element_at>;
+    };
 
     pointer allocate(size_type length) const noexcept {
         void* result = nullptr;
@@ -387,16 +389,30 @@ class auto_index_gt {
 
   public:
     auto_index_gt() = default;
-    auto_index_gt(auto_index_gt&& other)
-        : dimensions_(other.dimensions_), casted_vector_bytes_(other.casted_vector_bytes_), accuracy_(other.accuracy_),
-          acceleration_(other.acceleration_), index_(std::move(other.index_)),
-          cast_buffer_(std::move(other.cast_buffer_)), casts_(std::move(other.casts_)),
-          root_metric_(std::move(other.root_metric_)), root_config_(std::move(other.root_config_)) {}
+    auto_index_gt(auto_index_gt&& other) { swap(other); }
+
+    auto_index_gt& operator=(auto_index_gt&& other) noexcept {
+        swap(other);
+        return *this;
+    }
+
+    void swap(auto_index_gt& other) noexcept {
+        std::swap(dimensions_, other.dimensions_);
+        std::swap(casted_vector_bytes_, other.casted_vector_bytes_);
+        std::swap(accuracy_, other.accuracy_);
+        std::swap(acceleration_, other.acceleration_);
+        std::swap(index_, other.index_);
+        std::swap(cast_buffer_, other.cast_buffer_);
+        std::swap(casts_, other.casts_);
+        std::swap(root_metric_, other.root_metric_);
+        std::swap(root_config_, other.root_config_);
+    }
 
     std::size_t dimensions() const noexcept { return dimensions_; }
     std::size_t connectivity() const noexcept { return index_->connectivity(); }
     std::size_t size() const noexcept { return index_->size(); }
     std::size_t capacity() const noexcept { return index_->capacity(); }
+    config_t const& config() const noexcept { return root_config_; }
     void clear() noexcept { return index_->clear(); }
 
     isa_t acceleration() const noexcept { return acceleration_; }

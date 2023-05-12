@@ -273,7 +273,7 @@ Aside from the `add` and `search`, it also provides `add_in_thread` and `search_
 // cargo add usearch
 
 let quant: &str = "f16";
-let index = new_ip(5,  &quant, 0, 0, 0).unwrap();
+let index = new_ip(5, &quant, 0, 0, 0).unwrap();
 
 assert!(index.reserve(10).is_ok());
 assert!(index.capacity() >= 10);
@@ -298,8 +298,8 @@ assert!(index.load("index.usearch").is_ok());
 assert!(index.view("index.usearch").is_ok());
 
 // There are more "metrics" available
-assert!(new_l2(5,  &quant, 0, 0, 0).is_ok());
-assert!(new_cos(5,  &quant, 0, 0, 0).is_ok());
+assert!(new_l2(5, &quant, 0, 0, 0).is_ok());
+assert!(new_cos(5, &quant, 0, 0, 0).is_ok());
 assert!(new_haversine(&quant, 0, 0, 0).is_ok());
 ```
 
@@ -310,6 +310,19 @@ Index index = new Index.Config().metric("cos").dimensions(2).build();
 float vec[] = {10, 20};
 index.add(42, vec);
 int[] labels = index.search(vec, 5);
+```
+
+### Objective-C and Swift
+
+```swift
+let index = Index.l2(dimensions: 4, connectivity: 8)
+let vectorA: [Float32] = [0.3, 0.5, 1.2, 1.4]
+let vectorB: [Float32] = [0.4, 0.2, 1.2, 1.1]
+index.add(label: 42, vector: vectorA[...])
+index.add(label: 43, vector: vectorB[...])
+
+let results = index.search(vector: vectorA[...], count: 10)
+assert(results.0[0] == 42)
 ```
 
 ### GoLang
