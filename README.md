@@ -216,9 +216,9 @@ Assuming the presence of Global Interpreter Lock in Python, on large insertions 
 $ pip install usearch
 
 import numpy as np
-import usearch
+from usearch.index import Index
 
-index = usearch.Index(
+index = Index(
     ndim=256, # Define the number of dimensions in input vectors
     metric='cos', # Choose the "metric" or "distance", default = 'ip', optional
     dtype='f32', # Quantize to 'f16' or 'i8q100' if needed, default = 'f32', optional
@@ -413,14 +413,14 @@ One can take an encoder model, like the multi-modal UForm, and a web-programming
 ```python
 import ucall.rich_posix as ucall
 import uform
-import usearch
+from usearch.index import Index
 
 import numpy as np
 from PIL import Image
 
 server = ucall.Server()
 model = uform.get_model('unum-cloud/uform-vl-multilingual')
-index = usearch.Index(ndim=256)
+index = Index(ndim=256)
 
 @server
 def add(label: int, photo: Image.Image):

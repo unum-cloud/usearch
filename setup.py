@@ -15,9 +15,9 @@ if sys.platform == 'win32':
 
 ext_modules = [
     Pybind11Extension(
-        'usearch',
+        'usearch.index',
         ['python/lib.cpp'],
-        extra_compile_args=compile_args,
+        extra_compile_args=compile_args
     ),
 ]
 
@@ -34,7 +34,8 @@ setup(
 
     name=__lib_name__,
     version=__version__,
-    packages=find_packages(),
+    packages=['usearch'],
+    package_dir={'usearch': 'python/usearch'},
 
     description='Smaller & Faster Single-File Vector Search Engine from Unum',
     long_description=long_description,
