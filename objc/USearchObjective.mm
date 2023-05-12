@@ -1,4 +1,4 @@
-#import "ObjectiveUSearch.h"
+#import "USearchObjective.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
