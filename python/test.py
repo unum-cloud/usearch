@@ -1,7 +1,6 @@
 import numpy as np
 
-import usearch
-
+from usearch.index import Index, SetsIndex
 from numba import cfunc, types, carray
 
 # Showcases how to use Numba to JIT-compile similarity measures for USearch.
@@ -29,13 +28,13 @@ vectors = np.random.uniform(
     0, 0.3, (count_vectors, count_dimensions)).astype(np.float32)
 labels = np.array(range(count_vectors), dtype=np.longlong)
 
-index_udf = usearch.Index(ndim=96, metric_pointer=python_dot.address)
+index_udf = Index(ndim=96, metric_pointer=python_dot.address)
 index_udf.add(labels, vectors, copy=True)
 results = index_udf.search(vectors, 10)
 print('found', results[0].shape, results[1].shape, results[2].shape)
 
 
-index = usearch.Index(ndim=96)
+index = Index(ndim=96)
 index.add(labels, vectors, copy=True)
 assert index.ndim == count_dimensions
 assert index.capacity >= count_vectors
@@ -45,7 +44,7 @@ results = index.search(vectors, 10)
 print('found', results[0].shape, results[1].shape, results[2].shape)
 
 
-index_sets = usearch.SetsIndex()
+index_sets = SetsIndex()
 index_sets.add(10, np.array([10, 12, 15], dtype=np.uint32))
 index_sets.add(11, np.array([11, 12, 15, 16], dtype=np.uint32))
 results = index_sets.search(np.array([12, 15], dtype=np.uint32), 20)
