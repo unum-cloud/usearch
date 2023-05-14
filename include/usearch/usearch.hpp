@@ -941,12 +941,15 @@ class index_gt {
         for (std::size_t i = 0; i != state.size; ++i) {
             node_ref_t node_ref = node(static_cast<id_t>(i));
             std::size_t bytes_to_dump = node_dump_size(node_ref.head.dim, node_ref.head.level);
-            std::size_t written = std::fwrite(&node_ref.head, bytes_to_dump - node_ref.head.dim, 1, file);
+            std::size_t bytes_in_vec = node_ref.head.dim * sizeof(scalar_t);
+            // Dump just neighbors, as vectors may be in a disjoint location
+            std::size_t written = std::fwrite(&node_ref.head, bytes_to_dump - bytes_in_vec, 1, file);
             if (!written) {
                 std::fclose(file);
                 throw std::runtime_error(std::strerror(errno));
             }
-            written = std::fwrite(node_ref.vector, node_ref.head.dim, 1, file);
+            // Dump the vector
+            written = std::fwrite(node_ref.vector, bytes_in_vec, 1, file);
             if (!written) {
                 std::fclose(file);
                 throw std::runtime_error(std::strerror(errno));
