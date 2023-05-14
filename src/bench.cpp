@@ -224,7 +224,7 @@ void search_many(index_at& native, std::size_t n, real_at const* vectors, std::s
 
 #pragma omp parallel for
     for (std::size_t i = 0; i < n; ++i) {
-        std::size_t found = native.search(            //
+        native.search(                                //
             span_t{vectors + dims * i, dims}, wanted, //
             ids + wanted * i, distances + wanted * i, //
             omp_get_thread_num());
@@ -355,7 +355,7 @@ index_at type_punned_index_for_metric(dataset_at& dataset, args_t const& args, c
         return index_at::cos(dataset.dimensions(), accuracy, config);
     if (args.metric_haversine)
         return index_at::haversine(accuracy, config);
-    return index_at{};
+    throw std::invalid_argument("Unknown metric!");
 }
 
 template <typename index_at, typename dataset_at> //
@@ -396,7 +396,7 @@ void run_typed(dataset_at& dataset, config_t config) {
     std::printf("-------\n");
     std::printf("-- Will benchmark an on-disk view\n");
 
-    auto_index_t index_view;
+    index_at index_view = index.fork();
     index_view.view("tmp.usearch");
     single_shot(dataset, index_view, false);
 }
@@ -515,8 +515,8 @@ int main(int argc, char** argv) {
     std::printf("-- Queries count: %zu\n", dataset.queries_count());
     std::printf("-- Neighbors per query: %zu\n", dataset.neighborhood_size());
 
-    report_alternative_setups();
-    report_expected_losses(dataset);
+    // report_alternative_setups();
+    // report_expected_losses(dataset);
 
     config_t config;
     config.connectivity = args.connectivity;

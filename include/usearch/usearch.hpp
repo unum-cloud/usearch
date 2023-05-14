@@ -725,7 +725,9 @@ class index_gt {
     };
 
     config_t config_{};
-    precomputed_constants_t pre_;
+    metric_t metric_{};
+    allocator_t allocator_{};
+    precomputed_constants_t pre_{};
     int viewed_file_descriptor_{};
 
     usearch_align_m mutable std::atomic<std::size_t> capacity_{};
@@ -739,7 +741,7 @@ class index_gt {
     std::vector<node_t, node_allocator_t> nodes_{};
 
     using thread_context_allocator_t = typename allocator_traits_t::template rebind_alloc<thread_context_t>;
-    mutable std::vector<thread_context_t, thread_context_allocator_t> thread_contexts_;
+    mutable std::vector<thread_context_t, thread_context_allocator_t> thread_contexts_{};
 
   public:
     std::size_t connectivity() const noexcept { return config_.connectivity; }
@@ -749,7 +751,8 @@ class index_gt {
     bool is_immutable() const noexcept { return viewed_file_descriptor_ != 0; }
     bool synchronize() const noexcept { return config_.max_threads_add > 1; }
 
-    index_gt(config_t config = {}, metric_t metric = {}, allocator_t = {}) : config_(config) {
+    index_gt(config_t config = {}, metric_t metric = {}, allocator_t allocator = {}) noexcept(false)
+        : config_(config), metric_(metric), allocator_(allocator) {
 
         // Externally defined hyper-parameters:
         config_.expansion_add = (std::max)(config_.expansion_add, config_.connectivity);
@@ -768,7 +771,16 @@ class index_gt {
         reserve(config.max_elements);
     }
 
+    index_gt fork() noexcept(false) { return {config_, metric_, allocator_}; }
+
     ~index_gt() noexcept { clear(); }
+
+    index_gt(index_gt&& other) noexcept { swap(other); }
+
+    index_gt& operator=(index_gt&& other) noexcept {
+        swap(other);
+        return *this;
+    }
 
 #pragma region Adjusting Configuration
 
@@ -779,6 +791,26 @@ class index_gt {
         size_ = 0;
         max_level_ = -1;
         entry_id_ = 0u;
+    }
+
+    void swap(index_gt& other) noexcept {
+        std::swap(config_, other.config_);
+        std::swap(metric_, other.metric_);
+        std::swap(allocator_, other.allocator_);
+        std::swap(pre_, other.pre_);
+        std::swap(viewed_file_descriptor_, other.viewed_file_descriptor_);
+        std::swap(max_level_, other.max_level_);
+        std::swap(entry_id_, other.entry_id_);
+        std::swap(nodes_, other.nodes_);
+        std::swap(thread_contexts_, other.thread_contexts_);
+
+        // Non-atomic parts.
+        std::size_t capacity = capacity_;
+        std::size_t size = size_;
+        capacity_ = other.capacity_.load();
+        size_ = other.size_.load();
+        other.capacity_ = capacity;
+        other.size_ = size;
     }
 
     void reserve(std::size_t new_capacity) noexcept(false) {
@@ -1366,8 +1398,8 @@ class index_gt {
                     if (!top_candidates.empty())
                         closest_dist = top_candidates.top().first;
                 }
+            }
         }
-    }
     }
 
     void filter_top_candidates_with_heuristic( //

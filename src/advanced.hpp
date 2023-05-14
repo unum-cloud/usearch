@@ -6,6 +6,8 @@
 #define WINDOWS
 #endif
 
+#include <stdlib.h> // `aligned_alloc`
+
 #include <functional>
 #include <stdexcept> // `std::invalid_argument`
 #include <thread>
@@ -387,8 +389,9 @@ class auto_index_gt {
     punned_stateful_metric_t root_metric_;
     config_t root_config_;
 
-  public:
     auto_index_gt() = default;
+
+  public:
     auto_index_gt(auto_index_gt&& other) { swap(other); }
 
     auto_index_gt& operator=(auto_index_gt&& other) noexcept {
@@ -458,7 +461,9 @@ class auto_index_gt {
 
         result.root_metric_ = root_metric_;
         result.root_config_ = root_config_;
-        result.index_.reset(new index_t(result.root_config_, result.root_metric_));
+        index_t* raw = (index_t*)aligned_alloc(64, sizeof(index_t));
+        new (raw) index_t(root_config_, root_metric_);
+        result.index_.reset(raw);
 
         return result;
     }
@@ -506,10 +511,14 @@ class auto_index_gt {
         result.casted_vector_bytes_ = bytes_per_scalar(accuracy) * dimensions;
         result.cast_buffer_.resize(max_threads * result.casted_vector_bytes_);
         result.casts_ = casts;
-        result.index_.reset(new index_t(config, metric_and_meta.metric));
         result.acceleration_ = metric_and_meta.acceleration;
         result.root_metric_ = metric_and_meta.metric;
         result.root_config_ = config;
+
+        // Availible since C11, but only C++17, so we use the C version.
+        index_t* raw = (index_t*)aligned_alloc(64, sizeof(index_t));
+        new (raw) index_t(config, metric_and_meta.metric);
+        result.index_.reset(raw);
         return result;
     }
 
