@@ -27,17 +27,19 @@
 #define usearch_align_m __attribute__((aligned(64)))
 #endif
 
-#include <algorithm>  // `std::sort_heap`
-#include <atomic>     // `std::atomic`
-#include <bitset>     // `std::bitset`
-#include <climits>    // `CHAR_BIT`
-#include <cmath>      // `std::sqrt`
-#include <cstring>    // `std::memset`
-#include <mutex>      // `std::unique_lock` - replacement candidate
-#include <random>     // `std::default_random_engine` - replacement candidate
 #include <sys/stat.h> // `fstat` for file size
-#include <utility>    // `std::exchange`
-#include <vector>     // `std::vector`
+
+#include <algorithm> // `std::sort_heap`
+#include <atomic>    // `std::atomic`
+#include <bitset>    // `std::bitset`
+#include <climits>   // `CHAR_BIT`
+#include <cmath>     // `std::sqrt`
+#include <cstring>   // `std::memset`
+#include <mutex>     // `std::unique_lock` - replacement candidate
+#include <random>    // `std::default_random_engine` - replacement candidate
+#include <stdexcept> // `std::runtime_exception`
+#include <utility>   // `std::exchange`
+#include <vector>    // `std::vector`
 
 #if defined(__GNUC__)
 // https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html
@@ -659,11 +661,18 @@ class index_gt {
     using distances_and_ids_t = max_heap_gt<distance_and_id_t, compare_by_distance_t, distances_and_ids_allocator_t>;
 
     struct neighbors_ref_t {
-        neighbors_count_t& count;
-        id_t* neighbors{};
+        neighbors_count_t& count_;
+        id_t* neighbors_{};
 
         inline neighbors_ref_t(byte_t* tape) noexcept
-            : count(*(neighbors_count_t*)tape), neighbors((neighbors_count_t*)tape + 1) {}
+            : count_(*(neighbors_count_t*)tape), neighbors_((neighbors_count_t*)tape + 1) {}
+        inline id_t* begin() noexcept { return neighbors_; }
+        inline id_t* end() noexcept { return neighbors_ + count_; }
+        inline id_t const* begin() const noexcept { return neighbors_; }
+        inline id_t const* end() const noexcept { return neighbors_ + count_; }
+        inline id_t& operator[](std::size_t i) noexcept { return neighbors_[i]; }
+        inline id_t operator[](std::size_t i) const noexcept { return neighbors_[i]; }
+        inline std::size_t size() const noexcept { return count_; }
     };
 
 #if defined(WINDOWS)
@@ -684,8 +693,14 @@ class index_gt {
     static constexpr std::size_t head_bytes_k = sizeof(label_t) + sizeof(dim_t) + sizeof(level_t);
 
     struct node_t {
-        byte_t* tape_;
-        scalar_t* vector_;
+        byte_t* tape_{};
+        scalar_t* vector_{};
+
+        explicit node_t(byte_t* tape, scalar_t* vector) noexcept : tape_(tape), vector_(vector) {}
+
+        node_t() = default;
+        node_t(node_t const&) = default;
+        node_t& operator=(node_t const&) = default;
     };
 
     class node_ref_t {
@@ -697,7 +712,7 @@ class index_gt {
 
         inline node_ref_t(mutex_t& m, node_head_t& h, scalar_t* s) noexcept : mutex_(&m), head(h), vector(s) {}
         inline lock_t lock() const noexcept { return mutex_ ? lock_t{*mutex_} : lock_t{}; }
-        inline operator node_t() const noexcept { return {mutex_ ? (byte_t*)mutex_ : (byte_t*)&head, vector}; }
+        inline operator node_t() const noexcept { return node_t{mutex_ ? (byte_t*)mutex_ : (byte_t*)&head, vector}; }
     };
 
     struct usearch_align_m thread_context_t {
@@ -819,28 +834,7 @@ class index_gt {
         }
 
         // Go down the level, tracking only the closest match
-        id_t closest_id = entry_id_;
-        distance_t closest_dist =
-            context.metric(new_vector, node(closest_id).vector, new_dim, node(closest_id).head.dim);
-        for (level_t level = max_level; level > new_target_level; level--) {
-            bool changed;
-            do {
-                changed = false;
-                node_ref_t closest_node = node(closest_id);
-                lock_t closest_lock = closest_node.lock();
-                neighbors_ref_t closest_header = neighbors_non_base(closest_node, level);
-                iterate_through_neighbors(closest_header, [&](id_t candidate_id) noexcept {
-                    node_ref_t candidate_node = node(candidate_id);
-                    distance_t candidate_dist =
-                        context.metric(new_vector, candidate_node.vector, new_dim, candidate_node.head.dim);
-                    if (candidate_dist < closest_dist) {
-                        closest_dist = candidate_dist;
-                        closest_id = candidate_id;
-                        changed = true;
-                    }
-                });
-            } while (changed);
-        }
+        id_t closest_id = search_for_one(entry_id_, new_vector, new_dim, max_level, new_target_level, context);
 
         // From `new_target_level` down perform proper extensive search.
         for (level_t level = (std::min)(new_target_level, max_level); level >= 0; level--) {
@@ -869,28 +863,7 @@ class index_gt {
 
         // Go down the level, tracking only the closest match
         thread_context_t& context = thread_contexts_[thread_idx];
-        id_t closest_id = entry_id_;
-        distance_t closest_dist =
-            context.metric(query_vec, node(closest_id).vector, query_dim, node(closest_id).head.dim);
-        for (level_t level = max_level_; level > 0; level--) {
-            bool changed;
-            do {
-                changed = false;
-                node_ref_t closest_node = node(closest_id);
-                neighbors_ref_t closest_header = neighbors_non_base(closest_node, level);
-                iterate_through_neighbors(closest_header, [&](id_t candidate_id) noexcept {
-                    node_ref_t candidate_node = node(candidate_id);
-                    distance_t candidate_dist = context.metric( //
-                        query_vec, candidate_node.vector, query_dim, candidate_node.head.dim);
-                    if (candidate_dist < closest_dist) {
-                        closest_dist = candidate_dist;
-                        closest_id = candidate_id;
-                        changed = true;
-                    }
-                });
-
-            } while (changed);
-        }
+        id_t closest_id = search_for_one(entry_id_, query_vec, query_dim, max_level_, 0, context);
 
         // For bottom layer we need a more optimized procedure
         search_to_find_in_base( //
@@ -1127,7 +1100,7 @@ class index_gt {
             ;
 
         allocator_t{}.deallocate(node.tape_, node_bytes);
-        node = {};
+        node = node_t{};
     }
 
     node_ref_t node_malloc(                                     //
@@ -1161,9 +1134,9 @@ class index_gt {
         return {*mutex, head, scalars};
     }
 
-    inline node_ref_t node(id_t id) const noexcept {
+    inline node_ref_t node(id_t id) const noexcept { return node(nodes_[id]); }
 
-        node_t node = nodes_[id];
+    inline node_ref_t node(node_t node) const noexcept {
         byte_t* data = node.tape_;
         mutex_t* mutex = synchronize() ? (mutex_t*)data : nullptr;
         node_head_t& head = *(node_head_t*)(data + pre_.mutex_bytes);
@@ -1197,14 +1170,14 @@ class index_gt {
         // Outgoing links from `new_id`:
         {
             neighbors_ref_t new_neighbors = neighbors(new_node, level);
-            assert_m(!new_neighbors.count, "The newly inserted element should have blank link list");
+            assert_m(!new_neighbors.count_, "The newly inserted element should have blank link list");
 
-            new_neighbors.count = static_cast<neighbors_count_t>(top_count);
+            new_neighbors.count_ = static_cast<neighbors_count_t>(top_count);
             for (std::size_t idx = 0; idx < top_count; idx++) {
-                assert_m(!new_neighbors.neighbors[idx], "Possible memory corruption");
+                assert_m(!new_neighbors[idx], "Possible memory corruption");
                 assert_m(level <= node(top_unordered[idx].second).head.level, "Linking to missing level");
 
-                new_neighbors.neighbors[idx] = top_unordered[idx].second;
+                new_neighbors[idx] = top_unordered[idx].second;
                 if (top_unordered[idx].first < next_closest_distance) {
                     next_closest_entry_id = top_unordered[idx].second;
                     next_closest_distance = top_unordered[idx].first;
@@ -1219,15 +1192,15 @@ class index_gt {
             lock_t close_lock = close_node.lock();
 
             neighbors_ref_t close_header = neighbors(close_node, level);
-            assert_m(close_header.count <= connectivity_max, "Possible corruption");
+            assert_m(close_header.count_ <= connectivity_max, "Possible corruption");
             assert_m(close_id != new_id, "Self-loops are impossible");
             assert_m(level <= close_node.head.level, "Linking to missing level");
 
             // If `new_id` is already present in the neighboring connections of `close_id`
             // then no need to modify any connections or run the heuristics.
-            if (close_header.count < connectivity_max) {
-                close_header.neighbors[close_header.count] = new_id;
-                close_header.count++;
+            if (close_header.count_ < connectivity_max) {
+                close_header[close_header.count_] = new_id;
+                close_header.count_++;
                 continue;
             }
 
@@ -1238,20 +1211,20 @@ class index_gt {
                 context.metric( //
                     new_node.vector, close_node.vector, new_node.head.dim, close_node.head.dim),
                 new_id);
-            iterate_through_neighbors(close_header, [&](id_t successor_id) noexcept {
+            for (id_t successor_id : close_header) {
                 node_ref_t successor_node = node(successor_id);
                 candidates.emplace( //
                     context.metric( //
                         successor_node.vector, close_node.vector, successor_node.head.dim, close_node.head.dim),
                     successor_id);
-            });
+            }
             filter_top_candidates_with_heuristic(candidates, context.candidates_set, connectivity_max, context);
 
             // Export the results:
-            close_header.count = 0u;
+            close_header.count_ = 0u;
             while (candidates.size()) {
-                close_header.neighbors[close_header.count] = candidates.top().second;
-                close_header.count++;
+                close_header[close_header.count_] = candidates.top().second;
+                close_header.count_++;
                 candidates.pop();
             }
         }
@@ -1265,7 +1238,36 @@ class index_gt {
         return (level_t)r;
     }
 
-    void search_to_insert(                                         //
+    id_t search_for_one(                                                 //
+        id_t entry_id, scalar_t const* query_vec, std::size_t query_dim, //
+        level_t begin_level, level_t end_level, thread_context_t& context) const noexcept {
+
+        id_t closest_id = entry_id;
+        distance_t closest_dist =
+            context.metric(query_vec, node(closest_id).vector, query_dim, node(closest_id).head.dim);
+        for (level_t level = begin_level; level > end_level; level--) {
+            bool changed;
+            do {
+                changed = false;
+                node_ref_t closest_node = node(closest_id);
+                lock_t closest_lock = closest_node.lock();
+                neighbors_ref_t closest_header = neighbors_non_base(closest_node, level);
+                for (id_t candidate_id : closest_header) {
+                    node_ref_t candidate_node = node(candidate_id);
+                    distance_t candidate_dist =
+                        context.metric(query_vec, candidate_node.vector, query_dim, candidate_node.head.dim);
+                    if (candidate_dist < closest_dist) {
+                        closest_dist = candidate_dist;
+                        closest_id = candidate_id;
+                        changed = true;
+                    }
+                }
+            } while (changed);
+        }
+        return closest_id;
+    }
+
+    void search_to_insert(                                               //
         id_t start_id, scalar_t const* query_vec, std::size_t query_dim, //
         level_t level, thread_context_t& context) noexcept(false) {
 
@@ -1294,9 +1296,9 @@ class index_gt {
             lock_t candidate_lock = candidate_node.lock();
             neighbors_ref_t candidate_header = neighbors(candidate_node, level);
 
-            iterate_through_neighbors(candidate_header, [&](id_t successor_id) noexcept {
+            for (id_t successor_id : candidate_header) {
                 if (visits.test(successor_id))
-                    return;
+                    continue;
 
                 visits.set(successor_id);
                 node_ref_t successor_node = node(successor_id);
@@ -1311,11 +1313,11 @@ class index_gt {
                     if (!top_candidates.empty())
                         closest_dist = top_candidates.top().first;
                 }
-            });
+            }
         }
     }
 
-    void search_to_find_in_base(                                   //
+    void search_to_find_in_base(                                         //
         id_t start_id, scalar_t const* query_vec, std::size_t query_dim, //
         std::size_t expansion, thread_context_t& context) const noexcept(false) {
 
@@ -1343,9 +1345,9 @@ class index_gt {
             id_t candidate_id = current_node_node.second;
             neighbors_ref_t candidate_header = neighbors_base(node(candidate_id));
 
-            iterate_through_neighbors(candidate_header, [&](id_t successor_id) noexcept {
+            for (id_t successor_id : candidate_header) {
                 if (visits.test(successor_id))
-                    return;
+                    continue;
 
                 visits.set(successor_id);
                 node_ref_t successor_node = node(successor_id);
@@ -1361,18 +1363,8 @@ class index_gt {
                     if (!top_candidates.empty())
                         closest_dist = top_candidates.top().first;
                 }
-            });
         }
     }
-
-    /**
-     *  @brief A simple `for`-loop that prefetches vectors of neighbors.
-     */
-    template <typename neighbor_id_callback_at>
-    inline void iterate_through_neighbors(neighbors_ref_t head, neighbor_id_callback_at&& callback) const noexcept {
-        std::size_t n = head.count;
-        for (std::size_t j = 0; j != n; j++)
-            callback(head.neighbors[j]);
     }
 
     void filter_top_candidates_with_heuristic( //
