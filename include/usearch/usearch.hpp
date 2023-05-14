@@ -725,7 +725,9 @@ class index_gt {
     };
 
     config_t config_{};
-    precomputed_constants_t pre_;
+    metric_t metric_{};
+    allocator_t allocator_{};
+    precomputed_constants_t pre_{};
     int viewed_file_descriptor_{};
 
     usearch_align_m mutable std::atomic<std::size_t> capacity_{};
@@ -739,7 +741,7 @@ class index_gt {
     std::vector<node_t, node_allocator_t> nodes_{};
 
     using thread_context_allocator_t = typename allocator_traits_t::template rebind_alloc<thread_context_t>;
-    mutable std::vector<thread_context_t, thread_context_allocator_t> thread_contexts_;
+    mutable std::vector<thread_context_t, thread_context_allocator_t> thread_contexts_{};
 
   public:
     std::size_t connectivity() const noexcept { return config_.connectivity; }
@@ -749,7 +751,8 @@ class index_gt {
     bool is_immutable() const noexcept { return viewed_file_descriptor_ != 0; }
     bool synchronize() const noexcept { return config_.max_threads_add > 1; }
 
-    index_gt(config_t config = {}, metric_t metric = {}, allocator_t = {}) : config_(config) {
+    index_gt(config_t config = {}, metric_t metric = {}, allocator_t allocator = {}) noexcept(false)
+        : config_(config), metric_(metric), allocator_(allocator) {
 
         // Externally defined hyper-parameters:
         config_.expansion_add = (std::max)(config_.expansion_add, config_.connectivity);
@@ -768,7 +771,16 @@ class index_gt {
         reserve(config.max_elements);
     }
 
+    index_gt fork() noexcept(false) { return {config_, metric_, allocator_}; }
+
     ~index_gt() noexcept { clear(); }
+
+    index_gt(index_gt&& other) noexcept { swap(other); }
+
+    index_gt& operator=(index_gt&& other) noexcept {
+        swap(other);
+        return *this;
+    }
 
 #pragma region Adjusting Configuration
 
@@ -779,6 +791,26 @@ class index_gt {
         size_ = 0;
         max_level_ = -1;
         entry_id_ = 0u;
+    }
+
+    void swap(index_gt& other) noexcept {
+        std::swap(config_, other.config_);
+        std::swap(metric_, other.metric_);
+        std::swap(allocator_, other.allocator_);
+        std::swap(pre_, other.pre_);
+        std::swap(viewed_file_descriptor_, other.viewed_file_descriptor_);
+        std::swap(max_level_, other.max_level_);
+        std::swap(entry_id_, other.entry_id_);
+        std::swap(nodes_, other.nodes_);
+        std::swap(thread_contexts_, other.thread_contexts_);
+
+        // Non-atomic parts.
+        std::size_t capacity = capacity_;
+        std::size_t size = size_;
+        capacity_ = other.capacity_.load();
+        size_ = other.size_.load();
+        other.capacity_ = capacity;
+        other.size_ = size;
     }
 
     void reserve(std::size_t new_capacity) noexcept(false) {
@@ -919,6 +951,10 @@ class index_gt {
     void save(char const* file_path) const noexcept(false) {
 
         state_t state;
+        // Check compatibility
+        state.bytes_per_label = sizeof(label_t);
+        state.bytes_per_id = sizeof(id_t);
+        // Describe state
         state.connectivity = config_.connectivity;
         state.size = size_;
         state.entry_id = entry_id_;
@@ -941,12 +977,15 @@ class index_gt {
         for (std::size_t i = 0; i != state.size; ++i) {
             node_ref_t node_ref = node(static_cast<id_t>(i));
             std::size_t bytes_to_dump = node_dump_size(node_ref.head.dim, node_ref.head.level);
-            std::size_t written = std::fwrite(&node_ref.head, bytes_to_dump - node_ref.head.dim, 1, file);
+            std::size_t bytes_in_vec = node_ref.head.dim * sizeof(scalar_t);
+            // Dump just neighbors, as vectors may be in a disjoint location
+            std::size_t written = std::fwrite(&node_ref.head, bytes_to_dump - bytes_in_vec, 1, file);
             if (!written) {
                 std::fclose(file);
                 throw std::runtime_error(std::strerror(errno));
             }
-            written = std::fwrite(node_ref.vector, node_ref.head.dim, 1, file);
+            // Dump the vector
+            written = std::fwrite(node_ref.vector, bytes_in_vec, 1, file);
             if (!written) {
                 std::fclose(file);
                 throw std::runtime_error(std::strerror(errno));
@@ -972,6 +1011,15 @@ class index_gt {
                 std::fclose(file);
                 throw std::runtime_error(std::strerror(errno));
             }
+            if (state.bytes_per_label != sizeof(label_t)) {
+                std::fclose(file);
+                throw std::runtime_error("Incompatible label type!");
+            }
+            if (state.bytes_per_id != sizeof(id_t)) {
+                std::fclose(file);
+                throw std::runtime_error("Incompatible ID type!");
+            }
+
             config_.connectivity = state.connectivity;
             config_.max_elements = state.size;
             pre_ = precompute(config_);
@@ -1037,6 +1085,15 @@ class index_gt {
         // Read the header
         {
             std::memcpy(&state, file, sizeof(state));
+            if (state.bytes_per_label != sizeof(label_t)) {
+                close(descriptor);
+                throw std::runtime_error("Incompatible label type!");
+            }
+            if (state.bytes_per_id != sizeof(id_t)) {
+                close(descriptor);
+                throw std::runtime_error("Incompatible ID type!");
+            }
+
             config_.connectivity = state.connectivity;
             config_.max_elements = state.size;
             config_.max_threads_add = 0;
@@ -1052,8 +1109,9 @@ class index_gt {
         for (std::size_t i = 0; i != state.size; ++i) {
             node_head_t const& head = *(node_head_t const*)(file + progress);
             std::size_t bytes_to_dump = node_dump_size(head.dim, head.level);
+            std::size_t bytes_in_vec = head.dim * sizeof(scalar_t);
             nodes_[i].tape_ = (byte_t*)(file + progress);
-            nodes_[i].vector_ = (scalar_t*)(file + progress + bytes_to_dump - head.dim);
+            nodes_[i].vector_ = (scalar_t*)(file + progress + bytes_to_dump - bytes_in_vec);
             progress += bytes_to_dump;
             max_level_ = (std::max)(max_level_, head.level);
         }
@@ -1353,8 +1411,8 @@ class index_gt {
                     if (!top_candidates.empty())
                         closest_dist = top_candidates.top().first;
                 }
+            }
         }
-    }
     }
 
     span_gt<distance_and_id_t const> filter_heuristic( //
