@@ -1429,7 +1429,7 @@ class index_gt {
         while (submitted_count < needed && consumed_count < top_count) {
             distance_and_id_t candidate = top_ordered[consumed_count];
             node_ref_t candidate_node = node(candidate.second);
-            distance_t candidate_dist = -candidate.first;
+            distance_t candidate_dist = candidate.first;
             bool good = true;
             for (std::size_t idx = 0; idx < submitted_count; idx++) {
                 distance_and_id_t submitted = top_ordered[idx];
@@ -1446,7 +1446,7 @@ class index_gt {
             if (good) {
                 top_ordered[submitted_count] = top_ordered[consumed_count];
                 submitted_count++;
-        }
+            }
             consumed_count++;
         }
 
