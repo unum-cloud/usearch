@@ -951,6 +951,10 @@ class index_gt {
     void save(char const* file_path) const noexcept(false) {
 
         state_t state;
+        // Check compatibility
+        state.bytes_per_label = sizeof(label_t);
+        state.bytes_per_id = sizeof(id_t);
+        // Describe state
         state.connectivity = config_.connectivity;
         state.size = size_;
         state.entry_id = entry_id_;
@@ -1007,6 +1011,15 @@ class index_gt {
                 std::fclose(file);
                 throw std::runtime_error(std::strerror(errno));
             }
+            if (state.bytes_per_label != sizeof(label_t)) {
+                std::fclose(file);
+                throw std::runtime_error("Incompatible label type!");
+            }
+            if (state.bytes_per_id != sizeof(id_t)) {
+                std::fclose(file);
+                throw std::runtime_error("Incompatible ID type!");
+            }
+
             config_.connectivity = state.connectivity;
             config_.max_elements = state.size;
             pre_ = precompute(config_);
@@ -1072,6 +1085,15 @@ class index_gt {
         // Read the header
         {
             std::memcpy(&state, file, sizeof(state));
+            if (state.bytes_per_label != sizeof(label_t)) {
+                close(descriptor);
+                throw std::runtime_error("Incompatible label type!");
+            }
+            if (state.bytes_per_id != sizeof(id_t)) {
+                close(descriptor);
+                throw std::runtime_error("Incompatible ID type!");
+            }
+
             config_.connectivity = state.connectivity;
             config_.max_elements = state.size;
             config_.max_threads_add = 0;
@@ -1087,8 +1109,9 @@ class index_gt {
         for (std::size_t i = 0; i != state.size; ++i) {
             node_head_t const& head = *(node_head_t const*)(file + progress);
             std::size_t bytes_to_dump = node_dump_size(head.dim, head.level);
+            std::size_t bytes_in_vec = head.dim * sizeof(scalar_t);
             nodes_[i].tape_ = (byte_t*)(file + progress);
-            nodes_[i].vector_ = (scalar_t*)(file + progress + bytes_to_dump - head.dim);
+            nodes_[i].vector_ = (scalar_t*)(file + progress + bytes_to_dump - bytes_in_vec);
             progress += bytes_to_dump;
             max_level_ = (std::max)(max_level_, head.level);
         }
