@@ -1159,13 +1159,12 @@ class index_gt {
 
         node_ref_t new_node = node(new_id);
         distances_and_ids_t& top_candidates = context.top_candidates;
-        std::size_t connectivity_max = level ? config_.connectivity : pre_.connectivity_max_base;
-        filter_top_candidates_with_heuristic(top_candidates, context.candidates_set, config_.connectivity, context);
+        std::size_t const connectivity_max = level ? config_.connectivity : pre_.connectivity_max_base;
+        span_gt<distance_and_id_t const> top = filter_heuristic(top_candidates, config_.connectivity, context.metric);
 
-        distance_and_id_t const* const top_unordered = top_candidates.data();
-        std::size_t const top_count = top_candidates.size();
-        id_t next_closest_entry_id = top_unordered[0].second;
-        distance_t next_closest_distance = top_unordered[0].first;
+        distance_and_id_t const* const top_ordered = top.data();
+        std::size_t const top_count = top.size();
+        id_t const next_closest_entry_id = top_ordered[0].second;
 
         // Outgoing links from `new_id`:
         {
@@ -1175,19 +1174,14 @@ class index_gt {
             new_neighbors.count_ = static_cast<neighbors_count_t>(top_count);
             for (std::size_t idx = 0; idx < top_count; idx++) {
                 assert_m(!new_neighbors[idx], "Possible memory corruption");
-                assert_m(level <= node(top_unordered[idx].second).head.level, "Linking to missing level");
-
-                new_neighbors[idx] = top_unordered[idx].second;
-                if (top_unordered[idx].first < next_closest_distance) {
-                    next_closest_entry_id = top_unordered[idx].second;
-                    next_closest_distance = top_unordered[idx].first;
-                }
+                assert_m(level <= node(top_ordered[idx].second).head.level, "Linking to missing level");
+                new_neighbors[idx] = top_ordered[idx].second;
             }
         }
 
         // Reverse links from the neighbors:
         for (std::size_t idx = 0; idx < top_count; idx++) {
-            id_t close_id = top_unordered[idx].second;
+            id_t close_id = top_ordered[idx].second;
             node_ref_t close_node = node(close_id);
             lock_t close_lock = close_node.lock();
 
@@ -1218,15 +1212,11 @@ class index_gt {
                         successor_node.vector, close_node.vector, successor_node.head.dim, close_node.head.dim),
                     successor_id);
             }
-            filter_top_candidates_with_heuristic(candidates, context.candidates_set, connectivity_max, context);
+            span_gt<distance_and_id_t const> top = filter_heuristic(candidates, connectivity_max, context.metric);
 
             // Export the results:
-            close_header.count_ = 0u;
-            while (candidates.size()) {
-                close_header[close_header.count_] = candidates.top().second;
-                close_header.count_++;
-                candidates.pop();
-            }
+            for (close_header.count_ = 0u; close_header.count_ != top.size(); ++close_header.count_)
+                close_header[close_header.count_] = top[close_header.count_].second;
         }
 
         return next_closest_entry_id;
@@ -1367,44 +1357,42 @@ class index_gt {
     }
     }
 
-    void filter_top_candidates_with_heuristic( //
-        distances_and_ids_t& top_candidates, distances_and_ids_t& temporary, std::size_t needed,
-        thread_context_t& context) const noexcept(false) {
+    span_gt<distance_and_id_t const> filter_heuristic( //
+        distances_and_ids_t& top_candidates, std::size_t needed, metric_t const& metric) const noexcept {
 
-        if (top_candidates.size() < needed)
-            return;
+        top_candidates.sort_ascending();
+        distance_and_id_t* top_ordered = top_candidates.data();
+        std::size_t const top_count = top_candidates.size();
+        if (top_count < needed)
+            return {top_ordered, top_count};
 
-        // TODO: Sort ascending, then run an inplace triangular reduction.
-        temporary.clear();
-        while (top_candidates.size()) {
-            temporary.emplace(-top_candidates.top().first, top_candidates.top().second);
-            top_candidates.pop();
-        }
-
-        while (temporary.size() && top_candidates.size() < needed) {
-
-            distance_and_id_t best = temporary.top();
-            distance_t dist_to_query = -best.first;
-            temporary.pop();
+        std::size_t submitted_count = 1;
+        std::size_t consumed_count = 1; /// Always equal or greater than `submitted_count`.
+        while (submitted_count < needed && consumed_count < top_count) {
+            distance_and_id_t candidate = top_ordered[consumed_count];
+            node_ref_t candidate_node = node(candidate.second);
+            distance_t candidate_dist = -candidate.first;
             bool good = true;
-
-            distance_and_id_t const* const top_unordered = top_candidates.data();
-            std::size_t const top_count = top_candidates.size();
-            for (std::size_t idx = 0; idx < top_count; idx++) {
-                distance_and_id_t other = top_unordered[idx];
-                node_ref_t other_node = node(other.second);
-                node_ref_t best_node = node(best.second);
-                distance_t inter_result_dist =
-                    context.metric(other_node.vector, best_node.vector, other_node.head.dim, best_node.head.dim);
-                if (inter_result_dist < dist_to_query) {
+            for (std::size_t idx = 0; idx < submitted_count; idx++) {
+                distance_and_id_t submitted = top_ordered[idx];
+                node_ref_t submitted_node = node(submitted.second);
+                distance_t inter_result_dist = metric(            //
+                    submitted_node.vector, candidate_node.vector, //
+                    submitted_node.head.dim, candidate_node.head.dim);
+                if (inter_result_dist < candidate_dist) {
                     good = false;
                     break;
                 }
             }
 
-            if (good)
-                top_candidates.emplace(-best.first, best.second);
+            if (good) {
+                top_ordered[submitted_count] = top_ordered[consumed_count];
+                submitted_count++;
         }
+            consumed_count++;
+        }
+
+        return {top_ordered, submitted_count};
     }
 };
 
