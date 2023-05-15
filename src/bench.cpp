@@ -33,7 +33,7 @@
 #include <variant>   // `std::monostate`
 
 #include <clipp.h> // Command Line Interface
-#include <omp.h>   // `omp_get_num_threads()`
+#include <omp.h>   // `omp_set_num_threads()`
 
 #include <simsimd/simsimd.h>
 

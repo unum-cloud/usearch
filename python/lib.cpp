@@ -59,6 +59,25 @@ struct hash_index_w_meta_t : public hash_index_t {
     span_gt<hash_word_t const> buffer() const noexcept { return {buffer_.data(), buffer_.size()}; }
 };
 
+template <typename scalar_at> punned_stateful_metric_t udf(std::size_t metric_uintptr) {
+    return [metric_uintptr](byte_t const* a_bytes, byte_t const* b_bytes, std::size_t n, std::size_t m) -> distance_t {
+        using metric_t = punned_distance_t (*)(scalar_at const*, scalar_at const*, std::size_t, std::size_t);
+        metric_t metric_ptr = reinterpret_cast<metric_t>(metric_uintptr);
+        scalar_at const* a = reinterpret_cast<scalar_at const*>(a_bytes);
+        scalar_at const* b = reinterpret_cast<scalar_at const*>(b_bytes);
+        return metric_ptr(a, b, n / sizeof(scalar_at), m / sizeof(scalar_at));
+    };
+}
+
+punned_stateful_metric_t udf(std::size_t metric_uintptr, accuracy_t accuracy) {
+    switch (accuracy) {
+    case accuracy_t::f8_k: return udf<f8_bits_t>(metric_uintptr);
+    case accuracy_t::f16_k: return udf<f16_bits_t>(metric_uintptr);
+    case accuracy_t::f32_k: return udf<f32_t>(metric_uintptr);
+    case accuracy_t::f64_k: return udf<f64_t>(metric_uintptr);
+    }
+}
+
 static native_index_t make_index(   //
     std::size_t dimensions,         //
     std::size_t capacity,           //
@@ -79,9 +98,8 @@ static native_index_t make_index(   //
     config.max_threads_search = std::thread::hardware_concurrency();
 
     accuracy_t accuracy = accuracy_from_name(scalar_type.c_str(), scalar_type.size());
-    punned_metric_t metric_ptr = reinterpret_cast<punned_metric_t>(metric_uintptr);
-    if (metric_ptr)
-        return native_index_t::udf(dimensions, metric_ptr, accuracy, config);
+    if (metric_uintptr)
+        return native_index_t::udf(dimensions, udf(metric_uintptr, accuracy), accuracy, config);
     else
         return index_from_name<native_index_t>(metric.c_str(), metric.size(), dimensions, accuracy, config);
 }
@@ -146,7 +164,9 @@ static void add_one_to_index(native_index_t& index, label_t label, py::buffer ve
         throw std::invalid_argument("Incompatible scalars in the vector!");
 }
 
-static void add_many_to_index(native_index_t& index, py::buffer labels, py::buffer vectors, bool copy) {
+static void add_many_to_index(                                    //
+    native_index_t& index, py::buffer labels, py::buffer vectors, //
+    bool copy, std::size_t threads = 0) {
 
     py::buffer_info labels_info = labels.request();
     py::buffer_info vectors_info = vectors.request();
@@ -393,7 +413,8 @@ PYBIND11_MODULE(index, m) {
         py::arg("labels"),         //
         py::arg("vectors"),        //
         py::kw_only(),             //
-        py::arg("copy") = true     //
+        py::arg("copy") = true,    //
+        py::arg("threads") = 0     //
     );
 
     i.def(                        //
@@ -415,6 +436,8 @@ PYBIND11_MODULE(index, m) {
     i.def_property_readonly("ndim", &native_index_t::dimensions);
     i.def_property_readonly("connectivity", &native_index_t::connectivity);
     i.def_property_readonly("capacity", &native_index_t::capacity);
+    i.def_property_readonly( //
+        "dtype", [](native_index_t const& index) -> std::string { return accuracy_name(index.accuracy()); });
 
     i.def("save", &save_index<native_index_t>, py::arg("path"));
     i.def("load", &load_index<native_index_t>, py::arg("path"));

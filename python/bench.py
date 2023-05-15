@@ -1,25 +1,28 @@
-import datetime
+import time
 import numpy as np
 import fire
 
-import faiss
-import usearch
-
-import struct
 import numpy as np
+from numba import cfunc, types, carray
+
+from faiss import IndexHNSWFlat, IndexIVFPQ
+from usearch.index import Index
+from usearch.io import load_matrix
+
 
 def measure(f) -> float:
-    a = datetime.datetime.now()
+    a = time.time_ns()
     f()
-    b = datetime.datetime.now()
+    b = time.time_ns()
     c = b - a
-    print(f'Took: {c.seconds:.2f} seconds')
-    return c.seconds
+    secs = c / (10 ** 9)
+    print(f'- Took: {secs:.2f} seconds')
+    return secs
 
 
 def bench_faiss(index, vectors: np.array, queries: np.array, neighbors: np.array):
     dt = measure(lambda: index.add(vectors))
-    print(f'- FAISS: {vectors.shape[0]/dt:.2f} vectors/s')
+    print(f'- Performance: {vectors.shape[0]/dt:.2f} vectors/s')
 
 
 def bench_usearch(index, vectors: np.array, queries: np.array, neighbors: np.array):
@@ -27,7 +30,26 @@ def bench_usearch(index, vectors: np.array, queries: np.array, neighbors: np.arr
     assert len(index) == 0
     dt = measure(lambda: index.add(labels, vectors))
     assert len(index) == vectors.shape[0]
-    print(f'- USearch: {vectors.shape[0]/dt:.2f} vectors/s')
+    print(f'- Performance: {vectors.shape[0]/dt:.2f} vectors/s')
+
+
+# Showcases how to use Numba to JIT-compile similarity measures for USearch.
+# https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
+
+signature_f32 = types.float32(
+    types.CPointer(types.float32),
+    types.CPointer(types.float32),
+    types.size_t, types.size_t)
+
+
+@cfunc(signature_f32)
+def inner_product_f32(a, b, n, m):
+    a_array = carray(a, n)
+    b_array = carray(b, n)
+    c = types.float32(0)
+    for i in range(n):
+        c += a_array[i] * b_array[i]
+    return types.float32(1 - c)
 
 
 def main(
@@ -44,30 +66,50 @@ def main(
     neighbors_mat = load_matrix(neighbors)
     dim = vectors_mat.shape[1]
 
-    # Test FAISS
-    index = faiss.IndexHNSWFlat(dim, connectivity)
-    index.hnsw.efSearch = expansion_search
-    index.hnsw.efConstruction = expansion_add
-    bench_faiss(index, vectors_mat, queries_mat, neighbors_mat)
-
-    # Test FAISS with default Product Quantization
-    nlist = 10000  # Number of inverted lists (number of partitions or cells).
-    nsegment = 16  # Number of segments for PQ (number of subquantizers).
-    nbit = 8       # Number of bits to encode each segment.
-    coarse_quantizer = faiss.IndexHNSWFlat(dim, connectivity)
-    index = faiss.IndexIVFPQ(coarse_quantizer, dim, nlist, nsegment, nbit)
-    index.train(vectors_mat)
-    index.nprobe = 10
-    bench_faiss(index, vectors_mat, queries_mat, neighbors_mat)
-
-    # Test USearch `Index`
-    index = usearch.Index(
+    print('USearch: HNSW')
+    index = Index(
         ndim=dim,
         expansion_add=expansion_add,
         expansion_search=expansion_search,
         connectivity=connectivity,
     )
     bench_usearch(index, vectors_mat, queries_mat, neighbors_mat)
+
+    print('USearch: HNSW + Numba JIT')
+    index = Index(
+        ndim=dim,
+        expansion_add=expansion_add,
+        expansion_search=expansion_search,
+        connectivity=connectivity,
+        metric_pointer=inner_product_f32.address,
+    )
+    bench_usearch(index, vectors_mat, queries_mat, neighbors_mat)
+
+    print('USearch: HNSW + Numba JIT + Half Precision')
+    index = Index(
+        ndim=dim,
+        dtype='f16',
+        expansion_add=expansion_add,
+        expansion_search=expansion_search,
+        connectivity=connectivity,
+    )
+    bench_usearch(index, vectors_mat, queries_mat, neighbors_mat)
+
+    print('FAISS: HNSW')
+    index = IndexHNSWFlat(dim, connectivity)
+    index.hnsw.efSearch = expansion_search
+    index.hnsw.efConstruction = expansion_add
+    bench_faiss(index, vectors_mat, queries_mat, neighbors_mat)
+
+    print('FAISS: HNSW + IVFPQ')
+    nlist = 10000  # Number of inverted lists (number of partitions or cells).
+    nsegment = 16  # Number of segments for PQ (number of subquantizers).
+    nbit = 8       # Number of bits to encode each segment.
+    coarse_quantizer = IndexHNSWFlat(dim, connectivity)
+    index = IndexIVFPQ(coarse_quantizer, dim, nlist, nsegment, nbit)
+    index.train(vectors_mat)
+    index.nprobe = 10
+    bench_faiss(index, vectors_mat, queries_mat, neighbors_mat)
 
 
 if __name__ == '__main__':

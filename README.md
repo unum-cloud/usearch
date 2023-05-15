@@ -17,30 +17,33 @@ Vector Search Engine<br/>
 <a href="https://github.com/unum-cloud/usearch"><img height="25" src="https://github.com/unum-cloud/.github/raw/main/assets/github.svg" alt="GitHub"></a>
 </p>
 
+<p align="center">
+Euclidean • Angular • Jaccard • Hamming • Haversine • User-Defined Metrics
+<br/>
+<a href="#c++">C++11</a> •
+<a href="#python">Python</a> •
+<a href="#javascript">JavaScript</a> •
+<a href="#java">Java</a> •
+<a href="#rust">Rust</a> •
+<a href="#objective-c">Objective-C</a> •
+<a href="#swift">Swift</a> •
+<a href="#golang">GoLang</a> •
+<a href="#wolfram">Wolfram</a>
+<br/>
+Linux • MacOS • Windows
+</p>
+
 - [x] [Single C++11 header][usearch-header] implementation, easily extendible.
 - [x] [4B+](#go-beyond-4b-entries) sized space efficient point-clouds with `uint40_t`.
-- [x] [Half-precision](#quantize-on-the-fly) support with [`maratyszcza/fp16`](https://github.com/maratyszcza/fp16).
+- [x] [Half-precision](#quantize-on-the-fly) support with [`fp16`](https://github.com/maratyszcza/fp16).
 - [x] [View from disk](#view-larger-indexes-from-disk), without loading into RAM.
-- [x] [Any metric](#define-custom-metrics), includes: 
-  - [x] Euclidean, Dot-product, Cosine,
-  - [x] Jaccard, Hamming, Haversine.
-  - [x] Hardware-accelerated [`ashvardanian/simsimd`](https://github.com/ashvardanian/simsimd). 
+- [x] [User-defined](#define-custom-metrics) and hardware-accelerated metrics with [`simsimd`](https://github.com/ashvardanian/simsimd). 
 - [x] Variable dimensionality vectors.
 - [x] Don't copy vectors if not needed.
 - [x] [Bring your threads](#bring-your-threads), like OpenMP.
 - [x] Multiple vectors per label.
-- [x] [Python](#python) bindings: `pip install usearch`.
-- [x] [JavaScript](#javascript) bindings: `npm install usearch`.
-- [x] [Rust](#rust) bindings: `cargo add usearch`.
-- [x] [Java](#java) bindings: `cloud.unum:usearch` on GitHub.
-- [ ] GoLang bindings.
-- [x] Wolfram language bindings.
-- [x] For Linux: GCC, Clang.
-- [x] For MacOS: Apple Clang.
-- [ ] For Windows.
-- [ ] Multi-index lookups in Python.
 - [ ] Thread-safe `reserve`.
-- [ ] Distributed construction with MPI.
+- [x] Compatible with Linux, MacOS, and Windows.
 - [x] AI + Vector Search = Semantic Search.
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/usearch.hpp
@@ -209,12 +212,14 @@ struct custom_metric_t {
 
 ### Python
 
+```sh
+pip install usearch
+```
+
 Python bindings are implemented with [`pybind/pybind11`](https://github.com/pybind/pybind11).
 Assuming the presence of Global Interpreter Lock in Python, on large insertions we spawn threads in the C++ layer.
 
 ```python
-$ pip install usearch
-
 import numpy as np
 from usearch.index import Index
 
@@ -232,6 +237,8 @@ index.add(42, vector)
 matches, distances, count = index.search(vector, 10)
 ```
 
+#### Batch Operations
+
 Same can be done with batches, rather than single entries.
 Under the hood, worker threads will be spawned, to parallelize the procedure.
 
@@ -240,17 +247,31 @@ n = 100
 labels = np.array(range(n), dtype=np.longlong)
 vectors = np.random.uniform(0, 0.3, (n, index.ndim)).astype(np.float32)
 
-# You can avoid copying the data
-# Handy when build 1B+ indexes of memory-mapped files
-index.add(labels, vectors, copy=True)
+index.add(labels, vectors)
 matches, distances, counts = index.search(vectors, 10)
 ```
 
+#### Performance
+
+To maximize performance, you can:
+
+- adjust the number of threads passed to `index.add(threads=)`.
+- downcast to half-precision with `Index(accuracy=)`.
+- JIT-compile your metrics for hardware and pass to `Index(matric_pointer=)`.
+
+For a dataset with 1 Million 256-dimensional embeddings at single precision, the performance would be:
+
+- FAISS: 77'563 vectors/s.
+- USearch precompiled for old hardware: 53'198 vectors/s (-32%).
+- USearch with Numba JIT for target hardware: 88'658 vectors/s (+14%).
+
 ### JavaScript
 
-```js
-// npm install usearch
+```sh
+npm install usearch
+```
 
+```js
 var index = new usearch.Index({ metric: 'cos', connectivity: 16, dimensions: 2 })
 assert.equal(index.connectivity(), 16)
 assert.equal(index.dimensions(), 2)
@@ -266,12 +287,14 @@ assert.deepEqual(results.distances, new Float32Array([45, 130]))
 
 ### Rust
 
+```sh
+cargo add usearch
+```
+
 Being a systems-programming language, Rust has better control over memory management and concurrency, but lacks function overloading.
 Aside from the `add` and `search`, it also provides `add_in_thread` and `search_in_thread` which let users identify the calling thread to use underlying temporary memory more efficiently.
 
 ```rust
-// cargo add usearch
-
 let quant: &str = "f16";
 let index = new_ip(5, &quant, 0, 0, 0).unwrap();
 
@@ -305,6 +328,16 @@ assert!(new_haversine(&quant, 0, 0, 0).is_ok());
 
 ### Java
 
+```xml
+<dependency>
+  <groupId>cloud.unum.usearch</groupId>
+  <artifactId>usearch</artifactId>
+  <version>0.2.2</version>
+</dependency>
+```
+
+Add that snippet to your `pom.xml` and hit `mvn install`.
+
 ```java
 Index index = new Index.Config().metric("cos").dimensions(2).build();
 float vec[] = {10, 20};
@@ -312,7 +345,7 @@ index.add(42, vec);
 int[] labels = index.search(vec, 5);
 ```
 
-### Objective-C and Swift
+### Swift
 
 ```swift
 let index = Index.l2(dimensions: 4, connectivity: 8)
