@@ -330,7 +330,8 @@ using visits_bitset_t = visits_bitset_gt<>;
 
 /**
  *  @brief  Similar to `std::priority_queue`, but allows raw access to underlying
- *          memory, in case you want to shuffle it or sort.
+ *          memory, in case you want to shuffle it or sort. Good for collections
+ *          from 100s to 10'000s elements.
  */
 template <typename element_at,                                //
           typename comparator_at = std::less<void>,           // <void> is needed before C++14.
@@ -405,10 +406,15 @@ class max_heap_gt {
         if (!reserve(size_ + 1))
             return false;
 
+        emplace_reserved(std::forward<args_at>(args)...);
+        return true;
+    }
+
+    template <typename... args_at> //
+    void emplace_reserved(args_at&&... args) noexcept {
         new (&elements_[size_]) element_t({std::forward<args_at>(args)...});
         size_++;
         shift_up(size_ - 1);
-        return true;
     }
 
     element_t pop() noexcept {
@@ -422,10 +428,7 @@ class max_heap_gt {
 
     /** @brief Invalidates the "max-heap" property, transforming into ascending range. */
     void sort_ascending() noexcept { std::sort_heap(elements_, elements_ + size_, &less); }
-    /** @brief Invalidates the "max-heap" property, transforming into descending range. */
-    void sort_descending() noexcept { sort_ascending(), std::reverse(elements_, elements_ + size_); }
-    void sort_heap() noexcept { std::make_heap(elements_, elements_ + size_, &less); }
-    void shrink(std::size_t n) noexcept { size_ = n; }
+    void shrink(std::size_t n) noexcept { size_ = (std::min<std::size_t>)(n, size_); }
 
     element_t* data() noexcept { return elements_; }
     element_t const* data() const noexcept { return elements_; }
@@ -457,6 +460,108 @@ class max_heap_gt {
             shift_down(max_idx);
         }
     }
+};
+
+/**
+ *  @brief  Similar to `std::priority_queue`, but allows raw access to underlying
+ *          memory and always keeps the data sorted. Ideal for small collections
+ *          under 128 elements.
+ */
+template <typename element_at,                                //
+          typename comparator_at = std::less<void>,           // <void> is needed before C++14.
+          typename allocator_at = std::allocator<element_at>> //
+class sorted_buffer_gt {
+  public:
+    using element_t = element_at;
+    using comparator_t = comparator_at;
+    using allocator_t = allocator_at;
+
+    using value_type = element_t;
+
+  private:
+    element_t* elements_;
+    std::size_t size_;
+    std::size_t capacity_;
+
+  public:
+    sorted_buffer_gt() noexcept : elements_(nullptr), size_(0), capacity_(0) {}
+
+    sorted_buffer_gt(sorted_buffer_gt&& other) noexcept {
+        std::swap(elements_, other.elements_);
+        std::swap(size_, other.size_);
+        std::swap(capacity_, other.capacity_);
+    }
+    sorted_buffer_gt& operator=(sorted_buffer_gt&& other) noexcept {
+        std::swap(elements_, other.elements_);
+        std::swap(size_, other.size_);
+        std::swap(capacity_, other.capacity_);
+        return *this;
+    }
+
+    sorted_buffer_gt(sorted_buffer_gt const&) = delete;
+    sorted_buffer_gt& operator=(sorted_buffer_gt const&) = delete;
+
+    ~sorted_buffer_gt() {
+        clear();
+        allocator_t{}.deallocate(elements_, capacity_);
+    }
+
+    bool empty() const noexcept { return !size_; }
+    std::size_t size() const noexcept { return size_; }
+    std::size_t capacity() const noexcept { return capacity_; }
+    element_t const& top() const noexcept { return elements_[size_ - 1]; }
+
+    void clear() noexcept {
+        while (size_)
+            size_--, elements_[size_].~element_t();
+    }
+
+    bool reserve(std::size_t new_capacity) noexcept {
+        if (new_capacity < capacity_)
+            return true;
+
+        new_capacity = ceil2(new_capacity);
+        new_capacity = (std::max<std::size_t>)(new_capacity, (std::max<std::size_t>)(capacity_ * 2u, 16u));
+        auto allocator = allocator_t{};
+        auto new_elements = allocator.allocate(new_capacity);
+        if (!new_elements)
+            return false;
+
+        if (size_) {
+            std::uninitialized_copy_n(elements_, size_, new_elements);
+            allocator.deallocate(elements_, capacity_);
+        }
+        elements_ = new_elements;
+        capacity_ = new_capacity;
+        return true;
+    }
+
+    template <typename... args_at> void emplace_reserved(args_at&&... args) {
+        element_t element({std::forward<args_at>(args)...});
+        std::size_t slot = std::lower_bound(elements_, elements_ + size_, element, &less) - elements_;
+        std::size_t to_move = size_ - slot;
+        element_t* source = elements_ + size_ - 1;
+        for (; to_move; --to_move, --source)
+            source[1] = source[0];
+        elements_[slot] = element;
+        size_++;
+    }
+
+    element_t pop() noexcept {
+        size_--;
+        element_t result = elements_[size_];
+        elements_[size_].~element_t();
+        return result;
+    }
+
+    void sort_ascending() noexcept {}
+    void shrink(std::size_t n) noexcept { size_ = (std::min<std::size_t>)(n, size_); }
+
+    element_t* data() noexcept { return elements_; }
+    element_t const* data() const noexcept { return elements_; }
+
+  private:
+    static bool less(element_t const& a, element_t const& b) noexcept { return comparator_t{}(a, b); }
 };
 
 /**
@@ -592,7 +697,7 @@ struct config_t {
     /// @brief Hyper-parameter controlling the quality of search.
     /// Defaults to 16 in FAISS and 10 in hnswlib.
     /// > It is called `ef` in the paper.
-    static constexpr std::size_t expansion_search_default_k = 32;
+    static constexpr std::size_t expansion_search_default_k = 64;
 
     std::size_t connectivity = connectivity_default_k;
     std::size_t expansion_add = expansion_add_default_k;
@@ -674,7 +779,7 @@ class index_gt {
 
     using candidates_view_t = span_gt<candidate_t const>;
     using candidates_allocator_t = typename allocator_traits_t::template rebind_alloc<candidate_t>;
-    using top_candidates_t = max_heap_gt<candidate_t, compare_by_distance_t, candidates_allocator_t>;
+    using top_candidates_t = sorted_buffer_gt<candidate_t, compare_by_distance_t, candidates_allocator_t>;
     using next_candidates_t = max_heap_gt<candidate_t, compare_by_distance_t, candidates_allocator_t>;
 
     struct neighbors_ref_t {
@@ -1237,7 +1342,7 @@ class index_gt {
         neighbors_ref_t new_neighbors = neighbors(new_node, level);
         {
             assert_m(!new_neighbors.size(), "The newly inserted element should have blank link list");
-            candidates_view_t top_view = filter_heuristic(top, config_.connectivity, context.metric);
+            candidates_view_t top_view = refine(top, config_.connectivity, context);
 
             for (std::size_t idx = 0; idx != top_view.size(); idx++) {
                 assert_m(!new_neighbors[idx], "Possible memory corruption");
@@ -1266,21 +1371,21 @@ class index_gt {
             // To fit a new connection we need to drop an existing one.
             top.clear();
             top.reserve(close_header.size() + 1);
-            top.emplace(        //
-                context.metric( //
+            top.emplace_reserved( //
+                context.metric(   //
                     new_node.vector, close_node.vector, new_node.head.dim, close_node.head.dim),
                 new_id);
             for (id_t successor_id : close_header) {
                 node_ref_t successor_node = node(successor_id);
-                top.emplace(        //
-                    context.metric( //
+                top.emplace_reserved( //
+                    context.metric(   //
                         successor_node.vector, close_node.vector, successor_node.head.dim, close_node.head.dim),
                     successor_id);
             }
 
             // Export the results:
             close_header.clear();
-            candidates_view_t top_view = filter_heuristic(top, connectivity_max, context.metric);
+            candidates_view_t top_view = refine(top, connectivity_max, context);
             for (std::size_t idx = 0; idx != top_view.size(); idx++)
                 close_header.push_back(top_view[idx].second);
         }
@@ -1338,8 +1443,8 @@ class index_gt {
         top.reserve(top_limit + 1);
 
         distance_t radius = context.metric(query_vec, node(start_id).vector, query_dim, node(start_id).head.dim);
-        top.emplace(radius, start_id);
         candidates.emplace(-radius, start_id);
+        top.emplace_reserved(radius, start_id);
         visits.set(start_id);
 
         while (!candidates.empty()) {
@@ -1365,7 +1470,7 @@ class index_gt {
                     context.metric(query_vec, successor_node.vector, query_dim, successor_node.head.dim);
                 if (top.size() < top_limit || successor_dist < radius) {
                     candidates.emplace(-successor_dist, successor_id);
-                    top.emplace(successor_dist, successor_id);
+                    top.emplace_reserved(successor_dist, successor_id);
                     if (top.size() > top_limit)
                         top.pop();
                     radius = top.top().first;
@@ -1389,8 +1494,8 @@ class index_gt {
         top.reserve(top_limit + 1);
 
         distance_t radius = context.metric(query_vec, node(start_id).vector, query_dim, node(start_id).head.dim);
-        top.emplace(radius, start_id);
         candidates.emplace(-radius, start_id);
+        top.emplace_reserved(radius, start_id);
         visits.set(start_id);
 
         while (!candidates.empty()) {
@@ -1416,7 +1521,7 @@ class index_gt {
 
                 if (top.size() < top_limit || successor_dist < radius) {
                     candidates.emplace(-successor_dist, successor_id);
-                    top.emplace(successor_dist, successor_id);
+                    top.emplace_reserved(successor_dist, successor_id);
                     if (top.size() > top_limit)
                         top.pop();
                     radius = top.top().first;
@@ -1427,26 +1532,30 @@ class index_gt {
 
     void prefetch_neighbors(neighbors_ref_t, visits_bitset_t const&) const noexcept {}
 
-    candidates_view_t filter_heuristic( //
-        top_candidates_t& top_candidates, std::size_t needed, metric_t const& metric) const noexcept {
+    /**
+     *  @brief  This algorithm from the original paper implements a heuristic,
+     *          that massively reduces the number of connections a point has,
+     *          to keep only the neighbors, that are from each other.
+     */
+    candidates_view_t refine(top_candidates_t& top, std::size_t needed, thread_context_t& context) const noexcept {
 
-        top_candidates.sort_ascending();
-        candidate_t* top_ordered = top_candidates.data();
-        std::size_t const top_count = top_candidates.size();
+        top.sort_ascending();
+        candidate_t* top_data = top.data();
+        std::size_t const top_count = top.size();
         if (top_count < needed)
-            return {top_ordered, top_count};
+            return {top_data, top_count};
 
         std::size_t submitted_count = 1;
         std::size_t consumed_count = 1; /// Always equal or greater than `submitted_count`.
         while (submitted_count < needed && consumed_count < top_count) {
-            candidate_t candidate = top_ordered[consumed_count];
+            candidate_t candidate = top_data[consumed_count];
             node_ref_t candidate_node = node(candidate.second);
             distance_t candidate_dist = candidate.first;
             bool good = true;
             for (std::size_t idx = 0; idx < submitted_count; idx++) {
-                candidate_t submitted = top_ordered[idx];
+                candidate_t submitted = top_data[idx];
                 node_ref_t submitted_node = node(submitted.second);
-                distance_t inter_result_dist = metric(            //
+                distance_t inter_result_dist = context.metric(    //
                     submitted_node.vector, candidate_node.vector, //
                     submitted_node.head.dim, candidate_node.head.dim);
                 if (inter_result_dist < candidate_dist) {
@@ -1456,14 +1565,14 @@ class index_gt {
             }
 
             if (good) {
-                top_ordered[submitted_count] = top_ordered[consumed_count];
+                top_data[submitted_count] = top_data[consumed_count];
                 submitted_count++;
             }
             consumed_count++;
         }
 
-        top_candidates.shrink(submitted_count);
-        return {top_ordered, submitted_count};
+        top.shrink(submitted_count);
+        return {top_data, submitted_count};
     }
 };
 
