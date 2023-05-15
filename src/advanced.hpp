@@ -379,8 +379,8 @@ class auto_index_gt {
     accuracy_t accuracy_ = accuracy_t::f32_k;
     isa_t acceleration_ = isa_t::auto_k;
 
-    std::unique_ptr<index_t> index_;
-    mutable std::vector<byte_t> cast_buffer_;
+    index_t* index_{};
+    mutable std::vector<byte_t> cast_buffer_{};
     struct casts_t {
         cast_t from_f8{};
         cast_t from_f16{};
@@ -401,6 +401,8 @@ class auto_index_gt {
         swap(other);
         return *this;
     }
+
+    ~auto_index_gt() { aligned_index_free(index_); }
 
     void swap(auto_index_gt& other) noexcept {
         std::swap(dimensions_, other.dimensions_);
@@ -473,14 +475,20 @@ class auto_index_gt {
 
         result.root_metric_ = root_metric_;
         result.root_config_ = root_config_;
-        index_t* raw = (index_t*)aligned_alloc(64, sizeof(index_t));
+        index_t* raw = aligned_index_alloc();
         new (raw) index_t(root_config_, root_metric_);
-        result.index_.reset(raw);
+        result.index_ = raw;
 
         return result;
     }
 
   private:
+    static index_t* aligned_index_alloc() noexcept {
+        return (index_t*)aligned_alloc(64, 64 * divide_round_up<64>(sizeof(index_t)));
+    }
+
+    static void aligned_index_free(index_t* raw) noexcept { free(raw); }
+
     struct thread_lock_t {
         auto_index_gt& parent;
         std::size_t thread_id;
@@ -567,12 +575,12 @@ class auto_index_gt {
 
         // Fill the thread IDs.
         result.available_threads_.resize(max_threads);
-        std::iota(result.available_threads_.begin(), result.available_threads_.end());
+        std::iota(result.available_threads_.begin(), result.available_threads_.end(), 0ul);
 
         // Availible since C11, but only C++17, so we use the C version.
-        index_t* raw = (index_t*)aligned_alloc(64, sizeof(index_t));
+        index_t* raw = aligned_index_alloc();
         new (raw) index_t(config, metric_and_meta.metric);
-        result.index_.reset(raw);
+        result.index_ = raw;
         return result;
     }
 

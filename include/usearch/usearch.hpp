@@ -1484,9 +1484,9 @@ class index_gt {
 
         // Prefetch from disk
         if (viewed_file_descriptor_ != 0)
-            iterate_through_neighbors(head, [&](id_t successor_id) noexcept {
+            for (id_t successor_id : head) {
                 if (visits.test(successor_id))
-                    return;
+                    continue;
 
                 node_ref_t node_ref = node(successor_id);
                 node_head_t& head = node_ref.head;
@@ -1505,12 +1505,12 @@ class index_gt {
                 io_uring_sqe_set_data(sqe, fi);
                 io_uring_submit(ring_);
 #endif
-            });
+            }
         else
-            iterate_through_neighbors(head, [&](id_t successor_id) noexcept {
+            for (id_t successor_id : head) {
                 if (!visits.test(successor_id))
                     __builtin_prefetch(node(successor_id).vector);
-            });
+            }
     }
 
     span_gt<distance_and_id_t const> filter_heuristic( //
