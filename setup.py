@@ -9,11 +9,15 @@ compile_args = ['-std=c++11', '-O3']
 if sys.platform == 'darwin':
     compile_args.append('-mmacosx-version-min=10.13')
 
+if sys.platform == 'win32':
+    compile_args = ['/std:c++14', '/O2']
+
+
 ext_modules = [
     Pybind11Extension(
-        'usearch',
+        'usearch.index',
         ['python/lib.cpp'],
-        extra_compile_args=compile_args,
+        extra_compile_args=compile_args
     ),
 ]
 
@@ -30,7 +34,8 @@ setup(
 
     name=__lib_name__,
     version=__version__,
-    packages=find_packages(),
+    packages=['usearch'],
+    package_dir={'usearch': 'python/usearch'},
 
     description='Smaller & Faster Single-File Vector Search Engine from Unum',
     long_description=long_description,

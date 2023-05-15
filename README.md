@@ -30,7 +30,7 @@ Vector Search Engine<br/>
 - [x] [Bring your threads](#bring-your-threads), like OpenMP.
 - [x] Multiple vectors per label.
 - [x] [Python](#python) bindings: `pip install usearch`.
-- [x] [JavaScript](#java) bindings: `npm install usearch`.
+- [x] [JavaScript](#javascript) bindings: `npm install usearch`.
 - [x] [Rust](#rust) bindings: `cargo add usearch`.
 - [x] [Java](#java) bindings: `cloud.unum:usearch` on GitHub.
 - [ ] GoLang bindings.
@@ -216,9 +216,9 @@ Assuming the presence of Global Interpreter Lock in Python, on large insertions 
 $ pip install usearch
 
 import numpy as np
-import usearch
+from usearch.index import Index
 
-index = usearch.Index(
+index = Index(
     ndim=256, # Define the number of dimensions in input vectors
     metric='cos', # Choose the "metric" or "distance", default = 'ip', optional
     dtype='f32', # Quantize to 'f16' or 'f8' if needed, default = 'f32', optional
@@ -273,7 +273,7 @@ Aside from the `add` and `search`, it also provides `add_in_thread` and `search_
 // cargo add usearch
 
 let quant: &str = "f16";
-let index = new_ip(5,  &quant, 0, 0, 0).unwrap();
+let index = new_ip(5, &quant, 0, 0, 0).unwrap();
 
 assert!(index.reserve(10).is_ok());
 assert!(index.capacity() >= 10);
@@ -298,8 +298,8 @@ assert!(index.load("index.usearch").is_ok());
 assert!(index.view("index.usearch").is_ok());
 
 // There are more "metrics" available
-assert!(new_l2(5,  &quant, 0, 0, 0).is_ok());
-assert!(new_cos(5,  &quant, 0, 0, 0).is_ok());
+assert!(new_l2(5, &quant, 0, 0, 0).is_ok());
+assert!(new_cos(5, &quant, 0, 0, 0).is_ok());
 assert!(new_haversine(&quant, 0, 0, 0).is_ok());
 ```
 
@@ -310,6 +310,19 @@ Index index = new Index.Config().metric("cos").dimensions(2).build();
 float vec[] = {10, 20};
 index.add(42, vec);
 int[] labels = index.search(vec, 5);
+```
+
+### Objective-C and Swift
+
+```swift
+let index = Index.l2(dimensions: 4, connectivity: 8)
+let vectorA: [Float32] = [0.3, 0.5, 1.2, 1.4]
+let vectorB: [Float32] = [0.4, 0.2, 1.2, 1.1]
+index.add(label: 42, vector: vectorA[...])
+index.add(label: 43, vector: vectorB[...])
+
+let results = index.search(vector: vectorA[...], count: 10)
+assert(results.0[0] == 42)
 ```
 
 ### GoLang
@@ -400,14 +413,14 @@ One can take an encoder model, like the multi-modal UForm, and a web-programming
 ```python
 import ucall.rich_posix as ucall
 import uform
-import usearch
+from usearch.index import Index
 
 import numpy as np
 from PIL import Image
 
 server = ucall.Server()
 model = uform.get_model('unum-cloud/uform-vl-multilingual')
-index = usearch.Index(ndim=256)
+index = Index(ndim=256)
 
 @server
 def add(label: int, photo: Image.Image):

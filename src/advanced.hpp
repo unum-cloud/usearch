@@ -1,4 +1,13 @@
 #pragma once
+
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+#define _USE_MATH_DEFINES
+
+#define WINDOWS
+#endif
+
+#include <stdlib.h> // `aligned_alloc`
+
 #include <functional> // `std::function`
 #include <numeric>    // `std::iota`
 #include <stdexcept>  // `std::invalid_argument`
@@ -181,7 +190,7 @@ void multithreaded(std::size_t threads, std::size_t tasks, callback_at&& callbac
     for (std::size_t thread_idx = 0; thread_idx != threads; ++thread_idx) {
         threads_pool.emplace_back([=]() {
             for (std::size_t task_idx = thread_idx * tasks_per_thread;
-                 task_idx < std::min(tasks, thread_idx * tasks_per_thread + tasks_per_thread); ++task_idx)
+                 task_idx < (std::min)(tasks, thread_idx * tasks_per_thread + tasks_per_thread); ++task_idx)
                 callback(thread_idx, task_idx);
         });
     }
@@ -387,22 +396,35 @@ class auto_index_gt {
 
   public:
     auto_index_gt() = default;
-    auto_index_gt(auto_index_gt&& other)
-        : dimensions_(other.dimensions_), casted_vector_bytes_(other.casted_vector_bytes_), accuracy_(other.accuracy_),
-          acceleration_(other.acceleration_), index_(std::move(other.index_)),
-          cast_buffer_(std::move(other.cast_buffer_)), casts_(std::move(other.casts_)),
-          root_metric_(std::move(other.root_metric_)), root_config_(std::move(other.root_config_)),
-          available_threads_(std::move(other.available_threads_)) {}
+    auto_index_gt(auto_index_gt&& other) { swap(other); }
+    auto_index_gt& operator=(auto_index_gt&& other) noexcept {
+        swap(other);
+        return *this;
+    }
+
+    void swap(auto_index_gt& other) noexcept {
+        std::swap(dimensions_, other.dimensions_);
+        std::swap(casted_vector_bytes_, other.casted_vector_bytes_);
+        std::swap(accuracy_, other.accuracy_);
+        std::swap(acceleration_, other.acceleration_);
+        std::swap(index_, other.index_);
+        std::swap(cast_buffer_, other.cast_buffer_);
+        std::swap(casts_, other.casts_);
+        std::swap(root_metric_, other.root_metric_);
+        std::swap(root_config_, other.root_config_);
+        std::swap(available_threads_, other.available_threads_);
+    }
 
     std::size_t dimensions() const noexcept { return dimensions_; }
     std::size_t connectivity() const noexcept { return index_->connectivity(); }
     std::size_t size() const noexcept { return index_->size(); }
     std::size_t capacity() const noexcept { return index_->capacity(); }
+    config_t const& config() const noexcept { return root_config_; }
     void clear() noexcept { return index_->clear(); }
 
     isa_t acceleration() const noexcept { return acceleration_; }
     std::size_t concurrency() const noexcept {
-        return std::min(root_config_.max_threads_add, root_config_.max_threads_search);
+        return (std::min)(root_config_.max_threads_add, root_config_.max_threads_search);
     }
 
     void save(char const* path) const { index_->save(path); }
@@ -451,7 +473,9 @@ class auto_index_gt {
 
         result.root_metric_ = root_metric_;
         result.root_config_ = root_config_;
-        result.index_.reset(new index_t(result.root_config_, result.root_metric_));
+        index_t* raw = (index_t*)aligned_alloc(64, sizeof(index_t));
+        new (raw) index_t(root_config_, root_metric_);
+        result.index_.reset(raw);
 
         return result;
     }
@@ -530,19 +554,25 @@ class auto_index_gt {
         std::size_t hardware_threads = std::thread::hardware_concurrency();
         config.max_threads_add = config.max_threads_add ? config.max_threads_add : hardware_threads;
         config.max_threads_search = config.max_threads_search ? config.max_threads_search : hardware_threads;
-        std::size_t max_threads = std::max(config.max_threads_add, config.max_threads_search);
+        std::size_t max_threads = (std::max)(config.max_threads_add, config.max_threads_search);
         auto_index_gt result;
         result.dimensions_ = dimensions;
         result.accuracy_ = accuracy;
         result.casted_vector_bytes_ = bytes_per_scalar(accuracy) * dimensions;
         result.cast_buffer_.resize(max_threads * result.casted_vector_bytes_);
         result.casts_ = casts;
-        result.index_.reset(new index_t(config, metric_and_meta.metric));
         result.acceleration_ = metric_and_meta.acceleration;
         result.root_metric_ = metric_and_meta.metric;
         result.root_config_ = config;
+
+        // Fill the thread IDs.
         result.available_threads_.resize(max_threads);
         std::iota(result.available_threads_.begin(), result.available_threads_.end());
+
+        // Availible since C11, but only C++17, so we use the C version.
+        index_t* raw = (index_t*)aligned_alloc(64, sizeof(index_t));
+        new (raw) index_t(config, metric_and_meta.metric);
+        result.index_.reset(raw);
         return result;
     }
 

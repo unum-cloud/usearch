@@ -32,7 +32,7 @@ jobs:
 #     needs: versioning
     strategy:
       matrix:
-        os: [ubuntu-20.04, macOS-11]
+        os: [ubuntu-20.04, macOS-11, windows-2022]
 
     steps:
       - uses: actions/checkout@v3
@@ -129,6 +129,17 @@ jobs:
       run: gradle publish
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish_swift:
+    name: Publish ObjC & Swift
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: git submodule update --init --recursive
+    - name: Build
+      run: swift build
+    - name: Run tests
+      run: swift test
 
   deploy_docs:
     name: Deploy Docs
