@@ -56,7 +56,7 @@ cmake \
 
 ```sh
 pip install -e .
-python python/test.py
+pytest python/test.py
 ```
 
 ### JavaScript
