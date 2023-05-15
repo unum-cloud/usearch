@@ -14,6 +14,10 @@
 #include <thread>     // `std::thread`
 #include <vector>     // `std::vector`
 
+#if defined(_OPENMP)
+#include <omp.h> // `omp_get_num_threads()`
+#endif
+
 #if __linux__
 #include <sys/auxv.h>
 #endif
@@ -179,12 +183,18 @@ void multithreaded(std::size_t threads, std::size_t tasks, callback_at&& callbac
 
     if (threads == 0)
         threads = std::thread::hardware_concurrency();
-    if (threads == 1) {
+    if (threads == 1 || tasks <= 128) {
         for (std::size_t task_idx = 0; task_idx < tasks; ++task_idx)
             callback(0, task_idx);
         return;
     }
 
+#if defined(_OPENMP)
+    omp_set_num_threads(threads);
+#pragma omp parallel for schedule(dynamic)
+    for (std::size_t i = 0; i < tasks; ++i)
+        callback(omp_get_thread_num(), i);
+#else
     std::vector<std::thread> threads_pool;
     std::size_t tasks_per_thread = (tasks / threads) + ((tasks % threads) != 0);
     for (std::size_t thread_idx = 0; thread_idx != threads; ++thread_idx) {
@@ -194,9 +204,9 @@ void multithreaded(std::size_t threads, std::size_t tasks, callback_at&& callbac
                 callback(thread_idx, task_idx);
         });
     }
-
     for (std::size_t thread_idx = 0; thread_idx != threads; ++thread_idx)
         threads_pool[thread_idx].join();
+#endif
 }
 
 /**
@@ -424,6 +434,7 @@ class auto_index_gt {
     config_t const& config() const noexcept { return root_config_; }
     void clear() noexcept { return index_->clear(); }
 
+    accuracy_t accuracy() const noexcept { return accuracy_; }
     isa_t acceleration() const noexcept { return acceleration_; }
     std::size_t concurrency() const noexcept {
         return (std::min)(root_config_.max_threads_add, root_config_.max_threads_search);
