@@ -758,7 +758,6 @@ class index_gt {
     mutex_t global_mutex_{};
     level_t max_level_{};
     id_t entry_id_{};
-    id_t base_id_{};
 
     using node_allocator_t = typename allocator_traits_t::template rebind_alloc<node_t>;
     std::vector<node_t, node_allocator_t> nodes_{};
@@ -952,31 +951,6 @@ class index_gt {
         return found;
     }
 
-    /**
-     *  @brief  Assuming minor point drift, adjusts the coordinates
-     *          of a point, reassembling a new neighbors lists for it
-     *          and it's older neighbors.
-     */
-    void update(id_t existing_id, span_gt<scalar_t const> new_span, //
-                std::size_t thread_idx = 0, bool store_vector = true) {}
-
-    struct extracted_node_t {
-        node_t node;
-        index_gt&& source;
-    };
-
-    extracted_node_t extract();
-
-    /**
-     *  @brief  Imports a separate index.
-     *
-     *  @warning Not thread-safe!
-     */
-    std::size_t merge(index_gt&& imported) {
-        // For every point in the `imported` index - find nearest neighbors in existing.
-        return 0;
-    }
-
 #pragma endregion
 
 #pragma region Serialization
@@ -1164,9 +1138,7 @@ class index_gt {
             max_level_ = (std::max)(max_level_, head.level);
         }
 
-        bool replaced_existing_map = viewed_file_descriptor_ != 0;
         viewed_file_descriptor_ = descriptor;
-        (void)replaced_existing_map;
 #endif // POSIX
     }
 
