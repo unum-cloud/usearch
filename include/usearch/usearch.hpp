@@ -123,7 +123,7 @@ template <typename scalar_at, typename result_at = scalar_at> struct cos_gt {
             ab += result_t(a[i]) * result_t(b[i]), //
                 a2 += square<result_t>(a[i]),      //
                 b2 += square<result_t>(b[i]);
-        return ab / (std::sqrt(a2) * std::sqrt(b2));
+        return 1 - ab / (std::sqrt(a2) * std::sqrt(b2));
     }
 };
 
