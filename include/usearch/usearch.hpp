@@ -347,23 +347,19 @@ class max_heap_gt {
     element_t* elements_;
     std::size_t size_;
     std::size_t capacity_;
-    std::size_t max_capacity_;
 
   public:
-    max_heap_gt(std::size_t max_capacity = 0) noexcept
-        : elements_(nullptr), size_(0), capacity_(0), max_capacity_(max_capacity) {}
+    max_heap_gt() noexcept : elements_(nullptr), size_(0), capacity_(0) {}
 
     max_heap_gt(max_heap_gt&& other) noexcept {
         std::swap(elements_, other.elements_);
         std::swap(size_, other.size_);
         std::swap(capacity_, other.capacity_);
-        std::swap(max_capacity_, other.max_capacity_);
     }
     max_heap_gt& operator=(max_heap_gt&& other) noexcept {
         std::swap(elements_, other.elements_);
         std::swap(size_, other.size_);
         std::swap(capacity_, other.capacity_);
-        std::swap(max_capacity_, other.max_capacity_);
         return *this;
     }
 
@@ -384,16 +380,12 @@ class max_heap_gt {
         }
     }
 
-    bool reserve(std::size_t n) noexcept {
-        if (n < capacity_)
+    bool reserve(std::size_t new_capacity) noexcept {
+        if (new_capacity < capacity_)
             return true;
-        if (max_capacity_ && capacity_ == max_capacity_)
-            return false;
 
-        auto new_capacity = (std::max<std::size_t>)(capacity_ * 2u, 16u);
-        if (max_capacity_)
-            new_capacity = (std::min)(new_capacity, max_capacity_);
-
+        new_capacity = ceil2(new_capacity);
+        new_capacity = (std::max<std::size_t>)(new_capacity, (std::max<std::size_t>)(capacity_ * 2u, 16u));
         auto allocator = allocator_t{};
         auto new_elements = allocator.allocate(new_capacity);
         if (!new_elements)
@@ -600,7 +592,7 @@ struct config_t {
     /// @brief Hyper-parameter controlling the quality of search.
     /// Defaults to 16 in FAISS and 10 in hnswlib.
     /// > It is called `ef` in the paper.
-    static constexpr std::size_t expansion_search_default_k = 64;
+    static constexpr std::size_t expansion_search_default_k = 32;
 
     std::size_t connectivity = connectivity_default_k;
     std::size_t expansion_add = expansion_add_default_k;
@@ -672,16 +664,18 @@ class index_gt {
         std::size_t neighbors_base_bytes{};
         std::size_t mutex_bytes{};
     };
-    struct distance_and_id_t {
+    struct candidate_t {
         distance_t first;
         id_t second;
     };
     struct compare_by_distance_t {
-        inline bool operator()(distance_and_id_t a, distance_and_id_t b) const noexcept { return a.first < b.first; }
+        inline bool operator()(candidate_t a, candidate_t b) const noexcept { return a.first < b.first; }
     };
 
-    using distances_and_ids_allocator_t = typename allocator_traits_t::template rebind_alloc<distance_and_id_t>;
-    using distances_and_ids_t = max_heap_gt<distance_and_id_t, compare_by_distance_t, distances_and_ids_allocator_t>;
+    using candidates_view_t = span_gt<candidate_t const>;
+    using candidates_allocator_t = typename allocator_traits_t::template rebind_alloc<candidate_t>;
+    using top_candidates_t = max_heap_gt<candidate_t, compare_by_distance_t, candidates_allocator_t>;
+    using next_candidates_t = max_heap_gt<candidate_t, compare_by_distance_t, candidates_allocator_t>;
 
     struct neighbors_ref_t {
         neighbors_count_t& count_;
@@ -696,6 +690,8 @@ class index_gt {
         inline id_t& operator[](std::size_t i) noexcept { return neighbors_[i]; }
         inline id_t operator[](std::size_t i) const noexcept { return neighbors_[i]; }
         inline std::size_t size() const noexcept { return count_; }
+        inline void clear() noexcept { count_ = 0u; }
+        inline void push_back(id_t id) noexcept { neighbors_[count_] = id, count_++; }
     };
 
 #if defined(WINDOWS)
@@ -739,8 +735,8 @@ class index_gt {
     };
 
     struct usearch_align_m thread_context_t {
-        distances_and_ids_t top_candidates;
-        distances_and_ids_t candidates_set;
+        top_candidates_t top_candidates;
+        next_candidates_t next_candidates;
         visits_bitset_t visits;
         std::default_random_engine level_generator;
         metric_t metric;
@@ -920,16 +916,14 @@ class index_gt {
         id_t closest_id = search_for_one(entry_id_, query_vec, query_dim, max_level_, 0, context);
 
         // For bottom layer we need a more optimized procedure
-        search_to_find_in_base( //
-            closest_id, query_vec, query_dim, (std::max)(config_.expansion_search, wanted), context);
-        while (context.top_candidates.size() > wanted)
-            context.top_candidates.pop();
+        std::size_t expansion = (std::max)(config_.expansion_search, wanted);
+        search_to_find_in_base(closest_id, query_vec, query_dim, expansion, context);
+        context.top_candidates.sort_ascending();
+        context.top_candidates.shrink(wanted);
 
-        while (context.top_candidates.size()) {
-            distance_and_id_t top = context.top_candidates.top();
-            callback(node(top.second).head.label, top.first);
-            context.top_candidates.pop();
-        }
+        candidate_t const* top = context.top_candidates.data();
+        for (std::size_t i = 0; i < context.top_candidates.size(); ++i)
+            callback(node(top[i].second).head.label, top[i].first);
     }
 
     std::size_t search(                                         //
@@ -946,8 +940,6 @@ class index_gt {
             ++found;
         };
         search(query_span, wanted, callback, thread_idx);
-        std::reverse(matches, matches + found * (matches != nullptr));
-        std::reverse(distances, distances + found * (distances != nullptr));
         return found;
     }
 
@@ -1238,11 +1230,11 @@ class index_gt {
     id_t connect_new_element(id_t new_id, level_t level, thread_context_t& context) noexcept(false) {
 
         node_ref_t new_node = node(new_id);
-        distances_and_ids_t& top_candidates = context.top_candidates;
+        top_candidates_t& top_candidates = context.top_candidates;
         std::size_t const connectivity_max = level ? config_.connectivity : pre_.connectivity_max_base;
-        span_gt<distance_and_id_t const> top = filter_heuristic(top_candidates, config_.connectivity, context.metric);
+        candidates_view_t top = filter_heuristic(top_candidates, config_.connectivity, context.metric);
 
-        distance_and_id_t const* const top_ordered = top.data();
+        candidate_t const* const top_ordered = top.data();
         std::size_t const top_count = top.size();
         id_t const next_closest_entry_id = top_ordered[0].second;
 
@@ -1279,7 +1271,7 @@ class index_gt {
             }
 
             // To fit a new connection we need to drop an existing one.
-            distances_and_ids_t& candidates = context.candidates_set;
+            next_candidates_t& candidates = context.next_candidates;
             candidates.clear();
             candidates.emplace( //
                 context.metric( //
@@ -1292,7 +1284,7 @@ class index_gt {
                         successor_node.vector, close_node.vector, successor_node.head.dim, close_node.head.dim),
                     successor_id);
             }
-            span_gt<distance_and_id_t const> top = filter_heuristic(candidates, connectivity_max, context.metric);
+            candidates_view_t top = filter_heuristic(candidates, connectivity_max, context.metric);
 
             // Export the results:
             for (close_header.count_ = 0u; close_header.count_ != top.size(); ++close_header.count_)
@@ -1342,25 +1334,27 @@ class index_gt {
         level_t level, thread_context_t& context) noexcept(false) {
 
         visits_bitset_t& visits = context.visits;
-        distances_and_ids_t& top_candidates = context.top_candidates; // pop max, push
-        distances_and_ids_t& candidates_set = context.candidates_set; // pop min, push
+        next_candidates_t& candidates = context.next_candidates; // pop min, push
+        top_candidates_t& top = context.top_candidates;          // pop max, push
+        std::size_t const top_limit = config_.expansion_add;
 
-        top_candidates.clear();
-        candidates_set.clear();
         visits.clear();
+        candidates.clear();
+        top.clear();
+        top.reserve(top_limit + 1);
 
-        distance_t closest_dist = context.metric(query_vec, node(start_id).vector, query_dim, node(start_id).head.dim);
-        top_candidates.emplace(closest_dist, start_id);
-        candidates_set.emplace(-closest_dist, start_id);
+        distance_t radius = context.metric(query_vec, node(start_id).vector, query_dim, node(start_id).head.dim);
+        top.emplace(radius, start_id);
+        candidates.emplace(-radius, start_id);
         visits.set(start_id);
 
-        while (!candidates_set.empty()) {
+        while (!candidates.empty()) {
 
-            distance_and_id_t candidacy = candidates_set.top();
-            if ((-candidacy.first) > closest_dist && top_candidates.size() == config_.expansion_add)
+            candidate_t candidacy = candidates.top();
+            if ((-candidacy.first) > radius && top.size() == top_limit)
                 break;
 
-            candidates_set.pop();
+            candidates.pop();
             id_t candidate_id = candidacy.second;
             node_ref_t candidate_node = node(candidate_id);
             lock_t candidate_lock = candidate_node.lock();
@@ -1375,14 +1369,12 @@ class index_gt {
                 node_ref_t successor_node = node(successor_id);
                 distance_t successor_dist =
                     context.metric(query_vec, successor_node.vector, query_dim, successor_node.head.dim);
-                if (top_candidates.size() < config_.expansion_add || closest_dist > successor_dist) {
-                    candidates_set.emplace(-successor_dist, successor_id);
-
-                    top_candidates.emplace(successor_dist, successor_id);
-                    if (top_candidates.size() > config_.expansion_add)
-                        top_candidates.pop();
-                    if (!top_candidates.empty())
-                        closest_dist = top_candidates.top().first;
+                if (top.size() < top_limit || successor_dist < radius) {
+                    candidates.emplace(-successor_dist, successor_id);
+                    top.emplace(successor_dist, successor_id);
+                    if (top.size() > top_limit)
+                        top.pop();
+                    radius = top.top().first;
                 }
             }
         }
@@ -1393,27 +1385,29 @@ class index_gt {
         std::size_t expansion, thread_context_t& context) const noexcept(false) {
 
         visits_bitset_t& visits = context.visits;
-        distances_and_ids_t& top_candidates = context.top_candidates; // pop max, push
-        distances_and_ids_t& candidates_set = context.candidates_set; // pop min, push
+        next_candidates_t& candidates = context.next_candidates; // pop min, push
+        top_candidates_t& top = context.top_candidates;          // pop max, push
+        std::size_t const top_limit = expansion;
 
         visits.clear();
-        top_candidates.clear();
-        candidates_set.clear();
+        candidates.clear();
+        top.clear();
+        top.reserve(top_limit + 1);
 
-        distance_t closest_dist = context.metric(query_vec, node(start_id).vector, query_dim, node(start_id).head.dim);
-        top_candidates.emplace(closest_dist, start_id);
-        candidates_set.emplace(-closest_dist, start_id);
+        distance_t radius = context.metric(query_vec, node(start_id).vector, query_dim, node(start_id).head.dim);
+        top.emplace(radius, start_id);
+        candidates.emplace(-radius, start_id);
         visits.set(start_id);
 
-        while (!candidates_set.empty()) {
+        while (!candidates.empty()) {
 
-            distance_and_id_t current_node_node = candidates_set.top();
-            if ((-current_node_node.first) > closest_dist)
+            candidate_t candidate = candidates.top();
+            if ((-candidate.first) > radius)
                 break;
 
-            candidates_set.pop();
+            candidates.pop();
 
-            id_t candidate_id = current_node_node.second;
+            id_t candidate_id = candidate.second;
             neighbors_ref_t candidate_header = neighbors_base(node(candidate_id));
 
             prefetch_neighbors(candidate_header, visits);
@@ -1426,14 +1420,12 @@ class index_gt {
                 distance_t successor_dist =
                     context.metric(query_vec, successor_node.vector, query_dim, successor_node.head.dim);
 
-                if (top_candidates.size() < expansion || closest_dist > successor_dist) {
-                    candidates_set.emplace(-successor_dist, successor_id);
-
-                    top_candidates.emplace(successor_dist, successor_id);
-                    if (top_candidates.size() > expansion)
-                        top_candidates.pop();
-                    if (!top_candidates.empty())
-                        closest_dist = top_candidates.top().first;
+                if (top.size() < top_limit || successor_dist < radius) {
+                    candidates.emplace(-successor_dist, successor_id);
+                    top.emplace(successor_dist, successor_id);
+                    if (top.size() > top_limit)
+                        top.pop();
+                    radius = top.top().first;
                 }
             }
         }
@@ -1441,11 +1433,11 @@ class index_gt {
 
     void prefetch_neighbors(neighbors_ref_t, visits_bitset_t const&) const noexcept {}
 
-    span_gt<distance_and_id_t const> filter_heuristic( //
-        distances_and_ids_t& top_candidates, std::size_t needed, metric_t const& metric) const noexcept {
+    candidates_view_t filter_heuristic( //
+        top_candidates_t& top_candidates, std::size_t needed, metric_t const& metric) const noexcept {
 
         top_candidates.sort_ascending();
-        distance_and_id_t* top_ordered = top_candidates.data();
+        candidate_t* top_ordered = top_candidates.data();
         std::size_t const top_count = top_candidates.size();
         if (top_count < needed)
             return {top_ordered, top_count};
@@ -1453,12 +1445,12 @@ class index_gt {
         std::size_t submitted_count = 1;
         std::size_t consumed_count = 1; /// Always equal or greater than `submitted_count`.
         while (submitted_count < needed && consumed_count < top_count) {
-            distance_and_id_t candidate = top_ordered[consumed_count];
+            candidate_t candidate = top_ordered[consumed_count];
             node_ref_t candidate_node = node(candidate.second);
             distance_t candidate_dist = candidate.first;
             bool good = true;
             for (std::size_t idx = 0; idx < submitted_count; idx++) {
-                distance_and_id_t submitted = top_ordered[idx];
+                candidate_t submitted = top_ordered[idx];
                 node_ref_t submitted_node = node(submitted.second);
                 distance_t inter_result_dist = metric(            //
                     submitted_node.vector, candidate_node.vector, //
@@ -1476,6 +1468,7 @@ class index_gt {
             consumed_count++;
         }
 
+        top_candidates.shrink(submitted_count);
         return {top_ordered, submitted_count};
     }
 };
