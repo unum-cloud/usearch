@@ -490,7 +490,7 @@ class auto_index_gt {
     static void aligned_index_free(index_t* raw) noexcept { free(raw); }
 
     struct thread_lock_t {
-        auto_index_gt& parent;
+        auto_index_gt const& parent;
         std::size_t thread_id;
 
         ~thread_lock_t() { parent.thread_unlock(thread_id); }
