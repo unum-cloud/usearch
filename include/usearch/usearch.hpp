@@ -718,7 +718,6 @@ class index_gt {
     struct usearch_align_m thread_context_t {
         distances_and_ids_t top_candidates;
         distances_and_ids_t candidates_set;
-        distances_and_ids_t candidates_filter;
         visits_bitset_t visits;
         std::default_random_engine level_generator;
         metric_t metric;
@@ -1257,7 +1256,7 @@ class index_gt {
             }
 
             // To fit a new connection we need to drop an existing one.
-            distances_and_ids_t& candidates = context.candidates_filter;
+            distances_and_ids_t& candidates = context.candidates_set;
             candidates.clear();
             candidates.emplace( //
                 context.metric( //
@@ -1320,8 +1319,8 @@ class index_gt {
         level_t level, thread_context_t& context) noexcept(false) {
 
         visits_bitset_t& visits = context.visits;
-        distances_and_ids_t& top_candidates = context.top_candidates;
-        distances_and_ids_t& candidates_set = context.candidates_set;
+        distances_and_ids_t& top_candidates = context.top_candidates; // pop max, push
+        distances_and_ids_t& candidates_set = context.candidates_set; // pop min, push
 
         top_candidates.clear();
         candidates_set.clear();
@@ -1370,8 +1369,8 @@ class index_gt {
         std::size_t expansion, thread_context_t& context) const noexcept(false) {
 
         visits_bitset_t& visits = context.visits;
-        distances_and_ids_t& top_candidates = context.top_candidates;
-        distances_and_ids_t& candidates_set = context.candidates_set;
+        distances_and_ids_t& top_candidates = context.top_candidates; // pop max, push
+        distances_and_ids_t& candidates_set = context.candidates_set; // pop min, push
 
         visits.clear();
         top_candidates.clear();
