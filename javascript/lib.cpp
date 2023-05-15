@@ -9,6 +9,12 @@
  *  @see NodeJS docs: https://nodejs.org/api/addons.html#hello-world
  *
  */
+
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+#define _USE_MATH_DEFINES
+#define NAPI_CPP_EXCEPTIONS
+#endif
+
 #include <napi.h>
 #include <node_api.h>
 
@@ -87,8 +93,8 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
             accuracy = accuracy_t::f64_k;
         else if (accuracy_str == "f16")
             accuracy = accuracy_t::f16_k;
-        else if (accuracy_str == "i8q100")
-            accuracy = accuracy_t::i8q100_k;
+        else if (accuracy_str == "f8")
+            accuracy = accuracy_t::f8_k;
         else {
             Napi::TypeError::New(env, "Supported metrics are: [ip, cos, l2_sq, haversine]")
                 .ThrowAsJavaScriptException();

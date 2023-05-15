@@ -7,15 +7,15 @@ let package = Package(
     products: [
         .library(
             name: "USearch",
-            targets: ["ObjectiveUSearch", "SwiftyUSearch"]
+            targets: ["USearchObjective", "USearch"]
         )
     ],
     dependencies: [],
     targets: [
         .target(
-            name: "ObjectiveUSearch",
+            name: "USearchObjective",
             path: "objc",
-            sources: ["ObjectiveUSearch.mm"],
+            sources: ["USearchObjective.mm"],
             cxxSettings: [
                 .headerSearchPath("../include/"),
                 .headerSearchPath("../src/"),
@@ -24,14 +24,14 @@ let package = Package(
             ]
         ),
         .target(
-            name: "SwiftyUSearch",
-            dependencies: ["ObjectiveUSearch"],
+            name: "USearch",
+            dependencies: ["USearchObjective"],
             path: "swift",
-            sources: ["SwiftyUSearch.swift", "Index+Sugar.swift"]
+            sources: ["USearch.swift", "Index+Sugar.swift"]
         ),
         .testTarget(
-            name: "SwiftyUSearchTests",
-            dependencies: ["SwiftyUSearch"],
+            name: "USearchTests",
+            dependencies: ["USearch"],
             path: "swift",
             sources: ["Test.swift"]
         )

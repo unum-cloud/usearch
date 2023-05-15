@@ -137,7 +137,7 @@ static void add_one_to_index(native_index_t& index, label_t label, py::buffer ve
 
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vector_info.format == "e")
-        index.add(label, reinterpret_cast<f16_converted_t const*>(vector_data), 0, copy);
+        index.add(label, reinterpret_cast<f16_bits_t const*>(vector_data), 0, copy);
     else if (vector_info.format == "f")
         index.add(label, reinterpret_cast<float const*>(vector_data), 0, copy);
     else if (vector_info.format == "d")
@@ -179,8 +179,8 @@ static void add_many_to_index(native_index_t& index, py::buffer labels, py::buff
     if (vectors_info.format == "e")
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
-            f16_converted_t const* vector =
-                reinterpret_cast<f16_converted_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
+            f16_bits_t const* vector =
+                reinterpret_cast<f16_bits_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
             index.add(label, vector, thread_idx, copy);
         });
     else if (vectors_info.format == "f")
@@ -216,7 +216,7 @@ static py::tuple search_one_in_index(native_index_t& index, py::buffer vector, s
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vector_info.format == "e")
         count = index.search( //
-            reinterpret_cast<f16_converted_t const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), 0);
+            reinterpret_cast<f16_bits_t const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), 0);
     else if (vector_info.format == "f")
         count = index.search( //
             reinterpret_cast<float const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), 0);
@@ -272,7 +272,7 @@ static py::tuple search_many_in_index(native_index_t& index, py::buffer vectors,
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vectors_info.format == "e")
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            f16_converted_t const* vector = (f16_converted_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
+            f16_bits_t const* vector = (f16_bits_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
             counts_py1d(task_idx) = static_cast<Py_ssize_t>(
                 index.search(vector, wanted, &labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0), thread_idx));
         });
@@ -371,7 +371,7 @@ void hash_buffer(hash_index_w_meta_t& index, py::buffer vector) {
         throw std::invalid_argument("Array elements must be 16, 32, or 64 bit hashable integers!");
 }
 
-PYBIND11_MODULE(usearch, m) {
+PYBIND11_MODULE(index, m) {
     m.doc() = "Unum USearch Python bindings";
 
     auto i = py::class_<native_index_t>(m, "Index");

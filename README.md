@@ -108,7 +108,7 @@ So, if you are working on large datasets, but don't need the in-RAM throughput, 
 ### Quantize on the Fly
 
 Most modern CPU have at least partial support for `half`-precision `f16_t` arithmetic.
-USearch supports automatic down-casting and up-casting between `f32_t`, `f16_t`, `f64_t`, and `i8q100_t` representations.
+USearch supports automatic down-casting and up-casting between `f32_t`, `f16_t`, `f64_t`, and `f8_t` representations.
 
 > Making vectors smaller will help pack more of them in-memory, while also increasing performance on CPUs implementing native support for target type.
 
@@ -160,7 +160,7 @@ That can be one of the following templates:
 
 - `cos_gt<float>` for "Cosine" or "Angular" distance.
 - `ip_gt<float>` for "Inner Product" or "Dot Product" distance.
-- `l2_squared_gt<float>` for the squared "L2" or "Euclidean" distance.
+- `l2sq_gt<float>` for the squared "L2" or "Euclidean" distance.
 - `jaccard_gt<int>` for "Jaccard" distance between two ordered sets of unique elements.
 - `bit_hamming_gt<uint>` for "Hamming" distance, as the number of shared bits in hashes.
 - `pearson_correlation_gt<float>` for "Pearson" correlation between probability distributions.
@@ -216,12 +216,12 @@ Assuming the presence of Global Interpreter Lock in Python, on large insertions 
 $ pip install usearch
 
 import numpy as np
-import usearch
+from usearch.index import Index
 
-index = usearch.Index(
+index = Index(
     ndim=256, # Define the number of dimensions in input vectors
     metric='cos', # Choose the "metric" or "distance", default = 'ip', optional
-    dtype='f32', # Quantize to 'f16' or 'i8q100' if needed, default = 'f32', optional
+    dtype='f32', # Quantize to 'f16' or 'f8' if needed, default = 'f32', optional
     connectivity=16, # How frequent should the connections in the graph be, optional
     expansion_add=128, # Control the recall of indexing, optional
     expansion_search=64, # Control the quality of search, optional
@@ -413,14 +413,14 @@ One can take an encoder model, like the multi-modal UForm, and a web-programming
 ```python
 import ucall.rich_posix as ucall
 import uform
-import usearch
+from usearch.index import Index
 
 import numpy as np
 from PIL import Image
 
 server = ucall.Server()
 model = uform.get_model('unum-cloud/uform-vl-multilingual')
-index = usearch.Index(ndim=256)
+index = Index(ndim=256)
 
 @server
 def add(label: int, photo: Image.Image):

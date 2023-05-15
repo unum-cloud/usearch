@@ -1,4 +1,4 @@
-#import "ObjectiveUSearch.h"
+#import "USearchObjective.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
@@ -32,31 +32,31 @@ using shared_index_t = std::shared_ptr<native_index_t>;
     return _native->size() != 0;
 }
 
-- (UInt)dimensions {
-    return static_cast<UInt>(_native->dimensions());
+- (UInt32)dimensions {
+    return static_cast<UInt32>(_native->dimensions());
 }
 
-- (UInt)connectivity {
-    return static_cast<UInt>(_native->connectivity());
+- (UInt32)connectivity {
+    return static_cast<UInt32>(_native->connectivity());
 }
 
-- (UInt)length {
-    return static_cast<UInt>(_native->size());
+- (UInt32)length {
+    return static_cast<UInt32>(_native->size());
 }
 
-- (UInt)capacity {
-    return static_cast<UInt>(_native->capacity());
+- (UInt32)capacity {
+    return static_cast<UInt32>(_native->capacity());
 }
 
-- (UInt)expansion_add {
-    return static_cast<UInt>(_native->config().expansion_add);
+- (UInt32)expansion_add {
+    return static_cast<UInt32>(_native->config().expansion_add);
 }
 
-- (UInt)expansion_search {
-    return static_cast<UInt>(_native->config().expansion_search);
+- (UInt32)expansion_search {
+    return static_cast<UInt32>(_native->config().expansion_search);
 }
 
-+ (instancetype)indexIP:(UInt)dimensions connectivity:(UInt)connectivity {
++ (instancetype)indexIP:(UInt32)dimensions connectivity:(UInt32)connectivity {
     std::size_t dims = static_cast<std::size_t>(dimensions);
     config_t config;
     config.connectivity = static_cast<std::size_t>(connectivity);
@@ -64,7 +64,7 @@ using shared_index_t = std::shared_ptr<native_index_t>;
     return [[Index alloc] initWithIndex:ptr];
 }
 
-+ (instancetype)indexL2:(UInt)dimensions connectivity:(UInt)connectivity {
++ (instancetype)indexL2:(UInt32)dimensions connectivity:(UInt32)connectivity {
     std::size_t dims = static_cast<std::size_t>(dimensions);
     config_t config;
     config.connectivity = static_cast<std::size_t>(connectivity);
@@ -72,7 +72,7 @@ using shared_index_t = std::shared_ptr<native_index_t>;
     return [[Index alloc] initWithIndex:ptr];
 }
 
-+ (instancetype)indexHaversine:(UInt)connectivity {
++ (instancetype)indexHaversine:(UInt32)connectivity {
     config_t config;
     config.connectivity = static_cast<std::size_t>(connectivity);
     shared_index_t ptr = std::make_shared<native_index_t>(native_index_t::haversine(accuracy_t::f32_k, config));
@@ -84,12 +84,12 @@ using shared_index_t = std::shared_ptr<native_index_t>;
     _native->add(label, vector);
 }
 
-- (UInt)searchSingle:(Float32 const* _Nonnull)vector
-               count:(UInt)wanted
-              labels:(UInt32* _Nullable)labels
-           distances:(Float32* _Nullable)distances {
+- (UInt32)searchSingle:(Float32 const* _Nonnull)vector
+                 count:(UInt32)wanted
+                labels:(UInt32* _Nullable)labels
+             distances:(Float32* _Nullable)distances {
     std::size_t found = _native->search(vector, static_cast<std::size_t>(wanted), labels, distances);
-    return static_cast<UInt>(found);
+    return static_cast<UInt32>(found);
 }
 
 - (void)addPrecise:(UInt32)label
@@ -97,12 +97,12 @@ using shared_index_t = std::shared_ptr<native_index_t>;
     _native->add(label, (f64_t const *)vector);
 }
 
-- (UInt)searchPrecise:(Float64 const* _Nonnull)vector
-                count:(UInt)wanted
-               labels:(UInt32* _Nullable)labels
-            distances:(Float32* _Nullable)distances {
+- (UInt32)searchPrecise:(Float64 const* _Nonnull)vector
+                  count:(UInt32)wanted
+                 labels:(UInt32* _Nullable)labels
+              distances:(Float32* _Nullable)distances {
     std::size_t found = _native->search((f64_t const *)vector, static_cast<std::size_t>(wanted), labels, distances);
-    return static_cast<UInt>(found);
+    return static_cast<UInt32>(found);
 }
 
 - (void)addImprecise:(UInt32)label
@@ -110,12 +110,12 @@ using shared_index_t = std::shared_ptr<native_index_t>;
     _native->add(label, (f16_converted_t const *)vector);
 }
 
-- (UInt)searchImprecise:(void const* _Nonnull)vector
-                  count:(UInt)wanted
-                 labels:(UInt32* _Nullable)labels
-              distances:(Float32* _Nullable)distances {
+- (UInt32)searchImprecise:(void const* _Nonnull)vector
+                    count:(UInt32)wanted
+                   labels:(UInt32* _Nullable)labels
+                distances:(Float32* _Nullable)distances {
     std::size_t found = _native->search((f16_converted_t const *)vector, static_cast<std::size_t>(wanted), labels, distances);
-    return static_cast<UInt>(found);
+    return static_cast<UInt32>(found);
 }
 
 - (void)clear { _native->clear(); }

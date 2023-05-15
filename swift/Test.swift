@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import SwiftyUSearch
+import USearch
 
 func testUnit() throws {
     let index = Index.l2(dimensions: 4, connectivity: 8)
