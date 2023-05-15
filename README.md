@@ -44,7 +44,7 @@ Linux • MacOS • Windows
 - [x] [Bring your threads](#bring-your-threads), like OpenMP.
 - [x] Multiple vectors per label.
 - [ ] Thread-safe `reserve`.
-- [x] AI + Vector Search = [Semantic Search][#ai--vector-search--semantic-search].
+- [x] AI + Vector Search = [Semantic Search](#ai--vector-search--semantic-search).
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/usearch.hpp
 [obscure-usecases]: https://ashvardanian.com/posts/abusing-vector-search/
