@@ -1230,68 +1230,62 @@ class index_gt {
     id_t connect_new_element(id_t new_id, level_t level, thread_context_t& context) noexcept(false) {
 
         node_ref_t new_node = node(new_id);
-        top_candidates_t& top_candidates = context.top_candidates;
+        top_candidates_t& top = context.top_candidates;
         std::size_t const connectivity_max = level ? config_.connectivity : pre_.connectivity_max_base;
-        candidates_view_t top = filter_heuristic(top_candidates, config_.connectivity, context.metric);
-
-        candidate_t const* const top_ordered = top.data();
-        std::size_t const top_count = top.size();
-        id_t const next_closest_entry_id = top_ordered[0].second;
 
         // Outgoing links from `new_id`:
+        neighbors_ref_t new_neighbors = neighbors(new_node, level);
         {
-            neighbors_ref_t new_neighbors = neighbors(new_node, level);
-            assert_m(!new_neighbors.count_, "The newly inserted element should have blank link list");
+            assert_m(!new_neighbors.size(), "The newly inserted element should have blank link list");
+            candidates_view_t top_view = filter_heuristic(top, config_.connectivity, context.metric);
 
-            new_neighbors.count_ = static_cast<neighbors_count_t>(top_count);
-            for (std::size_t idx = 0; idx < top_count; idx++) {
+            for (std::size_t idx = 0; idx != top_view.size(); idx++) {
                 assert_m(!new_neighbors[idx], "Possible memory corruption");
-                assert_m(level <= node(top_ordered[idx].second).head.level, "Linking to missing level");
-                new_neighbors[idx] = top_ordered[idx].second;
+                assert_m(level <= node(top_view[idx].second).head.level, "Linking to missing level");
+                new_neighbors.push_back(top_view[idx].second);
             }
         }
 
         // Reverse links from the neighbors:
-        for (std::size_t idx = 0; idx < top_count; idx++) {
-            id_t close_id = top_ordered[idx].second;
+        for (id_t close_id : new_neighbors) {
             node_ref_t close_node = node(close_id);
             lock_t close_lock = close_node.lock();
 
             neighbors_ref_t close_header = neighbors(close_node, level);
-            assert_m(close_header.count_ <= connectivity_max, "Possible corruption");
+            assert_m(close_header.size() <= connectivity_max, "Possible corruption");
             assert_m(close_id != new_id, "Self-loops are impossible");
             assert_m(level <= close_node.head.level, "Linking to missing level");
 
             // If `new_id` is already present in the neighboring connections of `close_id`
             // then no need to modify any connections or run the heuristics.
-            if (close_header.count_ < connectivity_max) {
-                close_header[close_header.count_] = new_id;
-                close_header.count_++;
+            if (close_header.size() < connectivity_max) {
+                close_header.push_back(new_id);
                 continue;
             }
 
             // To fit a new connection we need to drop an existing one.
-            next_candidates_t& candidates = context.next_candidates;
-            candidates.clear();
-            candidates.emplace( //
+            top.clear();
+            top.reserve(close_header.size() + 1);
+            top.emplace(        //
                 context.metric( //
                     new_node.vector, close_node.vector, new_node.head.dim, close_node.head.dim),
                 new_id);
             for (id_t successor_id : close_header) {
                 node_ref_t successor_node = node(successor_id);
-                candidates.emplace( //
+                top.emplace(        //
                     context.metric( //
                         successor_node.vector, close_node.vector, successor_node.head.dim, close_node.head.dim),
                     successor_id);
             }
-            candidates_view_t top = filter_heuristic(candidates, connectivity_max, context.metric);
 
             // Export the results:
-            for (close_header.count_ = 0u; close_header.count_ != top.size(); ++close_header.count_)
-                close_header[close_header.count_] = top[close_header.count_].second;
+            close_header.clear();
+            candidates_view_t top_view = filter_heuristic(top, connectivity_max, context.metric);
+            for (std::size_t idx = 0; idx != top_view.size(); idx++)
+                close_header.push_back(top_view[idx].second);
         }
 
-        return next_closest_entry_id;
+        return new_neighbors[0];
     }
 
     level_t choose_random_level(std::default_random_engine& level_generator) const noexcept {
