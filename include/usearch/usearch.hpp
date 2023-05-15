@@ -6,7 +6,8 @@
  *
  *  @copyright Copyright (c) 2023
  */
-#pragma once
+#ifndef UNUM_USEARCH_H
+#define UNUM_USEARCH_H
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
 #define _USE_MATH_DEFINES
@@ -53,7 +54,7 @@
 #define prefetch_m(ptr)
 #endif
 
-#ifdef NDEBUG
+#if defined(NDEBUG)
 #define assert_m(must_be_true, message)
 #else
 #define assert_m(must_be_true, message)                                                                                \
@@ -67,12 +68,6 @@ namespace usearch {
 
 using f64_t = double;
 using f32_t = float;
-
-/**
- *  GCC supports half-precision types.
- *  https://gcc.gnu.org/onlinedocs/gcc/Half-Precision.html
- */
-enum class f16_t : std::uint16_t {};
 
 template <typename at> at angle_to_radians(at angle) noexcept { return angle * M_PI / 180.f; }
 
@@ -90,11 +85,12 @@ inline std::size_t ceil2(std::size_t v) noexcept {
     return v;
 }
 
-template <typename scalar_at> struct ip_gt {
+template <typename scalar_at, typename result_at = scalar_at> struct ip_gt {
     using scalar_t = scalar_at;
-    using result_type = scalar_t;
+    using result_t = result_at;
+    using result_type = result_t;
 
-    inline scalar_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_type ab{};
 #if defined(__GNUC__)
 #pragma GCC ivdep
@@ -104,17 +100,18 @@ template <typename scalar_at> struct ip_gt {
 #pragma omp simd reduction(+ : ab)
 #endif
         for (std::size_t i = 0; i != dim; ++i)
-            ab += a[i] * b[i];
+            ab += result_t(a[i]) * result_t(b[i]);
         return 1 - ab;
     }
 };
 
-template <typename scalar_at> struct cos_gt {
+template <typename scalar_at, typename result_at = scalar_at> struct cos_gt {
     using scalar_t = scalar_at;
-    using result_type = scalar_t;
+    using result_t = result_at;
+    using result_type = result_t;
 
-    inline scalar_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
-        result_type ab{}, a2{}, b2{};
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
+        result_t ab{}, a2{}, b2{};
 #if defined(__GNUC__)
 #pragma GCC ivdep
 #elif defined(__clang__)
@@ -123,17 +120,20 @@ template <typename scalar_at> struct cos_gt {
 #pragma omp simd reduction(+ : ab, a2, b2)
 #endif
         for (std::size_t i = 0; i != dim; ++i)
-            ab += a[i] * b[i], a2 += a[i] * a[i], b2 += b[i] * b[i];
+            ab += result_t(a[i]) * result_t(b[i]), //
+                a2 += square<result_t>(a[i]),      //
+                b2 += square<result_t>(b[i]);
         return ab / (std::sqrt(a2) * std::sqrt(b2));
     }
 };
 
-template <typename scalar_at> struct l2_squared_gt {
+template <typename scalar_at, typename result_at = scalar_at> struct l2sq_gt {
     using scalar_t = scalar_at;
-    using result_type = scalar_t;
+    using result_t = result_at;
+    using result_type = result_t;
 
-    inline scalar_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
-        result_type ab_deltas_sq{};
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
+        result_t ab_deltas_sq{};
 #if defined(__GNUC__)
 #pragma GCC ivdep
 #elif defined(__clang__)
@@ -142,7 +142,7 @@ template <typename scalar_at> struct l2_squared_gt {
 #pragma omp simd reduction(+ : ab_deltas_sq)
 #endif
         for (std::size_t i = 0; i != dim; ++i)
-            ab_deltas_sq += (a[i] - b[i]) * (a[i] - b[i]);
+            ab_deltas_sq += square(result_t(a[i]) - result_t(b[i]));
         return ab_deltas_sq;
     }
 };
@@ -151,13 +151,14 @@ template <typename scalar_at> struct l2_squared_gt {
  *  @brief  Hamming distance computes the number of differing elements in
  *          two arrays. An example would be a chess board.
  */
-template <typename scalar_at> struct hamming_gt {
+template <typename scalar_at, typename result_at = std::size_t> struct hamming_gt {
     using scalar_t = scalar_at;
-    using result_type = std::size_t;
+    using result_t = result_at;
+    using result_type = result_t;
 
-    inline std::size_t operator()(scalar_t const* a, scalar_t const* b, std::size_t elements,
-                                  std::size_t = 0) const noexcept {
-        std::size_t matches{};
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t elements,
+                               std::size_t = 0) const noexcept {
+        result_t matches{};
 #if defined(__GNUC__)
 #pragma GCC ivdep
 #elif defined(__clang__)
@@ -176,15 +177,16 @@ template <typename scalar_at> struct hamming_gt {
  *          two arrays of integers. An example would be a textual document,
  *          tokenized and hashed into a fixed-capacity bitset.
  */
-template <typename scalar_at> struct bit_hamming_gt {
+template <typename scalar_at, typename result_at = std::size_t> struct bit_hamming_gt {
     using scalar_t = scalar_at;
-    using result_type = std::size_t;
+    using result_t = result_at;
+    using result_type = result_t;
     static_assert(std::is_unsigned<scalar_t>::value, "Hamming distance requires unsigned integral words");
     static constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
 
-    inline std::size_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words,
-                                  std::size_t = 0) const noexcept {
-        std::size_t matches{};
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words,
+                               std::size_t = 0) const noexcept {
+        result_t matches{};
 #if defined(__GNUC__)
 #pragma GCC ivdep
 #elif defined(__clang__)
@@ -203,14 +205,15 @@ template <typename scalar_at> struct bit_hamming_gt {
  *          Can be used to compute the similarity between two textual documents
  *          using the IDs of tokens present in them.
  */
-template <typename scalar_at> struct jaccard_gt {
+template <typename scalar_at, typename result_at = scalar_at> struct jaccard_gt {
     using scalar_t = scalar_at;
-    using result_type = f32_t;
+    using result_t = result_at;
+    using result_type = result_t;
     static_assert(!std::is_floating_point<scalar_t>::value, "Jaccard distance requires integral scalars");
 
-    inline result_type operator()( //
+    inline result_t operator()( //
         scalar_t const* a, scalar_t const* b, std::size_t a_length, std::size_t b_length) const noexcept {
-        std::size_t intersection{};
+        result_t intersection{};
         std::size_t i{};
         std::size_t j{};
         while (i != a_length && j != b_length) {
@@ -227,14 +230,15 @@ template <typename scalar_at> struct jaccard_gt {
  *          Can be used to compute the similarity between two textual documents
  *          using the IDs of tokens present in them.
  */
-template <typename scalar_at> struct pearson_correlation_gt {
+template <typename scalar_at, typename result_at = scalar_at> struct pearson_correlation_gt {
     using scalar_t = scalar_at;
-    using result_type = scalar_t;
+    using result_t = result_at;
+    using result_type = result_t;
 
-    inline result_type operator()( //
+    inline result_t operator()( //
         scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
-        scalar_t a_sum{}, b_sum{}, ab_sum{};
-        scalar_t a_sq_sum{}, b_sq_sum{};
+        result_t a_sum{}, b_sum{}, ab_sum{};
+        result_t a_sq_sum{}, b_sq_sum{};
 #if defined(__GNUC__)
 #pragma GCC ivdep
 #elif defined(__clang__)
@@ -249,8 +253,8 @@ template <typename scalar_at> struct pearson_correlation_gt {
             a_sq_sum += a[i] * a[i];
             b_sq_sum += b[i] * b[i];
         }
-        result_type denom = std::sqrt((dim * a_sq_sum - a_sum * a_sum) * (dim * b_sq_sum - b_sum * b_sum));
-        result_type corr = (dim * ab_sum - a_sum * b_sum) / denom;
+        result_t denom = std::sqrt((dim * a_sq_sum - a_sum * a_sum) * (dim * b_sq_sum - b_sum * b_sum));
+        result_t corr = (dim * ab_sum - a_sum * b_sum) / denom;
         return -corr;
     }
 };
@@ -259,23 +263,25 @@ template <typename scalar_at> struct pearson_correlation_gt {
  *  @brief  Haversine distance for the shortest distance between two nodes on
  *          the surface of a 3D sphere, defined with latitude and longitude.
  */
-template <typename scalar_at> struct haversine_gt {
+template <typename scalar_at, typename result_at = scalar_at> struct haversine_gt {
     using scalar_t = scalar_at;
-    using result_type = scalar_t;
+    using result_t = result_at;
+    using result_type = result_t;
     static_assert(!std::is_integral<scalar_t>::value, "Latitude and longitude must be floating-node");
 
-    inline scalar_t operator()(scalar_t const* a, scalar_t const* b, std::size_t = 2, std::size_t = 2) const noexcept {
-        scalar_t lat_a = a[0], lon_a = a[1];
-        scalar_t lat_b = b[0], lon_b = b[1];
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t = 2, std::size_t = 2) const noexcept {
+        result_t lat_a = a[0], lon_a = a[1];
+        result_t lat_b = b[0], lon_b = b[1];
 
-        scalar_t lat_delta = angle_to_radians<scalar_t>(lat_b - lat_a);
-        scalar_t lon_delta = angle_to_radians<scalar_t>(lon_b - lon_a);
+        result_t lat_delta = angle_to_radians<result_t>(lat_b - lat_a);
+        result_t lon_delta = angle_to_radians<result_t>(lon_b - lon_a);
 
-        scalar_t converted_lat_a = angle_to_radians<scalar_t>(lat_a);
-        scalar_t converted_lat_b = angle_to_radians<scalar_t>(lat_b);
+        result_t converted_lat_a = angle_to_radians<result_t>(lat_a);
+        result_t converted_lat_b = angle_to_radians<result_t>(lat_b);
 
-        scalar_t x = square(std::sin(lat_delta / 2.f)) +
-                     std::cos(converted_lat_a) * std::cos(converted_lat_b) * square(std::sin(lon_delta / 2.f));
+        result_t x = //
+            square(std::sin(lat_delta / 2.f)) +
+            std::cos(converted_lat_a) * std::cos(converted_lat_b) * square(std::sin(lon_delta / 2.f));
 
         return std::atan2(std::sqrt(x), std::sqrt(1.f - x));
     }
@@ -346,6 +352,23 @@ class max_heap_gt {
   public:
     max_heap_gt(std::size_t max_capacity = 0) noexcept
         : elements_(nullptr), size_(0), capacity_(0), max_capacity_(max_capacity) {}
+
+    max_heap_gt(max_heap_gt&& other) noexcept {
+        std::swap(elements_, other.elements_);
+        std::swap(size_, other.size_);
+        std::swap(capacity_, other.capacity_);
+        std::swap(max_capacity_, other.max_capacity_);
+    }
+    max_heap_gt& operator=(max_heap_gt&& other) noexcept {
+        std::swap(elements_, other.elements_);
+        std::swap(size_, other.size_);
+        std::swap(capacity_, other.capacity_);
+        std::swap(max_capacity_, other.max_capacity_);
+        return *this;
+    }
+
+    max_heap_gt(max_heap_gt const&) = delete;
+    max_heap_gt& operator=(max_heap_gt const&) = delete;
 
     bool empty() const noexcept { return !size_; }
     std::size_t size() const noexcept { return size_; }
@@ -585,8 +608,8 @@ struct config_t {
 
     ///
     std::size_t max_elements = 0;
-    std::size_t max_threads_add = 64;
-    std::size_t max_threads_search = 64;
+    std::size_t max_threads_add = 0;
+    std::size_t max_threads_search = 0;
 };
 
 /**
@@ -1116,7 +1139,7 @@ class index_gt {
         }
 
         viewed_file_descriptor_ = descriptor;
-#endif
+#endif // POSIX
     }
 
 #pragma endregion
@@ -1138,7 +1161,7 @@ class index_gt {
 
     void node_free(std::size_t id) noexcept {
 
-        if (viewed_file_descriptor_)
+        if (viewed_file_descriptor_ != 0)
             return;
 
         // This function is rarely called and can be as expensive as needed for higher space-efficiency.
@@ -1343,6 +1366,7 @@ class index_gt {
             lock_t candidate_lock = candidate_node.lock();
             neighbors_ref_t candidate_header = neighbors(candidate_node, level);
 
+            prefetch_neighbors(candidate_header, visits);
             for (id_t successor_id : candidate_header) {
                 if (visits.test(successor_id))
                     continue;
@@ -1392,6 +1416,7 @@ class index_gt {
             id_t candidate_id = current_node_node.second;
             neighbors_ref_t candidate_header = neighbors_base(node(candidate_id));
 
+            prefetch_neighbors(candidate_header, visits);
             for (id_t successor_id : candidate_header) {
                 if (visits.test(successor_id))
                     continue;
@@ -1413,6 +1438,8 @@ class index_gt {
             }
         }
     }
+
+    void prefetch_neighbors(neighbors_ref_t, visits_bitset_t const&) const noexcept {}
 
     span_gt<distance_and_id_t const> filter_heuristic( //
         distances_and_ids_t& top_candidates, std::size_t needed, metric_t const& metric) const noexcept {
@@ -1455,3 +1482,5 @@ class index_gt {
 
 } // namespace usearch
 } // namespace unum
+
+#endif

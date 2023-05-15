@@ -36,18 +36,19 @@
             }
         },
         {
-            "name": "Debug C++ Bench on Text-to-Image 1M @Cos",
+            "name": "Debug C++ Bench on Text-to-Image 1B @Cos",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build_debug/bench",
             "cwd": "${workspaceFolder}",
             "args": [
                 "--vectors",
-                "datasets/t2i_1M/base.1M.fbin",
+                "datasets/t2i_1B/base.1B.fbin",
                 "--queries",
-                "datasets/t2i_1M/query.public.100K.fbin",
+                "datasets/t2i_1B/query.public.100K.fbin",
                 "--neighbors",
-                "datasets/t2i_1M/groundtruth.public.100K.ibin",
+                "datasets/t2i_1B/groundtruth.public.100K.ibin",
+                "--cos"
             ],
             "environment": [
                 {

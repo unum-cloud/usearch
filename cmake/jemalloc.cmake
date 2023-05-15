@@ -76,5 +76,3 @@ else()
         JEMALLOC_INCLUDE_DIR
     )
 endif()
-
-message("JEMALLOC_LIBRARIES:" ${JEMALLOC_LIBRARIES})
