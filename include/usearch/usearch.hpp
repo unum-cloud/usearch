@@ -751,9 +751,6 @@ class index_gt {
     allocator_t allocator_{};
     precomputed_constants_t pre_{};
     int viewed_file_descriptor_{};
-#if defined(USEARCH_IOURING)
-    struct io_uring ring_ {};
-#endif
 
     usearch_align_m mutable std::atomic<std::size_t> capacity_{};
     usearch_align_m mutable std::atomic<std::size_t> size_{};
@@ -795,11 +792,6 @@ class index_gt {
         for (thread_context_t& context : thread_contexts_)
             context.metric = metric;
         reserve(config.max_elements);
-
-        // Prefetching:
-#if defined(USEARCH_IOURING)
-        io_uring_queue_init(config.max_threads_search * pre_.connectivity_max_base, &ring_, 0);
-#endif
     }
 
     index_gt fork() noexcept(false) { return {config_, metric_, allocator_}; }
@@ -1175,11 +1167,6 @@ class index_gt {
         bool replaced_existing_map = viewed_file_descriptor_ != 0;
         viewed_file_descriptor_ = descriptor;
         (void)replaced_existing_map;
-
-#if defined(USEARCH_IOURING)
-        io_uring_register(ring_., replaced_existing_map ? IORING_REGISTER_FILES : IORING_REGISTER_FILES_UPDATE,
-                          &viewed_file_descriptor_, 1);
-#endif // USEARCH_IOURING
 #endif // POSIX
     }
 
@@ -1480,38 +1467,7 @@ class index_gt {
         }
     }
 
-    void prefetch_neighbors(neighbors_ref_t head, visits_bitset_t const& visits) const noexcept {
-
-        // Prefetch from disk
-        if (viewed_file_descriptor_ != 0)
-            for (id_t successor_id : head) {
-                if (visits.test(successor_id))
-                    continue;
-
-                node_ref_t node_ref = node(successor_id);
-                node_head_t& head = node_ref.head;
-
-                // Naive
-                __builtin_prefetch(node(successor_id).vector);
-
-                // Old-school
-                // std::size_t length = node_dump_size(head.dim, 0);
-                // madvise(&head, length, MADV_WILLNEED);
-
-                // Async
-#if defined(USEARCH_IOURING)
-                struct io_uring_sqe* sqe = io_uring_get_sqe(ring_);
-                io_uring_prep_madvice(sqe, &head, length, MADV_WILLNEED);
-                io_uring_sqe_set_data(sqe, fi);
-                io_uring_submit(ring_);
-#endif
-            }
-        else
-            for (id_t successor_id : head) {
-                if (!visits.test(successor_id))
-                    __builtin_prefetch(node(successor_id).vector);
-            }
-    }
+    void prefetch_neighbors(neighbors_ref_t, visits_bitset_t const&) const noexcept {}
 
     span_gt<distance_and_id_t const> filter_heuristic( //
         distances_and_ids_t& top_candidates, std::size_t needed, metric_t const& metric) const noexcept {
