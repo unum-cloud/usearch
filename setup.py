@@ -1,10 +1,15 @@
 import os
 import sys
-from setuptools import setup, find_packages
+from setuptools import setup
 from pybind11.setup_helpers import Pybind11Extension
 
 
 compile_args = ['-std=c++11', '-O3']
+link_args = []
+
+if sys.platform == 'linux':
+    compile_args.append('-fopenmp')
+    link_args.append('-lgomp')
 
 if sys.platform == 'darwin':
     # MacOS 10.15 orhigher is needed for `aligned_alloc` support.
@@ -19,7 +24,8 @@ ext_modules = [
     Pybind11Extension(
         'usearch.index',
         ['python/lib.cpp'],
-        extra_compile_args=compile_args
+        extra_compile_args=compile_args,
+        extra_link_args=link_args,
     ),
 ]
 
