@@ -332,7 +332,7 @@ assert!(new_haversine(&quant, 0, 0, 0).is_ok());
 <dependency>
   <groupId>cloud.unum.usearch</groupId>
   <artifactId>usearch</artifactId>
-  <version>0.2.2</version>
+  <version>0.2.3</version>
 </dependency>
 ```
 
