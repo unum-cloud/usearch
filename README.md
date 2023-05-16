@@ -33,6 +33,8 @@ Euclidean • Angular • Jaccard • Hamming • Haversine • User-Defined Met
 Linux • MacOS • Windows
 </p>
 
+---
+
 - [x] Industry-leading [performance](#performance).
 - [x] Easily-extendible [single C++11 header][usearch-header] implementation.
 - [x] [Half-precision `f16` and Quarter-precision `f8`](#quantize-on-the-fly) support on any hardware.
@@ -43,7 +45,6 @@ Linux • MacOS • Windows
 - [x] [Bring your threads](#bring-your-threads), like OpenMP.
 - [x] Multiple vectors per label.
 - [ ] Thread-safe `reserve`.
-- [x] Compatible with Linux, MacOS, and Windows.
 - [x] AI + Vector Search = [Semantic Search](#ai--vector-search--semantic-search).
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/usearch.hpp
