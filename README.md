@@ -33,20 +33,21 @@ Euclidean • Angular • Jaccard • Hamming • Haversine • User-Defined Met
 Linux • MacOS • Windows
 </p>
 
-- [x] [Single C++11 header][usearch-header] implementation, easily extendible.
-- [x] [4B+](#go-beyond-4b-entries) sized space efficient point-clouds with `uint40_t`.
-- [x] [Half-precision](#quantize-on-the-fly) support with [`fp16`](https://github.com/maratyszcza/fp16).
+- [x] Industry-leading [performance](#performance).
+- [x] Easily-extendible [single C++11 header][usearch-header] implementation.
+- [x] [Half-precision `f16` and Quarter-precision `f8`](#quantize-on-the-fly) support on any hardware.
 - [x] [View from disk](#view-larger-indexes-from-disk), without loading into RAM.
-- [x] [User-defined](#define-custom-metrics) and hardware-accelerated metrics with [`simsimd`](https://github.com/ashvardanian/simsimd). 
-- [x] Variable dimensionality vectors.
-- [x] Don't copy vectors if not needed.
+- [x] [User-defined](#define-custom-metrics) and pre-packaged SIMD-accelerated metrics.
+- [x] [4B+](#go-beyond-4b-entries) sized space efficient point-clouds with `uint40_t`.
+- [x] Variable dimensionality vectors - for [obscure usecases][obscure-usecases].
 - [x] [Bring your threads](#bring-your-threads), like OpenMP.
 - [x] Multiple vectors per label.
 - [ ] Thread-safe `reserve`.
 - [x] Compatible with Linux, MacOS, and Windows.
-- [x] AI + Vector Search = Semantic Search.
+- [x] AI + Vector Search = [Semantic Search](#ai--vector-search--semantic-search).
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/usearch.hpp
+[obscure-usecases]: https://ashvardanian.com/posts/abusing-vector-search
 
 ## Features
 
