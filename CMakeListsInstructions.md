@@ -14,7 +14,6 @@ git submodule update --init --recursive
 cmake -B ./build_release \
     -DCMAKE_CXX_COMPILER="g++-12" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DUSEARCH_USE_SIMD=1 \
     -DUSEARCH_USE_OPENMP=1 \
     -DUSEARCH_USE_JEMALLOC=1 && \
     make -C ./build_release -j
@@ -57,7 +56,7 @@ cmake \
 
 ```sh
 pip install -e .
-python python/test.py
+pytest python/test.py
 ```
 
 ### JavaScript

@@ -400,7 +400,7 @@ struct args_t {
     bool quantize_f16 = false;
     bool quantize_f8 = false;
 
-    bool metric_ip = true;
+    bool metric_ip = false;
     bool metric_l2 = false;
     bool metric_cos = false;
     bool metric_haversine = false;
@@ -408,23 +408,19 @@ struct args_t {
 
 template <typename index_at, typename dataset_at> //
 index_at type_punned_index_for_metric(dataset_at& dataset, args_t const& args, config_t config, accuracy_t accuracy) {
-    if (args.metric_ip) {
-        std::printf("-- Metric: Inner Product\n");
-        return index_at::ip(dataset.dimensions(), accuracy, config);
-    }
     if (args.metric_l2) {
         std::printf("-- Metric: Euclidean\n");
         return index_at::l2(dataset.dimensions(), accuracy, config);
-    }
-    if (args.metric_cos) {
+    } else if (args.metric_cos) {
         std::printf("-- Metric: Angular\n");
         return index_at::cos(dataset.dimensions(), accuracy, config);
-    }
-    if (args.metric_haversine) {
+    } else if (args.metric_haversine) {
         std::printf("-- Metric: Haversine\n");
         return index_at::haversine(accuracy, config);
+    } else {
+        std::printf("-- Metric: Inner Product\n");
+        return index_at::ip(dataset.dimensions(), accuracy, config);
     }
-    throw std::invalid_argument("Unknown metric!");
 }
 
 template <typename index_at, typename dataset_at> //
@@ -472,16 +468,16 @@ template <typename neighbor_id_at, typename dataset_at> //
 void run_big_or_small(dataset_at& dataset, args_t const& args, config_t config) {
     if (args.native) {
         if (args.metric_cos) {
-            std::printf("-- Metric: Inner Product\n");
-            run_typed<index_gt<ip_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config);
+            std::printf("-- Metric: Angular\n");
+            run_typed<index_gt<cos_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config);
         } else if (args.metric_l2) {
             std::printf("-- Metric: Euclidean\n");
             run_typed<index_gt<l2sq_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config);
         } else if (args.metric_haversine) {
-            std::printf("-- Metric: Angular\n");
+            std::printf("-- Metric: Haversine\n");
             run_typed<index_gt<haversine_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config);
         } else {
-            std::printf("-- Metric: Haversine\n");
+            std::printf("-- Metric: Inner Product\n");
             run_typed<index_gt<ip_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config);
         }
     } else

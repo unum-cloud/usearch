@@ -35,11 +35,12 @@ Linux • MacOS • Windows
 
 ---
 
-- [x] [Single C++11 header][usearch-header] implementation, easily extendible.
-- [x] [4B+](#go-beyond-4b-entries) sized space efficient point-clouds with `uint40_t`.
-- [x] [Half-precision](#quantize-on-the-fly) support with [`fp16`](https://github.com/maratyszcza/fp16).
+- [x] Industry-leading [performance](#performance).
+- [x] Easily-extendible [single C++11 header][usearch-header] implementation.
+- [x] [Half-precision `f16` and Quarter-precision `f8`](#quantize-on-the-fly) support on any hardware.
 - [x] [View from disk](#view-larger-indexes-from-disk), without loading into RAM.
-- [x] [User-defined](#define-custom-metrics) and hardware-accelerated metrics with [`simsimd`](https://github.com/ashvardanian/simsimd). 
+- [x] [User-defined](#define-custom-metrics) and pre-packaged SIMD-accelerated metrics.
+- [x] [4B+](#go-beyond-4b-entries) sized space efficient point-clouds with `uint40_t`.
 - [x] Variable dimensionality vectors - for [obscure usecases][obscure-usecases].
 - [x] [Bring your threads](#bring-your-threads), like OpenMP.
 - [x] Multiple vectors per label.
@@ -47,7 +48,7 @@ Linux • MacOS • Windows
 - [x] AI + Vector Search = [Semantic Search](#ai--vector-search--semantic-search).
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/usearch.hpp
-[obscure-usecases]: https://ashvardanian.com/posts/abusing-vector-search/
+[obscure-usecases]: https://ashvardanian.com/posts/abusing-vector-search
 
 ## Features
 
@@ -119,27 +120,39 @@ USearch supports automatic down-casting and up-casting between `f32_t`, `f16_t`,
 ## Performance
 
 Below are the performance numbers for a benchmark running on the 64 cores of AWS `c7g.metal` "Graviton 3"-based instances.
-We fix the default configuration in the top line and show the affects of various parameters by changing one parameter at a time.
-
-|  Vectors   | Connectivity | EF @ A | EF @ S | **Add**, QPS | **Search**, QPS | **Recall @1** |
-| :--------: | :----------: | :----: | :----: | :----------: | :-------------: | ------------: |
-| `f32` x256 |      16      |  128   |   64   |    75'640    |     131'654     |         99.3% |
-|            |              |        |        |              |                 |               |
-| `f32` x256 |      12      |  128   |   64   |    81'747    |     149'728     |         99.0% |
-| `f32` x256 |      32      |  128   |   64   |    64'368    |     104'050     |         99.4% |
-|            |              |        |        |              |                 |               |
-| `f32` x256 |      16      |   64   |   32   |   128'644    |     228'422     |         97.2% |
-| `f32` x256 |      16      |  256   |  128   |    39'981    |     69'065      |         99.2% |
-|            |              |        |        |              |                 |               |
-| `f16` x256 |      16      |   64   |   32   |   128'644    |     228'422     |         97.2% |
-| `f32` x256 |      16      |  256   |  128   |    39'981    |     69'065      |         99.2% |
-
 The main columns are:
 
 - Add: Number of insertion Queries Per Second.
 - Search: Number search Queries Per Second.
 - Recall @1: How often does approximate search yield the exact best match?
 
+For different "connectivity":
+
+| Vectors    | Connectivity | EF @ A | EF @ S | **Add**, QPS | **Search**, QPS | **Recall @1** |
+| :--------- | :----------: | :----: | :----: | :----------: | :-------------: | ------------: |
+| `f32` x256 |      16      |  128   |   64   |    75'640    |     131'654     |         99.3% |
+| `f32` x256 |      12      |  128   |   64   |    81'747    |     149'728     |         99.0% |
+| `f32` x256 |      32      |  128   |   64   |    64'368    |     104'050     |         99.4% |
+
+For different "expansion factors":
+
+| Vectors    | Connectivity | EF @ A | EF @ S | **Add**, QPS | **Search**, QPS | **Recall @1** |
+| :--------- | :----------: | :----: | :----: | :----------: | :-------------: | ------------: |
+| `f32` x256 |      16      |  128   |   64   |    75'640    |     131'654     |         99.3% |
+| `f32` x256 |      16      |   64   |   32   |   128'644    |     228'422     |         97.2% |
+| `f32` x256 |      16      |  256   |  128   |    39'981    |     69'065      |         99.2% |
+
+For different vectors "accuracy":
+
+| Vectors      | Connectivity | EF @ A | EF @ S | **Add**, QPS | **Search**, QPS | **Recall @1** |
+| :----------- | :----------: | :----: | :----: | :----------: | :-------------: | ------------: |
+| `f32` x256   |      16      |  128   |   64   |    87'995    |     171'856     |         99.1% |
+| `f16` x256   |      16      |  128   |   64   |    87'270    |     153'788     |         98.4% |
+| `f16` x256 ✳️ |      16      |  128   |   64   |    71'454    |     132'673     |         98.4% |
+| `f8` x256    |      16      |  128   |   64   |   115'923    |     274'653     |         98.9% |
+
+As seen on the chart, for `f16` accuracy, performance may differ depending on native hardware support for that numeric type.
+Also worth noting, 8-bit quantization results in almost no accuracy loss and may perform better than `f16`.
 To read more and reproduce, jump to [benchmarking section](#benchmarking).
 
 ## Usage
