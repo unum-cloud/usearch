@@ -174,6 +174,29 @@ class f8_bits_t {
 
 inline f16_bits_t::f16_bits_t(f8_bits_t v) noexcept : f16_bits_t(float(v)) {}
 
+struct cos_f8_t {
+    punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b, std::size_t n) const noexcept {
+        std::int32_t ab{}, a2{}, b2{};
+        for (std::size_t i = 0; i != n; i++) {
+            std::int16_t ai{a[i]};
+            std::int16_t bi{b[i]};
+            ab += ai * bi;
+            a2 += square(ai);
+            b2 += square(bi);
+        }
+        return 1.f - ab / (std::sqrt(a2) * std::sqrt(b2));
+    }
+};
+
+struct l2sq_f8_t {
+    punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b, std::size_t n) const noexcept {
+        std::int32_t ab_deltas_sq{};
+        for (std::size_t i = 0; i != n; i++)
+            ab_deltas_sq += square(std::int16_t(a[i]) - std::int16_t(b[i]));
+        return ab_deltas_sq;
+    }
+};
+
 struct uuid_t {
     std::uint8_t octets[16];
 };
@@ -685,7 +708,7 @@ class auto_index_gt {
             // Dot-product accumulates error, Cosine-distance normalizes it
             return cos_metric_f16(dimensions);
 
-        case accuracy_t::f8_k: return {pun_metric<f8_bits_t>(cos_gt<f8_bits_t, f32_t>{}), isa_t::auto_k};
+        case accuracy_t::f8_k: return {pun_metric<f8_bits_t>(cos_f8_t{}), isa_t::auto_k};
         case accuracy_t::f64_k: return {pun_metric<f64_t>(ip_gt<f64_t>{}), isa_t::auto_k};
         default: return {};
         }
@@ -693,7 +716,7 @@ class auto_index_gt {
 
     static metric_and_meta_t l2_metric(std::size_t, accuracy_t accuracy) {
         switch (accuracy) {
-        case accuracy_t::f8_k: return {pun_metric<f8_bits_t>(l2sq_gt<f8_bits_t, f32_t>{}), isa_t::auto_k};
+        case accuracy_t::f8_k: return {pun_metric<f8_bits_t>(l2sq_f8_t{}), isa_t::auto_k};
         case accuracy_t::f16_k: return {pun_metric<f16_bits_t>(l2sq_gt<f16_bits_t, f32_t>{}), isa_t::auto_k};
         case accuracy_t::f32_k: return {pun_metric<f32_t>(l2sq_gt<f32_t>{}), isa_t::auto_k};
         case accuracy_t::f64_k: return {pun_metric<f64_t>(l2sq_gt<f64_t>{}), isa_t::auto_k};
@@ -703,7 +726,7 @@ class auto_index_gt {
 
     static metric_and_meta_t cos_metric(std::size_t dimensions, accuracy_t accuracy) {
         switch (accuracy) {
-        case accuracy_t::f8_k: return {pun_metric<f8_bits_t>(cos_gt<f8_bits_t, f32_t>{}), isa_t::auto_k};
+        case accuracy_t::f8_k: return {pun_metric<f8_bits_t>(cos_f8_t{}), isa_t::auto_k};
         case accuracy_t::f16_k: return cos_metric_f16(dimensions);
         case accuracy_t::f32_k: return {pun_metric<f32_t>(cos_gt<f32_t>{}), isa_t::auto_k};
         case accuracy_t::f64_k: return {pun_metric<f64_t>(cos_gt<f64_t>{}), isa_t::auto_k};
