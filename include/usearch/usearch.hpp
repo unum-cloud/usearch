@@ -1113,11 +1113,16 @@ class index_gt {
         thread_context_t& context = thread_contexts_[config.thread];
         result.measurements = context.measurements_count;
         result.cycles = context.iteration_cycles;
-        id_t closest_id = search_for_one(entry_id_, query, max_level_, 0, context);
 
-        // For bottom layer we need a more optimized procedure
-        std::size_t expansion = (std::max)(config_.expansion_search, wanted);
-        search_to_find_in_base(closest_id, query, expansion, context);
+        if (config.exact) {
+            search_exact(query, wanted, context);
+        } else {
+            id_t closest_id = search_for_one(entry_id_, query, max_level_, 0, context);
+            std::size_t expansion = (std::max)(config_.expansion_search, wanted);
+            // For bottom layer we need a more optimized procedure
+            search_to_find_in_base(closest_id, query, expansion, context);
+        }
+
         top_candidates_t& top = context.top_candidates;
         top.sort_ascending();
         top.shrink(wanted);
@@ -1634,6 +1639,14 @@ class index_gt {
                 }
             }
         }
+    }
+
+    void search_exact(vector_view_t query, std::size_t count, thread_context_t& context) const noexcept(false) {
+        top_candidates_t& top = context.top_candidates;
+        top.clear();
+        top.reserve(count);
+        for (std::size_t i = 0; i != nodes_.size(); ++i)
+            top.emplace_reserved(context.measure(query, node(nodes_[i])), static_cast<id_t>(i));
     }
 
     void prefetch_neighbors(neighbors_ref_t, visits_bitset_t const&) const noexcept {}

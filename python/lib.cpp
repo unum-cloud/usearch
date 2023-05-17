@@ -231,7 +231,7 @@ static void add_many_to_index(                                    //
         throw std::invalid_argument("Incompatible scalars in the vectors matrix!");
 }
 
-static py::tuple search_one_in_index(native_index_t& index, py::buffer vector, std::size_t wanted) {
+static py::tuple search_one_in_index(native_index_t& index, py::buffer vector, std::size_t wanted, bool exact) {
 
     py::buffer_info vector_info = vector.request();
     Py_ssize_t vector_dimensions = vector_info.shape[0];
@@ -245,16 +245,19 @@ static py::tuple search_one_in_index(native_index_t& index, py::buffer vector, s
     auto labels_py1d = labels_py.mutable_unchecked<1>();
     auto distances_py1d = distances_py.mutable_unchecked<1>();
 
+    search_config_t config;
+    config.exact = exact;
+
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vector_info.format == "e")
         count = index.search( //
-            reinterpret_cast<f16_bits_t const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), {});
+            reinterpret_cast<f16_bits_t const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), config);
     else if (vector_info.format == "f")
         count = index.search( //
-            reinterpret_cast<float const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), {});
+            reinterpret_cast<float const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), config);
     else if (vector_info.format == "d")
         count = index.search( //
-            reinterpret_cast<double const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), {});
+            reinterpret_cast<double const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), config);
     else
         throw std::invalid_argument("Incompatible scalars in the query vector!");
 
@@ -277,14 +280,14 @@ static py::tuple search_one_in_index(native_index_t& index, py::buffer vector, s
  *      2. matrix of distances,
  *      3. array with match counts.
  */
-static py::tuple search_many_in_index(native_index_t& index, py::buffer vectors, std::size_t wanted) {
+static py::tuple search_many_in_index(native_index_t& index, py::buffer vectors, std::size_t wanted, bool exact) {
 
     if (wanted == 0)
         return py::tuple(3);
 
     py::buffer_info vectors_info = vectors.request();
     if (vectors_info.ndim == 1)
-        return search_one_in_index(index, vectors, wanted);
+        return search_one_in_index(index, vectors, wanted, exact);
     if (vectors_info.ndim != 2)
         throw std::invalid_argument("Expects a matrix of vectors to add!");
 
@@ -306,6 +309,7 @@ static py::tuple search_many_in_index(native_index_t& index, py::buffer vectors,
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
+            config.exact = exact;
             f16_bits_t const* vector = (f16_bits_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
             counts_py1d(task_idx) = static_cast<Py_ssize_t>(
                 index.search(vector, wanted, &labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0), config));
@@ -314,6 +318,7 @@ static py::tuple search_many_in_index(native_index_t& index, py::buffer vectors,
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
+            config.exact = exact;
             float const* vector = (float const*)(vectors_data + task_idx * vectors_info.strides[0]);
             counts_py1d(task_idx) = static_cast<Py_ssize_t>(
                 index.search(vector, wanted, &labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0), config));
@@ -322,6 +327,7 @@ static py::tuple search_many_in_index(native_index_t& index, py::buffer vectors,
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
+            config.exact = exact;
             double const* vector = (double const*)(vectors_data + task_idx * vectors_info.strides[0]);
             counts_py1d(task_idx) = static_cast<Py_ssize_t>(
                 index.search(vector, wanted, &labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0), config));
@@ -446,7 +452,8 @@ PYBIND11_MODULE(index, m) {
     i.def(                               //
         "search", &search_many_in_index, //
         py::arg("query"),                //
-        py::arg("count") = 10            //
+        py::arg("count") = 10,           //
+        py::arg("exact") = false         //
     );
 
     i.def("__len__", &native_index_t::size);
