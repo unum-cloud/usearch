@@ -1,6 +1,6 @@
 {
     "name": "usearch",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "description": "Smaller & Faster Single-File Vector Search Engine from Unum",
     "author": "Ashot Vardanian",
     "license": "Apache 2.0",
