@@ -8,6 +8,7 @@
 import Foundation
 import USearch
 
+@available(iOS 13, macOS 10.15, tvOS 13.0, watchOS 6.0, *)
 func testUnit() throws {
     let index = Index.l2(dimensions: 4, connectivity: 8)
     let vectorA: [Float32] = [0.3, 0.5, 1.2, 1.4]
