@@ -86,9 +86,9 @@ jobs:
       - name: Publish to PyPi
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages_dir: ./dist/artifact
+          packages-dir: ./dist/artifact
           verbose: true
-          print_hash: true
+          print-hash: true
 
   publish_javascript:
     name: Publish JavaScript
@@ -143,7 +143,7 @@ jobs:
         java-version: '11'
         distribution: 'adopt'
     - name: Setup Gradle
-      uses: gradle/gradle-build-action@v2    
+      uses: gradle/gradle-build-action@v2.4.2
     - name: Execute Gradle build
       run: gradle clean build
     - name: Publish package
