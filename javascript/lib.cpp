@@ -15,6 +15,8 @@
 #define NAPI_CPP_EXCEPTIONS
 #endif
 
+#include <new> // `std::bad_alloc`
+
 #include <napi.h>
 #include <node_api.h>
 
@@ -38,6 +40,10 @@ class Index : public Napi::ObjectWrap<Index> {
     Napi::Value GetCapacity(Napi::CallbackInfo const& ctx);
     Napi::Value GetConnectivity(Napi::CallbackInfo const& ctx);
 
+    void Save(Napi::CallbackInfo const& ctx);
+    void Load(Napi::CallbackInfo const& ctx);
+    void View(Napi::CallbackInfo const& ctx);
+
     void Add(Napi::CallbackInfo const& ctx);
     Napi::Value Search(Napi::CallbackInfo const& ctx);
 
@@ -54,6 +60,9 @@ Napi::Object Index::Init(Napi::Env env, Napi::Object exports) {
             InstanceMethod("connectivity", &Index::GetConnectivity),
             InstanceMethod("add", &Index::Add),
             InstanceMethod("search", &Index::Search),
+            InstanceMethod("save", &Index::Save),
+            InstanceMethod("load", &Index::Load),
+            InstanceMethod("view", &Index::View),
         });
 
     Napi::FunctionReference* constructor = new Napi::FunctionReference();
@@ -150,6 +159,57 @@ Napi::Value Index::GetCapacity(Napi::CallbackInfo const& ctx) {
     return Napi::Number::New(ctx.Env(), native_->capacity());
 }
 
+void Index::Save(Napi::CallbackInfo const& ctx) {
+    Napi::Env env = ctx.Env();
+
+    int length = ctx.Length();
+    if (length == 0 || !ctx[0].IsString()) {
+        Napi::TypeError::New(env, "Function expects a string path argument").ThrowAsJavaScriptException();
+        return;
+    }
+
+    try {
+        std::string path = ctx[0].As<Napi::String>();
+        native_->save(path.c_str());
+    } catch (...) {
+        Napi::TypeError::New(env, "Serialization failed").ThrowAsJavaScriptException();
+    }
+}
+
+void Index::Load(Napi::CallbackInfo const& ctx) {
+    Napi::Env env = ctx.Env();
+
+    int length = ctx.Length();
+    if (length == 0 || !ctx[0].IsString()) {
+        Napi::TypeError::New(env, "Function expects a string path argument").ThrowAsJavaScriptException();
+        return;
+    }
+
+    try {
+        std::string path = ctx[0].As<Napi::String>();
+        native_->load(path.c_str());
+    } catch (...) {
+        Napi::TypeError::New(env, "Loading failed").ThrowAsJavaScriptException();
+    }
+}
+
+void Index::View(Napi::CallbackInfo const& ctx) {
+    Napi::Env env = ctx.Env();
+
+    int length = ctx.Length();
+    if (length == 0 || !ctx[0].IsString()) {
+        Napi::TypeError::New(env, "Function expects a string path argument").ThrowAsJavaScriptException();
+        return;
+    }
+
+    try {
+        std::string path = ctx[0].As<Napi::String>();
+        native_->view(path.c_str());
+    } catch (...) {
+        Napi::TypeError::New(env, "Memory-mapping failed").ThrowAsJavaScriptException();
+    }
+}
+
 void Index::Add(Napi::CallbackInfo const& ctx) {
     Napi::Env env = ctx.Env();
     if (ctx.Length() < 2 || !ctx[0].IsNumber() || !ctx[1].IsTypedArray())
@@ -166,7 +226,14 @@ void Index::Add(Napi::CallbackInfo const& ctx) {
 
     if (native_->size() + 1 >= native_->capacity())
         native_->reserve(ceil2(native_->size() + 1));
-    native_->add(label, vector);
+
+    try {
+        native_->add(label, vector);
+    } catch (std::bad_alloc const&) {
+        Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
+    } catch (...) {
+        Napi::TypeError::New(env, "Insertion failed").ThrowAsJavaScriptException();
+    }
 }
 
 Napi::Value Index::Search(Napi::CallbackInfo const& ctx) {
@@ -190,13 +257,20 @@ Napi::Value Index::Search(Napi::CallbackInfo const& ctx) {
 
     Napi::Uint32Array matches_js = Napi::Uint32Array::New(env, wanted);
     Napi::Float32Array distances_js = Napi::Float32Array::New(env, wanted);
-    std::size_t count = native_->search(vector, wanted, matches_js.Data(), distances_js.Data());
-
-    Napi::Object result_js = Napi::Object::New(env);
-    result_js.Set("labels", matches_js);
-    result_js.Set("distances", distances_js);
-    result_js.Set("count", Napi::Number::New(env, count));
-    return result_js;
+    try {
+        std::size_t count = native_->search(vector, wanted, matches_js.Data(), distances_js.Data());
+        Napi::Object result_js = Napi::Object::New(env);
+        result_js.Set("labels", matches_js);
+        result_js.Set("distances", distances_js);
+        result_js.Set("count", Napi::Number::New(env, count));
+        return result_js;
+    } catch (std::bad_alloc const&) {
+        Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
+        return {};
+    } catch (...) {
+        Napi::TypeError::New(env, "Search failed").ThrowAsJavaScriptException();
+        return {};
+    }
 }
 
 Napi::Object InitAll(Napi::Env env, Napi::Object exports) { return Index::Init(env, exports); }
