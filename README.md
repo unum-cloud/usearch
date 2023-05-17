@@ -205,7 +205,7 @@ The following distances are pre-packaged:
 - `pearson_correlation_gt<scalar_t>` for "Pearson" correlation between probability distributions.
 - `haversine_gt<scalar_t>` for "Haversine" or "Great Circle" distance between coordinates.
 
-#### Bring your Threads
+#### Multi-Threading
 
 Most AI, HPC, or Big Data packages use some form of a thread pool.
 Instead of spawning additional threads within USearch, we focus on the thread safety of `add()` function, simplifying resource management.
@@ -213,7 +213,7 @@ Instead of spawning additional threads within USearch, we focus on the thread sa
 ```cpp
 #pragma omp parallel for
     for (std::size_t i = 0; i < n; ++i)
-        native.add(label, span_t{vector, dims}, omp_get_thread_num());
+        native.add(label, span_t{vector, dims}, add_config_t { .thread = omp_get_thread_num() });
 ```
 
 During initialization, we allocate enough temporary memory for all the cores on the machine.
@@ -381,6 +381,14 @@ assert_eq!(index.size(), 2);
 // Read back the tags
 let results = index.search(&first, 10).unwrap();
 assert_eq!(results.count, 2);
+```
+
+#### Multi-Threading
+
+```rust
+assert!(index.add_in_thread(42, &first, 0).is_ok());
+assert!(index.add_in_thread(43, &second, 0).is_ok());
+let results = index.search_in_thread(&first, 10, 0).unwrap();
 ```
 
 Being a systems-programming language, Rust has better control over memory management and concurrency but lacks function overloading.
