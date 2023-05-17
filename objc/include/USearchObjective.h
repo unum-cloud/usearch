@@ -10,6 +10,7 @@ typedef NS_ENUM(NSUInteger, Quantization) {
     kDoublePrecision
 };
 
+API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
 @interface Index: NSObject
 
 @property (readonly) UInt32 dimensions;
@@ -33,9 +34,9 @@ NS_UNAVAILABLE;
 NS_SWIFT_NAME(addSingle(label:vector:));
 
 - (UInt32)searchSingle:(Float32 const* _Nonnull)vector
-               count:(UInt32)count
-              labels:(UInt32* _Nullable)labels
-           distances:(Float32* _Nullable)distances
+                 count:(UInt32)count
+                labels:(UInt32* _Nullable)labels
+             distances:(Float32* _Nullable)distances
 NS_SWIFT_NAME(searchSingle(vector:count:labels:distances:));
 
 - (void)addPrecise:(UInt32)label
@@ -43,9 +44,9 @@ NS_SWIFT_NAME(searchSingle(vector:count:labels:distances:));
 NS_SWIFT_NAME(addPrecise(label:vector:));
 
 - (UInt32)searchPrecise:(Float64 const* _Nonnull)vector
-                count:(UInt32)count
-               labels:(UInt32* _Nullable)labels
-            distances:(Float32* _Nullable)distances
+                  count:(UInt32)count
+                 labels:(UInt32* _Nullable)labels
+              distances:(Float32* _Nullable)distances
 NS_SWIFT_NAME(searchPrecise(vector:count:labels:distances:));
 
 - (void)addImprecise:(UInt32)label
@@ -53,9 +54,9 @@ NS_SWIFT_NAME(searchPrecise(vector:count:labels:distances:));
 NS_SWIFT_NAME(addImprecise(label:vector:));
 
 - (UInt32)searchImprecise:(void const* _Nonnull)vector
-                  count:(UInt32)count
-                 labels:(UInt32* _Nullable)labels
-              distances:(Float32* _Nullable)distances
+                    count:(UInt32)count
+                   labels:(UInt32* _Nullable)labels
+                distances:(Float32* _Nullable)distances
 NS_SWIFT_NAME(searchImprecise(vector:count:labels:distances:));
 
 
