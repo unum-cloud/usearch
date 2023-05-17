@@ -145,9 +145,9 @@ static void add_one_to_index(native_index_t& index, label_t label, py::buffer ve
     if (vector_info.ndim != 1)
         throw std::invalid_argument("Expects a vector, not a higher-rank tensor!");
 
-    ssize_t vector_dimensions = vector_info.shape[0];
+    Py_ssize_t vector_dimensions = vector_info.shape[0];
     char const* vector_data = reinterpret_cast<char const*>(vector_info.ptr);
-    if (vector_dimensions != static_cast<ssize_t>(index.dimensions()))
+    if (vector_dimensions != static_cast<Py_ssize_t>(index.dimensions()))
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
     if (index.size() + 1 >= index.capacity())
@@ -180,10 +180,10 @@ static void add_many_to_index(                                    //
     if (vectors_info.ndim != 2)
         throw std::invalid_argument("Expects a matrix of vectors to add!");
 
-    ssize_t labels_count = labels_info.shape[0];
-    ssize_t vectors_count = vectors_info.shape[0];
-    ssize_t vectors_dimensions = vectors_info.shape[1];
-    if (vectors_dimensions != static_cast<ssize_t>(index.dimensions()))
+    Py_ssize_t labels_count = labels_info.shape[0];
+    Py_ssize_t vectors_count = vectors_info.shape[0];
+    Py_ssize_t vectors_dimensions = vectors_info.shape[1];
+    if (vectors_dimensions != static_cast<Py_ssize_t>(index.dimensions()))
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
     if (labels_count != vectors_count)
@@ -222,13 +222,13 @@ static void add_many_to_index(                                    //
 static py::tuple search_one_in_index(native_index_t& index, py::buffer vector, std::size_t wanted) {
 
     py::buffer_info vector_info = vector.request();
-    ssize_t vector_dimensions = vector_info.shape[0];
+    Py_ssize_t vector_dimensions = vector_info.shape[0];
     char const* vector_data = reinterpret_cast<char const*>(vector_info.ptr);
-    if (vector_dimensions != static_cast<ssize_t>(index.dimensions()))
+    if (vector_dimensions != static_cast<Py_ssize_t>(index.dimensions()))
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
-    py::array_t<label_t> labels_py(static_cast<ssize_t>(wanted));
-    py::array_t<distance_t> distances_py(static_cast<ssize_t>(wanted));
+    py::array_t<label_t> labels_py(static_cast<Py_ssize_t>(wanted));
+    py::array_t<distance_t> distances_py(static_cast<Py_ssize_t>(wanted));
     std::size_t count{};
     auto labels_py1d = labels_py.mutable_unchecked<1>();
     auto distances_py1d = distances_py.mutable_unchecked<1>();
@@ -246,8 +246,8 @@ static py::tuple search_one_in_index(native_index_t& index, py::buffer vector, s
     else
         throw std::invalid_argument("Incompatible scalars in the query vector!");
 
-    labels_py.resize(py_shape_t{static_cast<ssize_t>(count)});
-    distances_py.resize(py_shape_t{static_cast<ssize_t>(count)});
+    labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(count)});
+    distances_py.resize(py_shape_t{static_cast<Py_ssize_t>(count)});
 
     py::tuple results(3);
     results[0] = labels_py;
@@ -276,14 +276,14 @@ static py::tuple search_many_in_index(native_index_t& index, py::buffer vectors,
     if (vectors_info.ndim != 2)
         throw std::invalid_argument("Expects a matrix of vectors to add!");
 
-    ssize_t vectors_count = vectors_info.shape[0];
-    ssize_t vectors_dimensions = vectors_info.shape[1];
+    Py_ssize_t vectors_count = vectors_info.shape[0];
+    Py_ssize_t vectors_dimensions = vectors_info.shape[1];
     char const* vectors_data = reinterpret_cast<char const*>(vectors_info.ptr);
-    if (vectors_dimensions != static_cast<ssize_t>(index.dimensions()))
+    if (vectors_dimensions != static_cast<Py_ssize_t>(index.dimensions()))
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
-    py::array_t<label_t> labels_py({vectors_count, static_cast<ssize_t>(wanted)});
-    py::array_t<distance_t> distances_py({vectors_count, static_cast<ssize_t>(wanted)});
+    py::array_t<label_t> labels_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
+    py::array_t<distance_t> distances_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
     py::array_t<Py_ssize_t> counts_py(vectors_count);
     auto labels_py2d = labels_py.mutable_unchecked<2>();
     auto distances_py2d = distances_py.mutable_unchecked<2>();
@@ -364,8 +364,8 @@ inline std::uint64_t hash(std::uint64_t v) noexcept {
 template <typename scalar_at>
 inline void hash_typed_buffer(hash_index_w_meta_t& index, py::buffer_info const& vector_info) noexcept {
     char const* vector_data = reinterpret_cast<char const*>(vector_info.ptr);
-    ssize_t vector_dimensions = vector_info.shape[0];
-    ssize_t vector_stride = vector_info.strides[0];
+    Py_ssize_t vector_dimensions = vector_info.shape[0];
+    Py_ssize_t vector_stride = vector_info.strides[0];
     std::memset(index.buffer_.data(), 0, index.words_ * sizeof(hash_word_t));
 
     for (std::size_t i = 0; i != static_cast<std::size_t>(vector_dimensions); ++i) {
@@ -477,10 +477,10 @@ PYBIND11_MODULE(index, m) {
             validate_set(set);
             auto proxy = set.unchecked<1>();
             auto view = set_view_t{proxy.data(0), static_cast<std::size_t>(proxy.shape(0))};
-            auto labels_py = py::array_t<label_t>(py_shape_t{static_cast<ssize_t>(count)});
+            auto labels_py = py::array_t<label_t>(py_shape_t{static_cast<Py_ssize_t>(count)});
             auto labels_proxy = labels_py.mutable_unchecked<1>();
             auto found = index.search(view, count, &labels_proxy(0), nullptr, 0);
-            labels_py.resize(py_shape_t{static_cast<ssize_t>(found)});
+            labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(found)});
             return labels_py;
         },
         py::arg("set"),       //
@@ -527,10 +527,10 @@ PYBIND11_MODULE(index, m) {
             if (index.size() + 1 >= index.capacity())
                 index.reserve(ceil2(index.size() + 1));
             hash_buffer(index, array);
-            auto labels_py = py::array_t<label_t>(py_shape_t{static_cast<ssize_t>(count)});
+            auto labels_py = py::array_t<label_t>(py_shape_t{static_cast<Py_ssize_t>(count)});
             auto labels_proxy = labels_py.mutable_unchecked<1>();
             auto found = index.search(index.buffer(), count, &labels_proxy(0), nullptr, 0);
-            labels_py.resize(py_shape_t{static_cast<ssize_t>(found)});
+            labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(found)});
             return labels_py;
         },
         py::arg("array"),     //
