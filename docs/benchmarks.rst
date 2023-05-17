@@ -1,0 +1,5 @@
+========================
+Benchmarks
+========================
+
+.. mdinclude:: benchmarks.md

@@ -7,4 +7,11 @@ Overview
    :hidden:
    :caption: �
 
+   benchmarks
+   compilation
+
+.. toctree:: 
+   :hidden:
+   :caption: �
+
    genindex

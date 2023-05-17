@@ -1,0 +1,5 @@
+========================
+Compilation
+========================
+
+.. mdinclude:: compilation.md

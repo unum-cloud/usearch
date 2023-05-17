@@ -107,14 +107,14 @@ using shared_index_t = std::shared_ptr<native_index_t>;
 
 - (void)addImprecise:(UInt32)label
               vector:(void const * _Nonnull)vector {
-    _native->add(label, (f16_converted_t const *)vector);
+    _native->add(label, (f16_bits_t const *)vector);
 }
 
 - (UInt32)searchImprecise:(void const* _Nonnull)vector
                     count:(UInt32)wanted
                    labels:(UInt32* _Nullable)labels
                 distances:(Float32* _Nullable)distances {
-    std::size_t found = _native->search((f16_converted_t const *)vector, static_cast<std::size_t>(wanted), labels, distances);
+    std::size_t found = _native->search((f16_bits_t const *)vector, static_cast<std::size_t>(wanted), labels, distances);
     return static_cast<UInt32>(found);
 }
 

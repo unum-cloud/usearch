@@ -2,6 +2,7 @@ fn main() {
     cxx_build::bridge("rust/lib.rs")
         .file("rust/lib.cpp")
         .flag_if_supported("-std=c++11")
+        .flag_if_supported("-Wunknown-pragmas")
         .include("include")
         .include("rust")
         .include("src")

@@ -5,6 +5,7 @@
 //  Created by Ashot Vardanian on 5/11/23.
 //
 
+@available(iOS 13, macOS 10.15, tvOS 13.0, watchOS 6.0, *)
 extension Index {
 
     public func add(label: UInt32, vector: ArraySlice<Float32>) -> () {

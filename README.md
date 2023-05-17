@@ -82,7 +82,7 @@ USearch is designed to be compact and broadly compatible without sacrificing per
 > Jump to the [Performance Tuning][benchmarking] section to read about the effects of those hyper-parameters.
 
 [sloc]: https://en.wikipedia.org/wiki/Source_lines_of_code
-[benchmarking]: https://github.com/unum-cloud/usearch
+[benchmarking]: https://github.com/unum-cloud/usearch/blob/main/docs/benchmarks.md
 
 ## User-Defined Functions
 
@@ -92,7 +92,7 @@ A good example would be the rare [Haversine][haversine] distance, used to comput
 Another example would be designing a custom metric for **composite embeddings** concatenated from multiple AI models in real-world applications. 
 USearch supports that: [Python](#user-defined-functions-in-python) and [C++](#user-defined-functions-in-c) examples.
 
-![USearch: Vector Search Approaches](assets/usearch-approaches-white.png)
+![USearch: Vector Search Approaches](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-approaches-white.png?raw=true)
 
 Unlike older approaches indexing high-dimensional spaces, like KD-Trees and Locality Sensitive Hashing, HNSW doesn't require vectors to be identical in length.
 They only have to be comparable.
@@ -106,7 +106,7 @@ So you can apply it in [obscure][obscure] applications, like searching for simil
 Training a quantization model and dimension-reduction is a common approach to accelerate vector search.
 Those, however, are only sometimes reliable, can significantly affect the statistical properties of your data, and require regular adjustments if your distribution shifts.
 
-![USearch uint40_t support](assets/usearch-neighbor-types.png)
+![USearch uint40_t support](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-neighbor-types.png?raw=true)
 
 Instead, we have focused on high-precision arithmetic over low-precision downcasted vectors.
 The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f32_t`, `f16_t`, `f64_t`, and `f8_t` representations, even if the hardware doesn't natively support it.
@@ -205,7 +205,7 @@ The following distances are pre-packaged:
 - `pearson_correlation_gt<scalar_t>` for "Pearson" correlation between probability distributions.
 - `haversine_gt<scalar_t>` for "Haversine" or "Great Circle" distance between coordinates.
 
-#### Bring your Threads
+#### Multi-Threading
 
 Most AI, HPC, or Big Data packages use some form of a thread pool.
 Instead of spawning additional threads within USearch, we focus on the thread safety of `add()` function, simplifying resource management.
@@ -213,7 +213,7 @@ Instead of spawning additional threads within USearch, we focus on the thread sa
 ```cpp
 #pragma omp parallel for
     for (std::size_t i = 0; i < n; ++i)
-        native.add(label, span_t{vector, dims}, omp_get_thread_num());
+        native.add(label, span_t{vector, dims}, add_config_t { .thread = omp_get_thread_num() });
 ```
 
 During initialization, we allocate enough temporary memory for all the cores on the machine.
@@ -381,6 +381,14 @@ assert_eq!(index.size(), 2);
 // Read back the tags
 let results = index.search(&first, 10).unwrap();
 assert_eq!(results.count, 2);
+```
+
+#### Multi-Threading
+
+```rust
+assert!(index.add_in_thread(42, &first, 0).is_ok());
+assert!(index.add_in_thread(43, &second, 0).is_ok());
+let results = index.search_in_thread(&first, 10, 0).unwrap();
 ```
 
 Being a systems-programming language, Rust has better control over memory management and concurrency but lacks function overloading.

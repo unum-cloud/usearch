@@ -1,0 +1,64 @@
+name: Request a feature
+description: Something we haven't implemented yet?
+title: "Feature: "
+labels: ["enhancement"]
+assignees:
+  - octocat
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this feature request!
+        We have already scheduled a few features for our [next milestone](https://github.com/unum-cloud/usearch/milestones).
+        Still, if it is something we have yet to think about, we will happily extend our [roadmap](https://github.com/orgs/unum-cloud/projects/2).
+        It is also worth noting that choosing between speed and functionality, we generally prefer the former.
+        So in some cases, it makes more sense to build something on top of USearch rather than patch it 🤗
+  - type: textarea
+    id: what
+    attributes:
+      label: Describe what you are looking for
+      placeholder: A short description of what the feature would look like, ideally with code examples.
+    validations:
+      required: true
+  - type: checkboxes
+    id: check
+    attributes:
+      label: Can you contribute to the implementation?
+      options:
+        - label: I can contribute
+  - type: dropdown
+    id: interface
+    attributes:
+      label: Is your feature request specific to a certain interface?
+      options:
+        - It applies to everything
+        - C++ implementation
+        - Python bindings
+        - Other bindings
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: contact
+    attributes:
+      label: Contact Details
+      description: How can we get in touch with you if we need more info?
+      placeholder: email@example.com
+    validations:
+      required: false
+  - type: checkboxes
+    id: duplicate
+    attributes:
+      label: Is there an existing issue for this?
+      description: Please search [our issues](https://github.com/unum-cloud/usearch/issues) to see if this bug already exists.
+      options:
+        - label: I have searched the existing issues
+          required: true
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our [Code of Conduct](https://github.com/unum-cloud/usearch/blob/main/CODE_OF_CONDUCT.md)
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true

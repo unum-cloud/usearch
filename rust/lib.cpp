@@ -9,7 +9,9 @@ using native_index_t = typename Index::native_index_t;
 Index::Index(std::shared_ptr<native_index_t> index) : index_(index) {}
 
 void Index::add_in_thread(uint32_t label, rust::Slice<float const> vector, size_t thread) const {
-    index_->add(label, vector.data(), thread, true);
+    add_config_t config;
+    config.thread = thread;
+    index_->add(label, vector.data(), config);
 }
 
 Matches Index::search_in_thread(rust::Slice<float const> vector, size_t count, size_t thread) const {
@@ -18,7 +20,9 @@ Matches Index::search_in_thread(rust::Slice<float const> vector, size_t count, s
     results.distances.reserve(count);
     for (size_t i = 0; i != count; ++i)
         results.labels.push_back(0), results.distances.push_back(0);
-    results.count = index_->search(vector.data(), count, results.labels.data(), results.distances.data(), thread);
+    search_config_t config;
+    config.thread = thread;
+    results.count = index_->search(vector.data(), count, results.labels.data(), results.distances.data(), config);
     results.labels.truncate(results.count);
     results.distances.truncate(results.count);
     return results;
