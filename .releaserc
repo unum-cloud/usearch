@@ -1,0 +1,77 @@
+{
+    "branches": [
+        "main"
+    ],
+    "debug": true,
+    "ci": true,
+    "dryRun": false,
+    "plugins": [
+        [
+            "@semantic-release/commit-analyzer",
+            {
+                "preset": "eslint",
+                "releaseRules": [
+                    {
+                        "tag": "Add",
+                        "release": "minor"
+                    },
+                    {
+                        "tag": "Improve",
+                        "release": "patch"
+                    },
+                    {
+                        "tag": "Make",
+                        "release": "patch"
+                    },
+                    {
+                        "tag": "Refactor",
+                        "release": false
+                    }
+                ]
+            }
+        ],
+        [
+            "@semantic-release/release-notes-generator",
+            {
+                "preset": "eslint",
+                "releaseRules": [
+                    {
+                        "tag": "Add",
+                        "release": "minor"
+                    },
+                    {
+                        "tag": "Improve",
+                        "release": "patch"
+                    },
+                    {
+                        "tag": "Make",
+                        "release": "patch"
+                    },
+                    {
+                        "tag": "Refactor",
+                        "release": false
+                    }
+                ]
+            }
+        ],
+        "@semantic-release/github",
+        [
+            "@semantic-release/exec",
+            {
+                "prepareCmd": "bash .github/workflows/update_version.sh '${nextRelease.version}'"
+            }
+        ],
+        [
+            "@semantic-release/git",
+            {
+                "assets": [
+                    "VERSION",
+                    "conanfile.py",
+                    "package.json",
+                    "Cargo.toml",
+                ],
+                "message": "Build: Released ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+            }
+        ]
+    ]
+}

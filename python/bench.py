@@ -12,29 +12,49 @@ from usearch.io import load_matrix
 
 def measure(f) -> float:
     a = time.time_ns()
-    f()
+    result = f()
     b = time.time_ns()
     c = b - a
     secs = c / (10 ** 9)
     print(f'- Took: {secs:.2f} seconds')
-    return secs
+    return secs, result
 
 
 def bench_faiss(index, vectors: np.array, queries: np.array, neighbors: np.array):
-    dt = measure(lambda: index.add(vectors))
-    print(f'- Performance: {vectors.shape[0]/dt:.2f} vectors/s')
+    dt, _ = measure(lambda: index.add(vectors))
+    print(f'- Performance: {vectors.shape[0]/dt:.2f} insertions/s')
+
+    dt, results = measure(lambda: index.search(queries, neighbors.shape[1]))
+    print(f'- Performance: {queries.shape[0]/dt:.2f} queries/s')
+
+    recall_at_one = 0.0
+    matches = results[1]
+    for i in range(queries.shape[0]):
+        recall_at_one += neighbors[i, 0] in matches[i, :]
+    recall_at_one /= queries.shape[0]
+    print(f'- Recall@1: {recall_at_one * 100:.2f} %')
 
 
 def bench_usearch(index, vectors: np.array, queries: np.array, neighbors: np.array):
     labels = np.arange(vectors.shape[0], dtype=np.longlong)
     assert len(index) == 0
-    dt = measure(lambda: index.add(labels, vectors))
+    dt, _ = measure(lambda: index.add(labels, vectors))
     assert len(index) == vectors.shape[0]
-    print(f'- Performance: {vectors.shape[0]/dt:.2f} vectors/s')
+    print(f'- Performance: {vectors.shape[0]/dt:.2f} insertions/s')
 
+    dt, results = measure(lambda: index.search(queries, neighbors.shape[1]))
+    print(f'- Performance: {queries.shape[0]/dt:.2f} queries/s')
+
+    recall_at_one = 0.0
+    matches = results[0]
+    for i in range(queries.shape[0]):
+        recall_at_one += neighbors[i, 0] in matches[i, :]
+    recall_at_one /= queries.shape[0]
+    print(f'- Recall@1: {recall_at_one * 100:.2f} %')
 
 # Showcases how to use Numba to JIT-compile similarity measures for USearch.
 # https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
+
 
 signature_f32 = types.float32(
     types.CPointer(types.float32),
@@ -85,10 +105,20 @@ def main(
     )
     bench_usearch(index, vectors_mat, queries_mat, neighbors_mat)
 
-    print('USearch: HNSW + Numba JIT + Half Precision')
+    print('USearch: HNSW + Half Precision')
     index = Index(
         ndim=dim,
         dtype='f16',
+        expansion_add=expansion_add,
+        expansion_search=expansion_search,
+        connectivity=connectivity,
+    )
+    bench_usearch(index, vectors_mat, queries_mat, neighbors_mat)
+
+    print('USearch: HNSW + Quarter Precision')
+    index = Index(
+        ndim=dim,
+        dtype='f8',
         expansion_add=expansion_add,
         expansion_search=expansion_search,
         connectivity=connectivity,

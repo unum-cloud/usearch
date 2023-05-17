@@ -102,16 +102,25 @@
     },
     "cSpell.words": [
         "astype",
+        "BLAS",
+        "downcasted",
+        "Downcasting",
         "dtype",
         "equidimensional",
+        "FAISS",
         "hashable",
+        "HNSW",
         "jaccard",
         "longlong",
         "memmap",
         "ndim",
+        "Numba",
         "preprocess",
+        "Quickstart",
         "simsimd",
-        "usearch"
+        "SLOC",
+        "usearch",
+        "usecases"
     ],
     "java.configuration.updateBuildConfiguration": "interactive"
 }
