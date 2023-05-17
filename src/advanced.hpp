@@ -469,21 +469,21 @@ class auto_index_gt {
     void reserve(std::size_t capacity) { index_->reserve(capacity); }
 
     // clang-format off
-    void add(label_t label, f16_bits_t const* vector) { return add(label, vector, true, casts_.from_f16); }
-    void add(label_t label, f32_t const* vector) { return add(label, vector, true, casts_.from_f32); }
-    void add(label_t label, f64_t const* vector) { return add(label, vector, true, casts_.from_f64); }
+    void add(label_t label, f16_bits_t const* vector) { return add(label, vector, casts_.from_f16); }
+    void add(label_t label, f32_t const* vector) { return add(label, vector, casts_.from_f32); }
+    void add(label_t label, f64_t const* vector) { return add(label, vector, casts_.from_f64); }
 
-    void add(label_t label, f16_bits_t const* vector, std::size_t thread, bool copy) { return add(label, vector, thread, copy, casts_.from_f16); }
-    void add(label_t label, f32_t const* vector, std::size_t thread, bool copy) { return add(label, vector, thread, copy, casts_.from_f32); }
-    void add(label_t label, f64_t const* vector, std::size_t thread, bool copy) { return add(label, vector, thread, copy, casts_.from_f64); }
+    void add(label_t label, f16_bits_t const* vector, add_config_t config) { return add(label, vector, config, casts_.from_f16); }
+    void add(label_t label, f32_t const* vector, add_config_t config) { return add(label, vector, config, casts_.from_f32); }
+    void add(label_t label, f64_t const* vector, add_config_t config) { return add(label, vector, config, casts_.from_f64); }
 
     std::size_t search(f16_bits_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances) const { return search(vector, wanted, matches, distances, casts_.from_f16); }
     std::size_t search(f32_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances) const { return search(vector, wanted, matches, distances, casts_.from_f32); }
     std::size_t search(f64_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances) const { return search(vector, wanted, matches, distances, casts_.from_f64); }
 
-    std::size_t search(f16_bits_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread) const { return search(vector, wanted, matches, distances, thread, casts_.from_f16); }
-    std::size_t search(f32_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread) const { return search(vector, wanted, matches, distances, thread, casts_.from_f32); }
-    std::size_t search(f64_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, std::size_t thread) const { return search(vector, wanted, matches, distances, thread, casts_.from_f64); }
+    std::size_t search(f16_bits_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, search_config_t config) const { return search(vector, wanted, matches, distances, config, casts_.from_f16); }
+    std::size_t search(f32_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, search_config_t config) const { return search(vector, wanted, matches, distances, config, casts_.from_f32); }
+    std::size_t search(f64_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, search_config_t config) const { return search(vector, wanted, matches, distances, config, casts_.from_f64); }
 
     static auto_index_gt ip(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make(dimensions, accuracy, ip_metric(dimensions, accuracy), make_casts(accuracy), config); }
     static auto_index_gt l2(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make(dimensions, accuracy, l2_metric(dimensions, accuracy), make_casts(accuracy), config); }
@@ -549,38 +549,40 @@ class auto_index_gt {
     }
 
     template <typename scalar_at>
-    void add(label_t label, scalar_at const* vector, std::size_t thread, bool copy, cast_t const& cast) {
+    void add(label_t label, scalar_at const* vector, add_config_t config, cast_t const& cast) {
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
         std::size_t vector_bytes = dimensions_ * sizeof(scalar_at);
 
-        byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * thread;
+        byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * config.thread;
         bool casted = cast(vector_data, casted_vector_bytes_, casted_data);
         if (casted)
-            vector_data = casted_data, vector_bytes = casted_vector_bytes_, copy = true;
+            vector_data = casted_data, vector_bytes = casted_vector_bytes_, config.store_vector = true;
 
-        index_->add(label, {vector_data, vector_bytes}, thread, copy);
+        index_->add(label, {vector_data, vector_bytes}, config);
     }
 
     template <typename scalar_at>
     std::size_t search(                              //
         scalar_at const* vector, std::size_t wanted, //
         label_t* matches, distance_t* distances,     //
-        std::size_t thread, cast_t const& cast) const {
+        search_config_t config, cast_t const& cast) const {
 
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
         std::size_t vector_bytes = dimensions_ * sizeof(scalar_at);
 
-        byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * thread;
+        byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * config.thread;
         bool casted = cast(vector_data, casted_vector_bytes_, casted_data);
         if (casted)
             vector_data = casted_data, vector_bytes = casted_vector_bytes_;
 
-        return index_->search({vector_data, vector_bytes}, wanted, matches, distances, thread);
+        return index_->search({vector_data, vector_bytes}, wanted, matches, distances, config);
     }
 
-    template <typename scalar_at> void add(label_t label, scalar_at const* vector, bool copy, cast_t const& cast) {
+    template <typename scalar_at> void add(label_t label, scalar_at const* vector, cast_t const& cast) {
         thread_lock_t lock = thread_lock();
-        return add(label, vector, lock.thread_id, copy, cast);
+        add_config_t config;
+        config.thread = lock.thread_id;
+        return add(label, vector, config, cast);
     }
 
     template <typename scalar_at>
@@ -589,7 +591,9 @@ class auto_index_gt {
         label_t* matches, distance_t* distances,     //
         cast_t const& cast) const {
         thread_lock_t lock = thread_lock();
-        return search(vector, wanted, matches, distances, lock.thread_id, cast);
+        search_config_t config;
+        config.thread = lock.thread_id;
+        return search(vector, wanted, matches, distances, config, cast);
     }
 
     static auto_index_gt make(                            //

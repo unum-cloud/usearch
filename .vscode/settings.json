@@ -98,11 +98,13 @@
         "filesystem": "cpp",
         "__availability": "cpp",
         "version": "cpp",
-        "future": "cpp"
+        "future": "cpp",
+        "__verbose_abort": "cpp"
     },
     "cSpell.words": [
         "astype",
         "BLAS",
+        "cflags",
         "downcasted",
         "Downcasting",
         "dtype",

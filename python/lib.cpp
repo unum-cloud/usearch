@@ -153,13 +153,16 @@ static void add_one_to_index(native_index_t& index, label_t label, py::buffer ve
     if (index.size() + 1 >= index.capacity())
         index.reserve(ceil2(index.size() + 1));
 
+    add_config_t config;
+    config.store_vector = copy;
+
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vector_info.format == "e")
-        index.add(label, reinterpret_cast<f16_bits_t const*>(vector_data), 0, copy);
+        index.add(label, reinterpret_cast<f16_bits_t const*>(vector_data), config);
     else if (vector_info.format == "f")
-        index.add(label, reinterpret_cast<float const*>(vector_data), 0, copy);
+        index.add(label, reinterpret_cast<float const*>(vector_data), config);
     else if (vector_info.format == "d")
-        index.add(label, reinterpret_cast<double const*>(vector_data), 0, copy);
+        index.add(label, reinterpret_cast<double const*>(vector_data), config);
     else
         throw std::invalid_argument("Incompatible scalars in the vector!");
 }
@@ -198,22 +201,31 @@ static void add_many_to_index(                                    //
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vectors_info.format == "e")
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+            add_config_t config;
+            config.store_vector = copy;
+            config.thread = thread_idx;
             label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
             f16_bits_t const* vector =
                 reinterpret_cast<f16_bits_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, thread_idx, copy);
+            index.add(label, vector, config);
         });
     else if (vectors_info.format == "f")
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+            add_config_t config;
+            config.store_vector = copy;
+            config.thread = thread_idx;
             label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
             float const* vector = reinterpret_cast<float const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, thread_idx, copy);
+            index.add(label, vector, config);
         });
     else if (vectors_info.format == "d")
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+            add_config_t config;
+            config.store_vector = copy;
+            config.thread = thread_idx;
             label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
             double const* vector = reinterpret_cast<double const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, thread_idx, copy);
+            index.add(label, vector, config);
         });
     else
         throw std::invalid_argument("Incompatible scalars in the vectors matrix!");
@@ -236,13 +248,13 @@ static py::tuple search_one_in_index(native_index_t& index, py::buffer vector, s
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vector_info.format == "e")
         count = index.search( //
-            reinterpret_cast<f16_bits_t const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), 0);
+            reinterpret_cast<f16_bits_t const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), {});
     else if (vector_info.format == "f")
         count = index.search( //
-            reinterpret_cast<float const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), 0);
+            reinterpret_cast<float const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), {});
     else if (vector_info.format == "d")
         count = index.search( //
-            reinterpret_cast<double const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), 0);
+            reinterpret_cast<double const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), {});
     else
         throw std::invalid_argument("Incompatible scalars in the query vector!");
 
@@ -292,21 +304,27 @@ static py::tuple search_many_in_index(native_index_t& index, py::buffer vectors,
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vectors_info.format == "e")
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+            search_config_t config;
+            config.thread = thread_idx;
             f16_bits_t const* vector = (f16_bits_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
             counts_py1d(task_idx) = static_cast<Py_ssize_t>(
-                index.search(vector, wanted, &labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0), thread_idx));
+                index.search(vector, wanted, &labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0), config));
         });
     else if (vectors_info.format == "f")
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+            search_config_t config;
+            config.thread = thread_idx;
             float const* vector = (float const*)(vectors_data + task_idx * vectors_info.strides[0]);
             counts_py1d(task_idx) = static_cast<Py_ssize_t>(
-                index.search(vector, wanted, &labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0), thread_idx));
+                index.search(vector, wanted, &labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0), config));
         });
     else if (vectors_info.format == "d")
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+            search_config_t config;
+            config.thread = thread_idx;
             double const* vector = (double const*)(vectors_data + task_idx * vectors_info.strides[0]);
             counts_py1d(task_idx) = static_cast<Py_ssize_t>(
-                index.search(vector, wanted, &labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0), thread_idx));
+                index.search(vector, wanted, &labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0), config));
         });
     else
         throw std::invalid_argument("Incompatible scalars in the query matrix!");
@@ -463,7 +481,9 @@ PYBIND11_MODULE(index, m) {
                 index.reserve(ceil2(index.size() + 1));
             auto proxy = set.unchecked<1>();
             auto view = set_view_t{proxy.data(0), static_cast<std::size_t>(proxy.shape(0))};
-            index.add(label, view, 0, copy);
+            add_config_t config;
+            config.store_vector = copy;
+            index.add(label, view, config);
         },                     //
         py::arg("label"),      //
         py::arg("set"),        //
@@ -479,7 +499,7 @@ PYBIND11_MODULE(index, m) {
             auto view = set_view_t{proxy.data(0), static_cast<std::size_t>(proxy.shape(0))};
             auto labels_py = py::array_t<label_t>(py_shape_t{static_cast<Py_ssize_t>(count)});
             auto labels_proxy = labels_py.mutable_unchecked<1>();
-            auto found = index.search(view, count, &labels_proxy(0), nullptr, 0);
+            auto found = index.search(view, count, &labels_proxy(0), nullptr);
             labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(found)});
             return labels_py;
         },
@@ -515,7 +535,7 @@ PYBIND11_MODULE(index, m) {
             if (index.size() + 1 >= index.capacity())
                 index.reserve(ceil2(index.size() + 1));
             hash_buffer(index, array);
-            index.add(label, index.buffer(), 0);
+            index.add(label, index.buffer());
         },                //
         py::arg("label"), //
         py::arg("array")  //
@@ -529,7 +549,7 @@ PYBIND11_MODULE(index, m) {
             hash_buffer(index, array);
             auto labels_py = py::array_t<label_t>(py_shape_t{static_cast<Py_ssize_t>(count)});
             auto labels_proxy = labels_py.mutable_unchecked<1>();
-            auto found = index.search(index.buffer(), count, &labels_proxy(0), nullptr, 0);
+            auto found = index.search(index.buffer(), count, &labels_proxy(0), nullptr);
             labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(found)});
             return labels_py;
         },

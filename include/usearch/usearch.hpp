@@ -95,10 +95,10 @@ template <typename scalar_at, typename result_at = scalar_at> struct ip_gt {
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_type ab{};
-#if defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(__clang__)
+#if defined(__clang__)
 #pragma clang loop vectorize(enable)
+#elif defined(__GNUC__)
+#pragma GCC ivdep
 #elif defined(_OPENMP)
 #pragma omp simd reduction(+ : ab)
 #endif
@@ -121,10 +121,10 @@ template <typename scalar_at, typename result_at = scalar_at> struct cos_gt {
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_t ab{}, a2{}, b2{};
-#if defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(__clang__)
+#if defined(__clang__)
 #pragma clang loop vectorize(enable)
+#elif defined(__GNUC__)
+#pragma GCC ivdep
 #elif defined(_OPENMP)
 #pragma omp simd reduction(+ : ab, a2, b2)
 #endif
@@ -147,10 +147,10 @@ template <typename scalar_at, typename result_at = scalar_at> struct l2sq_gt {
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_t ab_deltas_sq{};
-#if defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(__clang__)
+#if defined(__clang__)
 #pragma clang loop vectorize(enable)
+#elif defined(__GNUC__)
+#pragma GCC ivdep
 #elif defined(_OPENMP)
 #pragma omp simd reduction(+ : ab_deltas_sq)
 #endif
@@ -172,10 +172,10 @@ template <typename scalar_at, typename result_at = std::size_t> struct hamming_g
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t elements,
                                std::size_t = 0) const noexcept {
         result_t matches{};
-#if defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(__clang__)
+#if defined(__clang__)
 #pragma clang loop vectorize(enable)
+#elif defined(__GNUC__)
+#pragma GCC ivdep
 #elif defined(_OPENMP)
 #pragma omp simd reduction(+ : matches)
 #endif
@@ -200,10 +200,10 @@ template <typename scalar_at, typename result_at = std::size_t> struct bit_hammi
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words,
                                std::size_t = 0) const noexcept {
         result_t matches{};
-#if defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(__clang__)
+#if defined(__clang__)
 #pragma clang loop vectorize(enable)
+#elif defined(__GNUC__)
+#pragma GCC ivdep
 #elif defined(_OPENMP)
 #pragma omp simd reduction(+ : matches)
 #endif
@@ -252,10 +252,10 @@ template <typename scalar_at, typename result_at = scalar_at> struct pearson_cor
         scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_t a_sum{}, b_sum{}, ab_sum{};
         result_t a_sq_sum{}, b_sq_sum{};
-#if defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(__clang__)
+#if defined(__clang__)
 #pragma clang loop vectorize(enable)
+#elif defined(__GNUC__)
+#pragma GCC ivdep
 #elif defined(_OPENMP)
 #pragma omp simd reduction(+ : a_sum, b_sum, ab_sum, a_sq_sum, b_sq_sum)
 #endif
@@ -725,6 +725,32 @@ struct config_t {
     std::size_t max_threads_search = 0;
 };
 
+struct add_config_t {
+    /// @brief Optional thread identifier for multi-threaded construction.
+    std::size_t thread{};
+    /// @brief Don't copy the ::vector, if it's persisted elsewhere.
+    bool store_vector{true};
+};
+
+struct add_result_t {
+    std::size_t new_size{};
+    std::size_t cycles{};
+    std::size_t measurements{};
+};
+
+struct search_config_t {
+    std::size_t thread{};
+    bool exact{};
+};
+
+struct search_result_t {
+    std::size_t count{};
+    std::size_t cycles{};
+    std::size_t measurements{};
+
+    inline operator std::size_t() const noexcept { return count; }
+};
+
 /**
  *  @brief  Approximate Nearest Neighbors Search index using the
  *          Hierarchical Navigable Small World graph algorithm.
@@ -762,8 +788,15 @@ class index_gt {
     using id_t = id_at;
     using allocator_t = allocator_at;
 
+    using vector_view_t = span_gt<scalar_t const>;
+
+#if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L) // C++17 ann newer
+    using distance_t =
+        typename std::invoke_result<metric_t, scalar_t const*, scalar_t const*, std::size_t, std::size_t>::type;
+#else
     using distance_t =
         typename std::result_of<metric_t(scalar_t const*, scalar_t const*, std::size_t, std::size_t)>::type;
+#endif
 
   private:
     using neighbors_count_t = id_t;
@@ -850,16 +883,25 @@ class index_gt {
         scalar_t* vector{};
 
         inline node_ref_t(mutex_t& m, node_head_t& h, scalar_t* s) noexcept : mutex_(&m), head(h), vector(s) {}
+        /// @brief Locks the list of neighbors for concurrent updates.
         inline lock_t lock() const noexcept { return mutex_ ? lock_t{*mutex_} : lock_t{}; }
         inline operator node_t() const noexcept { return node_t{mutex_ ? (byte_t*)mutex_ : (byte_t*)&head, vector}; }
+        inline operator vector_view_t() const noexcept { return {vector, head.dim}; }
     };
 
     struct usearch_align_m thread_context_t {
-        top_candidates_t top_candidates;
-        next_candidates_t next_candidates;
-        visits_bitset_t visits;
-        std::default_random_engine level_generator;
-        metric_t metric;
+        top_candidates_t top_candidates{};
+        next_candidates_t next_candidates{};
+        visits_bitset_t visits{};
+        std::default_random_engine level_generator{};
+        metric_t metric{};
+        std::size_t iteration_cycles{};
+        std::size_t measurements_count{};
+
+        inline distance_t measure(vector_view_t a, vector_view_t b) noexcept {
+            measurements_count++;
+            return metric(a.data(), b.data(), a.size(), b.size());
+        }
     };
 
     config_t config_{};
@@ -909,6 +951,9 @@ class index_gt {
         reserve(config.max_elements);
     }
 
+    /**
+     *  @brief  Clones the structure with the same hyper-parameters, but without contents.
+     */
     index_gt fork() noexcept(false) { return {config_, metric_, allocator_}; }
 
     ~index_gt() noexcept { clear(); }
@@ -991,118 +1036,131 @@ class index_gt {
 
     /**
      *  @brief Inserts a new vector into the index. Thread-safe.
+     *
      *  @param[in] label External identifier/name/descriptor for the vector.
      *  @param[in] vector Contiguous range of scalars forming a vector view.
-     *  @param[in] thread Optional thread identifier for multi-threaded construction.
-     *  @param[in] store_vector Don't copy the ::vector, if it's persisted elsewhere.
+     *  @param[in] config Configuration options for this specific operation.
      */
-    id_t add(label_t label, span_gt<scalar_t const> vector, std::size_t thread = 0, bool store_vector = true) {
+    add_result_t add(label_t label, vector_view_t vector, add_config_t config = {}) noexcept(false) {
 
         assert_m(!is_immutable(), "Can't add to an immutable index");
-        id_t new_id = static_cast<id_t>(size_.fetch_add(1));
-        label_t const& new_label = label;
-        scalar_t const* new_vector = vector.data();
-        std::size_t new_dim = vector.size();
+        add_result_t result;
+        result.new_size = size_.fetch_add(1);
+        id_t id = static_cast<id_t>(result.new_size);
 
-        // Determining how much memory to allocate depends on the target level.
+        // Determining how much memory to allocate depends on the target level
         lock_t new_level_lock(global_mutex_);
         level_t max_level = max_level_;
-        thread_context_t& context = thread_contexts_[thread];
-        level_t new_target_level = choose_random_level(context.level_generator);
-        if (new_target_level <= max_level)
+        thread_context_t& context = thread_contexts_[config.thread];
+        level_t target_level = choose_random_level(context.level_generator);
+        if (target_level <= max_level)
             new_level_lock.unlock();
 
         // Allocate the neighbors
-        node_ref_t new_node = node_malloc(new_label, new_vector, new_dim, new_target_level, store_vector);
+        node_ref_t new_node = node_malloc(label, vector, target_level, config.store_vector);
         lock_t new_lock = new_node.lock();
-        nodes_[new_id] = new_node;
+        nodes_[id] = new_node;
 
         // Do nothing for the first element
-        if (!new_id) {
-            max_level_ = new_target_level;
-            return new_id;
+        if (!id) {
+            max_level_ = target_level;
+            return result;
         }
+
+        // Pull stats
+        result.measurements = context.measurements_count;
+        result.cycles = context.iteration_cycles;
 
         // Go down the level, tracking only the closest match
-        id_t closest_id = search_for_one(entry_id_, new_vector, new_dim, max_level, new_target_level, context);
+        id_t closest_id = search_for_one(entry_id_, vector, max_level, target_level, context);
 
-        // From `new_target_level` down perform proper extensive search.
-        for (level_t level = (std::min)(new_target_level, max_level); level >= 0; level--) {
-            search_to_insert(closest_id, new_vector, new_dim, level, context);
-            closest_id = connect_new_element(new_id, level, context);
+        // From `target_level` down perform proper extensive search
+        for (level_t level = (std::min)(target_level, max_level); level >= 0; level--) {
+            search_to_insert(closest_id, vector, level, context);
+            closest_id = connect_new_element(id, level, context);
         }
 
-        // Releasing lock for the maximum level
-        if (new_target_level > max_level) {
-            entry_id_ = new_id;
-            max_level_ = new_target_level;
+        // Normalize stats
+        result.measurements = context.measurements_count - result.measurements;
+        result.cycles = context.iteration_cycles - result.cycles;
+
+        // Updating the entry point if needed
+        if (target_level > max_level) {
+            entry_id_ = id;
+            max_level_ = target_level;
         }
-        return new_id;
+        return result;
     }
 
     /**
      *  @brief Searches for the closest members to the given ::query. Thread-safe.
+     *
      *  @param[in] query Contiguous range of scalars forming a vector view.
      *  @param[in] wanted The upper bound for the number of results to return.
      *  @param[in] callback Function receiving the labels and distances to matches in ascending order.
-     *  @param[in] thread Optional thread identifier for multi-threaded search.
+     *  @param[in] config Configuration options for this specific operation.
      */
-    template <typename label_and_distance_callback_at>
-    void search(                                           //
-        span_gt<scalar_t const> query, std::size_t wanted, //
-        label_and_distance_callback_at&& callback,         //
-        std::size_t thread = 0) const {
+    template <typename callback_at>
+    search_result_t search(                      //
+        vector_view_t query, std::size_t wanted, //
+        callback_at&& callback, search_config_t config = {}) const noexcept(false) {
 
+        search_result_t result;
         if (!size_)
-            return;
-
-        scalar_t const* query_vec = query.data();
-        std::size_t query_dim = query.size();
+            return result;
 
         // Go down the level, tracking only the closest match
-        thread_context_t& context = thread_contexts_[thread];
-        id_t closest_id = search_for_one(entry_id_, query_vec, query_dim, max_level_, 0, context);
+        thread_context_t& context = thread_contexts_[config.thread];
+        result.measurements = context.measurements_count;
+        result.cycles = context.iteration_cycles;
+        id_t closest_id = search_for_one(entry_id_, query, max_level_, 0, context);
 
         // For bottom layer we need a more optimized procedure
         std::size_t expansion = (std::max)(config_.expansion_search, wanted);
-        search_to_find_in_base(closest_id, query_vec, query_dim, expansion, context);
-        context.top_candidates.sort_ascending();
-        context.top_candidates.shrink(wanted);
+        search_to_find_in_base(closest_id, query, expansion, context);
+        top_candidates_t& top = context.top_candidates;
+        top.sort_ascending();
+        top.shrink(wanted);
 
-        candidate_t const* top = context.top_candidates.data();
-        for (std::size_t i = 0; i < context.top_candidates.size(); ++i)
-            callback(node(top[i].second).head.label, top[i].first);
+        candidate_t const* top_ordered = top.data();
+        for (std::size_t i = 0; i < top.size(); ++i)
+            callback(node(top_ordered[i].second).head.label, top_ordered[i].first);
+
+        // Normalize stats
+        result.measurements = context.measurements_count - result.measurements;
+        result.cycles = context.iteration_cycles - result.cycles;
+        result.count = top.size();
+        return result;
     }
 
     /**
      *  @brief Searches for the closest members to the given ::query. Thread-safe.
+     *  @note Convenience method for callback-based `search()`.
+     *
      *  @param[in] query Contiguous range of scalars forming a vector view.
      *  @param[in] wanted The upper bound for the number of results to return.
      *  @param[out] matches Contiguous output buffer for the labels of closest members.
      *  @param[out] distances Contiguous output buffer for the distances to the closest members.
-     *  @param[in] thread Optional thread identifier for multi-threaded search.
+     *  @param[in] config Configuration options for this specific operation.
      *  @return The number of found approximate matches. Always equal or less then ::wanted.
      */
-    std::size_t search(                                    //
-        span_gt<scalar_t const> query, std::size_t wanted, //
-        label_t* matches, distance_t* distances,           //
-        std::size_t thread = 0) const {
+    search_result_t search(                      //
+        vector_view_t query, std::size_t wanted, //
+        label_t* matches, distance_t* distances, search_config_t config = {}) const noexcept(false) {
 
-        std::size_t found = 0;
         auto callback = [&](label_t label, distance_t distance) noexcept {
             if (matches)
-                matches[found] = label;
+                *(matches++) = label;
             if (distances)
-                distances[found] = distance;
-            ++found;
+                *(distances++) = distance;
         };
-        search(query, wanted, callback, thread);
-        return found;
+        return search(query, wanted, callback, config);
     }
 
 #pragma endregion
 
 #pragma region Serialization
+
   private:
     struct serialized_state_t {
         // Check compatibility
@@ -1215,7 +1273,7 @@ class index_gt {
             }
 
             std::size_t bytes_to_dump = node_dump_size(head.dim, head.level);
-            node_ref_t node_ref = node_malloc(head.label, nullptr, head.dim, head.level, true);
+            node_ref_t node_ref = node_malloc(head.label, {nullptr, head.dim}, head.level, true);
             read = std::fread((byte_t*)&node_ref.head + head_bytes_k, bytes_to_dump - head_bytes_k, 1, file);
             if (!read) {
                 std::fclose(file);
@@ -1339,11 +1397,10 @@ class index_gt {
         node = node_t{};
     }
 
-    node_ref_t node_malloc(                                     //
-        label_t label, scalar_t const* vector, std::size_t dim, //
-        level_t level, bool store_vector = true) noexcept(false) {
+    node_ref_t node_malloc(label_t label, vector_view_t vector, level_t level, bool store_vector) noexcept(false) {
 
         // This function is rarely called and can be as expensive as needed for higher space-efficiency.
+        std::size_t dim = vector.size();
         std::size_t levels_bytes = pre_.neighbors_base_bytes + pre_.neighbors_bytes * level;
         std::size_t node_bytes =                  //
             pre_.mutex_bytes +                    // Optional concurrency-control
@@ -1357,10 +1414,10 @@ class index_gt {
         mutex_t* mutex = synchronize() ? (mutex_t*)data : nullptr;
         scalar_t* scalars = store_vector //
                                 ? (scalar_t*)(data + pre_.mutex_bytes + head_bytes_k + levels_bytes)
-                                : (scalar_t*)(vector);
+                                : (scalar_t*)(vector.data());
 
         std::memset(data, 0, node_bytes);
-        std::memcpy(scalars, vector, sizeof(scalar_t) * dim * (store_vector && vector));
+        std::memcpy(scalars, vector.data(), sizeof(scalar_t) * dim * (store_vector && vector.data()));
 
         node_head_t& head = *(node_head_t*)(data + pre_.mutex_bytes);
         head.label = label;
@@ -1430,17 +1487,9 @@ class index_gt {
             // To fit a new connection we need to drop an existing one.
             top.clear();
             top.reserve(close_header.size() + 1);
-            top.emplace_reserved( //
-                context.metric(   //
-                    new_node.vector, close_node.vector, new_node.head.dim, close_node.head.dim),
-                new_id);
-            for (id_t successor_id : close_header) {
-                node_ref_t successor_node = node(successor_id);
-                top.emplace_reserved( //
-                    context.metric(   //
-                        successor_node.vector, close_node.vector, successor_node.head.dim, close_node.head.dim),
-                    successor_id);
-            }
+            top.emplace_reserved(context.measure(new_node, close_node), new_id);
+            for (id_t successor_id : close_header)
+                top.emplace_reserved(context.measure(node(successor_id), close_node), successor_id);
 
             // Export the results:
             close_header.clear();
@@ -1458,13 +1507,12 @@ class index_gt {
         return (level_t)r;
     }
 
-    id_t search_for_one(                                                 //
-        id_t entry_id, scalar_t const* query_vec, std::size_t query_dim, //
-        level_t begin_level, level_t end_level, thread_context_t& context) const noexcept {
+    id_t search_for_one(                        //
+        id_t closest_id, vector_view_t query,   //
+        level_t begin_level, level_t end_level, //
+        thread_context_t& context) const noexcept {
 
-        id_t closest_id = entry_id;
-        distance_t closest_dist =
-            context.metric(query_vec, node(closest_id).vector, query_dim, node(closest_id).head.dim);
+        distance_t closest_dist = context.measure(query, node(closest_id));
         for (level_t level = begin_level; level > end_level; level--) {
             bool changed;
             do {
@@ -1473,23 +1521,22 @@ class index_gt {
                 lock_t closest_lock = closest_node.lock();
                 neighbors_ref_t closest_header = neighbors_non_base(closest_node, level);
                 for (id_t candidate_id : closest_header) {
-                    node_ref_t candidate_node = node(candidate_id);
-                    distance_t candidate_dist =
-                        context.metric(query_vec, candidate_node.vector, query_dim, candidate_node.head.dim);
+                    distance_t candidate_dist = context.measure(query, node(candidate_id));
                     if (candidate_dist < closest_dist) {
                         closest_dist = candidate_dist;
                         closest_id = candidate_id;
                         changed = true;
                     }
                 }
+                context.iteration_cycles++;
             } while (changed);
         }
         return closest_id;
     }
 
-    void search_to_insert(                                               //
-        id_t start_id, scalar_t const* query_vec, std::size_t query_dim, //
-        level_t level, thread_context_t& context) noexcept(false) {
+    void search_to_insert(                                 //
+        id_t start_id, vector_view_t query, level_t level, //
+        thread_context_t& context) noexcept(false) {
 
         visits_bitset_t& visits = context.visits;
         next_candidates_t& candidates = context.next_candidates; // pop min, push
@@ -1501,7 +1548,7 @@ class index_gt {
         top.clear();
         top.reserve(top_limit + 1);
 
-        distance_t radius = context.metric(query_vec, node(start_id).vector, query_dim, node(start_id).head.dim);
+        distance_t radius = context.measure(query, node(start_id));
         candidates.emplace(-radius, start_id);
         top.emplace_reserved(radius, start_id);
         visits.set(start_id);
@@ -1513,6 +1560,8 @@ class index_gt {
                 break;
 
             candidates.pop();
+            context.iteration_cycles++;
+
             id_t candidate_id = candidacy.second;
             node_ref_t candidate_node = node(candidate_id);
             lock_t candidate_lock = candidate_node.lock();
@@ -1524,9 +1573,8 @@ class index_gt {
                     continue;
 
                 visits.set(successor_id);
-                node_ref_t successor_node = node(successor_id);
-                distance_t successor_dist =
-                    context.metric(query_vec, successor_node.vector, query_dim, successor_node.head.dim);
+                distance_t successor_dist = context.measure(query, node(successor_id));
+
                 if (top.size() < top_limit || successor_dist < radius) {
                     candidates.emplace(-successor_dist, successor_id);
                     top.emplace_reserved(successor_dist, successor_id);
@@ -1538,9 +1586,9 @@ class index_gt {
         }
     }
 
-    void search_to_find_in_base(                                         //
-        id_t start_id, scalar_t const* query_vec, std::size_t query_dim, //
-        std::size_t expansion, thread_context_t& context) const noexcept(false) {
+    void search_to_find_in_base(                                   //
+        id_t start_id, vector_view_t query, std::size_t expansion, //
+        thread_context_t& context) const noexcept(false) {
 
         visits_bitset_t& visits = context.visits;
         next_candidates_t& candidates = context.next_candidates; // pop min, push
@@ -1552,7 +1600,7 @@ class index_gt {
         top.clear();
         top.reserve(top_limit + 1);
 
-        distance_t radius = context.metric(query_vec, node(start_id).vector, query_dim, node(start_id).head.dim);
+        distance_t radius = context.measure(query, node(start_id));
         candidates.emplace(-radius, start_id);
         top.emplace_reserved(radius, start_id);
         visits.set(start_id);
@@ -1564,6 +1612,7 @@ class index_gt {
                 break;
 
             candidates.pop();
+            context.iteration_cycles++;
 
             id_t candidate_id = candidate.second;
             neighbors_ref_t candidate_header = neighbors_base(node(candidate_id));
@@ -1574,9 +1623,7 @@ class index_gt {
                     continue;
 
                 visits.set(successor_id);
-                node_ref_t successor_node = node(successor_id);
-                distance_t successor_dist =
-                    context.metric(query_vec, successor_node.vector, query_dim, successor_node.head.dim);
+                distance_t successor_dist = context.measure(query, node(successor_id));
 
                 if (top.size() < top_limit || successor_dist < radius) {
                     candidates.emplace(-successor_dist, successor_id);
@@ -1596,7 +1643,10 @@ class index_gt {
      *          that massively reduces the number of connections a point has,
      *          to keep only the neighbors, that are from each other.
      */
-    candidates_view_t refine(top_candidates_t& top, std::size_t needed, thread_context_t& context) const noexcept {
+
+    candidates_view_t refine(                      //
+        top_candidates_t& top, std::size_t needed, //
+        thread_context_t& context) const noexcept {
 
         top.sort_ascending();
         candidate_t* top_data = top.data();
@@ -1614,9 +1664,7 @@ class index_gt {
             for (std::size_t idx = 0; idx < submitted_count; idx++) {
                 candidate_t submitted = top_data[idx];
                 node_ref_t submitted_node = node(submitted.second);
-                distance_t inter_result_dist = context.metric(    //
-                    submitted_node.vector, candidate_node.vector, //
-                    submitted_node.head.dim, candidate_node.head.dim);
+                distance_t inter_result_dist = context.measure(submitted_node, candidate_node);
                 if (inter_result_dist < candidate_dist) {
                     good = false;
                     break;

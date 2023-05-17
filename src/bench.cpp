@@ -43,6 +43,7 @@ using namespace unum::usearch;
 using namespace unum;
 
 using vector_id_t = std::uint32_t;
+using vector_view_t = span_gt<float const>;
 
 template <typename element_at>
 std::size_t offset_of(element_at const* begin, element_at const* end, element_at v) noexcept {
@@ -271,12 +272,14 @@ struct running_stats_printer_t {
 template <typename index_at, typename vector_id_at, typename real_at>
 void index_many(index_at& native, std::size_t n, vector_id_at const* ids, real_at const* vectors, std::size_t dims) {
 
-    using span_t = span_gt<float const>;
     running_stats_printer_t printer{n, "Indexing"};
 
 #pragma omp parallel for schedule(static, 32)
     for (std::size_t i = 0; i < n; ++i) {
-        native.add(ids[i], span_t{vectors + dims * i, dims}, omp_get_thread_num(), true);
+        add_config_t config;
+        config.thread = omp_get_thread_num();
+        config.store_vector = true;
+        native.add(ids[i], vector_view_t{vectors + dims * i, dims}, config);
         printer.progress++;
         if (omp_get_thread_num() == 0)
             printer.refresh();
@@ -284,18 +287,20 @@ void index_many(index_at& native, std::size_t n, vector_id_at const* ids, real_a
 }
 
 template <typename index_at, typename vector_id_at, typename real_at>
-void search_many(index_at& native, std::size_t n, real_at const* vectors, std::size_t dims, std::size_t wanted,
-                 vector_id_at* ids, real_at* distances) {
+void search_many( //
+    index_at& native, std::size_t n, real_at const* vectors, std::size_t dims, std::size_t wanted, vector_id_at* ids,
+    real_at* distances) {
 
-    using span_t = span_gt<float const>;
     running_stats_printer_t printer{n, "Search"};
 
 #pragma omp parallel for schedule(static, 32)
     for (std::size_t i = 0; i < n; ++i) {
-        native.search(                                //
-            span_t{vectors + dims * i, dims}, wanted, //
-            ids + wanted * i, distances + wanted * i, //
-            omp_get_thread_num());
+        search_config_t config;
+        config.thread = omp_get_thread_num();
+        native.search(                                       //
+            vector_view_t{vectors + dims * i, dims}, wanted, //
+            ids + wanted * i, distances + wanted * i,        //
+            config);
         printer.progress++;
         if (omp_get_thread_num() == 0)
             printer.refresh();
