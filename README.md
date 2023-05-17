@@ -41,26 +41,36 @@ Linux • MacOS • Windows
 - [x] [Half-precision `f16` and Quarter-precision `f8`](#quantize-on-the-fly) support on any hardware.
 - [x] [View from disk](#view-larger-indexes-from-disk), without loading into RAM.
 - [x] [4B+](#go-beyond-4b-entries) sized space efficient point-clouds with `uint40_t`.
-- [x] Variable dimensionality vectors - for [obscure usecases][obscure-usecases].
+- [x] Variable dimensionality vectors - for [obscure use-cases][obscure-use-cases].
 - [x] [Bring your threads](#bring-your-threads), like OpenMP.
 - [x] Multiple vectors per label.
 - [ ] Thread-safe `reserve`.
 - [x] AI + Vector Search = [Semantic Search](#ai--vector-search--semantic-search).
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/usearch.hpp
-[obscure-usecases]: https://ashvardanian.com/posts/abusing-vector-search
+[obscure-use-cases]: https://ashvardanian.com/posts/abusing-vector-search
 
 ---
 
-FAISS the industry standard for a high-performance batteries-included vector search engine.
+|                    | FAISS                         | USearch                            |
+| :----------------- | :---------------------------- | :--------------------------------- |
+| Implementation     | 84 K [SLOC][sloc] in `faiss/` | 1 K [SLOC][sloc] in `usearch/`     |
+| Supported metrics  | 9 fixed metrics               | Any User-Defined metrics           |
+| Supported ID types | `uint32_t`, `uint64_t`        | `uint32_t`, `uint40_t`, `uint64_t` |
+| Dependencies       | BLAS, OpenMP                  | None                               |
+| Bindings           | SWIG                          | Native                             |
+| Acceleration       | Learned Quantization          | Downcasting                        |
+
+FAISS is the industry standard for a high-performance batteries-included vector search engine.
 Both USearch and FAISS implement the same HNSW algorithm.
-USearch outperforms FAISS out-of-the-box, and doesn't need training a product-quantization scheme to achieve great performance with simple downcasting.
+But they differ in a lot of design decisions.
+USearch is designed to be compact and broadly compatible without sacrificing performance.
 
 |            | FAISS, `f32` | USearch, `f32` | USearch, `f16` | USearch, `f8` |
 | :--------- | -----------: | -------------: | -------------: | ------------: |
-| Insertions |       76 K/s |         89 K/s |         73 K/s |       137 K/s |
-| Queries    |      118 K/s |        167 K/s |        140 K/s |       281 K/s |
-| Recall @1  |          99% |          99.2% |            98% |         99.2% |
+| Insertions |       76 K/s |         89 K/s |         73 K/s |   **137 K/s** |
+| Queries    |      118 K/s |        167 K/s |        140 K/s |   **281 K/s** |
+| Recall @1  |          99% |          99.2% |            98% |     **99.2%** |
 
 > Dataset: 1M vectors sample of the Deep1B dataset.
 > Hardware: `c7g.metal` AWS instance with 64 cores and DDR5 memory.
@@ -69,18 +79,7 @@ USearch outperforms FAISS out-of-the-box, and doesn't need training a product-qu
 > expansion @ construction `efConstruction=128`,
 > and expansion @ search `ef=64`.
 > Both libraries were compiled for the target architecture.
-> Jump to [Performance Tuning][benchmarking] section to read about the affects of those hyper-parameters.
-
-|                    | FAISS                         | USearch                            |
-| :----------------- | :---------------------------- | :--------------------------------- |
-| Implementation     | 84 K [SLOC][sloc] in `faiss/` | 1 K [SLOC][sloc] in `usearch/`     |
-| Supported metrics  | 9 metrics                     | Any User-Defined Metric            |
-| Supported ID types | `uint32_t`, `uint64_t`        | `uint32_t`, `uint40_t`, `uint64_t` |
-| Dependencies       | BLAS, OpenMP                  | None                               |
-| Bindings           | SWIG                          | Native                             |
-| Acceleration       | Learned Quantization          | Downcasting                        |
-
-With higher performance, it's also much smaller and more portable, making it ideal for the next million AI-powered applications.
+> Jump to the [Performance Tuning][benchmarking] section to read about the effects of those hyper-parameters.
 
 [sloc]: https://en.wikipedia.org/wiki/Source_lines_of_code
 [benchmarking]: https://github.com/unum-cloud/usearch
@@ -88,17 +87,16 @@ With higher performance, it's also much smaller and more portable, making it ide
 ## User-Defined Functions
 
 Most vector-search packages focus on just 2 metrics - "Inner Product distance" and "Euclidean distance".
-That hardly exhausts the list of possible metrics.
-A good example would be the rare [Haversine][haversine] distance, used to compute the distance between geo-spatial coordinates, extending Vector Search into GIS domain.
-In real-world AI applications you may want to build **composite indexes**, combining embeddings from multiple models.
-In that case you would need to define a custom "metric".
+That only partially exhausts the list of possible metrics.
+A good example would be the rare [Haversine][haversine] distance, used to compute the distance between geo-spatial coordinates, extending Vector Search into the GIS domain.
+Another example would be designing a custom metric for **composite embeddings** concatenated from multiple AI models in real-world applications. 
 USearch supports that: [Python](#user-defined-functions-in-python) and [C++](#user-defined-functions-in-c) examples.
 
 ![USearch: Vector Search Approaches](assets/usearch-approaches-white.png)
 
-Older approaches indexing high-dimensional spaces, like KD-Trees and Locality Sensitive Hashing are hardly extendible to vectors/objects of variable length.
-Modern NSW-like algorithms, however, only require two objects to be comparable.
-This means, the index can be extended to support fuzzy search with Levenstein distance over strings of different length, or any other [obscure][obscure] application.
+Unlike older approaches indexing high-dimensional spaces, like KD-Trees and Locality Sensitive Hashing, HNSW doesn't require vectors to be identical in length.
+They only have to be comparable.
+So you can apply it in [obscure][obscure] applications, like searching for similar sets or fuzzy text matching.
 
 [haversine]: https://ashvardanian.com/posts/abusing-vector-search#geo-spatial-indexing
 [obscure]: https://ashvardanian.com/posts/abusing-vector-search
@@ -106,17 +104,17 @@ This means, the index can be extended to support fuzzy search with Levenstein di
 ## Memory Efficiency, Downcasting, and Quantization
 
 Training a quantization model and dimension-reduction is a common approach to accelerate vector search.
-Those, however, aren't always reliable, can significantly affect the statistical properties of your data, and require regular adjustments if your distribution shifts.
+Those, however, are only sometimes reliable, can significantly affect the statistical properties of your data, and require regular adjustments if your distribution shifts.
 
 ![USearch uint40_t support](assets/usearch-neighbor-types.png)
 
 Instead, we have focused on high-precision arithmetic over low-precision downcasted vectors.
-The same index, and it's `add` and `search` operations will automatically down-cast or up-cast between `f32_t`, `f16_t`, `f64_t`, and `f8_t` representations, even if hardware doesn't natively support it.
-Continuing the topic memory-efficiency, we provide a `uint40_t` to allow collection with over 4B+ vectors, without having to allocate 8 bytes for every neighbor reference in the proximity graph.
+The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f32_t`, `f16_t`, `f64_t`, and `f8_t` representations, even if the hardware doesn't natively support it.
+Continuing the topic of memory-efficiency, we provide a `uint40_t` to allow collection with over 4B+ vectors without allocating 8 bytes for every neighbor reference in the proximity graph.
 
 ## View Larger Indexes from Disk
 
-To maximize indexing speed and minimize serving costs modern search system would often suggest using different servers.
+Modern search systems often suggest using different servers to maximize indexing speed and minimize serving costs.
 Memory-optimized for the first task, and storage-optimized for the second, if the index can be served from external memory, which USearch can.
 
 |          |    To Build     |        To Serve        |
@@ -126,7 +124,7 @@ Memory-optimized for the first task, and storage-optimized for the second, if th
 | Memory   | 24 TB RAM + EBS | 192 GB RAM + 30 TB SSD |
 
 There is a 50x difference between the cost of such instances for identical capacity.
-Of course, the latency of external memory access will be higher, but it is partly compensated with a good prefetching mechanism.
+Of course, the latency of external memory access will be higher, but it is in part compensated with an excellent prefetching mechanism.
 
 ## Usage
 
@@ -137,6 +135,8 @@ There are two usage patters:
 
 ### C++
 
+#### Installation
+
 To use in a C++ project simply copy the `include/usearch/usearch.hpp` header into your project.
 Alternatively fetch it with CMake:
 
@@ -145,8 +145,10 @@ FetchContent_Declare(usearch GIT_REPOSITORY https://github.com/unum-cloud/usearc
 FetchContent_MakeAvailable(usearch)
 ```
 
+#### Quickstart
+
 Once included, the low-level C++11 interface is as simple as it gets: `reserve()`, `add()`, `search()`, `size()`, `capacity()`, `save()`, `load()`, `view()`.
-This covers 90% of usecases.
+This covers 90% of use-cases.
 
 ```c++
 using namespace unum::usearch;
@@ -161,7 +163,9 @@ index.search(
   /* with callback: */ [](std::size_t label, float distance) { });
 ```
 
-### Serialization
+The `add` is thread-safe for concurrent index construction.
+
+#### Serialization
 
 ```c++
 index.save("index.usearch");
@@ -169,8 +173,9 @@ index.load("index.usearch"); // Copying from disk
 index.view("index.usearch"); // Memory-mapping from disk
 ```
 
-The `add` is thread-safe for concurrent index construction.
-For advanced users, more compile-time abstraction are available.
+#### User-Defined Metrics in C++
+
+For advanced users, more compile-time abstractions are available.
 
 ```cpp
 template <typename metric_at = ip_gt<float>,            //
@@ -181,10 +186,8 @@ template <typename metric_at = ip_gt<float>,            //
 class index_gt;
 ```
 
-#### User Defined Metrics in C++
-
-You may want to use a custom memory allocator, or a rare scalar type, but most often you would start by defining a custom similarity measure.
-To support different-length vectors, the function object should have the following signature.
+You may want to use a custom memory allocator or a rare scalar type, but most often, you would start by defining a custom similarity measure.
+The function object should have the following signature to support different-length vectors.
 
 ```cpp
 struct custom_metric_t {
@@ -192,7 +195,7 @@ struct custom_metric_t {
 };
 ```
 
-Following distances are pre-packaged:
+The following distances are pre-packaged:
 
 - `cos_gt<scalar_t>` for "Cosine" or "Angular" distance.
 - `ip_gt<scalar_t>` for "Inner Product" or "Dot Product" distance.
@@ -205,7 +208,7 @@ Following distances are pre-packaged:
 #### Bring your Threads
 
 Most AI, HPC, or Big Data packages use some form of a thread pool.
-Instead of spawning additional threads within USearch, we focus on thread-safety of `add()` function, simplifying resource-management.
+Instead of spawning additional threads within USearch, we focus on the thread safety of `add()` function, simplifying resource management.
 
 ```cpp
 #pragma omp parallel for
@@ -213,9 +216,8 @@ Instead of spawning additional threads within USearch, we focus on thread-safety
         native.add(label, span_t{vector, dims}, omp_get_thread_num());
 ```
 
-During initialization we allocate enough temporary memory for all the cores on the machine.
-On call, the user can simply supply the identifier of the current thread, making this library easy to integrate with OpenMP and similar tools.
-Higher-level interface f
+During initialization, we allocate enough temporary memory for all the cores on the machine.
+On the call, the user can supply the identifier of the current thread, making this library easy to integrate with OpenMP and similar tools.
 
 ### Python
 
@@ -251,7 +253,7 @@ assert distances[0] <= 0.001
 ```
 
 Python bindings are implemented with [`pybind/pybind11`](https://github.com/pybind/pybind11).
-Assuming the presence of Global Interpreter Lock in Python, on large insertions we spawn threads in the C++ layer.
+Assuming the presence of Global Interpreter Lock in Python, we spawn threads in the C++ layer on large insertions.
 
 #### Serialization
 
@@ -278,13 +280,14 @@ assert matches.shape[0] == vectors.shape[0]
 assert counts[0] <= 10
 ```
 
-Working with large collections you may also want to override the default `threads` and `copy` arguments.
+You can also override the default `threads` and `copy` arguments in bulk workloads.
 The first controls the number of threads spawned for the task.
-The second controls, wether a 
+The second controls whether the vector itself will be persisted inside the index.
+If you can preserve the lifetime of the vector somewhere else, you can avoid the copy.
 
-#### User Defined Metrics in Python
+#### User-Defined Metrics in Python
 
-Assuming the language boundary exists between Python user code and C++ implementation, passing a Python callable to the engine, isn't the most efficient solution.
+Assuming the language boundary exists between Python user code and C++ implementation, there are more efficient solutions than passing a Python callable to the engine.
 Luckily, with the help of [Numba][numba], we can JIT compile a function with a matching signature and pass it down to the engine.
 
 ```py
@@ -380,8 +383,8 @@ let results = index.search(&first, 10).unwrap();
 assert_eq!(results.count, 2);
 ```
 
-Being a systems-programming language, Rust has better control over memory management and concurrency, but lacks function overloading.
-Aside from the `add` and `search`, USearch Rust binding also provides `add_in_thread` and `search_in_thread` which let users identify the calling thread to use underlying temporary memory more efficiently.
+Being a systems-programming language, Rust has better control over memory management and concurrency but lacks function overloading.
+Aside from the `add` and `search`, USearch Rust binding also provides `add_in_thread` and `search_in_thread`, which let users identify the calling thread to use underlying temporary memory more efficiently.
 
 #### Serialization
 
@@ -429,8 +432,6 @@ int[] labels = index.search(vec, 5);
 ```txt
 https://github.com/unum-cloud/usearch
 ```
-
-Simply add this dependency
 
 #### Quickstart
 
