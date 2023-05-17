@@ -1,0 +1,90 @@
+name: Report a bug
+description: Something doesn't work as expected?
+title: "Bug: "
+labels: ["bug", "invalid"]
+assignees:
+  - octocat
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+        If you have a small question, it may be faster to ask the maintainers on [Discord](https://discord.gg/4mxGrenbNt).
+  - type: textarea
+    id: what
+    attributes:
+      label: Describe the bug
+      placeholder: A short description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: Detail the steps taken to reproduce the behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: USearch version
+      placeholder: v0.4.X
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      placeholder: Ubuntu 22.04
+    validations:
+      required: true
+  - type: dropdown
+    id: hardware
+    attributes:
+      label: Hardware architecture
+      options:
+        - x86
+        - Arm
+    validations:
+      required: true
+  - type: dropdown
+    id: frontend
+    attributes:
+      label: Which interface are you using?
+      options:
+        - C++ implementation
+        - Python bindings
+        - Other bindings
+    validations:
+      required: true
+  - type: input
+    id: contact
+    attributes:
+      label: Contact Details
+      description: How can we get in touch with you if we need more info?
+      placeholder: email@example.com
+    validations:
+      required: false
+  - type: checkboxes
+    id: duplicate
+    attributes:
+      label: Is there an existing issue for this?
+      description: Please search [our issues](https://github.com/unum-cloud/usearch/issues) to see if this bug already exists.
+      options:
+        - label: I have searched the existing issues
+          required: true
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our [Code of Conduct](https://github.com/unum-cloud/usearch/blob/main/CODE_OF_CONDUCT.md)
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true

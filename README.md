@@ -92,7 +92,7 @@ A good example would be the rare [Haversine][haversine] distance, used to comput
 Another example would be designing a custom metric for **composite embeddings** concatenated from multiple AI models in real-world applications. 
 USearch supports that: [Python](#user-defined-functions-in-python) and [C++](#user-defined-functions-in-c) examples.
 
-![USearch: Vector Search Approaches](assets/usearch-approaches-white.png)
+![USearch: Vector Search Approaches](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-approaches-white.png?raw=true)
 
 Unlike older approaches indexing high-dimensional spaces, like KD-Trees and Locality Sensitive Hashing, HNSW doesn't require vectors to be identical in length.
 They only have to be comparable.
@@ -106,7 +106,7 @@ So you can apply it in [obscure][obscure] applications, like searching for simil
 Training a quantization model and dimension-reduction is a common approach to accelerate vector search.
 Those, however, are only sometimes reliable, can significantly affect the statistical properties of your data, and require regular adjustments if your distribution shifts.
 
-![USearch uint40_t support](assets/usearch-neighbor-types.png)
+![USearch uint40_t support](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-neighbor-types.png?raw=true)
 
 Instead, we have focused on high-precision arithmetic over low-precision downcasted vectors.
 The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f32_t`, `f16_t`, `f64_t`, and `f8_t` representations, even if the hardware doesn't natively support it.
