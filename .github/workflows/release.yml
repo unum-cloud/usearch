@@ -28,8 +28,8 @@ jobs:
 
   build_wheels:
     name: Build Wheels for ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
     needs: versioning
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-20.04, macOS-11]
@@ -57,8 +57,8 @@ jobs:
   
   publish_python:
     name: Publish Python
-    runs-on: ubuntu-20.04
     needs: build_wheels
+    runs-on: ubuntu-20.04
     environment:
       name: pypi
       url: https://pypi.org/p/usearch
@@ -80,6 +80,7 @@ jobs:
 
   publish_javascript:
     name: Publish JavaScript
+    needs: versioning
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -96,6 +97,7 @@ jobs:
 
   publish_rust:
     name: Publish Rust
+    needs: versioning
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -110,6 +112,7 @@ jobs:
 
   publish_java:
     name: Publish Java
+    needs: versioning
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -132,6 +135,7 @@ jobs:
 
   publish_swift:
     name: Publish ObjC & Swift
+    needs: versioning
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v3

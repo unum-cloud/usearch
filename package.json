@@ -1,6 +1,6 @@
 {
     "name": "usearch",
-    "version": "0.2.3",
+    "version": "0.2.1",
     "description": "Smaller & Faster Single-File Vector Search Engine from Unum",
     "author": "Ashot Vardanian",
     "license": "Apache 2.0",
@@ -18,5 +18,11 @@
     },
     "scripts": {
         "test": "node javascript/test.js"
+    },
+    "devDependencies": {
+        "@semantic-release/exec": "^6.0.3",
+        "@semantic-release/git": "^10.0.1",
+        "conventional-changelog-eslint": "^3.0.9",
+        "semantic-release": "^21.0.2"
     }
 }
