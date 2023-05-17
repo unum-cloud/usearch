@@ -518,7 +518,11 @@ class auto_index_gt {
 
   private:
     static index_t* aligned_index_alloc() noexcept {
+#if defined(WINDOWS)
+        return (index_t*)_aligned_malloc(64, 64 * divide_round_up<64>(sizeof(index_t)));
+#else
         return (index_t*)aligned_alloc(64, 64 * divide_round_up<64>(sizeof(index_t)));
+#endif
     }
 
     static void aligned_index_free(index_t* raw) noexcept { free(raw); }
