@@ -7,6 +7,7 @@ on:
 env:
   BUILD_TYPE: Release
   GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
+  PYTHONUTF8: 1
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -32,24 +33,35 @@ jobs:
     needs: versioning
     strategy:
       matrix:
-        os: [ubuntu-20.04, macOS-11]
+        os: [ubuntu-20.04, macOS-11, windows-2022]
 
     steps:
       - uses: actions/checkout@v3
         with:
           ref: 'main'      
       - uses: actions/setup-python@v3
-      - uses: crazy-max/ghaction-setup-docker@v1.0.0
+      
+      - name: Setup Docker
+        if: matrix.os != 'windows-2022'
+        uses: crazy-max/ghaction-setup-docker@v1.0.0
         with:
           version: 23.0.1
-      - uses: docker/setup-qemu-action@v2.1.0
+
+      - name: Setup QEMU
+        if: matrix.os != 'windows-2022'
+        uses: docker/setup-qemu-action@v2.1.0
 
       - name: Install CIBuildWheel
         run: python -m pip install cibuildwheel
 
-      - name: Build wheels
+      - name: Build wheels for Windows
+        if: matrix.os == 'windows-2022'
         run: python -m cibuildwheel
-        
+
+      - name: Build wheels for POSIX
+        if: matrix.os != 'windows-2022'
+        run: python -m cibuildwheel
+
       - uses: actions/upload-artifact@v3
         with:
           path: ./wheelhouse/*.whl
