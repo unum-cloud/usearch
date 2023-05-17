@@ -84,6 +84,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: 'main'  
       - run: git submodule update --init --recursive
       - uses: actions/setup-node@v3
         with:
@@ -101,6 +103,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+      with:
+        ref: 'main'  
     - run: git submodule update --init --recursive
     - uses: actions-rs/toolchain@v1
       with:
@@ -119,6 +123,8 @@ jobs:
       packages: write
     steps:
     - uses: actions/checkout@v3
+      with:
+        ref: 'main'  
     - run: git submodule update --init --recursive
     - uses: actions/setup-java@v3
       with:
@@ -139,6 +145,8 @@ jobs:
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v3
+      with:
+        ref: 'main'  
     - run: git submodule update --init --recursive
     - name: Build
       run: swift build
