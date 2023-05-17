@@ -85,6 +85,9 @@ inline std::size_t ceil2(std::size_t v) noexcept {
     return v;
 }
 
+/**
+ *  @brief  Inner (Dot) Product distance.
+ */
 template <typename scalar_at, typename result_at = scalar_at> struct ip_gt {
     using scalar_t = scalar_at;
     using result_t = result_at;
@@ -105,6 +108,12 @@ template <typename scalar_at, typename result_at = scalar_at> struct ip_gt {
     }
 };
 
+/**
+ *  @brief  Cosine (Angular) distance.
+ *          Identical to the Inner Product of normalized vectors.
+ *          Unless you are running on an tiny embedded platform, this metric
+ *          is recommended over `::ip_gt` for low-precision scalars.
+ */
 template <typename scalar_at, typename result_at = scalar_at> struct cos_gt {
     using scalar_t = scalar_at;
     using result_t = result_at;
@@ -127,6 +136,10 @@ template <typename scalar_at, typename result_at = scalar_at> struct cos_gt {
     }
 };
 
+/**
+ *  @brief  Squared Euclidean (L2) distance.
+ *          Square root is avoided at the end, as it won't affect the ordering.
+ */
 template <typename scalar_at, typename result_at = scalar_at> struct l2sq_gt {
     using scalar_t = scalar_at;
     using result_t = result_at;
@@ -291,6 +304,9 @@ template <std::size_t multiple_ak> inline std::size_t divide_round_up(std::size_
     return (num + multiple_ak - 1) / multiple_ak;
 }
 
+/**
+ *  @brief  Light-weight bitset implementation to track visited nodes during graph traversal.
+ */
 template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
     using allocator_t = allocator_at;
     using byte_t = typename allocator_t::value_type;
@@ -565,7 +581,7 @@ class sorted_buffer_gt {
 };
 
 /**
- *
+ *  @brief  Tiny userspace mutex, designed to fit in a single integer.
  */
 class mutex_t {
 #if defined(WINDOWS)
@@ -614,13 +630,13 @@ static_assert(sizeof(mutex_t) == sizeof(std::int32_t), "Mutex is larger than exp
 
 using lock_t = std::unique_lock<mutex_t>;
 
-/**
- *  @brief Five-byte integer type to address node clouds with over 4B entries.
- */
 #if defined(WINDOWS)
 #pragma pack(push, 1) // Pack struct members on 1-byte alignment
 #endif
 
+/**
+ *  @brief Five-byte integer type to address node clouds with over 4B entries.
+ */
 class usearch_pack_m uint40_t {
     unsigned char octets[5];
 
@@ -658,6 +674,7 @@ class usearch_pack_m uint40_t {
         return old;
     }
 };
+
 #if defined(WINDOWS)
 #pragma pack(pop) // Reset alignment to default
 #endif
@@ -677,10 +694,9 @@ template <typename scalar_at> class span_gt {
 };
 
 /**
- *  @brief
- *      Configuration settings for the index construction.
- *      Includes the main `::connectivity` parameter (`M` in the paper)
- *      and two expansion factors - for construction and search.
+ *  @brief  Configuration settings for the index construction.
+ *          Includes the main `::connectivity` parameter (`M` in the paper)
+ *          and two expansion factors - for construction and search.
  */
 struct config_t {
 
@@ -710,9 +726,8 @@ struct config_t {
 };
 
 /**
- *  @brief
- *      Approximate Nearest Neighbors Search index using the
- *      Hierarchical Navigable Small World graph algorithm.
+ *  @brief  Approximate Nearest Neighbors Search index using the
+ *          Hierarchical Navigable Small World graph algorithm.
  *
  *  @section Features
  *      - Search for vectors of different dimensionality.
@@ -907,6 +922,10 @@ class index_gt {
 
 #pragma region Adjusting Configuration
 
+    /**
+     *  @brief  Erases all the vectors from the index.
+     *          Will change `size()` to zero, but will keep the same `capacity()`.
+     */
     void clear() noexcept {
         std::size_t n = size_;
         for (std::size_t i = 0; i != n; ++i)
@@ -916,6 +935,9 @@ class index_gt {
         entry_id_ = 0u;
     }
 
+    /**
+     *  @brief  Swaps the underlying memory buffers and thread contexts.
+     */
     void swap(index_gt& other) noexcept {
         std::swap(config_, other.config_);
         std::swap(metric_, other.metric_);
@@ -936,6 +958,9 @@ class index_gt {
         other.size_ = size;
     }
 
+    /**
+     *  @brief  Increases the `capacity()` of the index to allow adding more vectors.
+     */
     void reserve(std::size_t new_capacity) noexcept(false) {
 
         assert_m(new_capacity >= size_, "Can't drop existing values");
@@ -946,6 +971,10 @@ class index_gt {
         capacity_ = new_capacity;
     }
 
+    /**
+     *  @brief  Optimizes configuration options to fit the maximum number
+     *          of neighbors in CPU-cache-aligned buffers.
+     */
     static config_t optimize(config_t const& config) noexcept {
         precomputed_constants_t pre = precompute(config);
         std::size_t bytes_per_node_base = head_bytes_k + pre.neighbors_base_bytes + pre.mutex_bytes;
@@ -960,19 +989,25 @@ class index_gt {
 
 #pragma region Construction and Search
 
-    id_t add(                                                //
-        label_t new_label, span_gt<scalar_t const> new_span, //
-        std::size_t thread_idx = 0, bool store_vector = true) {
+    /**
+     *  @brief Inserts a new vector into the index. Thread-safe.
+     *  @param[in] label External identifier/name/descriptor for the vector.
+     *  @param[in] vector Contiguous range of scalars forming a vector view.
+     *  @param[in] thread Optional thread identifier for multi-threaded construction.
+     *  @param[in] store_vector Don't copy the ::vector, if it's persisted elsewhere.
+     */
+    id_t add(label_t label, span_gt<scalar_t const> vector, std::size_t thread = 0, bool store_vector = true) {
 
         assert_m(!is_immutable(), "Can't add to an immutable index");
         id_t new_id = static_cast<id_t>(size_.fetch_add(1));
-        scalar_t const* new_vector = new_span.data();
-        std::size_t new_dim = new_span.size();
+        label_t const& new_label = label;
+        scalar_t const* new_vector = vector.data();
+        std::size_t new_dim = vector.size();
 
         // Determining how much memory to allocate depends on the target level.
         lock_t new_level_lock(global_mutex_);
         level_t max_level = max_level_;
-        thread_context_t& context = thread_contexts_[thread_idx];
+        thread_context_t& context = thread_contexts_[thread];
         level_t new_target_level = choose_random_level(context.level_generator);
         if (new_target_level <= max_level)
             new_level_lock.unlock();
@@ -1005,19 +1040,27 @@ class index_gt {
         return new_id;
     }
 
+    /**
+     *  @brief Searches for the closest members to the given ::query. Thread-safe.
+     *  @param[in] query Contiguous range of scalars forming a vector view.
+     *  @param[in] wanted The upper bound for the number of results to return.
+     *  @param[in] callback Function receiving the labels and distances to matches in ascending order.
+     *  @param[in] thread Optional thread identifier for multi-threaded search.
+     */
     template <typename label_and_distance_callback_at>
-    void search(                                                //
-        span_gt<scalar_t const> query_span, std::size_t wanted, //
-        label_and_distance_callback_at&& callback, std::size_t thread_idx = 0) const {
+    void search(                                           //
+        span_gt<scalar_t const> query, std::size_t wanted, //
+        label_and_distance_callback_at&& callback,         //
+        std::size_t thread = 0) const {
 
         if (!size_)
             return;
 
-        scalar_t const* query_vec = query_span.data();
-        std::size_t query_dim = query_span.size();
+        scalar_t const* query_vec = query.data();
+        std::size_t query_dim = query.size();
 
         // Go down the level, tracking only the closest match
-        thread_context_t& context = thread_contexts_[thread_idx];
+        thread_context_t& context = thread_contexts_[thread];
         id_t closest_id = search_for_one(entry_id_, query_vec, query_dim, max_level_, 0, context);
 
         // For bottom layer we need a more optimized procedure
@@ -1031,10 +1074,19 @@ class index_gt {
             callback(node(top[i].second).head.label, top[i].first);
     }
 
-    std::size_t search(                                         //
-        span_gt<scalar_t const> query_span, std::size_t wanted, //
-        label_t* matches, distance_t* distances,                //
-        std::size_t thread_idx = 0) const {
+    /**
+     *  @brief Searches for the closest members to the given ::query. Thread-safe.
+     *  @param[in] query Contiguous range of scalars forming a vector view.
+     *  @param[in] wanted The upper bound for the number of results to return.
+     *  @param[out] matches Contiguous output buffer for the labels of closest members.
+     *  @param[out] distances Contiguous output buffer for the distances to the closest members.
+     *  @param[in] thread Optional thread identifier for multi-threaded search.
+     *  @return The number of found approximate matches. Always equal or less then ::wanted.
+     */
+    std::size_t search(                                    //
+        span_gt<scalar_t const> query, std::size_t wanted, //
+        label_t* matches, distance_t* distances,           //
+        std::size_t thread = 0) const {
 
         std::size_t found = 0;
         auto callback = [&](label_t label, distance_t distance) noexcept {
@@ -1044,15 +1096,15 @@ class index_gt {
                 distances[found] = distance;
             ++found;
         };
-        search(query_span, wanted, callback, thread_idx);
+        search(query, wanted, callback, thread);
         return found;
     }
 
 #pragma endregion
 
 #pragma region Serialization
-
-    struct state_t {
+  private:
+    struct serialized_state_t {
         // Check compatibility
         std::uint64_t bytes_per_label{};
         std::uint64_t bytes_per_id{};
@@ -1064,12 +1116,15 @@ class index_gt {
         std::uint64_t max_level{};
     };
 
+  public:
     /**
-     *  Compatibility: Linux, MacOS, Windows.
+     *  @brief  Saves serialized binary index representation to disk,
+     *          co-locating vectors and neighbors lists.
+     *          Available on Linux, MacOS, Windows.
      */
     void save(char const* file_path) const noexcept(false) {
 
-        state_t state;
+        serialized_state_t state;
         // Check compatibility
         state.bytes_per_label = sizeof(label_t);
         state.bytes_per_id = sizeof(id_t);
@@ -1115,10 +1170,12 @@ class index_gt {
     }
 
     /**
-     *  Compatibility: Linux, MacOS, Windows.
+     *  @brief  Loads the serialized binary index representation from disk,
+     *          copying both vectors and neighbors lists into RAM.
+     *          Available on Linux, MacOS, Windows.
      */
     void load(char const* file_path) noexcept(false) {
-        state_t state;
+        serialized_state_t state;
         std::FILE* file = std::fopen(file_path, "r");
         if (!file)
             throw std::runtime_error(std::strerror(errno));
@@ -1173,13 +1230,15 @@ class index_gt {
     }
 
     /**
-     *  Compatibility: Linux, MacOS.
+     *  @brief  Memory-maps the serialized binary index representation from disk,
+     *          @b without copying the vectors and neighbors lists into RAM.
+     *          Available on Linux, MacOS, but @b not on Windows.
      */
     void view(char const* file_path) noexcept(false) {
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
         throw std::logic_error("Memory-mapping is not yet available for Windows");
 #else
-        state_t state;
+        serialized_state_t state;
         int open_flags = O_RDONLY;
 #if __linux__
         open_flags |= O_NOATIME;

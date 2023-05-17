@@ -171,7 +171,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-22.04
-    needs: publish_python
+    if: ${{ always() }}
+    needs: [publish_python, publish_javascript, publish_rust, publish_java, publish_swift]
     steps:
       - name: Checkout
         uses: actions/checkout@v3

@@ -82,7 +82,7 @@ USearch is designed to be compact and broadly compatible without sacrificing per
 > Jump to the [Performance Tuning][benchmarking] section to read about the effects of those hyper-parameters.
 
 [sloc]: https://en.wikipedia.org/wiki/Source_lines_of_code
-[benchmarking]: https://github.com/unum-cloud/usearch
+[benchmarking]: https://github.com/unum-cloud/usearch/blob/main/docs/benchmarks.md
 
 ## User-Defined Functions
 
