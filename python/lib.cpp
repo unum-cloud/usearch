@@ -420,16 +420,16 @@ PYBIND11_MODULE(index, m) {
 
     auto i = py::class_<native_index_t>(m, "Index");
 
-    i.def(py::init(&make_index),                                              //
-          py::kw_only(),                                                      //
-          py::arg("ndim") = 0,                                                //
-          py::arg("capacity") = 0,                                            //
-          py::arg("dtype") = std::string("f32"),                              //
-          py::arg("metric") = std::string("ip"),                              //
-          py::arg("connectivity") = config_t::connectivity_default_k,         //
-          py::arg("expansion_add") = config_t::expansion_add_default_k,       //
-          py::arg("expansion_search") = config_t::expansion_search_default_k, //
-          py::arg("metric_pointer") = 0                                       //
+    i.def(py::init(&make_index),                                    //
+          py::kw_only(),                                            //
+          py::arg("ndim") = 0,                                      //
+          py::arg("capacity") = 0,                                  //
+          py::arg("dtype") = std::string("f32"),                    //
+          py::arg("metric") = std::string("ip"),                    //
+          py::arg("connectivity") = default_connectivity(),         //
+          py::arg("expansion_add") = default_expansion_add(),       //
+          py::arg("expansion_search") = default_expansion_search(), //
+          py::arg("metric_pointer") = 0                             //
     );
 
     i.def(                         //
@@ -471,13 +471,13 @@ PYBIND11_MODULE(index, m) {
 
     auto si = py::class_<sets_index_t>(m, "SetsIndex");
 
-    si.def(                                                                //
-        py::init(&make_sets_index),                                        //
-        py::kw_only(),                                                     //
-        py::arg("capacity") = 0,                                           //
-        py::arg("connectivity") = config_t::connectivity_default_k,        //
-        py::arg("expansion_add") = config_t::expansion_add_default_k,      //
-        py::arg("expansion_search") = config_t::expansion_search_default_k //
+    si.def(                                                      //
+        py::init(&make_sets_index),                              //
+        py::kw_only(),                                           //
+        py::arg("capacity") = 0,                                 //
+        py::arg("connectivity") = default_connectivity(),        //
+        py::arg("expansion_add") = default_expansion_add(),      //
+        py::arg("expansion_search") = default_expansion_search() //
     );
 
     si.def( //
@@ -526,14 +526,14 @@ PYBIND11_MODULE(index, m) {
 
     auto hi = py::class_<hash_index_w_meta_t>(m, "HashIndex");
 
-    hi.def(                                                                //
-        py::init(&make_hash_index),                                        //
-        py::kw_only(),                                                     //
-        py::arg("bits"),                                                   //
-        py::arg("capacity") = 0,                                           //
-        py::arg("connectivity") = config_t::connectivity_default_k,        //
-        py::arg("expansion_add") = config_t::expansion_add_default_k,      //
-        py::arg("expansion_search") = config_t::expansion_search_default_k //
+    hi.def(                                                      //
+        py::init(&make_hash_index),                              //
+        py::kw_only(),                                           //
+        py::arg("bits"),                                         //
+        py::arg("capacity") = 0,                                 //
+        py::arg("connectivity") = default_connectivity(),        //
+        py::arg("expansion_add") = default_expansion_add(),      //
+        py::arg("expansion_search") = default_expansion_search() //
     );
 
     hi.def( //

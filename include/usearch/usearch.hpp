@@ -693,6 +693,10 @@ template <typename scalar_at> class span_gt {
     operator scalar_at*() const noexcept { return data(); }
 };
 
+constexpr std::size_t default_connectivity() { return 16; }
+constexpr std::size_t default_expansion_add() { return 128; }
+constexpr std::size_t default_expansion_search() { return 64; }
+
 /**
  *  @brief  Configuration settings for the index construction.
  *          Includes the main `::connectivity` parameter (`M` in the paper)
@@ -703,21 +707,17 @@ struct config_t {
     /// @brief Number of neighbors per graph node.
     /// Defaults to 32 in FAISS and 16 in hnswlib.
     /// > It is called `M` in the paper.
-    inline static constexpr std::size_t connectivity_default_k = 16;
+    std::size_t connectivity = default_connectivity();
 
     /// @brief Hyper-parameter controlling the quality of indexing.
     /// Defaults to 40 in FAISS and 200 in hnswlib.
     /// > It is called `efConstruction` in the paper.
-    inline static constexpr std::size_t expansion_add_default_k = 128;
+    std::size_t expansion_add = default_expansion_add();
 
     /// @brief Hyper-parameter controlling the quality of search.
     /// Defaults to 16 in FAISS and 10 in hnswlib.
     /// > It is called `ef` in the paper.
-    inline static constexpr std::size_t expansion_search_default_k = 64;
-
-    std::size_t connectivity = connectivity_default_k;
-    std::size_t expansion_add = expansion_add_default_k;
-    std::size_t expansion_search = expansion_search_default_k;
+    std::size_t expansion_search = default_expansion_search();
 
     ///
     std::size_t max_elements = 0;
@@ -790,7 +790,9 @@ class index_gt {
 
     using vector_view_t = span_gt<scalar_t const>;
 
-#if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L) // C++17 ann newer
+// C++17 and newer version deprecate the `std::result_of`
+#if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
+
     using distance_t =
         typename std::invoke_result<metric_t, scalar_t const*, scalar_t const*, std::size_t, std::size_t>::type;
 #else
@@ -806,7 +808,8 @@ class index_gt {
     using allocator_traits_t = std::allocator_traits<allocator_t>;
     using byte_t = typename allocator_t::value_type;
     static_assert(sizeof(byte_t) == 1, "Allocator must allocate separate addressable bytes");
-    inline static constexpr std::size_t base_level_multiple_k = 2;
+
+    static constexpr std::size_t base_level_multiple() { return 2; }
 
     using visits_bitset_t = visits_bitset_gt<allocator_t>;
 
@@ -862,7 +865,7 @@ class index_gt {
 #pragma pack(pop) // Reset alignment to default
 #endif
 
-    inline static constexpr std::size_t head_bytes_k = sizeof(label_t) + sizeof(dim_t) + sizeof(level_t);
+    static constexpr std::size_t head_bytes() { return sizeof(label_t) + sizeof(dim_t) + sizeof(level_t); }
 
     struct node_t {
         byte_t* tape_{};
@@ -1022,11 +1025,11 @@ class index_gt {
      */
     static config_t optimize(config_t const& config) noexcept {
         precomputed_constants_t pre = precompute(config);
-        std::size_t bytes_per_node_base = head_bytes_k + pre.neighbors_base_bytes + pre.mutex_bytes;
+        std::size_t bytes_per_node_base = head_bytes() + pre.neighbors_base_bytes + pre.mutex_bytes;
         std::size_t rounded_size = divide_round_up<64>(bytes_per_node_base) * 64;
         std::size_t added_connections = (rounded_size - rounded_size) / sizeof(id_t);
         config_t result = config;
-        result.connectivity = config.connectivity + added_connections / base_level_multiple_k;
+        result.connectivity = config.connectivity + added_connections / base_level_multiple();
         return result;
     }
 
@@ -1271,7 +1274,7 @@ class index_gt {
         // Load nodes one by one
         for (std::size_t i = 0; i != state.size; ++i) {
             node_head_t head;
-            std::size_t read = std::fread(&head, head_bytes_k, 1, file);
+            std::size_t read = std::fread(&head, head_bytes(), 1, file);
             if (!read) {
                 std::fclose(file);
                 throw std::runtime_error(std::strerror(errno));
@@ -1279,7 +1282,7 @@ class index_gt {
 
             std::size_t bytes_to_dump = node_dump_size(head.dim, head.level);
             node_ref_t node_ref = node_malloc(head.label, {nullptr, head.dim}, head.level, true);
-            read = std::fread((byte_t*)&node_ref.head + head_bytes_k, bytes_to_dump - head_bytes_k, 1, file);
+            read = std::fread((byte_t*)&node_ref.head + head_bytes(), bytes_to_dump - head_bytes(), 1, file);
             if (!read) {
                 std::fclose(file);
                 throw std::runtime_error(std::strerror(errno));
@@ -1366,7 +1369,7 @@ class index_gt {
   private:
     inline static precomputed_constants_t precompute(config_t const& config) noexcept {
         precomputed_constants_t pre;
-        pre.connectivity_max_base = config.connectivity * base_level_multiple_k;
+        pre.connectivity_max_base = config.connectivity * base_level_multiple();
         pre.inverse_log_connectivity = 1.0 / std::log(static_cast<double>(config.connectivity));
         pre.neighbors_bytes = config.connectivity * sizeof(id_t) + sizeof(neighbors_count_t);
         pre.neighbors_base_bytes = pre.connectivity_max_base * sizeof(id_t) + sizeof(neighbors_count_t);
@@ -1375,7 +1378,7 @@ class index_gt {
     }
 
     inline std::size_t node_dump_size(dim_t dim, level_t level) const noexcept {
-        return head_bytes_k + pre_.neighbors_base_bytes + pre_.neighbors_bytes * level + sizeof(scalar_t) * dim;
+        return head_bytes() + pre_.neighbors_base_bytes + pre_.neighbors_bytes * level + sizeof(scalar_t) * dim;
     }
 
     void node_free(std::size_t id) noexcept {
@@ -1384,17 +1387,17 @@ class index_gt {
             return;
 
         // This function is rarely called and can be as expensive as needed for higher space-efficiency.
-        node_t& node = nodes_[id];
+        node_t& node = node`s_[id];
         if (!node.tape_)
             return;
 
         node_head_t const& head = *(node_head_t const*)(node.tape_ + pre_.mutex_bytes);
         std::size_t levels_bytes = pre_.neighbors_base_bytes + pre_.neighbors_bytes * head.level;
-        bool store_vector = (byte_t*)(node.tape_ + pre_.mutex_bytes + head_bytes_k + levels_bytes) == //
+        bool store_vector = (byte_t*)(node.tape_ + pre_.mutex_bytes + head_bytes() + levels_bytes) == //
                             (byte_t*)(node.vector_);
         std::size_t node_bytes =          //
             pre_.mutex_bytes +            // Optional concurrency-control
-            head_bytes_k + levels_bytes + // Obligatory neighborhood index
+            head_bytes() + levels_bytes + // Obligatory neighborhood index
             head.dim * store_vector       // Optional vector copy
             ;
 
@@ -1409,7 +1412,7 @@ class index_gt {
         std::size_t levels_bytes = pre_.neighbors_base_bytes + pre_.neighbors_bytes * level;
         std::size_t node_bytes =                  //
             pre_.mutex_bytes +                    // Optional concurrency-control
-            head_bytes_k + levels_bytes +         // Obligatory neighborhood index
+            head_bytes() + levels_bytes +         // Obligatory neighborhood index
             sizeof(scalar_t) * dim * store_vector // Optional vector copy
             ;
 
@@ -1418,7 +1421,7 @@ class index_gt {
 
         mutex_t* mutex = synchronize() ? (mutex_t*)data : nullptr;
         scalar_t* scalars = store_vector //
-                                ? (scalar_t*)(data + pre_.mutex_bytes + head_bytes_k + levels_bytes)
+                                ? (scalar_t*)(data + pre_.mutex_bytes + head_bytes() + levels_bytes)
                                 : (scalar_t*)(vector.data());
 
         std::memset(data, 0, node_bytes);
