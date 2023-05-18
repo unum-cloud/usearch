@@ -116,6 +116,7 @@
         "longlong",
         "memmap",
         "Napi",
+        "ndarray",
         "ndim",
         "Numba",
         "preprocess",

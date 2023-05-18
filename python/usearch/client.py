@@ -9,9 +9,9 @@ class IndexClient:
 
     def add(self, labels: np.array, vectors: np.array):
         if isinstance(labels, int):
-            return self.client.add_one(label=labels, vectors=vectors)
+            self.client.add_one(label=labels, vectors=vectors)
         else:
-            return self.client.add_many(labels=labels, vectors=vectors)
+            self.client.add_many(labels=labels, vectors=vectors)
 
     def search(self, vectors: np.array, count: int) -> tuple[np.array, np.array, np.array]:
         matches = []
@@ -32,3 +32,19 @@ class IndexClient:
 
     def connectivity(self):
         return self.client.connectivity()
+
+    def load(self, path: str):
+        raise NotImplementedError()
+
+    def view(self, path: str):
+        raise NotImplementedError()
+
+    def save(self, path: str):
+        raise NotImplementedError()
+
+
+if __name__ == '__main__':
+    index = IndexClient()
+    index.add(42, np.array([0.4] * 256, dtype=np.float32))
+    results = index.search(np.array([0.4] * 256, dtype=np.float32), 10)
+    print(results)

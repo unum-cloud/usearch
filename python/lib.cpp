@@ -37,7 +37,7 @@ using sets_index_t = index_gt<jaccard_gt<set_member_t>, label_t, id_t, set_membe
 
 using hash_word_t = std::uint64_t;
 using hash_index_t = index_gt<bit_hamming_gt<hash_word_t>, label_t, id_t, hash_word_t>;
-static constexpr std::size_t bits_per_hash_word_k = sizeof(hash_word_t) * CHAR_BIT;
+inline static constexpr std::size_t bits_per_hash_word_k = sizeof(hash_word_t) * CHAR_BIT;
 
 struct hash_index_w_meta_t : public hash_index_t {
     using hash_index_t::add;

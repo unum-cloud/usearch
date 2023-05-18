@@ -1,14 +1,12 @@
 # Compiling USearch
 
-## Build
-
 Before building the first time, please pull submodules.
 
 ```sh
 git submodule update --init --recursive
 ```
 
-### Linux
+## C++ on Linux
 
 ```sh
 cmake -B ./build_release \
@@ -39,7 +37,7 @@ python python/bench.py \
     --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin
 ```
 
-### MacOS
+## C++ on MacOS
 
 ```sh
 brew install libomp llvm
@@ -52,14 +50,14 @@ cmake \
     make -C ./build_release -j 
 ```
 
-### Python
+## Python
 
 ```sh
 pip install -e .
 pytest python/test.py
 ```
 
-### JavaScript
+## JavaScript
 
 ```sh
 npm install
@@ -67,14 +65,14 @@ node javascript/test.js
 npm publish
 ```
 
-### Rust
+## Rust
 
 ```sh
 cargo test -p usearch
 cargo publish
 ```
 
-### Java
+## Java
 
 ```sh
 gradle clean build
@@ -105,8 +103,14 @@ java -cp . -Djava.library.path=/Users/av/github/usearch/java/cloud/unum/usearch/
 java -cp . -Djava.library.path=/Users/av/github/usearch/java cloud.unum.usearch.Index
 ```
 
-### Wolfram
+## Wolfram
 
 ```sh
 brew install --cask wolfram-engine
+```
+
+## Docker
+
+```sh
+docker build -t unum/usearch . && docker run unum/usearch
 ```

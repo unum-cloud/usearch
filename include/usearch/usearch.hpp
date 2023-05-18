@@ -195,10 +195,10 @@ template <typename scalar_at, typename result_at = std::size_t> struct bit_hammi
     using result_t = result_at;
     using result_type = result_t;
     static_assert(std::is_unsigned<scalar_t>::value, "Hamming distance requires unsigned integral words");
-    static constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words,
                                std::size_t = 0) const noexcept {
+        constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
         result_t matches{};
 #if defined(__clang__)
 #pragma clang loop vectorize(enable)
@@ -703,17 +703,17 @@ struct config_t {
     /// @brief Number of neighbors per graph node.
     /// Defaults to 32 in FAISS and 16 in hnswlib.
     /// > It is called `M` in the paper.
-    static constexpr std::size_t connectivity_default_k = 16;
+    inline static constexpr std::size_t connectivity_default_k = 16;
 
     /// @brief Hyper-parameter controlling the quality of indexing.
     /// Defaults to 40 in FAISS and 200 in hnswlib.
     /// > It is called `efConstruction` in the paper.
-    static constexpr std::size_t expansion_add_default_k = 128;
+    inline static constexpr std::size_t expansion_add_default_k = 128;
 
     /// @brief Hyper-parameter controlling the quality of search.
     /// Defaults to 16 in FAISS and 10 in hnswlib.
     /// > It is called `ef` in the paper.
-    static constexpr std::size_t expansion_search_default_k = 64;
+    inline static constexpr std::size_t expansion_search_default_k = 64;
 
     std::size_t connectivity = connectivity_default_k;
     std::size_t expansion_add = expansion_add_default_k;
@@ -806,7 +806,7 @@ class index_gt {
     using allocator_traits_t = std::allocator_traits<allocator_t>;
     using byte_t = typename allocator_t::value_type;
     static_assert(sizeof(byte_t) == 1, "Allocator must allocate separate addressable bytes");
-    static constexpr std::size_t base_level_multiple_k = 2;
+    inline static constexpr std::size_t base_level_multiple_k = 2;
 
     using visits_bitset_t = visits_bitset_gt<allocator_t>;
 
@@ -862,7 +862,7 @@ class index_gt {
 #pragma pack(pop) // Reset alignment to default
 #endif
 
-    static constexpr std::size_t head_bytes_k = sizeof(label_t) + sizeof(dim_t) + sizeof(level_t);
+    inline static constexpr std::size_t head_bytes_k = sizeof(label_t) + sizeof(dim_t) + sizeof(level_t);
 
     struct node_t {
         byte_t* tape_{};
