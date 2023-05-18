@@ -1,7 +1,7 @@
 var assert = require('assert');
 var usearch = require('bindings')('usearch');
 
-var index = new usearch.Index({ metric: 'l2_sq', connectivity: 16, dimensions: 2 })
+var index = new usearch.Index({ metric: 'l2sq', connectivity: 16, dimensions: 2 })
 assert.equal(index.connectivity(), 16)
 assert.equal(index.dimensions(), 2)
 assert.equal(index.size(), 0)

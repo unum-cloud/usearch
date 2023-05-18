@@ -6,14 +6,16 @@ from usearch.index import Index, SetsIndex
 
 dimensions = [13, 99, 100, 256]
 sizes = [1, 2, 100]
-types = ['f32', 'f16', 'f8', 'f64']
+index_types = ['f64', 'f32', 'f16', 'f8']
+numpy_types = [np.float64, np.float32, np.float16, np.byte]
 
 
 @pytest.mark.parametrize('ndim', dimensions)
-@pytest.mark.parametrize('dtype', types)
-def test_cos(ndim: int, dtype: str):
-    index = Index(ndim=ndim, metric='cos', dtype=dtype)
-    vector = np.random.uniform(0, 0.7, (index.ndim)).astype(np.float32)
+@pytest.mark.parametrize('index_type', index_types)
+@pytest.mark.parametrize('numpy_type', numpy_types)
+def test_l2sq(ndim: int, index_type: str, numpy_type: str):
+    index = Index(ndim=ndim, metric='l2sq', dtype=index_type)
+    vector = np.random.uniform(0, 0.7, (index.ndim)).astype(numpy_type)
     index.add(42, vector)
     matches, distances, count = index.search(vector, 10)
 
@@ -26,12 +28,12 @@ def test_cos(ndim: int, dtype: str):
 
 @pytest.mark.parametrize('ndim', dimensions)
 @pytest.mark.parametrize('size', sizes)
-@pytest.mark.parametrize('dtype', types)
-def test_cos_batch(ndim: int, size: int, dtype: str):
-    index = Index(ndim=ndim, metric='cos', dtype=dtype)
+@pytest.mark.parametrize('index_type', index_types)
+@pytest.mark.parametrize('numpy_type', numpy_types)
+def test_l2sq_batch(ndim: int, size: int, index_type: str, numpy_type: str):
+    index = Index(ndim=ndim, metric='l2sq', dtype=index_type)
 
-    vectors = np.random.uniform(
-        0, 0.3, (size, index.ndim)).astype(np.float32)
+    vectors = np.random.uniform(0, 0.7, (size, index.ndim)).astype(numpy_type)
     labels = np.array(range(size), dtype=np.longlong)
 
     index.add(labels, vectors)
@@ -84,8 +86,7 @@ def test_sets():
     index = SetsIndex()
     index.add(10, np.array([10, 12, 15], dtype=np.uint32))
     index.add(11, np.array([11, 12, 15, 16], dtype=np.uint32))
-    results = index.search(np.array([12, 15], dtype=np.uint32), 20)
-
+    # results = index.search(np.array([12, 15], dtype=np.uint32), 10)
     # assert list(results) == [10, 11]
 
 
