@@ -59,6 +59,7 @@ using shared_index_t = std::shared_ptr<native_index_t>;
 + (instancetype)indexIP:(UInt32)dimensions connectivity:(UInt32)connectivity {
     std::size_t dims = static_cast<std::size_t>(dimensions);
     config_t config;
+
     config.connectivity = static_cast<std::size_t>(connectivity);
     shared_index_t ptr = std::make_shared<native_index_t>(native_index_t::ip(dims, accuracy_t::f32_k, config));
     return [[Index alloc] initWithIndex:ptr];
@@ -67,6 +68,7 @@ using shared_index_t = std::shared_ptr<native_index_t>;
 + (instancetype)indexL2:(UInt32)dimensions connectivity:(UInt32)connectivity {
     std::size_t dims = static_cast<std::size_t>(dimensions);
     config_t config;
+
     config.connectivity = static_cast<std::size_t>(connectivity);
     shared_index_t ptr = std::make_shared<native_index_t>(native_index_t::l2(dims, accuracy_t::f32_k, config));
     return [[Index alloc] initWithIndex:ptr];
@@ -74,76 +76,91 @@ using shared_index_t = std::shared_ptr<native_index_t>;
 
 + (instancetype)indexHaversine:(UInt32)connectivity {
     config_t config;
+
     config.connectivity = static_cast<std::size_t>(connectivity);
     shared_index_t ptr = std::make_shared<native_index_t>(native_index_t::haversine(accuracy_t::f32_k, config));
     return [[Index alloc] initWithIndex:ptr];
 }
 
 - (void)addSingle:(UInt32)label
-           vector:(Float32 const * _Nonnull)vector {
+           vector:(Float32 const *_Nonnull)vector {
     _native->add(label, vector);
 }
 
-- (UInt32)searchSingle:(Float32 const* _Nonnull)vector
+- (UInt32)searchSingle:(Float32 const *_Nonnull)vector
                  count:(UInt32)wanted
-                labels:(UInt32* _Nullable)labels
-             distances:(Float32* _Nullable)distances {
-    std::size_t found = _native->search(vector, static_cast<std::size_t>(wanted), labels, distances);
+                labels:(UInt32 *_Nullable)labels
+             distances:(Float32 *_Nullable)distances {
+    std::size_t found = _native->search(vector, static_cast<std::size_t>(wanted)).dump_to(labels, distances);
+
     return static_cast<UInt32>(found);
 }
 
 - (void)addPrecise:(UInt32)label
-            vector:(Float64 const * _Nonnull)vector {
+            vector:(Float64 const *_Nonnull)vector {
     _native->add(label, (f64_t const *)vector);
 }
 
-- (UInt32)searchPrecise:(Float64 const* _Nonnull)vector
+- (UInt32)searchPrecise:(Float64 const *_Nonnull)vector
                   count:(UInt32)wanted
-                 labels:(UInt32* _Nullable)labels
-              distances:(Float32* _Nullable)distances {
-    std::size_t found = _native->search((f64_t const *)vector, static_cast<std::size_t>(wanted), labels, distances);
+                 labels:(UInt32 *_Nullable)labels
+              distances:(Float32 *_Nullable)distances {
+    std::size_t found = _native->search((f64_t const *)vector, static_cast<std::size_t>(wanted)).dump_to(labels, distances);
+
     return static_cast<UInt32>(found);
 }
 
 - (void)addImprecise:(UInt32)label
-              vector:(void const * _Nonnull)vector {
+              vector:(void const *_Nonnull)vector {
     _native->add(label, (f16_bits_t const *)vector);
 }
 
-- (UInt32)searchImprecise:(void const* _Nonnull)vector
+- (UInt32)searchImprecise:(void const *_Nonnull)vector
                     count:(UInt32)wanted
-                   labels:(UInt32* _Nullable)labels
-                distances:(Float32* _Nullable)distances {
-    std::size_t found = _native->search((f16_bits_t const *)vector, static_cast<std::size_t>(wanted), labels, distances);
+                   labels:(UInt32 *_Nullable)labels
+                distances:(Float32 *_Nullable)distances {
+    std::size_t found = _native->search((f16_bits_t const *)vector, static_cast<std::size_t>(wanted)).dump_to(labels, distances);
+
     return static_cast<UInt32>(found);
 }
 
-- (void)clear { _native->clear(); }
+- (void)clear {
+    _native->clear();
+}
 
-- (void)save:(NSString*)path {
+- (void)save:(NSString *)path {
     char const *path_c = [path UTF8String];
-    if (!path_c)
+
+    if (!path_c) {
         @throw [NSException exceptionWithName:@"Can't save to disk"
                                        reason:@"The path must be convertible to UTF8"
                                      userInfo:nil];
+    }
+
     _native->save(path_c);
 }
 
-- (void)load:(NSString*)path {
+- (void)load:(NSString *)path {
     char const *path_c = [path UTF8String];
-    if (!path_c)
+
+    if (!path_c) {
         @throw [NSException exceptionWithName:@"Can't load from disk"
                                        reason:@"The path must be convertible to UTF8"
                                      userInfo:nil];
+    }
+
     _native->load(path_c);
 }
 
-- (void)view:(NSString*)path {
+- (void)view:(NSString *)path {
     char const *path_c = [path UTF8String];
-    if (!path_c)
+
+    if (!path_c) {
         @throw [NSException exceptionWithName:@"Can't view from disk"
                                        reason:@"The path must be convertible to UTF8"
                                      userInfo:nil];
+    }
+
     _native->view(path_c);
 }
 

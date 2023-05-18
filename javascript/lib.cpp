@@ -79,7 +79,7 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
     int length = ctx.Length();
     if (length == 0 || length >= 2 || !ctx[0].IsObject()) {
         Napi::TypeError::New(
-            env, "Pass args as named objects: dimensions: uint, capacity: uint, metric: [ip, cos, l2_sq, haversine]")
+            env, "Pass args as named objects: dimensions: uint, capacity: uint, metric: [ip, cos, l2sq, haversine]")
             .ThrowAsJavaScriptException();
         return;
     }
@@ -105,7 +105,7 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
         else if (accuracy_str == "f8")
             accuracy = accuracy_t::f8_k;
         else {
-            Napi::TypeError::New(env, "Supported metrics are: [ip, cos, l2_sq, haversine]")
+            Napi::TypeError::New(env, "Supported metrics are: [ip, cos, l2sq, haversine]")
                 .ThrowAsJavaScriptException();
             return;
         }
@@ -114,7 +114,7 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
     // By default we use the Inner Product similarity
     if (params.Has("metric")) {
         std::string name = params.Get("metric").As<Napi::String>().Utf8Value();
-        if (name == "l2_sq" || name == "euclidean_sq") {
+        if (name == "l2sq" || name == "euclidean_sq") {
             if (!dimensions) {
                 Napi::TypeError::New(env, "Please define the number of dimensions").ThrowAsJavaScriptException();
                 return;
@@ -135,7 +135,7 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
         } else if (name == "haversine") {
             native_.reset(new native_index_t(native_index_t::haversine(accuracy, config)));
         } else {
-            Napi::TypeError::New(env, "Supported metrics are: [ip, cos, l2_sq, haversine]")
+            Napi::TypeError::New(env, "Supported metrics are: [ip, cos, l2sq, haversine]")
                 .ThrowAsJavaScriptException();
             return;
         }
@@ -258,7 +258,7 @@ Napi::Value Index::Search(Napi::CallbackInfo const& ctx) {
     Napi::Uint32Array matches_js = Napi::Uint32Array::New(env, wanted);
     Napi::Float32Array distances_js = Napi::Float32Array::New(env, wanted);
     try {
-        std::size_t count = native_->search(vector, wanted, matches_js.Data(), distances_js.Data());
+        std::size_t count = native_->search(vector, wanted).dump_to(matches_js.Data(), distances_js.Data());
         Napi::Object result_js = Napi::Object::New(env);
         result_js.Set("labels", matches_js);
         result_js.Set("distances", distances_js);

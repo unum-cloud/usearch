@@ -29,28 +29,55 @@ using py_shape_t = py::array::ShapeContainer;
 using label_t = Py_ssize_t;
 using distance_t = punned_distance_t;
 using id_t = std::uint32_t;
-using native_index_t = auto_index_gt<label_t>;
+using linear_index_t = auto_index_gt<label_t, id_t>;
+
+struct linear_index_py_t : public linear_index_t {
+    using native_t = linear_index_t;
+    using native_t::add;
+    using native_t::capacity;
+    using native_t::reserve;
+    using native_t::search;
+    using native_t::size;
+
+    std::vector<char> ascii_normalization_buffer_;
+
+    linear_index_py_t(native_t&& base) : native_t(std::move(base)) {}
+};
 
 using set_member_t = std::uint32_t;
 using set_view_t = span_gt<set_member_t const>;
 using sets_index_t = index_gt<jaccard_gt<set_member_t>, label_t, id_t, set_member_t>;
 
+struct sets_index_py_t : public sets_index_t {
+    using native_t = sets_index_t;
+    using native_t::add;
+    using native_t::capacity;
+    using native_t::reserve;
+    using native_t::search;
+    using native_t::size;
+
+    sets_index_py_t(native_t&& base) : native_t(std::move(base)) {}
+};
+
 using hash_word_t = std::uint64_t;
 using hash_index_t = index_gt<bit_hamming_gt<hash_word_t>, label_t, id_t, hash_word_t>;
 static constexpr std::size_t bits_per_hash_word_k = sizeof(hash_word_t) * CHAR_BIT;
 
-struct hash_index_w_meta_t : public hash_index_t {
-    using hash_index_t::add;
-    using hash_index_t::capacity;
-    using hash_index_t::reserve;
-    using hash_index_t::search;
-    using hash_index_t::size;
+struct hash_index_py_t : public hash_index_t {
+    using native_t = hash_index_t;
+    using native_t::add;
+    using native_t::capacity;
+    using native_t::reserve;
+    using native_t::search;
+    using native_t::size;
 
     std::vector<hash_word_t> buffer_;
     std::size_t words_;
     std::size_t bits_;
 
-    hash_index_w_meta_t(config_t config, std::size_t bits) : hash_index_t(config) {
+    hash_index_py_t(native_t&& base) : native_t(std::move(base)) {}
+
+    hash_index_py_t(config_t config, std::size_t bits) : hash_index_t(config) {
         words_ = divide_round_up<bits_per_hash_word_k>(bits);
         bits_ = words_ * bits_per_hash_word_k;
         buffer_.resize(words_);
@@ -78,15 +105,15 @@ punned_stateful_metric_t udf(std::size_t metric_uintptr, accuracy_t accuracy) {
     }
 }
 
-static native_index_t make_index(   //
-    std::size_t dimensions,         //
-    std::size_t capacity,           //
-    std::string const& scalar_type, //
-    std::string const& metric,      //
-    std::size_t connectivity,       //
-    std::size_t expansion_add,      //
-    std::size_t expansion_search,   //
-    std::size_t metric_uintptr      //
+static linear_index_py_t make_index( //
+    std::size_t dimensions,          //
+    std::size_t capacity,            //
+    std::string const& scalar_type,  //
+    std::string const& metric,       //
+    std::size_t connectivity,        //
+    std::size_t expansion_add,       //
+    std::size_t expansion_search,    //
+    std::size_t metric_uintptr       //
 ) {
 
     config_t config;
@@ -99,16 +126,16 @@ static native_index_t make_index(   //
 
     accuracy_t accuracy = accuracy_from_name(scalar_type.c_str(), scalar_type.size());
     if (metric_uintptr)
-        return native_index_t::udf(dimensions, udf(metric_uintptr, accuracy), accuracy, config);
+        return linear_index_t::udf(dimensions, udf(metric_uintptr, accuracy), accuracy, config);
     else
-        return index_from_name<native_index_t>(metric.c_str(), metric.size(), dimensions, accuracy, config);
+        return index_from_name<linear_index_t>(metric.c_str(), metric.size(), dimensions, accuracy, config);
 }
 
-static std::unique_ptr<sets_index_t> make_sets_index( //
-    std::size_t capacity,                             //
-    std::size_t connectivity,                         //
-    std::size_t expansion_add,                        //
-    std::size_t expansion_search                      //
+static std::unique_ptr<sets_index_py_t> make_sets_index( //
+    std::size_t capacity,                                //
+    std::size_t connectivity,                            //
+    std::size_t expansion_add,                           //
+    std::size_t expansion_search                         //
 ) {
     config_t config;
     config.expansion_add = expansion_add;
@@ -118,15 +145,15 @@ static std::unique_ptr<sets_index_t> make_sets_index( //
     config.max_threads_add = 1;
     config.max_threads_search = 1;
 
-    return std::unique_ptr<sets_index_t>(new sets_index_t(config));
+    return std::unique_ptr<sets_index_py_t>(new sets_index_py_t(sets_index_t(config)));
 }
 
-static std::unique_ptr<hash_index_w_meta_t> make_hash_index( //
-    std::size_t bits,                                        //
-    std::size_t capacity,                                    //
-    std::size_t connectivity,                                //
-    std::size_t expansion_add,                               //
-    std::size_t expansion_search                             //
+static std::unique_ptr<hash_index_py_t> make_hash_index( //
+    std::size_t bits,                                    //
+    std::size_t capacity,                                //
+    std::size_t connectivity,                            //
+    std::size_t expansion_add,                           //
+    std::size_t expansion_search                         //
 ) {
     config_t config;
     config.expansion_add = expansion_add;
@@ -136,10 +163,10 @@ static std::unique_ptr<hash_index_w_meta_t> make_hash_index( //
     config.max_threads_add = 1;
     config.max_threads_search = 1;
 
-    return std::unique_ptr<hash_index_w_meta_t>(new hash_index_w_meta_t(config, bits));
+    return std::unique_ptr<hash_index_py_t>(new hash_index_py_t(config, bits));
 }
 
-static void add_one_to_index(native_index_t& index, label_t label, py::buffer vector, bool copy) {
+static void add_one_to_index(linear_index_py_t& index, label_t label, py::buffer vector, bool copy) {
 
     py::buffer_info vector_info = vector.request();
     if (vector_info.ndim != 1)
@@ -157,7 +184,9 @@ static void add_one_to_index(native_index_t& index, label_t label, py::buffer ve
     config.store_vector = copy;
 
     // https://docs.python.org/3/library/struct.html#format-characters
-    if (vector_info.format == "e")
+    if (vector_info.format == "c" || vector_info.format == "b")
+        index.add(label, reinterpret_cast<f8_bits_t const*>(vector_data), config);
+    else if (vector_info.format == "e")
         index.add(label, reinterpret_cast<f16_bits_t const*>(vector_data), config);
     else if (vector_info.format == "f")
         index.add(label, reinterpret_cast<float const*>(vector_data), config);
@@ -167,8 +196,8 @@ static void add_one_to_index(native_index_t& index, label_t label, py::buffer ve
         throw std::invalid_argument("Incompatible scalars in the vector!");
 }
 
-static void add_many_to_index(                                    //
-    native_index_t& index, py::buffer labels, py::buffer vectors, //
+static void add_many_to_index(                                       //
+    linear_index_py_t& index, py::buffer labels, py::buffer vectors, //
     bool copy, std::size_t threads = 0) {
 
     py::buffer_info labels_info = labels.request();
@@ -199,7 +228,17 @@ static void add_many_to_index(                                    //
     char const* labels_data = reinterpret_cast<char const*>(labels_info.ptr);
 
     // https://docs.python.org/3/library/struct.html#format-characters
-    if (vectors_info.format == "e")
+    if (vectors_info.format == "c" || vectors_info.format == "b")
+        multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+            add_config_t config;
+            config.store_vector = copy;
+            config.thread = thread_idx;
+            label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
+            f8_bits_t const* vector =
+                reinterpret_cast<f8_bits_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
+            index.add(label, vector, config);
+        });
+    else if (vectors_info.format == "e")
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             add_config_t config;
             config.store_vector = copy;
@@ -231,7 +270,7 @@ static void add_many_to_index(                                    //
         throw std::invalid_argument("Incompatible scalars in the vectors matrix!");
 }
 
-static py::tuple search_one_in_index(native_index_t& index, py::buffer vector, std::size_t wanted, bool exact) {
+static py::tuple search_one_in_index(linear_index_py_t& index, py::buffer vector, std::size_t wanted, bool exact) {
 
     py::buffer_info vector_info = vector.request();
     Py_ssize_t vector_dimensions = vector_info.shape[0];
@@ -249,15 +288,22 @@ static py::tuple search_one_in_index(native_index_t& index, py::buffer vector, s
     config.exact = exact;
 
     // https://docs.python.org/3/library/struct.html#format-characters
-    if (vector_info.format == "e")
-        count = index.search( //
-            reinterpret_cast<f16_bits_t const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), config);
+    if (vector_info.format == "c" || vector_info.format == "b")
+        count = index //
+                    .search(reinterpret_cast<f8_bits_t const*>(vector_data), wanted, config)
+                    .dump_to(&labels_py1d(0), &distances_py1d(0));
+    else if (vector_info.format == "e")
+        count = index //
+                    .search(reinterpret_cast<f16_bits_t const*>(vector_data), wanted, config)
+                    .dump_to(&labels_py1d(0), &distances_py1d(0));
     else if (vector_info.format == "f")
-        count = index.search( //
-            reinterpret_cast<float const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), config);
+        count = index //
+                    .search(reinterpret_cast<float const*>(vector_data), wanted, config)
+                    .dump_to(&labels_py1d(0), &distances_py1d(0));
     else if (vector_info.format == "d")
-        count = index.search( //
-            reinterpret_cast<double const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), config);
+        count = index //
+                    .search(reinterpret_cast<double const*>(vector_data), wanted, config)
+                    .dump_to(&labels_py1d(0), &distances_py1d(0));
     else
         throw std::invalid_argument("Incompatible scalars in the query vector!");
 
@@ -280,7 +326,7 @@ static py::tuple search_one_in_index(native_index_t& index, py::buffer vector, s
  *      2. matrix of distances,
  *      3. array with match counts.
  */
-static py::tuple search_many_in_index(native_index_t& index, py::buffer vectors, std::size_t wanted, bool exact) {
+static py::tuple search_many_in_index(linear_index_py_t& index, py::buffer vectors, std::size_t wanted, bool exact) {
 
     if (wanted == 0)
         return py::tuple(3);
@@ -305,14 +351,23 @@ static py::tuple search_many_in_index(native_index_t& index, py::buffer vectors,
     auto counts_py1d = counts_py.mutable_unchecked<1>();
 
     // https://docs.python.org/3/library/struct.html#format-characters
-    if (vectors_info.format == "e")
+    if (vectors_info.format == "c" || vectors_info.format == "b")
+        multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+            search_config_t config;
+            config.thread = thread_idx;
+            config.exact = exact;
+            f8_bits_t const* vector = (f8_bits_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
+            counts_py1d(task_idx) = static_cast<Py_ssize_t>(
+                index.search(vector, wanted, config).dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
+        });
+    else if (vectors_info.format == "e")
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
             config.exact = exact;
             f16_bits_t const* vector = (f16_bits_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
             counts_py1d(task_idx) = static_cast<Py_ssize_t>(
-                index.search(vector, wanted, &labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0), config));
+                index.search(vector, wanted, config).dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
     else if (vectors_info.format == "f")
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
@@ -321,7 +376,7 @@ static py::tuple search_many_in_index(native_index_t& index, py::buffer vectors,
             config.exact = exact;
             float const* vector = (float const*)(vectors_data + task_idx * vectors_info.strides[0]);
             counts_py1d(task_idx) = static_cast<Py_ssize_t>(
-                index.search(vector, wanted, &labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0), config));
+                index.search(vector, wanted, config).dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
     else if (vectors_info.format == "d")
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
@@ -330,7 +385,7 @@ static py::tuple search_many_in_index(native_index_t& index, py::buffer vectors,
             config.exact = exact;
             double const* vector = (double const*)(vectors_data + task_idx * vectors_info.strides[0]);
             counts_py1d(task_idx) = static_cast<Py_ssize_t>(
-                index.search(vector, wanted, &labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0), config));
+                index.search(vector, wanted, config).dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
     else
         throw std::invalid_argument("Incompatible scalars in the query matrix!");
@@ -386,7 +441,7 @@ inline std::uint64_t hash(std::uint64_t v) noexcept {
 }
 
 template <typename scalar_at>
-inline void hash_typed_buffer(hash_index_w_meta_t& index, py::buffer_info const& vector_info) noexcept {
+inline void hash_typed_buffer(hash_index_py_t& index, py::buffer_info const& vector_info) noexcept {
     char const* vector_data = reinterpret_cast<char const*>(vector_info.ptr);
     Py_ssize_t vector_dimensions = vector_info.shape[0];
     Py_ssize_t vector_stride = vector_info.strides[0];
@@ -399,7 +454,7 @@ inline void hash_typed_buffer(hash_index_w_meta_t& index, py::buffer_info const&
     }
 }
 
-void hash_buffer(hash_index_w_meta_t& index, py::buffer vector) {
+void hash_buffer(hash_index_py_t& index, py::buffer vector) {
     py::buffer_info info = vector.request();
     if (info.ndim != 1)
         throw std::invalid_argument("Array can't be multi-dimensional!");
@@ -418,18 +473,18 @@ void hash_buffer(hash_index_w_meta_t& index, py::buffer vector) {
 PYBIND11_MODULE(index, m) {
     m.doc() = "Unum USearch Python bindings";
 
-    auto i = py::class_<native_index_t>(m, "Index");
+    auto i = py::class_<linear_index_py_t>(m, "Index");
 
-    i.def(py::init(&make_index),                                              //
-          py::kw_only(),                                                      //
-          py::arg("ndim") = 0,                                                //
-          py::arg("capacity") = 0,                                            //
-          py::arg("dtype") = std::string("f32"),                              //
-          py::arg("metric") = std::string("ip"),                              //
-          py::arg("connectivity") = config_t::connectivity_default_k,         //
-          py::arg("expansion_add") = config_t::expansion_add_default_k,       //
-          py::arg("expansion_search") = config_t::expansion_search_default_k, //
-          py::arg("metric_pointer") = 0                                       //
+    i.def(py::init(&make_index),                                    //
+          py::kw_only(),                                            //
+          py::arg("ndim") = 0,                                      //
+          py::arg("capacity") = 0,                                  //
+          py::arg("dtype") = std::string("f32"),                    //
+          py::arg("metric") = std::string("ip"),                    //
+          py::arg("connectivity") = default_connectivity(),         //
+          py::arg("expansion_add") = default_expansion_add(),       //
+          py::arg("expansion_search") = default_expansion_search(), //
+          py::arg("metric_pointer") = 0                             //
     );
 
     i.def(                         //
@@ -456,33 +511,33 @@ PYBIND11_MODULE(index, m) {
         py::arg("exact") = false         //
     );
 
-    i.def("__len__", &native_index_t::size);
-    i.def_property_readonly("size", &native_index_t::size);
-    i.def_property_readonly("ndim", &native_index_t::dimensions);
-    i.def_property_readonly("connectivity", &native_index_t::connectivity);
-    i.def_property_readonly("capacity", &native_index_t::capacity);
+    i.def("__len__", &linear_index_py_t::size);
+    i.def_property_readonly("size", &linear_index_py_t::size);
+    i.def_property_readonly("ndim", &linear_index_py_t::dimensions);
+    i.def_property_readonly("connectivity", &linear_index_py_t::connectivity);
+    i.def_property_readonly("capacity", &linear_index_py_t::capacity);
     i.def_property_readonly( //
-        "dtype", [](native_index_t const& index) -> std::string { return accuracy_name(index.accuracy()); });
+        "dtype", [](linear_index_py_t const& index) -> std::string { return accuracy_name(index.accuracy()); });
 
-    i.def("save", &save_index<native_index_t>, py::arg("path"));
-    i.def("load", &load_index<native_index_t>, py::arg("path"));
-    i.def("view", &view_index<native_index_t>, py::arg("path"));
-    i.def("clear", &clear_index<native_index_t>);
+    i.def("save", &save_index<linear_index_py_t>, py::arg("path"));
+    i.def("load", &load_index<linear_index_py_t>, py::arg("path"));
+    i.def("view", &view_index<linear_index_py_t>, py::arg("path"));
+    i.def("clear", &clear_index<linear_index_py_t>);
 
-    auto si = py::class_<sets_index_t>(m, "SetsIndex");
+    auto si = py::class_<sets_index_py_t>(m, "SetsIndex");
 
-    si.def(                                                                //
-        py::init(&make_sets_index),                                        //
-        py::kw_only(),                                                     //
-        py::arg("capacity") = 0,                                           //
-        py::arg("connectivity") = config_t::connectivity_default_k,        //
-        py::arg("expansion_add") = config_t::expansion_add_default_k,      //
-        py::arg("expansion_search") = config_t::expansion_search_default_k //
+    si.def(                                                      //
+        py::init(&make_sets_index),                              //
+        py::kw_only(),                                           //
+        py::arg("capacity") = 0,                                 //
+        py::arg("connectivity") = default_connectivity(),        //
+        py::arg("expansion_add") = default_expansion_add(),      //
+        py::arg("expansion_search") = default_expansion_search() //
     );
 
     si.def( //
         "add",
-        [](sets_index_t& index, label_t label, py::array_t<set_member_t> set, bool copy) {
+        [](sets_index_py_t& index, label_t label, py::array_t<set_member_t> set, bool copy) {
             validate_set(set);
             if (index.size() + 1 >= index.capacity())
                 index.reserve(ceil2(index.size() + 1));
@@ -500,13 +555,13 @@ PYBIND11_MODULE(index, m) {
 
     si.def( //
         "search",
-        [](sets_index_t& index, py::array_t<set_member_t> set, std::size_t count) -> py::array_t<label_t> {
+        [](sets_index_py_t& index, py::array_t<set_member_t> set, std::size_t count) -> py::array_t<label_t> {
             validate_set(set);
             auto proxy = set.unchecked<1>();
             auto view = set_view_t{proxy.data(0), static_cast<std::size_t>(proxy.shape(0))};
             auto labels_py = py::array_t<label_t>(py_shape_t{static_cast<Py_ssize_t>(count)});
             auto labels_proxy = labels_py.mutable_unchecked<1>();
-            auto found = index.search(view, count, &labels_proxy(0), nullptr);
+            auto found = index.search(view, count).dump_to(&labels_proxy(0), nullptr);
             labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(found)});
             return labels_py;
         },
@@ -514,31 +569,31 @@ PYBIND11_MODULE(index, m) {
         py::arg("count") = 10 //
     );
 
-    si.def("__len__", &sets_index_t::size);
-    si.def_property_readonly("size", &sets_index_t::size);
-    si.def_property_readonly("connectivity", &sets_index_t::connectivity);
-    si.def_property_readonly("capacity", &sets_index_t::capacity);
+    si.def("__len__", &sets_index_py_t::size);
+    si.def_property_readonly("size", &sets_index_py_t::size);
+    si.def_property_readonly("connectivity", &sets_index_py_t::connectivity);
+    si.def_property_readonly("capacity", &sets_index_py_t::capacity);
 
-    si.def("save", &save_index<sets_index_t>, py::arg("path"));
-    si.def("load", &load_index<sets_index_t>, py::arg("path"));
-    si.def("view", &view_index<sets_index_t>, py::arg("path"));
-    si.def("clear", &clear_index<sets_index_t>);
+    si.def("save", &save_index<sets_index_py_t>, py::arg("path"));
+    si.def("load", &load_index<sets_index_py_t>, py::arg("path"));
+    si.def("view", &view_index<sets_index_py_t>, py::arg("path"));
+    si.def("clear", &clear_index<sets_index_py_t>);
 
-    auto hi = py::class_<hash_index_w_meta_t>(m, "HashIndex");
+    auto hi = py::class_<hash_index_py_t>(m, "HashIndex");
 
-    hi.def(                                                                //
-        py::init(&make_hash_index),                                        //
-        py::kw_only(),                                                     //
-        py::arg("bits"),                                                   //
-        py::arg("capacity") = 0,                                           //
-        py::arg("connectivity") = config_t::connectivity_default_k,        //
-        py::arg("expansion_add") = config_t::expansion_add_default_k,      //
-        py::arg("expansion_search") = config_t::expansion_search_default_k //
+    hi.def(                                                      //
+        py::init(&make_hash_index),                              //
+        py::kw_only(),                                           //
+        py::arg("bits"),                                         //
+        py::arg("capacity") = 0,                                 //
+        py::arg("connectivity") = default_connectivity(),        //
+        py::arg("expansion_add") = default_expansion_add(),      //
+        py::arg("expansion_search") = default_expansion_search() //
     );
 
     hi.def( //
         "add",
-        [](hash_index_w_meta_t& index, label_t label, py::buffer array) {
+        [](hash_index_py_t& index, label_t label, py::buffer array) {
             if (index.size() + 1 >= index.capacity())
                 index.reserve(ceil2(index.size() + 1));
             hash_buffer(index, array);
@@ -550,13 +605,13 @@ PYBIND11_MODULE(index, m) {
 
     hi.def( //
         "search",
-        [](hash_index_w_meta_t& index, py::buffer array, std::size_t count) -> py::array_t<label_t> {
+        [](hash_index_py_t& index, py::buffer array, std::size_t count) -> py::array_t<label_t> {
             if (index.size() + 1 >= index.capacity())
                 index.reserve(ceil2(index.size() + 1));
             hash_buffer(index, array);
             auto labels_py = py::array_t<label_t>(py_shape_t{static_cast<Py_ssize_t>(count)});
             auto labels_proxy = labels_py.mutable_unchecked<1>();
-            auto found = index.search(index.buffer(), count, &labels_proxy(0), nullptr);
+            auto found = index.search(index.buffer(), count).dump_to(&labels_proxy(0), nullptr);
             labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(found)});
             return labels_py;
         },
@@ -564,13 +619,13 @@ PYBIND11_MODULE(index, m) {
         py::arg("count") = 10 //
     );
 
-    hi.def("__len__", &hash_index_w_meta_t::size);
-    hi.def_property_readonly("size", &hash_index_w_meta_t::size);
-    hi.def_property_readonly("connectivity", &hash_index_w_meta_t::connectivity);
-    hi.def_property_readonly("capacity", &hash_index_w_meta_t::capacity);
+    hi.def("__len__", &hash_index_py_t::size);
+    hi.def_property_readonly("size", &hash_index_py_t::size);
+    hi.def_property_readonly("connectivity", &hash_index_py_t::connectivity);
+    hi.def_property_readonly("capacity", &hash_index_py_t::capacity);
 
-    hi.def("save", &save_index<hash_index_w_meta_t>, py::arg("path"));
-    hi.def("load", &load_index<hash_index_w_meta_t>, py::arg("path"));
-    hi.def("view", &view_index<hash_index_w_meta_t>, py::arg("path"));
-    hi.def("clear", &clear_index<hash_index_w_meta_t>);
+    hi.def("save", &save_index<hash_index_py_t>, py::arg("path"));
+    hi.def("load", &load_index<hash_index_py_t>, py::arg("path"));
+    hi.def("view", &view_index<hash_index_py_t>, py::arg("path"));
+    hi.def("clear", &clear_index<hash_index_py_t>);
 }

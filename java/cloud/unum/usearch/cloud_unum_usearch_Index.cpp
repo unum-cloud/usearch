@@ -159,8 +159,9 @@ JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search( //
         vector_data = (*env).GetFloatArrayElements(vector, 0);
         jsize vector_dims = (*env).GetArrayLength(vector);
         span_t vector_span = span_t{vector_data, static_cast<std::size_t>(vector_dims)};
-        found = reinterpret_cast<native_index_t*>(c_ptr)->search( //
-            vector_span, static_cast<std::size_t>(wanted), matches_data, NULL);
+        found = reinterpret_cast<native_index_t*>(c_ptr)
+                    ->search(vector_span, static_cast<std::size_t>(wanted))
+                    .dump_to(matches_data, NULL);
         (*env).SetIntArrayRegion(matches, 0, found, matches_data);
     } catch (...) {
         jclass jc = (*env).FindClass("java/lang/Error");

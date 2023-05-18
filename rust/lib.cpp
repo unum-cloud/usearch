@@ -22,7 +22,8 @@ Matches Index::search_in_thread(rust::Slice<float const> vector, size_t count, s
         results.labels.push_back(0), results.distances.push_back(0);
     search_config_t config;
     config.thread = thread;
-    results.count = index_->search(vector.data(), count, results.labels.data(), results.distances.data(), config);
+    results.count =
+        index_->search(vector.data(), count, config).dump_to(results.labels.data(), results.distances.data());
     results.labels.truncate(results.count);
     results.distances.truncate(results.count);
     return results;
@@ -38,7 +39,7 @@ Matches Index::search(rust::Slice<float const> vector, size_t count) const {
     results.distances.reserve(count);
     for (size_t i = 0; i != count; ++i)
         results.labels.push_back(0), results.distances.push_back(0);
-    results.count = index_->search(vector.data(), count, results.labels.data(), results.distances.data());
+    results.count = index_->search(vector.data(), count).dump_to(results.labels.data(), results.distances.data());
     results.labels.truncate(results.count);
     results.distances.truncate(results.count);
     return results;
@@ -64,9 +65,9 @@ std::unique_ptr<Index> wrap(native_index_t&& index) {
 
 config_t config(size_t connectivity, size_t exp_add, size_t exp_search) {
     config_t result;
-    result.connectivity = connectivity ? connectivity : config_t::connectivity_default_k;
-    result.expansion_add = exp_add ? exp_add : config_t::expansion_add_default_k;
-    result.expansion_search = exp_search ? exp_search : config_t::expansion_search_default_k;
+    result.connectivity = connectivity ? connectivity : default_connectivity();
+    result.expansion_add = exp_add ? exp_add : default_expansion_add();
+    result.expansion_search = exp_search ? exp_search : default_expansion_search();
     return result;
 }
 

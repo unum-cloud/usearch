@@ -29,6 +29,7 @@
 #include <iostream>  // `std::cerr`
 #include <numeric>   // `std::iota`
 #include <stdexcept> // `std::invalid_argument`
+#include <string>    // `std::to_string`
 #include <thread>    // `std::thread::hardware_concurrency()`
 #include <variant>   // `std::monostate`
 
@@ -279,7 +280,8 @@ void index_many(index_at& native, std::size_t n, vector_id_at const* ids, real_a
         add_config_t config;
         config.thread = omp_get_thread_num();
         config.store_vector = true;
-        native.add(ids[i], vector_view_t{vectors + dims * i, dims}, config);
+        vector_view_t vector{vectors + dims * i, dims};
+        native.add(ids[i], vector, config);
         printer.progress++;
         if (omp_get_thread_num() == 0)
             printer.refresh();
@@ -291,16 +293,35 @@ void search_many( //
     index_at& native, std::size_t n, real_at const* vectors, std::size_t dims, std::size_t wanted, vector_id_at* ids,
     real_at* distances) {
 
-    running_stats_printer_t printer{n, "Search"};
+    std::string name = "Search " + std::to_string(wanted);
+    running_stats_printer_t printer{n, name.c_str()};
 
 #pragma omp parallel for schedule(static, 32)
     for (std::size_t i = 0; i < n; ++i) {
         search_config_t config;
         config.thread = omp_get_thread_num();
-        native.search(                                       //
-            vector_view_t{vectors + dims * i, dims}, wanted, //
-            ids + wanted * i, distances + wanted * i,        //
-            config);
+        vector_view_t vector{vectors + dims * i, dims};
+        native.search(vector, wanted, config).dump_to(ids + wanted * i, distances + wanted * i);
+        printer.progress++;
+        if (omp_get_thread_num() == 0)
+            printer.refresh();
+    }
+}
+
+template <typename index_at, typename vector_id_at, typename real_at>
+void paginate_many( //
+    index_at& native, std::size_t n, real_at const* vectors, std::size_t dims, std::size_t wanted,
+    vector_id_at const* hints) {
+
+    std::string name = "Paginate " + std::to_string(wanted);
+    running_stats_printer_t printer{n, name.c_str()};
+
+#pragma omp parallel for schedule(static, 32)
+    for (std::size_t i = 0; i < n; ++i) {
+        search_config_t config;
+        config.thread = omp_get_thread_num();
+        vector_view_t vector{vectors + dims * i, dims};
+        native.search_around(hints[i], vector, wanted, config);
         printer.progress++;
         if (omp_get_thread_num() == 0)
             printer.refresh();
@@ -338,6 +359,15 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
 
     std::printf("Recall@1 %.2f %%\n", recall_at_1 * 100.f / dataset.queries_count());
     std::printf("Recall %.2f %%\n", recall_full * 100.f / dataset.queries_count());
+
+    // Paginate
+    std::vector<vector_id_t> hints(dataset.queries_count());
+    for (std::size_t i = 0; i != hints.size(); ++i)
+        hints[i] = dataset.neighborhood(i)[0];
+    paginate_many(index, dataset.queries_count(), dataset.query(0), dataset.dimensions(), 10, hints.data());
+    paginate_many(index, dataset.queries_count(), dataset.query(0), dataset.dimensions(), 100, hints.data());
+    paginate_many(index, dataset.queries_count(), dataset.query(0), dataset.dimensions(), 1000, hints.data());
+
     std::printf("------------\n");
     std::printf("\n");
 }
@@ -390,9 +420,9 @@ struct args_t {
     std::string path_neighbors;
     std::string path_output = "last.usearch";
 
-    std::size_t connectivity = config_t::connectivity_default_k;
-    std::size_t expansion_add = config_t::expansion_add_default_k;
-    std::size_t expansion_search = config_t::expansion_search_default_k;
+    std::size_t connectivity = default_connectivity();
+    std::size_t expansion_add = default_expansion_add();
+    std::size_t expansion_search = default_expansion_search();
     std::size_t threads = std::thread::hardware_concurrency();
 
     std::size_t vectors_to_skip = 0;
