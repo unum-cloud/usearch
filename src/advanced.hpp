@@ -469,18 +469,22 @@ class auto_index_gt {
     void reserve(std::size_t capacity) { index_->reserve(capacity); }
 
     // clang-format off
+    void add(label_t label, f8_bits_t const* vector) { return add(label, vector, casts_.from_f8); }
     void add(label_t label, f16_bits_t const* vector) { return add(label, vector, casts_.from_f16); }
     void add(label_t label, f32_t const* vector) { return add(label, vector, casts_.from_f32); }
     void add(label_t label, f64_t const* vector) { return add(label, vector, casts_.from_f64); }
 
+    void add(label_t label, f8_bits_t const* vector, add_config_t config) { return add(label, vector, config, casts_.from_f8); }
     void add(label_t label, f16_bits_t const* vector, add_config_t config) { return add(label, vector, config, casts_.from_f16); }
     void add(label_t label, f32_t const* vector, add_config_t config) { return add(label, vector, config, casts_.from_f32); }
     void add(label_t label, f64_t const* vector, add_config_t config) { return add(label, vector, config, casts_.from_f64); }
 
+    std::size_t search(f8_bits_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances) const { return search(vector, wanted, matches, distances, casts_.from_f8); }
     std::size_t search(f16_bits_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances) const { return search(vector, wanted, matches, distances, casts_.from_f16); }
     std::size_t search(f32_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances) const { return search(vector, wanted, matches, distances, casts_.from_f32); }
     std::size_t search(f64_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances) const { return search(vector, wanted, matches, distances, casts_.from_f64); }
 
+    std::size_t search(f8_bits_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, search_config_t config) const { return search(vector, wanted, matches, distances, config, casts_.from_f8); }
     std::size_t search(f16_bits_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, search_config_t config) const { return search(vector, wanted, matches, distances, config, casts_.from_f16); }
     std::size_t search(f32_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, search_config_t config) const { return search(vector, wanted, matches, distances, config, casts_.from_f32); }
     std::size_t search(f64_t const* vector, std::size_t wanted, label_t* matches, distance_t* distances, search_config_t config) const { return search(vector, wanted, matches, distances, config, casts_.from_f64); }

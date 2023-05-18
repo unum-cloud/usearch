@@ -37,7 +37,7 @@ using sets_index_t = index_gt<jaccard_gt<set_member_t>, label_t, id_t, set_membe
 
 using hash_word_t = std::uint64_t;
 using hash_index_t = index_gt<bit_hamming_gt<hash_word_t>, label_t, id_t, hash_word_t>;
-inline static constexpr std::size_t bits_per_hash_word_k = sizeof(hash_word_t) * CHAR_BIT;
+static constexpr std::size_t bits_per_hash_word_k = sizeof(hash_word_t) * CHAR_BIT;
 
 struct hash_index_w_meta_t : public hash_index_t {
     using hash_index_t::add;
@@ -199,7 +199,17 @@ static void add_many_to_index(                                    //
     char const* labels_data = reinterpret_cast<char const*>(labels_info.ptr);
 
     // https://docs.python.org/3/library/struct.html#format-characters
-    if (vectors_info.format == "e")
+    if (vectors_info.format == "c" || vectors_info.format == "b")
+        multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+            add_config_t config;
+            config.store_vector = copy;
+            config.thread = thread_idx;
+            label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
+            f8_bits_t const* vector =
+                reinterpret_cast<f8_bits_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
+            index.add(label, vector, config);
+        });
+    else if (vectors_info.format == "e")
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             add_config_t config;
             config.store_vector = copy;
@@ -249,7 +259,10 @@ static py::tuple search_one_in_index(native_index_t& index, py::buffer vector, s
     config.exact = exact;
 
     // https://docs.python.org/3/library/struct.html#format-characters
-    if (vector_info.format == "e")
+    if (vector_info.format == "c")
+        count = index.search( //
+            reinterpret_cast<f8_bits_t const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), config);
+    else if (vector_info.format == "e")
         count = index.search( //
             reinterpret_cast<f16_bits_t const*>(vector_data), wanted, &labels_py1d(0), &distances_py1d(0), config);
     else if (vector_info.format == "f")
@@ -305,7 +318,16 @@ static py::tuple search_many_in_index(native_index_t& index, py::buffer vectors,
     auto counts_py1d = counts_py.mutable_unchecked<1>();
 
     // https://docs.python.org/3/library/struct.html#format-characters
-    if (vectors_info.format == "e")
+    if (vectors_info.format == "c" || vectors_info.format == "b")
+        multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+            search_config_t config;
+            config.thread = thread_idx;
+            config.exact = exact;
+            f8_bits_t const* vector = (f8_bits_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
+            counts_py1d(task_idx) = static_cast<Py_ssize_t>(
+                index.search(vector, wanted, &labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0), config));
+        });
+    else if (vectors_info.format == "e")
         multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
