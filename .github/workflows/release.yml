@@ -54,12 +54,7 @@ jobs:
       - name: Install CIBuildWheel
         run: python -m pip install cibuildwheel
 
-      - name: Build wheels for Windows
-        if: matrix.os == 'windows-2022'
-        run: python -m cibuildwheel
-
-      - name: Build wheels for POSIX
-        if: matrix.os != 'windows-2022'
+      - name: Build wheels
         run: python -m cibuildwheel
 
       - uses: actions/upload-artifact@v3
