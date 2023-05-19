@@ -21,17 +21,17 @@ class IndexClient:
         return matches, distances, counts
 
     def __len__(self):
-        return self.client.size()
+        return self.client.size().json
 
     @property
     def ndim(self):
-        return self.client.ndim()
+        return self.client.ndim().json
 
     def capacity(self):
-        return self.client.capacity()
+        return self.client.capacity().json
 
     def connectivity(self):
-        return self.client.connectivity()
+        return self.client.connectivity().json
 
     def load(self, path: str):
         raise NotImplementedError()
