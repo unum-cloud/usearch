@@ -30,6 +30,25 @@ def serve(
         index.add(labels, vectors, copy=True)
 
     @server
+    def add_ascii(label: int, string: str):
+        """
+        WARNING: A dirty performance hack!
+        Assuming the `f8` vectors in our implementations are just integers,
+        and generally contain scalars in the [0, 100] range, we can transmit
+        them as JSON-embedded strings. The only symbols we must avoid are
+        the double-quote '"' (code 22) and backslash '\' (code 60).
+        Printable ASCII characters are in [20, 126].
+        """
+        vector = np.array(string, dtype=np.int8)
+        if np.any((vector < 0) | (vector > 100)):
+            return add_one(label, vector)
+        # Let's map [0, 100] to the range from [23, 123],
+        # poking 60 and replacing with the 124.
+        vector += 23
+        vector[vector == 60] = 124
+        index.add_ascii(label, vector)
+
+    @server
     def add_many(labels: np.array, vectors: np.array):
         labels = labels.astype(np.longlong)
         index.add(labels, vectors, threads=threads, copy=True)
@@ -75,7 +94,7 @@ if __name__ == '__main__':
         help='the index can not be updated')
 
     parser.add_argument(
-        '--metric', type=str, default='ip', choices=['ip', 'cos', 'l2', 'haversine'],
+        '--metric', type=str, default='ip', choices=['ip', 'cos', 'l2sq', 'haversine'],
         help='distance function to compare vectors')
     parser.add_argument(
         '-p', '--port', type=int, default=8545,
