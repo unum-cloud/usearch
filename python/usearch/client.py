@@ -7,13 +7,13 @@ class IndexClient:
     def __init__(self, uri: str = '127.0.0.1', port: int = 8545, use_http: bool = True) -> None:
         self.client = Client(uri=uri, port=port, use_http=use_http)
 
-    def add(self, labels: np.array, vectors: np.array):
+    def add(self, labels: np.ndarray, vectors: np.ndarray):
         if isinstance(labels, int):
             self.client.add_one(label=labels, vectors=vectors)
         else:
             self.client.add_many(labels=labels, vectors=vectors)
 
-    def search(self, vectors: np.array, count: int) -> tuple[np.array, np.array, np.array]:
+    def search(self, vectors: np.ndarray, count: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         matches = []
         distances = []
         counts = []
