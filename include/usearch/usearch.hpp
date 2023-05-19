@@ -1210,7 +1210,8 @@ class index_gt {
         search_config_t config = {}) const noexcept(false) {
 
         thread_context_t& context = thread_contexts_[config.thread];
-        search_results_t result{*this, context.top_candidates};
+        top_candidates_t& top = context.top_candidates;
+        search_results_t result{*this, top};
         if (!size_)
             return result;
 
@@ -1227,7 +1228,6 @@ class index_gt {
             search_to_find_in_base(closest_id, query, expansion, context);
         }
 
-        top_candidates_t& top = context.top_candidates;
         top.sort_ascending();
         top.shrink(wanted);
 
@@ -1243,7 +1243,8 @@ class index_gt {
         search_config_t config = {}) const noexcept(false) {
 
         thread_context_t& context = thread_contexts_[config.thread];
-        search_results_t result{*this, context.top_candidates};
+        top_candidates_t& top = context.top_candidates;
+        search_results_t result{*this, top};
         if (!size_)
             return result;
 
@@ -1253,8 +1254,6 @@ class index_gt {
 
         std::size_t expansion = (std::max)(config_.expansion_search, wanted);
         search_to_find_in_base(hint, query, expansion, context);
-
-        top_candidates_t& top = context.top_candidates;
         top.sort_ascending();
         top.shrink(wanted);
 
