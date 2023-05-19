@@ -7,13 +7,13 @@ class IndexClient:
     def __init__(self, uri: str = '127.0.0.1', port: int = 8545, use_http: bool = True) -> None:
         self.client = Client(uri=uri, port=port, use_http=use_http)
 
-    def add(self, labels: np.array, vectors: np.array):
+    def add(self, labels: np.ndarray, vectors: np.ndarray):
         if isinstance(labels, int):
             self.client.add_one(label=labels, vectors=vectors)
         else:
             self.client.add_many(labels=labels, vectors=vectors)
 
-    def search(self, vectors: np.array, count: int) -> tuple[np.array, np.array, np.array]:
+    def search(self, vectors: np.ndarray, count: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         matches = []
         distances = []
         counts = []
@@ -21,17 +21,17 @@ class IndexClient:
         return matches, distances, counts
 
     def __len__(self):
-        return self.client.size()
+        return self.client.size().json()
 
     @property
     def ndim(self):
-        return self.client.ndim()
+        return self.client.ndim().json()
 
     def capacity(self):
-        return self.client.capacity()
+        return self.client.capacity().json()
 
     def connectivity(self):
-        return self.client.connectivity()
+        return self.client.connectivity().json()
 
     def load(self, path: str):
         raise NotImplementedError()

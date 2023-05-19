@@ -24,18 +24,18 @@ def serve(
             index.load(path)
 
     @server
-    def add_one(label: int, vector: np.array):
+    def add_one(label: int, vector: np.ndarray):
         labels = np.array([label], dtype=np.longlong)
         vectors = vector.reshape(vector.shape[0], 1)
         index.add(labels, vectors, copy=True)
 
     @server
-    def add_many(labels: np.array, vectors: np.array):
+    def add_many(labels: np.ndarray, vectors: np.ndarray):
         labels = labels.astype(np.longlong)
         index.add(labels, vectors, threads=threads, copy=True)
 
     @server
-    def search_one(vector: np.array, count: int) -> np.ndarray:
+    def search_one(vector: np.ndarray, count: int) -> np.ndarray:
         vectors = vector.reshape(vector.shape[0], 1)
         results = index.search(vectors, 3)
         return results[0][:results[2][0]]
