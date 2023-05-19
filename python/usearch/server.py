@@ -9,55 +9,41 @@ from ucall.rich_posix import Server
 from usearch.index import Index
 
 
+def _results_to_json(results: tuple[np.ndarray, np.ndarray, np.ndarray], row: int) -> list[dict[str, int]]:
+    count = results[2][row]
+    labels = results[0][row, :count]
+    distances = results[1][row, :count]
+    return [{'label': l, 'distance': d} for l, d in zip(labels, distances)]
+
+
+def _ascii_to_vector(string: str) -> np.ndarray:
+    """
+    WARNING: A dirty performance hack!
+    Assuming the `f8` vectors in our implementations are just integers,
+    and generally contain scalars in the [0, 100] range, we can transmit
+    them as JSON-embedded strings. The only symbols we must avoid are
+    the double-quote '"' (code 22) and backslash '\' (code 60).
+    Printable ASCII characters are in [20, 126].
+    """
+    vector = np.array(string, dtype=np.int8)
+    vector[vector == 124] = 60
+    vector -= 23
+    return vector
+
+
 def serve(
-        ndim: int, metric: str = 'ip',
+        ndim_: int, metric: str = 'ip',
         port: int = 8545, threads: int = 1,
         path: str = 'index.usearch', immutable: bool = False):
 
     server = Server(port=port)
-    index = Index(ndim=ndim, metric=metric)
+    index = Index(ndim=ndim_, metric=metric)
 
     if os.path.exists(path):
         if immutable:
             index.view(path)
         else:
             index.load(path)
-
-    @server
-    def add_one(label: int, vector: np.ndarray):
-        labels = np.array([label], dtype=np.longlong)
-        vectors = vector.reshape(vector.shape[0], 1)
-        index.add(labels, vectors, copy=True)
-
-    @server
-    def add_ascii(label: int, string: str):
-        """
-        WARNING: A dirty performance hack!
-        Assuming the `f8` vectors in our implementations are just integers,
-        and generally contain scalars in the [0, 100] range, we can transmit
-        them as JSON-embedded strings. The only symbols we must avoid are
-        the double-quote '"' (code 22) and backslash '\' (code 60).
-        Printable ASCII characters are in [20, 126].
-        """
-        vector = np.array(string, dtype=np.int8)
-        if np.any((vector < 0) | (vector > 100)):
-            return add_one(label, vector)
-        # Let's map [0, 100] to the range from [23, 123],
-        # poking 60 and replacing with the 124.
-        vector += 23
-        vector[vector == 60] = 124
-        index.add_ascii(label, vector)
-
-    @server
-    def add_many(labels: np.ndarray, vectors: np.ndarray):
-        labels = labels.astype(np.longlong)
-        index.add(labels, vectors, threads=threads, copy=True)
-
-    @server
-    def search_one(vector: np.ndarray, count: int) -> np.ndarray:
-        vectors = vector.reshape(vector.shape[0], 1)
-        results = index.search(vectors, 3)
-        return results[0][:results[2][0]]
 
     @server
     def size() -> int:
@@ -74,6 +60,38 @@ def serve(
     @server
     def connectivity() -> int:
         return index.connectivity()
+
+    @server
+    def add_one(label: int, vector: np.ndarray):
+        print('adding', label, vector)
+        labels = np.array([label], dtype=np.longlong)
+        vectors = vector.flatten().reshape(vector.shape[0], 1)
+        index.add(labels, vectors)
+
+    @server
+    def add_many(labels: np.ndarray, vectors: np.ndarray):
+        labels = labels.astype(np.longlong)
+        index.add(labels, vectors, threads=threads)
+
+    @server
+    def search_one(vector: np.ndarray, count: int) -> list[dict[str, int]]:
+        print('search', vector, count)
+        vectors = vector.reshape(vector.shape[0], 1)
+        results = index.search(vectors, count)
+        return _results_to_json(results, 0)
+
+    @server
+    def search_many(vectors: np.ndarray, count: int) -> list[list[dict[str, int]]]:
+        results = index.search(vectors, count)
+        return [_results_to_json(results, i) for i in range(vectors.shape[0])]
+
+    @server
+    def add_ascii(label: int, string: str):
+        return add_one(label, _ascii_to_vector(string))
+
+    @server
+    def search_ascii(string: str, count: int):
+        return search_one(_ascii_to_vector(string), count)
 
     try:
         server.run()
@@ -109,6 +127,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     assert args.ndim is not None, 'Define the number of dimensions!'
     serve(
-        ndim=args.ndim, metric=args.metric,
+        ndim_=args.ndim, metric=args.metric,
         threads=args.threads, port=args.port,
         path=args.path, immutable=args.immutable)
