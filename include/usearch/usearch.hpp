@@ -923,11 +923,14 @@ class index_gt {
 
     static constexpr std::size_t head_bytes() { return sizeof(label_t) + sizeof(dim_t) + sizeof(level_t); }
 
-    struct node_t {
+    class node_t {
         byte_t* tape_{};
         scalar_t* vector_{};
 
+      public:
         explicit node_t(byte_t* tape, scalar_t* vector) noexcept : tape_(tape), vector_(vector) {}
+        byte_t* tape() const noexcept { return tape_; }
+        scalar_t* vector() const noexcept { return vector_; }
 
         node_t() = default;
         node_t(node_t const&) = default;
@@ -1127,9 +1130,9 @@ class index_gt {
         inline std::size_t size() const noexcept { return count; }
         inline search_result_t operator[](std::size_t i) const noexcept {
             candidate_t const* top_ordered = top_.data();
-            return {member_cref_t(index_.node(top_ordered[i].id)), top_ordered[i].distance};
+            return {member_cref_t(index_.node(index_.nodes_[top_ordered[i].id])), top_ordered[i].distance};
         }
-        inline std::size_t dump_to(label_t* labels, distance_t* distances) noexcept {
+        inline std::size_t dump_to(label_t* labels, distance_t* distances) const noexcept {
             for (std::size_t i = 0; i != count; ++i) {
                 search_result_t result = operator[](i);
                 labels[i] = result.member.label;
@@ -1453,8 +1456,7 @@ class index_gt {
             node_head_t const& head = *(node_head_t const*)(file + progress);
             std::size_t bytes_to_dump = node_dump_size(head.dim, head.level);
             std::size_t bytes_in_vec = head.dim * sizeof(scalar_t);
-            nodes_[i].tape_ = (byte_t*)(file + progress);
-            nodes_[i].vector_ = (scalar_t*)(file + progress + bytes_to_dump - bytes_in_vec);
+            nodes_[i] = node_t{(byte_t*)(file + progress), (scalar_t*)(file + progress + bytes_to_dump - bytes_in_vec)};
             progress += bytes_to_dump;
             max_level_ = (std::max)(max_level_, head.level);
         }
@@ -1487,20 +1489,17 @@ class index_gt {
 
         // This function is rarely called and can be as expensive as needed for higher space-efficiency.
         node_t& node = nodes_[id];
-        if (!node.tape_)
-            return;
-
-        node_head_t const& head = *(node_head_t const*)(node.tape_ + pre_.mutex_bytes);
+        node_head_t const& head = *(node_head_t const*)(node.tape() + pre_.mutex_bytes);
         std::size_t levels_bytes = pre_.neighbors_base_bytes + pre_.neighbors_bytes * head.level;
-        bool store_vector = (byte_t*)(node.tape_ + pre_.mutex_bytes + head_bytes() + levels_bytes) == //
-                            (byte_t*)(node.vector_);
+        bool store_vector = (byte_t*)(node.tape() + pre_.mutex_bytes + head_bytes() + levels_bytes) == //
+                            (byte_t*)(node.vector());
         std::size_t node_bytes =          //
             pre_.mutex_bytes +            // Optional concurrency-control
             head_bytes() + levels_bytes + // Obligatory neighborhood index
             head.dim * store_vector       // Optional vector copy
             ;
 
-        allocator_t{}.deallocate(node.tape_, node_bytes);
+        allocator_t{}.deallocate(node.tape(), node_bytes);
         node = node_t{};
     }
 
@@ -1537,10 +1536,10 @@ class index_gt {
     inline node_ref_t node(id_t id) const noexcept { return node(nodes_[id]); }
 
     inline node_ref_t node(node_t node) const noexcept {
-        byte_t* data = node.tape_;
+        byte_t* data = node.tape();
         mutex_t* mutex = synchronize() ? (mutex_t*)data : nullptr;
         node_head_t& head = *(node_head_t*)(data + pre_.mutex_bytes);
-        scalar_t* scalars = node.vector_;
+        scalar_t* scalars = node.vector();
 
         return {*mutex, head, scalars};
     }
