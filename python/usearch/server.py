@@ -9,11 +9,11 @@ from ucall.rich_posix import Server
 from usearch.index import Index
 
 
-def _results_to_json(results: tuple[np.ndarray, np.ndarray, np.ndarray], row: int) -> list[dict[str, int]]:
+def _results_to_json(results: tuple[np.ndarray, np.ndarray, np.ndarray], row: int) -> list[dict]:
     count = results[2][row]
     labels = results[0][row, :count]
     distances = results[1][row, :count]
-    return [{'label': l, 'distance': d} for l, d in zip(labels, distances)]
+    return [{'label': int(l), 'distance': float(d)} for l, d in zip(labels, distances)]
 
 
 def _ascii_to_vector(string: str) -> np.ndarray:
@@ -74,14 +74,14 @@ def serve(
         index.add(labels, vectors, threads=threads)
 
     @server
-    def search_one(vector: np.ndarray, count: int) -> list[dict[str, int]]:
+    def search_one(vector: np.ndarray, count: int) -> list[dict]:
         print('search', vector, count)
         vectors = vector.reshape(vector.shape[0], 1)
         results = index.search(vectors, count)
         return _results_to_json(results, 0)
 
     @server
-    def search_many(vectors: np.ndarray, count: int) -> list[list[dict[str, int]]]:
+    def search_many(vectors: np.ndarray, count: int) -> list[list[dict]]:
         results = index.search(vectors, count)
         return [_results_to_json(results, i) for i in range(vectors.shape[0])]
 
