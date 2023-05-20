@@ -160,11 +160,8 @@ jobs:
     - name: Run tests
       run: swift test
 
-  deploy_docs:
-    name: Deploy Docs
-    environment: 
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build_docs:
+    name: Build Docs
     runs-on: ubuntu-22.04
     if: ${{ always() }}
     needs: [publish_python, publish_javascript, publish_rust, publish_java, publish_swift]
@@ -173,8 +170,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: 'main'   
-      - name: Setup GitHub Pages
-        uses: actions/configure-pages@v2
       - name: Install dependencies
         run: sudo apt update && sudo apt install -y doxygen graphviz dia git && pip install sphinx breathe furo m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery
       - name: Install USearch from PyPi
@@ -183,6 +178,30 @@ jobs:
         run: cd docs && make html
       - name: Copy assets
         run: cp -r assets build/docs/html/
+      - name: Compress assets
+        run: tar -czvf docs.tar.gz build/docs/html/
+      - name: Upload docs to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: docs.tar.gz
+          asset_name: docs.tar.gz
+          tag: ${{ github.ref }}
+
+  deploy_docs_pages:
+    name: Deploy GitHub Pages
+    environment: 
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-22.04
+    needs: build_docs
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: 'main'   
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v2
       - name: Upload artifacts
         uses: actions/upload-pages-artifact@v1
         with:
@@ -191,3 +210,18 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v1
+
+  deploy_docs_vercel:
+    name: Deploy GitHub Vercel
+    runs-on: ubuntu-22.04
+    needs: build_docs
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: 'main'   
+      - name: Deploy Vercel Docs
+        uses: fjogeleit/http-request-action@v1
+        with:
+          url: ${{ secrets.DOCS_VERCEL }}
+          method: 'POST'
