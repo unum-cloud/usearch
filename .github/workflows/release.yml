@@ -162,9 +162,9 @@ jobs:
 
   deploy_docs:
     name: Deploy Docs
-    environment: 
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    # environment: 
+    #   name: github-pages
+    #   url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-22.04
     if: ${{ always() }}
     # needs: [publish_python, publish_javascript, publish_rust, publish_java, publish_swift]
