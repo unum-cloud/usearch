@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main-dev"]
 
 env:
   BUILD_TYPE: Release
@@ -17,15 +17,15 @@ permissions:
 
 jobs:
 
-  versioning:
-    name: Semantic Release
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        persist-credentials: false
-    - uses: actions/setup-node@v3
-    - run: npm install --save-dev @semantic-release/exec @semantic-release/git conventional-changelog-eslint semantic-release && npx semantic-release
+  # versioning:
+  #   name: Semantic Release
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #     with:
+  #       persist-credentials: false
+  #   - uses: actions/setup-node@v3
+  #   - run: npm install --save-dev @semantic-release/exec @semantic-release/git conventional-changelog-eslint semantic-release && npx semantic-release
 
   build_wheels:
     name: Build Wheels for ${{ matrix.os }}
@@ -191,3 +191,8 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v1
+      - name: Deploy Vercel Docs
+        uses: fjogeleit/http-request-action@v1
+        with:
+          url: ${{ secrets.DOCS_VERCEL }}
+          method: 'POST'
