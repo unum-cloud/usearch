@@ -17,8 +17,28 @@ permissions:
 
 jobs:
 
+  build_docs:
+    name: Build Docs
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: 'main'   
+      - name: Install dependencies
+        run: sudo apt update && sudo apt install -y doxygen graphviz dia git && pip install sphinx breathe furo m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery
+      - name: Install USearch from PyPi
+        run: pip install usearch
+      - name: Build documentation
+        run: cd docs && make html
+      - name: Copy assets
+        run: cp -r assets build/docs/html/
+      - name: Compress assets
+        run: tar -czvf docs.tar.gz build/docs/html/
+
   versioning:
     name: Semantic Release
+    needs: build_docs
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
