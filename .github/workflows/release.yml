@@ -183,14 +183,14 @@ jobs:
         run: cd docs && make html
       - name: Copy assets
         run: cp -r assets build/docs/html/
-      - name: Upload artifacts
-        uses: actions/upload-pages-artifact@v1
-        with:
-          # Upload entire repository
-          path: "./build/docs/html/"
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v1
+      # - name: Upload artifacts
+      #   uses: actions/upload-pages-artifact@v1
+      #   with:
+      #     # Upload entire repository
+      #     path: "./build/docs/html/"
+      # - name: Deploy to GitHub Pages
+      #   id: deployment
+      #   uses: actions/deploy-pages@v1
       - name: Deploy Vercel Docs
         uses: fjogeleit/http-request-action@v1
         with:
