@@ -228,7 +228,7 @@ struct running_stats_printer_t {
     running_stats_printer_t(std::size_t n, char const* msg) {
         std::printf("%s. %zu items\n", msg, n);
         total = n;
-        start_time = std::chrono::high_resolution_clock::now();
+        last_printed_time = start_time = std::chrono::high_resolution_clock::now();
     }
 
     ~running_stats_printer_t() {
@@ -593,7 +593,7 @@ int main(int argc, char** argv) {
             option("--f8quant").set(args.quantize_f8).doc("Enable `f8_t` quantization")),
         ( //
             option("--ip").set(args.metric_ip).doc("Choose Inner Product metric") |
-            option("--l2").set(args.metric_l2).doc("Choose L2 Euclidean metric") |
+            option("--l2sq").set(args.metric_l2).doc("Choose L2 Euclidean metric") |
             option("--cos").set(args.metric_cos).doc("Choose Angular metric") |
             option("--haversine").set(args.metric_haversine).doc("Choose Haversine metric")),
         option("-h", "--help").set(args.help).doc("Print this help information on this tool and exit"));

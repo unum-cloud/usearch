@@ -5,6 +5,28 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Unit Test C++",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/test",
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
+                }
+            ],
+            "stopAtEntry": false,
+            "linux": {
+                "preLaunchTask": "Linux Build C++ Bench Debug",
+                "MIMode": "gdb"
+            },
+            "osx": {
+                "preLaunchTask": "MacOS Build C++ Bench Debug",
+                "MIMode": "lldb"
+            }
+        },
+        {
             "name": "Debug C++ Bench on Wiki 1M @Cos",
             "type": "cppdbg",
             "request": "launch",

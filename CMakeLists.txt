@@ -10,6 +10,7 @@ option(USEARCH_USE_OPENMP "Use OpenMP for a thread pool" OFF)
 option(USEARCH_USE_SIMD "Use SIMD hardware acceleration" OFF)
 
 option(USEARCH_BUILD_BENCHMARK "Compile a native benchmark in C++" ON)
+option(USEARCH_BUILD_TEST "Compile a native unit test in C++" ON)
 option(USEARCH_BUILD_WOLFRAM "Compile Wolfram Language bindings" OFF)
 
 # Make "Release" by default
@@ -85,6 +86,11 @@ target_sources(usearch INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include/usearch/us
 target_include_directories(usearch INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 # Define the targets
+if(${USEARCH_BUILD_TEST})
+    add_executable(test src/test.cpp)
+    target_link_libraries(test PRIVATE Threads::Threads)
+endif()
+
 if(${USEARCH_BUILD_BENCHMARK})
     add_executable(bench src/bench.cpp)
     target_link_libraries(bench PRIVATE Threads::Threads)

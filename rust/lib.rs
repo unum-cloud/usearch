@@ -15,7 +15,7 @@ pub mod ffi {
         type Index;
 
         fn new_ip(dimensions: usize, quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
-        fn new_l2(dimensions: usize, quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
+        fn new_l2sq(dimensions: usize, quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
         fn new_cos(dimensions: usize, quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
         fn new_haversine(quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
 
@@ -42,7 +42,7 @@ pub mod ffi {
 #[cfg(test)]
 mod tests {
     use crate::ffi::new_ip;
-    use crate::ffi::new_l2;
+    use crate::ffi::new_l2sq;
     use crate::ffi::new_cos;
     use crate::ffi::new_haversine;
 
@@ -76,7 +76,7 @@ mod tests {
     
         // Make sure every function is called at least once
         assert!(new_ip(5,  &quant, 0, 0, 0).is_ok());
-        assert!(new_l2(5,  &quant, 0, 0, 0).is_ok());
+        assert!(new_l2sq(5,  &quant, 0, 0, 0).is_ok());
         assert!(new_cos(5,  &quant, 0, 0, 0).is_ok());
         assert!(new_haversine(&quant, 0, 0, 0).is_ok());
     }
