@@ -25,7 +25,7 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
 - (instancetype)init NS_UNAVAILABLE;
 
 + (instancetype)indexIP:(UInt32)dimensions connectivity:(UInt32)connectivity NS_SWIFT_NAME(indexIP(dimensions:connectivity:));
-+ (instancetype)indexL2:(UInt32)dimensions connectivity:(UInt32)connectivity NS_SWIFT_NAME(l2(dimensions:connectivity:));
++ (instancetype)indexL2sq:(UInt32)dimensions connectivity:(UInt32)connectivity NS_SWIFT_NAME(l2sq(dimensions:connectivity:));
 + (instancetype)indexHaversine:(UInt32)connectivity NS_SWIFT_NAME(indexHaversine(connectivity:));
 
 - (void)addSingle:(UInt32)label

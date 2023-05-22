@@ -65,7 +65,7 @@ using shared_index_t = std::shared_ptr<punned_t>;
     return [[Index alloc] initWithIndex:ptr];
 }
 
-+ (instancetype)indexL2:(UInt32)dimensions connectivity:(UInt32)connectivity {
++ (instancetype)indexL2sq:(UInt32)dimensions connectivity:(UInt32)connectivity {
     std::size_t dims = static_cast<std::size_t>(dimensions);
     config_t config;
 

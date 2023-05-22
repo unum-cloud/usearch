@@ -235,7 +235,7 @@ from usearch.index import Index
 
 index = Index(
     ndim=3, # Define the number of dimensions in input vectors
-    metric='cos', # Choose 'l2', 'haversine' or other metric, default = 'ip'
+    metric='cos', # Choose 'l2sq', 'haversine' or other metric, default = 'ip'
     dtype='f32', # Quantize to 'f16' or 'f8' if needed, default = 'f32'
     connectivity=16, # How frequent should the connections in the graph be, optional
     expansion_add=128, # Control the recall of indexing, optional
@@ -405,7 +405,7 @@ assert!(index.view("index.usearch").is_ok());
 #### Metrics
 
 ```rust
-assert!(new_l2(3, &quant, 0, 0, 0).is_ok());
+assert!(new_l2sq(3, &quant, 0, 0, 0).is_ok());
 assert!(new_cos(3, &quant, 0, 0, 0).is_ok());
 assert!(new_haversine(&quant, 0, 0, 0).is_ok());
 ```
@@ -444,7 +444,7 @@ https://github.com/unum-cloud/usearch
 #### Quickstart
 
 ```swift
-let index = Index.l2(dimensions: 3, connectivity: 8)
+let index = Index.l2sq(dimensions: 3, connectivity: 8)
 let vectorA: [Float32] = [0.3, 0.5, 1.2]
 let vectorB: [Float32] = [0.4, 0.2, 1.2]
 index.add(label: 42, vector: vectorA[...])
