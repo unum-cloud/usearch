@@ -157,8 +157,8 @@ index_gt<cos_gt<float>> index;
 float vec[3] = {0.1, 0.3, 0.2};
 
 index.reserve(10);
-index.add(/* label: */ 42, /* vector: */ {&vec, 3});
-auto results = index.search(/* query: */ {&vec, 3}, /* top */ 5 /* results */);
+index.add(/* label: */ 42, /* vector: */ {&vec[0], 3});
+auto results = index.search(/* query: */ {&vec[0], 3}, 5 /* neighbors */);
 
 for (std::size_t i = 0; i != results.size(); ++i)
     results[i].member.label, results[i].member.vector, results[i].distance;
