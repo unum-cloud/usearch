@@ -445,7 +445,7 @@ template <typename index_at, typename dataset_at> //
 index_at type_punned_index_for_metric(dataset_at& dataset, args_t const& args, config_t config, accuracy_t accuracy) {
     if (args.metric_l2) {
         std::printf("-- Metric: Euclidean\n");
-        return index_at::l2(dataset.dimensions(), accuracy, config);
+        return index_at::l2sq(dataset.dimensions(), accuracy, config);
     } else if (args.metric_cos) {
         std::printf("-- Metric: Angular\n");
         return index_at::cos(dataset.dimensions(), accuracy, config);

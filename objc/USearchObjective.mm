@@ -70,7 +70,7 @@ using shared_index_t = std::shared_ptr<punned_t>;
     config_t config;
 
     config.connectivity = static_cast<std::size_t>(connectivity);
-    shared_index_t ptr = std::make_shared<punned_t>(punned_t::l2(dims, accuracy_t::f32_k, config));
+    shared_index_t ptr = std::make_shared<punned_t>(punned_t::l2sq(dims, accuracy_t::f32_k, config));
     return [[Index alloc] initWithIndex:ptr];
 }
 

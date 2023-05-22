@@ -41,8 +41,7 @@ using punned_distance_t = float;
 using punned_metric_t = punned_distance_t (*)(byte_t const*, byte_t const*, std::size_t, std::size_t);
 
 template <typename metric_at>
-static punned_distance_t punned_metric( //
-    byte_t const* a, byte_t const* b, std::size_t a_bytes, std::size_t b_bytes) noexcept {
+punned_distance_t punned_metric(byte_t const* a, byte_t const* b, std::size_t a_bytes, std::size_t b_bytes) {
     using scalar_t = typename metric_at::scalar_t;
     return metric_at{}((scalar_t const*)a, (scalar_t const*)b, a_bytes / sizeof(scalar_t), b_bytes / sizeof(scalar_t));
 }
@@ -50,17 +49,15 @@ static punned_distance_t punned_metric( //
 using punned_stateful_metric_t =
     std::function<punned_distance_t(byte_t const*, byte_t const*, std::size_t, std::size_t)>;
 
-template <typename at, typename compare_at> inline at clamp(at v, at lo, at hi, compare_at comp) noexcept {
+template <typename at, typename compare_at> inline at clamp(at v, at lo, at hi, compare_at comp) {
     return comp(v, lo) ? lo : comp(hi, v) ? hi : v;
 }
-template <typename at> inline at clamp(at v, at lo, at hi) noexcept {
-    return usearch::clamp(v, lo, hi, std::less<at>{});
-}
+template <typename at> inline at clamp(at v, at lo, at hi) { return usearch::clamp(v, lo, hi, std::less<at>{}); }
 
 class f8_bits_t;
 class f16_bits_t;
 
-inline float f16_to_f32(std::uint16_t u16) noexcept {
+inline float f16_to_f32(std::uint16_t u16) {
 #if defined(__AVX512F__)
     _Float16 f16;
     std::memcpy(&f16, &u16, sizeof(std::uint16_t));
@@ -74,7 +71,7 @@ inline float f16_to_f32(std::uint16_t u16) noexcept {
 #endif
 }
 
-inline std::uint16_t f32_to_f16(float f32) noexcept {
+inline std::uint16_t f32_to_f16(float f32) {
 #if defined(__AVX512F__)
     _Float16 f16 = _Float16(f32);
     std::uint16_t u16;
@@ -94,47 +91,47 @@ class f16_bits_t {
     std::uint16_t uint16_{};
 
   public:
-    inline f16_bits_t() noexcept : uint16_(0) {}
+    inline f16_bits_t() : uint16_(0) {}
     inline f16_bits_t(f16_bits_t&&) = default;
     inline f16_bits_t& operator=(f16_bits_t&&) = default;
     inline f16_bits_t(f16_bits_t const&) = default;
     inline f16_bits_t& operator=(f16_bits_t const&) = default;
 
-    inline operator float() const noexcept { return f16_to_f32(uint16_); }
+    inline operator float() const { return f16_to_f32(uint16_); }
 
-    inline f16_bits_t(f8_bits_t) noexcept;
-    inline f16_bits_t(float v) noexcept : uint16_(f32_to_f16(v)) {}
-    inline f16_bits_t(double v) noexcept : uint16_(f32_to_f16(v)) {}
+    inline f16_bits_t(f8_bits_t);
+    inline f16_bits_t(float v) : uint16_(f32_to_f16(v)) {}
+    inline f16_bits_t(double v) : uint16_(f32_to_f16(v)) {}
 
-    inline f16_bits_t operator+(f16_bits_t other) const noexcept { return {float(*this) + float(other)}; }
-    inline f16_bits_t operator-(f16_bits_t other) const noexcept { return {float(*this) - float(other)}; }
-    inline f16_bits_t operator*(f16_bits_t other) const noexcept { return {float(*this) * float(other)}; }
-    inline f16_bits_t operator/(f16_bits_t other) const noexcept { return {float(*this) / float(other)}; }
-    inline f16_bits_t operator+(float other) const noexcept { return {float(*this) + other}; }
-    inline f16_bits_t operator-(float other) const noexcept { return {float(*this) - other}; }
-    inline f16_bits_t operator*(float other) const noexcept { return {float(*this) * other}; }
-    inline f16_bits_t operator/(float other) const noexcept { return {float(*this) / other}; }
-    inline f16_bits_t operator+(double other) const noexcept { return {float(*this) + other}; }
-    inline f16_bits_t operator-(double other) const noexcept { return {float(*this) - other}; }
-    inline f16_bits_t operator*(double other) const noexcept { return {float(*this) * other}; }
-    inline f16_bits_t operator/(double other) const noexcept { return {float(*this) / other}; }
+    inline f16_bits_t operator+(f16_bits_t other) const { return {float(*this) + float(other)}; }
+    inline f16_bits_t operator-(f16_bits_t other) const { return {float(*this) - float(other)}; }
+    inline f16_bits_t operator*(f16_bits_t other) const { return {float(*this) * float(other)}; }
+    inline f16_bits_t operator/(f16_bits_t other) const { return {float(*this) / float(other)}; }
+    inline f16_bits_t operator+(float other) const { return {float(*this) + other}; }
+    inline f16_bits_t operator-(float other) const { return {float(*this) - other}; }
+    inline f16_bits_t operator*(float other) const { return {float(*this) * other}; }
+    inline f16_bits_t operator/(float other) const { return {float(*this) / other}; }
+    inline f16_bits_t operator+(double other) const { return {float(*this) + other}; }
+    inline f16_bits_t operator-(double other) const { return {float(*this) - other}; }
+    inline f16_bits_t operator*(double other) const { return {float(*this) * other}; }
+    inline f16_bits_t operator/(double other) const { return {float(*this) / other}; }
 
-    inline f16_bits_t& operator+=(float v) noexcept {
+    inline f16_bits_t& operator+=(float v) {
         uint16_ = f32_to_f16(v + f16_to_f32(uint16_));
         return *this;
     }
 
-    inline f16_bits_t& operator-=(float v) noexcept {
+    inline f16_bits_t& operator-=(float v) {
         uint16_ = f32_to_f16(v - f16_to_f32(uint16_));
         return *this;
     }
 
-    inline f16_bits_t& operator*=(float v) noexcept {
+    inline f16_bits_t& operator*=(float v) {
         uint16_ = f32_to_f16(v * f16_to_f32(uint16_));
         return *this;
     }
 
-    inline f16_bits_t& operator/=(float v) noexcept {
+    inline f16_bits_t& operator/=(float v) {
         uint16_ = f32_to_f16(v / f16_to_f32(uint16_));
         return *this;
     }
@@ -152,30 +149,30 @@ class f8_bits_t {
     constexpr static std::int8_t min_k = -100;
     constexpr static std::int8_t max_k = 100;
 
-    inline f8_bits_t() noexcept : int8_(0) {}
+    inline f8_bits_t() : int8_(0) {}
     inline f8_bits_t(f8_bits_t&&) = default;
     inline f8_bits_t& operator=(f8_bits_t&&) = default;
     inline f8_bits_t(f8_bits_t const&) = default;
     inline f8_bits_t& operator=(f8_bits_t const&) = default;
 
-    inline operator float() const noexcept { return float(int8_) / divisor_k; }
-    inline operator f16_bits_t() const noexcept { return float(int8_) / divisor_k; }
-    inline operator double() const noexcept { return double(int8_) / divisor_k; }
-    inline explicit operator std::int8_t() const noexcept { return int8_; }
-    inline explicit operator std::int16_t() const noexcept { return int8_; }
-    inline explicit operator std::int32_t() const noexcept { return int8_; }
-    inline explicit operator std::int64_t() const noexcept { return int8_; }
+    inline operator float() const { return float(int8_) / divisor_k; }
+    inline operator f16_bits_t() const { return float(int8_) / divisor_k; }
+    inline operator double() const { return double(int8_) / divisor_k; }
+    inline explicit operator std::int8_t() const { return int8_; }
+    inline explicit operator std::int16_t() const { return int8_; }
+    inline explicit operator std::int32_t() const { return int8_; }
+    inline explicit operator std::int64_t() const { return int8_; }
 
-    inline f8_bits_t(float v) noexcept
+    inline f8_bits_t(float v)
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
-    inline f8_bits_t(double v) noexcept
+    inline f8_bits_t(double v)
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
 };
 
-inline f16_bits_t::f16_bits_t(f8_bits_t v) noexcept : f16_bits_t(float(v)) {}
+inline f16_bits_t::f16_bits_t(f8_bits_t v) : f16_bits_t(float(v)) {}
 
 struct cos_f8_t {
-    punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b, std::size_t n) const noexcept {
+    punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b, std::size_t n) const {
         std::int32_t ab{}, a2{}, b2{};
         for (std::size_t i = 0; i != n; i++) {
             std::int16_t ai{a[i]};
@@ -189,7 +186,7 @@ struct cos_f8_t {
 };
 
 struct l2sq_f8_t {
-    punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b, std::size_t n) const noexcept {
+    punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b, std::size_t n) const {
         std::int32_t ab_deltas_sq{};
         for (std::size_t i = 0; i != n; i++)
             ab_deltas_sq += square(std::int16_t(a[i]) - std::int16_t(b[i]));
@@ -246,13 +243,13 @@ class aligned_allocator_gt {
         using other = aligned_allocator_gt<other_element_at>;
     };
 
-    pointer allocate(size_type length) const noexcept {
+    pointer allocate(size_type length) const {
         void* result = nullptr;
         int status = posix_memalign(&result, alignment_ak, ceil2(length * sizeof(value_type)));
         return status == 0 ? (pointer)result : nullptr;
     }
 
-    void deallocate(pointer begin, size_type) const noexcept { std::free(begin); }
+    void deallocate(pointer begin, size_type) const { std::free(begin); }
 };
 
 using aligned_allocator_t = aligned_allocator_gt<>;
@@ -264,7 +261,7 @@ enum class accuracy_t {
     f8_k,
 };
 
-inline char const* accuracy_name(accuracy_t accuracy) noexcept {
+inline char const* accuracy_name(accuracy_t accuracy) {
     switch (accuracy) {
     case accuracy_t::f32_k: return "f32";
     case accuracy_t::f16_k: return "f16";
@@ -274,7 +271,7 @@ inline char const* accuracy_name(accuracy_t accuracy) noexcept {
     }
 }
 
-inline bool str_equals(char const* begin, std::size_t len, char const* other_begin) noexcept {
+inline bool str_equals(char const* begin, std::size_t len, char const* other_begin) {
     std::size_t other_len = strlen(other_begin);
     return len == other_len && strncmp(begin, other_begin, len) == 0;
 }
@@ -301,7 +298,7 @@ inline index_at index_from_name( //
     if (str_equals(name, len, "l2sq") || str_equals(name, len, "euclidean_sq")) {
         if (dimensions == 0)
             throw std::invalid_argument("The number of dimensions must be positive");
-        return index_at::l2(dimensions, accuracy, config);
+        return index_at::l2sq(dimensions, accuracy, config);
     } else if (str_equals(name, len, "ip") || str_equals(name, len, "inner") || str_equals(name, len, "dot")) {
         if (dimensions == 0)
             throw std::invalid_argument("The number of dimensions must be positive");
@@ -327,7 +324,7 @@ enum class isa_t {
     avx512_k,
 };
 
-inline char const* isa_name(isa_t isa) noexcept {
+inline char const* isa_name(isa_t isa) {
     switch (isa) {
     case isa_t::auto_k: return "auto";
     case isa_t::neon_k: return "neon";
@@ -338,7 +335,7 @@ inline char const* isa_name(isa_t isa) noexcept {
     }
 }
 
-inline std::size_t bytes_per_scalar(accuracy_t accuracy) noexcept {
+inline std::size_t bytes_per_scalar(accuracy_t accuracy) {
     switch (accuracy) {
     case accuracy_t::f32_k: return 4;
     case accuracy_t::f16_k: return 2;
@@ -360,7 +357,7 @@ inline bool supports_arm_sve() {
 }
 
 template <typename from_scalar_at, typename to_scalar_at> struct cast_gt {
-    bool operator()(byte_t const* input, std::size_t bytes_in_input, byte_t* output) noexcept {
+    bool operator()(byte_t const* input, std::size_t bytes_in_input, byte_t* output) const {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
         to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
         std::transform( //
@@ -371,19 +368,19 @@ template <typename from_scalar_at, typename to_scalar_at> struct cast_gt {
 };
 
 template <> struct cast_gt<f32_t, f32_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
+    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
 };
 
 template <> struct cast_gt<f64_t, f64_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
+    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
 };
 
 template <> struct cast_gt<f16_bits_t, f16_bits_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
+    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
 };
 
 template <> struct cast_gt<f8_bits_t, f8_bits_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
+    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
 };
 
 /**
@@ -396,9 +393,6 @@ class punned_gt {
     using label_t = label_at;
     using id_t = id_at;
     using distance_t = punned_distance_t;
-
-    using f32_t = float;
-    using f64_t = double;
 
   private:
     /// @brief Schema: input buffer, bytes in input buffer, output buffer.
@@ -437,14 +431,14 @@ class punned_gt {
 
     punned_gt() = default;
     punned_gt(punned_gt&& other) { swap(other); }
-    punned_gt& operator=(punned_gt&& other) noexcept {
+    punned_gt& operator=(punned_gt&& other) {
         swap(other);
         return *this;
     }
 
     ~punned_gt() { aligned_index_free_(index_); }
 
-    void swap(punned_gt& other) noexcept {
+    void swap(punned_gt& other) {
         std::swap(dimensions_, other.dimensions_);
         std::swap(casted_vector_bytes_, other.casted_vector_bytes_);
         std::swap(accuracy_, other.accuracy_);
@@ -457,16 +451,16 @@ class punned_gt {
         std::swap(available_threads_, other.available_threads_);
     }
 
-    std::size_t dimensions() const noexcept { return dimensions_; }
-    std::size_t connectivity() const noexcept { return index_->connectivity(); }
-    std::size_t size() const noexcept { return index_->size(); }
-    std::size_t capacity() const noexcept { return index_->capacity(); }
-    config_t const& config() const noexcept { return root_config_; }
-    void clear() noexcept { return index_->clear(); }
+    std::size_t dimensions() const { return dimensions_; }
+    std::size_t connectivity() const { return index_->connectivity(); }
+    std::size_t size() const { return index_->size(); }
+    std::size_t capacity() const { return index_->capacity(); }
+    config_t const& config() const { return root_config_; }
+    void clear() { return index_->clear(); }
 
-    accuracy_t accuracy() const noexcept { return accuracy_; }
-    isa_t acceleration() const noexcept { return acceleration_; }
-    std::size_t concurrency() const noexcept {
+    accuracy_t accuracy() const { return accuracy_; }
+    isa_t acceleration() const { return acceleration_; }
+    std::size_t concurrency() const {
         return (std::min)(root_config_.max_threads_add, root_config_.max_threads_search);
     }
 
@@ -507,7 +501,7 @@ class punned_gt {
     search_results_t search_around(label_t hint, f64_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f64); }
 
     static punned_gt ip(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make_(dimensions, accuracy, ip_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
-    static punned_gt l2(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make_(dimensions, accuracy, l2_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
+    static punned_gt l2sq(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make_(dimensions, accuracy, l2_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
     static punned_gt cos(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return make_(dimensions, accuracy, cos_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
     static punned_gt haversine(accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return make_(2, accuracy, haversine_metric_(accuracy), make_casts_(accuracy), config); }
     // clang-format on
@@ -538,7 +532,7 @@ class punned_gt {
     }
 
   private:
-    static index_t* aligned_index_alloc_() noexcept {
+    static index_t* aligned_index_alloc_() {
 #if defined(WINDOWS)
         return (index_t*)_aligned_malloc(64, 64 * divide_round_up<64>(sizeof(index_t)));
 #else
@@ -546,7 +540,7 @@ class punned_gt {
 #endif
     }
 
-    static void aligned_index_free_(index_t* raw) noexcept { free(raw); }
+    static void aligned_index_free_(index_t* raw) { free(raw); }
 
     struct thread_lock_t {
         punned_gt const& parent;
@@ -692,7 +686,7 @@ class punned_gt {
 
     template <typename scalar_at, typename typed_at> //
     static punned_stateful_metric_t pun_metric_(typed_at metric) {
-        return [=](byte_t const* a, byte_t const* b, std::size_t bytes, std::size_t) noexcept -> float {
+        return [=](byte_t const* a, byte_t const* b, std::size_t bytes, std::size_t) -> float {
             return metric((scalar_at const*)a, (scalar_at const*)b, bytes / sizeof(scalar_at));
         };
     }
@@ -703,7 +697,7 @@ class punned_gt {
 #if defined(__x86_64__)
         if (dimensions % 4 == 0)
             return {
-                pun_metric_<simsimd_f32_t>([](simsimd_f32_t const* a, simsimd_f32_t const* b, size_t d) noexcept {
+                pun_metric_<simsimd_f32_t>([](simsimd_f32_t const* a, simsimd_f32_t const* b, size_t d) {
                     return 1.f - simsimd_dot_f32x4avx2(a, b, d);
                 }),
                 isa_t::avx2_k,
@@ -711,14 +705,14 @@ class punned_gt {
 #elif defined(__aarch64__)
         if (supports_arm_sve())
             return {
-                pun_metric_<simsimd_f32_t>([](simsimd_f32_t const* a, simsimd_f32_t const* b, size_t d) noexcept {
+                pun_metric_<simsimd_f32_t>([](simsimd_f32_t const* a, simsimd_f32_t const* b, size_t d) {
                     return 1.f - simsimd_dot_f32sve(a, b, d);
                 }),
                 isa_t::sve_k,
             };
         if (dimensions % 4 == 0)
             return {
-                pun_metric_<simsimd_f32_t>([](simsimd_f32_t const* a, simsimd_f32_t const* b, size_t d) noexcept {
+                pun_metric_<simsimd_f32_t>([](simsimd_f32_t const* a, simsimd_f32_t const* b, size_t d) {
                     return 1.f - simsimd_dot_f32x4neon(a, b, d);
                 }),
                 isa_t::neon_k,
@@ -734,7 +728,7 @@ class punned_gt {
 #if defined(__x86_64__)
         if (dimensions % 16 == 0)
             return {
-                pun_metric_<simsimd_f16_t>([](simsimd_f16_t const* a, simsimd_f16_t const* b, size_t d) noexcept {
+                pun_metric_<simsimd_f16_t>([](simsimd_f16_t const* a, simsimd_f16_t const* b, size_t d) {
                     return 1.f - simsimd_cos_f16x16avx512(a, b, d);
                 }),
                 isa_t::avx512_k,
@@ -742,7 +736,7 @@ class punned_gt {
 #elif defined(__aarch64__)
         if (dimensions % 4 == 0)
             return {
-                pun_metric_<simsimd_f16_t>([](simsimd_f16_t const* a, simsimd_f16_t const* b, size_t d) noexcept {
+                pun_metric_<simsimd_f16_t>([](simsimd_f16_t const* a, simsimd_f16_t const* b, size_t d) {
                     return 1.f - simsimd_cos_f16x4neon(a, b, d);
                 }),
                 isa_t::neon_k,

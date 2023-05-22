@@ -119,7 +119,7 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
                 Napi::TypeError::New(env, "Please define the number of dimensions").ThrowAsJavaScriptException();
                 return;
             }
-            native_.reset(new punned_t(punned_t::l2(dimensions, accuracy, config)));
+            native_.reset(new punned_t(punned_t::l2sq(dimensions, accuracy, config)));
         } else if (name == "ip" || name == "inner" || name == "dot") {
             if (!dimensions) {
                 Napi::TypeError::New(env, "Please define the number of dimensions").ThrowAsJavaScriptException();

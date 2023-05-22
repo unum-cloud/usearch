@@ -76,7 +76,7 @@ std::unique_ptr<Index> new_ip(size_t dims, rust::Str quant, size_t connectivity,
 }
 
 std::unique_ptr<Index> new_l2(size_t dims, rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search) {
-    return wrap(punned_t::l2(dims, accuracy(quant), config(connectivity, exp_add, exp_search)));
+    return wrap(punned_t::l2sq(dims, accuracy(quant), config(connectivity, exp_add, exp_search)));
 }
 
 std::unique_ptr<Index> new_cos(size_t dims, rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search) {
