@@ -165,6 +165,8 @@ jobs:
     runs-on: ubuntu-22.04
     if: ${{ always() }}
     needs: [publish_python, publish_javascript, publish_rust, publish_java, publish_swift]
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -209,7 +211,7 @@ jobs:
         uses: actions/deploy-pages@v1
 
   deploy_docs_vercel:
-    name: Deploy GitHub Vercel
+    name: Deploy Vercel
     runs-on: ubuntu-22.04
     needs: build_docs
     steps:
