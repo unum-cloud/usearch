@@ -170,6 +170,15 @@ mkdir -p datasets/deep_1B/ && \
 
 ## Profiling
 
+Enabling Huge Pages:
+
+```sh
+sudo cat /proc/sys/vm/nr_hugepages
+sudo sysctl -w vm.nr_hugepages=2048
+sudo reboot
+sudo cat /proc/sys/vm/nr_hugepages
+```
+
 With `perf`:
 
 ```sh
