@@ -9,27 +9,48 @@
 #ifndef UNUM_USEARCH_H
 #define UNUM_USEARCH_H
 
+// Inferring C++ version
+#if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
+#define USEARCH_IS_CPP17
+#endif
+
+// Inferring target OS
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+#define USEARCH_IS_WINDOWS
+#elif defined(__APPLE__) && defined(__MACH__)
+#define USEARCH_IS_APPLE
+#elif defined(__linux__)
+#define USEARCH_IS_LINUX
+#endif
+
+// Inferring the compiler
+#if defined(__clang__)
+#define USEARCH_IS_CLANG
+#elif defined(__GNUC__)
+#define USEARCH_IS_GCC
+#endif
+
+// Inferring hardware architecture: x86 vs Arm
+#if defined(__x86_64__)
+#define USEARCH_IS_X86
+#elif defined(__aarch64__)
+#define USEARCH_IS_ARM
+#endif
+
+// OS-specific includes
+#if defined(USEARCH_IS_WINDOWS)
 #define _USE_MATH_DEFINES
-
 #include <Windows.h>
-
-#define usearch_pack_m
-#define usearch_align_m __declspec(align(64))
-#define WINDOWS
-
+#include <sys/stat.h> // `fstat` for file size
 #else
 #include <fcntl.h>    // `fallocate`
 #include <stdlib.h>   // `posix_memalign`
 #include <sys/mman.h> // `mmap`
+#include <sys/stat.h> // `fstat` for file size
 #include <unistd.h>   // `open`, `close`
-
-#define usearch_pack_m __attribute__((packed))
-#define usearch_align_m __attribute__((aligned(64)))
 #endif
 
-#include <sys/stat.h> // `fstat` for file size
-
+// STL includes
 #include <algorithm> // `std::sort_heap`
 #include <atomic>    // `std::atomic`
 #include <bitset>    // `std::bitset`
@@ -43,18 +64,29 @@
 #include <utility>   // `std::exchange`, `std::pair`
 #include <vector>    // `std::vector`
 
-#if defined(__GNUC__)
+// Prefetching
+#if defined(USEARCH_IS_GCC)
 // https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html
 // Zero means we are only going to read from that memory.
 // Three means high temporal locality and suggests to keep
 // the data in all layers of cache.
 #define prefetch_m(ptr) __builtin_prefetch((void*)(ptr), 0, 3)
-#elif defined(__x86_64__)
+#elif defined(USEARCH_IS_X86)
 #define prefetch_m(ptr) _mm_prefetch((void*)(ptr), _MM_HINT_T0)
 #else
 #define prefetch_m(ptr)
 #endif
 
+// Alignment
+#if defined(USEARCH_IS_WINDOWS)
+#define usearch_pack_m
+#define usearch_align_m __declspec(align(64))
+#else
+#define usearch_pack_m __attribute__((packed))
+#define usearch_align_m __attribute__((aligned(64)))
+#endif
+
+// Debugging
 #if defined(NDEBUG)
 #define assert_m(must_be_true, message)
 #else
@@ -96,12 +128,12 @@ template <typename scalar_at, typename result_at = scalar_at> struct ip_gt {
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_type ab{};
-#if defined(__clang__)
-#pragma clang loop vectorize(enable)
-#elif defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(_OPENMP)
+#if defined(USEARCH_USE_OPENMP)
 #pragma omp simd reduction(+ : ab)
+#elif defined(USEARCH_IS_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_IS_GCC)
+#pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i)
             ab += result_t(a[i]) * result_t(b[i]);
@@ -122,12 +154,12 @@ template <typename scalar_at, typename result_at = scalar_at> struct cos_gt {
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_t ab{}, a2{}, b2{};
-#if defined(__clang__)
-#pragma clang loop vectorize(enable)
-#elif defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(_OPENMP)
+#if defined(USEARCH_USE_OPENMP)
 #pragma omp simd reduction(+ : ab, a2, b2)
+#elif defined(USEARCH_IS_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_IS_GCC)
+#pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i)
             ab += result_t(a[i]) * result_t(b[i]), //
@@ -148,12 +180,12 @@ template <typename scalar_at, typename result_at = scalar_at> struct l2sq_gt {
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_t ab_deltas_sq{};
-#if defined(__clang__)
-#pragma clang loop vectorize(enable)
-#elif defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(_OPENMP)
+#if defined(USEARCH_USE_OPENMP)
 #pragma omp simd reduction(+ : ab_deltas_sq)
+#elif defined(USEARCH_IS_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_IS_GCC)
+#pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i)
             ab_deltas_sq += square(result_t(a[i]) - result_t(b[i]));
@@ -170,17 +202,16 @@ template <typename scalar_at, typename result_at = std::size_t> struct hamming_g
     using result_t = result_at;
     using result_type = result_t;
 
-    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t elements,
-                               std::size_t = 0) const noexcept {
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_t matches{};
-#if defined(__clang__)
-#pragma clang loop vectorize(enable)
-#elif defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(_OPENMP)
+#if defined(USEARCH_USE_OPENMP)
 #pragma omp simd reduction(+ : matches)
+#elif defined(USEARCH_IS_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_IS_GCC)
+#pragma GCC ivdep
 #endif
-        for (std::size_t i = 0; i != elements; ++i)
+        for (std::size_t i = 0; i != dim; ++i)
             matches += a[i] != b[i];
         return matches;
     }
@@ -201,12 +232,12 @@ template <typename scalar_at, typename result_at = std::size_t> struct bit_hammi
                                std::size_t = 0) const noexcept {
         constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
         result_t matches{};
-#if defined(__clang__)
-#pragma clang loop vectorize(enable)
-#elif defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(_OPENMP)
+#if defined(USEARCH_USE_OPENMP)
 #pragma omp simd reduction(+ : matches)
+#elif defined(USEARCH_IS_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_IS_GCC)
+#pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != words; ++i)
             matches += std::bitset<bits_per_word_k>(a[i] ^ b[i]).count();
@@ -253,12 +284,12 @@ template <typename scalar_at, typename result_at = scalar_at> struct pearson_cor
         scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_t a_sum{}, b_sum{}, ab_sum{};
         result_t a_sq_sum{}, b_sq_sum{};
-#if defined(__clang__)
-#pragma clang loop vectorize(enable)
-#elif defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(_OPENMP)
+#if defined(USEARCH_USE_OPENMP)
 #pragma omp simd reduction(+ : a_sum, b_sum, ab_sum, a_sq_sum, b_sq_sum)
+#elif defined(USEARCH_IS_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_IS_GCC)
+#pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i) {
             a_sum += a[i];
@@ -585,11 +616,11 @@ class sorted_buffer_gt {
  *  @brief  Tiny userspace mutex, designed to fit in a single integer.
  */
 class mutex_t {
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
     using slot_t = volatile LONG;
 #else
     using slot_t = std::int32_t;
-#endif // WINDOWS
+#endif // USEARCH_IS_WINDOWS
 
     slot_t flag_;
 
@@ -599,27 +630,27 @@ class mutex_t {
 
     inline bool try_lock() noexcept {
         slot_t raw = 0;
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
         return InterlockedCompareExchange(&flag_, 1, raw);
 #else
         return __atomic_compare_exchange_n(&flag_, &raw, 1, true, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED);
-#endif // WINDOWS
+#endif // USEARCH_IS_WINDOWS
     }
 
     inline void lock() noexcept {
         slot_t raw = 0;
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
         InterlockedCompareExchange(&flag_, 1, raw);
 #else
     lock_again:
         raw = 0;
         if (!__atomic_compare_exchange_n(&flag_, &raw, 1, true, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
             goto lock_again;
-#endif // WINDOWS
+#endif // USEARCH_IS_WINDOWS
     }
 
     inline void unlock() noexcept {
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
         InterlockedExchange(&flag_, 0);
 #else
         __atomic_store_n(&flag_, 0, __ATOMIC_RELEASE);
@@ -631,7 +662,7 @@ static_assert(sizeof(mutex_t) == sizeof(std::int32_t), "Mutex is larger than exp
 
 using lock_t = std::unique_lock<mutex_t>;
 
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
 #pragma pack(push, 1) // Pack struct members on 1-byte alignment
 #endif
 
@@ -645,7 +676,7 @@ class usearch_pack_m uint40_t {
     inline uint40_t() noexcept { std::memset(octets, 0, 5); }
     inline uint40_t(std::uint32_t n) noexcept { std::memcpy(octets + 1, (char*)&n, 4), octets[0] = 0; }
     inline uint40_t(std::uint64_t n) noexcept { std::memcpy(octets, (char*)&n + 3, 5); }
-#if defined(__clang__)
+#if defined(USEARCH_IS_CLANG)
     inline uint40_t(std::size_t n) noexcept { std::memcpy(octets, (char*)&n + 3, 5); }
 #endif
 
@@ -676,7 +707,7 @@ class usearch_pack_m uint40_t {
     }
 };
 
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
 #pragma pack(pop) // Reset alignment to default
 #endif
 
@@ -778,8 +809,7 @@ class index_gt {
     using vector_view_t = span_gt<scalar_t const>;
 
 // C++17 and newer version deprecate the `std::result_of`
-#if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
-
+#if defined(USEARCH_IS_CPP17)
     using distance_t =
         typename std::invoke_result<metric_t, scalar_t const*, scalar_t const*, std::size_t, std::size_t>::type;
 #else
@@ -906,7 +936,7 @@ class index_gt {
         inline void push_back(id_t id) noexcept { neighbors_[count_] = id, count_++; }
     };
 
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
 #pragma pack(push, 1) // Pack struct members on 1-byte alignment
 #endif
     struct usearch_pack_m node_head_t {
@@ -917,7 +947,7 @@ class index_gt {
         // Each starts with a `neighbors_count_t` and is followed by such number of `id_t`s.
         byte_t neighbors[1];
     };
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
 #pragma pack(pop) // Reset alignment to default
 #endif
 

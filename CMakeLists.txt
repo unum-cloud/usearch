@@ -1,111 +1,118 @@
-cmake_minimum_required(VERSION 3.11 FATAL_ERROR)
-project(usearch LANGUAGES CXX)
+# This CMake file is heavily inspired by following `usearch` CMake:
+# https://github.com/nlohmann/json/blob/develop/CMakeLists.txt
+cmake_minimum_required(VERSION 3.1)
+project(usearch VERSION 0.6.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED YES)
-set(CMAKE_CXX_EXTENSIONS NO)
+# Determine if USearch is built as a subproject (using `add_subdirectory`) or if it is the main project
+set(USEARCH_IS_MAIN_PROJECT OFF)
+if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    set(USEARCH_IS_MAIN_PROJECT ON)
+endif()
 
-option(USEARCH_USE_JEMALLOC "Use JeMalloc for Faster Memory Allocations" OFF)
-option(USEARCH_USE_OPENMP "Use OpenMP for a thread pool" OFF)
-option(USEARCH_USE_SIMD "Use SIMD hardware acceleration" OFF)
-
-option(USEARCH_BUILD_BENCHMARK "Compile a native benchmark in C++" ON)
-option(USEARCH_BUILD_TEST "Compile a native unit test in C++" ON)
+# Options
+option(USEARCH_INSTALL "Install CMake targets" OFF)
+option(USEARCH_BUILD_TEST "Compile a native unit test in C++" ${USEARCH_IS_MAIN_PROJECT})
+option(USEARCH_BUILD_BENCHMARK "Compile a native benchmark in C++" ${USEARCH_IS_MAIN_PROJECT})
 option(USEARCH_BUILD_WOLFRAM "Compile Wolfram Language bindings" OFF)
 
-# Make "Release" by default
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
-endif()
+# Includes
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
+include(ExternalProject)
 
-# List of all possible compiler IDs:
-# https://cmake.org/cmake/help/latest/variable/CMAKE_LANG_COMPILER_ID.html
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -Wextra -Wno-conversion -Wno-unknown-pragmas")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmax-errors=1")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic")
+# Allow CMake 3.13+ to override options when using FetchContent / add_subdirectory
+if (POLICY CMP0077)
+    cmake_policy(SET CMP0077 NEW)
+endif ()
 
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wfatal-errors")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic")
+# Configuration
+include(GNUInstallDirs)
+set(USEARCH_TARGET_NAME               ${PROJECT_NAME})
+set(USEARCH_CONFIG_INSTALL_DIR        "${CMAKE_INSTALL_DATADIR}/cmake/${PROJECT_NAME}" CACHE INTERNAL "")
+set(USEARCH_INCLUDE_INSTALL_DIR       "${CMAKE_INSTALL_INCLUDEDIR}")
+set(USEARCH_TARGETS_EXPORT_NAME       "${PROJECT_NAME}Targets")
+set(USEARCH_CMAKE_CONFIG_TEMPLATE     "cmake/config.cmake.in")
+set(USEARCH_CMAKE_CONFIG_DIR          "${CMAKE_CURRENT_BINARY_DIR}")
+set(USEARCH_CMAKE_VERSION_CONFIG_FILE "${USEARCH_CMAKE_CONFIG_DIR}/${PROJECT_NAME}ConfigVersion.cmake")
+set(USEARCH_CMAKE_PROJECT_CONFIG_FILE "${USEARCH_CMAKE_CONFIG_DIR}/${PROJECT_NAME}Config.cmake")
+set(USEARCH_CMAKE_PROJECT_TARGETS_FILE "${USEARCH_CMAKE_CONFIG_DIR}/${PROJECT_NAME}Targets.cmake")
+set(USEARCH_PKGCONFIG_INSTALL_DIR      "${CMAKE_INSTALL_DATADIR}/pkgconfig")
 
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "NVIDIA" OR CMAKE_CXX_COMPILER_ID STREQUAL "NVHPC")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr --extended-lambda")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_86,code=sm_86")
-    set_property(SOURCE src/bench.cpp PROPERTY LANGUAGE CUDA)
-    set_target_properties(bench PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    set_target_properties(bench PROPERTIES CUDA_ARCHITECTURES "86")
 
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ferror-limit=1")
-
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /DEBUG")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /O2 /DEBUG")
+# Define our header-only library
+add_library(${USEARCH_TARGET_NAME} INTERFACE)
+add_library(${PROJECT_NAME}::${USEARCH_TARGET_NAME} ALIAS ${USEARCH_TARGET_NAME})
+set(USEARCH_INCLUDE_BUILD_DIR "${PROJECT_SOURCE_DIR}/include/")
+if (${CMAKE_VERSION} VERSION_LESS "3.8.0")
+    target_compile_features(${USEARCH_TARGET_NAME} INTERFACE cxx_range_for)
 else()
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -O3 -pg -g")
+    target_compile_features(${USEARCH_TARGET_NAME} INTERFACE cxx_std_11)
 endif()
 
-if(APPLE)
-    set(CMAKE_THREAD_LIBS_INIT "-lpthread")
-    set(CMAKE_HAVE_THREADS_LIBRARY 1)
-    set(CMAKE_USE_WIN32_THREADS_INIT 0)
-    set(CMAKE_USE_PTHREADS_INIT 1)
-    set(THREADS_PREFER_PTHREAD_FLAG ON)
+target_compile_definitions(
+    ${USEARCH_TARGET_NAME}
+    INTERFACE
+    $<$<NOT:$<BOOL:${JSON_GlobalUDLs}>>:USEARCH_USE_OPENMP=0>
+)
+target_include_directories(
+    ${USEARCH_TARGET_NAME}
+    ${USEARCH_SYSTEM_INCLUDE} INTERFACE
+    $<BUILD_INTERFACE:${USEARCH_INCLUDE_BUILD_DIR}>
+    $<INSTALL_INTERFACE:include>
+)
+
+# Install a pkg-config file, so other tools can find this
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/pkg-config.pc.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc"
+)
+
+# Install a custom package version config file instead of
+# write_basic_package_version_file to ensure that it's architecture-independent
+# https://github.com/nlohmann/json/issues/1697
+include(CMakePackageConfigHelpers)
+configure_file(
+    "cmake/usearchConfigVersion.cmake.in"
+    ${USEARCH_CMAKE_VERSION_CONFIG_FILE}
+    @ONLY
+)
+configure_file(
+    ${USEARCH_CMAKE_CONFIG_TEMPLATE}
+    ${USEARCH_CMAKE_PROJECT_CONFIG_FILE}
+    @ONLY
+)
+
+if(USEARCH_INSTALL)
+    install(
+        DIRECTORY ${USEARCH_INCLUDE_BUILD_DIR}
+        DESTINATION ${USEARCH_INCLUDE_INSTALL_DIR}
+    )
+    install(
+        FILES ${USEARCH_CMAKE_PROJECT_CONFIG_FILE} ${USEARCH_CMAKE_VERSION_CONFIG_FILE}
+        DESTINATION ${USEARCH_CONFIG_INSTALL_DIR}
+    )
+    export(
+        TARGETS ${USEARCH_TARGET_NAME}
+        NAMESPACE ${PROJECT_NAME}::
+        FILE ${USEARCH_CMAKE_PROJECT_TARGETS_FILE}
+    )
+    install(
+        TARGETS ${USEARCH_TARGET_NAME}
+        EXPORT ${USEARCH_TARGETS_EXPORT_NAME}
+        INCLUDES DESTINATION ${USEARCH_INCLUDE_INSTALL_DIR}
+    )
+    install(
+        EXPORT ${USEARCH_TARGETS_EXPORT_NAME}
+        NAMESPACE ${PROJECT_NAME}::
+        DESTINATION ${USEARCH_CONFIG_INSTALL_DIR}
+    )
+    install(
+        FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc"
+        DESTINATION ${USEARCH_PKGCONFIG_INSTALL_DIR}
+    )
 endif()
 
-find_package(Threads REQUIRED)
-
-if(${USEARCH_USE_OPENMP})
-    find_package(OpenMP REQUIRED)
-    include_directories(${OPENMP_INCLUDE_DIRS})
-endif()
-
-if(${USEARCH_USE_JEMALLOC})
-    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jemalloc.cmake")
-endif()
-
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/clipp.cmake")
-
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/fp16/include")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/simsimd/include")
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src")
-
-# Define our header-only library.
-add_library(usearch INTERFACE)
-target_sources(usearch INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include/usearch/usearch.hpp")
-target_include_directories(usearch INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
-
-# Define the targets
-if(${USEARCH_BUILD_TEST})
-    add_executable(test src/test.cpp)
-    target_link_libraries(test PRIVATE Threads::Threads)
-endif()
-
-if(${USEARCH_BUILD_BENCHMARK})
-    add_executable(bench src/bench.cpp)
-    target_link_libraries(bench PRIVATE Threads::Threads)
-
-    if(${USEARCH_USE_SIMD})
-        target_compile_definitions(bench PRIVATE USEARCH_USE_SIMD=1)
-    endif()
-
-    if(${USEARCH_USE_OPENMP})
-        target_link_libraries(bench PRIVATE ${OPENMP_LIBRARIES})
-    endif()
-
-    if(${USEARCH_USE_JEMALLOC})
-        target_link_libraries(bench PRIVATE ${JEMALLOC_LIBRARIES})
-    endif()
+if(${USEARCH_BUILD_TEST} OR ${USEARCH_BUILD_BENCHMARK})
+    add_subdirectory(src)
 endif()
 
 if(${USEARCH_BUILD_WOLFRAM})
