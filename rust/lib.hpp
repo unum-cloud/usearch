@@ -3,7 +3,7 @@
 
 #include <memory> // `std::shared_ptr`
 
-#include "advanced.hpp"
+#include "punned.hpp"
 
 struct Matches;
 
@@ -15,9 +15,9 @@ class Index {
   public:
     using label_t = std::uint32_t;
     using distance_t = unum::usearch::punned_distance_t;
-    using native_index_t = unum::usearch::auto_index_gt<label_t>;
+    using punned_t = unum::usearch::punned_gt<label_t>;
 
-    Index(std::shared_ptr<native_index_t> index);
+    Index(std::shared_ptr<punned_t> index);
 
     void reserve(size_t) const;
 
@@ -37,7 +37,7 @@ class Index {
     void view(rust::Str path) const;
 
   private:
-    std::shared_ptr<native_index_t> index_;
+    std::shared_ptr<punned_t> index_;
 };
 
 std::unique_ptr<Index> new_ip(size_t dims, rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search);

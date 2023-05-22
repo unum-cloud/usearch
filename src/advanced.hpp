@@ -391,7 +391,7 @@ template <> struct cast_gt<f8_bits_t, f8_bits_t> {
  *          vectors with automatic down-casting and hardware acceleration.
  */
 template <typename label_at = std::int64_t, typename id_at = std::uint32_t> //
-class auto_index_gt {
+class punned_gt {
   public:
     using label_t = label_at;
     using id_t = id_at;
@@ -435,16 +435,16 @@ class auto_index_gt {
     using search_results_t = typename index_t::search_results_t;
     using add_result_t = typename index_t::add_result_t;
 
-    auto_index_gt() = default;
-    auto_index_gt(auto_index_gt&& other) { swap(other); }
-    auto_index_gt& operator=(auto_index_gt&& other) noexcept {
+    punned_gt() = default;
+    punned_gt(punned_gt&& other) { swap(other); }
+    punned_gt& operator=(punned_gt&& other) noexcept {
         swap(other);
         return *this;
     }
 
-    ~auto_index_gt() { aligned_index_free_(index_); }
+    ~punned_gt() { aligned_index_free_(index_); }
 
-    void swap(auto_index_gt& other) noexcept {
+    void swap(punned_gt& other) noexcept {
         std::swap(dimensions_, other.dimensions_);
         std::swap(casted_vector_bytes_, other.casted_vector_bytes_);
         std::swap(accuracy_, other.accuracy_);
@@ -506,20 +506,20 @@ class auto_index_gt {
     search_results_t search_around(label_t hint, f32_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f32); }
     search_results_t search_around(label_t hint, f64_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f64); }
 
-    static auto_index_gt ip(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make_(dimensions, accuracy, ip_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
-    static auto_index_gt l2(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make_(dimensions, accuracy, l2_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
-    static auto_index_gt cos(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return make_(dimensions, accuracy, cos_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
-    static auto_index_gt haversine(accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return make_(2, accuracy, haversine_metric_(accuracy), make_casts_(accuracy), config); }
+    static punned_gt ip(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make_(dimensions, accuracy, ip_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
+    static punned_gt l2(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make_(dimensions, accuracy, l2_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
+    static punned_gt cos(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return make_(dimensions, accuracy, cos_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
+    static punned_gt haversine(accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return make_(2, accuracy, haversine_metric_(accuracy), make_casts_(accuracy), config); }
     // clang-format on
 
-    static auto_index_gt udf(                                    //
+    static punned_gt udf(                                        //
         std::size_t dimensions, punned_stateful_metric_t metric, //
         accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) {
         return make_(dimensions, accuracy, {metric, isa_t::auto_k}, make_casts_(accuracy), config);
     }
 
-    auto_index_gt fork() const {
-        auto_index_gt result;
+    punned_gt fork() const {
+        punned_gt result;
 
         result.dimensions_ = dimensions_;
         result.accuracy_ = accuracy_;
@@ -549,7 +549,7 @@ class auto_index_gt {
     static void aligned_index_free_(index_t* raw) noexcept { free(raw); }
 
     struct thread_lock_t {
-        auto_index_gt const& parent;
+        punned_gt const& parent;
         std::size_t thread_id;
 
         ~thread_lock_t() { parent.thread_unlock_(thread_id); }
@@ -641,7 +641,7 @@ class auto_index_gt {
         return search_around_(hint, vector, wanted, config, cast);
     }
 
-    static auto_index_gt make_(                           //
+    static punned_gt make_(                               //
         std::size_t dimensions, accuracy_t accuracy,      //
         metric_and_meta_t metric_and_meta, casts_t casts, //
         config_t config) {
@@ -650,7 +650,7 @@ class auto_index_gt {
         config.max_threads_add = config.max_threads_add ? config.max_threads_add : hardware_threads;
         config.max_threads_search = config.max_threads_search ? config.max_threads_search : hardware_threads;
         std::size_t max_threads = (std::max)(config.max_threads_add, config.max_threads_search);
-        auto_index_gt result;
+        punned_gt result;
         result.dimensions_ = dimensions;
         result.accuracy_ = accuracy;
         result.casted_vector_bytes_ = bytes_per_scalar(accuracy) * dimensions;
@@ -798,8 +798,8 @@ class auto_index_gt {
     }
 };
 
-using auto_index_t = auto_index_gt<std::int64_t, std::uint32_t>;
-using auto_index_big_t = auto_index_gt<uuid_t, uint40_t>;
+using punned_small_t = punned_gt<std::int64_t, std::uint32_t>;
+using punned_big_t = punned_gt<uuid_t, uint40_t>;
 
 } // namespace usearch
 } // namespace unum

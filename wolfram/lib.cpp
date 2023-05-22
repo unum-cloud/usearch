@@ -1,9 +1,9 @@
 #include "WolframLibrary.h"
-#include "advanced.hpp"
+#include "punned.hpp"
 
 using namespace unum::usearch;
 using distance_t = punned_distance_t;
-using native_index_t = auto_index_gt<int>;
+using punned_t = punned_gt<int>;
 using span_t = span_gt<float>;
 
 EXTERN_C DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) { return LIBRARY_NO_ERROR; }
@@ -25,10 +25,10 @@ EXTERN_C DLLEXPORT int IndexCreate(WolframLibraryData libData, mint Argc, MArgum
         config.max_threads_search = 4;
 
         accuracy_t accuracy = accuracy_from_name(accuracy_cstr, strlen(accuracy_cstr));
-        native_index_t index = index_from_name<native_index_t>( //
+        punned_t index = index_from_name<punned_t>( //
             metric_cstr, strlen(metric_cstr), dimensions, accuracy, config);
 
-        native_index_t* result_ptr = new native_index_t(std::move(index));
+        punned_t* result_ptr = new punned_t(std::move(index));
         MArgument_setInteger(Res, (long)result_ptr);
 
     } catch (...) {
@@ -42,7 +42,7 @@ EXTERN_C DLLEXPORT int IndexCreate(WolframLibraryData libData, mint Argc, MArgum
 
 EXTERN_C DLLEXPORT int IndexSave(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
     char* path_cstr = nullptr;
-    native_index_t* c_ptr = (native_index_t*)MArgument_getUTF8String(Args[0]);
+    punned_t* c_ptr = (punned_t*)MArgument_getUTF8String(Args[0]);
     try {
         path_cstr = MArgument_getUTF8String(Args[1]);
         c_ptr->save(path_cstr);
@@ -55,7 +55,7 @@ EXTERN_C DLLEXPORT int IndexSave(WolframLibraryData libData, mint Argc, MArgumen
 
 EXTERN_C DLLEXPORT int IndexLoad(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
     char* path_cstr = nullptr;
-    native_index_t* c_ptr = (native_index_t*)MArgument_getUTF8String(Args[0]);
+    punned_t* c_ptr = (punned_t*)MArgument_getUTF8String(Args[0]);
     try {
         path_cstr = MArgument_getUTF8String(Args[1]);
         c_ptr->load(path_cstr);
@@ -68,7 +68,7 @@ EXTERN_C DLLEXPORT int IndexLoad(WolframLibraryData libData, mint Argc, MArgumen
 
 EXTERN_C DLLEXPORT int IndexView(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
     char* path_cstr = nullptr;
-    native_index_t* c_ptr = (native_index_t*)MArgument_getUTF8String(Args[0]);
+    punned_t* c_ptr = (punned_t*)MArgument_getUTF8String(Args[0]);
     try {
         path_cstr = MArgument_getUTF8String(Args[1]);
         c_ptr->view(path_cstr);
@@ -80,37 +80,37 @@ EXTERN_C DLLEXPORT int IndexView(WolframLibraryData libData, mint Argc, MArgumen
 }
 
 EXTERN_C DLLEXPORT int IndexDestroy(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
-    delete (native_index_t*)MArgument_getUTF8String(Args[0]);
+    delete (punned_t*)MArgument_getUTF8String(Args[0]);
     return LIBRARY_NO_ERROR;
 }
 
 EXTERN_C DLLEXPORT int IndexSize(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
-    size_t res = ((native_index_t*)MArgument_getUTF8String(Args[0]))->size();
+    size_t res = ((punned_t*)MArgument_getUTF8String(Args[0]))->size();
     MArgument_setInteger(Res, res);
     return LIBRARY_NO_ERROR;
 }
 
 EXTERN_C DLLEXPORT int IndexConnectivity(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
-    size_t res = ((native_index_t*)MArgument_getUTF8String(Args[0]))->connectivity();
+    size_t res = ((punned_t*)MArgument_getUTF8String(Args[0]))->connectivity();
     MArgument_setInteger(Res, res);
     return LIBRARY_NO_ERROR;
 }
 
 EXTERN_C DLLEXPORT int IndexDimensions(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
-    size_t res = ((native_index_t*)MArgument_getUTF8String(Args[0]))->dimensions();
+    size_t res = ((punned_t*)MArgument_getUTF8String(Args[0]))->dimensions();
     MArgument_setInteger(Res, res);
     return LIBRARY_NO_ERROR;
 }
 
 EXTERN_C DLLEXPORT int IndexCapacity(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
-    size_t res = ((native_index_t*)MArgument_getUTF8String(Args[0]))->capacity();
+    size_t res = ((punned_t*)MArgument_getUTF8String(Args[0]))->capacity();
     MArgument_setInteger(Res, res);
     return LIBRARY_NO_ERROR;
 }
 
 EXTERN_C DLLEXPORT int IndexAdd(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
     char* path_cstr = nullptr;
-    native_index_t* c_ptr = (native_index_t*)MArgument_getUTF8String(Args[0]);
+    punned_t* c_ptr = (punned_t*)MArgument_getUTF8String(Args[0]);
     float* vector_data = nullptr;
     try {
         int label = MArgument_getInteger(Args[1]);
@@ -126,7 +126,7 @@ EXTERN_C DLLEXPORT int IndexAdd(WolframLibraryData libData, mint Argc, MArgument
 }
 
 EXTERN_C DLLEXPORT int IndexSearch(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
-    native_index_t* c_ptr = (native_index_t*)MArgument_getUTF8String(Args[0]);
+    punned_t* c_ptr = (punned_t*)MArgument_getUTF8String(Args[0]);
     MTensor matches;
     mint dims[] = {1};
     int wanted = MArgument_getInteger(Args[2]);

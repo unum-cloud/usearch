@@ -4,9 +4,9 @@
 using namespace unum::usearch;
 using namespace unum;
 
-using native_index_t = typename Index::native_index_t;
+using punned_t = typename Index::punned_t;
 
-Index::Index(std::shared_ptr<native_index_t> index) : index_(index) {}
+Index::Index(std::shared_ptr<punned_t> index) : index_(index) {}
 
 void Index::add_in_thread(uint32_t label, rust::Slice<float const> vector, size_t thread) const {
     add_config_t config;
@@ -58,8 +58,8 @@ void Index::view(rust::Str path) const { index_->view(std::string(path).c_str())
 
 accuracy_t accuracy(rust::Str quant) { return accuracy_from_name(quant.data(), quant.size()); }
 
-std::unique_ptr<Index> wrap(native_index_t&& index) {
-    std::shared_ptr<native_index_t> native = std::make_shared<native_index_t>(std::move(index));
+std::unique_ptr<Index> wrap(punned_t&& index) {
+    std::shared_ptr<punned_t> native = std::make_shared<punned_t>(std::move(index));
     return std::unique_ptr<Index>(new Index(native));
 }
 
@@ -72,17 +72,17 @@ config_t config(size_t connectivity, size_t exp_add, size_t exp_search) {
 }
 
 std::unique_ptr<Index> new_ip(size_t dims, rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search) {
-    return wrap(native_index_t::ip(dims, accuracy(quant), config(connectivity, exp_add, exp_search)));
+    return wrap(punned_t::ip(dims, accuracy(quant), config(connectivity, exp_add, exp_search)));
 }
 
 std::unique_ptr<Index> new_l2(size_t dims, rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search) {
-    return wrap(native_index_t::l2(dims, accuracy(quant), config(connectivity, exp_add, exp_search)));
+    return wrap(punned_t::l2(dims, accuracy(quant), config(connectivity, exp_add, exp_search)));
 }
 
 std::unique_ptr<Index> new_cos(size_t dims, rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search) {
-    return wrap(native_index_t::cos(dims, accuracy(quant), config(connectivity, exp_add, exp_search)));
+    return wrap(punned_t::cos(dims, accuracy(quant), config(connectivity, exp_add, exp_search)));
 }
 
 std::unique_ptr<Index> new_haversine(rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search) {
-    return wrap(native_index_t::haversine(accuracy(quant), config(connectivity, exp_add, exp_search)));
+    return wrap(punned_t::haversine(accuracy(quant), config(connectivity, exp_add, exp_search)));
 }

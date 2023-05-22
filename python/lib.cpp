@@ -18,7 +18,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 
-#include "advanced.hpp"
+#include "punned.hpp"
 
 using namespace unum::usearch;
 using namespace unum;
@@ -29,10 +29,10 @@ using py_shape_t = py::array::ShapeContainer;
 using label_t = Py_ssize_t;
 using distance_t = punned_distance_t;
 using id_t = std::uint32_t;
-using linear_index_t = auto_index_gt<label_t, id_t>;
+using punned_t = punned_gt<label_t, id_t>;
 
-struct linear_index_py_t : public linear_index_t {
-    using native_t = linear_index_t;
+struct punned_py_t : public punned_t {
+    using native_t = punned_t;
     using native_t::add;
     using native_t::capacity;
     using native_t::reserve;
@@ -41,7 +41,7 @@ struct linear_index_py_t : public linear_index_t {
 
     std::vector<char> ascii_normalization_buffer_;
 
-    linear_index_py_t(native_t&& base) : native_t(std::move(base)) {}
+    punned_py_t(native_t&& base) : native_t(std::move(base)) {}
 };
 
 using set_member_t = std::uint32_t;
@@ -105,7 +105,7 @@ punned_stateful_metric_t udf(std::size_t metric_uintptr, accuracy_t accuracy) {
     }
 }
 
-static linear_index_py_t make_index( //
+static punned_py_t make_index( //
     std::size_t dimensions,          //
     std::size_t capacity,            //
     std::string const& scalar_type,  //
@@ -126,9 +126,9 @@ static linear_index_py_t make_index( //
 
     accuracy_t accuracy = accuracy_from_name(scalar_type.c_str(), scalar_type.size());
     if (metric_uintptr)
-        return linear_index_t::udf(dimensions, udf(metric_uintptr, accuracy), accuracy, config);
+        return punned_t::udf(dimensions, udf(metric_uintptr, accuracy), accuracy, config);
     else
-        return index_from_name<linear_index_t>(metric.c_str(), metric.size(), dimensions, accuracy, config);
+        return index_from_name<punned_t>(metric.c_str(), metric.size(), dimensions, accuracy, config);
 }
 
 static std::unique_ptr<sets_index_py_t> make_sets_index( //
@@ -166,7 +166,7 @@ static std::unique_ptr<hash_index_py_t> make_hash_index( //
     return std::unique_ptr<hash_index_py_t>(new hash_index_py_t(config, bits));
 }
 
-static void add_one_to_index(linear_index_py_t& index, label_t label, py::buffer vector, bool copy) {
+static void add_one_to_index(punned_py_t& index, label_t label, py::buffer vector, bool copy) {
 
     py::buffer_info vector_info = vector.request();
     if (vector_info.ndim != 1)
@@ -197,7 +197,7 @@ static void add_one_to_index(linear_index_py_t& index, label_t label, py::buffer
 }
 
 static void add_many_to_index(                                       //
-    linear_index_py_t& index, py::buffer labels, py::buffer vectors, //
+    punned_py_t& index, py::buffer labels, py::buffer vectors, //
     bool copy, std::size_t threads = 0) {
 
     py::buffer_info labels_info = labels.request();
@@ -270,7 +270,7 @@ static void add_many_to_index(                                       //
         throw std::invalid_argument("Incompatible scalars in the vectors matrix!");
 }
 
-static py::tuple search_one_in_index(linear_index_py_t& index, py::buffer vector, std::size_t wanted, bool exact) {
+static py::tuple search_one_in_index(punned_py_t& index, py::buffer vector, std::size_t wanted, bool exact) {
 
     py::buffer_info vector_info = vector.request();
     Py_ssize_t vector_dimensions = vector_info.shape[0];
@@ -326,7 +326,7 @@ static py::tuple search_one_in_index(linear_index_py_t& index, py::buffer vector
  *      2. matrix of distances,
  *      3. array with match counts.
  */
-static py::tuple search_many_in_index(linear_index_py_t& index, py::buffer vectors, std::size_t wanted, bool exact) {
+static py::tuple search_many_in_index(punned_py_t& index, py::buffer vectors, std::size_t wanted, bool exact) {
 
     if (wanted == 0)
         return py::tuple(3);
@@ -473,7 +473,7 @@ void hash_buffer(hash_index_py_t& index, py::buffer vector) {
 PYBIND11_MODULE(index, m) {
     m.doc() = "Unum USearch Python bindings";
 
-    auto i = py::class_<linear_index_py_t>(m, "Index");
+    auto i = py::class_<punned_py_t>(m, "Index");
 
     i.def(py::init(&make_index),                                    //
           py::kw_only(),                                            //
@@ -511,18 +511,18 @@ PYBIND11_MODULE(index, m) {
         py::arg("exact") = false         //
     );
 
-    i.def("__len__", &linear_index_py_t::size);
-    i.def_property_readonly("size", &linear_index_py_t::size);
-    i.def_property_readonly("ndim", &linear_index_py_t::dimensions);
-    i.def_property_readonly("connectivity", &linear_index_py_t::connectivity);
-    i.def_property_readonly("capacity", &linear_index_py_t::capacity);
+    i.def("__len__", &punned_py_t::size);
+    i.def_property_readonly("size", &punned_py_t::size);
+    i.def_property_readonly("ndim", &punned_py_t::dimensions);
+    i.def_property_readonly("connectivity", &punned_py_t::connectivity);
+    i.def_property_readonly("capacity", &punned_py_t::capacity);
     i.def_property_readonly( //
-        "dtype", [](linear_index_py_t const& index) -> std::string { return accuracy_name(index.accuracy()); });
+        "dtype", [](punned_py_t const& index) -> std::string { return accuracy_name(index.accuracy()); });
 
-    i.def("save", &save_index<linear_index_py_t>, py::arg("path"));
-    i.def("load", &load_index<linear_index_py_t>, py::arg("path"));
-    i.def("view", &view_index<linear_index_py_t>, py::arg("path"));
-    i.def("clear", &clear_index<linear_index_py_t>);
+    i.def("save", &save_index<punned_py_t>, py::arg("path"));
+    i.def("load", &load_index<punned_py_t>, py::arg("path"));
+    i.def("view", &view_index<punned_py_t>, py::arg("path"));
+    i.def("clear", &clear_index<punned_py_t>);
 
     auto si = py::class_<sets_index_py_t>(m, "SetsIndex");
 

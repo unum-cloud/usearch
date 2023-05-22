@@ -4,14 +4,14 @@
 
 #include <thread>
 
-#include "advanced.hpp"
+#include "punned.hpp"
 
 using namespace unum::usearch;
 using namespace unum;
 
 using label_t = jint;
 using distance_t = punned_distance_t;
-using native_index_t = auto_index_gt<label_t>;
+using punned_t = punned_gt<label_t>;
 using span_t = span_gt<float>;
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
@@ -39,10 +39,10 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
         std::size_t accuracy_length = (*env).GetStringUTFLength(accuracy);
 
         accuracy_t accuracy = accuracy_from_name(accuracy_cstr, accuracy_length);
-        native_index_t index = index_from_name<native_index_t>( //
+        punned_t index = index_from_name<punned_t>( //
             metric_cstr, metric_length, static_cast<std::size_t>(dimensions), accuracy, config);
 
-        native_index_t* result_ptr = new native_index_t(std::move(index));
+        punned_t* result_ptr = new punned_t(std::move(index));
         std::memcpy(&result, &result_ptr, sizeof(jlong));
     } catch (...) {
         jclass jc = (*env).FindClass("java/lang/Error");
@@ -59,7 +59,7 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1save(JNIEnv* env, jclass
     char const* path_cstr{};
     try {
         path_cstr = (*env).GetStringUTFChars(path, 0);
-        reinterpret_cast<native_index_t*>(c_ptr)->save(path_cstr);
+        reinterpret_cast<punned_t*>(c_ptr)->save(path_cstr);
     } catch (...) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
@@ -72,7 +72,7 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1load(JNIEnv* env, jclass
     char const* path_cstr{};
     try {
         path_cstr = (*env).GetStringUTFChars(path, 0);
-        reinterpret_cast<native_index_t*>(c_ptr)->load(path_cstr);
+        reinterpret_cast<punned_t*>(c_ptr)->load(path_cstr);
     } catch (...) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
@@ -85,7 +85,7 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1view(JNIEnv* env, jclass
     char const* path_cstr{};
     try {
         path_cstr = (*env).GetStringUTFChars(path, 0);
-        reinterpret_cast<native_index_t*>(c_ptr)->view(path_cstr);
+        reinterpret_cast<punned_t*>(c_ptr)->view(path_cstr);
     } catch (...) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
@@ -95,28 +95,28 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1view(JNIEnv* env, jclass
 }
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1destroy(JNIEnv*, jclass, jlong c_ptr) {
-    delete reinterpret_cast<native_index_t*>(c_ptr);
+    delete reinterpret_cast<punned_t*>(c_ptr);
 }
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1size(JNIEnv*, jclass, jlong c_ptr) {
-    return reinterpret_cast<native_index_t*>(c_ptr)->size();
+    return reinterpret_cast<punned_t*>(c_ptr)->size();
 }
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1connectivity(JNIEnv*, jclass, jlong c_ptr) {
-    return reinterpret_cast<native_index_t*>(c_ptr)->connectivity();
+    return reinterpret_cast<punned_t*>(c_ptr)->connectivity();
 }
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1dimensions(JNIEnv*, jclass, jlong c_ptr) {
-    return reinterpret_cast<native_index_t*>(c_ptr)->dimensions();
+    return reinterpret_cast<punned_t*>(c_ptr)->dimensions();
 }
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1capacity(JNIEnv*, jclass, jlong c_ptr) {
-    return reinterpret_cast<native_index_t*>(c_ptr)->capacity();
+    return reinterpret_cast<punned_t*>(c_ptr)->capacity();
 }
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1reserve(JNIEnv* env, jclass, jlong c_ptr, jlong capacity) {
     try {
-        return reinterpret_cast<native_index_t*>(c_ptr)->reserve(static_cast<std::size_t>(capacity));
+        return reinterpret_cast<punned_t*>(c_ptr)->reserve(static_cast<std::size_t>(capacity));
     } catch (...) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
@@ -132,7 +132,7 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add( //
         vector_data = (*env).GetFloatArrayElements(vector, 0);
         jsize vector_dims = (*env).GetArrayLength(vector);
         span_t vector_span = span_t{vector_data, static_cast<std::size_t>(vector_dims)};
-        reinterpret_cast<native_index_t*>(c_ptr)->add(label, vector_span);
+        reinterpret_cast<punned_t*>(c_ptr)->add(label, vector_span);
     } catch (...) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
@@ -159,7 +159,7 @@ JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search( //
         vector_data = (*env).GetFloatArrayElements(vector, 0);
         jsize vector_dims = (*env).GetArrayLength(vector);
         span_t vector_span = span_t{vector_data, static_cast<std::size_t>(vector_dims)};
-        found = reinterpret_cast<native_index_t*>(c_ptr)
+        found = reinterpret_cast<punned_t*>(c_ptr)
                     ->search(vector_span, static_cast<std::size_t>(wanted))
                     .dump_to(matches_data, NULL);
         (*env).SetIntArrayRegion(matches, 0, found, matches_data);

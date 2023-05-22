@@ -2,15 +2,15 @@
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
-#import "advanced.hpp"
+#import "punned.hpp"
 #pragma clang diagnostic pop
 
 using namespace unum::usearch;
 using namespace unum;
 
 using distance_t = punned_distance_t;
-using native_index_t = auto_index_gt<UInt32>;
-using shared_index_t = std::shared_ptr<native_index_t>;
+using punned_t = punned_gt<UInt32>;
+using shared_index_t = std::shared_ptr<punned_t>;
 
 @interface Index ()
 
@@ -61,7 +61,7 @@ using shared_index_t = std::shared_ptr<native_index_t>;
     config_t config;
 
     config.connectivity = static_cast<std::size_t>(connectivity);
-    shared_index_t ptr = std::make_shared<native_index_t>(native_index_t::ip(dims, accuracy_t::f32_k, config));
+    shared_index_t ptr = std::make_shared<punned_t>(punned_t::ip(dims, accuracy_t::f32_k, config));
     return [[Index alloc] initWithIndex:ptr];
 }
 
@@ -70,7 +70,7 @@ using shared_index_t = std::shared_ptr<native_index_t>;
     config_t config;
 
     config.connectivity = static_cast<std::size_t>(connectivity);
-    shared_index_t ptr = std::make_shared<native_index_t>(native_index_t::l2(dims, accuracy_t::f32_k, config));
+    shared_index_t ptr = std::make_shared<punned_t>(punned_t::l2(dims, accuracy_t::f32_k, config));
     return [[Index alloc] initWithIndex:ptr];
 }
 
@@ -78,7 +78,7 @@ using shared_index_t = std::shared_ptr<native_index_t>;
     config_t config;
 
     config.connectivity = static_cast<std::size_t>(connectivity);
-    shared_index_t ptr = std::make_shared<native_index_t>(native_index_t::haversine(accuracy_t::f32_k, config));
+    shared_index_t ptr = std::make_shared<punned_t>(punned_t::haversine(accuracy_t::f32_k, config));
     return [[Index alloc] initWithIndex:ptr];
 }
 

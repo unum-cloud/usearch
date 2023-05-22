@@ -20,14 +20,14 @@
 #include <napi.h>
 #include <node_api.h>
 
-#include "advanced.hpp"
+#include "punned.hpp"
 
 using namespace unum::usearch;
 using namespace unum;
 
 using label_t = std::uint32_t;
 using distance_t = punned_distance_t;
-using native_index_t = auto_index_gt<label_t>;
+using punned_t = punned_gt<label_t>;
 
 class Index : public Napi::ObjectWrap<Index> {
   public:
@@ -47,7 +47,7 @@ class Index : public Napi::ObjectWrap<Index> {
     void Add(Napi::CallbackInfo const& ctx);
     Napi::Value Search(Napi::CallbackInfo const& ctx);
 
-    std::unique_ptr<native_index_t> native_;
+    std::unique_ptr<punned_t> native_;
 };
 
 Napi::Object Index::Init(Napi::Env env, Napi::Object exports) {
@@ -119,21 +119,21 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
                 Napi::TypeError::New(env, "Please define the number of dimensions").ThrowAsJavaScriptException();
                 return;
             }
-            native_.reset(new native_index_t(native_index_t::l2(dimensions, accuracy, config)));
+            native_.reset(new punned_t(punned_t::l2(dimensions, accuracy, config)));
         } else if (name == "ip" || name == "inner" || name == "dot") {
             if (!dimensions) {
                 Napi::TypeError::New(env, "Please define the number of dimensions").ThrowAsJavaScriptException();
                 return;
             }
-            native_.reset(new native_index_t(native_index_t::ip(dimensions, accuracy, config)));
+            native_.reset(new punned_t(punned_t::ip(dimensions, accuracy, config)));
         } else if (name == "cos" || name == "angular") {
             if (!dimensions) {
                 Napi::TypeError::New(env, "Please define the number of dimensions").ThrowAsJavaScriptException();
                 return;
             }
-            native_.reset(new native_index_t(native_index_t::cos(dimensions, accuracy, config)));
+            native_.reset(new punned_t(punned_t::cos(dimensions, accuracy, config)));
         } else if (name == "haversine") {
-            native_.reset(new native_index_t(native_index_t::haversine(accuracy, config)));
+            native_.reset(new punned_t(punned_t::haversine(accuracy, config)));
         } else {
             Napi::TypeError::New(env, "Supported metrics are: [ip, cos, l2sq, haversine]")
                 .ThrowAsJavaScriptException();
@@ -144,7 +144,7 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
             Napi::TypeError::New(env, "Please define the number of dimensions").ThrowAsJavaScriptException();
             return;
         }
-        native_.reset(new native_index_t(native_index_t::ip(dimensions, accuracy, config)));
+        native_.reset(new punned_t(punned_t::ip(dimensions, accuracy, config)));
     }
 }
 

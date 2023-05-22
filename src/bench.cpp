@@ -38,7 +38,7 @@
 
 #include <simsimd/simsimd.h>
 
-#include "advanced.hpp"
+#include "punned.hpp"
 
 using namespace unum::usearch;
 using namespace unum;
@@ -516,7 +516,7 @@ void run_big_or_small(dataset_at& dataset, args_t const& args, config_t config) 
             run_typed<index_gt<ip_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config);
         }
     } else
-        run_type_punned<auto_index_gt<std::size_t, neighbor_id_at>>(dataset, args, config);
+        run_type_punned<punned_gt<std::size_t, neighbor_id_at>>(dataset, args, config);
 }
 
 void report_alternative_setups() {
@@ -607,7 +607,7 @@ int main(int argc, char** argv) {
         exit(0);
     }
 
-    // Instead of relying on `multithreaded` from "advanced.hpp" we will use OpenMP
+    // Instead of relying on `multithreaded` from "punned.hpp" we will use OpenMP
     // to better estimate statistics between tasks batches, without having to recreate
     // the threads.
     omp_set_dynamic(true);
