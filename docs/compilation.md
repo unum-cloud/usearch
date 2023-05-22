@@ -6,7 +6,9 @@ Before building the first time, please pull submodules.
 git submodule update --init --recursive
 ```
 
-## C++ on Linux
+## C++
+
+Linux:
 
 ```sh
 cmake -B ./build_release \
@@ -15,29 +17,9 @@ cmake -B ./build_release \
     -DUSEARCH_USE_OPENMP=1 \
     -DUSEARCH_USE_JEMALLOC=1 && \
     make -C ./build_release -j
-
-# To benchmark in C++:
-./build_release/bench \
-    --vectors datasets/wiki_1M/base.1M.fbin \
-    --queries datasets/wiki_1M/query.public.100K.fbin \
-    --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin
-
-# Large benchmark on a 1TB dataset:
-./build_release/bench \
-    --vectors datasets/t2i_1B/base.1B.fbin \
-    --queries datasets/t2i_1B/query.public.100K.fbin \
-    --neighbors datasets/t2i_1B/groundtruth.public.100K.ibin \
-    --output datasets/t2i_1B/index.usearch \
-    --cos
-
-# To benchmark in Python:
-python python/bench.py \
-    --vectors datasets/wiki_1M/base.1M.fbin \
-    --queries datasets/wiki_1M/query.public.100K.fbin \
-    --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin
 ```
 
-## C++ on MacOS
+MacOS:
 
 ```sh
 brew install libomp llvm
@@ -50,11 +32,36 @@ cmake \
     make -C ./build_release -j 
 ```
 
+Benchmarking:
+
+```sh
+./build_release/bench \
+    --vectors datasets/wiki_1M/base.1M.fbin \
+    --queries datasets/wiki_1M/query.public.100K.fbin \
+    --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin
+
+./build_release/bench \
+    --vectors datasets/t2i_1B/base.1B.fbin \
+    --queries datasets/t2i_1B/query.public.100K.fbin \
+    --neighbors datasets/t2i_1B/groundtruth.public.100K.ibin \
+    --output datasets/t2i_1B/index.usearch \
+    --cos
+```
+
 ## Python
 
 ```sh
 pip install -e .
 pytest python/test.py
+```
+
+Benchmarking:
+
+```sh
+python python/bench.py \
+    --vectors datasets/wiki_1M/base.1M.fbin \
+    --queries datasets/wiki_1M/query.public.100K.fbin \
+    --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin
 ```
 
 ## JavaScript
