@@ -722,8 +722,8 @@ struct config_t {
 
     ///
     std::size_t max_elements = 0;
-    std::size_t max_threads_add = 0;
-    std::size_t max_threads_search = 0;
+    std::size_t max_threads_add = 1;
+    std::size_t max_threads_search = 1;
 };
 
 struct add_config_t {
@@ -1010,7 +1010,10 @@ class index_gt {
         viewed_file_descriptor_ = 0;
 
         // Dynamic memory:
-        thread_contexts_.resize((std::max)(config.max_threads_search, config.max_threads_add));
+        std::size_t threads = (std::max)(config.max_threads_search, config.max_threads_add);
+        if (!threads)
+            throw std::invalid_argument("Define the number of threads!");
+        thread_contexts_.resize(threads);
         for (thread_context_t& context : thread_contexts_)
             context.metric = metric;
         reserve(config.max_elements);
