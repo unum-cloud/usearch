@@ -3,7 +3,7 @@
     "tasks": [
         {
             "label": "Linux Build C++ Bench Debug",
-            "command": "cmake -DCMAKE_CXX_COMPILER=gcc-12 -DCMAKE_CXX_COMPILER=g++-12 -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make bench -C ./build_debug",
+            "command": "cmake -DCMAKE_CXX_COMPILER=gcc-12 -DCMAKE_CXX_COMPILER=g++-12 -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make -C ./build_debug",
             "args": [],
             "type": "shell",
             "problemMatcher": [
@@ -12,7 +12,7 @@
         },
         {
             "label": "Linux Build C++ Bench Release",
-            "command": "cmake -DCMAKE_CXX_COMPILER=gcc-12 -DCMAKE_CXX_COMPILER=g++-12 -DCMAKE_BUILD_TYPE=RelWithDebInfo -B ./build_release && make bench -C ./build_release",
+            "command": "cmake -DCMAKE_CXX_COMPILER=gcc-12 -DCMAKE_CXX_COMPILER=g++-12 -DCMAKE_BUILD_TYPE=RelWithDebInfo -B ./build_release && make -C ./build_release",
             "args": [],
             "type": "shell",
             "problemMatcher": [

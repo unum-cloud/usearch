@@ -77,7 +77,7 @@ SYNOPSIS
         ./build_release/bench [--vectors <path>] [--queries <path>] [--neighbors <path>] [-b] [-j
                               <integer>] [-c <integer>] [--expansion-add <integer>]
                               [--expansion-search <integer>] [--native|--f16quant|--i8quant]
-                              [--ip|--l2|--cos|--haversine] [-h]
+                              [--ip|--l2sq|--cos|--haversine] [-h]
 
 OPTIONS
         --vectors <path>
@@ -106,7 +106,7 @@ OPTIONS
         --f16quant  Enable `f16_t` quantization
         --i8quant   Enable `int8_t` quantization
         --ip        Choose Inner Product metric
-        --l2        Choose L2 Euclidean metric
+        --l2sq        Choose L2 Euclidean metric
         --cos       Choose Angular metric
         --haversine Choose Haversine metric
         -h, --help  Print this help information on this tool and exit
@@ -169,6 +169,15 @@ mkdir -p datasets/deep_1B/ && \
 ```
 
 ## Profiling
+
+Enabling Huge Pages:
+
+```sh
+sudo cat /proc/sys/vm/nr_hugepages
+sudo sysctl -w vm.nr_hugepages=2048
+sudo reboot
+sudo cat /proc/sys/vm/nr_hugepages
+```
 
 With `perf`:
 

@@ -9,27 +9,48 @@
 #ifndef UNUM_USEARCH_H
 #define UNUM_USEARCH_H
 
+// Inferring C++ version
+#if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
+#define USEARCH_IS_CPP17
+#endif
+
+// Inferring target OS
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+#define USEARCH_IS_WINDOWS
+#elif defined(__APPLE__) && defined(__MACH__)
+#define USEARCH_IS_APPLE
+#elif defined(__linux__)
+#define USEARCH_IS_LINUX
+#endif
+
+// Inferring the compiler
+#if defined(__clang__)
+#define USEARCH_IS_CLANG
+#elif defined(__GNUC__)
+#define USEARCH_IS_GCC
+#endif
+
+// Inferring hardware architecture: x86 vs Arm
+#if defined(__x86_64__)
+#define USEARCH_IS_X86
+#elif defined(__aarch64__)
+#define USEARCH_IS_ARM
+#endif
+
+// OS-specific includes
+#if defined(USEARCH_IS_WINDOWS)
 #define _USE_MATH_DEFINES
-
 #include <Windows.h>
-
-#define usearch_pack_m
-#define usearch_align_m __declspec(align(64))
-#define WINDOWS
-
+#include <sys/stat.h> // `fstat` for file size
 #else
 #include <fcntl.h>    // `fallocate`
 #include <stdlib.h>   // `posix_memalign`
 #include <sys/mman.h> // `mmap`
+#include <sys/stat.h> // `fstat` for file size
 #include <unistd.h>   // `open`, `close`
-
-#define usearch_pack_m __attribute__((packed))
-#define usearch_align_m __attribute__((aligned(64)))
 #endif
 
-#include <sys/stat.h> // `fstat` for file size
-
+// STL includes
 #include <algorithm> // `std::sort_heap`
 #include <atomic>    // `std::atomic`
 #include <bitset>    // `std::bitset`
@@ -43,18 +64,29 @@
 #include <utility>   // `std::exchange`, `std::pair`
 #include <vector>    // `std::vector`
 
-#if defined(__GNUC__)
+// Prefetching
+#if defined(USEARCH_IS_GCC)
 // https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html
 // Zero means we are only going to read from that memory.
 // Three means high temporal locality and suggests to keep
 // the data in all layers of cache.
 #define prefetch_m(ptr) __builtin_prefetch((void*)(ptr), 0, 3)
-#elif defined(__x86_64__)
+#elif defined(USEARCH_IS_X86)
 #define prefetch_m(ptr) _mm_prefetch((void*)(ptr), _MM_HINT_T0)
 #else
 #define prefetch_m(ptr)
 #endif
 
+// Alignment
+#if defined(USEARCH_IS_WINDOWS)
+#define usearch_pack_m
+#define usearch_align_m __declspec(align(64))
+#else
+#define usearch_pack_m __attribute__((packed))
+#define usearch_align_m __attribute__((aligned(64)))
+#endif
+
+// Debugging
 #if defined(NDEBUG)
 #define assert_m(must_be_true, message)
 #else
@@ -96,12 +128,12 @@ template <typename scalar_at, typename result_at = scalar_at> struct ip_gt {
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_type ab{};
-#if defined(__clang__)
-#pragma clang loop vectorize(enable)
-#elif defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(_OPENMP)
+#if defined(USEARCH_USE_OPENMP)
 #pragma omp simd reduction(+ : ab)
+#elif defined(USEARCH_IS_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_IS_GCC)
+#pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i)
             ab += result_t(a[i]) * result_t(b[i]);
@@ -122,12 +154,12 @@ template <typename scalar_at, typename result_at = scalar_at> struct cos_gt {
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_t ab{}, a2{}, b2{};
-#if defined(__clang__)
-#pragma clang loop vectorize(enable)
-#elif defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(_OPENMP)
+#if defined(USEARCH_USE_OPENMP)
 #pragma omp simd reduction(+ : ab, a2, b2)
+#elif defined(USEARCH_IS_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_IS_GCC)
+#pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i)
             ab += result_t(a[i]) * result_t(b[i]), //
@@ -148,12 +180,12 @@ template <typename scalar_at, typename result_at = scalar_at> struct l2sq_gt {
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_t ab_deltas_sq{};
-#if defined(__clang__)
-#pragma clang loop vectorize(enable)
-#elif defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(_OPENMP)
+#if defined(USEARCH_USE_OPENMP)
 #pragma omp simd reduction(+ : ab_deltas_sq)
+#elif defined(USEARCH_IS_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_IS_GCC)
+#pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i)
             ab_deltas_sq += square(result_t(a[i]) - result_t(b[i]));
@@ -170,17 +202,16 @@ template <typename scalar_at, typename result_at = std::size_t> struct hamming_g
     using result_t = result_at;
     using result_type = result_t;
 
-    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t elements,
-                               std::size_t = 0) const noexcept {
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_t matches{};
-#if defined(__clang__)
-#pragma clang loop vectorize(enable)
-#elif defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(_OPENMP)
+#if defined(USEARCH_USE_OPENMP)
 #pragma omp simd reduction(+ : matches)
+#elif defined(USEARCH_IS_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_IS_GCC)
+#pragma GCC ivdep
 #endif
-        for (std::size_t i = 0; i != elements; ++i)
+        for (std::size_t i = 0; i != dim; ++i)
             matches += a[i] != b[i];
         return matches;
     }
@@ -201,12 +232,12 @@ template <typename scalar_at, typename result_at = std::size_t> struct bit_hammi
                                std::size_t = 0) const noexcept {
         constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
         result_t matches{};
-#if defined(__clang__)
-#pragma clang loop vectorize(enable)
-#elif defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(_OPENMP)
+#if defined(USEARCH_USE_OPENMP)
 #pragma omp simd reduction(+ : matches)
+#elif defined(USEARCH_IS_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_IS_GCC)
+#pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != words; ++i)
             matches += std::bitset<bits_per_word_k>(a[i] ^ b[i]).count();
@@ -253,12 +284,12 @@ template <typename scalar_at, typename result_at = scalar_at> struct pearson_cor
         scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
         result_t a_sum{}, b_sum{}, ab_sum{};
         result_t a_sq_sum{}, b_sq_sum{};
-#if defined(__clang__)
-#pragma clang loop vectorize(enable)
-#elif defined(__GNUC__)
-#pragma GCC ivdep
-#elif defined(_OPENMP)
+#if defined(USEARCH_USE_OPENMP)
 #pragma omp simd reduction(+ : a_sum, b_sum, ab_sum, a_sq_sum, b_sq_sum)
+#elif defined(USEARCH_IS_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_IS_GCC)
+#pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i) {
             a_sum += a[i];
@@ -585,11 +616,11 @@ class sorted_buffer_gt {
  *  @brief  Tiny userspace mutex, designed to fit in a single integer.
  */
 class mutex_t {
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
     using slot_t = volatile LONG;
 #else
     using slot_t = std::int32_t;
-#endif // WINDOWS
+#endif // USEARCH_IS_WINDOWS
 
     slot_t flag_;
 
@@ -599,27 +630,27 @@ class mutex_t {
 
     inline bool try_lock() noexcept {
         slot_t raw = 0;
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
         return InterlockedCompareExchange(&flag_, 1, raw);
 #else
         return __atomic_compare_exchange_n(&flag_, &raw, 1, true, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED);
-#endif // WINDOWS
+#endif // USEARCH_IS_WINDOWS
     }
 
     inline void lock() noexcept {
         slot_t raw = 0;
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
         InterlockedCompareExchange(&flag_, 1, raw);
 #else
     lock_again:
         raw = 0;
         if (!__atomic_compare_exchange_n(&flag_, &raw, 1, true, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
             goto lock_again;
-#endif // WINDOWS
+#endif // USEARCH_IS_WINDOWS
     }
 
     inline void unlock() noexcept {
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
         InterlockedExchange(&flag_, 0);
 #else
         __atomic_store_n(&flag_, 0, __ATOMIC_RELEASE);
@@ -631,7 +662,7 @@ static_assert(sizeof(mutex_t) == sizeof(std::int32_t), "Mutex is larger than exp
 
 using lock_t = std::unique_lock<mutex_t>;
 
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
 #pragma pack(push, 1) // Pack struct members on 1-byte alignment
 #endif
 
@@ -645,7 +676,7 @@ class usearch_pack_m uint40_t {
     inline uint40_t() noexcept { std::memset(octets, 0, 5); }
     inline uint40_t(std::uint32_t n) noexcept { std::memcpy(octets + 1, (char*)&n, 4), octets[0] = 0; }
     inline uint40_t(std::uint64_t n) noexcept { std::memcpy(octets, (char*)&n + 3, 5); }
-#if defined(__clang__)
+#if defined(USEARCH_IS_CLANG)
     inline uint40_t(std::size_t n) noexcept { std::memcpy(octets, (char*)&n + 3, 5); }
 #endif
 
@@ -676,7 +707,7 @@ class usearch_pack_m uint40_t {
     }
 };
 
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
 #pragma pack(pop) // Reset alignment to default
 #endif
 
@@ -722,8 +753,8 @@ struct config_t {
 
     ///
     std::size_t max_elements = 0;
-    std::size_t max_threads_add = 0;
-    std::size_t max_threads_search = 0;
+    std::size_t max_threads_add = 1;
+    std::size_t max_threads_search = 1;
 };
 
 struct add_config_t {
@@ -778,8 +809,7 @@ class index_gt {
     using vector_view_t = span_gt<scalar_t const>;
 
 // C++17 and newer version deprecate the `std::result_of`
-#if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
-
+#if defined(USEARCH_IS_CPP17)
     using distance_t =
         typename std::invoke_result<metric_t, scalar_t const*, scalar_t const*, std::size_t, std::size_t>::type;
 #else
@@ -812,7 +842,7 @@ class index_gt {
         using pointer = void;
         using reference = ref_t;
 
-        reference operator*() const noexcept { return index_.node(offset_); }
+        reference operator*() const noexcept { return index_.node_ref_at(offset_); }
         member_iterator_gt operator++(int) noexcept { return member_iterator_gt(index_, offset_ + 1); }
         member_iterator_gt operator--(int) noexcept { return member_iterator_gt(index_, offset_ - 1); }
         member_iterator_gt operator+(difference_type d) noexcept { return member_iterator_gt(index_, offset_ + d); }
@@ -906,7 +936,7 @@ class index_gt {
         inline void push_back(id_t id) noexcept { neighbors_[count_] = id, count_++; }
     };
 
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
 #pragma pack(push, 1) // Pack struct members on 1-byte alignment
 #endif
     struct usearch_pack_m node_head_t {
@@ -917,7 +947,7 @@ class index_gt {
         // Each starts with a `neighbors_count_t` and is followed by such number of `id_t`s.
         byte_t neighbors[1];
     };
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
 #pragma pack(pop) // Reset alignment to default
 #endif
 
@@ -947,11 +977,11 @@ class index_gt {
         inline node_ref_t(mutex_t& m, node_head_t& h, scalar_t* s) noexcept : mutex_(&m), head(h), vector(s) {}
         /// @brief Locks the list of neighbors for concurrent updates.
         inline lock_t lock() const noexcept { return mutex_ ? lock_t{*mutex_} : lock_t{}; }
-        inline operator node_t() const noexcept { return node_t{mutex_ ? (byte_t*)mutex_ : (byte_t*)&head, vector}; }
+        inline node_t node() const noexcept { return node_t{mutex_ ? (byte_t*)mutex_ : (byte_t*)&head, vector}; }
         inline operator vector_view_t() const noexcept { return {vector, head.dim}; }
         inline vector_view_t vector_view() const noexcept { return {vector, head.dim}; }
-        inline operator member_ref_t() noexcept { return {head.label, vector_view()}; }
-        inline operator member_cref_t() const noexcept { return {head.label, vector_view()}; }
+        inline member_ref_t ref() noexcept { return {head.label, vector_view()}; }
+        inline member_cref_t cref() const noexcept { return {head.label, vector_view()}; }
     };
 
     struct usearch_align_m thread_context_t {
@@ -1010,7 +1040,10 @@ class index_gt {
         viewed_file_descriptor_ = 0;
 
         // Dynamic memory:
-        thread_contexts_.resize((std::max)(config.max_threads_search, config.max_threads_add));
+        std::size_t threads = (std::max)(config.max_threads_search, config.max_threads_add);
+        if (!threads)
+            throw std::invalid_argument("Define the number of threads!");
+        thread_contexts_.resize(threads);
         for (thread_context_t& context : thread_contexts_)
             context.metric = metric;
         reserve(config.max_elements);
@@ -1130,7 +1163,7 @@ class index_gt {
         inline std::size_t size() const noexcept { return count; }
         inline search_result_t operator[](std::size_t i) const noexcept {
             candidate_t const* top_ordered = top_.data();
-            return {member_cref_t(index_.node(index_.nodes_[top_ordered[i].id])), top_ordered[i].distance};
+            return {index_.node_ref_at(top_ordered[i].id).cref(), top_ordered[i].distance};
         }
         inline std::size_t dump_to(label_t* labels, distance_t* distances) const noexcept {
             for (std::size_t i = 0; i != count; ++i) {
@@ -1165,9 +1198,9 @@ class index_gt {
             new_level_lock.unlock();
 
         // Allocate the neighbors
-        node_ref_t new_node = node_malloc(label, vector, target_level, config.store_vector);
-        lock_t new_lock = new_node.lock();
-        nodes_[id] = new_node;
+        node_ref_t new_ref = node_malloc(label, vector, target_level, config.store_vector);
+        lock_t new_lock = new_ref.lock();
+        nodes_[id] = new_ref.node();
 
         // Do nothing for the first element
         if (!id) {
@@ -1317,7 +1350,7 @@ class index_gt {
 
         // Serialize nodes one by one
         for (std::size_t i = 0; i != state.size; ++i) {
-            node_ref_t node_ref = node(static_cast<id_t>(i));
+            node_ref_t node_ref = node_ref_at(i);
             std::size_t bytes_to_dump = node_dump_size(node_ref.head.dim, node_ref.head.level);
             std::size_t bytes_in_vec = node_ref.head.dim * sizeof(scalar_t);
             // Dump just neighbors, as vectors may be in a disjoint location
@@ -1390,7 +1423,7 @@ class index_gt {
                 throw std::runtime_error(std::strerror(errno));
             }
 
-            nodes_[i] = node_ref;
+            nodes_[i] = node_ref.node();
         }
 
         std::fclose(file);
@@ -1533,9 +1566,9 @@ class index_gt {
         return {*mutex, head, scalars};
     }
 
-    inline node_ref_t node(id_t id) const noexcept { return node(nodes_[id]); }
+    inline node_ref_t node_ref_at(std::size_t idx) const noexcept { return node_ref(nodes_[idx]); }
 
-    inline node_ref_t node(node_t node) const noexcept {
+    inline node_ref_t node_ref(node_t node) const noexcept {
         byte_t* data = node.tape();
         mutex_t* mutex = synchronize() ? (mutex_t*)data : nullptr;
         node_head_t& head = *(node_head_t*)(data + pre_.mutex_bytes);
@@ -1556,26 +1589,26 @@ class index_gt {
 
     id_t connect_new_element(id_t new_id, level_t level, thread_context_t& context) noexcept(false) {
 
-        node_ref_t new_node = node(new_id);
+        node_ref_t new_ref = node_ref_at(new_id);
         top_candidates_t& top = context.top_candidates;
         std::size_t const connectivity_max = level ? config_.connectivity : pre_.connectivity_max_base;
 
         // Outgoing links from `new_id`:
-        neighbors_ref_t new_neighbors = neighbors(new_node, level);
+        neighbors_ref_t new_neighbors = neighbors(new_ref, level);
         {
             assert_m(!new_neighbors.size(), "The newly inserted element should have blank link list");
             candidates_view_t top_view = refine(top, config_.connectivity, context);
 
             for (std::size_t idx = 0; idx != top_view.size(); idx++) {
                 assert_m(!new_neighbors[idx], "Possible memory corruption");
-                assert_m(level <= node(top_view[idx].id).head.level, "Linking to missing level");
+                assert_m(level <= node_ref_at(top_view[idx].id).head.level, "Linking to missing level");
                 new_neighbors.push_back(top_view[idx].id);
             }
         }
 
         // Reverse links from the neighbors:
         for (id_t close_id : new_neighbors) {
-            node_ref_t close_node = node(close_id);
+            node_ref_t close_node = node_ref_at(close_id);
             lock_t close_lock = close_node.lock();
 
             neighbors_ref_t close_header = neighbors(close_node, level);
@@ -1593,9 +1626,9 @@ class index_gt {
             // To fit a new connection we need to drop an existing one.
             top.clear();
             top.reserve(close_header.size() + 1);
-            top.emplace_reserved(context.measure(new_node, close_node), new_id);
+            top.emplace_reserved(context.measure(new_ref, close_node), new_id);
             for (id_t successor_id : close_header)
-                top.emplace_reserved(context.measure(node(successor_id), close_node), successor_id);
+                top.emplace_reserved(context.measure(node_ref_at(successor_id), close_node), successor_id);
 
             // Export the results:
             close_header.clear();
@@ -1618,16 +1651,16 @@ class index_gt {
         level_t begin_level, level_t end_level, //
         thread_context_t& context) const noexcept {
 
-        distance_t closest_dist = context.measure(query, node(closest_id));
+        distance_t closest_dist = context.measure(query, node_ref_at(closest_id));
         for (level_t level = begin_level; level > end_level; level--) {
             bool changed;
             do {
                 changed = false;
-                node_ref_t closest_node = node(closest_id);
+                node_ref_t closest_node = node_ref_at(closest_id);
                 lock_t closest_lock = closest_node.lock();
-                neighbors_ref_t closest_header = neighbors_non_base(closest_node, level);
-                for (id_t candidate_id : closest_header) {
-                    distance_t candidate_dist = context.measure(query, node(candidate_id));
+                neighbors_ref_t closest_neighbors = neighbors_non_base(closest_node, level);
+                for (id_t candidate_id : closest_neighbors) {
+                    distance_t candidate_dist = context.measure(query, node_ref_at(candidate_id));
                     if (candidate_dist < closest_dist) {
                         closest_dist = candidate_dist;
                         closest_id = candidate_id;
@@ -1654,7 +1687,7 @@ class index_gt {
         top.clear();
         top.reserve(top_limit + 1);
 
-        distance_t radius = context.measure(query, node(start_id));
+        distance_t radius = context.measure(query, node_ref_at(start_id));
         candidates.emplace(-radius, start_id);
         top.emplace_reserved(radius, start_id);
         visits.set(start_id);
@@ -1669,17 +1702,17 @@ class index_gt {
             context.iteration_cycles++;
 
             id_t candidate_id = candidacy.id;
-            node_ref_t candidate_node = node(candidate_id);
-            lock_t candidate_lock = candidate_node.lock();
-            neighbors_ref_t candidate_header = neighbors(candidate_node, level);
+            node_ref_t candidate_ref = node_ref_at(candidate_id);
+            lock_t candidate_lock = candidate_ref.lock();
+            neighbors_ref_t candidate_neighbors = neighbors(candidate_ref, level);
 
-            prefetch_neighbors(candidate_header, visits);
-            for (id_t successor_id : candidate_header) {
+            prefetch_neighbors(candidate_neighbors, visits);
+            for (id_t successor_id : candidate_neighbors) {
                 if (visits.test(successor_id))
                     continue;
 
                 visits.set(successor_id);
-                distance_t successor_dist = context.measure(query, node(successor_id));
+                distance_t successor_dist = context.measure(query, node_ref_at(successor_id));
 
                 if (top.size() < top_limit || successor_dist < radius) {
                     candidates.emplace(-successor_dist, successor_id);
@@ -1706,7 +1739,7 @@ class index_gt {
         top.clear();
         top.reserve(top_limit + 1);
 
-        distance_t radius = context.measure(query, node(start_id));
+        distance_t radius = context.measure(query, node_ref_at(start_id));
         candidates.emplace(-radius, start_id);
         top.emplace_reserved(radius, start_id);
         visits.set(start_id);
@@ -1721,15 +1754,15 @@ class index_gt {
             context.iteration_cycles++;
 
             id_t candidate_id = candidate.id;
-            neighbors_ref_t candidate_header = neighbors_base(node(candidate_id));
+            neighbors_ref_t candidate_neighbors = neighbors_base(node_ref_at(candidate_id));
 
-            prefetch_neighbors(candidate_header, visits);
-            for (id_t successor_id : candidate_header) {
+            prefetch_neighbors(candidate_neighbors, visits);
+            for (id_t successor_id : candidate_neighbors) {
                 if (visits.test(successor_id))
                     continue;
 
                 visits.set(successor_id);
-                distance_t successor_dist = context.measure(query, node(successor_id));
+                distance_t successor_dist = context.measure(query, node_ref_at(successor_id));
 
                 if (top.size() < top_limit || successor_dist < radius) {
                     candidates.emplace(-successor_dist, successor_id);
@@ -1747,7 +1780,7 @@ class index_gt {
         top.clear();
         top.reserve(count);
         for (std::size_t i = 0; i != nodes_.size(); ++i)
-            top.emplace_reserved(context.measure(query, node(nodes_[i])), static_cast<id_t>(i));
+            top.emplace_reserved(context.measure(query, node_ref_at(i)), static_cast<id_t>(i));
     }
 
     void prefetch_neighbors(neighbors_ref_t, visits_bitset_t const&) const noexcept {}
@@ -1772,13 +1805,13 @@ class index_gt {
         std::size_t consumed_count = 1; /// Always equal or greater than `submitted_count`.
         while (submitted_count < needed && consumed_count < top_count) {
             candidate_t candidate = top_data[consumed_count];
-            node_ref_t candidate_node = node(candidate.id);
+            node_ref_t candidate_ref = node_ref_at(candidate.id);
             distance_t candidate_dist = candidate.distance;
             bool good = true;
             for (std::size_t idx = 0; idx < submitted_count; idx++) {
                 candidate_t submitted = top_data[idx];
-                node_ref_t submitted_node = node(submitted.id);
-                distance_t inter_result_dist = context.measure(submitted_node, candidate_node);
+                node_ref_t submitted_node = node_ref_at(submitted.id);
+                distance_t inter_result_dist = context.measure(submitted_node, candidate_ref);
                 if (inter_result_dist < candidate_dist) {
                     good = false;
                     break;

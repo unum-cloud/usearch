@@ -197,6 +197,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-22.04
     needs: build_docs
+    if: ${{ github.event.build_docs.conclusion == 'success' }}
     steps:
       - uses: robinraju/release-downloader@v1.8
         with:
@@ -214,6 +215,7 @@ jobs:
     name: Deploy Vercel
     runs-on: ubuntu-22.04
     needs: build_docs
+    if: ${{ github.event.build_docs.conclusion == 'success' }}
     steps:
       - name: Notify Vercel
         uses: fjogeleit/http-request-action@v1

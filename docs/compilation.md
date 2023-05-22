@@ -14,8 +14,12 @@ Linux:
 cmake -B ./build_release \
     -DCMAKE_CXX_COMPILER="g++-12" \
     -DCMAKE_BUILD_TYPE=Release \
+    -DUSEARCH_USE_JEMALLOC=1 \
     -DUSEARCH_USE_OPENMP=1 \
-    -DUSEARCH_USE_JEMALLOC=1 && \
+    -DUSEARCH_USE_SIMSIMD=1 \
+    -DUSEARCH_BUILD_BENCHMARK=1 \
+    -DUSEARCH_BUILD_TEST=1 \
+    && \
     make -C ./build_release -j
 ```
 
@@ -23,12 +27,14 @@ MacOS:
 
 ```sh
 brew install libomp llvm
-cmake \
+cmake -B ./build_release \
     -DCMAKE_C_COMPILER="/opt/homebrew/opt/llvm/bin/clang" \
     -DCMAKE_CXX_COMPILER="/opt/homebrew/opt/llvm/bin/clang++" \
-    -DUSEARCH_USE_SIMD=1 \
     -DUSEARCH_USE_OPENMP=1 \
-     -B ./build_release && \
+    -DUSEARCH_USE_SIMSIMD=1 \
+    -DUSEARCH_BUILD_BENCHMARK=1 \
+    -DUSEARCH_BUILD_TEST=1 \
+    && \
     make -C ./build_release -j 
 ```
 

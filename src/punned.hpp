@@ -1,11 +1,4 @@
 #pragma once
-
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
-#define _USE_MATH_DEFINES
-
-#define WINDOWS
-#endif
-
 #include <stdlib.h> // `aligned_alloc`
 
 #include <functional> // `std::function`
@@ -14,24 +7,25 @@
 #include <thread>     // `std::thread`
 #include <vector>     // `std::vector`
 
-#if defined(_OPENMP)
+#include <fp16/fp16.h>
+
+#include <usearch/usearch.hpp>
+
+#if defined(USEARCH_USE_OPENMP)
 #include <omp.h> // `omp_get_num_threads()`
 #endif
 
-#if __linux__
+#if defined(USEARCH_IS_LINUX)
 #include <sys/auxv.h>
 #endif
 
-#if defined(__aarch64__)
+#if defined(USEARCH_IS_ARM)
 #include <arm_fp16.h>
 #endif
 
-#include <fp16/fp16.h>
-#if defined(USEARCH_USE_SIMD)
+#if defined(USEARCH_USE_SIMSIMD)
 #include <simsimd/simsimd.h>
 #endif
-
-#include <usearch/usearch.hpp>
 
 namespace unum {
 namespace usearch {
@@ -62,7 +56,7 @@ inline float f16_to_f32(std::uint16_t u16) {
     _Float16 f16;
     std::memcpy(&f16, &u16, sizeof(std::uint16_t));
     return float(f16);
-#elif defined(__aarch64__)
+#elif defined(USEARCH_IS_ARM)
     __fp16 f16;
     std::memcpy(&f16, &u16, sizeof(std::uint16_t));
     return float(f16);
@@ -77,7 +71,7 @@ inline std::uint16_t f32_to_f16(float f32) {
     std::uint16_t u16;
     std::memcpy(&u16, &f16, sizeof(std::uint16_t));
     return u16;
-#elif defined(__aarch64__)
+#elif defined(USEARCH_IS_ARM)
     __fp16 f16 = __fp16(f32);
     std::uint16_t u16;
     std::memcpy(&u16, &f16, sizeof(std::uint16_t));
@@ -209,7 +203,7 @@ void multithreaded(std::size_t threads, std::size_t tasks, callback_at&& callbac
         return;
     }
 
-#if defined(_OPENMP)
+#if defined(USEARCH_USE_OPENMP)
     omp_set_num_threads(threads);
 #pragma omp parallel for schedule(dynamic)
     for (std::size_t i = 0; i < tasks; ++i)
@@ -346,8 +340,8 @@ inline std::size_t bytes_per_scalar(accuracy_t accuracy) {
 }
 
 inline bool supports_arm_sve() {
-#if defined(__aarch64__)
-#if __linux__
+#if defined(USEARCH_IS_ARM)
+#if defined(USEARCH_IS_LINUX)
     unsigned long capabilities = getauxval(AT_HWCAP);
     if (capabilities & HWCAP_SVE)
         return true;
@@ -533,7 +527,7 @@ class punned_gt {
 
   private:
     static index_t* aligned_index_alloc_() {
-#if defined(WINDOWS)
+#if defined(USEARCH_IS_WINDOWS)
         return (index_t*)_aligned_malloc(64, 64 * divide_round_up<64>(sizeof(index_t)));
 #else
         return (index_t*)aligned_alloc(64, 64 * divide_round_up<64>(sizeof(index_t)));
@@ -693,8 +687,8 @@ class punned_gt {
 
     static metric_and_meta_t ip_metric_f32_(std::size_t dimensions) {
         (void)dimensions;
-#if defined(USEARCH_USE_SIMD)
-#if defined(__x86_64__)
+#if defined(USEARCH_USE_SIMSIMD)
+#if defined(USEARCH_IS_X86)
         if (dimensions % 4 == 0)
             return {
                 pun_metric_<simsimd_f32_t>([](simsimd_f32_t const* a, simsimd_f32_t const* b, size_t d) {
@@ -702,7 +696,7 @@ class punned_gt {
                 }),
                 isa_t::avx2_k,
             };
-#elif defined(__aarch64__)
+#elif defined(USEARCH_IS_ARM)
         if (supports_arm_sve())
             return {
                 pun_metric_<simsimd_f32_t>([](simsimd_f32_t const* a, simsimd_f32_t const* b, size_t d) {
@@ -724,8 +718,8 @@ class punned_gt {
 
     static metric_and_meta_t cos_metric_f16_(std::size_t dimensions) {
         (void)dimensions;
-#if defined(USEARCH_USE_SIMD)
-#if defined(__x86_64__)
+#if defined(USEARCH_USE_SIMSIMD)
+#if defined(USEARCH_IS_X86)
         if (dimensions % 16 == 0)
             return {
                 pun_metric_<simsimd_f16_t>([](simsimd_f16_t const* a, simsimd_f16_t const* b, size_t d) {
@@ -733,7 +727,7 @@ class punned_gt {
                 }),
                 isa_t::avx512_k,
             };
-#elif defined(__aarch64__)
+#elif defined(USEARCH_IS_ARM)
         if (dimensions % 4 == 0)
             return {
                 pun_metric_<simsimd_f16_t>([](simsimd_f16_t const* a, simsimd_f16_t const* b, size_t d) {
