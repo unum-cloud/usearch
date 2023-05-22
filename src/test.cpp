@@ -26,6 +26,10 @@ template <typename scalar_at, typename index_at> void test3d(index_at&& index) {
     assert(matched_count == 1);
     assert(matched_labels[0] == 42);
     assert(std::abs(matched_distances[0]) < 0.01);
+
+    index.save("tmp.usearch");
+    index.load("tmp.usearch");
+    index.view("tmp.usearch");
 }
 
 int main(int, char**) {
