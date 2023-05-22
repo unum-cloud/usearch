@@ -1,4 +1,4 @@
-#include "../src/advanced.hpp"
+#include "../src/punned.hpp"
 #include <algorithm>
 
 extern "C" {
@@ -11,7 +11,7 @@ using namespace unum;
 // todo:: pretty sure use of int here is not portible
 using label_t = int;
 using distance_t = float;
-using native_index_t = auto_index_gt<label_t>;
+using native_index_t = punned_gt<label_t>;
 using span_t = span_gt<float>;
 
 extern "C" {
@@ -110,11 +110,14 @@ SearchResults search(native_index_t* index, float* query, int query_len, int lim
     // to avoid a copy. not sure how it interacts with gc
     // that is why doing this now
     label_t* matches_data = new label_t[limit];
+
+    // todo:: pass the distances to outside world
+    distance_t* dist_data = new distance_t[limit];
     SearchResults res{0};
     try {
         span_t vector_span = span_t{query, static_cast<std::size_t>(query_len)};
         res.LabelsLen = index->search( //
-            vector_span, static_cast<std::size_t>(limit), matches_data, NULL);
+            vector_span, static_cast<std::size_t>(limit)).dump_to(matches_data, dist_data);
     } catch (std::exception& e) {
         res.Error = e.what();
     }

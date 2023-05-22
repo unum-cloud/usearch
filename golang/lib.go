@@ -54,7 +54,7 @@ const (
 func (m DistMetric) String() string {
 	switch m {
 	case L2_SQ:
-		return "l2_sq"
+		return "l2sq"
 	case IP:
 		return "ip"
 	case COS:
