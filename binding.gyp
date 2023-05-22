@@ -15,8 +15,8 @@
             "dependencies": [
                 "<!(node -p \"require('node-addon-api').gyp\")"
             ],
-            "cflags": ["-fexceptions", "-Wunknown-pragmas", "-std=c99"],
-            "cflags_cc": ["-fexceptions", "-Wunknown-pragmas", "-std=c++11"],
+            "cflags": ["-fexceptions", "-Wno-unknown-pragmas"],
+            "cflags_cc": ["-fexceptions", "-Wno-unknown-pragmas", "-std=c++11"],
             "xcode_settings": {
                 "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
                 "CLANG_CXX_LIBRARY": "libc++",
