@@ -158,9 +158,10 @@ float vec[3] = {0.1, 0.3, 0.2};
 
 index.reserve(10);
 index.add(/* label: */ 42, /* vector: */ {&vec, 3});
-index.search(
-  /* query: */ {&vec, 3}, /* top */ 5 /* results */,
-  /* with callback: */ [](std::size_t label, float distance) { });
+auto results = index.search(/* query: */ {&vec, 3}, /* top */ 5 /* results */);
+
+for (std::size_t i = 0; i != results.size(); ++i)
+    results[i].member.label, results[i].member.vector, results[i].distance;
 ```
 
 The `add` is thread-safe for concurrent index construction.
