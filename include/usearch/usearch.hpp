@@ -906,10 +906,7 @@ class index_gt {
         inline void push_back(id_t id) noexcept { neighbors_[count_] = id, count_++; }
     };
 
-#if defined(WINDOWS)
-#pragma pack(push, 1) // Pack struct members on 1-byte alignment
-#endif
-    struct usearch_pack_m node_head_t {
+    struct node_head_t {
         label_t label;
         dim_t dim;
         level_t level;
@@ -917,9 +914,6 @@ class index_gt {
         // Each starts with a `neighbors_count_t` and is followed by such number of `id_t`s.
         byte_t neighbors[1];
     };
-#if defined(WINDOWS)
-#pragma pack(pop) // Reset alignment to default
-#endif
 
     static constexpr std::size_t head_bytes() { return sizeof(label_t) + sizeof(dim_t) + sizeof(level_t); }
 
