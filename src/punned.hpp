@@ -563,7 +563,7 @@ class punned_gt {
         std::size_t vector_bytes = dimensions_ * sizeof(scalar_at);
 
         byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * config.thread;
-        bool casted = cast(vector_data, casted_vector_bytes_, casted_data);
+        bool casted = cast(vector_data, vector_bytes, casted_data);
         if (casted)
             vector_data = casted_data, vector_bytes = casted_vector_bytes_, config.store_vector = true;
 
@@ -579,7 +579,7 @@ class punned_gt {
         std::size_t vector_bytes = dimensions_ * sizeof(scalar_at);
 
         byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * config.thread;
-        bool casted = cast(vector_data, casted_vector_bytes_, casted_data);
+        bool casted = cast(vector_data, vector_bytes, casted_data);
         if (casted)
             vector_data = casted_data, vector_bytes = casted_vector_bytes_;
 
@@ -595,7 +595,7 @@ class punned_gt {
         std::size_t vector_bytes = dimensions_ * sizeof(scalar_at);
 
         byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * config.thread;
-        bool casted = cast(vector_data, casted_vector_bytes_, casted_data);
+        bool casted = cast(vector_data, vector_bytes, casted_data);
         if (casted)
             vector_data = casted_data, vector_bytes = casted_vector_bytes_;
 
