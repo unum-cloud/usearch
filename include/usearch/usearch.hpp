@@ -131,24 +131,6 @@ template <typename at> at misaligned_load(void* ptr) noexcept {
     return v;
 }
 
-#if defined(USEARCH_IS_WINDOWS)
-
-template <typename at> bool atomic_compare_exchange(at* ptr, at expected, at replacement) noexcept {
-    return InterlockedCompareExchange(ptr, replacement, expected);
-}
-
-#else
-
-template <typename at> bool atomic_compare_exchange(at* ptr, at expected, at replacement) noexcept {
-    return __atomic_compare_exchange_n(ptr, &expected, 1, replacement, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED);
-}
-
-template <typename at> at atomic_load(at* ptr) noexcept { return __atomic_load_n(ptr, __ATOMIC_ACQUIRE); }
-
-template <typename at> void atomic_store(at* ptr, at v) noexcept { __atomic_store_n(ptr, v, __ATOMIC_RELEASE); }
-
-#endif
-
 template <typename at> class misaligned_ref_gt {
     byte_t* ptr_;
 
@@ -419,13 +401,19 @@ template <typename scalar_at, typename result_at = scalar_at> struct haversine_g
 
 /**
  *  @brief  Light-weight bitset implementation to track visited nodes during graph traversal.
+ *          Extends basic functionality with atomic operations.
  */
 template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
     using allocator_t = allocator_at;
     using byte_t = typename allocator_t::value_type;
     static_assert(sizeof(byte_t) == 1, "Allocator must allocate separate addressable bytes");
 
+#if defined(USEARCH_IS_WINDOWS)
+    using slot_t = LONG volatile;
+    static_assert(sizeof(slot_t) == 8);
+#else
     using slot_t = std::uint64_t;
+#endif
 
     std::uint64_t* u64s_{};
     std::size_t slots_{};
@@ -435,6 +423,7 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
     visits_bitset_gt(std::size_t capacity) noexcept {
         slots_ = divide_round_up<64>(capacity);
         u64s_ = (slot_t*)allocator_t{}.allocate(slots_ * sizeof(slot_t));
+        clear();
     }
     ~visits_bitset_gt() noexcept { allocator_t{}.deallocate((byte_t*)u64s_, slots_ * sizeof(slot_t)), u64s_ = nullptr; }
     void clear() noexcept { std::memset(u64s_, 0, slots_ * sizeof(slot_t)); }
@@ -453,6 +442,42 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
         std::swap(slots_, other.slots_);
         return *this;
     }
+
+#if defined(USEARCH_IS_WINDOWS)
+
+    inline bool atomic_test(std::size_t i) noexcept {
+        slot_t mask{1ul << (i & 63ul)};
+        return InterlockedOr(&u64s_[i / 64], 0) & mask;
+    }
+
+    inline bool atomic_set(std::size_t i) noexcept {
+        slot_t mask{1ul << (i & 63ul)};
+        return InterLockedOr(&u64s_[i / 64], mask) & mask;
+    }
+
+    inline void atomic_reset(std::size_t i) noexcept {
+        slot_t mask{1ul << (i & 63ul)};
+        InterLockedAnd((LONG volatile*)&u64s_[i / 64], ~mask);
+    }
+
+#else
+
+    inline bool atomic_test(std::size_t i) noexcept {
+        slot_t mask{1ul << (i & 63ul)};
+        return __atomic_load_n(&u64s_[i / 64], __ATOMIC_RELAXED) & mask;
+    }
+
+    inline bool atomic_set(std::size_t i) noexcept {
+        slot_t mask{1ul << (i & 63ul)};
+        return __atomic_fetch_or(&u64s_[i / 64], mask, __ATOMIC_ACQUIRE) & mask;
+    }
+
+    inline void atomic_reset(std::size_t i) noexcept {
+        slot_t mask{1ul << (i & 63ul)};
+        __atomic_fetch_and(&u64s_[i / 64], ~mask, __ATOMIC_RELEASE);
+    }
+
+#endif
 };
 
 using visits_bitset_t = visits_bitset_gt<>;
@@ -1013,7 +1038,6 @@ class index_gt {
         byte_t* tape() const noexcept { return tape_; }
         scalar_t* vector() const noexcept { return vector_; }
         byte_t* neighbors_tape() const noexcept { return tape_ + node_head_bytes_(); }
-        byte_t* level_ptr() const noexcept { return tape_ + sizeof(label_t) + sizeof(dim_t); }
 
         node_t() = default;
         node_t(node_t const&) = default;
@@ -1021,7 +1045,7 @@ class index_gt {
 
         label_t label() const noexcept { return misaligned_load<label_t>(tape_); }
         dim_t dim() const noexcept { return misaligned_load<dim_t>(tape_ + sizeof(label_t)); }
-        level_t level() const noexcept { return misaligned_load<level_t>(level_ptr()) & level_mask_k; }
+        level_t level() const noexcept { return misaligned_load<level_t>(tape_ + sizeof(label_t) + sizeof(dim_t)); }
 
         void label(label_t v) noexcept { return misaligned_store<label_t>(tape_, v); }
         void dim(dim_t v) noexcept { return misaligned_store<dim_t>(tape_ + sizeof(label_t), v); }
@@ -1052,7 +1076,7 @@ class index_gt {
         misaligned_ptr_gt<id_t const> end() const noexcept { return begin() + size(); }
         id_t operator[](std::size_t i) const noexcept { return misaligned_load<id_t>(tape_ + shift(i)); }
         std::size_t size() const noexcept { return misaligned_load<neighbors_count_t>(tape_); }
-        void clear() noexcept { misaligned_store<neighbors_count_t>(tape_, {}); }
+        void clear() noexcept { misaligned_store<neighbors_count_t>(tape_, 0); }
         void push_back(id_t id) noexcept {
             neighbors_count_t n = misaligned_load<neighbors_count_t>(tape_);
             misaligned_store<id_t>(tape_ + shift(n), id);
@@ -1097,6 +1121,7 @@ class index_gt {
 
     using node_allocator_t = typename allocator_traits_t::template rebind_alloc<node_t>;
     std::vector<node_t, node_allocator_t> nodes_{};
+    mutable visits_bitset_t nodes_mutexes_{};
 
     using thread_context_allocator_t = typename allocator_traits_t::template rebind_alloc<thread_context_t>;
     mutable std::vector<thread_context_t, thread_context_allocator_t> thread_contexts_{};
@@ -1187,6 +1212,7 @@ class index_gt {
 
         assert_m(new_capacity >= size_, "Can't drop existing values");
         nodes_.resize(new_capacity);
+        nodes_mutexes_ = visits_bitset_t(new_capacity);
         for (thread_context_t& context : thread_contexts_)
             context.visits = visits_bitset_t(new_capacity);
 
@@ -1288,7 +1314,7 @@ class index_gt {
             new_level_lock.unlock();
 
         // Allocate the neighbors
-        node_t new_node = nodes_[result.new_size] = node_malloc_(label, vector, target_level, config.store_vector);
+        nodes_[result.new_size] = node_malloc_(label, vector, target_level, config.store_vector);
         node_lock_t new_lock = node_lock_(new_id);
         result.new_size++;
 
@@ -1309,7 +1335,7 @@ class index_gt {
         // From `target_level` down perform proper extensive search
         for (level_t level = (std::min)(target_level, max_level); level >= 0; level--) {
             search_to_insert_(closest_id, vector, level, context);
-            closest_id = connect_new_element_(new_id, level, context);
+            closest_id = connect_new_node_(new_id, level, context);
         }
 
         // Normalize stats
@@ -1629,7 +1655,7 @@ class index_gt {
             return;
 
         node_t& node = nodes_[id];
-        std::size_t node_bytes = node_bytes_(node) - node_vector_bytes_(node) * node_stored_(node);
+        std::size_t node_bytes = node_bytes_(node) - node_vector_bytes_(node) * !node_stored_(node);
         allocator_t{}.deallocate(node.tape(), node_bytes);
         node = node_t{};
     }
@@ -1669,21 +1695,19 @@ class index_gt {
     }
 
     struct node_lock_t {
-        level_t* level_ptr_;
-        level_t level_;
+        visits_bitset_t& bitset;
+        std::size_t idx;
 
-        inline ~node_lock_t() noexcept { atomic_store(level_ptr_, level_); }
+        inline ~node_lock_t() noexcept { bitset.atomic_reset(idx); }
     };
 
     inline node_lock_t node_lock_(std::size_t idx) const noexcept {
-        level_t* level_ptr = (level_t*)nodes_[idx].level_ptr();
-        level_t level = atomic_load(level_ptr) & level_mask_k;
-        while (!atomic_compare_exchange(level_ptr, level, level | ~level_mask_k))
+        while (nodes_mutexes_.atomic_set(idx))
             ;
-        return {level_ptr, level};
+        return {nodes_mutexes_, idx};
     }
 
-    id_t connect_new_element_(id_t new_id, level_t level, thread_context_t& context) noexcept(false) {
+    id_t connect_new_node_(id_t new_id, level_t level, thread_context_t& context) noexcept(false) {
 
         node_t new_node = node_with_id_(new_id);
         top_candidates_t& top = context.top_candidates;
