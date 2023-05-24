@@ -985,8 +985,6 @@ class index_gt {
     using dim_t = std::uint32_t;
     using level_t = std::int32_t;
 
-    static constexpr level_t level_mask_k = 0x7F'FF'FF'FF;
-
     using allocator_traits_t = std::allocator_traits<allocator_t>;
     using byte_t = typename allocator_t::value_type;
     static_assert(sizeof(byte_t) == 1, "Allocator must allocate separate addressable bytes");

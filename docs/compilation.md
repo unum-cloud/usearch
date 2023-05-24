@@ -58,7 +58,7 @@ Benchmarking:
 
 ```sh
 pip install -e .
-pytest python/test.py
+pytest python/scripts/test.py
 ```
 
 Benchmarking:

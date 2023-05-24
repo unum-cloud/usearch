@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-
+from usearch.io import load_matrix
 from usearch.index import Index, SetsIndex
 
 dimensions = [13, 99, 100, 256]
