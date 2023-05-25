@@ -410,71 +410,75 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
 
 #if defined(USEARCH_IS_WINDOWS)
     using slot_t = LONG volatile;
-    static_assert(sizeof(slot_t) == 8);
 #else
     using slot_t = std::uint64_t;
 #endif
 
-    std::uint64_t* u64s_{};
-    std::size_t slots_{};
+    static constexpr std::size_t bits_per_slot() { return sizeof(slot_t) * CHAR_BIT; }
+    static constexpr slot_t bits_mask() { return sizeof(slot_t) * CHAR_BIT - 1; }
+
+    slot_t* slots_{};
+    std::size_t slots_count_{};
 
   public:
     visits_bitset_gt() noexcept {}
     visits_bitset_gt(std::size_t capacity) noexcept {
-        slots_ = divide_round_up<64>(capacity);
-        u64s_ = (slot_t*)allocator_t{}.allocate(slots_ * sizeof(slot_t));
+        slots_count_ = divide_round_up<bits_per_slot()>(capacity);
+        slots_ = (slot_t*)allocator_t{}.allocate(slots_count_ * sizeof(slot_t));
         clear();
     }
-    ~visits_bitset_gt() noexcept { allocator_t{}.deallocate((byte_t*)u64s_, slots_ * sizeof(slot_t)), u64s_ = nullptr; }
-    void clear() noexcept { std::memset(u64s_, 0, slots_ * sizeof(slot_t)); }
-    inline bool test(std::size_t i) const noexcept { return u64s_[i / 64] & (1ul << (i & 63ul)); }
-    inline void set(std::size_t i) noexcept { u64s_[i / 64] |= (1ul << (i & 63ul)); }
+    ~visits_bitset_gt() noexcept {
+        allocator_t{}.deallocate((byte_t*)slots_, slots_count_ * sizeof(slot_t)), slots_ = nullptr;
+    }
+    void clear() noexcept { std::memset(slots_, 0, slots_count_ * sizeof(slot_t)); }
+    inline bool test(std::size_t i) const noexcept { return slots_[i / bits_per_slot()] & (1ul << (i & bits_mask())); }
+    inline void set(std::size_t i) noexcept { slots_[i / bits_per_slot()] |= (1ul << (i & bits_mask())); }
 
     visits_bitset_gt(visits_bitset_gt&& other) noexcept {
-        u64s_ = other.u64s_;
         slots_ = other.slots_;
-        other.u64s_ = nullptr;
-        other.slots_ = 0;
+        slots_count_ = other.slots_count_;
+        other.slots_ = nullptr;
+        other.slots_count_ = 0;
     }
 
     visits_bitset_gt& operator=(visits_bitset_gt&& other) noexcept {
-        std::swap(u64s_, other.u64s_);
         std::swap(slots_, other.slots_);
+        std::swap(slots_count_, other.slots_count_);
         return *this;
     }
 
 #if defined(USEARCH_IS_WINDOWS)
 
     inline bool atomic_test(std::size_t i) noexcept {
-        slot_t mask{1ul << (i & 63ul)};
-        return InterlockedOr(&u64s_[i / 64], 0) & mask;
+        slot_t mask{1ul << (i & bits_mask())};
+        return InterlockedOr(&slots_[i / bits_per_slot()], 0) & mask;
     }
 
     inline bool atomic_set(std::size_t i) noexcept {
-        slot_t mask{1ul << (i & 63ul)};
-        return InterLockedOr(&u64s_[i / 64], mask) & mask;
+        slot_t mask{1ul << (i & bits_mask())};
+        return InterLockedOr(&slots_[i / bits_per_slot()], mask) & mask;
     }
 
     inline void atomic_reset(std::size_t i) noexcept {
-        slot_t mask{1ul << (i & 63ul)};
-        InterLockedAnd((LONG volatile*)&u64s_[i / 64], ~mask);
+        slot_t mask{1ul << (i & bits_mask())};
+        InterLockedAnd((LONG volatile*)&slots_[i / bits_per_slot()], ~mask);
     }
 
 #else
 
     inline bool atomic_test(std::size_t i) noexcept {
-        slot_t mask{1ul << (i & 63ul)};
-        return __atomic_load_n(&u64s_[i / 64], __ATOMIC_RELAXED) & mask;
+        slot_t mask{1ul << (i & bits_mask())};
+        return __atomic_load_n(&slots_[i / bits_per_slot()], __ATOMIC_RELAXED) & mask;
     }
 
     inline bool atomic_set(std::size_t i) noexcept {
-        slot_t mask{1ul << (i & 63ul)};
-        return __atomic_fetch_or(&u64s_[i / 64], mask, __ATOMIC_ACQUIRE) & mask;
+        slot_t mask{1ul << (i & bits_mask())};
+        return __atomic_fetch_or(&slots_[i / bits_per_slot()], mask, __ATOMIC_ACQUIRE) & mask;
     }
 
     inline void atomic_reset(std::size_t i) noexcept {
-        slot_t mask{1ul << (i & 63ul)};
-        __atomic_fetch_and(&u64s_[i / 64], ~mask, __ATOMIC_RELEASE);
+        slot_t mask{1ul << (i & bits_mask())};
+        __atomic_fetch_and(&slots_[i / bits_per_slot()], ~mask, __ATOMIC_RELEASE);
     }
 
 #endif
