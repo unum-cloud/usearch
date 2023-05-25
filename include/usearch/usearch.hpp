@@ -103,7 +103,7 @@ using f64_t = double;
 using f32_t = float;
 using byte_t = char;
 
-template <typename at> at angle_to_radians(at angle) noexcept { return angle * M_PI / 180.f; }
+template <typename at> at angle_to_radians(at angle) noexcept { return angle * at(3.14159265358979323846) / at(180); }
 
 template <typename at> at square(at value) noexcept { return value * value; }
 
