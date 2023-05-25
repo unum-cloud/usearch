@@ -1,9 +1,8 @@
 import time
 import numpy as np
-import fire
+import math
 
-import numpy as np
-from numba import cfunc, types, carray
+import fire
 
 from usearch.index import Index
 from usearch.io import load_matrix
@@ -51,25 +50,6 @@ def bench_usearch(index, vectors: np.array, queries: np.array, neighbors: np.arr
     recall_at_one /= queries.shape[0]
     print(f'- Recall@1: {recall_at_one * 100:.2f} %')
 
-# Showcases how to use Numba to JIT-compile similarity measures for USearch.
-# https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
-
-
-signature_f32 = types.float32(
-    types.CPointer(types.float32),
-    types.CPointer(types.float32),
-    types.size_t, types.size_t)
-
-
-@cfunc(signature_f32)
-def inner_product_f32(a, b, n, m):
-    a_array = carray(a, n)
-    b_array = carray(b, n)
-    c = types.float32(0)
-    for i in range(n):
-        c += a_array[i] * b_array[i]
-    return types.float32(1 - c)
-
 
 def main(
     vectors: str,
@@ -94,16 +74,6 @@ def main(
     )
     bench_usearch(index, vectors_mat, queries_mat, neighbors_mat)
 
-    print('USearch: HNSW + Numba JIT')
-    index = Index(
-        ndim=dim,
-        expansion_add=expansion_add,
-        expansion_search=expansion_search,
-        connectivity=connectivity,
-        metric_pointer=inner_product_f32.address,
-    )
-    bench_usearch(index, vectors_mat, queries_mat, neighbors_mat)
-
     print('USearch: HNSW + Half Precision')
     index = Index(
         ndim=dim,
@@ -124,27 +94,94 @@ def main(
     )
     bench_usearch(index, vectors_mat, queries_mat, neighbors_mat)
 
+    # Showcases how to use Numba to JIT-compile similarity measures for USearch.
+    # https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
+    try:
+        from numba import cfunc, types, carray
+
+        signature_f32 = types.float32(
+            types.CPointer(types.float32),
+            types.CPointer(types.float32),
+            types.size_t, types.size_t)
+
+        @cfunc(signature_f32)
+        def inner_product_f32(a, b, n, m):
+            a_array = carray(a, n)
+            b_array = carray(b, n)
+            c = types.float32(0)
+            for i in range(n):
+                c += a_array[i] * b_array[i]
+            return types.float32(1 - c)
+
+        signature_f8 = types.float32(
+            types.CPointer(types.int8),
+            types.CPointer(types.int8),
+            types.size_t, types.size_t)
+
+        @cfunc(signature_f8)
+        def cos_f8(a, b, n, m):
+            a_array = carray(a, n)
+            b_array = carray(b, n)
+            c = types.int32(0)
+            a_sq = types.int32(0)
+            b_sq = types.int32(0)
+            for i in range(n):
+                ai = types.int16(a_array[i])
+                bi = types.int16(b_array[i])
+                c += ai * bi
+                a_sq += ai * ai
+                b_sq += bi * bi
+            a_norm = math.sqrt(types.float32(a_sq))
+            b_norm = math.sqrt(types.float32(b_sq))
+            c_norm = types.float32(c) / (a_norm * b_norm)
+            return types.float32(1 - c_norm)
+
+        print('USearch: HNSW + Numba JIT')
+        index = Index(
+            ndim=dim,
+            expansion_add=expansion_add,
+            expansion_search=expansion_search,
+            connectivity=connectivity,
+            metric_pointer=inner_product_f32.address,
+        )
+        bench_usearch(index, vectors_mat, queries_mat, neighbors_mat)
+
+        print('USearch: HNSW + Quarter Precision + Numba JIT')
+        index = Index(
+            ndim=dim,
+            dtype='f8',
+            expansion_add=expansion_add,
+            expansion_search=expansion_search,
+            connectivity=connectivity,
+            metric_pointer=cos_f8.address,
+        )
+        bench_usearch(index, vectors_mat, queries_mat, neighbors_mat)
+    except ImportError:
+        print('Skipping Numba benchmarks')
+
     # Don't depend on the FAISS installation for benchmarks
     try:
         from faiss import IndexHNSWFlat, IndexIVFPQ
+
+        print('FAISS: HNSW')
+        index = IndexHNSWFlat(dim, connectivity)
+        index.hnsw.efSearch = expansion_search
+        index.hnsw.efConstruction = expansion_add
+        bench_faiss(index, vectors_mat, queries_mat, neighbors_mat)
+
+        print('FAISS: HNSW + IVFPQ')
+        # Number of inverted lists (number of partitions or cells).
+        nlist = 10000
+        nsegment = 16  # Number of segments for PQ (number of subquantizers).
+        nbit = 8       # Number of bits to encode each segment.
+        coarse_quantizer = IndexHNSWFlat(dim, connectivity)
+        index = IndexIVFPQ(coarse_quantizer, dim, nlist, nsegment, nbit)
+        index.train(vectors_mat)
+        index.nprobe = 10
+        bench_faiss(index, vectors_mat, queries_mat, neighbors_mat)
+
     except ImportError:
-        return
-
-    print('FAISS: HNSW')
-    index = IndexHNSWFlat(dim, connectivity)
-    index.hnsw.efSearch = expansion_search
-    index.hnsw.efConstruction = expansion_add
-    bench_faiss(index, vectors_mat, queries_mat, neighbors_mat)
-
-    print('FAISS: HNSW + IVFPQ')
-    nlist = 10000  # Number of inverted lists (number of partitions or cells).
-    nsegment = 16  # Number of segments for PQ (number of subquantizers).
-    nbit = 8       # Number of bits to encode each segment.
-    coarse_quantizer = IndexHNSWFlat(dim, connectivity)
-    index = IndexIVFPQ(coarse_quantizer, dim, nlist, nsegment, nbit)
-    index.train(vectors_mat)
-    index.nprobe = 10
-    bench_faiss(index, vectors_mat, queries_mat, neighbors_mat)
+        print('Skipping FAISS benchmarks')
 
 
 if __name__ == '__main__':
