@@ -28,8 +28,20 @@ template <typename scalar_at, typename index_at> void test3d(index_at&& index) {
     assert(std::abs(matched_distances[0]) < 0.01);
 
     index.save("tmp.usearch");
+
+    // Search again over reconstructed index
     index.load("tmp.usearch");
+    matched_count = index.search(span_t{&vec[0], 3ul}, 5).dump_to(matched_labels, matched_distances);
+    assert(matched_count == 1);
+    assert(matched_labels[0] == 42);
+    assert(std::abs(matched_distances[0]) < 0.01);
+
+    // Search again over mapped index
     index.view("tmp.usearch");
+    matched_count = index.search(span_t{&vec[0], 3ul}, 5).dump_to(matched_labels, matched_distances);
+    assert(matched_count == 1);
+    assert(matched_labels[0] == 42);
+    assert(std::abs(matched_distances[0]) < 0.01);
 }
 
 int main(int, char**) {
