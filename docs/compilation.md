@@ -35,7 +35,13 @@ cmake -B ./build_release \
     -DUSEARCH_BUILD_BENCHMARK=1 \
     -DUSEARCH_BUILD_TEST=1 \
     && \
-    make -C ./build_release -j 
+    make -C ./build_release -j
+```
+
+Linting:
+
+```sh
+cppcheck --enable=all --suppress=cstyleCast --suppress=unusedFunction include/usearch/usearch.hpp src/punned.hpp
 ```
 
 Benchmarking:
@@ -59,6 +65,13 @@ Benchmarking:
 ```sh
 pip install -e .
 pytest python/scripts/test.py
+```
+
+Linting:
+
+```sh
+pip install ruff
+ruff --format=github --select=E9,F63,F7,F82 --target-version=py37 python
 ```
 
 Benchmarking:

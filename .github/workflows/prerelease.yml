@@ -1,0 +1,105 @@
+name: Pre-Release
+
+on:
+  push:
+  pull_request:
+    branches: ["main-dev"]
+
+env:
+  BUILD_TYPE: Release
+  GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
+  PYTHONUTF8: 1
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+
+jobs:
+
+  test_python:
+    name: Test Python
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, macOS-11, windows-2022]
+        python-version: ["3.11"]
+
+    steps:
+      - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest numpy
+      - name: Build locally
+        run: python -m pip install .
+      - name: Test with PyTest on NIX
+        if: matrix.os != 'windows-2022'
+        run: pytest python/scripts/test.py
+
+  test_javascript:
+    name: Test JavaScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - run: npm install
+      - run: npm ci
+      - run: npm test
+
+  test_rust:
+    name: Test Rust
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: git submodule update --init --recursive
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: stable
+          override: true
+
+  test_java:
+    name: Test Java
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: git submodule update --init --recursive
+    - uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'adopt'
+    - name: Setup Gradle
+      uses: gradle/gradle-build-action@v2.4.2
+    - name: Execute Gradle build
+      run: gradle clean build
+
+  test_swift:
+    name: Test ObjC & Swift
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: git submodule update --init --recursive
+    - name: Build
+      run: swift build
+    - name: Run tests
+      run: swift test
+
+  build_docker:
+    name: Test Docker Image
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: git submodule update --init --recursive
+    - name: Build
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        load: true
+        push: false
