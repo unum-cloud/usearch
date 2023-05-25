@@ -66,11 +66,11 @@ Both USearch and FAISS implement the same HNSW algorithm.
 But they differ in a lot of design decisions.
 USearch is designed to be compact and broadly compatible without sacrificing performance.
 
-|            | FAISS, `f32` | USearch, `f32` | USearch, `f16` | USearch, `f8` |
-| :--------- | -----------: | -------------: | -------------: | ------------: |
-| Insertions |       76 K/s |         89 K/s |         73 K/s |   **137 K/s** |
-| Queries    |      118 K/s |        167 K/s |        140 K/s |   **281 K/s** |
-| Recall @1  |          99% |          99.2% |            98% |     **99.2%** |
+|            | FAISS, `f32` | USearch, `f32` | USearch, `f16` | USearch, `f8` | USearch + Numba, `f32` |
+| :--------- | -----------: | -------------: | -------------: | ------------: | ---------------------: |
+| Insertions |       76 K/s |         89 K/s |         73 K/s |   **137 K/s** |                 99 K/s |
+| Queries    |      118 K/s |        167 K/s |        140 K/s |   **281 K/s** |                165 K/s |
+| Recall @1  |          99% |          99.2% |            98% |     **99.2%** |                  99.2% |
 
 > Dataset: 1M vectors sample of the Deep1B dataset.
 > Hardware: `c7g.metal` AWS instance with 64 cores and DDR5 memory.

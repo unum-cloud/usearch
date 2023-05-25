@@ -106,10 +106,10 @@ def main(
 
         @cfunc(signature_f32)
         def inner_product_f32(a, b, n, m):
-            a_array = carray(a, n)
-            b_array = carray(b, n)
+            a_array = carray(a, dim)
+            b_array = carray(b, dim)
             c = types.float32(0)
-            for i in range(n):
+            for i in range(dim):
                 c += a_array[i] * b_array[i]
             return types.float32(1 - c)
 
@@ -120,12 +120,12 @@ def main(
 
         @cfunc(signature_f8)
         def cos_f8(a, b, n, m):
-            a_array = carray(a, n)
-            b_array = carray(b, n)
+            a_array = carray(a, dim)
+            b_array = carray(b, dim)
             c = types.int32(0)
             a_sq = types.int32(0)
             b_sq = types.int32(0)
-            for i in range(n):
+            for i in range(dim):
                 ai = types.int16(a_array[i])
                 bi = types.int16(b_array[i])
                 c += ai * bi
