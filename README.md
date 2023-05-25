@@ -417,7 +417,7 @@ assert!(new_haversine(&quant, 0, 0, 0).is_ok());
 
 ```xml
 <dependency>
-  <groupId>cloud.unum.usearch</groupId>
+  <groupId>cloud.unum</groupId>
   <artifactId>usearch</artifactId>
   <version>0.2.3</version>
 </dependency>
