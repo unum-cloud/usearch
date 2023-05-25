@@ -595,7 +595,7 @@ class punned_gt {
         if (casted)
             vector_data = casted_data, vector_bytes = casted_vector_bytes_;
 
-        return index_->search_around(hint, {vector_data, vector_bytes}, wanted, config);
+        return index_->search_around(static_cast<id_t>(hint), {vector_data, vector_bytes}, wanted, config);
     }
 
     template <typename scalar_at> add_result_t add_(label_t label, scalar_at const* vector, cast_t const& cast) {
