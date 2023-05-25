@@ -6,7 +6,7 @@ plugins {
     id 'maven-publish'
 }
 
-group "cloud.unum.usearch"
+group "cloud.unum"
 version = file("VERSION").text.trim()
 
 sourceCompatibility = 1.8

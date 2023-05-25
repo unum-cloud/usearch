@@ -137,3 +137,18 @@ brew install --cask wolfram-engine
 ```sh
 docker build -t unum/usearch . && docker run unum/usearch
 ```
+
+For multi-architecture builds and publications:
+
+```sh
+version=$(cat VERSION)
+docker buildx create --use &&
+    docker login &&
+    docker buildx build \
+        --platform "linux/amd64,linux/arm64" \
+        --build-arg version=$version \
+        --file Dockerfile \
+        --tag unum/usearch:$version \
+        --tag unum/usearch:latest \
+        --push .
+```
