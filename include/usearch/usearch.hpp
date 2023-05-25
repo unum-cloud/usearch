@@ -409,9 +409,9 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
     static_assert(sizeof(byte_t) == 1, "Allocator must allocate separate addressable bytes");
 
 #if defined(USEARCH_IS_WINDOWS)
-    using slot_t = LONG volatile;
+    using slot_t = LONGLONG;
 #else
-    using slot_t = std::uint64_t;
+    using slot_t = unsigned long;
 #endif
 
     static constexpr std::size_t bits_per_slot() { return sizeof(slot_t) * CHAR_BIT; }
@@ -451,17 +451,17 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
 
     inline bool atomic_test(std::size_t i) noexcept {
         slot_t mask{1ul << (i & bits_mask())};
-        return InterlockedOr(&slots_[i / bits_per_slot()], 0) & mask;
+        return InterLockedOr64Acquire((slot_t volatile*)&slots_[i / bits_per_slot()], 0) & mask;
     }
 
     inline bool atomic_set(std::size_t i) noexcept {
         slot_t mask{1ul << (i & bits_mask())};
-        return InterLockedOr(&slots_[i / bits_per_slot()], mask) & mask;
+        return InterLockedOr64Acquire((slot_t volatile*)&slots_[i / bits_per_slot()], mask) & mask;
     }
 
     inline void atomic_reset(std::size_t i) noexcept {
         slot_t mask{1ul << (i & bits_mask())};
-        InterLockedAnd((LONG volatile*)&slots_[i / bits_per_slot()], ~mask);
+        InterLockedAnd64Release((slot_t volatile*)&slots_[i / bits_per_slot()], ~mask);
     }
 
 #else
