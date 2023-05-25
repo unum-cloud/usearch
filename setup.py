@@ -1,5 +1,6 @@
 import os
 import sys
+import platform
 from setuptools import setup
 from pybind11.setup_helpers import Pybind11Extension
 
@@ -21,6 +22,10 @@ if sys.platform == 'darwin':
 if sys.platform == 'win32':
     compile_args = ['/std:c++14', '/O2']
 
+if platform.machine() == 'arm64':
+    compile_args.append('-march=armv8.2-a+simd+fp16+fp16fml+dotprod')
+elif platform.machine() in ('i386', 'AMD64', 'x86_64'):
+    compile_args.append('-march=haswell')
 
 ext_modules = [
     Pybind11Extension(
