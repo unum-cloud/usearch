@@ -4,7 +4,7 @@ from conans import ConanFile
 class USearchConan(ConanFile):
 
     name = 'USearch'
-    version = '0.8.1'
+    version = '0.9.0'
     license = 'Apache 2.0'
     url = 'https://github.com/unum-cloud/usearch'
     description = 'Smaller & Faster Single-File Vector Search Engine from Unum'
