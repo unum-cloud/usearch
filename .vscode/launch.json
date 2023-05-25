@@ -39,9 +39,7 @@
                 "datasets/wiki_1M/query.public.100K.fbin",
                 "--neighbors",
                 "datasets/wiki_1M/groundtruth.public.100K.ibin",
-                "--ip",
-                // "-j",
-                // "1"
+                "--ip"
             ],
             "environment": [
                 {

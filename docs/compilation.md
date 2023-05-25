@@ -76,8 +76,8 @@ python python/scripts/bench.py \
 Checking the effect of different embedding dimensions on construction speed:
 
 ```sh
-python python/scripts/bench_param.py dimensions
-python python/scripts/bench_param.py connectivity
+python python/scripts/bench_params.py dimensions
+python python/scripts/bench_params.py connectivity
 ```
 
 ## JavaScript
