@@ -64,10 +64,20 @@ pytest python/scripts/test.py
 Benchmarking:
 
 ```sh
-python python/bench.py \
+pip install faiss-cpu
+python python/scripts/bench.py \
     --vectors datasets/wiki_1M/base.1M.fbin \
     --queries datasets/wiki_1M/query.public.100K.fbin \
     --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin
+```
+
+> Optional parameters include `connectivity`, `expansion_add`, `expansion_search`.
+
+Checking the effect of different embedding dimensions on construction speed:
+
+```sh
+python python/scripts/bench_param.py dimensions
+python python/scripts/bench_param.py connectivity
 ```
 
 ## JavaScript

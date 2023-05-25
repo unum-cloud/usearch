@@ -5,7 +5,6 @@ import fire
 import numpy as np
 from numba import cfunc, types, carray
 
-from faiss import IndexHNSWFlat, IndexIVFPQ
 from usearch.index import Index
 from usearch.io import load_matrix
 
@@ -124,6 +123,12 @@ def main(
         connectivity=connectivity,
     )
     bench_usearch(index, vectors_mat, queries_mat, neighbors_mat)
+
+    # Don't depend on the FAISS installation for benchmarks
+    try:
+        from faiss import IndexHNSWFlat, IndexIVFPQ
+    except ImportError:
+        return
 
     print('FAISS: HNSW')
     index = IndexHNSWFlat(dim, connectivity)

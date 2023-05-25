@@ -8,22 +8,40 @@ dimensions = [13, 99, 100, 256]
 sizes = [1, 2, 100]
 index_types = ['f64', 'f32', 'f16', 'f8']
 numpy_types = [np.float64, np.float32, np.float16, np.byte]
+connectivities = [3, 13, 50]
 
 
 @pytest.mark.parametrize('ndim', dimensions)
 @pytest.mark.parametrize('index_type', index_types)
 @pytest.mark.parametrize('numpy_type', numpy_types)
-def test_l2sq(ndim: int, index_type: str, numpy_type: str):
-    index = Index(ndim=ndim, metric='l2sq', dtype=index_type)
+@pytest.mark.parametrize('connectivity', connectivities)
+def test_l2sq(ndim: int, index_type: str, numpy_type: str, connectivity: int):
+    index = Index(
+        metric='l2sq',
+        ndim=ndim,
+        dtype=index_type,
+        connectivity=connectivity,
+    )
+    assert index.ndim == ndim
+    assert index.connectivity == connectivity
+
     vector = np.random.uniform(0, 0.7, (index.ndim)).astype(numpy_type)
     index.add(42, vector)
     matches, distances, count = index.search(vector, 10)
 
+    assert len(index) == 1
     assert len(matches) == count
     assert len(distances) == count
     assert count == 1
     assert matches[0] == 42
     assert distances[0] == pytest.approx(0, abs=1e-3)
+
+    index.save('tmp.usearch')
+    index.clear()
+    assert len(index) == 0
+
+    index.load('tmp.usearch')
+    assert len(index) == 1
 
 
 @pytest.mark.parametrize('ndim', dimensions)
