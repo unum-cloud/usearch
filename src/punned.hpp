@@ -414,7 +414,6 @@ class punned_gt {
     } casts_;
 
     punned_stateful_metric_t root_metric_;
-    config_t root_config_;
 
     mutable std::vector<std::size_t> available_threads_;
     mutable std::mutex available_threads_mutex_;
@@ -441,22 +440,20 @@ class punned_gt {
         std::swap(cast_buffer_, other.cast_buffer_);
         std::swap(casts_, other.casts_);
         std::swap(root_metric_, other.root_metric_);
-        std::swap(root_config_, other.root_config_);
         std::swap(available_threads_, other.available_threads_);
     }
+
+    static config_t optimize(config_t config) noexcept { return index_t::optimize(config); }
 
     std::size_t dimensions() const { return dimensions_; }
     std::size_t connectivity() const { return index_->connectivity(); }
     std::size_t size() const { return index_->size(); }
     std::size_t capacity() const { return index_->capacity(); }
-    config_t const& config() const { return root_config_; }
+    config_t const& config() const { return index_->config(); }
     void clear() { return index_->clear(); }
 
     accuracy_t accuracy() const { return accuracy_; }
     isa_t acceleration() const { return acceleration_; }
-    std::size_t concurrency() const {
-        return (std::min)(root_config_.max_threads_add, root_config_.max_threads_search);
-    }
 
     void save(char const* path) const { index_->save(path); }
     void load(char const* path) { index_->load(path); }
@@ -517,9 +514,8 @@ class punned_gt {
         result.casts_ = casts_;
 
         result.root_metric_ = root_metric_;
-        result.root_config_ = root_config_;
         index_t* raw = aligned_index_alloc_();
-        new (raw) index_t(root_config_, root_metric_);
+        new (raw) index_t(config(), root_metric_);
         result.index_ = raw;
 
         return result;
@@ -646,7 +642,6 @@ class punned_gt {
         result.casts_ = casts;
         result.acceleration_ = metric_and_meta.acceleration;
         result.root_metric_ = metric_and_meta.metric;
-        result.root_config_ = config;
 
         // Fill the thread IDs.
         result.available_threads_.resize(max_threads);

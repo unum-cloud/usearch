@@ -816,6 +816,7 @@ struct config_t {
     std::size_t max_threads_search = 1;
 
     std::size_t max_threads() const noexcept { return (std::max)(max_threads_add, max_threads_search); }
+    std::size_t concurrency() const noexcept { return (std::min)(max_threads_add, max_threads_search); }
 };
 
 struct add_config_t {
@@ -1128,9 +1129,9 @@ class index_gt {
     std::size_t connectivity() const noexcept { return config_.connectivity; }
     std::size_t capacity() const noexcept { return capacity_; }
     std::size_t size() const noexcept { return size_; }
-    std::size_t max_threads_add() const noexcept { return config_.max_threads_add; }
+    std::size_t max_level() const noexcept { return static_cast<std::size_t>(max_level_); }
+    config_t const& config() const { return config_; }
     bool is_immutable() const noexcept { return viewed_file_descriptor_ != 0; }
-    bool synchronize() const noexcept { return config_.max_threads_add > 1; }
 
     index_gt(config_t config = {}, metric_t metric = {}, allocator_t allocator = {}) noexcept(false)
         : config_(normalize(config)), metric_(metric), allocator_(allocator) {

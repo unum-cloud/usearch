@@ -229,7 +229,7 @@ static void add_many_to_index(                                       //
 
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vectors_info.format == "c" || vectors_info.format == "b")
-        multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             add_config_t config;
             config.store_vector = copy;
             config.thread = thread_idx;
@@ -239,7 +239,7 @@ static void add_many_to_index(                                       //
             index.add(label, vector, config);
         });
     else if (vectors_info.format == "e")
-        multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             add_config_t config;
             config.store_vector = copy;
             config.thread = thread_idx;
@@ -249,7 +249,7 @@ static void add_many_to_index(                                       //
             index.add(label, vector, config);
         });
     else if (vectors_info.format == "f")
-        multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             add_config_t config;
             config.store_vector = copy;
             config.thread = thread_idx;
@@ -258,7 +258,7 @@ static void add_many_to_index(                                       //
             index.add(label, vector, config);
         });
     else if (vectors_info.format == "d")
-        multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             add_config_t config;
             config.store_vector = copy;
             config.thread = thread_idx;
@@ -352,7 +352,7 @@ static py::tuple search_many_in_index(punned_py_t& index, py::buffer vectors, st
 
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vectors_info.format == "c" || vectors_info.format == "b")
-        multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
             config.exact = exact;
@@ -361,7 +361,7 @@ static py::tuple search_many_in_index(punned_py_t& index, py::buffer vectors, st
                 index.search(vector, wanted, config).dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
     else if (vectors_info.format == "e")
-        multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
             config.exact = exact;
@@ -370,7 +370,7 @@ static py::tuple search_many_in_index(punned_py_t& index, py::buffer vectors, st
                 index.search(vector, wanted, config).dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
     else if (vectors_info.format == "f")
-        multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
             config.exact = exact;
@@ -379,7 +379,7 @@ static py::tuple search_many_in_index(punned_py_t& index, py::buffer vectors, st
                 index.search(vector, wanted, config).dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
     else if (vectors_info.format == "d")
-        multithreaded(index.concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
             config.exact = exact;
