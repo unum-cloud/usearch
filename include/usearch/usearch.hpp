@@ -456,7 +456,7 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
 
     inline void atomic_reset(std::size_t i) noexcept {
         slot_t mask{1ul << (i & bits_mask())};
-        InterLockedAnd64Release((slot_t volatile*)&slots_[i / bits_per_slot()], ~mask);
+        InterlockedAnd64((slot_t volatile*)&slots_[i / bits_per_slot()], ~mask);
     }
 
 #else
