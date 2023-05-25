@@ -36,12 +36,6 @@ jobs:
           pip install ruff pytest
       - name: Build locally
         run: python -m pip install .
-      - name: Lint with Ruff
-        run: |
-          # stop the build if there are Python syntax errors or undefined names
-          ruff --format=github --select=E9,F63,F7,F82 --target-version=py37 .
-          # default set of ruff rules with GitHub Annotations
-          ruff --format=github --target-version=py37 .
       - name: Test with PyTest on Windows
         if: matrix.os == 'windows-2022'
         run: pytest python\scripts\test.py

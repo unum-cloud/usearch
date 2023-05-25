@@ -8,12 +8,16 @@ import numpy as np
 from ucall.rich_posix import Server
 from usearch.index import Index
 
+Triplet = tuple[np.ndarray, np.ndarray, np.ndarray]
 
-def _results_to_json(results: tuple[np.ndarray, np.ndarray, np.ndarray], row: int) -> list[dict]:
+
+def _results_to_json(results: Triplet, row: int) -> list[dict]:
+
     count = results[2][row]
     labels = results[0][row, :count]
     distances = results[1][row, :count]
-    return [{'label': int(l), 'distance': float(d)} for l, d in zip(labels, distances)]
+    return [{'label': int(label), 'distance': float(distance)}
+            for label, distance in zip(labels, distances)]
 
 
 def _ascii_to_vector(string: str) -> np.ndarray:

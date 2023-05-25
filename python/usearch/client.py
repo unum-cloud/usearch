@@ -18,9 +18,16 @@ def _vector_to_ascii(vector: np.ndarray) -> Optional[str]:
     return ascii
 
 
+Triplet = tuple[np.ndarray, np.ndarray, np.ndarray]
+
+
 class IndexClient:
 
-    def __init__(self, uri: str = '127.0.0.1', port: int = 8545, use_http: bool = True) -> None:
+    def __init__(
+            self,
+            uri: str = '127.0.0.1',
+            port: int = 8545,
+            use_http: bool = True) -> None:
         self.client = Client(uri=uri, port=port, use_http=use_http)
 
     def add_one(self, label: int, vector: np.ndarray):
@@ -46,7 +53,7 @@ class IndexClient:
         else:
             return self.add_many(labels, vectors)
 
-    def search_one(self, vector: np.ndarray, count: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def search_one(self, vector: np.ndarray, count: int) -> Triplet:
         matches: list[dict] = []
         vector = vector.flatten()
         ascii = _vector_to_ascii(vector)
@@ -68,7 +75,7 @@ class IndexClient:
 
         return labels, distances, counts
 
-    def search_many(self, vectors: np.ndarray, count: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def search_many(self, vectors: np.ndarray, count: int) -> Triplet:
         batch_size: int = vectors.shape[0]
         list_of_matches: list[list[dict]] = self.client.search_many(
             vectors=vectors, count=count)
@@ -84,7 +91,7 @@ class IndexClient:
 
         return labels, distances, counts
 
-    def search(self, vectors: np.ndarray, count: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def search(self, vectors: np.ndarray, count: int) -> Triplet:
         if vectors.ndim == 1 or (vectors.ndim == 2 and vectors.shape[0] == 1):
             return self.search_one(vectors, count)
         else:

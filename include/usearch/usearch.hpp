@@ -422,7 +422,7 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
 
   public:
     visits_bitset_gt() noexcept {}
-    visits_bitset_gt(std::size_t capacity) noexcept {
+    explicit visits_bitset_gt(std::size_t capacity) noexcept {
         slots_count_ = divide_round_up<bits_per_slot()>(capacity);
         slots_ = (slot_t*)allocator_t{}.allocate(slots_count_ * sizeof(slot_t));
         clear();
@@ -449,11 +449,6 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
 
 #if defined(USEARCH_IS_WINDOWS)
 
-    inline bool atomic_test(std::size_t i) noexcept {
-        slot_t mask{1ul << (i & bits_mask())};
-        return InterLockedOr64Acquire((slot_t volatile*)&slots_[i / bits_per_slot()], 0) & mask;
-    }
-
     inline bool atomic_set(std::size_t i) noexcept {
         slot_t mask{1ul << (i & bits_mask())};
         return InterLockedOr64Acquire((slot_t volatile*)&slots_[i / bits_per_slot()], mask) & mask;
@@ -465,11 +460,6 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
     }
 
 #else
-
-    inline bool atomic_test(std::size_t i) noexcept {
-        slot_t mask{1ul << (i & bits_mask())};
-        return __atomic_load_n(&slots_[i / bits_per_slot()], __ATOMIC_RELAXED) & mask;
-    }
 
     inline bool atomic_set(std::size_t i) noexcept {
         slot_t mask{1ul << (i & bits_mask())};
@@ -781,7 +771,7 @@ template <typename scalar_at> class span_gt {
     std::size_t size_;
 
   public:
-    span_gt(scalar_at* begin, scalar_at* end) noexcept : data_(begin), size_(end - begin) {}
+    span_gt(scalar_at* begin, scalar_at const* end) noexcept : data_(begin), size_(end - begin) {}
     span_gt(scalar_at* begin, std::size_t size) noexcept : data_(begin), size_(size) {}
     scalar_at* data() const noexcept { return data_; }
     std::size_t size() const noexcept { return size_; }
@@ -928,11 +918,12 @@ class index_gt {
 
     template <typename ref_at> class member_iterator_gt {
         using ref_t = ref_at;
-        index_gt& index_;
-        std::size_t offset_;
+        index_gt* index_{};
+        std::size_t offset_{};
 
+        friend class index_gt;
         member_iterator_gt() noexcept {}
-        member_iterator_gt(index_gt& index, std::size_t offset) noexcept : index_(index), offset_(offset) {}
+        member_iterator_gt(index_gt* index, std::size_t offset) noexcept : index_(index), offset_(offset) {}
 
       public:
         using iterator_category = std::random_access_iterator_tag;
@@ -941,7 +932,7 @@ class index_gt {
         using pointer = void;
         using reference = ref_t;
 
-        reference operator*() const noexcept { return index_.node_with_id_(offset_); }
+        reference operator*() const noexcept { return index_->node_with_id_(offset_).ref(); }
         member_iterator_gt operator++(int) noexcept { return member_iterator_gt(index_, offset_ + 1); }
         member_iterator_gt operator--(int) noexcept { return member_iterator_gt(index_, offset_ - 1); }
         member_iterator_gt operator+(difference_type d) noexcept { return member_iterator_gt(index_, offset_ + d); }
@@ -963,8 +954,11 @@ class index_gt {
             offset_ -= d;
             return *this;
         }
-        bool operator!=(member_iterator_gt const& other) noexcept {
-            return &index_ != &other.index_ || offset_ != other.offset_;
+        bool operator==(member_iterator_gt const& other) const noexcept {
+            return index_ == other.index_ && offset_ == other.offset_;
+        }
+        bool operator!=(member_iterator_gt const& other) const noexcept {
+            return index_ != other.index_ || offset_ != other.offset_;
         }
     };
 
@@ -1056,7 +1050,7 @@ class index_gt {
 
         operator vector_view_t() const noexcept { return {vector(), dim()}; }
         vector_view_t vector_view() const noexcept { return {vector(), dim()}; }
-        member_ref_t ref() noexcept { return {label(), vector_view()}; }
+        member_ref_t ref() noexcept { return {{tape_}, vector_view()}; }
         member_cref_t cref() const noexcept { return {label(), vector_view()}; }
     };
 
@@ -1137,19 +1131,10 @@ class index_gt {
     config_t const& config() const { return config_; }
     bool is_immutable() const noexcept { return viewed_file_descriptor_ != 0; }
 
-    index_gt(config_t config = {}, metric_t metric = {}, allocator_t allocator = {}) noexcept(false)
-        : config_(normalize(config)), metric_(metric), allocator_(allocator) {
+    explicit index_gt(config_t config = {}, metric_t metric = {}, allocator_t allocator = {}) noexcept(false)
+        : config_(normalize(config)), metric_(metric), allocator_(allocator), pre_(precompute_(config)),
+          viewed_file_descriptor_(0), size_(0u), max_level_(-1), entry_id_(0u) {
 
-        // Externally defined hyper-parameters:
-        pre_ = precompute_(config);
-
-        // Configure initial empty state:
-        size_ = 0u;
-        max_level_ = -1;
-        entry_id_ = 0u;
-        viewed_file_descriptor_ = 0;
-
-        // Dynamic memory:
         thread_contexts_.resize(config.max_threads());
         for (thread_context_t& context : thread_contexts_)
             context.metric = metric;
@@ -1159,7 +1144,7 @@ class index_gt {
     /**
      *  @brief  Clones the structure with the same hyper-parameters, but without contents.
      */
-    index_gt fork() noexcept(false) { return {config_, metric_, allocator_}; }
+    index_gt fork() noexcept(false) { return index_gt{config_, metric_, allocator_}; }
 
     ~index_gt() noexcept { clear(); }
 
@@ -1169,6 +1154,13 @@ class index_gt {
         swap(other);
         return *this;
     }
+
+    member_citerator_t cbegin() const noexcept { return {this, 0}; }
+    member_citerator_t cend() const noexcept { return {this, size()}; }
+    member_citerator_t begin() const noexcept { return {this, 0}; }
+    member_citerator_t end() const noexcept { return {this, size()}; }
+    member_iterator_t begin() noexcept { return {this, 0}; }
+    member_iterator_t end() noexcept { return {this, size()}; }
 
 #pragma region Adjusting Configuration
 
@@ -1200,12 +1192,12 @@ class index_gt {
         std::swap(thread_contexts_, other.thread_contexts_);
 
         // Non-atomic parts.
-        std::size_t capacity = capacity_;
-        std::size_t size = size_;
+        std::size_t capacity_copy = capacity_;
+        std::size_t size_copy = size_;
         capacity_ = other.capacity_.load();
         size_ = other.size_.load();
-        other.capacity_ = capacity;
-        other.size_ = size;
+        other.capacity_ = capacity_copy;
+        other.size_ = size_copy;
     }
 
     /**
@@ -1230,7 +1222,7 @@ class index_gt {
         precomputed_constants_t pre = precompute_(config);
         std::size_t bytes_per_node_base = node_head_bytes_() + pre.neighbors_base_bytes;
         std::size_t rounded_size = divide_round_up<64>(bytes_per_node_base) * 64;
-        std::size_t added_connections = (rounded_size - rounded_size) / sizeof(id_t);
+        std::size_t added_connections = (rounded_size - bytes_per_node_base) / sizeof(id_t);
         config.connectivity = config.connectivity + added_connections / base_level_multiple_();
         return config;
     }
@@ -1309,11 +1301,11 @@ class index_gt {
 
         // Determining how much memory to allocate depends on the target level
         std::unique_lock<std::mutex> new_level_lock(global_mutex_);
-        level_t max_level = max_level_; // Copy under lock
-        id_t entry_id = entry_id_;      // Copy under lock
+        level_t max_level_copy = max_level_; // Copy under lock
+        id_t entry_id_copy = entry_id_;      // Copy under lock
         thread_context_t& context = thread_contexts_[config.thread];
         level_t target_level = choose_random_level_(context.level_generator);
-        if (target_level <= max_level)
+        if (target_level <= max_level_copy)
             new_level_lock.unlock();
 
         // Allocate the neighbors
@@ -1333,10 +1325,10 @@ class index_gt {
         result.cycles = context.iteration_cycles;
 
         // Go down the level, tracking only the closest match
-        id_t closest_id = search_for_one_(entry_id, vector, max_level, target_level, context);
+        id_t closest_id = search_for_one_(entry_id_copy, vector, max_level_copy, target_level, context);
 
         // From `target_level` down perform proper extensive search
-        for (level_t level = (std::min)(target_level, max_level); level >= 0; level--) {
+        for (level_t level = (std::min)(target_level, max_level_copy); level >= 0; --level) {
             search_to_insert_(closest_id, vector, level, context);
             closest_id = connect_new_node_(new_id, level, context);
         }
@@ -1346,7 +1338,7 @@ class index_gt {
         result.cycles = context.iteration_cycles - result.cycles;
 
         // Updating the entry point if needed
-        if (target_level > max_level) {
+        if (target_level > max_level_copy) {
             entry_id_ = new_id;
             max_level_ = target_level;
         }
@@ -1423,12 +1415,12 @@ class index_gt {
     struct stats_t {
         std::size_t nodes;
         std::size_t edges;
-        std::size_t max_edged;
+        std::size_t max_edges;
     };
 
     stats_t stats() const noexcept {
         stats_t result{};
-        result.nodes = nodes_.size();
+        result.nodes = size();
         for (std::size_t i = 0; i != result.nodes; ++i) {
             node_t node = node_with_id_(i);
             std::size_t max_edges = node.level() * config_.connectivity + base_level_multiple_() * config_.connectivity;
@@ -1444,7 +1436,7 @@ class index_gt {
 
     stats_t stats(std::size_t level) const noexcept {
         stats_t result{};
-        result.nodes = nodes_.size();
+        result.nodes = size();
         for (std::size_t i = 0; i != result.nodes; ++i) {
             node_t node = node_with_id_(i);
             if (node.level() >= level)
@@ -1796,7 +1788,7 @@ class index_gt {
         thread_context_t& context) const noexcept {
 
         distance_t closest_dist = context.measure(query, node_with_id_(closest_id));
-        for (level_t level = begin_level; level > end_level; level--) {
+        for (level_t level = begin_level; level > end_level; --level) {
             bool changed;
             do {
                 changed = false;
@@ -1923,7 +1915,7 @@ class index_gt {
         top_candidates_t& top = context.top_candidates;
         top.clear();
         top.reserve(count);
-        for (std::size_t i = 0; i != nodes_.size(); ++i)
+        for (std::size_t i = 0; i != size(); ++i)
             top.emplace_reserved(context.measure(query, node_with_id_(i)), static_cast<id_t>(i));
     }
 

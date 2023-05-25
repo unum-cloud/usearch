@@ -399,12 +399,15 @@ class punned_gt {
         isa_t acceleration;
     };
 
+    using member_iterator_t = typename index_t::member_iterator_t;
+    using member_citerator_t = typename index_t::member_citerator_t;
+
     std::size_t dimensions_ = 0;
     std::size_t casted_vector_bytes_ = 0;
     accuracy_t accuracy_ = accuracy_t::f32_k;
     isa_t acceleration_ = isa_t::auto_k;
 
-    index_t* index_{};
+    index_t* typed_{};
     mutable std::vector<byte_t> cast_buffer_{};
     struct casts_t {
         cast_t from_f8{};
@@ -421,6 +424,7 @@ class punned_gt {
   public:
     using search_results_t = typename index_t::search_results_t;
     using add_result_t = typename index_t::add_result_t;
+    using stats_t = typename index_t::stats_t;
 
     punned_gt() = default;
     punned_gt(punned_gt&& other) { swap(other); }
@@ -429,14 +433,14 @@ class punned_gt {
         return *this;
     }
 
-    ~punned_gt() { aligned_index_free_(index_); }
+    ~punned_gt() { aligned_index_free_(typed_); }
 
     void swap(punned_gt& other) {
         std::swap(dimensions_, other.dimensions_);
         std::swap(casted_vector_bytes_, other.casted_vector_bytes_);
         std::swap(accuracy_, other.accuracy_);
         std::swap(acceleration_, other.acceleration_);
-        std::swap(index_, other.index_);
+        std::swap(typed_, other.typed_);
         std::swap(cast_buffer_, other.cast_buffer_);
         std::swap(casts_, other.casts_);
         std::swap(root_metric_, other.root_metric_);
@@ -446,19 +450,29 @@ class punned_gt {
     static config_t optimize(config_t config) noexcept { return index_t::optimize(config); }
 
     std::size_t dimensions() const { return dimensions_; }
-    std::size_t connectivity() const { return index_->connectivity(); }
-    std::size_t size() const { return index_->size(); }
-    std::size_t capacity() const { return index_->capacity(); }
-    config_t const& config() const { return index_->config(); }
-    void clear() { return index_->clear(); }
+    std::size_t connectivity() const { return typed_->connectivity(); }
+    std::size_t size() const { return typed_->size(); }
+    std::size_t capacity() const { return typed_->capacity(); }
+    config_t const& config() const { return typed_->config(); }
+    void clear() { return typed_->clear(); }
+
+    member_citerator_t cbegin() const noexcept { return typed_->cbegin(); }
+    member_citerator_t cend() const noexcept { return typed_->cend(); }
+    member_citerator_t begin() const noexcept { return typed_->begin(); }
+    member_citerator_t end() const noexcept { return typed_->end(); }
+    member_iterator_t begin() noexcept { return typed_->begin(); }
+    member_iterator_t end() noexcept { return typed_->end(); }
+
+    stats_t stats() const noexcept { return typed_->stats(); }
+    stats_t stats(std::size_t level) const noexcept { return typed_->stats(level); }
 
     accuracy_t accuracy() const { return accuracy_; }
     isa_t acceleration() const { return acceleration_; }
 
-    void save(char const* path) const { index_->save(path); }
-    void load(char const* path) { index_->load(path); }
-    void view(char const* path) { index_->view(path); }
-    void reserve(std::size_t capacity) { index_->reserve(capacity); }
+    void save(char const* path) const { typed_->save(path); }
+    void load(char const* path) { typed_->load(path); }
+    void view(char const* path) { typed_->view(path); }
+    void reserve(std::size_t capacity) { typed_->reserve(capacity); }
 
     // clang-format off
     add_result_t add(label_t label, f8_bits_t const* vector) { return add_(label, vector, casts_.from_f8); }
@@ -516,7 +530,7 @@ class punned_gt {
         result.root_metric_ = root_metric_;
         index_t* raw = aligned_index_alloc_();
         new (raw) index_t(config(), root_metric_);
-        result.index_ = raw;
+        result.typed_ = raw;
 
         return result;
     }
@@ -563,7 +577,7 @@ class punned_gt {
         if (casted)
             vector_data = casted_data, vector_bytes = casted_vector_bytes_, config.store_vector = true;
 
-        return index_->add(label, {vector_data, vector_bytes}, config);
+        return typed_->add(label, {vector_data, vector_bytes}, config);
     }
 
     template <typename scalar_at>
@@ -579,7 +593,7 @@ class punned_gt {
         if (casted)
             vector_data = casted_data, vector_bytes = casted_vector_bytes_;
 
-        return index_->search({vector_data, vector_bytes}, wanted, config);
+        return typed_->search({vector_data, vector_bytes}, wanted, config);
     }
 
     template <typename scalar_at>
@@ -595,14 +609,14 @@ class punned_gt {
         if (casted)
             vector_data = casted_data, vector_bytes = casted_vector_bytes_;
 
-        return index_->search_around(static_cast<id_t>(hint), {vector_data, vector_bytes}, wanted, config);
+        return typed_->search_around(static_cast<id_t>(hint), {vector_data, vector_bytes}, wanted, config);
     }
 
     template <typename scalar_at> add_result_t add_(label_t label, scalar_at const* vector, cast_t const& cast) {
         thread_lock_t lock = thread_lock_();
-        add_config_t config;
-        config.thread = lock.thread_id;
-        return add_(label, vector, config, cast);
+        add_config_t add_config;
+        add_config.thread = lock.thread_id;
+        return add_(label, vector, add_config, cast);
     }
 
     template <typename scalar_at>
@@ -610,9 +624,9 @@ class punned_gt {
         scalar_at const* vector, std::size_t wanted, //
         cast_t const& cast) const {
         thread_lock_t lock = thread_lock_();
-        search_config_t config;
-        config.thread = lock.thread_id;
-        return search_(vector, wanted, config, cast);
+        search_config_t search_config;
+        search_config.thread = lock.thread_id;
+        return search_(vector, wanted, search_config, cast);
     }
 
     template <typename scalar_at>
@@ -620,9 +634,9 @@ class punned_gt {
         label_t hint, scalar_at const* vector, std::size_t wanted, //
         cast_t const& cast) const {
         thread_lock_t lock = thread_lock_();
-        search_config_t config;
-        config.thread = lock.thread_id;
-        return search_around_(hint, vector, wanted, config, cast);
+        search_config_t search_config;
+        search_config.thread = lock.thread_id;
+        return search_around_(hint, vector, wanted, search_config, cast);
     }
 
     static punned_gt make_(                               //
@@ -650,7 +664,7 @@ class punned_gt {
         // Available since C11, but only C++17, so we use the C version.
         index_t* raw = aligned_index_alloc_();
         new (raw) index_t(config, metric_and_meta.metric);
-        result.index_ = raw;
+        result.typed_ = raw;
         return result;
     }
 
