@@ -1416,17 +1416,38 @@ class index_gt {
         return result;
     }
 
-    struct density_t {
-        std::size_t formed_links;
-        std::size_t free_links;
+    struct stats_t {
+        std::size_t nodes;
+        std::size_t edges;
+        std::size_t max_edged;
     };
 
-    density_t density() const noexcept {
-        density_t result{};
-        for (std::size_t i = 0; i != nodes_.size(); ++i) {
-            node_t node_ref = node_with_id_(i);
-            node_ref.head;
+    stats_t stats() const noexcept {
+        stats_t result{};
+        result.nodes = nodes_.size();
+        for (std::size_t i = 0; i != result.nodes; ++i) {
+            node_t node = node_with_id_(i);
+            std::size_t max_edges = node.level() * config_.connectivity + base_level_multiple_() * config_.connectivity;
+            std::size_t edges = 0;
+            for (level_t level = 0; level != node.level(); ++level)
+                edges += neighbors_(node, level).size();
+
+            result.edges += edges;
+            result.max_edges += max_edges;
         }
+        return result;
+    }
+
+    stats_t stats(std::size_t level) const noexcept {
+        stats_t result{};
+        result.nodes = nodes_.size();
+        for (std::size_t i = 0; i != result.nodes; ++i) {
+            node_t node = node_with_id_(i);
+            if (node.level() >= level)
+                result.edges += neighbors_(node, level).size();
+        }
+        std::size_t max_edges_per_node = level ? config_.connectivity : base_level_multiple_() * config_.connectivity;
+        result.max_edges = result.nodes * max_edges_per_node;
         return result;
     }
 
