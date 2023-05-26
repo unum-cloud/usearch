@@ -40,6 +40,9 @@ jobs:
       - name: Test with PyTest on NIX
         if: matrix.os != 'windows-2022'
         run: pytest python/scripts/test.py
+      - name: Test with PyTest on Windows
+        if: matrix.os == 'windows-2022'
+        run: pytest python\scripts\test.py
 
   test_javascript:
     name: Test JavaScript
