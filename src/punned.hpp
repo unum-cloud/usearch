@@ -538,13 +538,19 @@ class punned_gt {
   private:
     static index_t* aligned_index_alloc_() {
 #if defined(USEARCH_IS_WINDOWS)
-        return (index_t*)_aligned_malloc(64, 64 * divide_round_up<64>(sizeof(index_t)));
+        return (index_t*)_aligned_malloc(64 * divide_round_up<64>(sizeof(index_t)), 64);
 #else
         return (index_t*)aligned_alloc(64, 64 * divide_round_up<64>(sizeof(index_t)));
 #endif
     }
 
-    static void aligned_index_free_(index_t* raw) { free(raw); }
+    static void aligned_index_free_(index_t* raw) {
+#if defined(USEARCH_IS_WINDOWS)
+        _aligned_free(raw);
+#else
+        free(raw);
+#endif
+    }
 
     struct thread_lock_t {
         punned_gt const& parent;
