@@ -14,27 +14,27 @@ pub mod ffi {
 
         type Index;
 
-        fn new_ip(dimensions: usize, quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
-        fn new_l2sq(dimensions: usize, quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
-        fn new_cos(dimensions: usize, quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
-        fn new_haversine(quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
+        pub fn new_ip(dimensions: usize, quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
+        pub fn new_l2sq(dimensions: usize, quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
+        pub fn new_cos(dimensions: usize, quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
+        pub fn new_haversine(quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
 
-        fn reserve(self: &Index, capacity: usize) -> Result<()>;
+        pub fn reserve(self: &Index, capacity: usize) -> Result<()>;
 
-        fn dimensions(self: &Index) -> usize;
-        fn connectivity(self: &Index) -> usize;
-        fn size(self: &Index) -> usize;
-        fn capacity(self: &Index) -> usize;
+        pub fn dimensions(self: &Index) -> usize;
+        pub fn connectivity(self: &Index) -> usize;
+        pub fn size(self: &Index) -> usize;
+        pub fn capacity(self: &Index) -> usize;
 
-        fn add(self: &Index, label: u32, vector: &[f32]) -> Result<()>;
-        fn search(self: &Index, query: &[f32], count: usize) -> Result<Matches>;
+        pub fn add(self: &Index, label: u32, vector: &[f32]) -> Result<()>;
+        pub fn search(self: &Index, query: &[f32], count: usize) -> Result<Matches>;
 
-        fn add_in_thread(self: &Index, label: u32, vector: &[f32], thread: usize) -> Result<()>;
-        fn search_in_thread(self: &Index, query: &[f32], count: usize, thread: usize) -> Result<Matches>;
+        pub fn add_in_thread(self: &Index, label: u32, vector: &[f32], thread: usize) -> Result<()>;
+        pub fn search_in_thread(self: &Index, query: &[f32], count: usize, thread: usize) -> Result<Matches>;
 
-        fn save(self: &Index, path: &str) -> Result<()>;
-        fn load(self: &Index, path: &str) -> Result<()>;
-        fn view(self: &Index, path: &str) -> Result<()>;
+        pub fn save(self: &Index, path: &str) -> Result<()>;
+        pub fn load(self: &Index, path: &str) -> Result<()>;
+        pub fn view(self: &Index, path: &str) -> Result<()>;
     }
 }
 
