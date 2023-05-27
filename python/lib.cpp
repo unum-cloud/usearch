@@ -405,6 +405,9 @@ template <typename index_at> void save_index(index_at const& index, std::string 
 template <typename index_at> void load_index(index_at& index, std::string const& path) { index.load(path.c_str()); }
 template <typename index_at> void view_index(index_at& index, std::string const& path) { index.view(path.c_str()); }
 template <typename index_at> void clear_index(index_at& index) { index.clear(); }
+template <typename index_at> std::size_t get_expansion_add(index_at const &index) { return index.config().expansion_add; }
+template <typename index_at> std::size_t get_expansion_search(index_at const &index) { return index.config().expansion_search; }
+
 // clang-format on
 
 template <typename element_at> bool has_duplicates(element_at const* begin, element_at const* end) {
@@ -522,6 +525,10 @@ PYBIND11_MODULE(index, m) {
     i.def_property_readonly("capacity", &punned_py_t::capacity);
     i.def_property_readonly( //
         "dtype", [](punned_py_t const& index) -> std::string { return accuracy_name(index.accuracy()); });
+    i.def_property_readonly("memory_usage", &punned_py_t::memory_usage);
+
+    i.def_property("expansion_add", &get_expansion_add<punned_py_t>, &punned_py_t::change_expansion_add);
+    i.def_property("expansion_search", &get_expansion_search<punned_py_t>, &punned_py_t::change_expansion_search);
 
     i.def("save", &save_index<punned_py_t>, py::arg("path"));
     i.def("load", &load_index<punned_py_t>, py::arg("path"));
