@@ -455,6 +455,8 @@ class punned_gt {
     std::size_t capacity() const { return typed_->capacity(); }
     config_t const& config() const { return typed_->config(); }
     void clear() { return typed_->clear(); }
+    void change_expansion_add(std::size_t n) noexcept { typed_->change_expansion_add(n); }
+    void change_expansion_search(std::size_t n) noexcept { typed_->change_expansion_search(n); }
 
     member_citerator_t cbegin() const noexcept { return typed_->cbegin(); }
     member_citerator_t cend() const noexcept { return typed_->cend(); }
@@ -473,6 +475,10 @@ class punned_gt {
     void load(char const* path) { typed_->load(path); }
     void view(char const* path) { typed_->view(path); }
     void reserve(std::size_t capacity) { typed_->reserve(capacity); }
+
+    std::size_t memory_usage(std::size_t allocator_entry_bytes = default_allocator_entry_bytes()) const noexcept {
+        return typed_->memory_usage(allocator_entry_bytes);
+    }
 
     // clang-format off
     add_result_t add(label_t label, f8_bits_t const* vector) { return add_(label, vector, casts_.from_f8); }

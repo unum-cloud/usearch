@@ -781,6 +781,7 @@ template <typename scalar_at> class span_gt {
 constexpr std::size_t default_connectivity() { return 16; }
 constexpr std::size_t default_expansion_add() { return 128; }
 constexpr std::size_t default_expansion_search() { return 64; }
+constexpr std::size_t default_allocator_entry_bytes() { return 64; }
 
 /**
  *  @brief  Configuration settings for the index construction.
@@ -1416,6 +1417,7 @@ class index_gt {
         std::size_t nodes;
         std::size_t edges;
         std::size_t max_edges;
+        std::size_t allocated_bytes;
     };
 
     stats_t stats() const noexcept {
@@ -1428,6 +1430,7 @@ class index_gt {
             for (level_t level = 0; level != node.level(); ++level)
                 edges += neighbors_(node, level).size();
 
+            result.allocated_bytes += node_bytes_(node);
             result.edges += edges;
             result.max_edges += max_edges;
         }
@@ -1437,15 +1440,45 @@ class index_gt {
     stats_t stats(std::size_t level) const noexcept {
         stats_t result{};
         result.nodes = size();
+
+        std::size_t neighbors_bytes = !level ? pre_.neighbors_base_bytes : pre_.neighbors_bytes;
         for (std::size_t i = 0; i != result.nodes; ++i) {
             node_t node = node_with_id_(i);
-            if (node.level() >= level)
-                result.edges += neighbors_(node, level).size();
+            if (node.level() < level)
+                continue;
+
+            result.edges += neighbors_(node, level).size();
+            result.allocated_bytes += node_head_bytes_() + node_vector_bytes_(node) + neighbors_bytes;
         }
+
         std::size_t max_edges_per_node = level ? config_.connectivity : base_level_multiple_() * config_.connectivity;
         result.max_edges = result.nodes * max_edges_per_node;
         return result;
     }
+
+    /**
+     *  @brief  A relatively accurate lower bound on the amount of memory consumed by the system.
+     *          In practice it's error will be below 10%.
+     */
+    std::size_t memory_usage(std::size_t allocator_entry_bytes = default_allocator_entry_bytes()) const noexcept {
+        std::size_t total = 0;
+        if (viewed_file_descriptor_ == 0) {
+            stats_t s = stats();
+            total += s.allocated_bytes;
+            total += s.nodes * allocator_entry_bytes;
+        }
+
+        // Temporary data-structures, proportional to the number of nodes:
+        total += nodes_.capacity() * sizeof(node_t) + allocator_entry_bytes;
+
+        // Temporary data-structures, proportional to the number of threads:
+        std::size_t per_thread = (std::max)(config_.expansion_search, config_.expansion_add) * sizeof(candidate_t);
+        total += thread_contexts_.capacity() * (sizeof(thread_context_t) + per_thread) + allocator_entry_bytes * 3;
+        return total;
+    }
+
+    void change_expansion_add(std::size_t n) noexcept { config_.expansion_add = n; }
+    void change_expansion_search(std::size_t n) noexcept { config_.expansion_search = n; }
 
 #pragma endregion
 

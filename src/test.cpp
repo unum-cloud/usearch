@@ -65,6 +65,9 @@ template <typename scalar_at, typename index_at> void test3d(index_at&& index) {
     assert(matched_count == 3);
     assert(matched_labels[0] == 42);
     assert(std::abs(matched_distances[0]) < 0.01);
+
+    assert(index.memory_usage() > 0);
+    assert(index.stats().max_edges > 0);
 }
 
 int main(int, char**) {
