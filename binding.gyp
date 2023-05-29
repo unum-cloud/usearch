@@ -10,6 +10,7 @@
                 "include",
                 "src",
                 "fp16/include",
+                "robin-map/include",
                 "simsimd/include"
             ],
             "dependencies": [
@@ -23,9 +24,9 @@
                 "MACOSX_DEPLOYMENT_TARGET": "10.15"
             },
             "msvs_settings": {
-                "VCCLCompilerTool": { 
-                    "ExceptionHandling": 1, 
-                    "AdditionalOptions": [ "-std:c++11" ]
+                "VCCLCompilerTool": {
+                    "ExceptionHandling": 1,
+                    "AdditionalOptions": ["-std:c++11"]
                 }
             }
         }

@@ -1,13 +1,15 @@
 #pragma once
 #include <stdlib.h> // `aligned_alloc`
 
-#include <functional> // `std::function`
-#include <numeric>    // `std::iota`
-#include <stdexcept>  // `std::invalid_argument`
-#include <thread>     // `std::thread`
-#include <vector>     // `std::vector`
+#include <functional>   // `std::function`
+#include <numeric>      // `std::iota`
+#include <shared_mutex> // `std::shared_mutex`
+#include <stdexcept>    // `std::invalid_argument`
+#include <thread>       // `std::thread`
+#include <vector>       // `std::vector`
 
 #include <fp16/fp16.h>
+#include <tsl/robin_map.h>
 
 #include <usearch/usearch.hpp>
 
@@ -401,6 +403,8 @@ class punned_gt {
 
     using member_iterator_t = typename index_t::member_iterator_t;
     using member_citerator_t = typename index_t::member_citerator_t;
+    using member_ref_t = typename index_t::member_ref_t;
+    using member_cref_t = typename index_t::member_cref_t;
 
     std::size_t dimensions_ = 0;
     std::size_t casted_vector_bytes_ = 0;
@@ -414,12 +418,19 @@ class punned_gt {
         cast_t from_f16{};
         cast_t from_f32{};
         cast_t from_f64{};
+        cast_t to_f8{};
+        cast_t to_f16{};
+        cast_t to_f32{};
+        cast_t to_f64{};
     } casts_;
 
     punned_stateful_metric_t root_metric_;
 
     mutable std::vector<std::size_t> available_threads_;
     mutable std::mutex available_threads_mutex_;
+
+    mutable std::shared_mutex lookup_table_mutex_;
+    tsl::robin_map<label_t, id_t> lookup_table_;
 
   public:
     using search_results_t = typename index_t::search_results_t;
@@ -511,6 +522,11 @@ class punned_gt {
     search_results_t search_around(label_t hint, f32_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f32); }
     search_results_t search_around(label_t hint, f64_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f64); }
 
+    void reconstruct(label_t label, f8_bits_t* vector) const { return reconstruct_(label, vector, casts_.to_f8); }
+    void reconstruct(label_t label, f16_bits_t* vector) const { return reconstruct_(label, vector, casts_.to_f16); }
+    void reconstruct(label_t label, f32_t* vector) const { return reconstruct_(label, vector, casts_.to_f32); }
+    void reconstruct(label_t label, f64_t* vector) const { return reconstruct_(label, vector, casts_.to_f64); }
+
     static punned_gt ip(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make_(dimensions, accuracy, ip_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
     static punned_gt l2sq(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make_(dimensions, accuracy, l2_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
     static punned_gt cos(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return make_(dimensions, accuracy, cos_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
@@ -589,7 +605,12 @@ class punned_gt {
         if (casted)
             vector_data = casted_data, vector_bytes = casted_vector_bytes_, config.store_vector = true;
 
-        return typed_->add(label, {vector_data, vector_bytes}, config);
+        add_result_t result = typed_->add(label, {vector_data, vector_bytes}, config);
+        {
+            std::unique_lock lock(lookup_table_mutex_);
+            lookup_table_.emplace(label, result.id);
+        }
+        return result;
     }
 
     template <typename scalar_at>
@@ -622,6 +643,21 @@ class punned_gt {
             vector_data = casted_data, vector_bytes = casted_vector_bytes_;
 
         return typed_->search_around(static_cast<id_t>(hint), {vector_data, vector_bytes}, wanted, config);
+    }
+
+    id_t lookup_id_(label_t label) const {
+        std::shared_lock lock(lookup_table_mutex_);
+        return lookup_table_.at(label);
+    }
+
+    template <typename scalar_at> void reconstruct_(label_t label, scalar_at* reconstructed, cast_t const& cast) const {
+        id_t id = lookup_id_(label);
+        member_citerator_t iterator = typed_->cbegin() + id;
+        member_cref_t member = *iterator;
+        byte_t const* casted_vector = reinterpret_cast<byte_t const*>(member.vector.data());
+        bool casted = cast(casted_vector, casted_vector_bytes_, (byte_t*)reconstructed);
+        if (!casted)
+            std::memcpy(reconstructed, casted_vector, casted_vector_bytes_);
     }
 
     template <typename scalar_at> add_result_t add_(label_t label, scalar_at const* vector, cast_t const& cast) {
@@ -686,6 +722,10 @@ class punned_gt {
         result.from_f16 = cast_gt<f16_bits_t, to_scalar_at>{};
         result.from_f32 = cast_gt<f32_t, to_scalar_at>{};
         result.from_f64 = cast_gt<f64_t, to_scalar_at>{};
+        result.to_f8 = cast_gt<to_scalar_at, f8_bits_t>{};
+        result.to_f16 = cast_gt<to_scalar_at, f16_bits_t>{};
+        result.to_f32 = cast_gt<to_scalar_at, f32_t>{};
+        result.to_f64 = cast_gt<to_scalar_at, f64_t>{};
         return result;
     }
 

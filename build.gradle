@@ -45,7 +45,7 @@ model {
                         include "**/*.cpp"
                     }
                     exportedHeaders {
-                        srcDirs "include", "src", "fp16/include", "simsimd/include", "${Jvm.current().javaHome}/include"
+                        srcDirs "include", "src", "fp16/include", "robin-map/include", "simsimd/include", "${Jvm.current().javaHome}/include"
                     }
                 }
             }
