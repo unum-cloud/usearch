@@ -24,7 +24,7 @@ if sys.platform == 'win32':
 
 ext_modules = [
     Pybind11Extension(
-        'usearch.index',
+        'usearch.compiled',
         ['python/lib.cpp'],
         extra_compile_args=compile_args,
         extra_link_args=link_args,
