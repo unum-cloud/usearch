@@ -1003,14 +1003,15 @@ class index_gt {
         vector_view_t vector;
     };
 
-    template <typename ref_at> class member_iterator_gt {
+    template <typename ref_at, typename index_at> class member_iterator_gt {
         using ref_t = ref_at;
-        index_gt* index_{};
+        using index_t = index_at;
+        index_t* index_{};
         std::size_t offset_{};
 
         friend class index_gt;
         member_iterator_gt() noexcept {}
-        member_iterator_gt(index_gt* index, std::size_t offset) noexcept : index_(index), offset_(offset) {}
+        member_iterator_gt(index_t* index, std::size_t offset) noexcept : index_(index), offset_(offset) {}
 
       public:
         using iterator_category = std::random_access_iterator_tag;
@@ -1019,7 +1020,7 @@ class index_gt {
         using pointer = void;
         using reference = ref_t;
 
-        reference operator*() const noexcept { return index_->node_with_id_(offset_).ref(); }
+        reference operator*() const noexcept { return ref_t(index_->node_with_id_(offset_)); }
         member_iterator_gt operator++(int) noexcept { return member_iterator_gt(index_, offset_ + 1); }
         member_iterator_gt operator--(int) noexcept { return member_iterator_gt(index_, offset_ - 1); }
         member_iterator_gt operator+(difference_type d) noexcept { return member_iterator_gt(index_, offset_ + d); }
@@ -1049,8 +1050,8 @@ class index_gt {
         }
     };
 
-    using member_iterator_t = member_iterator_gt<member_ref_t>;
-    using member_citerator_t = member_iterator_gt<member_cref_t>;
+    using member_iterator_t = member_iterator_gt<member_ref_t, index_gt>;
+    using member_citerator_t = member_iterator_gt<member_cref_t, index_gt const>;
 
     // STL compatibility:
     using value_type = std::pair<label_t, distance_t>;
@@ -1137,8 +1138,8 @@ class index_gt {
 
         operator vector_view_t() const noexcept { return {vector(), dim()}; }
         vector_view_t vector_view() const noexcept { return {vector(), dim()}; }
-        member_ref_t ref() noexcept { return {{tape_}, vector_view()}; }
-        member_cref_t cref() const noexcept { return {label(), vector_view()}; }
+        explicit operator member_ref_t() noexcept { return {{tape_}, vector_view()}; }
+        explicit operator member_cref_t() const noexcept { return {label(), vector_view()}; }
     };
 
     /**
@@ -1360,7 +1361,7 @@ class index_gt {
         inline std::size_t size() const noexcept { return count; }
         inline search_result_t operator[](std::size_t i) const noexcept {
             candidate_t const* top_ordered = top_.data();
-            return {index_.node_with_id_(top_ordered[i].id).cref(), top_ordered[i].distance};
+            return {member_cref_t(index_.node_with_id_(top_ordered[i].id)), top_ordered[i].distance};
         }
         inline std::size_t dump_to(label_t* labels, distance_t* distances) const noexcept {
             for (std::size_t i = 0; i != count; ++i) {
