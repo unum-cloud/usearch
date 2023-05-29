@@ -231,7 +231,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           file: docs.tar.gz
-          asset_name: docs.tar.gz
+          update_latest_release: true
 
   deploy_docs_pages:
     name: Deploy GitHub Pages
