@@ -37,6 +37,7 @@ native_index_t* usearch_new_index(char* metric_str, int metric_len, char* accura
     } catch (std::exception& e) {
         printf("error %s\n", e.what());
     }
+    return NULL;
 }
 
 void usearch_destroy(native_index_t* index) { delete index; }
@@ -44,6 +45,7 @@ void usearch_destroy(native_index_t* index) { delete index; }
 const char* usearch_save(native_index_t* index, char* path) {
     try {
         index->save(path);
+        return NULL;
     } catch (std::exception& e) {
         //q:: added these to make sure I do not pass a potentially dangling e.what()
         // though I realize allocation below may fail and I am not checking for it.
@@ -58,6 +60,7 @@ const char* usearch_save(native_index_t* index, char* path) {
 const char* usearch_load(native_index_t* index, char* path) {
     try {
         index->load(path);
+        return NULL;
     } catch (std::exception& e) {
         char *res = new char[strlen(e.what()) + 1];
         strcpy(res, e.what());
@@ -68,6 +71,7 @@ const char* usearch_load(native_index_t* index, char* path) {
 const char* usearch_view(native_index_t* index, char* path) {
     try {
         index->view(path);
+        return NULL;
     } catch (std::exception& e) {
         char *res = new char[strlen(e.what()) + 1];
         strcpy(res, e.what());
@@ -83,6 +87,7 @@ int usearch_capacity(native_index_t* index) { return index->capacity(); }
 const char* usearch_reserve(native_index_t* index, int capacity) {
     try {
         index->reserve(capacity);
+        return NULL;
     } catch (std::exception& e) {
         char *res = new char[strlen(e.what()) + 1];
         strcpy(res, e.what());
