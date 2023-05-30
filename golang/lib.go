@@ -3,8 +3,6 @@ package usearch
 import (
 	"errors"
 	"fmt"
-	"runtime"
-	"sync"
 	"unsafe"
 )
 
@@ -13,26 +11,26 @@ import (
 #include "usearch.h"
 // avoid some verbosity by using void* index here
 // proper typed pointer in the cpp file definitions
-void* new_index(char* metric_str, int metric_len,
+void* usearch_new_index(char* metric_str, int metric_len,
     char* accuracy_str, int accuracy_len,
     int dimensions, int capacity, int connectivity,
     int expansion_add, int expansion_search
 );
-void destroy(void* index);
+void usearch_destroy(void* index);
 
-const char* save(void* index, char* path);
-const char* load(void* index, char* path);
-const char* view(void* index, char* path);
+const char* usearch_save(void* index, char* path);
+const char* usearch_load(void* index, char* path);
+const char* usearch_view(void* index, char* path);
 
 //todo:: q:: is int<->size_t conversion portable?
-int size(void* index);
-int connectivity(void* index);
-int dimensions(void* index);
-int capacity(void* index);
+int usearch_size(void* index);
+int usearch_connectivity(void* index);
+int usearch_dimensions(void* index);
+int usearch_capacity(void* index);
 
-const char* set_capacity(void* index, int capacity);
-const char* add(void* index, int label, float* vec);
-SearchResults search(void* index, float* query, int query_len, int limit);
+const char* usearch_reserve(void* index, int capacity);
+const char* usearch_add(void* index, int label, float* vec);
+SearchResults usearch_search(void* index, float* query, int query_len, int limit);
 #cgo CPPFLAGS: -I/home/narek/usearch/c/
 #cgo LDFLAGS: -L/home/narek/usearch/c/ -lusearch -Wl,-rpath=/home/narek/usearch/c
 */
@@ -120,9 +118,6 @@ type Index struct {
 
 func NewIndex(conf IndexConfig) *Index {
 	ind := &Index{config: conf}
-	// make sure that all Index operations go through the same OS thread
-	// as the C code uses thread local storage
-	runtime.LockOSThread()
 	ind.init()
 	return ind
 }
@@ -140,7 +135,7 @@ func (ind *Index) init() {
 	connectivity := C.int(conf.Connectivity)
 	expansion_add := C.int(conf.ExpansionAdd)
 	expansion_search := C.int(conf.ExpansionSearch)
-	ptr := C.new_index(metric_str, metric_len,
+	ptr := C.usearch_new_index(metric_str, metric_len,
 		accuracy_str, accuracy_len,
 		dimensions, capacity, connectivity,
 		expansion_add, expansion_search)
@@ -152,7 +147,7 @@ func (ind *Index) Destroy() {
 	if ind.opeque_handle == nil {
 		panic("index not initialized")
 	}
-	C.destroy(unsafe.Pointer(ind.opeque_handle))
+	C.usearch_destroy(unsafe.Pointer(ind.opeque_handle))
 	ind.opeque_handle = nil
 	ind.config = IndexConfig{}
 }
@@ -166,17 +161,18 @@ func (ind *Index) fileOp(path string, op string) error {
 	var errStr *C.char
 	switch op {
 	case "load":
-		errStr = C.load(unsafe.Pointer(ind.opeque_handle), c_path)
+		errStr = C.usearch_load(unsafe.Pointer(ind.opeque_handle), c_path)
 	case "save":
-		errStr = C.save(unsafe.Pointer(ind.opeque_handle), c_path)
+		errStr = C.usearch_save(unsafe.Pointer(ind.opeque_handle), c_path)
 	case "view":
-		errStr = C.view(unsafe.Pointer(ind.opeque_handle), c_path)
+		errStr = C.usearch_view(unsafe.Pointer(ind.opeque_handle), c_path)
 	default:
 		panic("unknown file operation")
 	}
 	var err error
 	if errStr != nil {
 		err = errors.New(C.GoString(errStr))
+		C.free(unsafe.Pointer(errStr))
 	}
 	return err
 }
@@ -194,33 +190,34 @@ func (ind *Index) View(path string) error {
 }
 
 func (ind *Index) Len() int {
-	return int(C.size(unsafe.Pointer(ind.opeque_handle)))
+	return int(C.usearch_size(unsafe.Pointer(ind.opeque_handle)))
 }
 
 func (ind *Index) Connectivity() int {
-	return int(C.connectivity(unsafe.Pointer(ind.opeque_handle)))
+	return int(C.usearch_connectivity(unsafe.Pointer(ind.opeque_handle)))
 }
 
 func (ind *Index) VecDimension() int {
-	return int(C.dimensions(unsafe.Pointer(ind.opeque_handle)))
+	return int(C.usearch_dimensions(unsafe.Pointer(ind.opeque_handle)))
 }
 
 func (ind *Index) Capacity() int {
-	return int(C.capacity(unsafe.Pointer(ind.opeque_handle)))
+	return int(C.usearch_capacity(unsafe.Pointer(ind.opeque_handle)))
 }
 
-func (ind *Index) SetCapacity(capacity int) error {
+func (ind *Index) Reserve(capacity int) error {
 	if ind.opeque_handle == nil {
 		panic("index not initialized")
 	}
 	cap := ind.Capacity()
 	if capacity < cap {
-		return errors.New(fmt.Sprintf("cannot set capacity to a value less than current capacity, current: %d, new: %d", cap, capacity))
+		return errors.New(fmt.Sprintf("cannot reserve to a value less than current capacity, current: %d, new: %d", cap, capacity))
 	}
-	errStr := C.set_capacity(unsafe.Pointer(ind.opeque_handle), (C.int)(capacity))
+	errStr := C.usearch_reserve(unsafe.Pointer(ind.opeque_handle), (C.int)(capacity))
 	var err error
 	if errStr != nil {
 		err = errors.New(C.GoString(errStr))
+		C.free(unsafe.Pointer(errStr))
 	}
 	return err
 }
@@ -229,10 +226,11 @@ func (ind *Index) Add(label int, vec []float32) error {
 	if ind.opeque_handle == nil {
 		panic("index not initialized")
 	}
-	errStr := C.add(unsafe.Pointer(ind.opeque_handle), (C.int)(label), (*C.float)(&vec[0]))
+	errStr := C.usearch_add(unsafe.Pointer(ind.opeque_handle), (C.int)(label), (*C.float)(&vec[0]))
 	var err error
 	if errStr != nil {
 		err = errors.New(C.GoString(errStr))
+		C.free(unsafe.Pointer(errStr))
 	}
 	return err
 
@@ -250,17 +248,18 @@ func (ind *Index) Search(query []float32, limit int) []int32 {
 	if limit <= 0 {
 		panic("limit must be greater than 0")
 	}
-	res := C.search(unsafe.Pointer(ind.opeque_handle),
+	res := C.usearch_search(unsafe.Pointer(ind.opeque_handle),
 		(*C.float)(&query[0]), (C.int)(len(query)), (C.int)(limit))
 
 	// my understanding is that search panics in truly exceptional cases,
 	// none of which is every expected. so, not passing the error to the caller
 	if res.Error != nil {
+		defer C.free(unsafe.Pointer(res.Error))
 		panic(C.GoString(res.Error))
 	}
 	var labs []int32
 	//q:: who free's this memory? will golang do it?
-	labs = unsafe.Slice((*int32)(unsafe.Pointer(res.Labels)), res.LabelsLen)
+	labs = unsafe.Slice((*int32)(unsafe.Pointer(res.Labels)), res.Len)
 	return labs
 }
 
@@ -268,35 +267,5 @@ func (ind *Index) Size() int {
 	if ind.opeque_handle == nil {
 		panic("index not initialized")
 	}
-	return int(C.size(unsafe.Pointer(ind.opeque_handle)))
-}
-
-func main() {
-
-	ind := NewIndex(DefaultConfig(128))
-	defer ind.Destroy()
-	fmt.Println("res", ind)
-	// vectors := "datasets/wiki_1M/base.1M.fbin"
-	// queries := "datasets/wiki_1M/query.public.100K.fbin"
-	// neighbors := "datasets/wiki_1M/groundtruth.public.100K.ibin"
-
-	var v0 [128]float32
-	v0[0] = 4.4
-	var wg sync.WaitGroup
-	// wg.Add(1)
-	// go func() {
-	// 	var v1 [128]float32
-	// 	defer wg.Done()
-	// 	for l := 0; l < 2000; l++ {
-	// 		ind.Add(10000+l, v1[:])
-	// 	}	}()
-	for l := 0; l < 1000; l++ {
-		ind.Add(l, v0[:])
-	}
-	wg.Wait()
-	ind.Add(44, v0[:])
-	fmt.Println("index size is", ind.Size())
-
-	ind.Search(v0[:], 1)
-
+	return int(C.usearch_size(unsafe.Pointer(ind.opeque_handle)))
 }

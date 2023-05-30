@@ -70,6 +70,7 @@ func TestUsearch(t *testing.T) {
 		t.Fatalf("expected closest vector labels to be 42, 43, got %d, %d", res[0], res[1])
 	}
 
+	Assure(ind.Reserve(102))
 	for i := 0; i < 100; i++ {
 		vec[i] += 10
 		Assure(ind.Add(i, vec))

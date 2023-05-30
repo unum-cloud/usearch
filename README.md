@@ -456,6 +456,33 @@ assert(results.0[0] == 42)
 ```
 
 ### GoLang
+```golang
+package main
+
+import (
+	"fmt"
+    /*Todo::fix canonical path after review*/
+	"github.com/ngalstyan4/usearch/golang"
+)
+
+/*N.B.: the following is only necessary if libusearch and headers are not available
+on compiler search path*/
+
+/*
+#cgo CPPFLAGS: -I/path/to/usearch.h
+#cgo LDFLAGS: -L/absolute/path/to/libusearch -Wl,-rpath=/absolute/path/to/libusearch -lusearch
+*/
+import "C"
+
+func main() {
+	conf := usearch.DefaultConfig(128)
+	ind := usearch.NewIndex(conf)
+	v := make([]float32, 128)
+	ind.Add(42, v)
+	res := ind.Search(v, 1)
+	fmt.Println("result is", res)
+}
+```
 
 ### Wolfram
 

@@ -3,6 +3,7 @@
 
 typedef struct {
     int* Labels;
-    int LabelsLen;
-    const char* Error;
+    float* Distances;
+    int Len;
+    char* Error;
 } SearchResults;

@@ -145,6 +145,12 @@ java -cp . -Djava.library.path=/Users/av/github/usearch/java cloud.unum.usearch.
 brew install --cask wolfram-engine
 ```
 
+## C
+
+# Linux
+```sh
+g++ -shared -fPIC lib.cpp -I ../include/  -I ../fp16/include/ -o libusearch.so
+```
 ## Docker
 
 ```sh
