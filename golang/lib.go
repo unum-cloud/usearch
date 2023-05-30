@@ -31,6 +31,7 @@ int usearch_capacity(void* index);
 const char* usearch_reserve(void* index, int capacity);
 const char* usearch_add(void* index, int label, float* vec);
 SearchResults usearch_search(void* index, float* query, int query_len, int limit);
+#cgo CPPFLAGS: -I.
 #cgo LDFLAGS: -lusearch
 */
 import "C"
