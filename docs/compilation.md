@@ -63,8 +63,7 @@ Benchmarking:
 ## Python
 
 ```sh
-pip install -e .
-pytest python/scripts/test.py
+pip install -e . && pytest python/scripts/test.py
 ```
 
 Linting:
@@ -131,7 +130,11 @@ g++ -shared -o USearchJNI.dll cloud_unum_usearch_Index.o -Wl,--add-stdcall-alias
 
 # MacOS
 g++ -std=c++11 -c -fPIC \
-    -I../../../../include -I../../../../src -I../../../../fp16/include -I../../../../simsimd/include \
+    -I../../../../include \
+    -I../../../../src \
+    -I../../../../fp16/include \
+    -I../../../../robin-map/include \
+    -I../../../../simsimd/include \
     -I${JAVA_HOME}/include -I${JAVA_HOME}/include/darwin cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
 g++ -dynamiclib -o libusearch.dylib cloud_unum_usearch_Index.o -lc
 # Run linking to that directory

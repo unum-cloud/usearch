@@ -7,6 +7,7 @@ fn main() {
         .include("rust")
         .include("src")
         .include("fp16/include")
+        .include("robin-map/include")
         .include("simsimd/include")
         .compile("usearch");
 

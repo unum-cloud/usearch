@@ -9,6 +9,18 @@
 #ifndef UNUM_USEARCH_H
 #define UNUM_USEARCH_H
 
+#if !defined(USEARCH_VERSION_MAJOR)
+#define USEARCH_VERSION_MAJOR 0
+#endif
+
+#if !defined(USEARCH_VERSION_MINOR)
+#define USEARCH_VERSION_MINOR 0
+#endif
+
+#if !defined(USEARCH_VERSION_PATCH)
+#define USEARCH_VERSION_PATCH 0
+#endif
+
 // Inferring C++ version
 #if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
 #define USEARCH_IS_CPP17
@@ -61,7 +73,7 @@
 #include <mutex>     // `std::unique_lock` - replacement candidate
 #include <random>    // `std::default_random_engine` - replacement candidate
 #include <stdexcept> // `std::runtime_exception`
-#include <utility>   // `std::exchange`, `std::pair`
+#include <utility>   // `std::pair`
 #include <vector>    // `std::vector`
 
 // Prefetching
@@ -125,10 +137,18 @@ inline std::size_t ceil2(std::size_t v) noexcept {
 
 template <typename at> void misaligned_store(void* ptr, at v) noexcept { std::memcpy(ptr, &v, sizeof(v)); }
 
+/// @brief  Simply dereferencing misaligned pointers can be dangerous.
 template <typename at> at misaligned_load(void* ptr) noexcept {
     at v;
     std::memcpy(&v, ptr, sizeof(v));
     return v;
+}
+
+/// @brief  The `std::exchange` alternative for C++11.
+template <typename at, typename other_at = at> at exchange(at& obj, other_at&& new_value) {
+    at old_value = std::move(obj);
+    obj = std::forward<other_at>(new_value);
+    return old_value;
 }
 
 template <typename at> class misaligned_ref_gt {
@@ -141,10 +161,8 @@ template <typename at> class misaligned_ref_gt {
         misaligned_store<at>(ptr_, v);
         return *this;
     }
-    misaligned_ref_gt& operator=(at v) noexcept {
-        misaligned_store<at>(ptr_, v);
-        return *this;
-    }
+
+    void reset(byte_t* ptr) noexcept { ptr_ = ptr; }
 };
 
 template <typename at> class misaligned_ptr_gt {
@@ -784,6 +802,12 @@ constexpr std::size_t default_expansion_search() { return 64; }
 constexpr std::size_t default_allocator_entry_bytes() { return 64; }
 
 /**
+ *  @brief  The "magic" sequence helps infer the type of the file.
+ *          USearch indexes start with the "unumusearch" string.
+ */
+static constexpr char const* default_magic() { return "unumusearch"; }
+
+/**
  *  @brief  Configuration settings for the index construction.
  *          Includes the main `::connectivity` parameter (`M` in the paper)
  *          and two expansion factors - for construction and search.
@@ -809,6 +833,7 @@ struct config_t {
     std::size_t max_elements = 0;
     std::size_t max_threads_add = 1;
     std::size_t max_threads_search = 1;
+    std::size_t vector_alignment = 1;
 
     std::size_t max_threads() const noexcept { return (std::max)(max_threads_add, max_threads_search); }
     std::size_t concurrency() const noexcept { return (std::min)(max_threads_add, max_threads_search); }
@@ -825,6 +850,67 @@ struct search_config_t {
     std::size_t thread{};
     bool exact{};
 };
+
+using file_header_t = byte_t[64];
+
+/**
+ *  @brief  Serialized binary representations of the USearch index start with metadata.
+ *          Metadata is parsed into a `file_head_t`, containing the USearch package version,
+ *          and the properties of the index.
+ */
+struct file_head_t {
+
+    using magic_t = char[11];
+    using version_major_t = std::uint16_t;
+    using version_minor_t = std::uint16_t;
+    using version_patch_t = std::uint16_t;
+
+    enum metric_t : std::uint8_t {
+        unknown_k = 0,
+        ip_k = 'i',
+        cos_k = 'c',
+        l2sq_k = 'e',
+        jaccard_k = 'j',
+        hamming_k = 'h',
+        pearson_k = 'p',
+        haversine_k = 'h',
+    };
+
+    using connectivity_t = std::uint8_t;
+    using max_level_t = std::uint8_t;
+    using vector_alignment_t = std::uint8_t;
+    using bytes_per_label_t = std::uint16_t;
+    using bytes_per_id_t = std::uint16_t;
+    using size_t = std::uint64_t;
+    using entry_idx_t = std::uint64_t;
+
+    char const* magic;
+    misaligned_ref_gt<version_major_t> version_major;
+    misaligned_ref_gt<version_minor_t> version_minor;
+    misaligned_ref_gt<version_patch_t> version_patch;
+    misaligned_ref_gt<metric_t> metric;
+    misaligned_ref_gt<connectivity_t> connectivity;
+    misaligned_ref_gt<max_level_t> max_level;
+    misaligned_ref_gt<vector_alignment_t> vector_alignment;
+    misaligned_ref_gt<bytes_per_label_t> bytes_per_label;
+    misaligned_ref_gt<bytes_per_id_t> bytes_per_id;
+    misaligned_ref_gt<size_t> size;
+    misaligned_ref_gt<entry_idx_t> entry_idx;
+
+    file_head_t(byte_t* ptr) noexcept
+        : magic((char const*)exchange(ptr, ptr + sizeof(magic_t))),
+          version_major(exchange(ptr, ptr + sizeof(version_major_t))),
+          version_minor(exchange(ptr, ptr + sizeof(version_minor_t))),
+          version_patch(exchange(ptr, ptr + sizeof(version_patch_t))), metric(exchange(ptr, ptr + sizeof(metric_t))),
+          connectivity(exchange(ptr, ptr + sizeof(connectivity_t))),
+          max_level(exchange(ptr, ptr + sizeof(max_level_t))),
+          vector_alignment(exchange(ptr, ptr + sizeof(vector_alignment_t))),
+          bytes_per_label(exchange(ptr, ptr + sizeof(bytes_per_label_t))),
+          bytes_per_id(exchange(ptr, ptr + sizeof(bytes_per_id_t))), size(exchange(ptr, ptr + sizeof(size_t))),
+          entry_idx(exchange(ptr, ptr + sizeof(entry_idx_t))) {}
+};
+
+static_assert(sizeof(file_header_t) == 64, "File header should be exactly 64 bytes");
 
 /**
  *  @brief  Approximate Nearest Neighbors Search index using the
@@ -917,14 +1003,15 @@ class index_gt {
         vector_view_t vector;
     };
 
-    template <typename ref_at> class member_iterator_gt {
+    template <typename ref_at, typename index_at> class member_iterator_gt {
         using ref_t = ref_at;
-        index_gt* index_{};
+        using index_t = index_at;
+        index_t* index_{};
         std::size_t offset_{};
 
         friend class index_gt;
         member_iterator_gt() noexcept {}
-        member_iterator_gt(index_gt* index, std::size_t offset) noexcept : index_(index), offset_(offset) {}
+        member_iterator_gt(index_t* index, std::size_t offset) noexcept : index_(index), offset_(offset) {}
 
       public:
         using iterator_category = std::random_access_iterator_tag;
@@ -933,7 +1020,7 @@ class index_gt {
         using pointer = void;
         using reference = ref_t;
 
-        reference operator*() const noexcept { return index_->node_with_id_(offset_).ref(); }
+        reference operator*() const noexcept { return ref_t(index_->node_with_id_(offset_)); }
         member_iterator_gt operator++(int) noexcept { return member_iterator_gt(index_, offset_ + 1); }
         member_iterator_gt operator--(int) noexcept { return member_iterator_gt(index_, offset_ - 1); }
         member_iterator_gt operator+(difference_type d) noexcept { return member_iterator_gt(index_, offset_ + d); }
@@ -963,8 +1050,8 @@ class index_gt {
         }
     };
 
-    using member_iterator_t = member_iterator_gt<member_ref_t>;
-    using member_citerator_t = member_iterator_gt<member_cref_t>;
+    using member_iterator_t = member_iterator_gt<member_ref_t, index_gt>;
+    using member_citerator_t = member_iterator_gt<member_cref_t, index_gt const>;
 
     // STL compatibility:
     using value_type = std::pair<label_t, distance_t>;
@@ -1051,8 +1138,8 @@ class index_gt {
 
         operator vector_view_t() const noexcept { return {vector(), dim()}; }
         vector_view_t vector_view() const noexcept { return {vector(), dim()}; }
-        member_ref_t ref() noexcept { return {{tape_}, vector_view()}; }
-        member_cref_t cref() const noexcept { return {label(), vector_view()}; }
+        explicit operator member_ref_t() noexcept { return {{tape_}, vector_view()}; }
+        explicit operator member_cref_t() const noexcept { return {label(), vector_view()}; }
     };
 
     /**
@@ -1274,7 +1361,7 @@ class index_gt {
         inline std::size_t size() const noexcept { return count; }
         inline search_result_t operator[](std::size_t i) const noexcept {
             candidate_t const* top_ordered = top_.data();
-            return {index_.node_with_id_(top_ordered[i].id).cref(), top_ordered[i].distance};
+            return {member_cref_t(index_.node_with_id_(top_ordered[i].id)), top_ordered[i].distance};
         }
         inline std::size_t dump_to(label_t* labels, distance_t* distances) const noexcept {
             for (std::size_t i = 0; i != count; ++i) {
@@ -1479,25 +1566,16 @@ class index_gt {
 
     void change_expansion_add(std::size_t n) noexcept { config_.expansion_add = n; }
     void change_expansion_search(std::size_t n) noexcept { config_.expansion_search = n; }
+    void change_metric(metric_t const& m) noexcept(false) {
+        metric_ = m;
+        for (thread_context_t& context : thread_contexts_)
+            context.metric = metric_;
+    }
 
 #pragma endregion
 
 #pragma region Serialization
 
-  private:
-    struct serialized_state_t {
-        // Check compatibility
-        std::uint64_t bytes_per_label{};
-        std::uint64_t bytes_per_id{};
-
-        // Describe state
-        std::uint64_t connectivity{};
-        std::uint64_t size{};
-        std::uint64_t entry_id{};
-        std::uint64_t max_level{};
-    };
-
-  public:
     /**
      *  @brief  Saves serialized binary index representation to disk,
      *          co-locating vectors and neighbors lists.
@@ -1505,15 +1583,25 @@ class index_gt {
      */
     void save(char const* file_path) const noexcept(false) {
 
-        serialized_state_t state;
+        file_header_t state_buffer{};
+        std::memset(state_buffer, 0, sizeof(file_header_t));
+        file_head_t state{state_buffer};
+        std::memcpy(state_buffer, default_magic(), std::strlen(default_magic()));
+
         // Check compatibility
-        state.bytes_per_label = sizeof(label_t);
-        state.bytes_per_id = sizeof(id_t);
+        state.version_major = USEARCH_VERSION_MAJOR;
+        state.version_minor = USEARCH_VERSION_MINOR;
+        state.version_patch = USEARCH_VERSION_PATCH;
+        state.metric = file_head_t::unknown_k;
+
         // Describe state
         state.connectivity = config_.connectivity;
-        state.size = size_;
-        state.entry_id = entry_id_;
         state.max_level = max_level_;
+        state.vector_alignment = config_.vector_alignment;
+        state.bytes_per_label = sizeof(label_t);
+        state.bytes_per_id = sizeof(id_t);
+        state.size = size_;
+        state.entry_idx = entry_id_;
 
         std::FILE* file = std::fopen(file_path, "w");
         if (!file)
@@ -1528,7 +1616,7 @@ class index_gt {
         };
 
         // Write the header
-        write_chunk(&state, sizeof(state));
+        write_chunk(&state_buffer[0], sizeof(file_header_t));
 
         // Serialize nodes one by one
         for (std::size_t i = 0; i != state.size; ++i) {
@@ -1549,7 +1637,7 @@ class index_gt {
      *          Available on Linux, MacOS, Windows.
      */
     void load(char const* file_path) noexcept(false) {
-        serialized_state_t state;
+        file_header_t state_buffer{};
         std::FILE* file = std::fopen(file_path, "r");
         if (!file)
             throw std::runtime_error(std::strerror(errno));
@@ -1564,7 +1652,8 @@ class index_gt {
 
         // Read the header
         {
-            read_chunk(&state, sizeof(state));
+            read_chunk(&state_buffer[0], sizeof(file_header_t));
+            file_head_t state{state_buffer};
             if (state.bytes_per_label != sizeof(label_t)) {
                 std::fclose(file);
                 throw std::runtime_error("Incompatible label type!");
@@ -1576,15 +1665,16 @@ class index_gt {
 
             config_.connectivity = state.connectivity;
             config_.max_elements = state.size;
+            config_.vector_alignment = state.vector_alignment;
             pre_ = precompute_(config_);
             reserve(state.size);
             size_ = state.size;
             max_level_ = static_cast<level_t>(state.max_level);
-            entry_id_ = static_cast<id_t>(state.entry_id);
+            entry_id_ = static_cast<id_t>(state.entry_idx);
         }
 
         // Load nodes one by one
-        for (std::size_t i = 0; i != state.size; ++i) {
+        for (std::size_t i = 0; i != size_; ++i) {
             label_t label;
             dim_t dim;
             level_t level;
@@ -1611,7 +1701,6 @@ class index_gt {
 #if defined(USEARCH_IS_WINDOWS)
         throw std::logic_error("Memory-mapping is not yet available for Windows");
 #else
-        serialized_state_t state;
         int open_flags = O_RDONLY;
 #if __linux__
         open_flags |= O_NOATIME;
@@ -1635,7 +1724,7 @@ class index_gt {
 
         // Read the header
         {
-            std::memcpy(&state, file, sizeof(state));
+            file_head_t state{file};
             if (state.bytes_per_label != sizeof(label_t)) {
                 close(descriptor);
                 throw std::runtime_error("Incompatible label type!");
@@ -1647,17 +1736,18 @@ class index_gt {
 
             config_.connectivity = state.connectivity;
             config_.max_elements = state.size;
+            config_.vector_alignment = state.vector_alignment;
             config_.max_threads_add = 0;
             pre_ = precompute_(config_);
             reserve(state.size);
             size_ = state.size;
             max_level_ = static_cast<level_t>(state.max_level);
-            entry_id_ = static_cast<id_t>(state.entry_id);
+            entry_id_ = static_cast<id_t>(state.entry_idx);
         }
 
         // Locate every node packed into file
-        std::size_t progress = sizeof(state);
-        for (std::size_t i = 0; i != state.size; ++i) {
+        std::size_t progress = sizeof(file_header_t);
+        for (std::size_t i = 0; i != size_; ++i) {
             byte_t* tape = (byte_t*)(file + progress);
             dim_t dim = misaligned_load<dim_t>(tape + sizeof(label_t));
             level_t level = misaligned_load<level_t>(tape + sizeof(label_t) + sizeof(dim_t));

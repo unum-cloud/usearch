@@ -86,7 +86,7 @@ def test_user_defined_function(ndim: int, size: int):
             c += a_array[i] * b_array[i]
         return c
 
-    index = Index(ndim=ndim, metric_pointer=python_dot.address)
+    index = Index(ndim=ndim, metric=python_dot.address)
 
     vectors = np.random.uniform(
         0, 0.3, (size, index.ndim)).astype(np.float32)

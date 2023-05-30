@@ -4,3 +4,6 @@
 [submodule "fp16"]
 	path = fp16
 	url = https://github.com/maratyszcza/fp16
+[submodule "robin-map"]
+	path = robin-map
+	url = https://github.com/tessil/robin-map

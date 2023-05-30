@@ -308,7 +308,7 @@ def python_dot(a, b, n, m):
         c += a_array[i] * b_array[i]
     return c
 
-index = Index(ndim=ndim, metric_pointer=python_dot.address)
+index = Index(ndim=ndim, metric=python_dot.address)
 ```
 
 [numba]: https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks

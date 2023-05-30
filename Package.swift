@@ -20,6 +20,7 @@ let package = Package(
                 .headerSearchPath("../include/"),
                 .headerSearchPath("../src/"),
                 .headerSearchPath("../fp16/include/"),
+                .headerSearchPath("../robin-map/include/"),
                 .headerSearchPath("../simismd/include/")
             ]
         ),

@@ -125,10 +125,12 @@
         "OPENMP",
         "preprocess",
         "Quickstart",
+        "rtype",
         "simsimd",
         "SLOC",
         "usearch",
         "usecases"
     ],
+    "autoDocstring.docstringFormat": "sphinx",
     "java.configuration.updateBuildConfiguration": "interactive"
 }

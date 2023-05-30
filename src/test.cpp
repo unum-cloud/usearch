@@ -12,7 +12,7 @@ using namespace unum;
 using point_id_t = std::int64_t;
 
 template <typename scalar_at, typename index_at> void test3d(index_at&& index) {
-    using span_t = span_gt<scalar_at const>;
+    using view_t = span_gt<scalar_at const>;
     using distance_t = typename index_at::distance_t;
 
     scalar_at vec[3] = {10, 20, 15};
@@ -20,12 +20,12 @@ template <typename scalar_at, typename index_at> void test3d(index_at&& index) {
     scalar_at vec_b[3] = {16, 17, 18};
 
     index.reserve(10);
-    index.add(42, span_t{&vec[0], 3ul});
+    index.add(42, view_t{&vec[0], 3ul});
 
     // Default approximate search
     point_id_t matched_labels[10] = {0};
     distance_t matched_distances[10] = {0};
-    std::size_t matched_count = index.search(span_t{&vec[0], 3ul}, 5).dump_to(matched_labels, matched_distances);
+    std::size_t matched_count = index.search(view_t{&vec[0], 3ul}, 5).dump_to(matched_labels, matched_distances);
 
     assert(matched_count == 1);
     assert(matched_labels[0] == 42);
@@ -34,12 +34,12 @@ template <typename scalar_at, typename index_at> void test3d(index_at&& index) {
     // Add more entries
     search_config_t search_config;
     search_config.exact = true;
-    index.add(43, span_t{&vec_a[0], 3ul});
-    index.add(44, span_t{&vec_b[0], 3ul});
+    index.add(43, view_t{&vec_a[0], 3ul});
+    index.add(44, view_t{&vec_b[0], 3ul});
     assert(index.size() == 3);
 
     // Perform exact search
-    matched_count = index.search(span_t{&vec[0], 3ul}, 5, search_config).dump_to(matched_labels, matched_distances);
+    matched_count = index.search(view_t{&vec[0], 3ul}, 5, search_config).dump_to(matched_labels, matched_distances);
 
     // Validate scans
     std::size_t count = 0;
@@ -54,20 +54,38 @@ template <typename scalar_at, typename index_at> void test3d(index_at&& index) {
     // Search again over reconstructed index
     index.save("tmp.usearch");
     index.load("tmp.usearch");
-    matched_count = index.search(span_t{&vec[0], 3ul}, 5).dump_to(matched_labels, matched_distances);
+    matched_count = index.search(view_t{&vec[0], 3ul}, 5).dump_to(matched_labels, matched_distances);
     assert(matched_count == 3);
     assert(matched_labels[0] == 42);
     assert(std::abs(matched_distances[0]) < 0.01);
 
     // Search again over mapped index
     index.view("tmp.usearch");
-    matched_count = index.search(span_t{&vec[0], 3ul}, 5).dump_to(matched_labels, matched_distances);
+    matched_count = index.search(view_t{&vec[0], 3ul}, 5).dump_to(matched_labels, matched_distances);
     assert(matched_count == 3);
     assert(matched_labels[0] == 42);
     assert(std::abs(matched_distances[0]) < 0.01);
 
     assert(index.memory_usage() > 0);
     assert(index.stats().max_edges > 0);
+}
+
+template <typename scalar_at, typename index_at> void test3d_punned(index_at&& index) {
+    using view_t = span_gt<scalar_at const>;
+    using span_t = span_gt<scalar_at>;
+    using distance_t = typename index_at::distance_t;
+
+    scalar_at vec[3] = {10, 20, 15};
+
+    index.reserve(10);
+    index.add(42, view_t{&vec[0], 3ul});
+
+    // Reconstruct
+    scalar_at vec_reconstructed[3] = {0, 0, 0};
+    index.reconstruct(42, span_t{&vec_reconstructed[0], 3ul});
+    assert(vec_reconstructed[0] == vec[0]);
+    assert(vec_reconstructed[1] == vec[1]);
+    assert(vec_reconstructed[2] == vec[2]);
 }
 
 int main(int, char**) {
@@ -83,6 +101,9 @@ int main(int, char**) {
 
     test3d<double>(punned_small_t::cos(3));
     test3d<double>(punned_small_t::l2sq(3));
+
+    test3d_punned<float>(punned_small_t::cos(3));
+    test3d_punned<float>(punned_small_t::l2sq(3));
 
     return 0;
 }
