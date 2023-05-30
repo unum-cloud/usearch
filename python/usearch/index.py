@@ -3,14 +3,15 @@
 # Python tooling, linters, and static analyzers. It also embeds JIT
 # into the primary `Index` class, connecting USearch with Numba.
 import os
-from typing import Optional, Callable, Union
 from math import sqrt
+from typing import Optional, Callable, Union
 
 import numpy as np
 
 from usearch.compiled import Index as _CompiledIndex
 from usearch.compiled import SetsIndex as _CompiledSetsIndex
 from usearch.compiled import HashIndex as _CompiledHashIndex
+from usearch.compiled import DEFAULT_CONNECTIVITY, DEFAULT_EXPANSION_ADD, DEFAULT_EXPANSION_SEARCH
 
 Triplet = tuple[np.ndarray, np.ndarray, np.ndarray]
 SetsIndex = _CompiledSetsIndex
@@ -28,7 +29,7 @@ def results_to_list(results: Triplet, row: int) -> list[dict]:
     ]
 
 
-def jitted_metric(ndim: int, metric_name: str, accuracy: str = 'f32') -> Callable:
+def jit_metric(ndim: int, metric_name: str, accuracy: str = 'f32') -> Callable:
 
     try:
         from numba import cfunc, types, carray
@@ -90,9 +91,14 @@ def jitted_metric(ndim: int, metric_name: str, accuracy: str = 'f32') -> Callabl
     return None
 
 
-class Index(_CompiledIndex):
-    """
+class Index:
+    """Fast JIT-compiled index for equi-dimensional embeddings.
 
+    Vector labels must be integers.
+    Vectors must have the same number of dimensions within the index.
+    Supports Inner Product, Cosine Distance, Ln measures
+    like the Euclidean metric, as well as automatic downcasting
+    and quantization.
     """
 
     def __init__(
@@ -102,46 +108,191 @@ class Index(_CompiledIndex):
         metric: Union[str, int] = 'ip',
         jit: bool = False,
 
-        capacity: Optional[int] = None,
-        connectivity: Optional[int] = None,
-        expansion_add: Optional[int] = None,
-        expansion_search: Optional[int] = None,
+        connectivity: int = DEFAULT_CONNECTIVITY,
+        expansion_add: int = DEFAULT_EXPANSION_ADD,
+        expansion_search: int = DEFAULT_EXPANSION_SEARCH,
         tune: bool = False,
 
         path: Optional[os.PathLike] = None,
         view: bool = False,
     ) -> None:
+        """Construct the index and compiles the functions, if requested (expensive).
 
+        :param ndim: Number of vector dimensions
+        :type ndim: int
+        :param dtype: Scalar type for vectors, defaults to 'f32'
+        :type dtype: str, optional
+            Example: you can use the `f16` index with `f32` vectors,
+            which will be automatically downcasted.
+
+        :param metric: Distance function, defaults to 'ip'
+        :type metric: Union[str, int], optional
+            Name of distance function, or the address of the
+            Numba `cfunc` JIT-compiled object.
+
+        :param jit: Enable Numba to JIT compile the metric, defaults to False
+        :type jit: bool, optional
+            This can result in up-to 3x performance difference on very large vectors
+            and very recent hardware, as the Python module is compiled with high
+            compatibility in mind and avoids very fancy assembly instructions.
+
+        :param connectivity: Connections per node in HNSW, defaults to None
+        :type connectivity: Optional[int], optional
+            Hyper-parameter for the number of Graph connections
+            per layer of HNSW. The original paper calls it "M".
+            Optional, but can't be changed after construction.
+
+        :param expansion_add: Traversal depth on insertions, defaults to None
+        :type expansion_add: Optional[int], optional
+            Hyper-parameter for the search depth when inserting new
+            vectors. The original paper calls it "efConstruction".
+            Can be changed afterwards, as the `.expansion_add`.
+
+        :param expansion_search: Traversal depth on queries, defaults to None
+        :type expansion_search: Optional[int], optional
+            Hyper-parameter for the search depth when querying 
+            nearest neighbors. The original paper calls it "ef".
+            Can be changed afterwards, as the `.expansion_search`.
+
+        :param tune: Automatically adjusts hyper-parameters, defaults to False
+        :type tune: bool, optional
+
+        :param path: Where to store the index, defaults to None
+        :type path: Optional[os.PathLike], optional
+        :param view: Are we simply viewing an immutable index, defaults to False
+        :type view: bool, optional
+        """
         if jit:
             assert isinstance(metric, str), 'Name the metric to JIT'
             self._metric_name = metric
-            self._metric_jitted = jitted_metric(
+            self._metric_jit = jit_metric(
                 ndim=ndim,
                 metric_name=metric,
                 dtype=dtype,
             )
-            self._metric_address = self._metric_jitted.address if \
-                self._metric_jitted else 0
+            self._metric_pointer = self._metric_jit.address if \
+                self._metric_jit else 0
 
         elif isinstance(metric, int):
-            self._metric_name = None
-            self._metric_jitted = None
-            self._metric_address = metric
+            self._metric_name = ''
+            self._metric_jit = None
+            self._metric_pointer = metric
 
-        super().__init__(
+        else:
+            if metric is None:
+                metric = 'ip'
+            assert isinstance(metric, str)
+            self._metric_name = metric
+            self._metric_jit = None
+            self._metric_pointer = 0
+
+        self._compiled = _CompiledIndex(
             ndim=ndim,
             metric=self._metric_name,
-            metric_address=self._metric_address,
+            metric_pointer=self._metric_pointer,
             dtype=dtype,
-            capacity=capacity,
             connectivity=connectivity,
             expansion_add=expansion_add,
             expansion_search=expansion_search,
             tune=tune,
         )
 
-        if os.path.exists(path):
+        self.path = path
+        if path and os.path.exists(path):
             if view:
-                super().view(path)
+                self._compiled.view(path)
             else:
-                super().load(path)
+                self._compiled.load(path)
+
+    def add(
+            self, labels, vectors, *,
+            copy: bool = True, threads: int = 0):
+        """Inserts one or move vectors into the index.
+
+        For maximal performance the `labels` and `vectors`
+        should conform to the Python's "buffer protocol" spec.
+
+        To index a single entry: 
+            labels: int, vectors: np.ndarray.
+        To index many entries: 
+            labels: np.ndarray, vectors: np.ndarray.
+
+        When working with extremely large indexes, you may want to
+        pass `copy=False`, if you can guarantee the lifetime of the
+        primary vectors store during the process of construction.
+
+        :param labels: Unique identifier for passed vectors.
+        :type labels: Buffer
+        :param vectors: Collection of vectors.
+        :type vectors: Buffer
+        :param copy: Should the index store a copy of vectors, defaults to True
+        :type copy: bool, optional
+        :param threads: Optimal number of cores to use, defaults to 0
+        :type threads: int, optional
+        """
+        if isinstance(labels, np.ndarray):
+            labels = labels.astype(np.longlong)
+        self._compiled.add(labels, vectors, copy=copy, threads=threads)
+
+    def search(
+            self, vectors, k: int = 10, *,
+            threads: int = 0, exact: bool = False) -> Triplet:
+        return self._compiled.search(vectors, k, exact=exact, threads=threads)
+
+    def __len__(self) -> int:
+        return len(self._compiled)
+
+    @property
+    def size(self) -> int:
+        return self._compiled.size
+
+    @property
+    def ndim(self) -> int:
+        return self._compiled.ndim
+
+    @property
+    def dtype(self) -> str:
+        return self._compiled.dtype
+
+    @property
+    def connectivity(self) -> int:
+        return self._compiled.connectivity
+
+    @property
+    def capacity(self) -> int:
+        return self._compiled.capacity
+
+    @property
+    def memory_usage(self) -> int:
+        return self._compiled.memory_usage
+
+    @property
+    def expansion_add(self) -> int:
+        return self._compiled.expansion_add
+
+    @property
+    def expansion_search(self) -> int:
+        return self._compiled.expansion_search
+
+    @expansion_add.setter
+    def change_expansion_add(self, v: int):
+        self._compiled.expansion_add = v
+
+    @expansion_search.setter
+    def change_expansion_search(self, v: int):
+        self._compiled.expansion_search = v
+
+    def save(self, path: os.PathLike):
+        self._compiled.save(path)
+
+    def load(self, path: os.PathLike):
+        self._compiled.load(path)
+
+    def view(self, path: os.PathLike):
+        self._compiled.view(path)
+
+    def clear(self):
+        self._compiled.clear()
+
+    def remove(self, label: int):
+        pass

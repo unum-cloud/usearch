@@ -142,7 +142,7 @@ def main(
             expansion_add=expansion_add,
             expansion_search=expansion_search,
             connectivity=connectivity,
-            metric_pointer=inner_product_f32.address,
+            metric=inner_product_f32.address,
         )
         bench_usearch(index, vectors_mat, queries_mat, neighbors_mat)
 
@@ -153,7 +153,7 @@ def main(
             expansion_add=expansion_add,
             expansion_search=expansion_search,
             connectivity=connectivity,
-            metric_pointer=cos_f8.address,
+            metric=cos_f8.address,
         )
         bench_usearch(index, vectors_mat, queries_mat, neighbors_mat)
     except ImportError:

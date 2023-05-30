@@ -169,7 +169,7 @@ static std::unique_ptr<hash_index_py_t> make_hash_index( //
     return std::unique_ptr<hash_index_py_t>(new hash_index_py_t(config, bits));
 }
 
-static void add_one_to_index(punned_py_t& index, label_t label, py::buffer vector, bool copy) {
+static void add_one_to_index(punned_py_t& index, label_t label, py::buffer vector, bool copy, std::size_t) {
 
     py::buffer_info vector_info = vector.request();
     if (vector_info.ndim != 1)
@@ -201,7 +201,10 @@ static void add_one_to_index(punned_py_t& index, label_t label, py::buffer vecto
 
 static void add_many_to_index(                                 //
     punned_py_t& index, py::buffer labels, py::buffer vectors, //
-    bool copy, std::size_t threads = 0) {
+    bool copy, std::size_t threads) {
+
+    if (index.config().max_threads_add < threads)
+        throw std::invalid_argument("Can't use that many threads!");
 
     py::buffer_info labels_info = labels.request();
     py::buffer_info vectors_info = vectors.request();
@@ -232,7 +235,7 @@ static void add_many_to_index(                                 //
 
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vectors_info.format == "c" || vectors_info.format == "b")
-        multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        multithreaded(threads, vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             add_config_t config;
             config.store_vector = copy;
             config.thread = thread_idx;
@@ -242,7 +245,7 @@ static void add_many_to_index(                                 //
             index.add(label, vector, config);
         });
     else if (vectors_info.format == "e")
-        multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        multithreaded(threads, vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             add_config_t config;
             config.store_vector = copy;
             config.thread = thread_idx;
@@ -252,7 +255,7 @@ static void add_many_to_index(                                 //
             index.add(label, vector, config);
         });
     else if (vectors_info.format == "f" || vectors_info.format == "f4" || vectors_info.format == "<f4")
-        multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        multithreaded(threads, vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             add_config_t config;
             config.store_vector = copy;
             config.thread = thread_idx;
@@ -261,7 +264,7 @@ static void add_many_to_index(                                 //
             index.add(label, vector, config);
         });
     else if (vectors_info.format == "d" || vectors_info.format == "f8" || vectors_info.format == "<f8")
-        multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        multithreaded(threads, vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             add_config_t config;
             config.store_vector = copy;
             config.thread = thread_idx;
@@ -329,10 +332,14 @@ static py::tuple search_one_in_index(punned_py_t& index, py::buffer vector, std:
  *      2. matrix of distances,
  *      3. array with match counts.
  */
-static py::tuple search_many_in_index(punned_py_t& index, py::buffer vectors, std::size_t wanted, bool exact) {
+static py::tuple search_many_in_index( //
+    punned_py_t& index, py::buffer vectors, std::size_t wanted, bool exact, std::size_t threads) {
 
     if (wanted == 0)
         return py::tuple(3);
+
+    if (index.config().max_threads_add < threads)
+        throw std::invalid_argument("Can't use that many threads!");
 
     py::buffer_info vectors_info = vectors.request();
     if (vectors_info.ndim == 1)
@@ -355,7 +362,7 @@ static py::tuple search_many_in_index(punned_py_t& index, py::buffer vectors, st
 
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vectors_info.format == "c" || vectors_info.format == "b")
-        multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        multithreaded(threads, vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
             config.exact = exact;
@@ -364,7 +371,7 @@ static py::tuple search_many_in_index(punned_py_t& index, py::buffer vectors, st
                 index.search(vector, wanted, config).dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
     else if (vectors_info.format == "e")
-        multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        multithreaded(threads, vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
             config.exact = exact;
@@ -373,7 +380,7 @@ static py::tuple search_many_in_index(punned_py_t& index, py::buffer vectors, st
                 index.search(vector, wanted, config).dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
     else if (vectors_info.format == "f" || vectors_info.format == "f4" || vectors_info.format == "<f4")
-        multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        multithreaded(threads, vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
             config.exact = exact;
@@ -382,7 +389,7 @@ static py::tuple search_many_in_index(punned_py_t& index, py::buffer vectors, st
                 index.search(vector, wanted, config).dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
     else if (vectors_info.format == "d" || vectors_info.format == "f8" || vectors_info.format == "<f8")
-        multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        multithreaded(threads, vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
             config.exact = exact;
@@ -478,6 +485,10 @@ void hash_buffer(hash_index_py_t& index, py::buffer vector) {
 PYBIND11_MODULE(compiled, m) {
     m.doc() = "Smaller & Faster Single-File Vector Search Engine from Unum";
 
+    m.attr("DEFAULT_CONNECTIVITY") = py::int_(default_connectivity());
+    m.attr("DEFAULT_EXPANSION_ADD") = py::int_(default_expansion_add());
+    m.attr("DEFAULT_EXPANSION_SEARCH") = py::int_(default_expansion_search());
+
     auto i = py::class_<punned_py_t>(m, "Index");
 
     i.def(py::init(&make_index),                                    //
@@ -507,14 +518,16 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("label"),         //
         py::arg("vector"),        //
         py::kw_only(),            //
-        py::arg("copy") = true    //
+        py::arg("copy") = true,   //
+        py::arg("threads") = 0    //
     );
 
     i.def(                               //
         "search", &search_many_in_index, //
         py::arg("query"),                //
         py::arg("count") = 10,           //
-        py::arg("exact") = false         //
+        py::arg("exact") = false,        //
+        py::arg("threads") = 0           //
     );
 
     i.def("__len__", &punned_py_t::size);

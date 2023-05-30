@@ -63,8 +63,7 @@ Benchmarking:
 ## Python
 
 ```sh
-pip install -e .
-pytest python/scripts/test.py
+pip install -e . && pytest python/scripts/test.py
 ```
 
 Linting:
