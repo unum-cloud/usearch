@@ -9,7 +9,8 @@ from math import sqrt
 import numpy as np
 
 from usearch.compiled import Index as _CompiledIndex
-from usearch.compiled import _CompiledSetsIndex, _CompiledHashIndex
+from usearch.compiled import SetsIndex as _CompiledSetsIndex
+from usearch.compiled import HashIndex as _CompiledHashIndex
 
 Triplet = tuple[np.ndarray, np.ndarray, np.ndarray]
 SetsIndex = _CompiledSetsIndex
