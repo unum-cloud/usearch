@@ -10,7 +10,7 @@ import (
 
 /*
 #include <stdlib.h>
-#include "golang.h"
+#include "usearch.h"
 // avoid some verbosity by using void* index here
 // proper typed pointer in the cpp file definitions
 void* new_index(char* metric_str, int metric_len,
@@ -33,12 +33,8 @@ int capacity(void* index);
 const char* set_capacity(void* index, int capacity);
 const char* add(void* index, int label, float* vec);
 SearchResults search(void* index, float* query, int query_len, int limit);
-
-//#cgo LDFLAGS: -lomp
-//#cgo CPPFLAGS: -fopenmp
-#cgo CPPFLAGS: -I../fp16/include/
-#cgo CPPFLAGS: -I../simsimd/include/
-#cgo CPPFLAGS: -I../include/
+#cgo CPPFLAGS: -I/home/narek/usearch/c/
+#cgo LDFLAGS: -L/home/narek/usearch/c/ -lusearch -Wl,-rpath=/home/narek/usearch/c
 */
 import "C"
 

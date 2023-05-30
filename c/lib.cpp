@@ -1,8 +1,7 @@
 #include "../src/punned.hpp"
-#include <algorithm>
 
 extern "C" {
-#include "golang.h"
+#include "usearch.h"
 }
 
 using namespace unum::usearch;
@@ -72,10 +71,7 @@ const char* view(native_index_t* index, char* path) {
 }
 
 int size(native_index_t* index) { return index->size(); }
-
 int connectivity(native_index_t* index) { return index->connectivity(); }
-
-// q:: why is this not "dimension"?
 int dimensions(native_index_t* index) { return index->dimensions(); }
 int capacity(native_index_t* index) { return index->capacity(); }
 
@@ -90,8 +86,8 @@ const char* set_capacity(native_index_t* index, int capacity) {
 
 const char* add(native_index_t* index, int label, float* vector) {
     // q:: I followed the java example to have try catches everywhere
-    // but they are kind of useless as most errors areoutside of cpp so
-    // translate into sefaults and are not caught by the runtime
+    // but they are kind of useless as most errors are outside of cpp so
+    // those translate into segaults and are not caught by the runtime
     try {
         // todo:: the code cannot currently be used in a multithreaded environment
         // because of golang's roaming gorountines, but once we have a way to
