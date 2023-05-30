@@ -191,9 +191,9 @@ static void add_one_to_index(punned_py_t& index, label_t label, py::buffer vecto
         index.add(label, reinterpret_cast<f8_bits_t const*>(vector_data), config);
     else if (vector_info.format == "e")
         index.add(label, reinterpret_cast<f16_bits_t const*>(vector_data), config);
-    else if (vector_info.format == "f")
+    else if (vector_info.format == "f" || vector_info.format == "f4" || vector_info.format == "<f4")
         index.add(label, reinterpret_cast<float const*>(vector_data), config);
-    else if (vector_info.format == "d")
+    else if (vector_info.format == "d" || vector_info.format == "f8" || vector_info.format == "<f8")
         index.add(label, reinterpret_cast<double const*>(vector_data), config);
     else
         throw std::invalid_argument("Incompatible scalars in the vector!");
@@ -251,7 +251,7 @@ static void add_many_to_index(                                 //
                 reinterpret_cast<f16_bits_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
             index.add(label, vector, config);
         });
-    else if (vectors_info.format == "f")
+    else if (vectors_info.format == "f" || vectors_info.format == "f4" || vectors_info.format == "<f4")
         multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             add_config_t config;
             config.store_vector = copy;
@@ -260,7 +260,7 @@ static void add_many_to_index(                                 //
             float const* vector = reinterpret_cast<float const*>(vectors_data + task_idx * vectors_info.strides[0]);
             index.add(label, vector, config);
         });
-    else if (vectors_info.format == "d")
+    else if (vectors_info.format == "d" || vectors_info.format == "f8" || vectors_info.format == "<f8")
         multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             add_config_t config;
             config.store_vector = copy;
@@ -299,11 +299,11 @@ static py::tuple search_one_in_index(punned_py_t& index, py::buffer vector, std:
         count = index //
                     .search(reinterpret_cast<f16_bits_t const*>(vector_data), wanted, config)
                     .dump_to(&labels_py1d(0), &distances_py1d(0));
-    else if (vector_info.format == "f")
+    else if (vector_info.format == "f" || vector_info.format == "f4" || vector_info.format == "<f4")
         count = index //
                     .search(reinterpret_cast<float const*>(vector_data), wanted, config)
                     .dump_to(&labels_py1d(0), &distances_py1d(0));
-    else if (vector_info.format == "d")
+    else if (vector_info.format == "d" || vector_info.format == "f8" || vector_info.format == "<f8")
         count = index //
                     .search(reinterpret_cast<double const*>(vector_data), wanted, config)
                     .dump_to(&labels_py1d(0), &distances_py1d(0));
@@ -372,7 +372,7 @@ static py::tuple search_many_in_index(punned_py_t& index, py::buffer vectors, st
             counts_py1d(task_idx) = static_cast<Py_ssize_t>(
                 index.search(vector, wanted, config).dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
-    else if (vectors_info.format == "f")
+    else if (vectors_info.format == "f" || vectors_info.format == "f4" || vectors_info.format == "<f4")
         multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
@@ -381,7 +381,7 @@ static py::tuple search_many_in_index(punned_py_t& index, py::buffer vectors, st
             counts_py1d(task_idx) = static_cast<Py_ssize_t>(
                 index.search(vector, wanted, config).dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
-    else if (vectors_info.format == "d")
+    else if (vectors_info.format == "d" || vectors_info.format == "f8" || vectors_info.format == "<f8")
         multithreaded(index.config().concurrency(), vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
@@ -407,7 +407,6 @@ template <typename index_at> void view_index(index_at& index, std::string const&
 template <typename index_at> void clear_index(index_at& index) { index.clear(); }
 template <typename index_at> std::size_t get_expansion_add(index_at const &index) { return index.config().expansion_add; }
 template <typename index_at> std::size_t get_expansion_search(index_at const &index) { return index.config().expansion_search; }
-
 // clang-format on
 
 template <typename element_at> bool has_duplicates(element_at const* begin, element_at const* end) {

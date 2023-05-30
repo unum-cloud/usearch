@@ -429,7 +429,11 @@ class punned_gt {
     mutable std::vector<std::size_t> available_threads_;
     mutable std::mutex available_threads_mutex_;
 
-    mutable std::shared_mutex lookup_table_mutex_;
+    using shared_mutex_t = std::mutex; // TODO: Find an OS-compatible solution
+    using shared_lock_t = std::unique_lock<shared_mutex_t>;
+    using unique_lock_t = std::unique_lock<shared_mutex_t>;
+
+    mutable shared_mutex_t lookup_table_mutex_;
     tsl::robin_map<label_t, id_t> lookup_table_;
 
   public:
@@ -607,7 +611,7 @@ class punned_gt {
 
         add_result_t result = typed_->add(label, {vector_data, vector_bytes}, config);
         {
-            std::unique_lock lock(lookup_table_mutex_);
+            unique_lock_t lock(lookup_table_mutex_);
             lookup_table_.emplace(label, result.id);
         }
         return result;
@@ -646,7 +650,7 @@ class punned_gt {
     }
 
     id_t lookup_id_(label_t label) const {
-        std::shared_lock lock(lookup_table_mutex_);
+        shared_lock_t lock(lookup_table_mutex_);
         return lookup_table_.at(label);
     }
 
