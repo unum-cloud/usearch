@@ -457,31 +457,30 @@ assert(results.0[0] == 42)
 
 ### GoLang
 
+#### Installation
+
+```golang
+import (
+	"github.com/unum-cloud/usearch/golang"
+)
+```
+
+#### Quickstart
+
 ```golang
 package main
 
 import (
 	"fmt"
-    /*Todo::fix canonical path after review*/
-	"github.com/ngalstyan4/usearch/golang"
+	"github.com/unum-cloud/usearch/golang"
 )
-
-/*N.B.: the following is only necessary if libusearch and headers are not available
-on compiler search path*/
-
-/*
-#cgo CPPFLAGS: -I/path/to/usearch.h
-#cgo LDFLAGS: -L/absolute/path/to/libusearch -Wl,-rpath=/absolute/path/to/libusearch -lusearch
-*/
-import "C"
 
 func main() {
 	conf := usearch.DefaultConfig(128)
 	index := usearch.NewIndex(conf)
 	v := make([]float32, 128)
 	index.Add(42, v)
-	res := index.Search(v, 1)
-	fmt.Println("result is", res)
+	results := index.Search(v, 1)
 }
 ```
 

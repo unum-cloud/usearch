@@ -7,19 +7,15 @@ extern "C" {
 using namespace unum::usearch;
 using namespace unum;
 
-// todo:: pretty sure use of int here is not portable
 using label_t = int;
 using distance_t = float;
-using native_index_t = punned_gt<label_t>;
+using punned_index_t = punned_gt<label_t>;
 using span_t = span_gt<float>;
 
-extern "C" {
-typedef struct config_t Config;
-
-native_index_t* usearch_new_index(              //
-    char const* metric_str, int metric_len,     //
-    char const* accuracy_str, int accuracy_len, //
-    int dimensions, int capacity, int connectivity, int expansion_add, int expansion_search) {
+void* usearch_new(                                        //
+    usearch_metric_t metric, usearch_accuracy_t accuracy, //
+    int dimensions, int capacity, int connectivity,       //
+    int expansion_add, int expansion_search) {
 
     try {
         config_t config;
@@ -30,21 +26,32 @@ native_index_t* usearch_new_index(              //
         config.max_threads_add = std::thread::hardware_concurrency();
         config.max_threads_search = std::thread::hardware_concurrency();
 
-        accuracy_t accuracy = accuracy_from_name(accuracy_str, accuracy_len);
-        native_index_t index = index_from_name<native_index_t>( //
-            metric_str, metric_len, static_cast<std::size_t>(dimensions), accuracy, config);
+        // TODO: Implement safe buffers for error messages, either here on in
+        // the C++ type-punned implementation.
+        // static constexpr std::size_t error_limit_k = 128;
+        // struct safe_punned_index_t {
+        //     punned_index_t punned_index;
+        //     char error_buffers[1];
+        // };
+        // std::size_t bytes_for_error_messages = error_limit_k * config.max_threads();
+        // std::size_t bytes_to_alloc = sizeof(punned_index_t) + bytes_for_error_messages;
+        // safe_punned_index_t* result = (safe_punned_index_t*)std::malloc(bytes_to_alloc);
 
-        native_index_t* result_ptr = new native_index_t(std::move(index));
+        accuracy_t accuracy = accuracy_from_name(accuracy_str, accuracy_len);
+        common_metric_kind_t metric_kind = common_metric_from_name(metric_str, metric_len);
+        punned_index_t index = make_punned<punned_index_t>( //
+            metric_kind, static_cast<std::size_t>(dimensions), accuracy, config);
+
+        punned_index_t* result_ptr = new punned_index_t(std::move(index));
         return result_ptr;
-    } catch (std::exception& e) {
-        printf("error %s\n", e.what());
+    } catch (std::exception const&) {
     }
     return NULL;
 }
 
-void usearch_destroy(native_index_t* index) { delete index; }
+void usearch_destroy(punned_index_t* index) { delete index; }
 
-char const* usearch_save(native_index_t* index, char const* path) {
+char const* usearch_save(punned_index_t* index, char const* path) {
     try {
         index->save(path);
         return NULL;
@@ -59,7 +66,7 @@ char const* usearch_save(native_index_t* index, char const* path) {
     }
 }
 
-char const* usearch_load(native_index_t* index, char const* path) {
+char const* usearch_load(punned_index_t* index, char const* path) {
     try {
         index->load(path);
         return NULL;
@@ -70,7 +77,7 @@ char const* usearch_load(native_index_t* index, char const* path) {
     }
 }
 
-char const* usearch_view(native_index_t* index, char const* path) {
+char const* usearch_view(punned_index_t* index, char const* path) {
     try {
         index->view(path);
         return NULL;
@@ -81,12 +88,12 @@ char const* usearch_view(native_index_t* index, char const* path) {
     }
 }
 
-int usearch_size(native_index_t* index) { return index->size(); }
-int usearch_connectivity(native_index_t* index) { return index->connectivity(); }
-int usearch_dimensions(native_index_t* index) { return index->dimensions(); }
-int usearch_capacity(native_index_t* index) { return index->capacity(); }
+int usearch_size(punned_index_t* index) { return index->size(); }
+int usearch_connectivity(punned_index_t* index) { return index->connectivity(); }
+int usearch_dimensions(punned_index_t* index) { return index->dimensions(); }
+int usearch_capacity(punned_index_t* index) { return index->capacity(); }
 
-char const* usearch_reserve(native_index_t* index, int capacity) {
+char const* usearch_reserve(punned_index_t* index, int capacity) {
     try {
         index->reserve(capacity);
         return NULL;
@@ -97,7 +104,7 @@ char const* usearch_reserve(native_index_t* index, int capacity) {
     }
 }
 
-char const* usearch_add(native_index_t* index, int label, float* vector) {
+char const* usearch_add(punned_index_t* index, int label, float* vector) {
     // q:: I followed the java example to have try catches everywhere
     // but they are kind of useless as most errors are outside of cpp so
     // those translate into segfaults and are not caught by the runtime
@@ -111,7 +118,7 @@ char const* usearch_add(native_index_t* index, int label, float* vector) {
     return NULL;
 }
 
-SearchResults usearch_search(native_index_t* index, float* query, int query_len, int limit) {
+SearchResults usearch_search(punned_index_t* index, float* query, int query_len, int limit) {
     // todo:: this could be allocated as golang slice
     // to avoid a copy. not sure how it interacts with gc
     // that is why doing this now

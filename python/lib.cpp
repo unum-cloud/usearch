@@ -130,8 +130,10 @@ static punned_py_t make_index(      //
     accuracy_t accuracy = accuracy_from_name(scalar_type.c_str(), scalar_type.size());
     if (metric_uintptr)
         return punned_t::udf(dimensions, udf(metric_uintptr, accuracy), accuracy, config);
-    else
-        return index_from_name<punned_t>(metric.c_str(), metric.size(), dimensions, accuracy, config);
+    else {
+        common_metric_kind_t metric_kind = common_metric_from_name(metric.c_str(), metric.size());
+        return make_punned<punned_t>(metric_kind, dimensions, accuracy, config);
+    }
 }
 
 static std::unique_ptr<sets_index_py_t> make_sets_index( //

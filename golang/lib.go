@@ -7,30 +7,8 @@ import (
 )
 
 /*
-#include <stdlib.h>
-#include "usearch.h"
-// avoid some verbosity by using void* index here
-// proper typed pointer in the cpp file definitions
-void* usearch_new_index(char* metric_str, int metric_len,
-    char* accuracy_str, int accuracy_len,
-    int dimensions, int capacity, int connectivity,
-    int expansion_add, int expansion_search
-);
-void usearch_destroy(void* index);
+#include "../c/usearch.h"
 
-const char* usearch_save(void* index, char* path);
-const char* usearch_load(void* index, char* path);
-const char* usearch_view(void* index, char* path);
-
-//todo:: q:: is int<->size_t conversion portable?
-int usearch_size(void* index);
-int usearch_connectivity(void* index);
-int usearch_dimensions(void* index);
-int usearch_capacity(void* index);
-
-const char* usearch_reserve(void* index, int capacity);
-const char* usearch_add(void* index, int label, float* vec);
-SearchResults usearch_search(void* index, float* query, int query_len, int limit);
 #cgo CPPFLAGS: -I.
 #cgo LDFLAGS: -lusearch
 */
@@ -128,7 +106,7 @@ func (ind *Index) init() {
 	connectivity := C.int(conf.Connectivity)
 	expansion_add := C.int(conf.ExpansionAdd)
 	expansion_search := C.int(conf.ExpansionSearch)
-	ptr := C.usearch_new_index(metric_str, metric_len,
+	ptr := C.usearch_new(metric_str, metric_len,
 		accuracy_str, accuracy_len,
 		dimensions, capacity, connectivity,
 		expansion_add, expansion_search)
