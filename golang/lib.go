@@ -66,7 +66,7 @@ const (
 	f32 Accuracy = iota
 	f16
 	f64
-	i8q100
+	f8
 )
 
 func (a Accuracy) String() string {
@@ -77,8 +77,8 @@ func (a Accuracy) String() string {
 		return "f32"
 	case f64:
 		return "f64"
-	case i8q100:
-		return "i8q100"
+	case f8:
+		return "f8"
 	default:
 		panic("unknown accuracy")
 	}
@@ -104,15 +104,8 @@ func DefaultConfig(dimension int) IndexConfig {
 	return c
 }
 
-/*
-Plan: read vectors in golang
-pass them to C via a concurrent map
-have the add() function copy over the vectors (maybe this copy is already done?? my job is easier)
-have search()
-pass around opeque native_ pointer between c and go
-*/
 type Index struct {
-	opeque_handle *C.void
+	opaque_handle *C.void
 	config        IndexConfig
 }
 
@@ -140,20 +133,20 @@ func (ind *Index) init() {
 		dimensions, capacity, connectivity,
 		expansion_add, expansion_search)
 
-	ind.opeque_handle = (*C.void)(unsafe.Pointer(ptr))
+	ind.opaque_handle = (*C.void)(unsafe.Pointer(ptr))
 }
 
 func (ind *Index) Destroy() {
-	if ind.opeque_handle == nil {
+	if ind.opaque_handle == nil {
 		panic("index not initialized")
 	}
-	C.usearch_destroy(unsafe.Pointer(ind.opeque_handle))
-	ind.opeque_handle = nil
+	C.usearch_destroy(unsafe.Pointer(ind.opaque_handle))
+	ind.opaque_handle = nil
 	ind.config = IndexConfig{}
 }
 
 func (ind *Index) fileOp(path string, op string) error {
-	if ind.opeque_handle == nil {
+	if ind.opaque_handle == nil {
 		panic("index not initialized")
 	}
 	c_path := C.CString(path)
@@ -161,11 +154,11 @@ func (ind *Index) fileOp(path string, op string) error {
 	var errStr *C.char
 	switch op {
 	case "load":
-		errStr = C.usearch_load(unsafe.Pointer(ind.opeque_handle), c_path)
+		errStr = C.usearch_load(unsafe.Pointer(ind.opaque_handle), c_path)
 	case "save":
-		errStr = C.usearch_save(unsafe.Pointer(ind.opeque_handle), c_path)
+		errStr = C.usearch_save(unsafe.Pointer(ind.opaque_handle), c_path)
 	case "view":
-		errStr = C.usearch_view(unsafe.Pointer(ind.opeque_handle), c_path)
+		errStr = C.usearch_view(unsafe.Pointer(ind.opaque_handle), c_path)
 	default:
 		panic("unknown file operation")
 	}
@@ -190,30 +183,26 @@ func (ind *Index) View(path string) error {
 }
 
 func (ind *Index) Len() int {
-	return int(C.usearch_size(unsafe.Pointer(ind.opeque_handle)))
+	return int(C.usearch_size(unsafe.Pointer(ind.opaque_handle)))
 }
 
 func (ind *Index) Connectivity() int {
-	return int(C.usearch_connectivity(unsafe.Pointer(ind.opeque_handle)))
+	return int(C.usearch_connectivity(unsafe.Pointer(ind.opaque_handle)))
 }
 
 func (ind *Index) VecDimension() int {
-	return int(C.usearch_dimensions(unsafe.Pointer(ind.opeque_handle)))
+	return int(C.usearch_dimensions(unsafe.Pointer(ind.opaque_handle)))
 }
 
 func (ind *Index) Capacity() int {
-	return int(C.usearch_capacity(unsafe.Pointer(ind.opeque_handle)))
+	return int(C.usearch_capacity(unsafe.Pointer(ind.opaque_handle)))
 }
 
 func (ind *Index) Reserve(capacity int) error {
-	if ind.opeque_handle == nil {
+	if ind.opaque_handle == nil {
 		panic("index not initialized")
 	}
-	cap := ind.Capacity()
-	if capacity < cap {
-		return errors.New(fmt.Sprintf("cannot reserve to a value less than current capacity, current: %d, new: %d", cap, capacity))
-	}
-	errStr := C.usearch_reserve(unsafe.Pointer(ind.opeque_handle), (C.int)(capacity))
+	errStr := C.usearch_reserve(unsafe.Pointer(ind.opaque_handle), (C.int)(capacity))
 	var err error
 	if errStr != nil {
 		err = errors.New(C.GoString(errStr))
@@ -223,10 +212,10 @@ func (ind *Index) Reserve(capacity int) error {
 }
 
 func (ind *Index) Add(label int, vec []float32) error {
-	if ind.opeque_handle == nil {
+	if ind.opaque_handle == nil {
 		panic("index not initialized")
 	}
-	errStr := C.usearch_add(unsafe.Pointer(ind.opeque_handle), (C.int)(label), (*C.float)(&vec[0]))
+	errStr := C.usearch_add(unsafe.Pointer(ind.opaque_handle), (C.int)(label), (*C.float)(&vec[0]))
 	var err error
 	if errStr != nil {
 		err = errors.New(C.GoString(errStr))
@@ -238,7 +227,7 @@ func (ind *Index) Add(label int, vec []float32) error {
 
 // return must be int32 because int is 64bit in golang and 32bit in C
 func (ind *Index) Search(query []float32, limit int) []int32 {
-	if ind.opeque_handle == nil {
+	if ind.opaque_handle == nil {
 		panic("index not initialized")
 	}
 	if len(query) != ind.config.VecDimension {
@@ -248,7 +237,7 @@ func (ind *Index) Search(query []float32, limit int) []int32 {
 	if limit <= 0 {
 		panic("limit must be greater than 0")
 	}
-	res := C.usearch_search(unsafe.Pointer(ind.opeque_handle),
+	res := C.usearch_search(unsafe.Pointer(ind.opaque_handle),
 		(*C.float)(&query[0]), (C.int)(len(query)), (C.int)(limit))
 
 	// my understanding is that search panics in truly exceptional cases,
@@ -264,8 +253,8 @@ func (ind *Index) Search(query []float32, limit int) []int32 {
 }
 
 func (ind *Index) Size() int {
-	if ind.opeque_handle == nil {
+	if ind.opaque_handle == nil {
 		panic("index not initialized")
 	}
-	return int(C.usearch_size(unsafe.Pointer(ind.opeque_handle)))
+	return int(C.usearch_size(unsafe.Pointer(ind.opaque_handle)))
 }
