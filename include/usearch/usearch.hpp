@@ -1603,7 +1603,7 @@ class index_gt {
         state.size = size_;
         state.entry_idx = entry_id_;
 
-        std::FILE* file = std::fopen(file_path, "w");
+        std::FILE* file = std::fopen(file_path, "wb");
         if (!file)
             throw std::runtime_error(std::strerror(errno));
 
@@ -1638,7 +1638,7 @@ class index_gt {
      */
     void load(char const* file_path) noexcept(false) {
         file_header_t state_buffer{};
-        std::FILE* file = std::fopen(file_path, "r");
+        std::FILE* file = std::fopen(file_path, "rb");
         if (!file)
             throw std::runtime_error(std::strerror(errno));
 
