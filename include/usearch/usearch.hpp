@@ -426,11 +426,7 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
     using byte_t = typename allocator_t::value_type;
     static_assert(sizeof(byte_t) == 1, "Allocator must allocate separate addressable bytes");
 
-#if defined(USEARCH_IS_WINDOWS)
-    using slot_t = LONGLONG;
-#else
     using slot_t = unsigned long;
-#endif
 
     static constexpr std::size_t bits_per_slot() { return sizeof(slot_t) * CHAR_BIT; }
     static constexpr slot_t bits_mask() { return sizeof(slot_t) * CHAR_BIT - 1; }
@@ -469,12 +465,12 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
 
     inline bool atomic_set(std::size_t i) noexcept {
         slot_t mask{1ul << (i & bits_mask())};
-        return InterlockedOr64Acquire((slot_t volatile*)&slots_[i / bits_per_slot()], mask) & mask;
+        return InterlockedOr((long volatile*)&slots_[i / bits_per_slot()], mask) & mask;
     }
 
     inline void atomic_reset(std::size_t i) noexcept {
         slot_t mask{1ul << (i & bits_mask())};
-        InterlockedAnd64Release((slot_t volatile*)&slots_[i / bits_per_slot()], ~mask);
+        InterlockedAnd((long volatile*)&slots_[i / bits_per_slot()], ~mask);
     }
 
 #else
