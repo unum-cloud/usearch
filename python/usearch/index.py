@@ -4,7 +4,7 @@
 # into the primary `Index` class, connecting USearch with Numba.
 import os
 from math import sqrt
-from typing import Optional, Callable, Union, NamedTuple
+from typing import Optional, Callable, Union, NamedTuple, List
 
 import numpy as np
 
@@ -23,7 +23,7 @@ class Matches(NamedTuple):
     counts: np.ndarray
 
 
-def list_matches(results: Matches, row: int) -> list[dict]:
+def list_matches(results: Matches, row: int) -> List[dict]:
 
     count = results[2][row]
     labels = results[0][row, :count]

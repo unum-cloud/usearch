@@ -1,4 +1,4 @@
-from typing import Union, Optional
+from typing import Union, Optional, List
 
 import numpy as np
 from ucall.client import Client
@@ -53,7 +53,7 @@ class IndexClient:
             return self.add_many(labels, vectors)
 
     def search_one(self, vector: np.ndarray, count: int) -> Matches:
-        matches: list[dict] = []
+        matches: List[dict] = []
         vector = vector.flatten()
         ascii = _vector_to_ascii(vector)
         if ascii:
@@ -76,7 +76,7 @@ class IndexClient:
 
     def search_many(self, vectors: np.ndarray, count: int) -> Matches:
         batch_size: int = vectors.shape[0]
-        list_of_matches: list[list[dict]] = self.client.search_many(
+        list_of_matches: List[List[dict]] = self.client.search_many(
             vectors=vectors, count=count)
 
         labels = np.array((batch_size, count), dtype=np.uint32)
