@@ -37,12 +37,8 @@ jobs:
           pip install pytest numpy
       - name: Build locally
         run: python -m pip install .
-      - name: Test with PyTest on NIX
-        if: matrix.os != 'windows-2022'
+      - name: Test with PyTest
         run: pytest python/scripts/test.py
-      - name: Test with PyTest on Windows
-        if: matrix.os == 'windows-2022'
-        run: pytest python\scripts\test.py
 
   test_javascript:
     name: Test JavaScript
