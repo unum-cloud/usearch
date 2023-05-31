@@ -456,6 +456,7 @@ assert(results.0[0] == 42)
 ```
 
 ### GoLang
+
 ```golang
 package main
 
@@ -476,10 +477,10 @@ import "C"
 
 func main() {
 	conf := usearch.DefaultConfig(128)
-	ind := usearch.NewIndex(conf)
+	index := usearch.NewIndex(conf)
 	v := make([]float32, 128)
-	ind.Add(42, v)
-	res := ind.Search(v, 1)
+	index.Add(42, v)
+	res := index.Search(v, 1)
 	fmt.Println("result is", res)
 }
 ```

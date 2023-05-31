@@ -124,6 +124,7 @@
         "Numba",
         "OPENMP",
         "preprocess",
+        "Println",
         "Quickstart",
         "rtype",
         "simsimd",

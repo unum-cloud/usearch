@@ -150,10 +150,12 @@ brew install --cask wolfram-engine
 
 ## C
 
-# Linux
+### Linux
+
 ```sh
 g++ -shared -fPIC lib.cpp -I ../include/  -I ../fp16/include/ -o libusearch.so
 ```
+
 ## Docker
 
 ```sh

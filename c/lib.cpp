@@ -7,7 +7,7 @@ extern "C" {
 using namespace unum::usearch;
 using namespace unum;
 
-// todo:: pretty sure use of int here is not portible
+// todo:: pretty sure use of int here is not portable
 using label_t = int;
 using distance_t = float;
 using native_index_t = punned_gt<label_t>;
@@ -16,15 +16,17 @@ using span_t = span_gt<float>;
 extern "C" {
 typedef struct config_t Config;
 
-native_index_t* usearch_new_index(char* metric_str, int metric_len, char* accuracy_str, int accuracy_len, int dimensions,
-                          int capacity, int connectivity, int expansion_add, int expansion_search) {
+native_index_t* usearch_new_index(              //
+    char const* metric_str, int metric_len,     //
+    char const* accuracy_str, int accuracy_len, //
+    int dimensions, int capacity, int connectivity, int expansion_add, int expansion_search) {
+
     try {
         config_t config;
         config.expansion_add = static_cast<std::size_t>(expansion_add);
         config.expansion_search = static_cast<std::size_t>(expansion_search);
         config.connectivity = static_cast<std::size_t>(connectivity);
         config.max_elements = static_cast<std::size_t>(capacity);
-        // todo:: what should those be?
         config.max_threads_add = std::thread::hardware_concurrency();
         config.max_threads_search = std::thread::hardware_concurrency();
 
@@ -42,38 +44,38 @@ native_index_t* usearch_new_index(char* metric_str, int metric_len, char* accura
 
 void usearch_destroy(native_index_t* index) { delete index; }
 
-const char* usearch_save(native_index_t* index, char* path) {
+char const* usearch_save(native_index_t* index, char const* path) {
     try {
         index->save(path);
         return NULL;
     } catch (std::exception& e) {
-        //q:: added these to make sure I do not pass a potentially dangling e.what()
+        // q:: added these to make sure I do not pass a potentially dangling e.what()
         // though I realize allocation below may fail and I am not checking for it.
         // what can I do there? Golang side tries to free whatever string is passed from
         // so passing a compile time constant "double fault" string is not an option
-        char *res = new char[strlen(e.what()) + 1];
+        char* res = new char[strlen(e.what()) + 1];
         strcpy(res, e.what());
         return res;
     }
 }
 
-const char* usearch_load(native_index_t* index, char* path) {
+char const* usearch_load(native_index_t* index, char const* path) {
     try {
         index->load(path);
         return NULL;
     } catch (std::exception& e) {
-        char *res = new char[strlen(e.what()) + 1];
+        char* res = new char[strlen(e.what()) + 1];
         strcpy(res, e.what());
         return res;
     }
 }
 
-const char* usearch_view(native_index_t* index, char* path) {
+char const* usearch_view(native_index_t* index, char const* path) {
     try {
         index->view(path);
         return NULL;
     } catch (std::exception& e) {
-        char *res = new char[strlen(e.what()) + 1];
+        char* res = new char[strlen(e.what()) + 1];
         strcpy(res, e.what());
         return res;
     }
@@ -84,27 +86,28 @@ int usearch_connectivity(native_index_t* index) { return index->connectivity(); 
 int usearch_dimensions(native_index_t* index) { return index->dimensions(); }
 int usearch_capacity(native_index_t* index) { return index->capacity(); }
 
-const char* usearch_reserve(native_index_t* index, int capacity) {
+char const* usearch_reserve(native_index_t* index, int capacity) {
     try {
         index->reserve(capacity);
         return NULL;
     } catch (std::exception& e) {
-        char *res = new char[strlen(e.what()) + 1];
+        char* res = new char[strlen(e.what()) + 1];
         strcpy(res, e.what());
         return res;
     }
 }
 
-const char* usearch_add(native_index_t* index, int label, float* vector) {
+char const* usearch_add(native_index_t* index, int label, float* vector) {
     // q:: I followed the java example to have try catches everywhere
     // but they are kind of useless as most errors are outside of cpp so
-    // those translate into segaults and are not caught by the runtime
+    // those translate into segfaults and are not caught by the runtime
     try {
         index->add(label, vector);
     } catch (std::exception& e) {
-        char *res = new char[strlen(e.what()) + 1];
+        char* res = new char[strlen(e.what()) + 1];
         strcpy(res, e.what());
-        return res;    }
+        return res;
+    }
     return NULL;
 }
 
@@ -119,8 +122,7 @@ SearchResults usearch_search(native_index_t* index, float* query, int query_len,
     SearchResults res{0};
     try {
         span_t vector_span = span_t{query, static_cast<std::size_t>(query_len)};
-        res.Len = index->search( //
-            vector_span, static_cast<std::size_t>(limit)).dump_to(matches_data, dist_data);
+        res.Len = index->search(vector_span, static_cast<std::size_t>(limit)).dump_to(matches_data, dist_data);
     } catch (std::exception& e) {
         res.Error = new char[strlen(e.what()) + 1];
         strcpy(res.Error, e.what());
@@ -129,5 +131,4 @@ SearchResults usearch_search(native_index_t* index, float* query, int query_len,
     res.Labels = matches_data;
     res.Distances = dist_data;
     return res;
-}
 }
