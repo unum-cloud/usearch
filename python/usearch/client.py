@@ -3,6 +3,8 @@ from typing import Union, Optional
 import numpy as np
 from ucall.client import Client
 
+from usearch.index import Matches
+
 
 def _vector_to_ascii(vector: np.ndarray) -> Optional[str]:
     if vector.dtype != np.int8 and vector.dtype != np.uint8 and vector.dtype != np.byte:
@@ -16,9 +18,6 @@ def _vector_to_ascii(vector: np.ndarray) -> Optional[str]:
     vector[vector == 60] = 124
     ascii = str(vector)
     return ascii
-
-
-Triplet = tuple[np.ndarray, np.ndarray, np.ndarray]
 
 
 class IndexClient:
@@ -53,7 +52,7 @@ class IndexClient:
         else:
             return self.add_many(labels, vectors)
 
-    def search_one(self, vector: np.ndarray, count: int) -> Triplet:
+    def search_one(self, vector: np.ndarray, count: int) -> Matches:
         matches: list[dict] = []
         vector = vector.flatten()
         ascii = _vector_to_ascii(vector)
@@ -75,7 +74,7 @@ class IndexClient:
 
         return labels, distances, counts
 
-    def search_many(self, vectors: np.ndarray, count: int) -> Triplet:
+    def search_many(self, vectors: np.ndarray, count: int) -> Matches:
         batch_size: int = vectors.shape[0]
         list_of_matches: list[list[dict]] = self.client.search_many(
             vectors=vectors, count=count)
@@ -91,7 +90,7 @@ class IndexClient:
 
         return labels, distances, counts
 
-    def search(self, vectors: np.ndarray, count: int) -> Triplet:
+    def search(self, vectors: np.ndarray, count: int) -> Matches:
         if vectors.ndim == 1 or (vectors.ndim == 2 and vectors.shape[0] == 1):
             return self.search_one(vectors, count)
         else:

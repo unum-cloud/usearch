@@ -4,7 +4,7 @@
 # into the primary `Index` class, connecting USearch with Numba.
 import os
 from math import sqrt
-from typing import Optional, Callable, Union
+from typing import Optional, Callable, Union, NamedTuple
 
 import numpy as np
 
@@ -13,12 +13,17 @@ from usearch.compiled import SetsIndex as _CompiledSetsIndex
 from usearch.compiled import HashIndex as _CompiledHashIndex
 from usearch.compiled import DEFAULT_CONNECTIVITY, DEFAULT_EXPANSION_ADD, DEFAULT_EXPANSION_SEARCH
 
-Triplet = tuple[np.ndarray, np.ndarray, np.ndarray]
 SetsIndex = _CompiledSetsIndex
 HashIndex = _CompiledHashIndex
 
 
-def results_to_list(results: Triplet, row: int) -> list[dict]:
+class Matches(NamedTuple):
+    labels: np.ndarray
+    distances: np.ndarray
+    counts: np.ndarray
+
+
+def list_matches(results: Matches, row: int) -> list[dict]:
 
     count = results[2][row]
     labels = results[0][row, :count]
@@ -236,8 +241,11 @@ class Index:
 
     def search(
             self, vectors, k: int = 10, *,
-            threads: int = 0, exact: bool = False) -> Triplet:
-        return self._compiled.search(vectors, k, exact=exact, threads=threads)
+            threads: int = 0, exact: bool = False) -> Matches:
+        tuple_ = self._compiled.search(
+            vectors, k,
+            exact=exact, threads=threads)
+        return Matches(*tuple_)
 
     def __len__(self) -> int:
         return len(self._compiled)
