@@ -6,8 +6,8 @@
  *
  *  @copyright Copyright (c) 2023
  */
-#ifndef UNUM_USEARCH_H
-#define UNUM_USEARCH_H
+#ifndef UNUM_USEARCH_HPP
+#define UNUM_USEARCH_HPP
 
 #if !defined(USEARCH_VERSION_MAJOR)
 #define USEARCH_VERSION_MAJOR 0
@@ -851,6 +851,17 @@ struct search_config_t {
     bool exact{};
 };
 
+enum class common_metric_kind_t : std::uint8_t {
+    unknown_k = 0,
+    ip_k = 'i',
+    cos_k = 'c',
+    l2sq_k = 'e',
+    jaccard_k = 'j',
+    hamming_k = 'h',
+    pearson_k = 'p',
+    haversine_k = 'h',
+};
+
 using file_header_t = byte_t[64];
 
 /**
@@ -865,17 +876,6 @@ struct file_head_t {
     using version_minor_t = std::uint16_t;
     using version_patch_t = std::uint16_t;
 
-    enum metric_t : std::uint8_t {
-        unknown_k = 0,
-        ip_k = 'i',
-        cos_k = 'c',
-        l2sq_k = 'e',
-        jaccard_k = 'j',
-        hamming_k = 'h',
-        pearson_k = 'p',
-        haversine_k = 'h',
-    };
-
     using connectivity_t = std::uint8_t;
     using max_level_t = std::uint8_t;
     using vector_alignment_t = std::uint8_t;
@@ -888,7 +888,7 @@ struct file_head_t {
     misaligned_ref_gt<version_major_t> version_major;
     misaligned_ref_gt<version_minor_t> version_minor;
     misaligned_ref_gt<version_patch_t> version_patch;
-    misaligned_ref_gt<metric_t> metric;
+    misaligned_ref_gt<common_metric_kind_t> metric;
     misaligned_ref_gt<connectivity_t> connectivity;
     misaligned_ref_gt<max_level_t> max_level;
     misaligned_ref_gt<vector_alignment_t> vector_alignment;
@@ -901,7 +901,8 @@ struct file_head_t {
         : magic((char const*)exchange(ptr, ptr + sizeof(magic_t))),
           version_major(exchange(ptr, ptr + sizeof(version_major_t))),
           version_minor(exchange(ptr, ptr + sizeof(version_minor_t))),
-          version_patch(exchange(ptr, ptr + sizeof(version_patch_t))), metric(exchange(ptr, ptr + sizeof(metric_t))),
+          version_patch(exchange(ptr, ptr + sizeof(version_patch_t))),
+          metric(exchange(ptr, ptr + sizeof(common_metric_kind_t))),
           connectivity(exchange(ptr, ptr + sizeof(connectivity_t))),
           max_level(exchange(ptr, ptr + sizeof(max_level_t))),
           vector_alignment(exchange(ptr, ptr + sizeof(vector_alignment_t))),
@@ -1316,8 +1317,7 @@ class index_gt {
     }
 
     /**
-     *  @brief  Validates/normalizes the configuration options and throws an exception
-     *          if those are incorrect.
+     *  @brief  Validates/normalizes the configuration options.
      */
     static config_t normalize(config_t config) noexcept {
         config.expansion_add = (std::max<std::size_t>)(config.expansion_add, config.connectivity);
@@ -1592,7 +1592,7 @@ class index_gt {
         state.version_major = USEARCH_VERSION_MAJOR;
         state.version_minor = USEARCH_VERSION_MINOR;
         state.version_patch = USEARCH_VERSION_PATCH;
-        state.metric = file_head_t::unknown_k;
+        state.metric = common_metric_kind_t::unknown_k;
 
         // Describe state
         state.connectivity = config_.connectivity;

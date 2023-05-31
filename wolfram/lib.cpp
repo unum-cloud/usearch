@@ -25,7 +25,7 @@ EXTERN_C DLLEXPORT int IndexCreate(WolframLibraryData libData, mint Argc, MArgum
         config.max_threads_search = 4;
 
         accuracy_t accuracy = accuracy_from_name(accuracy_cstr, strlen(accuracy_cstr));
-        punned_t index = index_from_name<punned_t>( //
+        punned_t index = make_punned<punned_t>( //
             metric_cstr, strlen(metric_cstr), dimensions, accuracy, config);
 
         punned_t* result_ptr = new punned_t(std::move(index));

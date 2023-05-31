@@ -39,8 +39,8 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
         std::size_t accuracy_length = (*env).GetStringUTFLength(accuracy);
 
         accuracy_t accuracy = accuracy_from_name(accuracy_cstr, accuracy_length);
-        punned_t index = index_from_name<punned_t>( //
-            metric_cstr, metric_length, static_cast<std::size_t>(dimensions), accuracy, config);
+        common_metric_kind_t metric_kind = common_metric_from_name(metric_cstr, metric_length);
+        punned_t index = make_punned<punned_t>(metric_kind, static_cast<std::size_t>(dimensions), accuracy, config);
 
         punned_t* result_ptr = new punned_t(std::move(index));
         std::memcpy(&result, &result_ptr, sizeof(jlong));
