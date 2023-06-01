@@ -289,7 +289,7 @@ inline accuracy_t accuracy_from_name(char const* name, std::size_t len) {
 
 template <typename index_at>
 inline index_at index_from_name( //
-    char const* name, std::size_t len, std::size_t dimensions, accuracy_t accuracy, config_t const& config) {
+    char const* name, std::size_t len, std::size_t dimensions, accuracy_t accuracy, index_config_t const& config) {
 
     if (str_equals(name, len, "l2sq") || str_equals(name, len, "euclidean_sq")) {
         if (dimensions == 0)
@@ -437,7 +437,7 @@ class punned_gt {
     tsl::robin_map<label_t, id_t> lookup_table_;
 
   public:
-    using search_results_t = typename index_t::search_results_t;
+    using search_result_t = typename index_t::search_result_t;
     using add_result_t = typename index_t::add_result_t;
     using stats_t = typename index_t::stats_t;
 
@@ -462,13 +462,13 @@ class punned_gt {
         std::swap(available_threads_, other.available_threads_);
     }
 
-    static config_t optimize(config_t config) noexcept { return index_t::optimize(config); }
+    static index_config_t optimize(index_config_t config) noexcept { return index_t::optimize(config); }
 
     std::size_t dimensions() const { return dimensions_; }
     std::size_t connectivity() const { return typed_->connectivity(); }
     std::size_t size() const { return typed_->size(); }
     std::size_t capacity() const { return typed_->capacity(); }
-    config_t const& config() const { return typed_->config(); }
+    index_config_t const& config() const { return typed_->config(); }
     void clear() { return typed_->clear(); }
     void change_expansion_add(std::size_t n) noexcept { typed_->change_expansion_add(n); }
     void change_expansion_search(std::size_t n) noexcept { typed_->change_expansion_search(n); }
@@ -489,7 +489,7 @@ class punned_gt {
     void save(char const* path) const { typed_->save(path); }
     void load(char const* path) { typed_->load(path); }
     void view(char const* path) { typed_->view(path); }
-    void reserve(std::size_t capacity) { typed_->reserve(capacity); }
+    void reserve(index_limits_t limits) { typed_->reserve(limits); }
 
     std::size_t memory_usage(std::size_t allocator_entry_bytes = default_allocator_entry_bytes()) const noexcept {
         return typed_->memory_usage(allocator_entry_bytes);
@@ -506,40 +506,40 @@ class punned_gt {
     add_result_t add(label_t label, f32_t const* vector, add_config_t config) { return add_(label, vector, config, casts_.from_f32); }
     add_result_t add(label_t label, f64_t const* vector, add_config_t config) { return add_(label, vector, config, casts_.from_f64); }
 
-    search_results_t search(f8_bits_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f8); }
-    search_results_t search(f16_bits_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f16); }
-    search_results_t search(f32_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f32); }
-    search_results_t search(f64_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f64); }
+    search_result_t search(f8_bits_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f8); }
+    search_result_t search(f16_bits_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f16); }
+    search_result_t search(f32_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f32); }
+    search_result_t search(f64_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f64); }
 
-    search_results_t search(f8_bits_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f8); }
-    search_results_t search(f16_bits_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f16); }
-    search_results_t search(f32_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f32); }
-    search_results_t search(f64_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f64); }
+    search_result_t search(f8_bits_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f8); }
+    search_result_t search(f16_bits_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f16); }
+    search_result_t search(f32_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f32); }
+    search_result_t search(f64_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f64); }
 
-    search_results_t search_around(label_t hint, f8_bits_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f8); }
-    search_results_t search_around(label_t hint, f16_bits_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f16); }
-    search_results_t search_around(label_t hint, f32_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f32); }
-    search_results_t search_around(label_t hint, f64_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f64); }
+    search_result_t search_around(label_t hint, f8_bits_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f8); }
+    search_result_t search_around(label_t hint, f16_bits_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f16); }
+    search_result_t search_around(label_t hint, f32_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f32); }
+    search_result_t search_around(label_t hint, f64_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f64); }
 
-    search_results_t search_around(label_t hint, f8_bits_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f8); }
-    search_results_t search_around(label_t hint, f16_bits_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f16); }
-    search_results_t search_around(label_t hint, f32_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f32); }
-    search_results_t search_around(label_t hint, f64_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f64); }
+    search_result_t search_around(label_t hint, f8_bits_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f8); }
+    search_result_t search_around(label_t hint, f16_bits_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f16); }
+    search_result_t search_around(label_t hint, f32_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f32); }
+    search_result_t search_around(label_t hint, f64_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f64); }
 
     void reconstruct(label_t label, f8_bits_t* vector) const { return reconstruct_(label, vector, casts_.to_f8); }
     void reconstruct(label_t label, f16_bits_t* vector) const { return reconstruct_(label, vector, casts_.to_f16); }
     void reconstruct(label_t label, f32_t* vector) const { return reconstruct_(label, vector, casts_.to_f32); }
     void reconstruct(label_t label, f64_t* vector) const { return reconstruct_(label, vector, casts_.to_f64); }
 
-    static punned_gt ip(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make_(dimensions, accuracy, ip_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
-    static punned_gt l2sq(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, config_t config = {}) { return make_(dimensions, accuracy, l2_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
-    static punned_gt cos(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return make_(dimensions, accuracy, cos_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
-    static punned_gt haversine(accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) { return make_(2, accuracy, haversine_metric_(accuracy), make_casts_(accuracy), config); }
+    static punned_gt ip(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, index_config_t config = {}) { return make_(dimensions, accuracy, ip_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
+    static punned_gt l2sq(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, index_config_t config = {}) { return make_(dimensions, accuracy, l2_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
+    static punned_gt cos(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f32_k, index_config_t config = {}) { return make_(dimensions, accuracy, cos_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
+    static punned_gt haversine(accuracy_t accuracy = accuracy_t::f32_k, index_config_t config = {}) { return make_(2, accuracy, haversine_metric_(accuracy), make_casts_(accuracy), config); }
     // clang-format on
 
     static punned_gt udf(                                        //
         std::size_t dimensions, punned_stateful_metric_t metric, //
-        accuracy_t accuracy = accuracy_t::f32_k, config_t config = {}) {
+        accuracy_t accuracy = accuracy_t::f32_k, index_config_t config = {}) {
         return make_(dimensions, accuracy, {metric, isa_t::auto_k}, make_casts_(accuracy), config);
     }
 
@@ -618,7 +618,7 @@ class punned_gt {
     }
 
     template <typename scalar_at>
-    search_results_t search_(                        //
+    search_result_t search_(                        //
         scalar_at const* vector, std::size_t wanted, //
         search_config_t config, cast_t const& cast) const {
 
@@ -634,7 +634,7 @@ class punned_gt {
     }
 
     template <typename scalar_at>
-    search_results_t search_around_(                               //
+    search_result_t search_around_(                               //
         label_t hint, scalar_at const* vector, std::size_t wanted, //
         search_config_t config, cast_t const& cast) const {
 
@@ -672,7 +672,7 @@ class punned_gt {
     }
 
     template <typename scalar_at>
-    search_results_t search_(                        //
+    search_result_t search_(                        //
         scalar_at const* vector, std::size_t wanted, //
         cast_t const& cast) const {
         thread_lock_t lock = thread_lock_();
@@ -682,7 +682,7 @@ class punned_gt {
     }
 
     template <typename scalar_at>
-    search_results_t search_around_(                               //
+    search_result_t search_around_(                               //
         label_t hint, scalar_at const* vector, std::size_t wanted, //
         cast_t const& cast) const {
         thread_lock_t lock = thread_lock_();
@@ -694,23 +694,20 @@ class punned_gt {
     static punned_gt make_(                               //
         std::size_t dimensions, accuracy_t accuracy,      //
         metric_and_meta_t metric_and_meta, casts_t casts, //
-        config_t config) {
+        index_config_t config) {
 
         std::size_t hardware_threads = std::thread::hardware_concurrency();
-        config.max_threads_add = config.max_threads_add ? config.max_threads_add : hardware_threads;
-        config.max_threads_search = config.max_threads_search ? config.max_threads_search : hardware_threads;
-        std::size_t max_threads = (std::max)(config.max_threads_add, config.max_threads_search);
         punned_gt result;
         result.dimensions_ = dimensions;
         result.accuracy_ = accuracy;
         result.casted_vector_bytes_ = bytes_per_scalar(accuracy) * dimensions;
-        result.cast_buffer_.resize(max_threads * result.casted_vector_bytes_);
+        result.cast_buffer_.resize(hardware_threads * result.casted_vector_bytes_);
         result.casts_ = casts;
         result.acceleration_ = metric_and_meta.acceleration;
         result.root_metric_ = metric_and_meta.metric;
 
         // Fill the thread IDs.
-        result.available_threads_.resize(max_threads);
+        result.available_threads_.resize(hardware_threads);
         std::iota(result.available_threads_.begin(), result.available_threads_.end(), 0ul);
 
         // Available since C11, but only C++17, so we use the C version.

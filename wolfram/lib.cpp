@@ -10,23 +10,21 @@ EXTERN_C DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) { r
 EXTERN_C DLLEXPORT void WolframLibrary_uninitialize(WolframLibraryData libData) { return; }
 
 EXTERN_C DLLEXPORT int IndexCreate(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
-    config_t config;
+    index_config_t config;
     char* accuracy_cstr = nullptr;
     char* metric_cstr = nullptr;
     try {
         accuracy_cstr = MArgument_getUTF8String(Args[1]);
         metric_cstr = MArgument_getUTF8String(Args[0]);
-        long dimensions = static_cast<std::size_t>(MArgument_getInteger(Args[2]));
-        config.max_elements = static_cast<std::size_t>(MArgument_getInteger(Args[3]));
+        std::size_t dimensions = static_cast<std::size_t>(MArgument_getInteger(Args[2]));
+        std::size_t capacity = static_cast<std::size_t>(MArgument_getInteger(Args[3]));
         config.connectivity = static_cast<std::size_t>(MArgument_getInteger(Args[4]));
         config.expansion_add = static_cast<std::size_t>(MArgument_getInteger(Args[5]));
         config.expansion_search = static_cast<std::size_t>(MArgument_getInteger(Args[6]));
-        config.max_threads_add = 4;
-        config.max_threads_search = 4;
 
         accuracy_t accuracy = accuracy_from_name(accuracy_cstr, strlen(accuracy_cstr));
-        punned_t index = index_from_name<punned_t>( //
-            metric_cstr, strlen(metric_cstr), dimensions, accuracy, config);
+        punned_t index = index_from_name<punned_t>(metric_cstr, strlen(metric_cstr), dimensions, accuracy, config);
+        index.reserve(capacity);
 
         punned_t* result_ptr = new punned_t(std::move(index));
         MArgument_setInteger(Res, (long)result_ptr);

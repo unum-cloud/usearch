@@ -77,7 +77,7 @@ struct hash_index_py_t : public hash_index_t {
 
     hash_index_py_t(native_t&& base) : native_t(std::move(base)) {}
 
-    hash_index_py_t(config_t config, std::size_t bits) : hash_index_t(config) {
+    hash_index_py_t(index_config_t config, std::size_t bits) : hash_index_t(config) {
         words_ = divide_round_up<bits_per_hash_word_k>(bits);
         bits_ = words_ * bits_per_hash_word_k;
         buffer_.resize(words_);
@@ -116,13 +116,13 @@ static punned_py_t make_index(      //
     std::size_t metric_uintptr,     //
     bool tune) {
 
-    config_t config;
+    index_config_t config;
     config.expansion_add = expansion_add;
     config.expansion_search = expansion_search;
     config.connectivity = connectivity;
-    config.max_elements = capacity;
-    config.max_threads_add = std::thread::hardware_concurrency();
-    config.max_threads_search = std::thread::hardware_concurrency();
+    limits.elements = capacity;
+    limits.threads_add = std::thread::hardware_concurrency();
+    limits.threads_search = std::thread::hardware_concurrency();
 
     if (tune)
         config = punned_t::optimize(config);
@@ -140,13 +140,13 @@ static std::unique_ptr<sets_index_py_t> make_sets_index( //
     std::size_t expansion_add,                           //
     std::size_t expansion_search                         //
 ) {
-    config_t config;
+    index_config_t config;
     config.expansion_add = expansion_add;
     config.expansion_search = expansion_search;
     config.connectivity = connectivity;
-    config.max_elements = capacity;
-    config.max_threads_add = 1;
-    config.max_threads_search = 1;
+    limits.elements = capacity;
+    limits.threads_add = 1;
+    limits.threads_search = 1;
 
     return std::unique_ptr<sets_index_py_t>(new sets_index_py_t(sets_index_t(config)));
 }
@@ -158,13 +158,13 @@ static std::unique_ptr<hash_index_py_t> make_hash_index( //
     std::size_t expansion_add,                           //
     std::size_t expansion_search                         //
 ) {
-    config_t config;
+    index_config_t config;
     config.expansion_add = expansion_add;
     config.expansion_search = expansion_search;
     config.connectivity = connectivity;
-    config.max_elements = capacity;
-    config.max_threads_add = 1;
-    config.max_threads_search = 1;
+    limits.elements = capacity;
+    limits.threads_add = 1;
+    limits.threads_search = 1;
 
     return std::unique_ptr<hash_index_py_t>(new hash_index_py_t(config, bits));
 }

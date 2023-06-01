@@ -128,6 +128,8 @@
         "rtype",
         "simsimd",
         "SLOC",
+        "uninitialize",
+        "unumusearch",
         "usearch",
         "usecases"
     ],

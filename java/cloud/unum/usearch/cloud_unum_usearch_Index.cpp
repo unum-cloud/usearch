@@ -25,13 +25,10 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
     char const* accuracy_cstr{};
     try {
 
-        config_t config;
+        index_config_t config;
         config.expansion_add = static_cast<std::size_t>(expansion_add);
         config.expansion_search = static_cast<std::size_t>(expansion_search);
         config.connectivity = static_cast<std::size_t>(connectivity);
-        config.max_elements = static_cast<std::size_t>(capacity);
-        config.max_threads_add = std::thread::hardware_concurrency();
-        config.max_threads_search = std::thread::hardware_concurrency();
 
         metric_cstr = (*env).GetStringUTFChars(metric, 0);
         std::size_t metric_length = (*env).GetStringUTFLength(metric);
@@ -41,6 +38,7 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
         accuracy_t accuracy = accuracy_from_name(accuracy_cstr, accuracy_length);
         punned_t index = index_from_name<punned_t>( //
             metric_cstr, metric_length, static_cast<std::size_t>(dimensions), accuracy, config);
+        index.reserve(static_cast<std::size_t>(capacity));
 
         punned_t* result_ptr = new punned_t(std::move(index));
         std::memcpy(&result, &result_ptr, sizeof(jlong));

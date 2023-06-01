@@ -63,8 +63,8 @@ std::unique_ptr<Index> wrap(punned_t&& index) {
     return std::unique_ptr<Index>(new Index(native));
 }
 
-config_t config(size_t connectivity, size_t exp_add, size_t exp_search) {
-    config_t result;
+index_config_t config(size_t connectivity, size_t exp_add, size_t exp_search) {
+    index_config_t result;
     result.connectivity = connectivity ? connectivity : default_connectivity();
     result.expansion_add = exp_add ? exp_add : default_expansion_add();
     result.expansion_search = exp_search ? exp_search : default_expansion_search();
