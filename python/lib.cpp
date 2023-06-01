@@ -107,7 +107,6 @@ punned_stateful_metric_t udf(std::size_t metric_uintptr, accuracy_t accuracy) {
 
 static punned_py_t make_index(      //
     std::size_t dimensions,         //
-    std::size_t capacity,           //
     std::string const& scalar_type, //
     std::string const& metric,      //
     std::size_t connectivity,       //
@@ -120,9 +119,6 @@ static punned_py_t make_index(      //
     config.expansion_add = expansion_add;
     config.expansion_search = expansion_search;
     config.connectivity = connectivity;
-    limits.elements = capacity;
-    limits.threads_add = std::thread::hardware_concurrency();
-    limits.threads_search = std::thread::hardware_concurrency();
 
     if (tune)
         config = punned_t::optimize(config);
@@ -130,12 +126,13 @@ static punned_py_t make_index(      //
     accuracy_t accuracy = accuracy_from_name(scalar_type.c_str(), scalar_type.size());
     if (metric_uintptr)
         return punned_t::udf(dimensions, udf(metric_uintptr, accuracy), accuracy, config);
-    else
-        return index_from_name<punned_t>(metric.c_str(), metric.size(), dimensions, accuracy, config);
+    else {
+        common_metric_kind_t metric_kind = common_metric_from_name(metric.c_str(), metric.size());
+        return make_punned<punned_t>(metric_kind, dimensions, accuracy, config);
+    }
 }
 
 static std::unique_ptr<sets_index_py_t> make_sets_index( //
-    std::size_t capacity,                                //
     std::size_t connectivity,                            //
     std::size_t expansion_add,                           //
     std::size_t expansion_search                         //
@@ -144,16 +141,12 @@ static std::unique_ptr<sets_index_py_t> make_sets_index( //
     config.expansion_add = expansion_add;
     config.expansion_search = expansion_search;
     config.connectivity = connectivity;
-    limits.elements = capacity;
-    limits.threads_add = 1;
-    limits.threads_search = 1;
 
     return std::unique_ptr<sets_index_py_t>(new sets_index_py_t(sets_index_t(config)));
 }
 
 static std::unique_ptr<hash_index_py_t> make_hash_index( //
     std::size_t bits,                                    //
-    std::size_t capacity,                                //
     std::size_t connectivity,                            //
     std::size_t expansion_add,                           //
     std::size_t expansion_search                         //
@@ -162,10 +155,6 @@ static std::unique_ptr<hash_index_py_t> make_hash_index( //
     config.expansion_add = expansion_add;
     config.expansion_search = expansion_search;
     config.connectivity = connectivity;
-    limits.elements = capacity;
-    limits.threads_add = 1;
-    limits.threads_search = 1;
-
     return std::unique_ptr<hash_index_py_t>(new hash_index_py_t(config, bits));
 }
 
@@ -203,7 +192,7 @@ static void add_many_to_index(                                 //
     punned_py_t& index, py::buffer labels, py::buffer vectors, //
     bool copy, std::size_t threads) {
 
-    if (index.config().max_threads_add < threads)
+    if (index.limits().threads_add < threads)
         throw std::invalid_argument("Can't use that many threads!");
 
     py::buffer_info labels_info = labels.request();
@@ -338,7 +327,7 @@ static py::tuple search_many_in_index( //
     if (wanted == 0)
         return py::tuple(3);
 
-    if (index.config().max_threads_add < threads)
+    if (index.limits().threads_add < threads)
         throw std::invalid_argument("Can't use that many threads!");
 
     py::buffer_info vectors_info = vectors.request();
@@ -494,7 +483,6 @@ PYBIND11_MODULE(compiled, m) {
     i.def(py::init(&make_index),                                    //
           py::kw_only(),                                            //
           py::arg("ndim") = 0,                                      //
-          py::arg("capacity") = 0,                                  //
           py::arg("dtype") = std::string("f32"),                    //
           py::arg("metric") = std::string("ip"),                    //
           py::arg("connectivity") = default_connectivity(),         //
@@ -552,7 +540,6 @@ PYBIND11_MODULE(compiled, m) {
     si.def(                                                      //
         py::init(&make_sets_index),                              //
         py::kw_only(),                                           //
-        py::arg("capacity") = 0,                                 //
         py::arg("connectivity") = default_connectivity(),        //
         py::arg("expansion_add") = default_expansion_add(),      //
         py::arg("expansion_search") = default_expansion_search() //
@@ -608,7 +595,6 @@ PYBIND11_MODULE(compiled, m) {
         py::init(&make_hash_index),                              //
         py::kw_only(),                                           //
         py::arg("bits"),                                         //
-        py::arg("capacity") = 0,                                 //
         py::arg("connectivity") = default_connectivity(),        //
         py::arg("expansion_add") = default_expansion_add(),      //
         py::arg("expansion_search") = default_expansion_search() //

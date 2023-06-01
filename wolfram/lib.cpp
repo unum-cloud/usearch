@@ -22,8 +22,9 @@ EXTERN_C DLLEXPORT int IndexCreate(WolframLibraryData libData, mint Argc, MArgum
         config.expansion_add = static_cast<std::size_t>(MArgument_getInteger(Args[5]));
         config.expansion_search = static_cast<std::size_t>(MArgument_getInteger(Args[6]));
 
-        accuracy_t accuracy = accuracy_from_name(accuracy_cstr, strlen(accuracy_cstr));
-        punned_t index = index_from_name<punned_t>(metric_cstr, strlen(metric_cstr), dimensions, accuracy, config);
+        accuracy_t accuracy = accuracy_from_name(accuracy_cstr, std::strlen(accuracy_cstr));
+        common_metric_kind_t metric_kind = common_metric_from_name(metric_cstr, std::strlen(metric_cstr));
+        punned_t index = make_punned<punned_t>(metric_kind, dimensions, accuracy, config);
         index.reserve(capacity);
 
         punned_t* result_ptr = new punned_t(std::move(index));

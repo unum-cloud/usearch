@@ -88,7 +88,7 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
     std::size_t dimensions = params.Has("dimensions") ? params.Get("dimensions").As<Napi::Number>().Uint32Value() : 0;
 
     index_config_t config;
-    index_config_t limits;
+    index_limits_t limits;
     if (params.Has("capacity"))
         limits.elements = params.Get("capacity").As<Napi::Number>().Uint32Value();
     if (params.Has("connectivity"))

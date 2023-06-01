@@ -4,6 +4,7 @@
     "description": "Smaller & Faster Single-File Vector Search Engine from Unum",
     "author": "Ashot Vardanian",
     "license": "Apache 2.0",
+    "main": "javascript/usearch.js",
     "repository": {
         "type": "git",
         "url": "https://github.com/unum-cloud/usearch.git"

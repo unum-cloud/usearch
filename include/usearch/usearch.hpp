@@ -6,8 +6,8 @@
  *
  *  @copyright Copyright (c) 2023
  */
-#ifndef UNUM_USEARCH_H
-#define UNUM_USEARCH_H
+#ifndef UNUM_USEARCH_HPP
+#define UNUM_USEARCH_HPP
 
 #if !defined(USEARCH_VERSION_MAJOR)
 #define USEARCH_VERSION_MAJOR 0
@@ -430,7 +430,7 @@ class error_t {
     }
     error_t(error_t&& other) noexcept : message_(exchange(other.message_, nullptr)) {}
     error_t& operator=(error_t&& other) noexcept {
-        message_ = exchange(other.message_, nullptr);
+        std::swap(message_, other.message_);
         return *this;
     }
     explicit operator bool() const noexcept { return message_ != nullptr; }
@@ -463,11 +463,7 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
     using byte_t = typename allocator_t::value_type;
     static_assert(sizeof(byte_t) == 1, "Allocator must allocate separate addressable bytes");
 
-#if defined(USEARCH_IS_WINDOWS)
-    using slot_t = LONGLONG;
-#else
     using slot_t = unsigned long;
-#endif
 
     static constexpr std::size_t bits_per_slot() { return sizeof(slot_t) * CHAR_BIT; }
     static constexpr slot_t bits_mask() { return sizeof(slot_t) * CHAR_BIT - 1; }
@@ -482,7 +478,8 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
     void clear() noexcept { std::memset(slots_, 0, count_ * sizeof(slot_t)); }
 
     void reset() noexcept {
-        allocator_t{}.deallocate((byte_t*)slots_, count_ * sizeof(slot_t)), slots_ = nullptr, count_ = 0;
+        if (slots_)
+            allocator_t{}.deallocate((byte_t*)slots_, count_ * sizeof(slot_t)), slots_ = nullptr, count_ = 0;
     }
 
     bool resize(std::size_t capacity) noexcept {
@@ -522,12 +519,12 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
 
     inline bool atomic_set(std::size_t i) noexcept {
         slot_t mask{1ul << (i & bits_mask())};
-        return InterlockedOr64Acquire((slot_t volatile*)&slots_[i / bits_per_slot()], mask) & mask;
+        return InterlockedOr((long volatile*)&slots_[i / bits_per_slot()], mask) & mask;
     }
 
     inline void atomic_reset(std::size_t i) noexcept {
         slot_t mask{1ul << (i & bits_mask())};
-        InterlockedAnd64Release((slot_t volatile*)&slots_[i / bits_per_slot()], ~mask);
+        InterlockedAnd((long volatile*)&slots_[i / bits_per_slot()], ~mask);
     }
 
 #else
@@ -563,8 +560,8 @@ class max_heap_gt {
 
     using value_type = element_t;
 
-    static_assert(std::is_trivially_destructible<element_t>());
-    static_assert(std::is_trivially_copy_constructible<element_t>());
+    static_assert(std::is_trivially_destructible<element_t>(), "This heap is designed for trivial structs");
+    static_assert(std::is_trivially_copy_constructible<element_t>(), "This heap is designed for trivial structs");
 
   private:
     element_t* elements_;
@@ -698,6 +695,9 @@ class sorted_buffer_gt {
     using comparator_t = comparator_at;
     using allocator_t = allocator_at;
 
+    static_assert(std::is_trivially_destructible<element_t>(), "This heap is designed for trivial structs");
+    static_assert(std::is_trivially_copy_constructible<element_t>(), "This heap is designed for trivial structs");
+
     using value_type = element_t;
 
   private:
@@ -725,7 +725,8 @@ class sorted_buffer_gt {
 
     ~sorted_buffer_gt() {
         clear();
-        allocator_t{}.deallocate(elements_, capacity_);
+        if (elements_)
+            allocator_t{}.deallocate(elements_, capacity_);
     }
 
     bool empty() const noexcept { return !size_; }
@@ -935,6 +936,17 @@ struct search_config_t {
     bool exact{};
 };
 
+enum class common_metric_kind_t : std::uint8_t {
+    unknown_k = 0,
+    ip_k = 'i',
+    cos_k = 'c',
+    l2sq_k = 'e',
+    jaccard_k = 'j',
+    hamming_k = 'h',
+    pearson_k = 'p',
+    haversine_k = 'h',
+};
+
 using file_header_t = byte_t[64];
 
 /**
@@ -949,17 +961,6 @@ struct file_head_t {
     using version_minor_t = std::uint16_t;
     using version_patch_t = std::uint16_t;
 
-    enum metric_t : std::uint8_t {
-        unknown_k = 0,
-        ip_k = 'i',
-        cos_k = 'c',
-        l2sq_k = 'e',
-        jaccard_k = 'j',
-        hamming_k = 'h',
-        pearson_k = 'p',
-        haversine_k = 'h',
-    };
-
     using connectivity_t = std::uint8_t;
     using max_level_t = std::uint8_t;
     using vector_alignment_t = std::uint8_t;
@@ -972,7 +973,7 @@ struct file_head_t {
     misaligned_ref_gt<version_major_t> version_major;
     misaligned_ref_gt<version_minor_t> version_minor;
     misaligned_ref_gt<version_patch_t> version_patch;
-    misaligned_ref_gt<metric_t> metric;
+    misaligned_ref_gt<common_metric_kind_t> metric;
     misaligned_ref_gt<connectivity_t> connectivity;
     misaligned_ref_gt<max_level_t> max_level;
     misaligned_ref_gt<vector_alignment_t> vector_alignment;
@@ -985,7 +986,8 @@ struct file_head_t {
         : magic((char const*)exchange(ptr, ptr + sizeof(magic_t))),
           version_major(exchange(ptr, ptr + sizeof(version_major_t))),
           version_minor(exchange(ptr, ptr + sizeof(version_minor_t))),
-          version_patch(exchange(ptr, ptr + sizeof(version_patch_t))), metric(exchange(ptr, ptr + sizeof(metric_t))),
+          version_patch(exchange(ptr, ptr + sizeof(version_patch_t))),
+          metric(exchange(ptr, ptr + sizeof(common_metric_kind_t))),
           connectivity(exchange(ptr, ptr + sizeof(connectivity_t))),
           max_level(exchange(ptr, ptr + sizeof(max_level_t))),
           vector_alignment(exchange(ptr, ptr + sizeof(vector_alignment_t))),
@@ -1310,6 +1312,7 @@ class index_gt {
     std::size_t size() const noexcept { return size_; }
     std::size_t max_level() const noexcept { return static_cast<std::size_t>(max_level_); }
     index_config_t const& config() const noexcept { return config_; }
+    index_limits_t const& limits() const noexcept { return limits_; }
     bool is_immutable() const noexcept { return viewed_file_descriptor_ != 0; }
 
     /**
@@ -1364,8 +1367,10 @@ class index_gt {
     void reset() noexcept {
         clear();
 
-        node_allocator_t{}.deallocate(exchange(nodes_, nullptr), limits_.elements);
-        context_allocator_t{}.deallocate(exchange(contexts_, nullptr), limits_.threads());
+        if (nodes_)
+            node_allocator_t{}.deallocate(exchange(nodes_, nullptr), limits_.elements);
+        if (contexts_)
+            context_allocator_t{}.deallocate(exchange(contexts_, nullptr), limits_.threads());
         limits_ = index_limits_t{0, 0};
         capacity_ = 0;
     }
@@ -1447,6 +1452,7 @@ class index_gt {
         context_allocator.deallocate(contexts_, limits_.threads());
 
         limits_ = limits;
+        capacity_ = limits.elements;
         nodes_ = new_nodes;
         contexts_ = new_contexts;
         return true;
@@ -1466,8 +1472,7 @@ class index_gt {
     }
 
     /**
-     *  @brief  Validates/normalizes the configuration options and throws an exception
-     *          if those are incorrect.
+     *  @brief  Validates/normalizes the configuration options.
      */
     static index_config_t normalize(index_config_t config) noexcept {
         config.expansion_add = (std::max<std::size_t>)(config.expansion_add, config.connectivity);
@@ -1769,7 +1774,7 @@ class index_gt {
         state.version_major = USEARCH_VERSION_MAJOR;
         state.version_minor = USEARCH_VERSION_MINOR;
         state.version_patch = USEARCH_VERSION_PATCH;
-        state.metric = file_head_t::unknown_k;
+        state.metric = common_metric_kind_t::unknown_k;
 
         // Describe state
         state.connectivity = config_.connectivity;
@@ -1780,7 +1785,7 @@ class index_gt {
         state.size = size_;
         state.entry_idx = entry_id_;
 
-        std::FILE* file = std::fopen(file_path, "w");
+        std::FILE* file = std::fopen(file_path, "wb");
         if (!file)
             return result.failed(std::strerror(errno));
 
@@ -1824,7 +1829,7 @@ class index_gt {
 
         serialization_result_t result;
         file_header_t state_buffer{};
-        std::FILE* file = std::fopen(file_path, "r");
+        std::FILE* file = std::fopen(file_path, "rb");
         if (!file)
             return result.failed(std::strerror(errno));
 

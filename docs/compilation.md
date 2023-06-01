@@ -95,8 +95,7 @@ python python/scripts/bench_params.py connectivity
 ## JavaScript
 
 ```sh
-npm install
-node javascript/test.js
+npm install && node javascript/test.js
 npm publish
 ```
 
@@ -146,6 +145,14 @@ java -cp . -Djava.library.path=/Users/av/github/usearch/java cloud.unum.usearch.
 
 ```sh
 brew install --cask wolfram-engine
+```
+
+## C
+
+### Linux
+
+```sh
+g++ -shared -fPIC lib.cpp -I ../include/  -I ../fp16/include/ -o libusearch.so
 ```
 
 ## Docker

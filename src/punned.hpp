@@ -1,6 +1,7 @@
 #pragma once
 #include <stdlib.h> // `aligned_alloc`
 
+#include <cstring>      // `std::strncmp`
 #include <functional>   // `std::function`
 #include <numeric>      // `std::iota`
 #include <shared_mutex> // `std::shared_mutex`
@@ -268,12 +269,12 @@ inline char const* accuracy_name(accuracy_t accuracy) {
 }
 
 inline bool str_equals(char const* begin, std::size_t len, char const* other_begin) {
-    std::size_t other_len = strlen(other_begin);
-    return len == other_len && strncmp(begin, other_begin, len) == 0;
+    std::size_t other_len = std::strlen(other_begin);
+    return len == other_len && std::strncmp(begin, other_begin, len) == 0;
 }
 
 inline accuracy_t accuracy_from_name(char const* name, std::size_t len) {
-    accuracy_t accuracy;
+    accuracy_t accuracy{};
     if (str_equals(name, len, "f32"))
         accuracy = accuracy_t::f32_k;
     else if (str_equals(name, len, "f64"))
@@ -287,28 +288,47 @@ inline accuracy_t accuracy_from_name(char const* name, std::size_t len) {
     return accuracy;
 }
 
-template <typename index_at>
-inline index_at index_from_name( //
-    char const* name, std::size_t len, std::size_t dimensions, accuracy_t accuracy, index_config_t const& config) {
-
+inline common_metric_kind_t common_metric_from_name(char const* name, std::size_t len) {
+    common_metric_kind_t metric{};
     if (str_equals(name, len, "l2sq") || str_equals(name, len, "euclidean_sq")) {
+        metric = common_metric_kind_t::l2sq_k;
+    } else if (str_equals(name, len, "ip") || str_equals(name, len, "inner") || str_equals(name, len, "dot")) {
+        metric = common_metric_kind_t::ip_k;
+    } else if (str_equals(name, len, "cos") || str_equals(name, len, "angular")) {
+        metric = common_metric_kind_t::cos_k;
+    } else if (str_equals(name, len, "haversine")) {
+        metric = common_metric_kind_t::haversine_k;
+    } else if (str_equals(name, len, "hamming")) {
+        metric = common_metric_kind_t::hamming_k;
+    } else if (str_equals(name, len, "pearson")) {
+        metric = common_metric_kind_t::pearson_k;
+    } else
+        throw std::invalid_argument("Unknown distance, choose: l2sq, ip, cos, haversine, hamming, jaccard, pearson");
+    return metric;
+}
+
+template <typename index_at>
+index_at make_punned( //
+    common_metric_kind_t metric, std::size_t dimensions, accuracy_t accuracy, index_config_t const& config) {
+
+    if (metric == common_metric_kind_t::l2sq_k) {
         if (dimensions == 0)
             throw std::invalid_argument("The number of dimensions must be positive");
         return index_at::l2sq(dimensions, accuracy, config);
-    } else if (str_equals(name, len, "ip") || str_equals(name, len, "inner") || str_equals(name, len, "dot")) {
+    } else if (metric == common_metric_kind_t::ip_k) {
         if (dimensions == 0)
             throw std::invalid_argument("The number of dimensions must be positive");
         return index_at::ip(dimensions, accuracy, config);
-    } else if (str_equals(name, len, "cos") || str_equals(name, len, "angular")) {
+    } else if (metric == common_metric_kind_t::cos_k) {
         if (dimensions == 0)
             throw std::invalid_argument("The number of dimensions must be positive");
         return index_at::cos(dimensions, accuracy, config);
-    } else if (str_equals(name, len, "haversine")) {
+    } else if (metric == common_metric_kind_t::haversine_k) {
         if (dimensions != 2 && dimensions != 0)
             throw std::invalid_argument("The number of dimensions must be equal to two");
         return index_at::haversine(accuracy, config);
     } else
-        throw std::invalid_argument("Unknown distance, choose: l2sq, ip, cos, hamming, jaccard");
+        throw std::invalid_argument("Type-punned index only supports: l2sq, ip, cos, haversine");
     return {};
 }
 
@@ -469,6 +489,7 @@ class punned_gt {
     std::size_t size() const { return typed_->size(); }
     std::size_t capacity() const { return typed_->capacity(); }
     index_config_t const& config() const { return typed_->config(); }
+    index_limits_t const& limits() const { return typed_->limits(); }
     void clear() { return typed_->clear(); }
     void change_expansion_add(std::size_t n) noexcept { typed_->change_expansion_add(n); }
     void change_expansion_search(std::size_t n) noexcept { typed_->change_expansion_search(n); }
@@ -618,7 +639,7 @@ class punned_gt {
     }
 
     template <typename scalar_at>
-    search_result_t search_(                        //
+    search_result_t search_(                         //
         scalar_at const* vector, std::size_t wanted, //
         search_config_t config, cast_t const& cast) const {
 
@@ -634,7 +655,7 @@ class punned_gt {
     }
 
     template <typename scalar_at>
-    search_result_t search_around_(                               //
+    search_result_t search_around_(                                //
         label_t hint, scalar_at const* vector, std::size_t wanted, //
         search_config_t config, cast_t const& cast) const {
 
@@ -672,7 +693,7 @@ class punned_gt {
     }
 
     template <typename scalar_at>
-    search_result_t search_(                        //
+    search_result_t search_(                         //
         scalar_at const* vector, std::size_t wanted, //
         cast_t const& cast) const {
         thread_lock_t lock = thread_lock_();
@@ -682,7 +703,7 @@ class punned_gt {
     }
 
     template <typename scalar_at>
-    search_result_t search_around_(                               //
+    search_result_t search_around_(                                //
         label_t hint, scalar_at const* vector, std::size_t wanted, //
         cast_t const& cast) const {
         thread_lock_t lock = thread_lock_();
