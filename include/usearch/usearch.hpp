@@ -100,12 +100,14 @@
 
 // Debugging
 #if defined(NDEBUG)
-#define assert_m(must_be_true, message)
+#define usearch_assert_m(must_be_true, message)
+#define usearch_noexcept_m noexcept
 #else
-#define assert_m(must_be_true, message)                                                                                \
+#define usearch_assert_m(must_be_true, message)                                                                        \
     if (!(must_be_true)) {                                                                                             \
         throw std::runtime_error(message);                                                                             \
     }
+#define usearch_noexcept_m
 #endif
 
 namespace unum {
@@ -1395,9 +1397,9 @@ class index_gt {
      *  @brief  Increases the `capacity()` of the index to allow adding more vectors.
      *  @return `true` on success, `false` on memory allocation errors.
      */
-    bool reserve(index_limits_t limits) noexcept {
+    bool reserve(index_limits_t limits) usearch_noexcept_m {
 
-        assert_m(limits.elements >= size_, "Can't drop existing values");
+        usearch_assert_m(limits.elements >= size_, "Can't drop existing values");
 
         if (!nodes_mutexes_.resize(limits.elements))
             return false;
@@ -1542,9 +1544,9 @@ class index_gt {
      *  @param[in] vector Contiguous range of scalars forming a vector view.
      *  @param[in] config Configuration options for this specific operation.
      */
-    add_result_t add(label_t label, vector_view_t vector, add_config_t config = {}) noexcept {
+    add_result_t add(label_t label, vector_view_t vector, add_config_t config = {}) usearch_noexcept_m {
 
-        assert_m(!is_immutable(), "Can't add to an immutable index");
+        usearch_assert_m(!is_immutable(), "Can't add to an immutable index");
         add_result_t result;
         result.new_size = size_.fetch_add(1);
         id_t new_id = result.id = static_cast<id_t>(result.new_size);
@@ -2055,7 +2057,7 @@ class index_gt {
         return {nodes_mutexes_, idx};
     }
 
-    id_t connect_new_node_(id_t new_id, level_t level, context_t& context) noexcept {
+    id_t connect_new_node_(id_t new_id, level_t level, context_t& context) usearch_noexcept_m {
 
         node_t new_node = node_with_id_(new_id);
         top_candidates_t& top = context.top_candidates;
@@ -2064,12 +2066,12 @@ class index_gt {
         // Outgoing links from `new_id`:
         neighbors_ref_t new_neighbors = neighbors_(new_node, level);
         {
-            assert_m(!new_neighbors.size(), "The newly inserted element should have blank link list");
+            usearch_assert_m(!new_neighbors.size(), "The newly inserted element should have blank link list");
             candidates_view_t top_view = refine_(top, config_.connectivity, context);
 
             for (std::size_t idx = 0; idx != top_view.size(); idx++) {
-                assert_m(!new_neighbors[idx], "Possible memory corruption");
-                assert_m(level <= node_with_id_(top_view[idx].id).level(), "Linking to missing level");
+                usearch_assert_m(!new_neighbors[idx], "Possible memory corruption");
+                usearch_assert_m(level <= node_with_id_(top_view[idx].id).level(), "Linking to missing level");
                 new_neighbors.push_back(top_view[idx].id);
             }
         }
@@ -2080,9 +2082,9 @@ class index_gt {
             node_lock_t close_lock = node_lock_(close_id);
 
             neighbors_ref_t close_header = neighbors_(close_node, level);
-            assert_m(close_header.size() <= connectivity_max, "Possible corruption");
-            assert_m(close_id != new_id, "Self-loops are impossible");
-            assert_m(level <= close_node.level(), "Linking to missing level");
+            usearch_assert_m(close_header.size() <= connectivity_max, "Possible corruption");
+            usearch_assert_m(close_id != new_id, "Self-loops are impossible");
+            usearch_assert_m(level <= close_node.level(), "Linking to missing level");
 
             // If `new_id` is already present in the neighboring connections of `close_id`
             // then no need to modify any connections or run the heuristics.
