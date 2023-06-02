@@ -31,6 +31,9 @@ using distance_t = punned_distance_t;
 using id_t = std::uint32_t;
 using punned_t = punned_gt<label_t, id_t>;
 
+using add_result_t = typename punned_t::add_result_t;
+using search_result_t = typename punned_t::search_result_t;
+
 struct punned_py_t : public punned_t {
     using native_t = punned_t;
     using native_t::add;
@@ -128,7 +131,7 @@ static punned_py_t make_index(      //
         return punned_t::udf(dimensions, udf(metric_uintptr, accuracy), accuracy, config);
     else {
         common_metric_kind_t metric_kind = common_metric_from_name(metric.c_str(), metric.size());
-        return make_punned<punned_t>(metric_kind, dimensions, accuracy, config);
+        return punned_t(make_punned<punned_t>(metric_kind, dimensions, accuracy, config));
     }
 }
 
@@ -177,13 +180,13 @@ static void add_one_to_index(punned_py_t& index, label_t label, py::buffer vecto
 
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vector_info.format == "c" || vector_info.format == "b")
-        index.add(label, reinterpret_cast<f8_bits_t const*>(vector_data), config);
+        index.add(label, reinterpret_cast<f8_bits_t const*>(vector_data), config).error.raise();
     else if (vector_info.format == "e")
-        index.add(label, reinterpret_cast<f16_bits_t const*>(vector_data), config);
+        index.add(label, reinterpret_cast<f16_bits_t const*>(vector_data), config).error.raise();
     else if (vector_info.format == "f" || vector_info.format == "f4" || vector_info.format == "<f4")
-        index.add(label, reinterpret_cast<float const*>(vector_data), config);
+        index.add(label, reinterpret_cast<float const*>(vector_data), config).error.raise();
     else if (vector_info.format == "d" || vector_info.format == "f8" || vector_info.format == "<f8")
-        index.add(label, reinterpret_cast<double const*>(vector_data), config);
+        index.add(label, reinterpret_cast<double const*>(vector_data), config).error.raise();
     else
         throw std::invalid_argument("Incompatible scalars in the vector!");
 }
@@ -231,7 +234,7 @@ static void add_many_to_index(                                 //
             label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
             f8_bits_t const* vector =
                 reinterpret_cast<f8_bits_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, config);
+            index.add(label, vector, config).error.raise();
         });
     else if (vectors_info.format == "e")
         multithreaded(threads, vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
@@ -241,7 +244,7 @@ static void add_many_to_index(                                 //
             label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
             f16_bits_t const* vector =
                 reinterpret_cast<f16_bits_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, config);
+            index.add(label, vector, config).error.raise();
         });
     else if (vectors_info.format == "f" || vectors_info.format == "f4" || vectors_info.format == "<f4")
         multithreaded(threads, vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
@@ -250,7 +253,7 @@ static void add_many_to_index(                                 //
             config.thread = thread_idx;
             label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
             float const* vector = reinterpret_cast<float const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, config);
+            index.add(label, vector, config).error.raise();
         });
     else if (vectors_info.format == "d" || vectors_info.format == "f8" || vectors_info.format == "<f8")
         multithreaded(threads, vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
@@ -259,7 +262,7 @@ static void add_many_to_index(                                 //
             config.thread = thread_idx;
             label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
             double const* vector = reinterpret_cast<double const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, config);
+            index.add(label, vector, config).error.raise();
         });
     else
         throw std::invalid_argument("Incompatible scalars in the vectors matrix!");
@@ -283,23 +286,23 @@ static py::tuple search_one_in_index(punned_py_t& index, py::buffer vector, std:
     config.exact = exact;
 
     // https://docs.python.org/3/library/struct.html#format-characters
-    if (vector_info.format == "c" || vector_info.format == "b")
-        count = index //
-                    .search(reinterpret_cast<f8_bits_t const*>(vector_data), wanted, config)
-                    .dump_to(&labels_py1d(0), &distances_py1d(0));
-    else if (vector_info.format == "e")
-        count = index //
-                    .search(reinterpret_cast<f16_bits_t const*>(vector_data), wanted, config)
-                    .dump_to(&labels_py1d(0), &distances_py1d(0));
-    else if (vector_info.format == "f" || vector_info.format == "f4" || vector_info.format == "<f4")
-        count = index //
-                    .search(reinterpret_cast<float const*>(vector_data), wanted, config)
-                    .dump_to(&labels_py1d(0), &distances_py1d(0));
-    else if (vector_info.format == "d" || vector_info.format == "f8" || vector_info.format == "<f8")
-        count = index //
-                    .search(reinterpret_cast<double const*>(vector_data), wanted, config)
-                    .dump_to(&labels_py1d(0), &distances_py1d(0));
-    else
+    if (vector_info.format == "c" || vector_info.format == "b") {
+        search_result_t result = index.search(reinterpret_cast<f8_bits_t const*>(vector_data), wanted, config);
+        result.error.raise();
+        count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
+    } else if (vector_info.format == "e") {
+        search_result_t result = index.search(reinterpret_cast<f16_bits_t const*>(vector_data), wanted, config);
+        result.error.raise();
+        count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
+    } else if (vector_info.format == "f" || vector_info.format == "f4" || vector_info.format == "<f4") {
+        search_result_t result = index.search(reinterpret_cast<float const*>(vector_data), wanted, config);
+        result.error.raise();
+        count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
+    } else if (vector_info.format == "d" || vector_info.format == "f8" || vector_info.format == "<f8") {
+        search_result_t result = index.search(reinterpret_cast<double const*>(vector_data), wanted, config);
+        result.error.raise();
+        count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
+    } else
         throw std::invalid_argument("Incompatible scalars in the query vector!");
 
     labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(count)});
@@ -356,8 +359,10 @@ static py::tuple search_many_in_index( //
             config.thread = thread_idx;
             config.exact = exact;
             f8_bits_t const* vector = (f8_bits_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
-            counts_py1d(task_idx) = static_cast<Py_ssize_t>(
-                index.search(vector, wanted, config).dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
+            search_result_t result = index.search(vector, wanted, config);
+            result.error.raise();
+            counts_py1d(task_idx) =
+                static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
     else if (vectors_info.format == "e")
         multithreaded(threads, vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
@@ -365,8 +370,10 @@ static py::tuple search_many_in_index( //
             config.thread = thread_idx;
             config.exact = exact;
             f16_bits_t const* vector = (f16_bits_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
-            counts_py1d(task_idx) = static_cast<Py_ssize_t>(
-                index.search(vector, wanted, config).dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
+            search_result_t result = index.search(vector, wanted, config);
+            result.error.raise();
+            counts_py1d(task_idx) =
+                static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
     else if (vectors_info.format == "f" || vectors_info.format == "f4" || vectors_info.format == "<f4")
         multithreaded(threads, vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
@@ -374,8 +381,10 @@ static py::tuple search_many_in_index( //
             config.thread = thread_idx;
             config.exact = exact;
             float const* vector = (float const*)(vectors_data + task_idx * vectors_info.strides[0]);
-            counts_py1d(task_idx) = static_cast<Py_ssize_t>(
-                index.search(vector, wanted, config).dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
+            search_result_t result = index.search(vector, wanted, config);
+            result.error.raise();
+            counts_py1d(task_idx) =
+                static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
     else if (vectors_info.format == "d" || vectors_info.format == "f8" || vectors_info.format == "<f8")
         multithreaded(threads, vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
@@ -383,8 +392,10 @@ static py::tuple search_many_in_index( //
             config.thread = thread_idx;
             config.exact = exact;
             double const* vector = (double const*)(vectors_data + task_idx * vectors_info.strides[0]);
-            counts_py1d(task_idx) = static_cast<Py_ssize_t>(
-                index.search(vector, wanted, config).dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
+            search_result_t result = index.search(vector, wanted, config);
+            result.error.raise();
+            counts_py1d(task_idx) =
+                static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
     else
         throw std::invalid_argument("Incompatible scalars in the query matrix!");

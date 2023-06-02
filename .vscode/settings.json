@@ -99,7 +99,8 @@
         "__availability": "cpp",
         "version": "cpp",
         "future": "cpp",
-        "__verbose_abort": "cpp"
+        "__verbose_abort": "cpp",
+        "shared_mutex": "cpp"
     },
     "cSpell.words": [
         "astype",

@@ -73,7 +73,6 @@ template <typename scalar_at, typename index_at> void test3d(index_at&& index) {
 template <typename scalar_at, typename index_at> void test3d_punned(index_at&& index) {
     using view_t = span_gt<scalar_at const>;
     using span_t = span_gt<scalar_at>;
-    using distance_t = typename index_at::distance_t;
 
     scalar_at vec[3] = {10, 20, 15};
 

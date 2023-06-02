@@ -50,7 +50,13 @@
             "stopAtEntry": false,
             "linux": {
                 "preLaunchTask": "Linux Build C++ Bench Debug",
-                "MIMode": "gdb"
+                "MIMode": "gdb",
+                "environment": [
+                    {
+                        "name": "MALLOC_CHECK_",
+                        "value": "2"
+                    }
+                ]
             },
             "osx": {
                 "preLaunchTask": "MacOS Build C++ Bench Debug",

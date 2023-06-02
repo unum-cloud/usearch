@@ -439,19 +439,38 @@ class error_t {
     ~error_t() noexcept(false) {
         if (message_)
             if (!std::uncaught_exception())
-                throw_or_terminate();
+                raise();
     }
-    void throw_or_terminate() noexcept(false) {
+    void raise() noexcept(false) {
         if (message_)
             throw std::runtime_error(exchange(message_, nullptr));
     }
 #else
-    ~error_t() noexcept { throw_or_terminate(); }
-    void throw_or_terminate() noexcept {
+    ~error_t() noexcept { raise(); }
+    void raise() noexcept {
         if (message_)
             std::terminate();
     }
 #endif
+};
+
+template <typename result_at> struct expected_gt {
+    result_at result;
+    error_t error;
+
+    operator result_at&() & {
+        error.raise();
+        return result;
+    }
+    operator result_at&&() && {
+        error.raise();
+        return std::move(result);
+    }
+    explicit operator bool() const noexcept { return !error; }
+    expected_gt failed(char const* message) noexcept {
+        error = message;
+        return std::move(*this);
+    }
 };
 
 /**
@@ -586,19 +605,23 @@ class max_heap_gt {
     max_heap_gt(max_heap_gt const&) = delete;
     max_heap_gt& operator=(max_heap_gt const&) = delete;
 
-    bool empty() const noexcept { return !size_; }
-    std::size_t size() const noexcept { return size_; }
-    std::size_t capacity() const noexcept { return capacity_; }
+    ~max_heap_gt() noexcept { reset(); }
+
+    void reset() noexcept {
+        if (elements_)
+            allocator_t{}.deallocate(elements_, capacity_);
+        elements_ = nullptr;
+        capacity_ = 0;
+        size_ = 0;
+    }
+
+    inline bool empty() const noexcept { return !size_; }
+    inline std::size_t size() const noexcept { return size_; }
+    inline std::size_t capacity() const noexcept { return capacity_; }
     /// @brief  Selects the largest element in the heap.
     /// @return Reference to the stored element.
-    element_t const& top() const noexcept { return elements_[0]; }
-
-    void clear() noexcept {
-        while (size_) {
-            size_--;
-            elements_[size_].~element_t();
-        }
-    }
+    inline element_t const& top() const noexcept { return elements_[0]; }
+    inline void clear() noexcept { size_ = 0; }
 
     bool reserve(std::size_t new_capacity) noexcept {
         if (new_capacity < capacity_)
@@ -612,7 +635,7 @@ class max_heap_gt {
             return false;
 
         if (elements_) {
-            std::uninitialized_copy_n(elements_, size_, new_elements);
+            std::memcpy(new_elements, elements_, size_ * sizeof(element_t));
             allocator.deallocate(elements_, capacity_);
         }
         elements_ = new_elements;
@@ -620,23 +643,21 @@ class max_heap_gt {
         return new_elements;
     }
 
-    template <typename... args_at> //
-    bool emplace(args_at&&... args) noexcept {
+    bool insert(element_t&& element) noexcept {
         if (!reserve(size_ + 1))
             return false;
 
-        emplace_reserved(std::forward<args_at>(args)...);
+        insert_reserved(std::move(element));
         return true;
     }
 
-    template <typename... args_at> //
-    void emplace_reserved(args_at&&... args) noexcept {
-        new (&elements_[size_]) element_t({std::forward<args_at>(args)...});
+    inline void insert_reserved(element_t&& element) noexcept {
+        new (&elements_[size_]) element_t(element);
         size_++;
         shift_up(size_ - 1);
     }
 
-    element_t pop() noexcept {
+    inline element_t pop() noexcept {
         element_t result = top();
         std::swap(elements_[0], elements_[size_ - 1]);
         size_--;
@@ -646,11 +667,11 @@ class max_heap_gt {
     }
 
     /** @brief Invalidates the "max-heap" property, transforming into ascending range. */
-    void sort_ascending() noexcept { std::sort_heap(elements_, elements_ + size_, &less); }
-    void shrink(std::size_t n) noexcept { size_ = (std::min<std::size_t>)(n, size_); }
+    inline void sort_ascending() noexcept { std::sort_heap(elements_, elements_ + size_, &less); }
+    inline void shrink(std::size_t n) noexcept { size_ = (std::min<std::size_t>)(n, size_); }
 
-    element_t* data() noexcept { return elements_; }
-    element_t const* data() const noexcept { return elements_; }
+    inline element_t* data() noexcept { return elements_; }
+    inline element_t const* data() const noexcept { return elements_; }
 
   private:
     inline std::size_t parent_idx(std::size_t i) const noexcept { return (i - 1u) / 2u; }
@@ -723,21 +744,21 @@ class sorted_buffer_gt {
     sorted_buffer_gt(sorted_buffer_gt const&) = delete;
     sorted_buffer_gt& operator=(sorted_buffer_gt const&) = delete;
 
-    ~sorted_buffer_gt() {
-        clear();
+    ~sorted_buffer_gt() noexcept { reset(); }
+
+    void reset() noexcept {
         if (elements_)
             allocator_t{}.deallocate(elements_, capacity_);
+        elements_ = nullptr;
+        capacity_ = 0;
+        size_ = 0;
     }
 
-    bool empty() const noexcept { return !size_; }
-    std::size_t size() const noexcept { return size_; }
-    std::size_t capacity() const noexcept { return capacity_; }
-    element_t const& top() const noexcept { return elements_[size_ - 1]; }
-
-    void clear() noexcept {
-        while (size_)
-            size_--, elements_[size_].~element_t();
-    }
+    inline bool empty() const noexcept { return !size_; }
+    inline std::size_t size() const noexcept { return size_; }
+    inline std::size_t capacity() const noexcept { return capacity_; }
+    inline element_t const& top() const noexcept { return elements_[size_ - 1]; }
+    inline void clear() noexcept { size_ = 0; }
 
     bool reserve(std::size_t new_capacity) noexcept {
         if (new_capacity < capacity_)
@@ -751,7 +772,7 @@ class sorted_buffer_gt {
             return false;
 
         if (size_) {
-            std::uninitialized_copy_n(elements_, size_, new_elements);
+            std::memcpy(new_elements, elements_, size_ * sizeof(element_t));
             allocator.deallocate(elements_, capacity_);
         }
         elements_ = new_elements;
@@ -759,8 +780,7 @@ class sorted_buffer_gt {
         return true;
     }
 
-    template <typename... args_at> void emplace_reserved(args_at&&... args) {
-        element_t element({std::forward<args_at>(args)...});
+    inline void insert_reserved(element_t&& element) noexcept {
         std::size_t slot = std::lower_bound(elements_, elements_ + size_, element, &less) - elements_;
         std::size_t to_move = size_ - slot;
         element_t* source = elements_ + size_ - 1;
@@ -773,21 +793,20 @@ class sorted_buffer_gt {
     /**
      *  @return `true` if the entry was added, `false` if it wasn't relevant enough.
      */
-    template <typename... args_at> bool emplace(args_at&&... args) noexcept {
-        element_t element({std::forward<args_at>(args)...});
+    inline bool insert(element_t&& element, std::size_t limit) noexcept {
         std::size_t slot = std::lower_bound(elements_, elements_ + size_, element, &less) - elements_;
-        if (slot == capacity_)
+        if (slot == limit)
             return false;
-        std::size_t to_move = size_ - slot - (size_ == capacity_);
-        element_t* source = elements_ + size_ - 1 - (size_ == capacity_);
+        std::size_t to_move = size_ - slot - (size_ == limit);
+        element_t* source = elements_ + size_ - 1 - (size_ == limit);
         for (; to_move; --to_move, --source)
             source[1] = source[0];
         elements_[slot] = element;
-        size_ += size_ != capacity_;
+        size_ += size_ != limit;
         return true;
     }
 
-    element_t pop() noexcept {
+    inline element_t pop() noexcept {
         size_--;
         element_t result = elements_[size_];
         elements_[size_].~element_t();
@@ -795,10 +814,10 @@ class sorted_buffer_gt {
     }
 
     void sort_ascending() noexcept {}
-    void shrink(std::size_t n) noexcept { size_ = (std::min<std::size_t>)(n, size_); }
+    inline void shrink(std::size_t n) noexcept { size_ = (std::min<std::size_t>)(n, size_); }
 
-    element_t* data() noexcept { return elements_; }
-    element_t const* data() const noexcept { return elements_; }
+    inline element_t* data() noexcept { return elements_; }
+    inline element_t const* data() const noexcept { return elements_; }
 
   private:
     static bool less(element_t const& a, element_t const& b) noexcept { return comparator_t{}(a, b); }
@@ -918,8 +937,8 @@ struct index_limits_t {
     std::size_t threads_add = std::thread::hardware_concurrency();
     std::size_t threads_search = std::thread::hardware_concurrency();
 
-    index_limits_t(std::size_t n, std::size_t t) : elements(n), threads_add(t), threads_search(t) {}
-    index_limits_t(std::size_t n = 0) : index_limits_t(n, std::thread::hardware_concurrency()) {}
+    index_limits_t(std::size_t n, std::size_t t) noexcept : elements(n), threads_add(t), threads_search(t) {}
+    index_limits_t(std::size_t n = 0) noexcept : index_limits_t(n, std::thread::hardware_concurrency()) {}
     std::size_t threads() const noexcept { return (std::max)(threads_add, threads_search); }
     std::size_t concurrency() const noexcept { return (std::min)(threads_add, threads_search); }
 };
@@ -1553,24 +1572,40 @@ class index_gt {
 
         usearch_assert_m(!is_immutable(), "Can't add to an immutable index");
         add_result_t result;
-        result.new_size = size_.fetch_add(1);
-        id_t new_id = result.id = static_cast<id_t>(result.new_size);
 
-        // Determining how much memory to allocate depends on the target level
+        // Make sure we have enough local memory to perform this request
+        context_t& context = contexts_[config.thread];
+        top_candidates_t& top = context.top_candidates;
+        next_candidates_t& next = context.next_candidates;
+        top.clear();
+        next.clear();
+
+        // The top list needs one more slot than the connectivity of the base level
+        // for the heurstic, that tries to squeeze one more element into saturated list.
+        std::size_t top_limit = (std::max)(base_level_multiple_() * config_.connectivity + 1, config_.expansion_add);
+        if (!top.reserve(top_limit))
+            return result.failed("Out of memory!");
+        if (!next.reserve(config_.expansion_add))
+            return result.failed("Out of memory!");
+
+        // Determining how much memory to allocate for the node depends on the target level
         std::unique_lock<std::mutex> new_level_lock(global_mutex_);
         level_t max_level_copy = max_level_; // Copy under lock
         id_t entry_id_copy = entry_id_;      // Copy under lock
-        context_t& context = contexts_[config.thread];
         level_t target_level = choose_random_level_(context.level_generator);
         if (target_level <= max_level_copy)
             new_level_lock.unlock();
 
         // Allocate the neighbors
-        node_t node = nodes_[result.new_size] = node_malloc_(label, vector, target_level, config.store_vector);
+        node_t node = node_malloc_(label, vector, target_level, config.store_vector);
         if (!node)
             return result.failed("Out of memory!");
-        node_lock_t new_lock = node_lock_(new_id);
-        result.new_size++;
+        std::size_t old_size = size_.fetch_add(1);
+        id_t new_id = static_cast<id_t>(old_size);
+        nodes_[old_size] = node;
+        result.new_size = old_size + 1;
+        result.id = new_id;
+        node_lock_t new_lock = node_lock_(old_size);
 
         // Do nothing for the first element
         if (!new_id) {
@@ -1625,11 +1660,18 @@ class index_gt {
         result.cycles = context.iteration_cycles;
 
         if (config.exact) {
-            if (!search_exact_(query, wanted, context))
+            if (!top.reserve(wanted))
                 return result.failed("Out of memory!");
+            search_exact_(query, wanted, context);
         } else {
-            id_t closest_id = search_for_one_(entry_id_, query, max_level_, 0, context);
+            next_candidates_t& next = context.next_candidates;
             std::size_t expansion = (std::max)(config_.expansion_search, wanted);
+            if (!next.reserve(expansion))
+                return result.failed("Out of memory!");
+            if (!top.reserve(expansion))
+                return result.failed("Out of memory!");
+
+            id_t closest_id = search_for_one_(entry_id_, query, max_level_, 0, context);
             // For bottom layer we need a more optimized procedure
             if (!search_to_find_in_base_(closest_id, query, expansion, context))
                 return result.failed("Out of memory!");
@@ -1651,15 +1693,22 @@ class index_gt {
 
         context_t& context = contexts_[config.thread];
         top_candidates_t& top = context.top_candidates;
+        next_candidates_t& next = context.next_candidates;
         search_result_t result{*this, top};
+
         if (!size_)
             return result;
+
+        std::size_t expansion = (std::max)(config_.expansion_search, wanted);
+        if (!next.reserve(expansion))
+            return result.failed("Out of memory!");
+        if (!top.reserve(expansion))
+            return result.failed("Out of memory!");
 
         // Go down the level, tracking only the closest match
         result.measurements = context.measurements_count;
         result.cycles = context.iteration_cycles;
 
-        std::size_t expansion = (std::max)(config_.expansion_search, wanted);
         search_to_find_in_base_(hint, query, expansion, context);
         top.sort_ascending();
         top.shrink(wanted);
@@ -1702,7 +1751,7 @@ class index_gt {
         std::size_t neighbors_bytes = !level ? pre_.neighbors_base_bytes : pre_.neighbors_bytes;
         for (std::size_t i = 0; i != result.nodes; ++i) {
             node_t node = node_with_id_(i);
-            if (node.level() < level)
+            if (static_cast<std::size_t>(node.level()) < level)
                 continue;
 
             result.edges += neighbors_(node, level).size();
@@ -2100,10 +2149,10 @@ class index_gt {
 
             // To fit a new connection we need to drop an existing one.
             top.clear();
-            top.reserve(close_header.size() + 1); // TODO: Handle out of memory
-            top.emplace_reserved(context.measure(new_node, close_node), new_id);
+            usearch_assert_m((top.reserve(close_header.size() + 1)), "The memory must have been reserved in `add`");
+            top.insert_reserved({context.measure(new_node, close_node), new_id});
             for (id_t successor_id : close_header)
-                top.emplace_reserved(context.measure(node_with_id_(successor_id), close_node), successor_id);
+                top.insert_reserved({context.measure(node_with_id_(successor_id), close_node), successor_id});
 
             // Export the results:
             close_header.clear();
@@ -2156,30 +2205,26 @@ class index_gt {
     bool search_to_insert_(id_t start_id, vector_view_t query, level_t level, context_t& context) noexcept {
 
         visits_bitset_t& visits = context.visits;
-        next_candidates_t& candidates = context.next_candidates; // pop min, push
-        top_candidates_t& top = context.top_candidates;          // pop max, push
+        next_candidates_t& next = context.next_candidates; // pop min, push
+        top_candidates_t& top = context.top_candidates;    // pop max, push
         std::size_t const top_limit = config_.expansion_add;
 
         visits.clear();
-        candidates.clear();
+        next.clear();
         top.clear();
-        if (!candidates.reserve(top_limit))
-            return false;
-        if (!top.reserve(top_limit + 1))
-            return false;
 
         distance_t radius = context.measure(query, node_with_id_(start_id));
-        candidates.emplace_reserved(-radius, start_id);
-        top.emplace_reserved(radius, start_id);
+        next.insert_reserved({-radius, start_id});
+        top.insert_reserved({radius, start_id});
         visits.set(start_id);
 
-        while (!candidates.empty()) {
+        while (!next.empty()) {
 
-            candidate_t candidacy = candidates.top();
+            candidate_t candidacy = next.top();
             if ((-candidacy.distance) > radius && top.size() == top_limit)
                 break;
 
-            candidates.pop();
+            next.pop();
             context.iteration_cycles++;
 
             id_t candidate_id = candidacy.id;
@@ -2197,11 +2242,9 @@ class index_gt {
 
                 if (top.size() < top_limit || successor_dist < radius) {
                     // This can substantially grow our priority queue:
-                    candidates.emplace(-successor_dist, successor_id);
+                    next.insert({-successor_dist, successor_id});
                     // This will automatically evict poor matches:
-                    top.emplace_reserved(successor_dist, successor_id);
-                    if (top.size() > top_limit)
-                        top.pop();
+                    top.insert({successor_dist, successor_id}, top_limit);
                     radius = top.top().distance;
                 }
             }
@@ -2218,30 +2261,26 @@ class index_gt {
         id_t start_id, vector_view_t query, std::size_t expansion, context_t& context) const noexcept {
 
         visits_bitset_t& visits = context.visits;
-        next_candidates_t& candidates = context.next_candidates; // pop min, push
-        top_candidates_t& top = context.top_candidates;          // pop max, push
+        next_candidates_t& next = context.next_candidates; // pop min, push
+        top_candidates_t& top = context.top_candidates;    // pop max, push
         std::size_t const top_limit = expansion;
 
         visits.clear();
-        candidates.clear();
+        next.clear();
         top.clear();
-        if (!candidates.reserve(top_limit))
-            return false;
-        if (!top.reserve(top_limit + 1))
-            return false;
 
         distance_t radius = context.measure(query, node_with_id_(start_id));
-        candidates.emplace_reserved(-radius, start_id);
-        top.emplace_reserved(radius, start_id);
+        next.insert_reserved({-radius, start_id});
+        top.insert_reserved({radius, start_id});
         visits.set(start_id);
 
-        while (!candidates.empty()) {
+        while (!next.empty()) {
 
-            candidate_t candidate = candidates.top();
+            candidate_t candidate = next.top();
             if ((-candidate.distance) > radius)
                 break;
 
-            candidates.pop();
+            next.pop();
             context.iteration_cycles++;
 
             id_t candidate_id = candidate.id;
@@ -2257,11 +2296,9 @@ class index_gt {
 
                 if (top.size() < top_limit || successor_dist < radius) {
                     // This can substantially grow our priority queue:
-                    candidates.emplace(-successor_dist, successor_id);
+                    next.insert({-successor_dist, successor_id});
                     // This will automatically evict poor matches:
-                    top.emplace_reserved(successor_dist, successor_id);
-                    if (top.size() > top_limit)
-                        top.pop();
+                    top.insert({successor_dist, successor_id}, top_limit);
                     radius = top.top().distance;
                 }
             }
@@ -2272,16 +2309,12 @@ class index_gt {
 
     /**
      *  @brief  Iterates through all managed vectors, without actually touching the index.
-     *  @return `true` if procedure succeeded, `false` if run out of memory.
      */
-    bool search_exact_(vector_view_t query, std::size_t count, context_t& context) const noexcept {
+    void search_exact_(vector_view_t query, std::size_t count, context_t& context) const noexcept {
         top_candidates_t& top = context.top_candidates;
         top.clear();
-        if (!top.reserve(count))
-            return false;
         for (std::size_t i = 0; i != size(); ++i)
-            top.emplace(context.measure(query, node_with_id_(i)), static_cast<id_t>(i));
-        return true;
+            top.insert({context.measure(query, node_with_id_(i)), static_cast<id_t>(i)}, count);
     }
 
     void prefetch_neighbors_(neighbors_ref_t, visits_bitset_t const&) const noexcept {}

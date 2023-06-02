@@ -38,7 +38,7 @@ using punned_distance_t = float;
 using punned_metric_t = punned_distance_t (*)(byte_t const*, byte_t const*, std::size_t, std::size_t);
 
 template <typename metric_at>
-punned_distance_t punned_metric(byte_t const* a, byte_t const* b, std::size_t a_bytes, std::size_t b_bytes) {
+inline punned_distance_t punned_metric(byte_t const* a, byte_t const* b, std::size_t a_bytes, std::size_t b_bytes) {
     using scalar_t = typename metric_at::scalar_t;
     return metric_at{}((scalar_t const*)a, (scalar_t const*)b, a_bytes / sizeof(scalar_t), b_bytes / sizeof(scalar_t));
 }
@@ -169,7 +169,7 @@ class f8_bits_t {
 inline f16_bits_t::f16_bits_t(f8_bits_t v) : f16_bits_t(float(v)) {}
 
 struct cos_f8_t {
-    punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b, std::size_t n) const {
+    inline punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b, std::size_t n) const {
         std::int32_t ab{}, a2{}, b2{};
         for (std::size_t i = 0; i != n; i++) {
             std::int16_t ai{a[i]};
@@ -183,7 +183,7 @@ struct cos_f8_t {
 };
 
 struct l2sq_f8_t {
-    punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b, std::size_t n) const {
+    inline punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b, std::size_t n) const {
         std::int32_t ab_deltas_sq{};
         for (std::size_t i = 0; i != n; i++)
             ab_deltas_sq += square(std::int16_t(a[i]) - std::int16_t(b[i]));
@@ -273,63 +273,68 @@ inline bool str_equals(char const* begin, std::size_t len, char const* other_beg
     return len == other_len && std::strncmp(begin, other_begin, len) == 0;
 }
 
-inline accuracy_t accuracy_from_name(char const* name, std::size_t len) {
-    accuracy_t accuracy{};
+inline expected_gt<accuracy_t> accuracy_from_name(char const* name, std::size_t len) {
+    expected_gt<accuracy_t> parsed;
     if (str_equals(name, len, "f32"))
-        accuracy = accuracy_t::f32_k;
+        parsed.result = accuracy_t::f32_k;
     else if (str_equals(name, len, "f64"))
-        accuracy = accuracy_t::f64_k;
+        parsed.result = accuracy_t::f64_k;
     else if (str_equals(name, len, "f16"))
-        accuracy = accuracy_t::f16_k;
+        parsed.result = accuracy_t::f16_k;
     else if (str_equals(name, len, "f8"))
-        accuracy = accuracy_t::f8_k;
+        parsed.result = accuracy_t::f8_k;
     else
-        throw std::invalid_argument("Unknown type, choose: f32, f16, f64, f8");
-    return accuracy;
+        parsed.failed("Unknown type, choose: f32, f16, f64, f8");
+    return parsed;
 }
 
-inline common_metric_kind_t common_metric_from_name(char const* name, std::size_t len) {
-    common_metric_kind_t metric{};
+inline expected_gt<common_metric_kind_t> common_metric_from_name(char const* name, std::size_t len) {
+    expected_gt<common_metric_kind_t> parsed;
     if (str_equals(name, len, "l2sq") || str_equals(name, len, "euclidean_sq")) {
-        metric = common_metric_kind_t::l2sq_k;
+        parsed.result = common_metric_kind_t::l2sq_k;
     } else if (str_equals(name, len, "ip") || str_equals(name, len, "inner") || str_equals(name, len, "dot")) {
-        metric = common_metric_kind_t::ip_k;
+        parsed.result = common_metric_kind_t::ip_k;
     } else if (str_equals(name, len, "cos") || str_equals(name, len, "angular")) {
-        metric = common_metric_kind_t::cos_k;
+        parsed.result = common_metric_kind_t::cos_k;
     } else if (str_equals(name, len, "haversine")) {
-        metric = common_metric_kind_t::haversine_k;
+        parsed.result = common_metric_kind_t::haversine_k;
     } else if (str_equals(name, len, "hamming")) {
-        metric = common_metric_kind_t::hamming_k;
+        parsed.result = common_metric_kind_t::hamming_k;
     } else if (str_equals(name, len, "pearson")) {
-        metric = common_metric_kind_t::pearson_k;
+        parsed.result = common_metric_kind_t::pearson_k;
     } else
-        throw std::invalid_argument("Unknown distance, choose: l2sq, ip, cos, haversine, hamming, jaccard, pearson");
-    return metric;
+        parsed.failed("Unknown distance, choose: l2sq, ip, cos, haversine, hamming, jaccard, pearson");
+    return parsed;
 }
 
 template <typename index_at>
-index_at make_punned( //
+expected_gt<index_at> make_punned( //
     common_metric_kind_t metric, std::size_t dimensions, accuracy_t accuracy, index_config_t const& config) {
 
+    expected_gt<index_at> parsed;
     if (metric == common_metric_kind_t::l2sq_k) {
         if (dimensions == 0)
-            throw std::invalid_argument("The number of dimensions must be positive");
-        return index_at::l2sq(dimensions, accuracy, config);
+            parsed.failed("The number of dimensions must be positive");
+        else
+            parsed.result = index_at::l2sq(dimensions, accuracy, config);
     } else if (metric == common_metric_kind_t::ip_k) {
         if (dimensions == 0)
-            throw std::invalid_argument("The number of dimensions must be positive");
-        return index_at::ip(dimensions, accuracy, config);
+            parsed.failed("The number of dimensions must be positive");
+        else
+            parsed.result = index_at::ip(dimensions, accuracy, config);
     } else if (metric == common_metric_kind_t::cos_k) {
         if (dimensions == 0)
-            throw std::invalid_argument("The number of dimensions must be positive");
-        return index_at::cos(dimensions, accuracy, config);
+            parsed.failed("The number of dimensions must be positive");
+        else
+            parsed.result = index_at::cos(dimensions, accuracy, config);
     } else if (metric == common_metric_kind_t::haversine_k) {
         if (dimensions != 2 && dimensions != 0)
-            throw std::invalid_argument("The number of dimensions must be equal to two");
-        return index_at::haversine(accuracy, config);
+            parsed.failed("The number of dimensions must be equal to two");
+        else
+            parsed.result = index_at::haversine(accuracy, config);
     } else
-        throw std::invalid_argument("Type-punned index only supports: l2sq, ip, cos, haversine");
-    return {};
+        parsed.failed("Type-punned index only supports: l2sq, ip, cos, haversine");
+    return parsed;
 }
 
 enum class isa_t {
@@ -373,7 +378,7 @@ inline bool supports_arm_sve() {
 }
 
 template <typename from_scalar_at, typename to_scalar_at> struct cast_gt {
-    bool operator()(byte_t const* input, std::size_t bytes_in_input, byte_t* output) const {
+    inline bool operator()(byte_t const* input, std::size_t bytes_in_input, byte_t* output) const {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
         to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
         std::transform( //
@@ -482,7 +487,7 @@ class punned_gt {
         std::swap(available_threads_, other.available_threads_);
     }
 
-    static index_config_t optimize(index_config_t config) noexcept { return index_t::optimize(config); }
+    static index_config_t optimize(index_config_t config) { return index_t::optimize(config); }
 
     std::size_t dimensions() const { return dimensions_; }
     std::size_t connectivity() const { return typed_->connectivity(); }
@@ -491,18 +496,18 @@ class punned_gt {
     index_config_t const& config() const { return typed_->config(); }
     index_limits_t const& limits() const { return typed_->limits(); }
     void clear() { return typed_->clear(); }
-    void change_expansion_add(std::size_t n) noexcept { typed_->change_expansion_add(n); }
-    void change_expansion_search(std::size_t n) noexcept { typed_->change_expansion_search(n); }
+    void change_expansion_add(std::size_t n) { typed_->change_expansion_add(n); }
+    void change_expansion_search(std::size_t n) { typed_->change_expansion_search(n); }
 
-    member_citerator_t cbegin() const noexcept { return typed_->cbegin(); }
-    member_citerator_t cend() const noexcept { return typed_->cend(); }
-    member_citerator_t begin() const noexcept { return typed_->begin(); }
-    member_citerator_t end() const noexcept { return typed_->end(); }
-    member_iterator_t begin() noexcept { return typed_->begin(); }
-    member_iterator_t end() noexcept { return typed_->end(); }
+    member_citerator_t cbegin() const { return typed_->cbegin(); }
+    member_citerator_t cend() const { return typed_->cend(); }
+    member_citerator_t begin() const { return typed_->begin(); }
+    member_citerator_t end() const { return typed_->end(); }
+    member_iterator_t begin() { return typed_->begin(); }
+    member_iterator_t end() { return typed_->end(); }
 
-    stats_t stats() const noexcept { return typed_->stats(); }
-    stats_t stats(std::size_t level) const noexcept { return typed_->stats(level); }
+    stats_t stats() const { return typed_->stats(); }
+    stats_t stats(std::size_t level) const { return typed_->stats(level); }
 
     accuracy_t accuracy() const { return accuracy_; }
     isa_t acceleration() const { return acceleration_; }
@@ -512,7 +517,7 @@ class punned_gt {
     void view(char const* path) { typed_->view(path); }
     void reserve(index_limits_t limits) { typed_->reserve(limits); }
 
-    std::size_t memory_usage(std::size_t allocator_entry_bytes = default_allocator_entry_bytes()) const noexcept {
+    std::size_t memory_usage(std::size_t allocator_entry_bytes = default_allocator_entry_bytes()) const {
         return typed_->memory_usage(allocator_entry_bytes);
     }
 

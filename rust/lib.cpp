@@ -5,44 +5,49 @@ using namespace unum::usearch;
 using namespace unum;
 
 using punned_t = typename Index::punned_t;
+using add_result_t = typename punned_t::add_result_t;
+using search_result_t = typename punned_t::search_result_t;
 
 Index::Index(std::shared_ptr<punned_t> index) : index_(index) {}
 
 void Index::add_in_thread(uint32_t label, rust::Slice<float const> vector, size_t thread) const {
     add_config_t config;
     config.thread = thread;
-    index_->add(label, vector.data(), config);
+    index_->add(label, vector.data(), config).error.raise();
 }
 
 Matches Index::search_in_thread(rust::Slice<float const> vector, size_t count, size_t thread) const {
-    Matches results;
-    results.labels.reserve(count);
-    results.distances.reserve(count);
+    Matches matches;
+    matches.labels.reserve(count);
+    matches.distances.reserve(count);
     for (size_t i = 0; i != count; ++i)
-        results.labels.push_back(0), results.distances.push_back(0);
+        matches.labels.push_back(0), matches.distances.push_back(0);
     search_config_t config;
     config.thread = thread;
-    results.count =
-        index_->search(vector.data(), count, config).dump_to(results.labels.data(), results.distances.data());
-    results.labels.truncate(results.count);
-    results.distances.truncate(results.count);
-    return results;
+    search_result_t result = index_->search(vector.data(), count, config);
+    result.error.raise();
+    matches.count = result.dump_to(matches.labels.data(), matches.distances.data());
+    matches.labels.truncate(matches.count);
+    matches.distances.truncate(matches.count);
+    return matches;
 }
 
 void Index::add(uint32_t label, rust::Slice<float const> vector) const {
-    index_->add(label, vector.data()); //
+    index_->add(label, vector.data()).error.raise();
 }
 
 Matches Index::search(rust::Slice<float const> vector, size_t count) const {
-    Matches results;
-    results.labels.reserve(count);
-    results.distances.reserve(count);
+    Matches matches;
+    matches.labels.reserve(count);
+    matches.distances.reserve(count);
     for (size_t i = 0; i != count; ++i)
-        results.labels.push_back(0), results.distances.push_back(0);
-    results.count = index_->search(vector.data(), count).dump_to(results.labels.data(), results.distances.data());
-    results.labels.truncate(results.count);
-    results.distances.truncate(results.count);
-    return results;
+        matches.labels.push_back(0), matches.distances.push_back(0);
+    search_result_t result = index_->search(vector.data(), count);
+    result.error.raise();
+    matches.count = result.dump_to(matches.labels.data(), matches.distances.data());
+    matches.labels.truncate(matches.count);
+    matches.distances.truncate(matches.count);
+    return matches;
 }
 
 void Index::reserve(size_t capacity) const { index_->reserve(capacity); }
