@@ -7,8 +7,9 @@ using namespace unum;
 using punned_t = typename Index::punned_t;
 using add_result_t = typename punned_t::add_result_t;
 using search_result_t = typename punned_t::search_result_t;
+using serialization_result_t = typename punned_t::serialization_result_t;
 
-Index::Index(std::shared_ptr<punned_t> index) : index_(index) {}
+Index::Index(std::unique_ptr<punned_t> index) : index_(std::move(index)) {}
 
 void Index::add_in_thread(uint32_t label, rust::Slice<float const> vector, size_t thread) const {
     add_config_t config;
@@ -64,8 +65,11 @@ void Index::view(rust::Str path) const { index_->view(std::string(path).c_str())
 accuracy_t accuracy(rust::Str quant) { return accuracy_from_name(quant.data(), quant.size()); }
 
 std::unique_ptr<Index> wrap(punned_t&& index) {
-    std::shared_ptr<punned_t> native = std::make_shared<punned_t>(std::move(index));
-    return std::unique_ptr<Index>(new Index(native));
+    std::unique_ptr<punned_t> punned_ptr;
+    punned_ptr.reset(new punned_t(std::move(index)));
+    std::unique_ptr<Index> result;
+    result.reset(new Index(std::move(punned_ptr)));
+    return result;
 }
 
 index_config_t config(size_t connectivity, size_t exp_add, size_t exp_search) {
