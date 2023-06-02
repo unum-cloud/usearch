@@ -408,9 +408,9 @@ static py::tuple search_many_in_index( //
 }
 
 // clang-format off
-template <typename index_at> void save_index(index_at const& index, std::string const& path) { index.save(path.c_str()); }
-template <typename index_at> void load_index(index_at& index, std::string const& path) { index.load(path.c_str()); }
-template <typename index_at> void view_index(index_at& index, std::string const& path) { index.view(path.c_str()); }
+template <typename index_at> void save_index(index_at const& index, std::string const& path) { index.save(path.c_str()).error.raise(); }
+template <typename index_at> void load_index(index_at& index, std::string const& path) { index.load(path.c_str()).error.raise(); }
+template <typename index_at> void view_index(index_at& index, std::string const& path) { index.view(path.c_str()).error.raise(); }
 template <typename index_at> void clear_index(index_at& index) { index.clear(); }
 template <typename index_at> std::size_t get_expansion_add(index_at const &index) { return index.config().expansion_add; }
 template <typename index_at> std::size_t get_expansion_search(index_at const &index) { return index.config().expansion_search; }
@@ -566,7 +566,7 @@ PYBIND11_MODULE(compiled, m) {
             auto view = set_view_t{proxy.data(0), static_cast<std::size_t>(proxy.shape(0))};
             add_config_t config;
             config.store_vector = copy;
-            index.add(label, view, config);
+            index.add(label, view, config).error.raise();
         },                     //
         py::arg("label"),      //
         py::arg("set"),        //
@@ -582,7 +582,9 @@ PYBIND11_MODULE(compiled, m) {
             auto view = set_view_t{proxy.data(0), static_cast<std::size_t>(proxy.shape(0))};
             auto labels_py = py::array_t<label_t>(py_shape_t{static_cast<Py_ssize_t>(count)});
             auto labels_proxy = labels_py.mutable_unchecked<1>();
-            auto found = index.search(view, count).dump_to(&labels_proxy(0), nullptr);
+            auto result = index.search(view, count);
+            result.error.raise();
+            auto found = result.dump_to(&labels_proxy(0), nullptr);
             labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(found)});
             return labels_py;
         },
@@ -617,7 +619,7 @@ PYBIND11_MODULE(compiled, m) {
             if (index.size() + 1 >= index.capacity())
                 index.reserve(ceil2(index.size() + 1));
             hash_buffer(index, array);
-            index.add(label, index.buffer());
+            index.add(label, index.buffer()).error.raise();
         },                //
         py::arg("label"), //
         py::arg("array")  //
@@ -631,7 +633,9 @@ PYBIND11_MODULE(compiled, m) {
             hash_buffer(index, array);
             auto labels_py = py::array_t<label_t>(py_shape_t{static_cast<Py_ssize_t>(count)});
             auto labels_proxy = labels_py.mutable_unchecked<1>();
-            auto found = index.search(index.buffer(), count).dump_to(&labels_proxy(0), nullptr);
+            auto result = index.search(index.buffer(), count);
+            result.error.raise();
+            auto found = result.dump_to(&labels_proxy(0), nullptr);
             labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(found)});
             return labels_py;
         },

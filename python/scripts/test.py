@@ -8,19 +8,25 @@ dimensions = [13, 99, 100, 256]
 sizes = [1, 2, 100]
 index_types = ['f64', 'f32', 'f16', 'f8']
 numpy_types = [np.float64, np.float32, np.float16, np.byte]
-connectivities = [3, 13, 50]
+connectivity_options = [3, 13, 50]
+jit_options = [False, True]
 
 
 @pytest.mark.parametrize('ndim', dimensions)
 @pytest.mark.parametrize('index_type', index_types)
 @pytest.mark.parametrize('numpy_type', numpy_types)
-@pytest.mark.parametrize('connectivity', connectivities)
-def test_l2sq(ndim: int, index_type: str, numpy_type: str, connectivity: int):
+@pytest.mark.parametrize('connectivity', connectivity_options)
+@pytest.mark.parametrize('jit', jit_options)
+def test_l2sq(
+        ndim: int, index_type: str, numpy_type: str,
+        connectivity: int, jit: bool):
+
     index = Index(
         metric='l2sq',
         ndim=ndim,
         dtype=index_type,
         connectivity=connectivity,
+        jit=jit,
     )
     assert index.ndim == ndim
     assert index.connectivity == connectivity
@@ -101,11 +107,11 @@ def test_user_defined_function(ndim: int, size: int):
 
 def test_sets():
 
-    # index = SetsIndex()
-    # index.add(10, np.array([10, 12, 15], dtype=np.uint32))
-    # index.add(11, np.array([11, 12, 15, 16], dtype=np.uint32))
-    # results = index.search(np.array([12, 15], dtype=np.uint32), 10)
-    # assert list(results) == [10, 11]
+    index = SetsIndex()
+    index.add(10, np.array([10, 12, 15], dtype=np.uint32))
+    index.add(11, np.array([11, 12, 15, 16], dtype=np.uint32))
+    results = index.search(np.array([12, 15], dtype=np.uint32), 10)
+    assert list(results) == [10, 11]
 
     pass
 

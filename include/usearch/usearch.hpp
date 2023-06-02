@@ -397,7 +397,7 @@ template <typename scalar_at, typename result_at = float> struct bit_sorensen_gt
  *          Can be used to compute the similarity between two textual documents
  *          using the IDs of tokens present in them.
  */
-template <typename scalar_at, typename result_at = scalar_at> struct jaccard_gt {
+template <typename scalar_at, typename result_at = float> struct jaccard_gt {
     using scalar_t = scalar_at;
     using result_t = result_at;
     using result_type = result_t;
@@ -413,7 +413,7 @@ template <typename scalar_at, typename result_at = scalar_at> struct jaccard_gt 
             i += a[i] < b[j];
             j += a[i] >= b[j];
         }
-        return 1.f - intersection * 1.f / (a_length + b_length - intersection);
+        return 1 - intersection / (a_length + b_length - intersection);
     }
 };
 
@@ -422,7 +422,7 @@ template <typename scalar_at, typename result_at = scalar_at> struct jaccard_gt 
  *          Can be used to compute the similarity between two textual documents
  *          using the IDs of tokens present in them.
  */
-template <typename scalar_at, typename result_at = scalar_at> struct pearson_correlation_gt {
+template <typename scalar_at, typename result_at = float> struct pearson_correlation_gt {
     using scalar_t = scalar_at;
     using result_t = result_at;
     using result_type = result_t;
