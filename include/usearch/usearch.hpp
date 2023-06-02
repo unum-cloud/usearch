@@ -650,11 +650,10 @@ class max_heap_gt {
   public:
     max_heap_gt() noexcept : elements_(nullptr), size_(0), capacity_(0) {}
 
-    max_heap_gt(max_heap_gt&& other) noexcept {
-        std::swap(elements_, other.elements_);
-        std::swap(size_, other.size_);
-        std::swap(capacity_, other.capacity_);
-    }
+    max_heap_gt(max_heap_gt&& other) noexcept
+        : elements_(exchange(other.elements_, nullptr)), size_(exchange(other.size_, 0)),
+          capacity_(exchange(other.capacity_, 0)) {}
+
     max_heap_gt& operator=(max_heap_gt&& other) noexcept {
         std::swap(elements_, other.elements_);
         std::swap(size_, other.size_);
@@ -789,11 +788,10 @@ class sorted_buffer_gt {
   public:
     sorted_buffer_gt() noexcept : elements_(nullptr), size_(0), capacity_(0) {}
 
-    sorted_buffer_gt(sorted_buffer_gt&& other) noexcept {
-        std::swap(elements_, other.elements_);
-        std::swap(size_, other.size_);
-        std::swap(capacity_, other.capacity_);
-    }
+    sorted_buffer_gt(sorted_buffer_gt&& other) noexcept
+        : elements_(exchange(other.elements_, nullptr)), size_(exchange(other.size_, 0)),
+          capacity_(exchange(other.capacity_, 0)) {}
+
     sorted_buffer_gt& operator=(sorted_buffer_gt&& other) noexcept {
         std::swap(elements_, other.elements_);
         std::swap(size_, other.size_);
