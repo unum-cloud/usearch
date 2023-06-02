@@ -10,9 +10,13 @@ using namespace unum::usearch;
 using namespace unum;
 
 using label_t = jint;
+using span_t = span_gt<float>;
 using distance_t = punned_distance_t;
 using punned_t = punned_gt<label_t>;
-using span_t = span_gt<float>;
+
+using add_result_t = typename punned_t::add_result_t;
+using search_result_t = typename punned_t::search_result_t;
+using serialization_result_t = typename punned_t::serialization_result_t;
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
     JNIEnv* env, jclass,                                         //

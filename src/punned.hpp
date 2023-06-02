@@ -464,6 +464,7 @@ class punned_gt {
   public:
     using search_result_t = typename index_t::search_result_t;
     using add_result_t = typename index_t::add_result_t;
+    using serialization_result_t = typename index_t::serialization_result_t;
     using stats_t = typename index_t::stats_t;
 
     punned_gt() = default;
@@ -512,10 +513,10 @@ class punned_gt {
     accuracy_t accuracy() const { return accuracy_; }
     isa_t acceleration() const { return acceleration_; }
 
-    void save(char const* path) const { typed_->save(path); }
-    void load(char const* path) { typed_->load(path); }
-    void view(char const* path) { typed_->view(path); }
-    void reserve(index_limits_t limits) { typed_->reserve(limits); }
+    serialization_result_t save(char const* path) const { return typed_->save(path); }
+    serialization_result_t load(char const* path) { return typed_->load(path); }
+    serialization_result_t view(char const* path) { return typed_->view(path); }
+    bool reserve(index_limits_t limits) { return typed_->reserve(limits); }
 
     std::size_t memory_usage(std::size_t allocator_entry_bytes = default_allocator_entry_bytes()) const {
         return typed_->memory_usage(allocator_entry_bytes);
