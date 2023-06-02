@@ -134,6 +134,8 @@
         "rtype",
         "simsimd",
         "SLOC",
+        "sorensen",
+        "tanimoto",
         "uninitialize",
         "unumusearch",
         "usearch",

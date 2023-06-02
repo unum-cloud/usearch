@@ -315,8 +315,8 @@ template <typename scalar_at, typename result_at = std::size_t> struct bit_hammi
     using result_type = result_t;
     static_assert(std::is_unsigned<scalar_t>::value, "Hamming distance requires unsigned integral words");
 
-    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words,
-                               std::size_t = 0) const noexcept {
+    inline result_t operator()( //
+        scalar_t const* a, scalar_t const* b, std::size_t words, std::size_t = 0) const noexcept {
         constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
         result_t matches{};
 #if defined(USEARCH_USE_OPENMP)
@@ -329,6 +329,66 @@ template <typename scalar_at, typename result_at = std::size_t> struct bit_hammi
         for (std::size_t i = 0; i != words; ++i)
             matches += std::bitset<bits_per_word_k>(a[i] ^ b[i]).count();
         return matches;
+    }
+};
+
+/**
+ *  @brief  Tanimoto distance is the intersection over bitwise union.
+ *          Often used in chemistry and biology to compare molecular fingerprints.
+ */
+template <typename scalar_at, typename result_at = float> struct bit_tanimoto_gt {
+    using scalar_t = scalar_at;
+    using result_t = result_at;
+    using result_type = result_t;
+    static_assert(std::is_unsigned<scalar_t>::value, "Tanimoto distance requires unsigned integral words");
+    static_assert(!std::is_floating_point<result_t>::value, "Tanimoto distance will be a fraction");
+
+    inline result_t operator()( //
+        scalar_t const* a, scalar_t const* b, std::size_t words, std::size_t = 0) const noexcept {
+        constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
+        result_t and_count{};
+        result_t or_count{};
+#if defined(USEARCH_USE_OPENMP)
+#pragma omp simd reduction(+ : matches)
+#elif defined(USEARCH_IS_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_IS_GCC)
+#pragma GCC ivdep
+#endif
+        for (std::size_t i = 0; i != words; ++i)
+            and_count += std::bitset<bits_per_word_k>(a[i] & b[i]).count(),
+                or_count += std::bitset<bits_per_word_k>(a[i] | b[i]).count();
+        return 1 - result_t(and_count) / or_count;
+    }
+};
+
+/**
+ *  @brief  Sorensen-Dice or F1 distance is the intersection over bitwise union.
+ *          Often used in chemistry and biology to compare molecular fingerprints.
+ */
+template <typename scalar_at, typename result_at = float> struct bit_sorensen_gt {
+    using scalar_t = scalar_at;
+    using result_t = result_at;
+    using result_type = result_t;
+    static_assert(std::is_unsigned<scalar_t>::value, "Sorensen-Dice distance requires unsigned integral words");
+    static_assert(!std::is_floating_point<result_t>::value, "Sorensen-Dice distance will be a fraction");
+
+    inline result_t operator()( //
+        scalar_t const* a, scalar_t const* b, std::size_t words, std::size_t = 0) const noexcept {
+        constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
+        result_t and_count{};
+        result_t any_count{};
+#if defined(USEARCH_USE_OPENMP)
+#pragma omp simd reduction(+ : matches)
+#elif defined(USEARCH_IS_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_IS_GCC)
+#pragma GCC ivdep
+#endif
+        for (std::size_t i = 0; i != words; ++i)
+            and_count += std::bitset<bits_per_word_k>(a[i] & b[i]).count(),
+                any_count += std::bitset<bits_per_word_k>(a[i]).count() + std::bitset<bits_per_word_k>(b[i]).count();
+        return 1 - 2 * result_t(and_count) / any_count;
     }
 };
 
@@ -957,13 +1017,20 @@ struct search_config_t {
 
 enum class common_metric_kind_t : std::uint8_t {
     unknown_k = 0,
+    // Classics:
     ip_k = 'i',
     cos_k = 'c',
     l2sq_k = 'e',
-    jaccard_k = 'j',
-    hamming_k = 'h',
+
+    // Custom:
     pearson_k = 'p',
     haversine_k = 'h',
+
+    // Sets:
+    jaccard_k = 'j',
+    hamming_k = 'h',
+    tanimoto_k = 't',
+    sorensen_k = 's',
 };
 
 using file_header_t = byte_t[64];
