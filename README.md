@@ -311,6 +311,12 @@ def python_dot(a, b, n, m):
 index = Index(ndim=ndim, metric=python_dot.address)
 ```
 
+To use Numba JIT, install USearch with extras:
+
+```sh
+pip install usearch[jit]
+```
+
 [numba]: https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
 
 #### Tooling

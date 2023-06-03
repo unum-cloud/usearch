@@ -34,7 +34,7 @@ def list_matches(results: Matches, row: int) -> List[dict]:
     ]
 
 
-def jit_metric(ndim: int, metric_name: str, accuracy: str = 'f32') -> Callable:
+def jit_metric(ndim: int, metric_name: str, dtype: str = 'f32') -> Callable:
 
     try:
         from numba import cfunc, types, carray
@@ -46,7 +46,7 @@ def jit_metric(ndim: int, metric_name: str, accuracy: str = 'f32') -> Callable:
     # Showcases how to use Numba to JIT-compile similarity measures for USearch.
     # https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
 
-    if accuracy == 'f32':
+    if dtype == 'f32':
         signature = types.float32(
             types.CPointer(types.float32),
             types.CPointer(types.float32),
@@ -54,18 +54,20 @@ def jit_metric(ndim: int, metric_name: str, accuracy: str = 'f32') -> Callable:
 
         if metric_name == 'ip':
 
+            @cfunc(signature)
             def numba_ip(a, b, _n, _m):
                 a_array = carray(a, ndim)
                 b_array = carray(b, ndim)
                 ab = 0.0
                 for i in range(ndim):
                     ab += a_array[i] * b_array[i]
-                return ab
+                return 1 - ab
 
-            return cfunc(numba_ip, signature)
+            return numba_ip
 
         if metric_name == 'cos':
 
+            @cfunc(signature)
             def numba_cos(a, b, _n, _m):
                 a_array = carray(a, ndim)
                 b_array = carray(b, ndim)
@@ -76,22 +78,30 @@ def jit_metric(ndim: int, metric_name: str, accuracy: str = 'f32') -> Callable:
                     ab += a_array[i] * b_array[i]
                     a_sq += a_array[i] * a_array[i]
                     b_sq += b_array[i] * b_array[i]
-                return ab / (sqrt(a_sq) * sqrt(b_sq))
+                a_norm = sqrt(a_sq)
+                b_norm = sqrt(b_sq)
+                if a_norm == 0 and b_norm == 0:
+                    return 0
+                elif a_norm == 0 or b_norm == 0 or ab == 0:
+                    return 1
+                else:
+                    return 1 - ab / (a_norm * b_norm)
 
-            return cfunc(numba_cos, signature)
+            return numba_cos
 
         if metric_name == 'l2sq':
 
+            @cfunc(signature)
             def numba_l2sq(a, b, _n, _m):
                 a_array = carray(a, ndim)
                 b_array = carray(b, ndim)
-                ab_delta_sq = 0.0
+                ab_delta_sq = types.float32(0.0)
                 for i in range(ndim):
                     ab_delta_sq += (a_array[i] - b_array[i]) * \
                         (a_array[i] - b_array[i])
                 return ab_delta_sq
 
-            return cfunc(numba_l2sq, signature)
+            return numba_l2sq
 
     return None
 
@@ -249,6 +259,10 @@ class Index:
 
     def __len__(self) -> int:
         return len(self._compiled)
+
+    @property
+    def jit(self) -> bool:
+        return self._metric_jit is not None
 
     @property
     def size(self) -> int:

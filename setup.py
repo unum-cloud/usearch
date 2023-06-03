@@ -14,7 +14,7 @@ if sys.platform == 'linux':
     compile_args.append('-Wno-unknown-pragmas')
 
 if sys.platform == 'darwin':
-    # MacOS 10.15 orhigher is needed for `aligned_alloc` support.
+    # MacOS 10.15 or higher is needed for `aligned_alloc` support.
     # https://github.com/unum-cloud/usearch/actions/runs/4975434891/jobs/8902603392
     compile_args.append('-mmacosx-version-min=10.15')
     compile_args.append('-Wno-unknown-pragmas')
@@ -82,4 +82,7 @@ setup(
         'include', 'src',
         'fp16/include', 'robin-map/include', 'simsimd/include'],
     ext_modules=ext_modules,
+    extras_require={
+        'jit': ['numba'],
+    },
 )

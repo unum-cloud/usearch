@@ -62,8 +62,12 @@ Benchmarking:
 
 ## Python
 
+Use PyTest to validate the build.
+The `-s` option will disable capturing the logs.
+The `-x` option will exit after first failure to simplify debugging.
+
 ```sh
-pip install -e . && pytest python/scripts/test.py
+pip install -e . && pytest python/scripts/test.py -s -x
 ```
 
 Linting:

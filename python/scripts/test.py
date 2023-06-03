@@ -4,25 +4,29 @@ import numpy as np
 from usearch.io import load_matrix
 from usearch.index import Index, SetsIndex
 
+
 dimensions = [13, 99, 100, 256]
 sizes = [1, 2, 100]
-index_types = ['f64', 'f32', 'f16', 'f8']
-numpy_types = [np.float64, np.float32, np.float16, np.byte]
+index_types = ['f32', 'f64', 'f16', 'f8']
+numpy_types = [np.float32, np.float64, np.float16, np.byte]
 connectivity_options = [3, 13, 50]
 jit_options = [False, True]
+metrics = ['cos', 'l2sq']
 
 
 @pytest.mark.parametrize('ndim', dimensions)
+@pytest.mark.parametrize('metric', metrics)
 @pytest.mark.parametrize('index_type', index_types)
 @pytest.mark.parametrize('numpy_type', numpy_types)
 @pytest.mark.parametrize('connectivity', connectivity_options)
 @pytest.mark.parametrize('jit', jit_options)
-def test_l2sq(
-        ndim: int, index_type: str, numpy_type: str,
+def test_basics(
+        ndim: int, metric: str,
+        index_type: str, numpy_type: str,
         connectivity: int, jit: bool):
 
     index = Index(
-        metric='l2sq',
+        metric=metric,
         ndim=ndim,
         dtype=index_type,
         connectivity=connectivity,
@@ -31,7 +35,8 @@ def test_l2sq(
     assert index.ndim == ndim
     assert index.connectivity == connectivity
 
-    vector = np.random.uniform(0, 0.7, (index.ndim)).astype(numpy_type)
+    limit = 0.7 if numpy_type != np.byte else 70
+    vector = np.random.uniform(0, limit, (index.ndim)).astype(numpy_type)
     index.add(42, vector)
     matches, distances, count = index.search(vector, 10)
 
@@ -57,7 +62,9 @@ def test_l2sq(
 def test_l2sq_batch(ndim: int, size: int, index_type: str, numpy_type: str):
     index = Index(ndim=ndim, metric='l2sq', dtype=index_type)
 
-    vectors = np.random.uniform(0, 0.7, (size, index.ndim)).astype(numpy_type)
+    limit = 0.7 if numpy_type != np.byte else 70
+    vectors = np.random.uniform(
+        0, limit, (size, index.ndim)).astype(numpy_type)
     labels = np.array(range(size), dtype=np.longlong)
 
     index.add(labels, vectors)
@@ -112,8 +119,6 @@ def test_sets():
     index.add(11, np.array([11, 12, 15, 16], dtype=np.uint32))
     results = index.search(np.array([12, 15], dtype=np.uint32), 10)
     assert list(results) == [10, 11]
-
-    pass
 
 
 if __name__ == '__main__':
