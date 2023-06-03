@@ -17,12 +17,14 @@ void expect(bool must_be_true) {
 }
 
 template <typename scalar_at, typename index_at> void test3d(index_at&& index) {
-    using view_t = span_gt<scalar_at const>;
+
+    using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
     using distance_t = typename index_at::distance_t;
 
-    scalar_at vec[3] = {10, 20, 15};
-    scalar_at vec_a[3] = {15, 16, 17};
-    scalar_at vec_b[3] = {16, 17, 18};
+    scalar_t vec[3] = {10, 20, 15};
+    scalar_t vec_a[3] = {15, 16, 17};
+    scalar_t vec_b[3] = {16, 17, 18};
 
     index.reserve(10);
     index.add(42, view_t{&vec[0], 3ul});
@@ -76,28 +78,33 @@ template <typename scalar_at, typename index_at> void test3d(index_at&& index) {
 }
 
 template <typename scalar_at, typename index_at> void test3d_punned(index_at&& index) {
-    using view_t = span_gt<scalar_at const>;
+
+    using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
     using span_t = span_gt<scalar_at>;
 
-    scalar_at vec[3] = {10, 20, 15};
+    scalar_t vec[3] = {10, 20, 15};
 
     index.reserve(10);
     index.add(42, view_t{&vec[0], 3ul});
 
     // Reconstruct
-    scalar_at vec_reconstructed[3] = {0, 0, 0};
+    scalar_t vec_reconstructed[3] = {0, 0, 0};
     index.reconstruct(42, span_t{&vec_reconstructed[0], 3ul});
     expect(vec_reconstructed[0] == vec[0]);
     expect(vec_reconstructed[1] == vec[1]);
     expect(vec_reconstructed[2] == vec[2]);
 }
 
-template <typename scalar_at, typename index_at> void test_sets(index_at&& index) {
-    using view_t = span_gt<scalar_at const>;
+template <typename index_at> void test_sets(index_at&& index) {
 
-    scalar_at vec0[] = {10, 20};
-    scalar_at vec1[] = {10, 15, 20};
-    scalar_at vec2[] = {10, 20, 30, 35};
+    using index_t = typename std::remove_reference<index_at>::type;
+    using scalar_t = typename index_t::scalar_t;
+    using view_t = span_gt<scalar_t const>;
+
+    scalar_t vec0[] = {10, 20};
+    scalar_t vec1[] = {10, 15, 20};
+    scalar_t vec2[] = {10, 20, 30, 35};
 
     index.reserve(10);
     index.add(42, view_t{&vec0[0], 2ul});
@@ -105,6 +112,24 @@ template <typename scalar_at, typename index_at> void test_sets(index_at&& index
     index.add(44, view_t{&vec2[0], 4ul});
 
     expect(index.size() == 3);
+}
+
+template <typename index_at> void test_sets_moved() {
+    {
+        index_at index;
+        test_sets(index);
+    }
+    {
+        index_at index;
+        index.reserve(1);
+        test_sets(index_at(std::move(index)));
+    }
+    {
+        index_at index;
+        index.reserve(1);
+        index_at index_moved = std::move(index);
+        test_sets(index_moved);
+    }
 }
 
 int main(int, char**) {
@@ -124,8 +149,11 @@ int main(int, char**) {
     test3d_punned<float>(punned_small_t::cos(3));
     test3d_punned<float>(punned_small_t::l2sq(3));
 
-    test_sets<std::int32_t>(index_gt<jaccard_gt<std::int32_t, float>, point_id_t, std::uint32_t, std::int32_t>{});
-    test_sets<std::int64_t>(index_gt<jaccard_gt<std::int64_t, float>, point_id_t, std::uint32_t, std::int64_t>{});
+    test_sets(index_gt<jaccard_gt<std::int32_t, float>, point_id_t, std::uint32_t, std::int32_t>{});
+    test_sets(index_gt<jaccard_gt<std::int64_t, float>, point_id_t, std::uint32_t, std::int64_t>{});
+
+    test_sets_moved<index_gt<jaccard_gt<std::int32_t, float>, point_id_t, std::uint32_t, std::int32_t>>();
+    test_sets_moved<index_gt<jaccard_gt<std::int64_t, float>, point_id_t, std::uint32_t, std::int64_t>>();
 
     return 0;
 }

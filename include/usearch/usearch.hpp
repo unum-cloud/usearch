@@ -1464,6 +1464,7 @@ class index_gt {
      */
     void swap(index_gt& other) noexcept {
         std::swap(config_, other.config_);
+        std::swap(limits_, other.limits_);
         std::swap(metric_, other.metric_);
         std::swap(allocator_, other.allocator_);
         std::swap(pre_, other.pre_);
@@ -1531,9 +1532,11 @@ class index_gt {
         }
 
         // Move the nodes info, and deallocate previous buffers.
-        std::memcpy(new_nodes, nodes_, sizeof(node_t) * size());
-        node_allocator.deallocate(nodes_, limits_.elements);
-        context_allocator.deallocate(contexts_, limits_.threads());
+        if (nodes_)
+            std::memcpy(new_nodes, nodes_, sizeof(node_t) * size()),
+                node_allocator.deallocate(nodes_, limits_.elements);
+        if (contexts_)
+            context_allocator.deallocate(contexts_, limits_.threads());
 
         limits_ = limits;
         capacity_ = limits.elements;
@@ -1624,6 +1627,13 @@ class index_gt {
             }
             return count;
         }
+        inline std::size_t dump_to(label_t* labels) const noexcept {
+            for (std::size_t i = 0; i != count; ++i) {
+                match_t result = operator[](i);
+                labels[i] = result.element.label;
+            }
+            return count;
+        }
     };
 
     /**
@@ -1646,7 +1656,7 @@ class index_gt {
         next.clear();
 
         // The top list needs one more slot than the connectivity of the base level
-        // for the heurstic, that tries to squeeze one more element into saturated list.
+        // for the heuristic, that tries to squeeze one more element into saturated list.
         std::size_t top_limit = (std::max)(base_level_multiple_() * config_.connectivity + 1, config_.expansion_add);
         if (!top.reserve(top_limit))
             return result.failed("Out of memory!");

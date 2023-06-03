@@ -563,7 +563,8 @@ PYBIND11_MODULE(compiled, m) {
             if (index.size() + 1 >= index.capacity())
                 index.reserve(ceil2(index.size() + 1));
             auto proxy = set.unchecked<1>();
-            auto view = set_view_t{proxy.data(0), static_cast<std::size_t>(proxy.shape(0))};
+            auto view = set_view_t{&proxy(0), static_cast<std::size_t>(proxy.shape(0))};
+
             add_config_t config;
             config.store_vector = copy;
             index.add(label, view, config).error.raise();
@@ -579,12 +580,12 @@ PYBIND11_MODULE(compiled, m) {
         [](sets_index_py_t& index, py::array_t<set_member_t> set, std::size_t count) -> py::array_t<label_t> {
             validate_set(set);
             auto proxy = set.unchecked<1>();
-            auto view = set_view_t{proxy.data(0), static_cast<std::size_t>(proxy.shape(0))};
+            auto view = set_view_t{&proxy(0), static_cast<std::size_t>(proxy.shape(0))};
             auto labels_py = py::array_t<label_t>(py_shape_t{static_cast<Py_ssize_t>(count)});
             auto labels_proxy = labels_py.mutable_unchecked<1>();
             auto result = index.search(view, count);
             result.error.raise();
-            auto found = result.dump_to(&labels_proxy(0), nullptr);
+            auto found = result.dump_to(&labels_proxy(0));
             labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(found)});
             return labels_py;
         },
