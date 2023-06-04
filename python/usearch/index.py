@@ -61,7 +61,7 @@ def jit_metric(ndim: int, metric: MetricKind, dtype: str = 'f32') -> Callable:
         signature = types.float32(
             types.CPointer(types.float32),
             types.CPointer(types.float32),
-            types.size_t, types.size_t)
+            types.uint64, types.uint64)
 
         if metric == MetricKind.IP:
 
