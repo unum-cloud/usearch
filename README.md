@@ -299,7 +299,7 @@ from numba import cfunc, types, carray
 signature = types.float32(
     types.CPointer(types.float32),
     types.CPointer(types.float32),
-    types.size_t, types.size_t)
+    types.uint64, types.uint64)
 
 @cfunc(signature)
 def python_dot(a, b, n, m):

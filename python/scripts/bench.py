@@ -102,7 +102,7 @@ def main(
         signature_f32 = types.float32(
             types.CPointer(types.float32),
             types.CPointer(types.float32),
-            types.size_t, types.size_t)
+            types.uint64, types.uint64)
 
         @cfunc(signature_f32)
         def inner_product_f32(a, b, n, m):
@@ -116,7 +116,7 @@ def main(
         signature_f8 = types.float32(
             types.CPointer(types.int8),
             types.CPointer(types.int8),
-            types.size_t, types.size_t)
+            types.uint64, types.uint64)
 
         @cfunc(signature_f8)
         def cos_f8(a, b, n, m):
