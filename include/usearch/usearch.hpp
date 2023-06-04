@@ -309,7 +309,7 @@ template <typename scalar_at, typename result_at = std::size_t> struct hamming_g
  *          two arrays of integers. An example would be a textual document,
  *          tokenized and hashed into a fixed-capacity bitset.
  */
-template <typename scalar_at, typename result_at = std::size_t> struct bit_hamming_gt {
+template <typename scalar_at, typename result_at = std::size_t> struct bitwise_hamming_gt {
     using scalar_t = scalar_at;
     using result_t = result_at;
     using result_type = result_t;
@@ -336,12 +336,12 @@ template <typename scalar_at, typename result_at = std::size_t> struct bit_hammi
  *  @brief  Tanimoto distance is the intersection over bitwise union.
  *          Often used in chemistry and biology to compare molecular fingerprints.
  */
-template <typename scalar_at, typename result_at = float> struct bit_tanimoto_gt {
+template <typename scalar_at, typename result_at = float> struct bitwise_tanimoto_gt {
     using scalar_t = scalar_at;
     using result_t = result_at;
     using result_type = result_t;
     static_assert(std::is_unsigned<scalar_t>::value, "Tanimoto distance requires unsigned integral words");
-    static_assert(!std::is_floating_point<result_t>::value, "Tanimoto distance will be a fraction");
+    static_assert(std::is_floating_point<result_t>::value, "Tanimoto distance will be a fraction");
 
     inline result_t operator()( //
         scalar_t const* a, scalar_t const* b, std::size_t words, std::size_t = 0) const noexcept {
@@ -366,12 +366,12 @@ template <typename scalar_at, typename result_at = float> struct bit_tanimoto_gt
  *  @brief  Sorensen-Dice or F1 distance is the intersection over bitwise union.
  *          Often used in chemistry and biology to compare molecular fingerprints.
  */
-template <typename scalar_at, typename result_at = float> struct bit_sorensen_gt {
+template <typename scalar_at, typename result_at = float> struct bitwise_sorensen_gt {
     using scalar_t = scalar_at;
     using result_t = result_at;
     using result_type = result_t;
     static_assert(std::is_unsigned<scalar_t>::value, "Sorensen-Dice distance requires unsigned integral words");
-    static_assert(!std::is_floating_point<result_t>::value, "Sorensen-Dice distance will be a fraction");
+    static_assert(std::is_floating_point<result_t>::value, "Sorensen-Dice distance will be a fraction");
 
     inline result_t operator()( //
         scalar_t const* a, scalar_t const* b, std::size_t words, std::size_t = 0) const noexcept {
@@ -1026,9 +1026,9 @@ enum class common_metric_kind_t : std::uint8_t {
 
     // Sets:
     jaccard_k = 'j',
-    hamming_k = 'h',
-    tanimoto_k = 't',
-    sorensen_k = 's',
+    bitwise_hamming_k = 'b',
+    bitwise_tanimoto_k = 't',
+    bitwise_sorensen_k = 's',
 };
 
 using file_header_t = byte_t[64];

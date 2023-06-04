@@ -10,11 +10,22 @@ import numpy as np
 
 from usearch.compiled import Index as _CompiledIndex
 from usearch.compiled import SetsIndex as _CompiledSetsIndex
-from usearch.compiled import HashIndex as _CompiledHashIndex
-from usearch.compiled import DEFAULT_CONNECTIVITY, DEFAULT_EXPANSION_ADD, DEFAULT_EXPANSION_SEARCH
+from usearch.compiled import BitsIndex as _CompiledBitsIndex
+
+from usearch.compiled import MetricKind
+from usearch.compiled import (
+    DEFAULT_CONNECTIVITY,
+    DEFAULT_EXPANSION_ADD,
+    DEFAULT_EXPANSION_SEARCH,
+)
+
+BitwiseMetricKind = (
+    MetricKind.BitwiseHamming,
+    MetricKind.BitwiseTanimoto,
+    MetricKind.BitwiseSorensen,
+)
 
 SetsIndex = _CompiledSetsIndex
-HashIndex = _CompiledHashIndex
 
 
 class Matches(NamedTuple):
@@ -34,7 +45,7 @@ def list_matches(results: Matches, row: int) -> List[dict]:
     ]
 
 
-def jit_metric(ndim: int, metric_name: str, dtype: str = 'f32') -> Callable:
+def jit_metric(ndim: int, metric: MetricKind, dtype: str = 'f32') -> Callable:
 
     try:
         from numba import cfunc, types, carray
@@ -52,7 +63,7 @@ def jit_metric(ndim: int, metric_name: str, dtype: str = 'f32') -> Callable:
             types.CPointer(types.float32),
             types.size_t, types.size_t)
 
-        if metric_name == 'ip':
+        if metric == MetricKind.IP:
 
             @cfunc(signature)
             def numba_ip(a, b, _n, _m):
@@ -65,7 +76,7 @@ def jit_metric(ndim: int, metric_name: str, dtype: str = 'f32') -> Callable:
 
             return numba_ip
 
-        if metric_name == 'cos':
+        if metric == MetricKind.Cos:
 
             @cfunc(signature)
             def numba_cos(a, b, _n, _m):
@@ -89,7 +100,7 @@ def jit_metric(ndim: int, metric_name: str, dtype: str = 'f32') -> Callable:
 
             return numba_cos
 
-        if metric_name == 'l2sq':
+        if metric == MetricKind.L2sq:
 
             @cfunc(signature)
             def numba_l2sq(a, b, _n, _m):
@@ -107,7 +118,7 @@ def jit_metric(ndim: int, metric_name: str, dtype: str = 'f32') -> Callable:
 
 
 class Index:
-    """Fast JIT-compiled index for equi-dimensional embeddings.
+    """Fast JIT-compiled vector-search index for dense equi-dimensional embeddings.
 
     Vector labels must be integers.
     Vectors must have the same number of dimensions within the index.
@@ -119,8 +130,8 @@ class Index:
     def __init__(
         self,
         ndim: int,
-        dtype: str = 'f32',
-        metric: Union[str, int] = 'ip',
+        metric: Union[MetricKind, Callable] = MetricKind.IP,
+        dtype: Optional[str] = None,
         jit: bool = False,
 
         connectivity: int = DEFAULT_CONNECTIVITY,
@@ -135,15 +146,20 @@ class Index:
 
         :param ndim: Number of vector dimensions
         :type ndim: int
-        :param dtype: Scalar type for vectors, defaults to 'f32'
-        :type dtype: str, optional
-            Example: you can use the `f16` index with `f32` vectors,
-            which will be automatically downcasted.
 
-        :param metric: Distance function, defaults to 'ip'
-        :type metric: Union[str, int], optional
-            Name of distance function, or the address of the
-            Numba `cfunc` JIT-compiled object.
+        :param metric: Distance function, defaults to MetricKind.IP
+        :type metric: Union[MetricKind, Callable], optional
+            Kind of the distance function, or the Numba `cfunc` JIT-compiled object.
+            Possible `MetricKind` values: IP, Cosine, L2sq, Haversine, 
+            Hamming, Tanimoto, Sorensen.
+            Not every kind is JIT-able.
+
+        :param dtype: Scalar type for internal vector storage, defaults to None
+        :type dtype: str, optional
+            For continuous metrics can be: f16, f32, f64, or f8.
+            For bitwise metrics it's implementation-defined, and can't change.
+            Example: you can use the `f16` index with `f32` vectors in Euclidean space,
+            which will be automatically downcasted.
 
         :param jit: Enable Numba to JIT compile the metric, defaults to False
         :type jit: bool, optional
@@ -177,40 +193,54 @@ class Index:
         :param view: Are we simply viewing an immutable index, defaults to False
         :type view: bool, optional
         """
-        if jit:
-            assert isinstance(metric, str), 'Name the metric to JIT'
-            self._metric_name = metric
-            self._metric_jit = jit_metric(
-                ndim=ndim,
-                metric_name=metric,
-                dtype=dtype,
-            )
-            self._metric_pointer = self._metric_jit.address if \
-                self._metric_jit else 0
 
-        elif isinstance(metric, int):
-            self._metric_name = ''
-            self._metric_jit = None
-            self._metric_pointer = metric
+        if metric is None:
+            metric = MetricKind.IP
 
+        if isinstance(metric, Callable):
+            self._metric_kind = MetricKind.Unknown
+            self._metric_jit = metric
+            self._metric_pointer = int(metric.address)
+
+        elif isinstance(metric, MetricKind):
+            if jit:
+                self._metric_kind = metric
+                self._metric_jit = jit_metric(
+                    ndim=ndim,
+                    metric_kind=metric,
+                    dtype=dtype,
+                )
+                self._metric_pointer = self._metric_jit.address if \
+                    self._metric_jit else 0
+            else:
+                self._metric_kind = metric
+                self._metric_jit = None
+                self._metric_pointer = 0
         else:
-            if metric is None:
-                metric = 'ip'
-            assert isinstance(metric, str)
-            self._metric_name = metric
-            self._metric_jit = None
-            self._metric_pointer = 0
+            raise ValueError(
+                'The `metric` must be Numba callback or a `MetricKind`')
 
-        self._compiled = _CompiledIndex(
-            ndim=ndim,
-            metric=self._metric_name,
-            metric_pointer=self._metric_pointer,
-            dtype=dtype,
-            connectivity=connectivity,
-            expansion_add=expansion_add,
-            expansion_search=expansion_search,
-            tune=tune,
-        )
+        if metric in BitwiseMetricKind:
+            self._compiled = _CompiledBitsIndex(
+                bits=ndim,
+                metric=self._metric_kind,
+                connectivity=connectivity,
+                expansion_add=expansion_add,
+                expansion_search=expansion_search,
+            )
+        else:
+            if dtype is None:
+                dtype = 'f32'
+            self._compiled = _CompiledIndex(
+                ndim=ndim,
+                metric=self._metric_kind,
+                metric_pointer=self._metric_pointer,
+                dtype=dtype,
+                connectivity=connectivity,
+                expansion_add=expansion_add,
+                expansion_search=expansion_search,
+                tune=tune,
+            )
 
         self.path = path
         if path and os.path.exists(path):
@@ -245,16 +275,47 @@ class Index:
         :param threads: Optimal number of cores to use, defaults to 0
         :type threads: int, optional
         """
+        assert isinstance(vectors, np.ndarray), 'Expects a NumPy array'
+        assert vectors.ndim == 1 or vectors.ndim == 2, 'Expects a matrix or vector'
+        is_batch = vectors.ndim == 2
+        generate_labels = labels is None
+
+        # If no `labels` were provided, generate some
+        if generate_labels:
+            start_id = len(self._compiled)
+            if is_batch:
+                labels = np.arange(start_id, start_id + vectors.shape[0])
+            else:
+                labels = start_id
         if isinstance(labels, np.ndarray):
             labels = labels.astype(np.longlong)
+
         self._compiled.add(labels, vectors, copy=copy, threads=threads)
+
+        if generate_labels:
+            return labels
 
     def search(
             self, vectors, k: int = 10, *,
             threads: int = 0, exact: bool = False) -> Matches:
+        """Performs approximate nearest neighbors search for one or more queries.
+
+        :param vectors: Query vector or vectors.
+        :type vectors: Buffer
+        :param k: Upper limit on the number of matches to find, defaults to 10
+        :type k: int, optional
+
+        :param threads: Optimal number of cores to use, defaults to 0
+        :type threads: int, optional
+        :param exact: Perform exhaustive linear-time exact search, defaults to False
+        :type exact: bool, optional
+        :return: Approximate matches for one or more queries
+        :rtype: Matches
+        """
         tuple_ = self._compiled.search(
             vectors, k,
-            exact=exact, threads=threads)
+            exact=exact, threads=threads,
+        )
         return Matches(*tuple_)
 
     def __len__(self) -> int:

@@ -202,9 +202,11 @@ The following distances are pre-packaged:
 - `ip_gt<scalar_t>` for "Inner Product" or "Dot Product" distance.
 - `l2sq_gt<scalar_t>` for the squared "L2" or "Euclidean" distance.
 - `jaccard_gt<scalar_t>` for "Jaccard" distance between two ordered sets of unique elements.
-- `bit_hamming_gt<scalar_t>` for "Hamming" distance, as the number of shared bits in hashes.
+- `bitwise_hamming_gt<scalar_t>` for "Hamming" distance, as the number of shared bits in hashes.
+- `bitwise_tanimoto_gt<scalar_t>` for "Tanimoto" coefficient for bit-strings.
+- `bitwise_sorensen_gt<scalar_t>` for "Dice-Sorensen" coefficient for bit-strings.
 - `pearson_correlation_gt<scalar_t>` for "Pearson" correlation between probability distributions.
-- `haversine_gt<scalar_t>` for "Haversine" or "Great Circle" distance between coordinates.
+- `haversine_gt<scalar_t>` for "Haversine" or "Great Circle" distance between coordinates used in GIS applications.
 
 #### Multi-Threading
 

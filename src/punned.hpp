@@ -298,12 +298,17 @@ inline expected_gt<common_metric_kind_t> common_metric_from_name(char const* nam
         parsed.result = common_metric_kind_t::cos_k;
     } else if (str_equals(name, len, "haversine")) {
         parsed.result = common_metric_kind_t::haversine_k;
-    } else if (str_equals(name, len, "hamming")) {
-        parsed.result = common_metric_kind_t::hamming_k;
     } else if (str_equals(name, len, "pearson")) {
         parsed.result = common_metric_kind_t::pearson_k;
+    } else if (str_equals(name, len, "hamming")) {
+        parsed.result = common_metric_kind_t::bitwise_hamming_k;
+    } else if (str_equals(name, len, "tanimoto")) {
+        parsed.result = common_metric_kind_t::bitwise_tanimoto_k;
+    } else if (str_equals(name, len, "sorensen")) {
+        parsed.result = common_metric_kind_t::bitwise_sorensen_k;
     } else
-        parsed.failed("Unknown distance, choose: l2sq, ip, cos, haversine, hamming, jaccard, pearson");
+        parsed.failed(
+            "Unknown distance, choose: l2sq, ip, cos, haversine, jaccard, pearson, hamming, tanimoto, sorensen");
     return parsed;
 }
 

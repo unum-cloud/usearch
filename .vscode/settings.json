@@ -103,6 +103,8 @@
         "shared_mutex": "cpp"
     },
     "cSpell.words": [
+        "allclose",
+        "arange",
         "astype",
         "Availible",
         "BLAS",
@@ -111,6 +113,7 @@
         "downcasted",
         "Downcasting",
         "dtype",
+        "equi",
         "equidimensional",
         "FAISS",
         "fbin",
@@ -126,6 +129,7 @@
         "ndarray",
         "ndim",
         "Numba",
+        "numpy",
         "OPENMP",
         "preprocess",
         "Println",

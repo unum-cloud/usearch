@@ -1,27 +1,56 @@
+import os
 import pytest
 import numpy as np
 
-from usearch.io import load_matrix
-from usearch.index import Index, SetsIndex
+from usearch.io import load_matrix, save_matrix
+from usearch.index import Index, SetsIndex, MetricKind
 
 
 dimensions = [13, 99, 100, 256]
-sizes = [1, 2, 100]
+batch_sizes = [1, 2, 100]
 index_types = ['f32', 'f64', 'f16', 'f8']
 numpy_types = [np.float32, np.float64, np.float16, np.byte]
 connectivity_options = [3, 13, 50]
-jit_options = [False, True]
-metrics = ['cos', 'l2sq']
+jit_options = [False]
+continuous_metrics = [
+    MetricKind.Cos,
+    MetricKind.L2sq,
+]
+hash_metrics = [
+    MetricKind.BitwiseHamming,
+    MetricKind.BitwiseTanimoto,
+    MetricKind.BitwiseSorensen,
+]
+
+
+@pytest.mark.parametrize('rows', batch_sizes)
+@pytest.mark.parametrize('cols', dimensions)
+def test_serializing_fbin_matrix(rows: int, cols: int):
+    original = np.random.rand(rows, cols).astype(np.float32)
+    save_matrix(original, 'tmp.fbin')
+    reconstructed = load_matrix('tmp.fbin')
+    assert np.allclose(original, reconstructed)
+    os.remove('tmp.fbin')
+
+
+@pytest.mark.parametrize('rows', batch_sizes)
+@pytest.mark.parametrize('cols', dimensions)
+def test_serializing_ibin_matrix(rows: int, cols: int):
+    original = np.random.randint(0, rows+1, size=(rows, cols)).astype(np.int32)
+    save_matrix(original, 'tmp.ibin')
+    reconstructed = load_matrix('tmp.ibin')
+    assert np.allclose(original, reconstructed)
+    os.remove('tmp.ibin')
 
 
 @pytest.mark.parametrize('ndim', dimensions)
-@pytest.mark.parametrize('metric', metrics)
+@pytest.mark.parametrize('metric', continuous_metrics)
 @pytest.mark.parametrize('index_type', index_types)
 @pytest.mark.parametrize('numpy_type', numpy_types)
 @pytest.mark.parametrize('connectivity', connectivity_options)
 @pytest.mark.parametrize('jit', jit_options)
-def test_basics(
-        ndim: int, metric: str,
+def test_index(
+        ndim: int, metric: MetricKind,
         index_type: str, numpy_type: str,
         connectivity: int, jit: bool):
 
@@ -56,27 +85,31 @@ def test_basics(
 
 
 @pytest.mark.parametrize('ndim', dimensions)
-@pytest.mark.parametrize('size', sizes)
+@pytest.mark.parametrize('metric', continuous_metrics)
+@pytest.mark.parametrize('batch_size', batch_sizes)
 @pytest.mark.parametrize('index_type', index_types)
 @pytest.mark.parametrize('numpy_type', numpy_types)
-def test_l2sq_batch(ndim: int, size: int, index_type: str, numpy_type: str):
-    index = Index(ndim=ndim, metric='l2sq', dtype=index_type)
+def test_index_batch(
+        ndim: int, metric: MetricKind,
+        batch_size: int, index_type: str, numpy_type: str):
+
+    index = Index(ndim=ndim, metric=metric, dtype=index_type)
 
     limit = 0.7 if numpy_type != np.byte else 70
     vectors = np.random.uniform(
-        0, limit, (size, index.ndim)).astype(numpy_type)
-    labels = np.array(range(size), dtype=np.longlong)
+        0, limit, (batch_size, index.ndim)).astype(numpy_type)
+    labels = np.array(range(batch_size), dtype=np.longlong)
 
     index.add(labels, vectors)
     matches, distances, count = index.search(vectors, 10)
 
     assert matches.shape[0] == distances.shape[0]
-    assert count.shape[0] == size
+    assert count.shape[0] == batch_size
 
 
 @pytest.mark.parametrize('ndim', dimensions)
-@pytest.mark.parametrize('size', sizes)
-def test_user_defined_function(ndim: int, size: int):
+@pytest.mark.parametrize('batch_size', batch_sizes)
+def test_index_udf(ndim: int, batch_size: int):
 
     try:
         from numba import cfunc, types, carray
@@ -99,27 +132,40 @@ def test_user_defined_function(ndim: int, size: int):
             c += a_array[i] * b_array[i]
         return c
 
-    index = Index(ndim=ndim, metric=python_dot.address)
+    index = Index(ndim=ndim, metric=python_dot)
 
     vectors = np.random.uniform(
-        0, 0.3, (size, index.ndim)).astype(np.float32)
-    labels = np.array(range(size), dtype=np.longlong)
+        0, 0.3, (batch_size, index.ndim)).astype(np.float32)
+    labels = np.array(range(batch_size), dtype=np.longlong)
 
     index.add(labels, vectors)
     matches, distances, count = index.search(vectors, 10)
 
     assert matches.shape[0] == distances.shape[0]
-    assert count.shape[0] == size
+    assert count.shape[0] == batch_size
 
 
-def test_sets():
+@pytest.mark.parametrize('connectivity', connectivity_options)
+def test_sets_index(connectivity: int):
 
-    index = SetsIndex()
+    index = SetsIndex(connectivity=connectivity)
     index.add(10, np.array([10, 12, 15], dtype=np.uint32))
     index.add(11, np.array([11, 12, 15, 16], dtype=np.uint32))
     results = index.search(np.array([12, 15], dtype=np.uint32), 10)
     assert list(results) == [10, 11]
 
 
-if __name__ == '__main__':
-    pass
+@pytest.mark.parametrize('bits', dimensions)
+@pytest.mark.parametrize('metric', hash_metrics)
+@pytest.mark.parametrize('connectivity', connectivity_options)
+@pytest.mark.parametrize('batch_size', batch_sizes)
+def test_hash_index(bits: int, metric: MetricKind, connectivity: int, batch_size: int):
+
+    index = Index(ndim=bits, metric=metric, connectivity=connectivity)
+
+    bit_vectors = np.random.randint(2, size=(batch_size, bits))
+    bit_vectors = np.packbits(bit_vectors, axis=1)
+    labels = np.array(range(batch_size), dtype=np.longlong)
+
+    index.add(labels, bit_vectors)
+    index.search(bit_vectors, 10)
