@@ -494,6 +494,67 @@ func main() {
 
 ### Wolfram
 
+### Docker
+
+#### Installation
+
+USearch Docker image is available from both [DockerHub](https://hub.docker.com/r/unum/usearch) and [GitHub Container Registry](https://github.com/unum-cloud/usearch/pkgs/container/usearch).
+
+```sh
+docker pull unum/usearch
+docker pull ghcr.io/unum-cloud/usearch:main
+```
+
+#### Quickstart
+
+```sh
+docker run unum/usearch --metric l2sq --ndim 3
+```
+
+#### Interface
+
+The Docker image built on a recent Linux kernel, supporting `io_uring` functionality for kernel bypass and use the fast `ucall` library for RPC.
+You can query the server with any JSON-RPC library or even plain REST calls, passing JSON tasks around.
+To add a single vector:
+
+```json
+{
+    "method": "add_one",
+    "id": "arbitrary-unique-id",
+    "params": {
+        "label": 42,
+        "vector": [0.2, 0.6, 0.4]
+    }
+}
+```
+
+To query a single vector:
+
+```json
+{
+    "method": "search_one",
+    "id": "arbitrary-unique-id",
+    "params": {
+        "vector": [0.2, 0.6, 0.4],
+        "count": 10
+    }
+}
+```
+
+Alternatively, you can use the UCall CLI tool:
+
+```sh
+ucall --uri 0.0.0.0 -p 8545 add_one label=42 vector='[0.2, 0.6, 0.4]'
+ucall --uri 0.0.0.0 -p 8545 search_one vector='[0.2, 0.6, 0.4]' count=10
+```
+
+In case you server is running somewhere else:
+
+```sh
+ucall --uri <ip> -p <port> add_one label=42 vector='[0.2, 0.6, 0.4]'
+ucall --uri <ip> -p <port> search_one vector='[0.2, 0.6, 0.4]' count=10
+```
+
 ## TODO
 
 - JavaScript: Allow calling from "worker threads".
