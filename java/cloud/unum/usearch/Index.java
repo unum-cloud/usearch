@@ -133,7 +133,7 @@ public class Index {
   }
 
   public static void main(String[] args) {
-    Index index = new Index.Config().metric("cos").build();
+    Index index = new Index.Config().metric("cos").dimensions(100).build();
     index.size();
   }
 

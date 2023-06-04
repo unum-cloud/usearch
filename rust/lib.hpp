@@ -17,7 +17,7 @@ class Index {
     using distance_t = unum::usearch::punned_distance_t;
     using punned_t = unum::usearch::punned_gt<label_t>;
 
-    Index(std::shared_ptr<punned_t> index);
+    Index(std::unique_ptr<punned_t> index);
 
     void reserve(size_t) const;
 
@@ -37,7 +37,7 @@ class Index {
     void view(rust::Str path) const;
 
   private:
-    std::shared_ptr<punned_t> index_;
+    std::unique_ptr<punned_t> index_;
 };
 
 std::unique_ptr<Index> new_ip(size_t dims, rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search);

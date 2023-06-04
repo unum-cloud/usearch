@@ -252,8 +252,8 @@ struct running_stats_printer_t {
         constexpr std::size_t bars_len_k = 60;
 
         float percentage = progress * 1.f / total;
-        int lpad = (int)(percentage * bars_len_k);
-        int rpad = bars_len_k - lpad;
+        int left_pad = (int)(percentage * bars_len_k);
+        int right_pad = bars_len_k - left_pad;
 
         std::size_t count_new = progress - last_printed_progress;
         timestamp_t time_new = std::chrono::high_resolution_clock::now();
@@ -261,8 +261,8 @@ struct running_stats_printer_t {
             std::chrono::duration_cast<std::chrono::nanoseconds>(time_new - last_printed_time).count();
         float vectors_per_second = count_new * 1e9 / duration;
 
-        std::printf("\r%3.3f%% [%.*s%*s] %.0f vectors/s, finished %zu/%zu", percentage * 100.f, lpad, bars_k, rpad, "",
-                    vectors_per_second, progress, total);
+        std::printf("\r%3.3f%% [%.*s%*s] %.0f vectors/s, finished %zu/%zu", percentage * 100.f, left_pad, bars_k,
+                    right_pad, "", vectors_per_second, progress, total);
         std::fflush(stdout);
 
         last_printed_progress = progress;
@@ -442,7 +442,7 @@ struct args_t {
 };
 
 template <typename index_at, typename dataset_at> //
-index_at type_punned_index_for_metric(dataset_at& dataset, args_t const& args, config_t config, accuracy_t accuracy) {
+index_at punned_index_for_metric(dataset_at& dataset, args_t const& args, index_config_t config, accuracy_t accuracy) {
     if (args.metric_l2) {
         std::printf("-- Metric: Euclidean\n");
         return index_at::l2sq(dataset.dimensions(), accuracy, config);
@@ -459,7 +459,7 @@ index_at type_punned_index_for_metric(dataset_at& dataset, args_t const& args, c
 }
 
 template <typename index_at, typename dataset_at> //
-void run_type_punned(dataset_at& dataset, args_t const& args, config_t config) {
+void run_punned(dataset_at& dataset, args_t const& args, index_config_t config, index_limits_t limits) {
 
     accuracy_t accuracy = accuracy_t::f32_k;
     if (args.quantize_f16)
@@ -469,7 +469,8 @@ void run_type_punned(dataset_at& dataset, args_t const& args, config_t config) {
 
     std::printf("-- Accuracy: %s\n", accuracy_name(accuracy));
 
-    index_at index{type_punned_index_for_metric<index_at>(dataset, args, config, accuracy)};
+    index_at index{punned_index_for_metric<index_at>(dataset, args, config, accuracy)};
+    index.reserve(limits);
     std::printf("-- Hardware acceleration: %s\n", isa_name(index.acceleration()));
     std::printf("Will benchmark in-memory\n");
 
@@ -484,9 +485,10 @@ void run_type_punned(dataset_at& dataset, args_t const& args, config_t config) {
 }
 
 template <typename index_at, typename dataset_at> //
-void run_typed(dataset_at& dataset, args_t const& args, config_t config) {
+void run_typed(dataset_at& dataset, args_t const& args, index_config_t config, index_limits_t limits) {
 
     index_at index(config);
+    index.reserve(limits);
     std::printf("Will benchmark in-memory\n");
 
     single_shot(dataset, index, true);
@@ -500,23 +502,23 @@ void run_typed(dataset_at& dataset, args_t const& args, config_t config) {
 }
 
 template <typename neighbor_id_at, typename dataset_at> //
-void run_big_or_small(dataset_at& dataset, args_t const& args, config_t config) {
+void run_big_or_small(dataset_at& dataset, args_t const& args, index_config_t config, index_limits_t limits) {
     if (args.native) {
         if (args.metric_cos) {
             std::printf("-- Metric: Angular\n");
-            run_typed<index_gt<cos_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config);
+            run_typed<index_gt<cos_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config, limits);
         } else if (args.metric_l2) {
             std::printf("-- Metric: Euclidean\n");
-            run_typed<index_gt<l2sq_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config);
+            run_typed<index_gt<l2sq_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config, limits);
         } else if (args.metric_haversine) {
             std::printf("-- Metric: Haversine\n");
-            run_typed<index_gt<haversine_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config);
+            run_typed<index_gt<haversine_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config, limits);
         } else {
             std::printf("-- Metric: Inner Product\n");
-            run_typed<index_gt<ip_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config);
+            run_typed<index_gt<ip_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config, limits);
         }
     } else
-        run_type_punned<punned_gt<std::size_t, neighbor_id_at>>(dataset, args, config);
+        run_punned<punned_gt<std::size_t, neighbor_id_at>>(dataset, args, config, limits);
 }
 
 void report_alternative_setups() {
@@ -634,12 +636,13 @@ int main(int argc, char** argv) {
     // report_alternative_setups();
     // report_expected_losses(dataset);
 
-    config_t config;
+    index_config_t config;
     config.connectivity = args.connectivity;
     config.expansion_add = args.expansion_add;
     config.expansion_search = args.expansion_search;
-    config.max_threads_add = config.max_threads_search = args.threads;
-    config.max_elements = dataset.vectors_count();
+    index_limits_t limits;
+    limits.threads_add = limits.threads_search = args.threads;
+    limits.elements = dataset.vectors_count();
 
     std::printf("- Index: \n");
     std::printf("-- Connectivity: %zu\n", config.connectivity);
@@ -647,9 +650,9 @@ int main(int argc, char** argv) {
     std::printf("-- Expansion @ Search: %zu\n", config.expansion_search);
 
     if (args.big)
-        run_big_or_small<uint40_t>(dataset, args, config);
+        run_big_or_small<uint40_t>(dataset, args, config, limits);
     else
-        run_big_or_small<std::uint32_t>(dataset, args, config);
+        run_big_or_small<std::uint32_t>(dataset, args, config, limits);
 
     return 0;
 }

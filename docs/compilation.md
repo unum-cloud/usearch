@@ -62,8 +62,12 @@ Benchmarking:
 
 ## Python
 
+Use PyTest to validate the build.
+The `-s` option will disable capturing the logs.
+The `-x` option will exit after first failure to simplify debugging.
+
 ```sh
-pip install -e . && pytest python/scripts/test.py
+pip install -e . && pytest python/scripts/test.py -s -x
 ```
 
 Linting:
@@ -95,8 +99,7 @@ python python/scripts/bench_params.py connectivity
 ## JavaScript
 
 ```sh
-npm install
-node javascript/test.js
+npm install && node javascript/test.js
 npm publish
 ```
 
@@ -146,6 +149,14 @@ java -cp . -Djava.library.path=/Users/av/github/usearch/java cloud.unum.usearch.
 
 ```sh
 brew install --cask wolfram-engine
+```
+
+## C
+
+### Linux
+
+```sh
+g++ -shared -fPIC lib.cpp -I ../include/  -I ../fp16/include/ -o libusearch.so
 ```
 
 ## Docker

@@ -58,7 +58,7 @@ using shared_index_t = std::shared_ptr<punned_t>;
 
 + (instancetype)indexIP:(UInt32)dimensions connectivity:(UInt32)connectivity {
     std::size_t dims = static_cast<std::size_t>(dimensions);
-    config_t config;
+    index_config_t config;
 
     config.connectivity = static_cast<std::size_t>(connectivity);
     shared_index_t ptr = std::make_shared<punned_t>(punned_t::ip(dims, accuracy_t::f32_k, config));
@@ -67,7 +67,7 @@ using shared_index_t = std::shared_ptr<punned_t>;
 
 + (instancetype)indexL2sq:(UInt32)dimensions connectivity:(UInt32)connectivity {
     std::size_t dims = static_cast<std::size_t>(dimensions);
-    config_t config;
+    index_config_t config;
 
     config.connectivity = static_cast<std::size_t>(connectivity);
     shared_index_t ptr = std::make_shared<punned_t>(punned_t::l2sq(dims, accuracy_t::f32_k, config));
@@ -75,7 +75,7 @@ using shared_index_t = std::shared_ptr<punned_t>;
 }
 
 + (instancetype)indexHaversine:(UInt32)connectivity {
-    config_t config;
+    index_config_t config;
 
     config.connectivity = static_cast<std::size_t>(connectivity);
     shared_index_t ptr = std::make_shared<punned_t>(punned_t::haversine(accuracy_t::f32_k, config));

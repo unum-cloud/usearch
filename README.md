@@ -66,11 +66,11 @@ Both USearch and FAISS implement the same HNSW algorithm.
 But they differ in a lot of design decisions.
 USearch is designed to be compact and broadly compatible without sacrificing performance.
 
-|            | FAISS, `f32` | USearch, `f32` | USearch, `f16` | USearch, `f8` | USearch + Numba, `f32` |
-| :--------- | -----------: | -------------: | -------------: | ------------: | ---------------------: |
-| Insertions |       76 K/s |         89 K/s |         73 K/s |   **137 K/s** |                 99 K/s |
-| Queries    |      118 K/s |        167 K/s |        140 K/s |   **281 K/s** |                165 K/s |
-| Recall @1  |          99% |          99.2% |            98% |     **99.2%** |                  99.2% |
+|            | FAISS, `f32` | USearch, `f32` | USearch, `f16` | USearch, `f8` |
+| :--------- | -----------: | -------------: | -------------: | ------------: |
+| Insertions |       76 K/s |        105 K/s |        115 K/s |   **202 K/s** |
+| Queries    |      118 K/s |        174 K/s |        173 K/s |   **304 K/s** |
+| Recall @1  |          99% |          99.2% |          99.1% |     **99.2%** |
 
 > Dataset: 1M vectors sample of the Deep1B dataset.
 > Hardware: `c7g.metal` AWS instance with 64 cores and DDR5 memory.
@@ -202,9 +202,11 @@ The following distances are pre-packaged:
 - `ip_gt<scalar_t>` for "Inner Product" or "Dot Product" distance.
 - `l2sq_gt<scalar_t>` for the squared "L2" or "Euclidean" distance.
 - `jaccard_gt<scalar_t>` for "Jaccard" distance between two ordered sets of unique elements.
-- `bit_hamming_gt<scalar_t>` for "Hamming" distance, as the number of shared bits in hashes.
+- `bitwise_hamming_gt<scalar_t>` for "Hamming" distance, as the number of shared bits in hashes.
+- `bitwise_tanimoto_gt<scalar_t>` for "Tanimoto" coefficient for bit-strings.
+- `bitwise_sorensen_gt<scalar_t>` for "Dice-Sorensen" coefficient for bit-strings.
 - `pearson_correlation_gt<scalar_t>` for "Pearson" correlation between probability distributions.
-- `haversine_gt<scalar_t>` for "Haversine" or "Great Circle" distance between coordinates.
+- `haversine_gt<scalar_t>` for "Haversine" or "Great Circle" distance between coordinates used in GIS applications.
 
 #### Multi-Threading
 
@@ -309,6 +311,12 @@ def python_dot(a, b, n, m):
     return c
 
 index = Index(ndim=ndim, metric=python_dot.address)
+```
+
+To use Numba JIT, install USearch with extras:
+
+```sh
+pip install usearch[jit]
 ```
 
 [numba]: https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
@@ -456,6 +464,33 @@ assert(results.0[0] == 42)
 ```
 
 ### GoLang
+
+#### Installation
+
+```golang
+import (
+	"github.com/unum-cloud/usearch/golang"
+)
+```
+
+#### Quickstart
+
+```golang
+package main
+
+import (
+	"fmt"
+	"github.com/unum-cloud/usearch/golang"
+)
+
+func main() {
+	conf := usearch.DefaultConfig(128)
+	index := usearch.NewIndex(conf)
+	v := make([]float32, 128)
+	index.Add(42, v)
+	results := index.Search(v, 1)
+}
+```
 
 ### Wolfram
 

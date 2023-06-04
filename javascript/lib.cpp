@@ -87,9 +87,10 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
     Napi::Object params = ctx[0].As<Napi::Object>();
     std::size_t dimensions = params.Has("dimensions") ? params.Get("dimensions").As<Napi::Number>().Uint32Value() : 0;
 
-    config_t config;
+    index_config_t config;
+    index_limits_t limits;
     if (params.Has("capacity"))
-        config.max_elements = params.Get("capacity").As<Napi::Number>().Uint32Value();
+        limits.elements = params.Get("capacity").As<Napi::Number>().Uint32Value();
     if (params.Has("connectivity"))
         config.connectivity = params.Get("connectivity").As<Napi::Number>().Uint32Value();
 
@@ -105,8 +106,7 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
         else if (accuracy_str == "f8")
             accuracy = accuracy_t::f8_k;
         else {
-            Napi::TypeError::New(env, "Supported metrics are: [ip, cos, l2sq, haversine]")
-                .ThrowAsJavaScriptException();
+            Napi::TypeError::New(env, "Supported metrics are: [ip, cos, l2sq, haversine]").ThrowAsJavaScriptException();
             return;
         }
     }
@@ -120,23 +120,26 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
                 return;
             }
             native_.reset(new punned_t(punned_t::l2sq(dimensions, accuracy, config)));
+            native_->reserve(limits);
         } else if (name == "ip" || name == "inner" || name == "dot") {
             if (!dimensions) {
                 Napi::TypeError::New(env, "Please define the number of dimensions").ThrowAsJavaScriptException();
                 return;
             }
             native_.reset(new punned_t(punned_t::ip(dimensions, accuracy, config)));
+            native_->reserve(limits);
         } else if (name == "cos" || name == "angular") {
             if (!dimensions) {
                 Napi::TypeError::New(env, "Please define the number of dimensions").ThrowAsJavaScriptException();
                 return;
             }
             native_.reset(new punned_t(punned_t::cos(dimensions, accuracy, config)));
+            native_->reserve(limits);
         } else if (name == "haversine") {
             native_.reset(new punned_t(punned_t::haversine(accuracy, config)));
+            native_->reserve(limits);
         } else {
-            Napi::TypeError::New(env, "Supported metrics are: [ip, cos, l2sq, haversine]")
-                .ThrowAsJavaScriptException();
+            Napi::TypeError::New(env, "Supported metrics are: [ip, cos, l2sq, haversine]").ThrowAsJavaScriptException();
             return;
         }
     } else {
@@ -145,6 +148,7 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
             return;
         }
         native_.reset(new punned_t(punned_t::ip(dimensions, accuracy, config)));
+        native_->reserve(limits);
     }
 }
 
