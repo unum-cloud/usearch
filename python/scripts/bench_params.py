@@ -8,7 +8,6 @@ import pandas as pd
 
 
 from usearch.index import Index
-from usearch.io import load_matrix
 
 
 def measure(f) -> float:
@@ -40,6 +39,11 @@ class Main:
         expansion_add: int = 128,
         expansion_search: int = 64,
     ):
+        """Measures indexing speed for different dimensionality vectors.
+
+        :param count: Number of vectors, defaults to 1_000_000
+        :type count: int, optional
+        """
 
         dimensions = [
             2, 3, 4, 8, 16, 32, 96, 100,
@@ -78,12 +82,20 @@ class Main:
         expansion_add: int = 128,
         expansion_search: int = 64,
     ):
+        """Measures indexing speed and accuracy for different level of
+        connectivity in the levels of the hierarchical proximity graph.
 
-        connectivities = range(10, 20)
+        :param count: Number of vectors, defaults to 1_000_000
+        :type count: int, optional
+        :param ndim: Number of dimensions per vector, defaults to 256
+        :type ndim: int, optional
+        """
+
+        connectivity_options = range(10, 20)
         results = []
 
         try:
-            for connectivity in connectivities:
+            for connectivity in connectivity_options:
                 vectors_mat = np.random.rand(count, ndim).astype(np.float32)
 
                 print(f'USearch for {connectivity} connectivity')
@@ -106,6 +118,43 @@ class Main:
         fig.write_image(os.path.join(os.path.dirname(
             __file__), 'bench_connectivity.png'))
         fig.show()
+
+    def robustness(
+        self,
+        experiments: int = 10,
+        count: int = 1_000_000,
+        ndim: int = 256,
+        connectivity: int = 16,
+        expansion_add: int = 128,
+        expansion_search: int = 64,
+    ):
+        """How much does accuracy fluctuate depending on the indexing order.
+
+        :param experiments: How many times to repeat, defaults to 10
+        :type experiments: int, optional
+        :param count: Number of vectors, defaults to 1_000_000
+        :type count: int, optional
+        :param ndim: Number of dimensions per vector, defaults to 256
+        :type ndim: int, optional
+        """
+
+        recall_levels = []
+        vectors_mat = np.random.rand(count, ndim).astype(np.float32)
+
+        for _ in range(experiments):
+
+            index = Index(
+                ndim=ndim,
+                expansion_add=expansion_add,
+                expansion_search=expansion_search,
+                connectivity=connectivity,
+            )
+            bench_usearch(index, vectors_mat)
+            del index
+
+        min_ = min(recall_levels)
+        max_ = max(recall_levels)
+        print(f'Recall@1 varies between {min_:.3f} and {max_:.3f}')
 
 
 if __name__ == '__main__':

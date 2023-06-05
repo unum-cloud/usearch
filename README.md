@@ -30,22 +30,24 @@ Euclidean • Angular • Jaccard • Hamming • Haversine • User-Defined Met
 <a href="#golang">GoLang</a> •
 <a href="#wolfram">Wolfram</a>
 <br/>
-Linux • MacOS • Windows
+Linux • MacOS • Windows • Docker • WebAssembly 🔜
 </p>
 
 ---
 
 - [x] Industry-leading [performance](#performance).
 - [x] Easily-extendible [single C++11 header][usearch-header] implementation.
-- [x] [User-defined](#define-custom-metrics) and pre-packaged SIMD-accelerated metrics.
+- [x] SIMD-accelerated and [User-defined](#define-custom-metrics) metrics with JIT-compilation.
+- [x] Variable dimensionality vectors - for [obscure use-cases, like GIS and Chess][obscure-use-cases].
+- [x] Bitwise Tanimoto and Sorensen coefficients for Genomics and Chemistry.
 - [x] [Half-precision `f16` and Quarter-precision `f8`](#quantize-on-the-fly) support on any hardware.
 - [x] [View from disk](#view-larger-indexes-from-disk), without loading into RAM.
 - [x] [4B+](#go-beyond-4b-entries) sized space efficient point-clouds with `uint40_t`.
-- [x] Variable dimensionality vectors - for [obscure use-cases][obscure-use-cases].
-- [x] [Bring your threads](#bring-your-threads), like OpenMP.
+- [x] [Bring your threads](#bring-your-threads), like OpenMP or C++23 executors.
 - [x] Multiple vectors per label.
 - [ ] Thread-safe `reserve`.
-- [x] AI + Vector Search = [Semantic Search](#ai--vector-search--semantic-search).
+- [ ] On-the-fly deletions.
+- [x] AI + Vector Search = [Semantic Search](#ai--vector-search--semantic-search) *server with UForm and UCall*
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/usearch.hpp
 [obscure-use-cases]: https://ashvardanian.com/posts/abusing-vector-search

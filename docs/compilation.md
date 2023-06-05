@@ -151,6 +151,13 @@ java -cp . -Djava.library.path=/Users/av/github/usearch/java cloud.unum.usearch.
 brew install --cask wolfram-engine
 ```
 
+## GoLang
+
+```sh
+cd golang
+go test -v
+```
+
 ## C
 
 ### Linux
