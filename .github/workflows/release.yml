@@ -28,7 +28,7 @@ jobs:
     - run: npm install --save-dev @semantic-release/exec @semantic-release/git conventional-changelog-eslint semantic-release && npx semantic-release
 
   rebase:
-    name: Rebase from main into main-dev
+    name: Rebase Developmtn Branch
     needs: versioning
     runs-on: ubuntu-latest
     steps:
@@ -37,14 +37,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Perform Rebase
+      - name: Perform rebase
         run: |
           git checkout main-dev
           git rebase main
       - name: Push changes
         uses: ad-m/github-push-action@master
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.SEMANTIC_REBASE_TOKEN }}
           branch: main-dev
 
   build_wheels:
