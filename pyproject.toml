@@ -46,4 +46,4 @@ before-build = [
     "git submodule update --init --recursive"
 ]
 archs = ["x86", "AMD64"]
-skip = ["*win32*"]
+skip = ["*win32*", "pp*"]
