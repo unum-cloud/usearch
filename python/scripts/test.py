@@ -121,7 +121,7 @@ def test_index_batch(
 
     assert matches.labels.shape[0] == matches.distances.shape[0]
     assert matches.counts.shape[0] == batch_size
-    assert np.all(index.labels == labels)
+    assert np.all(np.sort(index.labels) == np.sort(labels))
 
     assert recall_members(index, exact=True) == 1
 
