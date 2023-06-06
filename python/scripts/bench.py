@@ -1,6 +1,7 @@
 import time
 import numpy as np
 import math
+from typing import Tuple, Any, Optional
 
 import fire
 
@@ -8,7 +9,7 @@ from usearch.index import Index
 from usearch.io import load_matrix
 
 
-def measure(f) -> float:
+def measure(f) -> Tuple[float, Any]:
     a = time.time_ns()
     result = f()
     b = time.time_ns()
@@ -18,7 +19,10 @@ def measure(f) -> float:
     return secs, result
 
 
-def bench_faiss(index, vectors: np.array, queries: np.array, neighbors: np.array):
+def bench_faiss(
+        index,
+        vectors: np.ndarray, queries: np.ndarray, neighbors: np.ndarray):
+
     dt, _ = measure(lambda: index.add(vectors))
     print(f'- Performance: {vectors.shape[0]/dt:.2f} insertions/s')
 
@@ -33,7 +37,10 @@ def bench_faiss(index, vectors: np.array, queries: np.array, neighbors: np.array
     print(f'- Recall@1: {recall_at_one * 100:.2f} %')
 
 
-def bench_usearch(index, vectors: np.array, queries: np.array, neighbors: np.array):
+def bench_usearch(
+        index,
+        vectors: np.ndarray, queries: np.ndarray, neighbors: np.ndarray):
+
     labels = np.arange(vectors.shape[0], dtype=np.longlong)
     assert len(index) == 0
     dt, _ = measure(lambda: index.add(labels, vectors))
@@ -58,12 +65,15 @@ def main(
     connectivity: int = 16,
     expansion_add: int = 128,
     expansion_search: int = 64,
+    k: Optional[int] = None,
 ):
 
     vectors_mat = load_matrix(vectors)
     queries_mat = load_matrix(queries)
     neighbors_mat = load_matrix(neighbors)
     dim = vectors_mat.shape[1]
+    if k:
+        neighbors_mat = neighbors_mat[:, :1]
 
     print('USearch: HNSW')
     index = Index(
@@ -142,7 +152,7 @@ def main(
             expansion_add=expansion_add,
             expansion_search=expansion_search,
             connectivity=connectivity,
-            metric=inner_product_f32.address,
+            metric=inner_product_f32,
         )
         bench_usearch(index, vectors_mat, queries_mat, neighbors_mat)
 
@@ -153,7 +163,7 @@ def main(
             expansion_add=expansion_add,
             expansion_search=expansion_search,
             connectivity=connectivity,
-            metric=cos_f8.address,
+            metric=cos_f8,
         )
         bench_usearch(index, vectors_mat, queries_mat, neighbors_mat)
     except ImportError:

@@ -1,16 +1,21 @@
 import struct
+
 import numpy as np
 
 
-def load_matrix(filename: str, start_row: int = 0, count_rows: int = None, view: bool = False):
-    """
-    Read *.ibin, *.hbin, *.fbin, *.dbin files with matrixes.
-    Args:
-        :param filename (str): path to the matrix file
-        :param start_row (int): start reading vectors from this index
-        :param count_rows (int): number of vectors to read. If None, read all vectors
-    Returns:
-        Parsed matrix (numpy.ndarray)
+def load_matrix(
+        filename: str,
+        start_row: int = 0, count_rows: int = None,
+        view: bool = False) -> np.ndarray:
+    """Read *.ibin, *.hbin, *.fbin, *.dbin files with matrixes.
+
+    :param filename: path to the matrix file
+    :param start_row: start reading vectors from this index
+    :param count_rows: number of vectors to read. If None, read all vectors
+    :param view: set to `True` to memory-map the file instead of loading to RAM
+
+    :return: parsed matrix
+    :rtype: numpy.ndarray
     """
     dtype = np.float32
     scalar_size = 4
@@ -35,17 +40,21 @@ def load_matrix(filename: str, start_row: int = 0, count_rows: int = None, view:
         row_offset = start_row * scalar_size * cols
 
         if view:
-            return np.memmap(f, dtype=dtype, mode='r', offset=8+row_offset, shape=(rows, cols))
+            return np.memmap(
+                f, dtype=dtype, mode='r', offset=8+row_offset, shape=(rows, cols))
         else:
-            return np.fromfile(f, count=rows * cols, dtype=dtype, offset=row_offset).reshape(rows, cols)
+            return np.fromfile(
+                f, count=rows * cols,
+                dtype=dtype, offset=row_offset).reshape(rows, cols)
 
 
-def save_matrix(vecs: np.array, filename: str):
-    """
-    Write *.ibin, *.hbin, *.fbin, *.dbin files with matrixes.
-    Args:
-        :param vecs (numpy.array): the matrix to serialize
-        :param filename (str): path to the matrix file
+def save_matrix(vectors: np.ndarray, filename: str):
+    """Write *.ibin, *.hbin, *.fbin, *.dbin files with matrixes.
+
+    :param vectors: the matrix to serialize
+    :type vectors: numpy.ndarray
+    :param filename: path to the matrix file
+    :type filename: str
     """
     dtype = np.float32
     if filename.endswith('.fbin'):
@@ -59,9 +68,9 @@ def save_matrix(vecs: np.array, filename: str):
     else:
         raise Exception('Unknown file type')
 
-    assert len(vecs.shape) == 2, 'Input array must have 2 dimensions'
+    assert len(vectors.shape) == 2, 'Input array must have 2 dimensions'
     with open(filename, 'wb') as f:
-        nvecs, dim = vecs.shape
-        f.write(struct.pack('<i', nvecs))
+        count, dim = vectors.shape
+        f.write(struct.pack('<i', count))
         f.write(struct.pack('<i', dim))
-        vecs.astype(dtype).flatten().tofile(f)
+        vectors.astype(dtype).flatten().tofile(f)

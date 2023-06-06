@@ -717,7 +717,8 @@ PYBIND11_MODULE(compiled, m) {
     i.def_property_readonly("capacity", &punned_index_py_t::capacity);
     i.def_property_readonly( //
         "dtype", [](punned_index_py_t const& index) -> std::string { return accuracy_name(index.accuracy()); });
-    i.def_property_readonly("memory_usage", &punned_index_py_t::memory_usage);
+    i.def_property_readonly("memory_usage",
+                            [](punned_index_py_t const& index) -> std::size_t { return index.memory_usage(); });
 
     i.def_property("expansion_add", &get_expansion_add<punned_index_py_t>, &punned_index_py_t::change_expansion_add);
     i.def_property("expansion_search", &get_expansion_search<punned_index_py_t>,
