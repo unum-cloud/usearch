@@ -16,6 +16,8 @@ Overview
 
    c/index
    cpp/index
+   java/index
+   
 
 .. toctree:: 
    :hidden:
