@@ -17,6 +17,9 @@ from usearch.compiled import (
     DEFAULT_CONNECTIVITY,
     DEFAULT_EXPANSION_ADD,
     DEFAULT_EXPANSION_SEARCH,
+
+    USES_OPENMP,
+    USES_SIMSIMD,
 )
 
 BitwiseMetricKind = (
@@ -64,6 +67,10 @@ class Matches(NamedTuple):
             {'label': int(label), 'distance': float(distance)}
             for label, distance in zip(labels, distances)
         ]
+
+    def recall_first(self, expected: np.ndarray) -> float:
+        best_matches = self.labels if self.is_batch else self.labels[:, 0]
+        return np.sum(best_matches == expected) / len(expected)
 
     def __repr__(self) -> str:
         return f'usearch.Matches({self.total_matches})' if self.is_batch else \
@@ -344,7 +351,7 @@ class Index:
         return Matches(*tuple_)
 
     def __len__(self) -> int:
-        return len(self._compiled)
+        return self._compiled.__len__()
 
     @property
     def jit(self) -> bool:
@@ -406,5 +413,15 @@ class Index:
     def clear(self):
         self._compiled.clear()
 
-    def remove(self, label: int):
-        pass
+    @property
+    def labels(self) -> np.ndarray:
+        return self._compiled.labels
+
+    def __delitem__(self, label: int):
+        raise NotImplementedError()
+
+    def __contains__(self, label: int) -> bool:
+        return self._compiled.__contains__(label)
+
+    def __getitem__(self, label: int) -> np.ndarray:
+        return self._compiled.__getitem__(label)
