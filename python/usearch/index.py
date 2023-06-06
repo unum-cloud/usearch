@@ -31,18 +31,43 @@ SetsIndex = _CompiledSetsIndex
 class Matches(NamedTuple):
     labels: np.ndarray
     distances: np.ndarray
-    counts: np.ndarray
+    counts: Union[np.ndarray, int]
 
+    @property
+    def is_batch(self) -> bool:
+        return isinstance(self.counts, np.ndarray)
 
-def list_matches(results: Matches, row: int) -> List[dict]:
+    @property
+    def batch_size(self) -> int:
+        return len(self.counts) if isinstance(self.counts, np.ndarray) else 1
 
-    count = results[2][row]
-    labels = results[0][row, :count]
-    distances = results[1][row, :count]
-    return [
-        {'label': int(label), 'distance': float(distance)}
-        for label, distance in zip(labels, distances)
-    ]
+    @property
+    def total_matches(self) -> int:
+        return np.sum(self.counts)
+
+    def to_list(self, row: Optional[int] = None) -> Union[List[dict], List[List[dict]]]:
+
+        if not self.is_batch:
+            assert row is None, 'Exporting a single sequence is only for batch requests'
+            labels = self.labels
+            distances = self.distances
+
+        elif row is None:
+            return [self.to_list(i) for i in range(self.batch_size)]
+
+        else:
+            count = self.counts[row]
+            labels = self.labels[row, :count]
+            distances = self.distances[row, :count]
+
+        return [
+            {'label': int(label), 'distance': float(distance)}
+            for label, distance in zip(labels, distances)
+        ]
+
+    def __repr__(self) -> str:
+        return f'usearch.Matches({self.total_matches})' if self.is_batch else \
+            f'usearch.Matches({self.total_matches} across {self.batch_size} queries)'
 
 
 def jit_metric(ndim: int, metric: MetricKind, dtype: str = 'f32') -> Callable:
@@ -150,9 +175,9 @@ class Index:
         :param metric: Distance function, defaults to MetricKind.IP
         :type metric: Union[MetricKind, Callable], optional
             Kind of the distance function, or the Numba `cfunc` JIT-compiled object.
-            Possible `MetricKind` values: IP, Cosine, L2sq, Haversine, 
-            Hamming, Tanimoto, Sorensen.
-            Not every kind is JIT-able.
+            Possible `MetricKind` values: IP, Cos, L2sq, Haversine, Pearson,
+            BitwiseHamming, BitwiseTanimoto, BitwiseSorensen.
+            Not every kind is JIT-able. For Jaccard distance, use `SetsIndex`.
 
         :param dtype: Scalar type for internal vector storage, defaults to None
         :type dtype: str, optional
@@ -332,6 +357,10 @@ class Index:
     @property
     def ndim(self) -> int:
         return self._compiled.ndim
+
+    @property
+    def metric(self) -> MetricKind:
+        return self._metric_kind
 
     @property
     def dtype(self) -> str:

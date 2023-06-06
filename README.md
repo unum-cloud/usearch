@@ -47,7 +47,8 @@ Linux • MacOS • Windows • Docker • WebAssembly 🔜
 - [x] Multiple vectors per label.
 - [ ] Thread-safe `reserve`.
 - [ ] On-the-fly deletions.
-- [x] AI + Vector Search = [Semantic Search](#ai--vector-search--semantic-search) *server with UForm and UCall*
+- [x] USearch + UForm Transformers = [Semantic Search](#ai--vector-search--semantic-search).
+- [x] USearch + RDKit = [Molecular Search](#ai--vector-search--semantic-search).
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/usearch.hpp
 [obscure-use-cases]: https://ashvardanian.com/posts/abusing-vector-search
@@ -502,25 +503,27 @@ func main() {
 - Rust: Allow passing a custom thread ID.
 - C# .NET bindings.
 
-## AI + Vector Search = Semantic Search
+## Application Examples
+
+### USearch + AI = Multi-Modal Semantic Search
 
 AI has a growing number of applications, but one of the coolest classic ideas is to use it for Semantic Search.
-One can take an encoder model, like the multi-modal UForm, and a web-programming framework, like UCall, and build an image search platform in just 20 lines of Python.
+One can take an encoder model, like the multi-modal UForm, and a web-programming framework, like UCall, and build a text-to-image search platform in just 20 lines of Python.
 
 ```python
-import ucall.rich_posix as ucall
+import ucall
 import uform
-from usearch.index import Index
+import usearch
 
 import numpy as np
-from PIL import Image
+import PIL as pil
 
 server = ucall.Server()
 model = uform.get_model('unum-cloud/uform-vl-multilingual')
-index = Index(ndim=256)
+index = usearch.index.Index(ndim=256)
 
 @server
-def add(label: int, photo: Image.Image):
+def add(label: int, photo: pil.Image.Image):
     image = model.preprocess_image(photo)
     vector = model.encode_image(image).detach().numpy()
     index.add(label, vector.flatten(), copy=True)
@@ -529,10 +532,43 @@ def add(label: int, photo: Image.Image):
 def search(query: str) -> np.ndarray:
     tokens = model.preprocess_text(query)
     vector = model.encode_text(tokens).detach().numpy()
-    neighbors, _, _ = index.search(vector.flatten(), 3)
-    return neighbors
+    matches = index.search(vector.flatten(), 3)
+    return matches.labels
 
 server.run()
 ```
+
+### USearch + RDKit = Molecular Search
+
+Research in natural sciences is expensive.
+To search for properties of different molecules, large databases are used.
+Comparing the molecules, however, is hard.
+Instead, binary hash-like fingerprints are produced from the graph structure, using packages like RDKit.
+
+```python
+from usearch.index import Index, MetricKind
+from rdkit import Chem
+from rdkit.Chem import AllChem
+
+import numpy as np
+
+molecules = [Chem.MolFromSmiles('CCOC'), Chem.MolFromSmiles('CCO')]
+encoder = AllChem.GetRDKitFPGenerator()
+
+fingerprints = np.vstack([encoder.GetFingerprint(x) for x in molecules])
+fingerprints = np.packbits(fingerprints, axis=1)
+
+index = Index(ndim=2048, metric=MetricKind.BitwiseTanimoto)
+labels = np.array(len(molecules), dtype=np.longlong)
+
+index.add(labels, fingerprints)
+matches = index.search(fingerprints, 10)
+```
+
+RDKit [provides][rdkit-fingerprints] Atom-Pair, Topological Torsion, Morgan, and Layered Fingerprints, among other options.
+
+[rdkit-fingerprints]: https://www.rdkit.org/docs/RDKit_Book.html#additional-information-about-the-fingerprints
+
+---
 
 Check [that](https://github.com/ashvardanian/image-search) and [other](https://github.com/unum-cloud/examples) examples on our corporate GitHub 🤗
