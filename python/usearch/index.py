@@ -387,11 +387,11 @@ class Index:
         return self._compiled.expansion_search
 
     @expansion_add.setter
-    def change_expansion_add(self, v: int):
+    def expansion_add(self, v: int):
         self._compiled.expansion_add = v
 
     @expansion_search.setter
-    def change_expansion_search(self, v: int):
+    def expansion_search(self, v: int):
         self._compiled.expansion_search = v
 
     def save(self, path: os.PathLike):
