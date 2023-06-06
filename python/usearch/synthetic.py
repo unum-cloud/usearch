@@ -22,11 +22,10 @@ def vectors(index: Index, count: int) -> np.ndarray:
         return x
 
 
-def recall_at_one(index: Index, vectors: np.ndarray) -> float:
-    empty_replica: Index = index.fork()
-
-    labels = np.arange(vectors.shape[0])
-    empty_replica.add(labels=labels, vectors=vectors)
-    matches: Matches = empty_replica.search(empty_replica, 1)
-
-    return np.sum(matches.labels.flatten() == labels) / len(labels)
+def recall_members(index: Index, *args, **kwargs) -> float:
+    vectors: np.ndarray = np.vstack([
+        index[i] for i in range(len(index))
+    ])
+    labels: np.ndarray = np.arange(vectors.shape[0])
+    matches: Matches = index.search(vectors, 1, *args, **kwargs)
+    return matches.recall_first(labels)

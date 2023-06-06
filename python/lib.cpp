@@ -347,8 +347,8 @@ static py::tuple search_one_in_index(punned_index_py_t& index, py::buffer vector
     py::array_t<label_t> labels_py(static_cast<Py_ssize_t>(wanted));
     py::array_t<distance_t> distances_py(static_cast<Py_ssize_t>(wanted));
     std::size_t count{};
-    auto labels_py1d = labels_py.mutable_unchecked<1>();
-    auto distances_py1d = distances_py.mutable_unchecked<1>();
+    auto labels_py1d = labels_py.template mutable_unchecked<1>();
+    auto distances_py1d = distances_py.template mutable_unchecked<1>();
 
     search_config_t config;
     config.exact = exact;
@@ -416,9 +416,9 @@ static py::tuple search_many_in_index( //
     py::array_t<label_t> labels_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
     py::array_t<distance_t> distances_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
     py::array_t<Py_ssize_t> counts_py(vectors_count);
-    auto labels_py2d = labels_py.mutable_unchecked<2>();
-    auto distances_py2d = distances_py.mutable_unchecked<2>();
-    auto counts_py1d = counts_py.mutable_unchecked<1>();
+    auto labels_py2d = labels_py.template mutable_unchecked<2>();
+    auto distances_py2d = distances_py.template mutable_unchecked<2>();
+    auto counts_py1d = counts_py.template mutable_unchecked<1>();
 
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vectors_info.format == "c" || vectors_info.format == "b")
@@ -508,9 +508,9 @@ static py::tuple search_many_in_bits_index( //
     py::array_t<label_t> labels_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
     py::array_t<distance_t> distances_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
     py::array_t<Py_ssize_t> counts_py(vectors_count);
-    auto labels_py2d = labels_py.mutable_unchecked<2>();
-    auto distances_py2d = distances_py.mutable_unchecked<2>();
-    auto counts_py1d = counts_py.mutable_unchecked<1>();
+    auto labels_py2d = labels_py.template mutable_unchecked<2>();
+    auto distances_py2d = distances_py.template mutable_unchecked<2>();
+    auto counts_py1d = counts_py.template mutable_unchecked<1>();
 
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vectors_info.format != "B")
@@ -547,6 +547,36 @@ template <typename index_at> void clear_index(index_at& index) { index.clear(); 
 template <typename index_at> std::size_t get_expansion_add(index_at const &index) { return index.config().expansion_add; }
 template <typename index_at> std::size_t get_expansion_search(index_at const &index) { return index.config().expansion_search; }
 // clang-format on
+
+template <typename scalar_at, typename index_at>
+py::array_t<scalar_at> get_typed_member(index_at const& index, label_t label) {
+    py::array_t<scalar_at> result_py(static_cast<Py_ssize_t>(index.dimensions()));
+    auto result_py1d = result_py.template mutable_unchecked<1>();
+    index.reconstruct(label, &result_py1d(0));
+    return result_py;
+}
+
+template <typename index_at>
+py::array get_member(index_at const& index, label_t label, common_scalar_kind_t scalar_kind) {
+    if (scalar_kind == common_scalar_kind_t::f32_k)
+        return get_typed_member<f32_t>(index, label);
+    else if (scalar_kind == common_scalar_kind_t::f64_k)
+        return get_typed_member<f64_t>(index, label);
+    else if (scalar_kind == common_scalar_kind_t::f16_k)
+        return get_typed_member<f16_bits_t>(index, label);
+    else if (scalar_kind == common_scalar_kind_t::f8_k)
+        return get_typed_member<f8_bits_t>(index, label);
+    else
+        throw std::invalid_argument("Incompatible scalars in the query matrix!");
+}
+
+template <typename index_at> py::array_t<label_t> get_labels(index_at const& index) {
+    std::size_t result_length = index.size();
+    py::array_t<label_t> result_py(static_cast<Py_ssize_t>(result_length));
+    auto result_py1d = result_py.template mutable_unchecked<1>();
+    index.export_labels(&result_py1d(0), result_length);
+    return result_py;
+}
 
 template <typename element_at> bool has_duplicates(element_at const* begin, element_at const* end) {
     if (begin == end)
@@ -611,7 +641,7 @@ py::array_t<bits_numpy_word_t> hash_typed_buffer(py::buffer_info const& info, st
         Py_ssize_t rows_stride = info.strides[1];
         auto hashes_shape = py_shape_t{rows_count, words_per_row};
         auto hashes_py = py::array_t<bits_numpy_word_t>(hashes_shape);
-        auto hashes_proxy = hashes_py.mutable_unchecked<2>();
+        auto hashes_proxy = hashes_py.template mutable_unchecked<2>();
 
         for (Py_ssize_t i = 0; i != rows_count; ++i)
             hash_typed_row(                                                                                 //
@@ -622,7 +652,7 @@ py::array_t<bits_numpy_word_t> hash_typed_buffer(py::buffer_info const& info, st
     } else {
         auto hashes_shape = py_shape_t{words_per_row};
         auto hashes_py = py::array_t<bits_numpy_word_t>(hashes_shape);
-        auto hashes_proxy = hashes_py.mutable_unchecked<1>();
+        auto hashes_proxy = hashes_py.template mutable_unchecked<1>();
 
         hash_typed_row(                                                               //
             data, hashes_info.strides[0], static_cast<std::size_t>(elements_per_row), //
@@ -658,6 +688,18 @@ PYBIND11_MODULE(compiled, m) {
     m.attr("DEFAULT_EXPANSION_ADD") = py::int_(default_expansion_add());
     m.attr("DEFAULT_EXPANSION_SEARCH") = py::int_(default_expansion_search());
 
+#if defined(USEARCH_USE_OPENMP)
+    m.attr("USES_OPENMP") = py::int_(1);
+#else
+    m.attr("USES_OPENMP") = py::int_(0);
+#endif
+
+#if defined(USEARCH_USE_SIMSIMD)
+    m.attr("USES_SIMSIMD") = py::int_(1);
+#else
+    m.attr("USES_SIMSIMD") = py::int_(0);
+#endif
+
     py::enum_<common_metric_kind_t>(m, "MetricKind")
         .value("Unknown", common_metric_kind_t::unknown_k)
         .value("IP", common_metric_kind_t::ip_k)
@@ -669,6 +711,13 @@ PYBIND11_MODULE(compiled, m) {
         .value("BitwiseHamming", common_metric_kind_t::bitwise_hamming_k)
         .value("BitwiseTanimoto", common_metric_kind_t::bitwise_tanimoto_k)
         .value("BitwiseSorensen", common_metric_kind_t::bitwise_sorensen_k);
+
+    py::enum_<common_scalar_kind_t>(m, "ScalarKind")
+        .value("F64", common_scalar_kind_t::f64_k)
+        .value("F32", common_scalar_kind_t::f32_k)
+        .value("F16", common_scalar_kind_t::f16_k)
+        .value("F8", common_scalar_kind_t::f8_k)
+        .value("B1", common_scalar_kind_t::b1_k);
 
     auto i = py::class_<punned_index_py_t>(m, "Index");
 
@@ -717,12 +766,18 @@ PYBIND11_MODULE(compiled, m) {
     i.def_property_readonly("capacity", &punned_index_py_t::capacity);
     i.def_property_readonly( //
         "dtype", [](punned_index_py_t const& index) -> std::string { return accuracy_name(index.accuracy()); });
-    i.def_property_readonly("memory_usage",
-                            [](punned_index_py_t const& index) -> std::size_t { return index.memory_usage(); });
+    i.def_property_readonly( //
+        "memory_usage", [](punned_index_py_t const& index) -> std::size_t { return index.memory_usage(); });
 
     i.def_property("expansion_add", &get_expansion_add<punned_index_py_t>, &punned_index_py_t::change_expansion_add);
     i.def_property("expansion_search", &get_expansion_search<punned_index_py_t>,
                    &punned_index_py_t::change_expansion_search);
+
+    i.def_property_readonly("labels", &get_labels<punned_index_py_t>);
+    i.def("__contains__", &punned_index_py_t::contains);
+    i.def( //
+        "__getitem__", &get_member<punned_index_py_t>, py::arg("label"),
+        py::arg("dtype") = common_scalar_kind_t::f32_k);
 
     i.def("save", &save_index<punned_index_py_t>, py::arg("path"));
     i.def("load", &load_index<punned_index_py_t>, py::arg("path"));
@@ -805,7 +860,7 @@ PYBIND11_MODULE(compiled, m) {
             auto proxy = set.unchecked<1>();
             auto view = set_view_t{&proxy(0), static_cast<std::size_t>(proxy.shape(0))};
             auto labels_py = py::array_t<label_t>(py_shape_t{static_cast<Py_ssize_t>(count)});
-            auto labels_proxy = labels_py.mutable_unchecked<1>();
+            auto labels_proxy = labels_py.template mutable_unchecked<1>();
             auto result = index.search(view, count);
             result.error.raise();
             auto found = result.dump_to(&labels_proxy(0));
