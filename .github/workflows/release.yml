@@ -41,11 +41,14 @@ jobs:
         run: |
           git checkout main-dev
           git rebase main
+          
       - name: Push changes
-        uses: ad-m/github-push-action@master
+        uses: CasperWA/push-protected@v2
         with:
-          github_token: ${{ secrets.SEMANTIC_REBASE_TOKEN }}
+          token: ${{ secrets.SEMANTIC_REBASE_TOKEN }}
           branch: main-dev
+          unprotect_reviews: True
+          force: True
 
   build_wheels:
     name: Build Wheels for ${{ matrix.os }}
