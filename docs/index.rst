@@ -14,6 +14,7 @@ Overview
    :hidden:
    :caption: �
 
+   c/index
    cpp/index
 
 .. toctree:: 
