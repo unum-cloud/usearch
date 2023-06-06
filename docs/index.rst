@@ -14,4 +14,10 @@ Overview
    :hidden:
    :caption: �
 
+   cpp/index
+
+.. toctree:: 
+   :hidden:
+   :caption: �
+
    genindex
