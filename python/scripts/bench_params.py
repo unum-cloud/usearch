@@ -9,7 +9,7 @@ import pandas as pd
 
 
 from usearch.index import Index, MetricKind
-from usearch.synthetic import recall_at_one
+from usearch.eval import recall_members, Benchmark, BenchmarkResult
 from usearch.index import (
     DEFAULT_CONNECTIVITY,
     DEFAULT_EXPANSION_ADD,
@@ -18,35 +18,6 @@ from usearch.index import (
     USES_OPENMP,
     USES_SIMSIMD,
 )
-
-
-def measure(f) -> float:
-    a = time.time_ns()
-    result = f()
-    b = time.time_ns()
-    c = b - a
-    secs = c / (10 ** 9)
-    print(f'- Took: {secs:.2f} seconds')
-    return secs, result
-
-
-def bench_usearch(index, vectors: np.ndarray) -> float:
-    labels = np.arange(vectors.shape[0], dtype=np.longlong)
-    assert len(index) == 0
-    dt, _ = measure(lambda: index.add(labels, vectors))
-    assert len(index) == vectors.shape[0]
-    insertions_per_second = vectors.shape[0]/dt
-    print(f'- Performance: {insertions_per_second:.2f} insertions/s')
-    return insertions_per_second
-
-
-def recall_at_one(index: Index, vectors: np.ndarray) -> float:
-
-    labels = np.arange(vectors.shape[0])
-    index.add(labels=labels, vectors=vectors)
-    matches = index.search(vectors, 1)
-
-    return np.sum(matches.labels.flatten() == labels) / len(labels)
 
 
 class Main:
@@ -80,15 +51,17 @@ class Main:
                     expansion_search=expansion_search,
                     connectivity=connectivity,
                 )
-                speed = bench_usearch(index, vectors_mat)
-                results.append({'ndim': ndim, 'speed': speed})
+                result: BenchmarkResult = Benchmark(
+                    index, vectors_mat).__call__().__dict__()
+                result['ndim'] = ndim
+                results.append(result)
                 del index
         except KeyboardInterrupt:
             pass
 
         df = pd.DataFrame(results)
         fig = px.line(
-            df, x='ndim', y='speed', log_x=True,
+            df, x='ndim', y='add_per_second', log_x=True,
             title='HNSW Indexing Speed vs Vector Dimensions')
         fig.write_image(os.path.join(os.path.dirname(
             __file__), 'bench_dimensions.png'))
@@ -124,8 +97,10 @@ class Main:
                     expansion_search=expansion_search,
                     connectivity=connectivity,
                 )
-                speed = bench_usearch(index, vectors_mat)
-                results.append({'connectivity': connectivity, 'speed': speed})
+                result: BenchmarkResult = Benchmark(
+                    index, vectors_mat).__call__().__dict__()
+                result['connectivity'] = connectivity
+                results.append(result)
                 del index
         except KeyboardInterrupt:
             pass
@@ -140,8 +115,8 @@ class Main:
 
     def robustness(
         self,
-        random_experiments: int = 10,
-        partitioned_experiments: int = 10,
+        random_experiments: int = 4,
+        number_of_clusters: int = 1_000,
         count: int = 1_000_000,
         ndim: int = 256,
         connectivity: int = DEFAULT_CONNECTIVITY,
@@ -158,14 +133,6 @@ class Main:
         :type ndim: int, optional
         """
 
-        print(f'Connectivity: {connectivity}')
-        print(f'Number of vectors: {count}')
-        print(f'Vector dimensions: {ndim}')
-        print(f'Expansion on Add: {expansion_add}')
-        print(f'Expansion on Search: {expansion_search}')
-        print(f'Uses OpenMP: {USES_OPENMP}')
-        print(f'Uses SimSIMD: {USES_SIMSIMD}')
-
         recall_levels = []
         vectors_mat = np.random.rand(count, ndim).astype(np.float32)
 
@@ -176,13 +143,11 @@ class Main:
                 expansion_add=expansion_add,
                 expansion_search=expansion_search,
                 connectivity=connectivity,
-                metric=MetricKind.L2sq,
                 jit=True,
             )
-            bench_usearch(index, vectors_mat)
-            recall = recall_at_one(index, vectors_mat) * 100
-            print(f'- Recall @ 1 {recall:.2f} %')
-            recall_levels.append(recall)
+            result: BenchmarkResult = Benchmark(
+                index, vectors_mat).__call__()
+            recall_levels.append(result.recall_at_one)
             del index
 
         min_ = min(recall_levels) * 100
@@ -195,19 +160,31 @@ class Main:
         except ImportError:
             return
 
-        count_clusters = count / expansion_add
+        index = Index(
+            ndim=ndim,
+            expansion_add=expansion_add,
+            expansion_search=expansion_search,
+            connectivity=connectivity,
+            jit=True,
+        )
+
         clustering = KMeans(
-            n_clusters=count_clusters,
+            n_clusters=number_of_clusters,
             random_state=0, n_init='auto').fit(vectors_mat)
 
         partitioning = collections.defaultdict(list)
         for point, cluster in enumerate(clustering.labels_):
             partitioning[cluster].append(point)
 
-        for _, points in partitioning.items():
-            labels = np.array(points)
-            vectors = vectors_mat[labels, :]
-            index.add(labels, vectors)
+        def vector_batches():
+            for _, points in partitioning.items():
+                labels = np.array(points)
+                vectors = vectors_mat[labels, :]
+                yield vectors
+
+        result: BenchmarkResult = Benchmark(
+            index, vector_batches).__call__()
+        print(f'Recall @ 1 for sorted {result.recall_at_one:.3f}')
 
 
 if __name__ == '__main__':

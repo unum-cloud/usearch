@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 
 from usearch.io import load_matrix, save_matrix
-from usearch.synthetic import recall_members
+from usearch.eval import recall_members
 
 from usearch.index import Index, SetsIndex, MetricKind, Matches
 from usearch.index import (
@@ -128,7 +128,7 @@ def test_index_batch(
 
 @pytest.mark.parametrize('ndim', dimensions)
 @pytest.mark.parametrize('batch_size', batch_sizes)
-def test_index_udf(ndim: int, batch_size: int):
+def test_index_numba(ndim: int, batch_size: int):
 
     try:
         from numba import cfunc, types, carray

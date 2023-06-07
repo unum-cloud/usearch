@@ -30,6 +30,8 @@ BitwiseMetricKind = (
 
 SetsIndex = _CompiledSetsIndex
 
+Label = np.longlong
+
 
 class Matches(NamedTuple):
     labels: np.ndarray
@@ -69,84 +71,12 @@ class Matches(NamedTuple):
         ]
 
     def recall_first(self, expected: np.ndarray) -> float:
-        best_matches = self.labels if self.is_batch else self.labels[:, 0]
+        best_matches = self.labels if not self.is_batch else self.labels[:, 0]
         return np.sum(best_matches == expected) / len(expected)
 
     def __repr__(self) -> str:
         return f'usearch.Matches({self.total_matches})' if self.is_batch else \
             f'usearch.Matches({self.total_matches} across {self.batch_size} queries)'
-
-
-def jit_metric(ndim: int, metric: MetricKind, dtype: str = 'f32') -> Callable:
-
-    try:
-        from numba import cfunc, types, carray
-    except ImportError:
-        raise ModuleNotFoundError(
-            'To use JIT install Numba with `pip install numba`.'
-            'Alternatively, reinstall usearch with `pip install usearch[jit]`')
-
-    # Showcases how to use Numba to JIT-compile similarity measures for USearch.
-    # https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
-
-    if dtype == 'f32':
-        signature = types.float32(
-            types.CPointer(types.float32),
-            types.CPointer(types.float32),
-            types.uint64, types.uint64)
-
-        if metric == MetricKind.IP:
-
-            @cfunc(signature)
-            def numba_ip(a, b, _n, _m):
-                a_array = carray(a, ndim)
-                b_array = carray(b, ndim)
-                ab = 0.0
-                for i in range(ndim):
-                    ab += a_array[i] * b_array[i]
-                return 1 - ab
-
-            return numba_ip
-
-        if metric == MetricKind.Cos:
-
-            @cfunc(signature)
-            def numba_cos(a, b, _n, _m):
-                a_array = carray(a, ndim)
-                b_array = carray(b, ndim)
-                ab = 0.0
-                a_sq = 0.0
-                b_sq = 0.0
-                for i in range(ndim):
-                    ab += a_array[i] * b_array[i]
-                    a_sq += a_array[i] * a_array[i]
-                    b_sq += b_array[i] * b_array[i]
-                a_norm = sqrt(a_sq)
-                b_norm = sqrt(b_sq)
-                if a_norm == 0 and b_norm == 0:
-                    return 0
-                elif a_norm == 0 or b_norm == 0 or ab == 0:
-                    return 1
-                else:
-                    return 1 - ab / (a_norm * b_norm)
-
-            return numba_cos
-
-        if metric == MetricKind.L2sq:
-
-            @cfunc(signature)
-            def numba_l2sq(a, b, _n, _m):
-                a_array = carray(a, ndim)
-                b_array = carray(b, ndim)
-                ab_delta_sq = types.float32(0.0)
-                for i in range(ndim):
-                    ab_delta_sq += (a_array[i] - b_array[i]) * \
-                        (a_array[i] - b_array[i])
-                return ab_delta_sq
-
-            return numba_l2sq
-
-    return None
 
 
 class Index:
@@ -236,8 +166,16 @@ class Index:
 
         elif isinstance(metric, MetricKind):
             if jit:
+
+                try:
+                    from usearch.numba import jit
+                except ImportError:
+                    raise ModuleNotFoundError(
+                        'To use JIT install Numba with `pip install numba`.'
+                        'Alternatively, reinstall usearch with `pip install usearch[jit]`')
+
                 self._metric_kind = metric
-                self._metric_jit = jit_metric(
+                self._metric_jit = jit(
                     ndim=ndim,
                     metric=metric,
                     dtype=dtype,
@@ -353,6 +291,18 @@ class Index:
             exact=exact, threads=threads,
         )
         return Matches(*tuple_)
+
+    @property
+    def specs(self) -> dict:
+        return {
+            'Connectivity': self.connectivity,
+            'Size': self.size,
+            'Dimensions': self.ndim,
+            'Expansion@Add': self.expansion_add,
+            'Expansion@Search': self.expansion_search,
+            'OpenMP': USES_OPENMP,
+            'SimSIMD': USES_SIMSIMD,
+        }
 
     def __len__(self) -> int:
         return self._compiled.__len__()
