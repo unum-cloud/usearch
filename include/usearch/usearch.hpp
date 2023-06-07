@@ -349,7 +349,7 @@ template <typename scalar_at, typename result_at = float> struct bitwise_tanimot
         result_t and_count{};
         result_t or_count{};
 #if defined(USEARCH_USE_OPENMP)
-#pragma omp simd reduction(+ : matches)
+#pragma omp simd reduction(+ : and_count, or_count)
 #elif defined(USEARCH_IS_CLANG)
 #pragma clang loop vectorize(enable)
 #elif defined(USEARCH_IS_GCC)
@@ -379,7 +379,7 @@ template <typename scalar_at, typename result_at = float> struct bitwise_sorense
         result_t and_count{};
         result_t any_count{};
 #if defined(USEARCH_USE_OPENMP)
-#pragma omp simd reduction(+ : matches)
+#pragma omp simd reduction(+ : and_count, any_count)
 #elif defined(USEARCH_IS_CLANG)
 #pragma clang loop vectorize(enable)
 #elif defined(USEARCH_IS_GCC)
