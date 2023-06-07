@@ -18,7 +18,7 @@ Overview
    cpp/index
    java/index
    python/index
-   
+   javascript/index
 
 .. toctree:: 
    :hidden:

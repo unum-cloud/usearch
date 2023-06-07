@@ -239,11 +239,14 @@ jobs:
         with:
           ref: 'main'   
       - name: Install dependencies
-        run: sudo apt update && sudo apt install -y doxygen graphviz dia git && pip install sphinx breathe furo m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery
+        run: sudo apt update && \
+             sudo apt install -y doxygen graphviz dia git && \
+             pip install sphinx breathe furo m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery sphinx-js && \
+             npm install -g jsdoc
       - name: Install USearch from PyPi
         run: pip install usearch
       - name: Build documentation
-        run: cd docs && make html
+        run: cd docs && doxygen conf.dox && make html
       - name: Copy assets
         run: cp -r assets build/docs/html/
       - name: Compress assets
