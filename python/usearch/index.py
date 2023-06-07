@@ -232,7 +232,7 @@ class Index:
                 self._metric_kind = metric
                 self._metric_jit = jit_metric(
                     ndim=ndim,
-                    metric_kind=metric,
+                    metric=metric,
                     dtype=dtype,
                 )
                 self._metric_pointer = self._metric_jit.address if \
