@@ -7,6 +7,11 @@ import fire
 
 from usearch.index import Index
 from usearch.io import load_matrix
+from usearch.index import (
+    DEFAULT_CONNECTIVITY,
+    DEFAULT_EXPANSION_ADD,
+    DEFAULT_EXPANSION_SEARCH,
+)
 
 
 def measure(f) -> Tuple[float, Any]:
@@ -62,9 +67,9 @@ def main(
     vectors: str,
     queries: str,
     neighbors: str,
-    connectivity: int = 16,
-    expansion_add: int = 128,
-    expansion_search: int = 64,
+    connectivity: int = DEFAULT_CONNECTIVITY,
+    expansion_add: int = DEFAULT_EXPANSION_ADD,
+    expansion_search: int = DEFAULT_EXPANSION_SEARCH,
     k: Optional[int] = None,
 ):
 

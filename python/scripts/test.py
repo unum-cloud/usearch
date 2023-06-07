@@ -3,14 +3,21 @@ import pytest
 import numpy as np
 
 from usearch.io import load_matrix, save_matrix
-from usearch.index import Index, SetsIndex, MetricKind
+from usearch.synthetic import recall_members
+
+from usearch.index import Index, SetsIndex, MetricKind, Matches
+from usearch.index import (
+    DEFAULT_CONNECTIVITY,
+    DEFAULT_EXPANSION_ADD,
+    DEFAULT_EXPANSION_SEARCH,
+)
 
 
 dimensions = [3, 97, 256]
 batch_sizes = [1, 33]
 index_types = ['f32', 'f64', 'f16', 'f8']
 numpy_types = [np.float32, np.float64, np.float16, np.byte]
-connectivity_options = [3, 13, 50]
+connectivity_options = [3, 13, 50, DEFAULT_CONNECTIVITY]
 jit_options = [False]
 continuous_metrics = [
     MetricKind.Cos,
@@ -26,6 +33,7 @@ hash_metrics = [
 @pytest.mark.parametrize('rows', batch_sizes)
 @pytest.mark.parametrize('cols', dimensions)
 def test_serializing_fbin_matrix(rows: int, cols: int):
+
     original = np.random.rand(rows, cols).astype(np.float32)
     save_matrix(original, 'tmp.fbin')
     reconstructed = load_matrix('tmp.fbin')
@@ -36,6 +44,7 @@ def test_serializing_fbin_matrix(rows: int, cols: int):
 @pytest.mark.parametrize('rows', batch_sizes)
 @pytest.mark.parametrize('cols', dimensions)
 def test_serializing_ibin_matrix(rows: int, cols: int):
+
     original = np.random.randint(0, rows+1, size=(rows, cols)).astype(np.int32)
     save_matrix(original, 'tmp.ibin')
     reconstructed = load_matrix('tmp.ibin')
@@ -59,6 +68,8 @@ def test_index(
         ndim=ndim,
         dtype=index_type,
         connectivity=connectivity,
+        expansion_add=DEFAULT_EXPANSION_ADD,
+        expansion_search=DEFAULT_EXPANSION_SEARCH,
         jit=jit,
     )
     assert index.ndim == ndim
@@ -75,6 +86,11 @@ def test_index(
     assert count == 1
     assert matches[0] == 42
     assert distances[0] == pytest.approx(0, abs=1e-3)
+
+    assert 42 in index
+    assert 42 in index.labels
+    if numpy_type != np.byte:
+        assert np.allclose(index[42], vector, atol=0.1)
 
     index.save('tmp.usearch')
     index.clear()
@@ -101,10 +117,13 @@ def test_index_batch(
     labels = np.array(range(batch_size), dtype=np.longlong)
 
     index.add(labels, vectors)
-    matches, distances, count = index.search(vectors, 10)
+    matches: Matches = index.search(vectors, 10)
 
-    assert matches.shape[0] == distances.shape[0]
-    assert count.shape[0] == batch_size
+    assert matches.labels.shape[0] == matches.distances.shape[0]
+    assert matches.counts.shape[0] == batch_size
+    assert np.all(np.sort(index.labels) == np.sort(labels))
+
+    assert recall_members(index, exact=True) == 1
 
 
 @pytest.mark.parametrize('ndim', dimensions)

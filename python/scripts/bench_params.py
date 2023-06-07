@@ -10,6 +10,14 @@ import pandas as pd
 
 from usearch.index import Index, MetricKind
 from usearch.synthetic import recall_at_one
+from usearch.index import (
+    DEFAULT_CONNECTIVITY,
+    DEFAULT_EXPANSION_ADD,
+    DEFAULT_EXPANSION_SEARCH,
+
+    USES_OPENMP,
+    USES_SIMSIMD,
+)
 
 
 def measure(f) -> float:
@@ -32,14 +40,23 @@ def bench_usearch(index, vectors: np.ndarray) -> float:
     return insertions_per_second
 
 
+def recall_at_one(index: Index, vectors: np.ndarray) -> float:
+
+    labels = np.arange(vectors.shape[0])
+    index.add(labels=labels, vectors=vectors)
+    matches = index.search(vectors, 1)
+
+    return np.sum(matches.labels.flatten() == labels) / len(labels)
+
+
 class Main:
 
     def dimensions(
         self,
         count: int = 1_000_000,
-        connectivity: int = 16,
-        expansion_add: int = 128,
-        expansion_search: int = 64,
+        connectivity: int = DEFAULT_CONNECTIVITY,
+        expansion_add: int = DEFAULT_EXPANSION_ADD,
+        expansion_search: int = DEFAULT_EXPANSION_SEARCH,
     ):
         """Measures indexing speed for different dimensionality vectors.
 
@@ -81,8 +98,8 @@ class Main:
         self,
         count: int = 1_000_000,
         ndim: int = 256,
-        expansion_add: int = 128,
-        expansion_search: int = 64,
+        expansion_add: int = DEFAULT_EXPANSION_ADD,
+        expansion_search: int = DEFAULT_EXPANSION_SEARCH,
     ):
         """Measures indexing speed and accuracy for different level of
         connectivity in the levels of the hierarchical proximity graph.
@@ -127,9 +144,9 @@ class Main:
         partitioned_experiments: int = 10,
         count: int = 1_000_000,
         ndim: int = 256,
-        connectivity: int = 16,
-        expansion_add: int = 128,
-        expansion_search: int = 64,
+        connectivity: int = DEFAULT_CONNECTIVITY,
+        expansion_add: int = DEFAULT_EXPANSION_ADD,
+        expansion_search: int = DEFAULT_EXPANSION_SEARCH,
     ):
         """How much does accuracy and speed fluctuate depending on the indexing order.
 
@@ -140,6 +157,14 @@ class Main:
         :param ndim: Number of dimensions per vector, defaults to 256
         :type ndim: int, optional
         """
+
+        print(f'Connectivity: {connectivity}')
+        print(f'Number of vectors: {count}')
+        print(f'Vector dimensions: {ndim}')
+        print(f'Expansion on Add: {expansion_add}')
+        print(f'Expansion on Search: {expansion_search}')
+        print(f'Uses OpenMP: {USES_OPENMP}')
+        print(f'Uses SimSIMD: {USES_SIMSIMD}')
 
         recall_levels = []
         vectors_mat = np.random.rand(count, ndim).astype(np.float32)
@@ -155,9 +180,9 @@ class Main:
                 jit=True,
             )
             bench_usearch(index, vectors_mat)
-            recall = 100
+            recall = recall_at_one(index, vectors_mat) * 100
             print(f'- Recall @ 1 {recall:.2f} %')
-            recall_levels.append()
+            recall_levels.append(recall)
             del index
 
         min_ = min(recall_levels) * 100
@@ -186,4 +211,5 @@ class Main:
 
 
 if __name__ == '__main__':
+    Main().robustness()
     fire.Fire(Main)
