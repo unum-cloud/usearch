@@ -113,33 +113,15 @@
             "MIMode": "gdb"
         },
         {
-            "name": "Debug PyBind11 Test",
-            "type": "pythoncpp",
-            "request": "launch",
-            "pythonLaunchName": "Python: Current File",
-            "cppAttachName": "Debug PyBind11: Attach with GDB"
-        },
-        {
-            "name": "Debug PyBind11: Attach with GDB",
-            "type": "cppdbg",
-            "request": "attach",
-            "program": "/Users/av/miniconda3/bin/python",
-            "processId": "",
-            "MIMode": "lldb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ]
-        },
-        {
-            "name": "Python: Current File",
+            "name": "Debug PyTest",
             "type": "python",
             "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal"
+            "module": "pytest",
+            "console": "internalConsole",
+            "args": [
+                "${file}"
+            ],
+            "justMyCode": true
         }
     ]
 }
