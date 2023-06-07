@@ -245,7 +245,7 @@ jobs:
               pip install sphinx sphinx-js breathe furo m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery && 
               npm install -g jsdoc
       - name: Install USearch from PyPi
-        run: pip install usearch numpy ucall
+        run: pip install usearch
       - name: Build documentation
         run: cd docs && doxygen conf.dox && make html
       - name: Copy assets

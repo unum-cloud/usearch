@@ -81,6 +81,10 @@ setup(
     include_dirs=[
         'include', 'src',
         'fp16/include', 'robin-map/include', 'simsimd/include'],
+    install_requires=[
+        'numpy',
+        'ucall',
+    ],
     ext_modules=ext_modules,
     extras_require={
         'jit': ['numba'],
