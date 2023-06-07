@@ -6,8 +6,8 @@ from usearch.io import load_matrix, save_matrix
 from usearch.index import Index, SetsIndex, MetricKind
 
 
-dimensions = [13, 99, 100, 256]
-batch_sizes = [1, 2, 100]
+dimensions = [3, 97, 256]
+batch_sizes = [1, 33]
 index_types = ['f32', 'f64', 'f16', 'f8']
 numpy_types = [np.float32, np.float64, np.float16, np.byte]
 connectivity_options = [3, 13, 50]

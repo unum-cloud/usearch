@@ -4,7 +4,7 @@
 # into the primary `Index` class, connecting USearch with Numba.
 import os
 from math import sqrt
-from typing import Optional, Callable, Union, NamedTuple, List
+from typing import Optional, Callable, Union, NamedTuple, List, Iterable
 
 import numpy as np
 
@@ -276,7 +276,7 @@ class Index:
 
     def add(
             self, labels, vectors, *,
-            copy: bool = True, threads: int = 0):
+            copy: bool = True, threads: int = 0) -> Union[int, np.ndarray]:
         """Inserts one or move vectors into the index.
 
         For maximal performance the `labels` and `vectors`
@@ -291,7 +291,7 @@ class Index:
         pass `copy=False`, if you can guarantee the lifetime of the
         primary vectors store during the process of construction.
 
-        :param labels: Unique identifier for passed vectors.
+        :param labels: Unique identifier for passed vectors, optional
         :type labels: Buffer
         :param vectors: Collection of vectors.
         :type vectors: Buffer
@@ -299,6 +299,9 @@ class Index:
         :type copy: bool, optional
         :param threads: Optimal number of cores to use, defaults to 0
         :type threads: int, optional
+
+        :return: Inserted label or labels
+        :type: Union[int, np.ndarray]
         """
         assert isinstance(vectors, np.ndarray), 'Expects a NumPy array'
         assert vectors.ndim == 1 or vectors.ndim == 2, 'Expects a matrix or vector'
@@ -314,11 +317,12 @@ class Index:
                 labels = start_id
         if isinstance(labels, np.ndarray):
             labels = labels.astype(np.longlong)
+        elif isinstance(labels, Iterable):
+            labels = np.array(labels, dtype=np.longlong)
 
         self._compiled.add(labels, vectors, copy=copy, threads=threads)
 
-        if generate_labels:
-            return labels
+        return labels
 
     def search(
             self, vectors, k: int = 10, *,

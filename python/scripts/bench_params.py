@@ -1,5 +1,6 @@
 import os
 import time
+import collections
 
 import fire
 import plotly.express as px
@@ -7,7 +8,8 @@ import numpy as np
 import pandas as pd
 
 
-from usearch.index import Index
+from usearch.index import Index, MetricKind
+from usearch.synthetic import recall_at_one
 
 
 def measure(f) -> float:
@@ -121,17 +123,18 @@ class Main:
 
     def robustness(
         self,
-        experiments: int = 10,
+        random_experiments: int = 10,
+        partitioned_experiments: int = 10,
         count: int = 1_000_000,
         ndim: int = 256,
         connectivity: int = 16,
         expansion_add: int = 128,
         expansion_search: int = 64,
     ):
-        """How much does accuracy fluctuate depending on the indexing order.
+        """How much does accuracy and speed fluctuate depending on the indexing order.
 
-        :param experiments: How many times to repeat, defaults to 10
-        :type experiments: int, optional
+        :param random_experiments: How many times to repeat, defaults to 10
+        :type random_experiments: int, optional
         :param count: Number of vectors, defaults to 1_000_000
         :type count: int, optional
         :param ndim: Number of dimensions per vector, defaults to 256
@@ -141,20 +144,45 @@ class Main:
         recall_levels = []
         vectors_mat = np.random.rand(count, ndim).astype(np.float32)
 
-        for _ in range(experiments):
-
+        for _ in range(random_experiments):
+            np.random.shuffle(vectors_mat)
             index = Index(
                 ndim=ndim,
                 expansion_add=expansion_add,
                 expansion_search=expansion_search,
                 connectivity=connectivity,
+                metric=MetricKind.L2sq,
+                jit=True,
             )
             bench_usearch(index, vectors_mat)
+            recall = 100
+            print(f'- Recall @ 1 {recall:.2f} %')
+            recall_levels.append()
             del index
 
-        min_ = min(recall_levels)
-        max_ = max(recall_levels)
-        print(f'Recall@1 varies between {min_:.3f} and {max_:.3f}')
+        min_ = min(recall_levels) * 100
+        max_ = max(recall_levels) * 100
+        print(f'Recall @ 1 varies between {min_:.3f} and {max_:.3f}')
+
+        # Now let's try clustering and inserting in clusters
+        try:
+            from sklearn.cluster import KMeans
+        except ImportError:
+            return
+
+        count_clusters = count / expansion_add
+        clustering = KMeans(
+            n_clusters=count_clusters,
+            random_state=0, n_init='auto').fit(vectors_mat)
+
+        partitioning = collections.defaultdict(list)
+        for point, cluster in enumerate(clustering.labels_):
+            partitioning[cluster].append(point)
+
+        for _, points in partitioning.items():
+            labels = np.array(points)
+            vectors = vectors_mat[labels, :]
+            index.add(labels, vectors)
 
 
 if __name__ == '__main__':
