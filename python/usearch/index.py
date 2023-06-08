@@ -92,7 +92,7 @@ class Index:
     def __init__(
         self,
         ndim: int,
-        metric: Union[MetricKind, Callable] = MetricKind.IP,
+        metric: Union[MetricKind, Callable, str] = MetricKind.IP,
         dtype: Optional[str] = None,
         jit: bool = False,
 
@@ -110,7 +110,7 @@ class Index:
         :type ndim: int
 
         :param metric: Distance function, defaults to MetricKind.IP
-        :type metric: Union[MetricKind, Callable], optional
+        :type metric: Union[MetricKind, Callable, str], optional
             Kind of the distance function, or the Numba `cfunc` JIT-compiled object.
             Possible `MetricKind` values: IP, Cos, L2sq, Haversine, Pearson,
             BitwiseHamming, BitwiseTanimoto, BitwiseSorensen.
@@ -158,6 +158,18 @@ class Index:
 
         if metric is None:
             metric = MetricKind.IP
+        elif isinstance(metric, str):
+            _normalize = {
+                'cos': MetricKind.Cos,
+                'ip': MetricKind.IP,
+                'l2_sq': MetricKind.L2sq,
+                'haversine': MetricKind.Haversine,
+                'perason': MetricKind.Pearson,
+                'hamming': MetricKind.BitwiseHamming,
+                'tanimoto': MetricKind.BitwiseTanimoto,
+                'sorensen': MetricKind.BitwiseSorensen,
+            }
+            metric = _normalize[metric.lower()]
 
         if isinstance(metric, Callable):
             self._metric_kind = MetricKind.Unknown
