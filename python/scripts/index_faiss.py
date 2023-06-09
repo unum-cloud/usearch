@@ -1,5 +1,8 @@
+import os
+from typing import Optional
+
 import numpy as np
-from faiss import IndexHNSWFlat, IndexIVFPQ
+from faiss import IndexHNSWFlat, IndexIVFPQ, read_index
 
 from usearch.index import Matches
 from usearch.index import (
@@ -18,6 +21,7 @@ class IndexFAISS:
         connectivity: int = DEFAULT_CONNECTIVITY,
         expansion_add: int = DEFAULT_EXPANSION_ADD,
         expansion_search: int = DEFAULT_EXPANSION_SEARCH,
+        path: Optional[os.PathLike] = None,
         *args, **kwargs,
     ):
 
@@ -27,13 +31,19 @@ class IndexFAISS:
             index.hnsw.efSearch = expansion_search
 
         self._faiss = index
-        self.specs = {
+        self._specs = {
+            'Class': 'usearch.IndexFAISS',
+            'Dimensions': ndim,
             'Connectivity': connectivity,
             'Expansion@Add': expansion_add,
             'Expansion@Search': expansion_search,
         }
 
+        self.path = path
+
     def add(self, labels, vectors):
+        # Adding labels isn't supported for most index types
+        # self._faiss.add_with_ids(vectors, labels)
         self._faiss.add(vectors)
 
     def search(self, queries, k: int) -> Matches:
@@ -42,6 +52,19 @@ class IndexFAISS:
 
     def __len__(self) -> int:
         return self._faiss.ntotal
+
+    def clear(self):
+        self._faiss.reset()
+
+    @property
+    def specs(self) -> dict:
+        self._specs.update({
+            'Size': len(self),
+        })
+        return self._specs
+
+    def load(self, path: os.PathLike):
+        self._faiss = read_index(path)
 
 
 class IndexQuantizedFAISS(IndexFAISS):
@@ -74,3 +97,4 @@ class IndexQuantizedFAISS(IndexFAISS):
 
         self._faiss.train(train)
         self._faiss.nprobe = 10
+        self._specs['Class'] = 'usearch.IndexQuantizedFAISS'

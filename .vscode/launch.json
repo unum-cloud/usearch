@@ -122,6 +122,23 @@
                 "${file}"
             ],
             "justMyCode": true
+        },
+        {
+            "name": "Debug Python Benchmark",
+            "type": "python",
+            "request": "launch",
+            "program": "python/scripts/bench.py",
+            "console": "internalConsole",
+            "args": [
+                "speed",
+                "--vectors",
+                "datasets/wiki_1M/base.1M.fbin",
+                "--queries",
+                "datasets/wiki_1M/query.public.100K.fbin",
+                "--neighbors",
+                "datasets/wiki_1M/groundtruth.public.100K.ibin",
+            ],
+            "justMyCode": true
         }
     ]
 }

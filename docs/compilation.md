@@ -81,7 +81,7 @@ Benchmarking:
 
 ```sh
 pip install faiss-cpu
-python python/scripts/bench.py \
+python python/scripts/bench.py speed \
     --vectors datasets/wiki_1M/base.1M.fbin \
     --queries datasets/wiki_1M/query.public.100K.fbin \
     --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin
@@ -92,9 +92,8 @@ python python/scripts/bench.py \
 Checking the effect of different embedding dimensions on construction speed:
 
 ```sh
-python python/scripts/bench_params.py dimensions
-python python/scripts/bench_params.py connectivity
-python python/scripts/bench_params.py robustness
+python python/scripts/bench.py dimensions ...
+python python/scripts/bench.py connectivity ...
 ```
 
 ## JavaScript

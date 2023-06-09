@@ -89,9 +89,9 @@ setup(
     install_requires=[
         'numpy',
         'ucall',
+        'pandas',
     ],
     extras_require={
         'jit': ['numba', 'cppyy'],
-        'bench': ['pandas', 'jinja2', 'tqdm'],
     },
 )

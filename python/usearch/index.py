@@ -307,6 +307,7 @@ class Index:
     @property
     def specs(self) -> dict:
         return {
+            'Class': 'usearch.Index',
             'Connectivity': self.connectivity,
             'Size': self.size,
             'Dimensions': self.ndim,
@@ -314,6 +315,9 @@ class Index:
             'Expansion@Search': self.expansion_search,
             'OpenMP': USES_OPENMP,
             'SimSIMD': USES_SIMSIMD,
+            'JIT': self.jit,
+            'DType': self.dtype,
+            'Path': self.path,
         }
 
     def __len__(self) -> int:
