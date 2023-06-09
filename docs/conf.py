@@ -21,7 +21,7 @@ with open('_static/custom.js', 'r+') as js:
 
 extensions = [
     'breathe', 'm2r2',
-    'sphinx.ext.autodoc',
+    'sphinx.ext.autodoc', 'sphinx_js',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
     'sphinx.ext.napoleon',
@@ -46,3 +46,5 @@ html_baseurl = '/docs/usearch/'
 
 breathe_projects = {'USearch': '../build/xml'}
 breathe_default_project = 'USearch'
+
+js_source_path = '../javascript/usearch.js'
