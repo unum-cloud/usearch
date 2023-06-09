@@ -86,7 +86,12 @@ setup(
         'include', 'src',
         'fp16/include', 'robin-map/include', 'simsimd/include'],
     ext_modules=ext_modules,
+    install_requires=[
+        'numpy',
+        'ucall',
+    ],
     extras_require={
-        'jit': ['numba'],
+        'jit': ['numba', 'cppyy'],
+        'bench': ['pandas', 'jinja2', 'tqdm'],
     },
 )
