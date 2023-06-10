@@ -7,7 +7,7 @@ def load_matrix(
         filename: str,
         start_row: int = 0, count_rows: int = None,
         view: bool = False) -> np.ndarray:
-    """Read *.ibin, *.hbin, *.fbin, *.dbin files with matrixes.
+    """Read *.ibin, *.bbib, *.hbin, *.fbin, *.dbin files with matrices.
 
     :param filename: path to the matrix file
     :param start_row: start reading vectors from this index
@@ -31,6 +31,9 @@ def load_matrix(
     elif filename.endswith('.ibin'):
         dtype = np.int32
         scalar_size = 4
+    elif filename.endswith('.bbin'):
+        dtype = np.int8
+        scalar_size = 1
     else:
         raise Exception('Unknown file type')
 
@@ -49,7 +52,7 @@ def load_matrix(
 
 
 def save_matrix(vectors: np.ndarray, filename: str):
-    """Write *.ibin, *.hbin, *.fbin, *.dbin files with matrixes.
+    """Write *.ibin, *.bbib, *.hbin, *.fbin, *.dbin files with matrices.
 
     :param vectors: the matrix to serialize
     :type vectors: numpy.ndarray
@@ -65,6 +68,8 @@ def save_matrix(vectors: np.ndarray, filename: str):
         dtype = np.float16
     elif filename.endswith('.ibin'):
         dtype = np.int32
+    elif filename.endswith('.bbin'):
+        dtype = np.int8
     else:
         raise Exception('Unknown file type')
 

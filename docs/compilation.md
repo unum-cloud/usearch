@@ -41,7 +41,10 @@ cmake -B ./build_release \
 Linting:
 
 ```sh
-cppcheck --enable=all --suppress=cstyleCast --suppress=unusedFunction include/usearch/usearch.hpp src/punned.hpp
+cppcheck --enable=all --suppress=cstyleCast --suppress=unusedFunction \
+    include/usearch/index.hpp \
+    include/index_punned_dense.hpp \
+    include/index_punned_helpers.hpp
 ```
 
 Benchmarking:
@@ -81,7 +84,7 @@ Benchmarking:
 
 ```sh
 pip install faiss-cpu
-python python/scripts/bench.py \
+python python/scripts/bench.py speed \
     --vectors datasets/wiki_1M/base.1M.fbin \
     --queries datasets/wiki_1M/query.public.100K.fbin \
     --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin
@@ -92,9 +95,8 @@ python python/scripts/bench.py \
 Checking the effect of different embedding dimensions on construction speed:
 
 ```sh
-python python/scripts/bench_params.py dimensions
-python python/scripts/bench_params.py connectivity
-python python/scripts/bench_params.py robustness
+python python/scripts/bench.py dimensions ...
+python python/scripts/bench.py connectivity ...
 ```
 
 ## JavaScript
@@ -135,7 +137,6 @@ g++ -shared -o USearchJNI.dll cloud_unum_usearch_Index.o -Wl,--add-stdcall-alias
 # MacOS
 g++ -std=c++11 -c -fPIC \
     -I../../../../include \
-    -I../../../../src \
     -I../../../../fp16/include \
     -I../../../../robin-map/include \
     -I../../../../simsimd/include \

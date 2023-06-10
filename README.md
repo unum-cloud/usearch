@@ -48,9 +48,9 @@ Linux • MacOS • Windows • Docker • WebAssembly 🔜
 - [ ] Thread-safe `reserve`.
 - [ ] On-the-fly deletions.
 - [x] USearch + UForm Transformers = [Semantic Search](#ai--vector-search--semantic-search).
-- [x] USearch + RDKit = [Molecular Search](#ai--vector-search--semantic-search).
+- [x] USearch + RDKit = [Molecule Search](#ai--vector-search--semantic-search).
 
-[usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/usearch.hpp
+[usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/index.hpp
 [obscure-use-cases]: https://ashvardanian.com/posts/abusing-vector-search
 
 ---
@@ -133,14 +133,14 @@ Of course, the latency of external memory access will be higher, but it is in pa
 
 There are two usage patters:
 
-1. Bare-bones with `usearch/usearch.hpp`, only available in C++.
+1. Bare-bones with `usearch/index.hpp`, only available in C++.
 2. Full-fat version with it's own threads, mutexes, type-punning, quantization, that is available both in C++ and is wrapped for higher-level bindings.
 
 ### C++
 
 #### Installation
 
-To use in a C++ project simply copy the `include/usearch/usearch.hpp` header into your project.
+To use in a C++ project simply copy the `include/usearch/index.hpp` header into your project.
 Alternatively fetch it with CMake:
 
 ```cmake
@@ -497,11 +497,6 @@ func main() {
 
 ### Wolfram
 
-## TODO
-
-- JavaScript: Allow calling from "worker threads".
-- Rust: Allow passing a custom thread ID.
-- C# .NET bindings.
 
 ## Application Examples
 
@@ -538,12 +533,33 @@ def search(query: str) -> np.ndarray:
 server.run()
 ```
 
+We have pre-processed some commonly used datasets, cleaning the images, producing the vectors, and pre-building the index.
+
+| Dataset                             | Size | Images |          Preprocessed |
+| :---------------------------------- | ---: | -----: | --------------------: |
+| [Unsplash 25K][unsplash-25k-origin] |    - |   25 K | [HF][unsplash-25k-hf] |
+| [Unsplash 2M][unsplash-2m-origin]   |    - |    2 M |  [HF][unsplash-2m-hf] |
+| [LAION 400M][laion-400m-origin]     |    - |  400 M |   [HF][laion-400m-hf] |
+| [LAION 5B][laion-5b-origin]         |    - |    5 B |     [HF][laion-5b-hf] |
+
+
+[unsplash-25k-origin]: https://unum.cloud
+[unsplash-2m-origin]: https://unum.cloud
+[laion-400m-origin]: https://unum.cloud
+[laion-5b-origin]: https://unum.cloud
+[unsplash-25k-hf]: https://unum.cloud
+[unsplash-2m-hf]: https://unum.cloud
+[laion-400m-hf]: https://unum.cloud
+[laion-5b-hf]: https://unum.cloud
+
 ### USearch + RDKit = Molecular Search
 
-Research in natural sciences is expensive.
-To search for properties of different molecules, large databases are used.
-Comparing the molecules, however, is hard.
-Instead, binary hash-like fingerprints are produced from the graph structure, using packages like RDKit.
+Comparing molecule graphs and searching for similar structures is expensive and slow.
+It can be seen as a special case of the NP-Complete Subgraph Isomorphism problem.
+Luckily, domain-specific approximate methods exists.
+The one commonly used in Chemistry, is to generate structures from [SMILES][smiles], and later hash them into binary fingerprints.
+The later are searchable with bitwise similarity metrics, like the Tanimoto coefficient.
+Below is na example using the RDKit package.
 
 ```python
 from usearch.index import Index, MetricKind
@@ -565,9 +581,57 @@ index.add(labels, fingerprints)
 matches = index.search(fingerprints, 10)
 ```
 
-RDKit [provides][rdkit-fingerprints] Atom-Pair, Topological Torsion, Morgan, and Layered Fingerprints, among other options.
+RDKit [provides][rdkit-fingerprints] following fingerprinting techniques:
 
+- Atom-Pair, 
+- Topological Torsion, 
+- Morgan,
+- Layered Fingerprints.
+
+We have preprocessed some of the most commonly used datasets, and made it available for free on the HuggingFace portal, together with visual interface.
+
+| Dataset                   |     Size |   Molecules |     Preprocessed |
+| :------------------------ | -------: | ----------: | ---------------: |
+| [PubChem][pubchem-origin] |     8 GB | 115'034'339 | [HF][pubchem-hf] |
+| [GDB 13][gdb13-origin]    |   2.3 GB | 977'468'301 |   [HF][gdb13-hf] |
+| [REAL][real-origin]       | > 100 GB |         6 B |    [HF][real-hf] |
+
+[smiles]: https://en.wikipedia.org/wiki/Simplified_molecular-input_line-entry_system
 [rdkit-fingerprints]: https://www.rdkit.org/docs/RDKit_Book.html#additional-information-about-the-fingerprints
+
+[gdb13-origin]: https://zenodo.org/record/5172018/files/gdb13.tgz?download=1
+[pubchem-origin]: ftp://ftp.ncbi.nlm.nih.gov/pubchem/Compound/Extras/CID-SMILES.gz
+[real-origin]: https://enamine.net/compound-collections/real-compounds/real-database
+[pubchem-hf]: https://unum.cloud
+[gdb13-hf]: https://unum.cloud
+[real-hf]: https://unum.cloud
+
+## TODO
+
+- JavaScript: Allow calling from "worker threads".
+- Rust: Allow passing a custom thread ID.
+- C# .NET bindings.
+
+## Integrations
+
+- [x] GPT-Cache.
+- [ ] Langchain.
+- [ ] Microsoft Semantic Kernel.
+- [ ] PyTorch.
+
+## Citations
+
+```txt
+@software{Vardanian_USearch_2022,
+doi = {10.5281/zenodo.7949416},
+author = {Vardanian, Ash},
+title = {{USearch by Unum Cloud}},
+url = {https://github.com/unum-cloud/usearch},
+version = {0.13.0},
+year = {2022}
+month = jun,
+}
+```
 
 ---
 

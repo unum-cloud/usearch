@@ -3,7 +3,7 @@
 
 #include <memory> // `std::shared_ptr`
 
-#include "punned.hpp"
+#include <usearch/index_punned_dense.hpp>
 
 struct Matches;
 
@@ -15,7 +15,7 @@ class Index {
   public:
     using label_t = std::uint32_t;
     using distance_t = unum::usearch::punned_distance_t;
-    using punned_t = unum::usearch::punned_gt<label_t>;
+    using punned_t = unum::usearch::index_punned_dense_gt<label_t>;
 
     Index(std::unique_ptr<punned_t> index);
 

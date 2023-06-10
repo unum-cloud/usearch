@@ -8,7 +8,6 @@
             "include_dirs": [
                 "<!@(node -p \"require('node-addon-api').include\")",
                 "include",
-                "src",
                 "fp16/include",
                 "robin-map/include",
                 "simsimd/include"

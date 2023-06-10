@@ -8,18 +8,46 @@ pub mod ffi {
         distances: Vec<f32>,
     }
 
+    enum MetricKind {
+        IP,
+        L2Sq,
+        Cos,
+        Pearson,
+        Haversine,
+        Hamming,
+        Tanimoto,
+        Sorensen,
+    }
+
+    enum ScalarKind {
+        F64,
+        F32,
+        F16,
+        F8,
+        B1x8,
+    }
+
+    struct IndexOptions {
+        dimensions: usize
+        metric: MetricKind
+        quantization: ScalarKind
+        connectivity: usize
+        expansion_add: usize
+        expansion_search: usize
+    }
+
     // C++ types and signatures exposed to Rust.
     unsafe extern "C++" {
         include!("lib.hpp");
 
         type Index;
+        type MetricKind;
+        type ScalarKind;
 
-        pub fn new_ip(dimensions: usize, quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
-        pub fn new_l2sq(dimensions: usize, quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
-        pub fn new_cos(dimensions: usize, quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
-        pub fn new_haversine(quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
+        pub fn new_index(options: IndexOptions) -> Result<UniquePtr<Index>>;
 
         pub fn reserve(self: &Index, capacity: usize) -> Result<()>;
+        pub fn clear(self: &Index) -> Result<()>;
 
         pub fn dimensions(self: &Index) -> usize;
         pub fn connectivity(self: &Index) -> usize;
@@ -28,9 +56,6 @@ pub mod ffi {
 
         pub fn add(self: &Index, label: u32, vector: &[f32]) -> Result<()>;
         pub fn search(self: &Index, query: &[f32], count: usize) -> Result<Matches>;
-
-        pub fn add_in_thread(self: &Index, label: u32, vector: &[f32], thread: usize) -> Result<()>;
-        pub fn search_in_thread(self: &Index, query: &[f32], count: usize, thread: usize) -> Result<Matches>;
 
         pub fn save(self: &Index, path: &str) -> Result<()>;
         pub fn load(self: &Index, path: &str) -> Result<()>;

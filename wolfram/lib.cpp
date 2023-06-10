@@ -1,9 +1,9 @@
 #include "WolframLibrary.h"
-#include "punned.hpp"
+#include <usearch/index_punned_dense.hpp>
 
 using namespace unum::usearch;
 using distance_t = punned_distance_t;
-using punned_t = punned_gt<int>;
+using punned_t = index_punned_dense_gt<int>;
 using span_t = span_gt<float>;
 
 EXTERN_C DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) { return LIBRARY_NO_ERROR; }
@@ -22,8 +22,8 @@ EXTERN_C DLLEXPORT int IndexCreate(WolframLibraryData libData, mint Argc, MArgum
         config.expansion_add = static_cast<std::size_t>(MArgument_getInteger(Args[5]));
         config.expansion_search = static_cast<std::size_t>(MArgument_getInteger(Args[6]));
 
-        accuracy_t accuracy = accuracy_from_name(accuracy_cstr, std::strlen(accuracy_cstr));
-        common_metric_kind_t metric_kind = common_metric_from_name(metric_cstr, std::strlen(metric_cstr));
+        scalar_kind_t accuracy = scalar_kind_from_name(accuracy_cstr, std::strlen(accuracy_cstr));
+        metric_kind_t metric_kind = metric_from_name(metric_cstr, std::strlen(metric_cstr));
         punned_t index = make_punned<punned_t>(metric_kind, dimensions, accuracy, config);
         index.reserve(capacity);
 

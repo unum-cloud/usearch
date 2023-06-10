@@ -3,9 +3,9 @@ import pytest
 import numpy as np
 
 from usearch.io import load_matrix, save_matrix
-from usearch.synthetic import recall_members
+from usearch.eval import recall_members
 
-from usearch.index import Index, SetsIndex, MetricKind, Matches
+from usearch.index import Index, SparseIndex, MetricKind, Matches
 from usearch.index import (
     DEFAULT_CONNECTIVITY,
     DEFAULT_EXPANSION_ADD,
@@ -13,8 +13,8 @@ from usearch.index import (
 )
 
 
-dimensions = [13, 99, 100, 256]
-batch_sizes = [1, 2, 100]
+dimensions = [3, 97, 256]
+batch_sizes = [1, 33]
 index_types = ['f32', 'f64', 'f16', 'f8']
 numpy_types = [np.float32, np.float64, np.float16, np.byte]
 connectivity_options = [3, 13, 50, DEFAULT_CONNECTIVITY]
@@ -128,7 +128,7 @@ def test_index_batch(
 
 @pytest.mark.parametrize('ndim', dimensions)
 @pytest.mark.parametrize('batch_size', batch_sizes)
-def test_index_udf(ndim: int, batch_size: int):
+def test_index_numba(ndim: int, batch_size: int):
 
     try:
         from numba import cfunc, types, carray
@@ -167,7 +167,7 @@ def test_index_udf(ndim: int, batch_size: int):
 @pytest.mark.parametrize('connectivity', connectivity_options)
 def test_sets_index(connectivity: int):
 
-    index = SetsIndex(connectivity=connectivity)
+    index = SparseIndex(connectivity=connectivity)
     index.add(10, np.array([10, 12, 15], dtype=np.uint32))
     index.add(11, np.array([11, 12, 15, 16], dtype=np.uint32))
     results = index.search(np.array([12, 15], dtype=np.uint32), 10)

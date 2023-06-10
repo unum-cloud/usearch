@@ -7,10 +7,12 @@ from pybind11.setup_helpers import Pybind11Extension
 
 compile_args = ['-std=c++11', '-O3']
 link_args = []
+macros_args = []
 
 if sys.platform == 'linux':
     compile_args.append('-fopenmp')
     link_args.append('-lgomp')
+    macros_args.append(('USEARCH_USE_OPENMP', '1'))
     compile_args.append('-Wno-unknown-pragmas')
 
 if sys.platform == 'darwin':
@@ -22,12 +24,14 @@ if sys.platform == 'darwin':
 if sys.platform == 'win32':
     compile_args = ['/std:c++14', '/O2']
 
+
 ext_modules = [
     Pybind11Extension(
         'usearch.compiled',
         ['python/lib.cpp'],
         extra_compile_args=compile_args,
         extra_link_args=link_args,
+        define_macros=macros_args,
     ),
 ]
 
@@ -79,10 +83,16 @@ setup(
     ],
 
     include_dirs=[
-        'include', 'src',
+        'include',
         'fp16/include', 'robin-map/include', 'simsimd/include'],
+
     ext_modules=ext_modules,
+    install_requires=[
+        'numpy',
+        'ucall',
+        'pandas',
+    ],
     extras_require={
-        'jit': ['numba'],
+        'jit': ['numba', 'cppyy'],
     },
 )

@@ -1,4 +1,4 @@
-#include "../src/punned.hpp"
+#include "../src/index_punned_dense.hpp"
 
 extern "C" {
 #include "usearch.h"
@@ -9,11 +9,11 @@ using namespace unum;
 
 using label_t = int;
 using distance_t = float;
-using punned_index_t = punned_gt<label_t>;
+using punned_index_t = index_punned_dense_gt<label_t>;
 using span_t = span_gt<float>;
 
 void* usearch_new(                                        //
-    usearch_metric_t metric, usearch_accuracy_t accuracy, //
+    usearch_metric_t metric, usearch_scalar_kind_t accuracy, //
     int dimensions, int capacity, int connectivity,       //
     int expansion_add, int expansion_search) {
 
@@ -37,8 +37,8 @@ void* usearch_new(                                        //
         // std::size_t bytes_to_alloc = sizeof(punned_index_t) + bytes_for_error_messages;
         // safe_punned_index_t* result = (safe_punned_index_t*)std::malloc(bytes_to_alloc);
 
-        accuracy_t accuracy = accuracy_from_name(accuracy_str, accuracy_len);
-        common_metric_kind_t metric_kind = common_metric_from_name(metric_str, metric_len);
+        scalar_kind_t accuracy = scalar_kind_from_name(accuracy_str, accuracy_len);
+        metric_kind_t metric_kind = metric_from_name(metric_str, metric_len);
         punned_index_t index = make_punned<punned_index_t>( //
             metric_kind, static_cast<std::size_t>(dimensions), accuracy, config);
 

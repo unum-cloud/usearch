@@ -146,5 +146,10 @@
         "usecases"
     ],
     "autoDocstring.docstringFormat": "sphinx",
-    "java.configuration.updateBuildConfiguration": "interactive"
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "python.testing.pytestArgs": [
+        "python"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
 }

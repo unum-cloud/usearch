@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <stdexcept>
 
-#include "punned.hpp"
+#include <usearch/index_punned_dense.hpp>
 
 using namespace unum::usearch;
 using namespace unum;

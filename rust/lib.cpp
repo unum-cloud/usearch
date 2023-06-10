@@ -62,7 +62,7 @@ void Index::save(rust::Str path) const { index_->save(std::string(path).c_str())
 void Index::load(rust::Str path) const { index_->load(std::string(path).c_str()); }
 void Index::view(rust::Str path) const { index_->view(std::string(path).c_str()); }
 
-accuracy_t accuracy(rust::Str quant) { return accuracy_from_name(quant.data(), quant.size()); }
+scalar_kind_t accuracy(rust::Str quant) { return scalar_kind_from_name(quant.data(), quant.size()); }
 
 std::unique_ptr<Index> wrap(punned_t&& index) {
     std::unique_ptr<punned_t> punned_ptr;
