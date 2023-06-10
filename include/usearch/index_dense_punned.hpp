@@ -1,185 +1,33 @@
 #pragma once
 #include <stdlib.h> // `aligned_alloc`
 
-#include <cstring>      // `std::strncmp`
 #include <functional>   // `std::function`
 #include <numeric>      // `std::iota`
 #include <shared_mutex> // `std::shared_mutex`
-#include <stdexcept>    // `std::invalid_argument`
 #include <thread>       // `std::thread`
 #include <vector>       // `std::vector`
 
 #include <fp16/fp16.h>
 #include <tsl/robin_map.h>
 
-#include <usearch/usearch.hpp>
-
-#if defined(USEARCH_USE_OPENMP)
-#include <omp.h> // `omp_get_num_threads()`
-#endif
-
-#if defined(USEARCH_IS_LINUX)
-#include <sys/auxv.h>
-#endif
-
-#if defined(USEARCH_IS_ARM)
-#include <arm_fp16.h>
-#endif
-
 #if defined(USEARCH_USE_SIMSIMD)
 #include <simsimd/simsimd.h>
 #endif
 
+#include <usearch/index.hpp>
+#include <usearch/index_punned_helpers.hpp>
+
 namespace unum {
 namespace usearch {
 
-enum class common_scalar_kind_t {
-    f64_k,
-    f32_k,
-    f16_k,
-    f8_k,
-    b1_k,
-};
+struct cos_f8d2_t {
+    using scalar_t = f8d2_bits_t;
+    std::size_t dimensions;
 
-using byte_t = char;
-using punned_distance_t = float;
-using punned_metric_t = punned_distance_t (*)(byte_t const*, byte_t const*, std::size_t, std::size_t);
-
-template <typename metric_at>
-inline punned_distance_t punned_metric(byte_t const* a, byte_t const* b, std::size_t a_bytes, std::size_t b_bytes) {
-    using scalar_t = typename metric_at::scalar_t;
-    return metric_at{}((scalar_t const*)a, (scalar_t const*)b, a_bytes / sizeof(scalar_t), b_bytes / sizeof(scalar_t));
-}
-
-using punned_stateful_metric_t =
-    std::function<punned_distance_t(byte_t const*, byte_t const*, std::size_t, std::size_t)>;
-
-template <typename at, typename compare_at> inline at clamp(at v, at lo, at hi, compare_at comp) {
-    return comp(v, lo) ? lo : comp(hi, v) ? hi : v;
-}
-template <typename at> inline at clamp(at v, at lo, at hi) { return usearch::clamp(v, lo, hi, std::less<at>{}); }
-
-class f8_bits_t;
-class f16_bits_t;
-
-inline float f16_to_f32(std::uint16_t u16) {
-#if defined(__AVX512F__)
-    _Float16 f16;
-    std::memcpy(&f16, &u16, sizeof(std::uint16_t));
-    return float(f16);
-#elif defined(USEARCH_IS_ARM)
-    __fp16 f16;
-    std::memcpy(&f16, &u16, sizeof(std::uint16_t));
-    return float(f16);
-#else
-    return fp16_ieee_to_fp32_value(u16);
-#endif
-}
-
-inline std::uint16_t f32_to_f16(float f32) {
-#if defined(__AVX512F__)
-    _Float16 f16 = _Float16(f32);
-    std::uint16_t u16;
-    std::memcpy(&u16, &f16, sizeof(std::uint16_t));
-    return u16;
-#elif defined(USEARCH_IS_ARM)
-    __fp16 f16 = __fp16(f32);
-    std::uint16_t u16;
-    std::memcpy(&u16, &f16, sizeof(std::uint16_t));
-    return u16;
-#else
-    return fp16_ieee_from_fp32_value(f32);
-#endif
-}
-
-class f16_bits_t {
-    std::uint16_t uint16_{};
-
-  public:
-    inline f16_bits_t() : uint16_(0) {}
-    inline f16_bits_t(f16_bits_t&&) = default;
-    inline f16_bits_t& operator=(f16_bits_t&&) = default;
-    inline f16_bits_t(f16_bits_t const&) = default;
-    inline f16_bits_t& operator=(f16_bits_t const&) = default;
-
-    inline operator float() const { return f16_to_f32(uint16_); }
-
-    inline f16_bits_t(f8_bits_t);
-    inline f16_bits_t(float v) : uint16_(f32_to_f16(v)) {}
-    inline f16_bits_t(double v) : uint16_(f32_to_f16(v)) {}
-
-    inline f16_bits_t operator+(f16_bits_t other) const { return {float(*this) + float(other)}; }
-    inline f16_bits_t operator-(f16_bits_t other) const { return {float(*this) - float(other)}; }
-    inline f16_bits_t operator*(f16_bits_t other) const { return {float(*this) * float(other)}; }
-    inline f16_bits_t operator/(f16_bits_t other) const { return {float(*this) / float(other)}; }
-    inline f16_bits_t operator+(float other) const { return {float(*this) + other}; }
-    inline f16_bits_t operator-(float other) const { return {float(*this) - other}; }
-    inline f16_bits_t operator*(float other) const { return {float(*this) * other}; }
-    inline f16_bits_t operator/(float other) const { return {float(*this) / other}; }
-    inline f16_bits_t operator+(double other) const { return {float(*this) + other}; }
-    inline f16_bits_t operator-(double other) const { return {float(*this) - other}; }
-    inline f16_bits_t operator*(double other) const { return {float(*this) * other}; }
-    inline f16_bits_t operator/(double other) const { return {float(*this) / other}; }
-
-    inline f16_bits_t& operator+=(float v) {
-        uint16_ = f32_to_f16(v + f16_to_f32(uint16_));
-        return *this;
-    }
-
-    inline f16_bits_t& operator-=(float v) {
-        uint16_ = f32_to_f16(v - f16_to_f32(uint16_));
-        return *this;
-    }
-
-    inline f16_bits_t& operator*=(float v) {
-        uint16_ = f32_to_f16(v * f16_to_f32(uint16_));
-        return *this;
-    }
-
-    inline f16_bits_t& operator/=(float v) {
-        uint16_ = f32_to_f16(v / f16_to_f32(uint16_));
-        return *this;
-    }
-};
-
-/**
- *  @brief  Numeric type for uniformly-distributed floating point
- *          values within [-1,1] range, quantized to integers [-100,100].
- */
-class f8_bits_t {
-    std::int8_t int8_{};
-
-  public:
-    constexpr static float divisor_k = 100.f;
-    constexpr static std::int8_t min_k = -100;
-    constexpr static std::int8_t max_k = 100;
-
-    inline f8_bits_t() : int8_(0) {}
-    inline f8_bits_t(f8_bits_t&&) = default;
-    inline f8_bits_t& operator=(f8_bits_t&&) = default;
-    inline f8_bits_t(f8_bits_t const&) = default;
-    inline f8_bits_t& operator=(f8_bits_t const&) = default;
-
-    inline operator float() const { return float(int8_) / divisor_k; }
-    inline operator f16_bits_t() const { return float(int8_) / divisor_k; }
-    inline operator double() const { return double(int8_) / divisor_k; }
-    inline explicit operator std::int8_t() const { return int8_; }
-    inline explicit operator std::int16_t() const { return int8_; }
-    inline explicit operator std::int32_t() const { return int8_; }
-    inline explicit operator std::int64_t() const { return int8_; }
-
-    inline f8_bits_t(float v)
-        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
-    inline f8_bits_t(double v)
-        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
-};
-
-inline f16_bits_t::f16_bits_t(f8_bits_t v) : f16_bits_t(float(v)) {}
-
-struct cos_f8_t {
-    inline punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b, std::size_t n) const {
+    inline cos_f8d2_t(std::size_t dims) noexcept : dimensions(dims) {}
+    inline punned_distance_t operator()(f8d2_bits_t const* a, f8d2_bits_t const* b) const noexcept {
         std::int32_t ab{}, a2{}, b2{};
-        for (std::size_t i = 0; i != n; i++) {
+        for (std::size_t i = 0; i != dimensions; i++) {
             std::int16_t ai{a[i]};
             std::int16_t bi{b[i]};
             ab += ai * bi;
@@ -190,157 +38,41 @@ struct cos_f8_t {
     }
 };
 
-struct l2sq_f8_t {
-    inline punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b, std::size_t n) const {
+struct l2sq_f8d2_t {
+    using scalar_t = f8d2_bits_t;
+    std::size_t dimensions;
+
+    inline l2sq_f8d2_t(std::size_t dims) noexcept : dimensions(dims) {}
+    inline punned_distance_t operator()(f8d2_bits_t const* a, f8d2_bits_t const* b) const noexcept {
         std::int32_t ab_deltas_sq{};
-        for (std::size_t i = 0; i != n; i++)
+        for (std::size_t i = 0; i != dimensions; i++)
             ab_deltas_sq += square(std::int16_t(a[i]) - std::int16_t(b[i]));
         return ab_deltas_sq;
     }
 };
 
-struct uuid_t {
-    std::uint8_t octets[16];
-};
-
-template <typename callback_at> //
-void multithreaded(std::size_t threads, std::size_t tasks, callback_at&& callback) {
-
-    if (threads == 0)
-        threads = std::thread::hardware_concurrency();
-    if (threads == 1 || tasks <= 128) {
-        for (std::size_t task_idx = 0; task_idx < tasks; ++task_idx)
-            callback(0, task_idx);
-        return;
-    }
-
-#if defined(USEARCH_USE_OPENMP)
-    omp_set_num_threads(threads);
-#pragma omp parallel for schedule(dynamic)
-    for (std::size_t i = 0; i < tasks; ++i)
-        callback(omp_get_thread_num(), i);
-#else
-    std::vector<std::thread> threads_pool;
-    std::size_t tasks_per_thread = (tasks / threads) + ((tasks % threads) != 0);
-    for (std::size_t thread_idx = 0; thread_idx != threads; ++thread_idx) {
-        threads_pool.emplace_back([=]() {
-            for (std::size_t task_idx = thread_idx * tasks_per_thread;
-                 task_idx < (std::min)(tasks, thread_idx * tasks_per_thread + tasks_per_thread); ++task_idx)
-                callback(thread_idx, task_idx);
-        });
-    }
-    for (std::size_t thread_idx = 0; thread_idx != threads; ++thread_idx)
-        threads_pool[thread_idx].join();
-#endif
-}
-
-/**
- *  @brief Relies on `posix_memalign` for aligned memory allocations.
- */
-template <typename element_at = char, std::size_t alignment_ak = 64> //
-class aligned_allocator_gt {
-  public:
-    using value_type = element_at;
-    using size_type = std::size_t;
-    using pointer = element_at*;
-    using const_pointer = element_at const*;
-    template <typename other_element_at> struct rebind {
-        using other = aligned_allocator_gt<other_element_at>;
-    };
-
-    pointer allocate(size_type length) const {
-        void* result = nullptr;
-        int status = posix_memalign(&result, alignment_ak, ceil2(length * sizeof(value_type)));
-        return status == 0 ? (pointer)result : nullptr;
-    }
-
-    void deallocate(pointer begin, size_type) const { std::free(begin); }
-};
-
-using aligned_allocator_t = aligned_allocator_gt<>;
-
-enum class accuracy_t {
-    f32_k,
-    f16_k,
-    f64_k,
-    f8_k,
-};
-
-inline char const* accuracy_name(accuracy_t accuracy) {
-    switch (accuracy) {
-    case accuracy_t::f32_k: return "f32";
-    case accuracy_t::f16_k: return "f16";
-    case accuracy_t::f64_k: return "f64";
-    case accuracy_t::f8_k: return "f8";
-    default: return "";
-    }
-}
-
-inline bool str_equals(char const* begin, std::size_t len, char const* other_begin) {
-    std::size_t other_len = std::strlen(other_begin);
-    return len == other_len && std::strncmp(begin, other_begin, len) == 0;
-}
-
-inline expected_gt<accuracy_t> accuracy_from_name(char const* name, std::size_t len) {
-    expected_gt<accuracy_t> parsed;
-    if (str_equals(name, len, "f32"))
-        parsed.result = accuracy_t::f32_k;
-    else if (str_equals(name, len, "f64"))
-        parsed.result = accuracy_t::f64_k;
-    else if (str_equals(name, len, "f16"))
-        parsed.result = accuracy_t::f16_k;
-    else if (str_equals(name, len, "f8"))
-        parsed.result = accuracy_t::f8_k;
-    else
-        parsed.failed("Unknown type, choose: f32, f16, f64, f8");
-    return parsed;
-}
-
-inline expected_gt<common_metric_kind_t> common_metric_from_name(char const* name, std::size_t len) {
-    expected_gt<common_metric_kind_t> parsed;
-    if (str_equals(name, len, "l2sq") || str_equals(name, len, "euclidean_sq")) {
-        parsed.result = common_metric_kind_t::l2sq_k;
-    } else if (str_equals(name, len, "ip") || str_equals(name, len, "inner") || str_equals(name, len, "dot")) {
-        parsed.result = common_metric_kind_t::ip_k;
-    } else if (str_equals(name, len, "cos") || str_equals(name, len, "angular")) {
-        parsed.result = common_metric_kind_t::cos_k;
-    } else if (str_equals(name, len, "haversine")) {
-        parsed.result = common_metric_kind_t::haversine_k;
-    } else if (str_equals(name, len, "pearson")) {
-        parsed.result = common_metric_kind_t::pearson_k;
-    } else if (str_equals(name, len, "hamming")) {
-        parsed.result = common_metric_kind_t::bitwise_hamming_k;
-    } else if (str_equals(name, len, "tanimoto")) {
-        parsed.result = common_metric_kind_t::bitwise_tanimoto_k;
-    } else if (str_equals(name, len, "sorensen")) {
-        parsed.result = common_metric_kind_t::bitwise_sorensen_k;
-    } else
-        parsed.failed(
-            "Unknown distance, choose: l2sq, ip, cos, haversine, jaccard, pearson, hamming, tanimoto, sorensen");
-    return parsed;
-}
-
 template <typename index_at>
 expected_gt<index_at> make_punned( //
-    common_metric_kind_t metric, std::size_t dimensions, accuracy_t accuracy, index_config_t const& config) {
+    metric_kind_t metric, std::size_t dimensions, scalar_kind_t accuracy, std::size_t expansion_add,
+    std::size_t expansion_search, index_config_t const& config) {
 
     expected_gt<index_at> parsed;
-    if (metric == common_metric_kind_t::l2sq_k) {
+    if (metric == metric_kind_t::l2sq_k) {
         if (dimensions == 0)
             parsed.failed("The number of dimensions must be positive");
         else
             parsed.result = index_at::l2sq(dimensions, accuracy, config);
-    } else if (metric == common_metric_kind_t::ip_k) {
+    } else if (metric == metric_kind_t::ip_k) {
         if (dimensions == 0)
             parsed.failed("The number of dimensions must be positive");
         else
             parsed.result = index_at::ip(dimensions, accuracy, config);
-    } else if (metric == common_metric_kind_t::cos_k) {
+    } else if (metric == metric_kind_t::cos_k) {
         if (dimensions == 0)
             parsed.failed("The number of dimensions must be positive");
         else
             parsed.result = index_at::cos(dimensions, accuracy, config);
-    } else if (metric == common_metric_kind_t::haversine_k) {
+    } else if (metric == metric_kind_t::haversine_k) {
         if (dimensions != 2 && dimensions != 0)
             parsed.failed("The number of dimensions must be equal to two");
         else
@@ -350,79 +82,12 @@ expected_gt<index_at> make_punned( //
     return parsed;
 }
 
-enum class isa_t {
-    auto_k,
-    neon_k,
-    sve_k,
-    avx2_k,
-    avx512_k,
-};
-
-inline char const* isa_name(isa_t isa) {
-    switch (isa) {
-    case isa_t::auto_k: return "auto";
-    case isa_t::neon_k: return "neon";
-    case isa_t::sve_k: return "sve";
-    case isa_t::avx2_k: return "avx2";
-    case isa_t::avx512_k: return "avx512";
-    default: return "";
-    }
-}
-
-inline std::size_t bytes_per_scalar(accuracy_t accuracy) {
-    switch (accuracy) {
-    case accuracy_t::f32_k: return 4;
-    case accuracy_t::f16_k: return 2;
-    case accuracy_t::f64_k: return 8;
-    case accuracy_t::f8_k: return 1;
-    default: return 0;
-    }
-}
-
-inline bool supports_arm_sve() {
-#if defined(USEARCH_IS_ARM)
-#if defined(USEARCH_IS_LINUX)
-    unsigned long capabilities = getauxval(AT_HWCAP);
-    if (capabilities & HWCAP_SVE)
-        return true;
-#endif
-#endif
-    return false;
-}
-
-template <typename from_scalar_at, typename to_scalar_at> struct cast_gt {
-    inline bool operator()(byte_t const* input, std::size_t bytes_in_input, byte_t* output) const {
-        from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
-        to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
-        std::transform( //
-            typed_input, typed_input + bytes_in_input / sizeof(from_scalar_at), typed_output,
-            [](from_scalar_at from) { return to_scalar_at(from); });
-        return true;
-    }
-};
-
-template <> struct cast_gt<f32_t, f32_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
-};
-
-template <> struct cast_gt<f64_t, f64_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
-};
-
-template <> struct cast_gt<f16_bits_t, f16_bits_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
-};
-
-template <> struct cast_gt<f8_bits_t, f8_bits_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
-};
-
 /**
- *  @brief  Oversimplified type-punned index for equidimensional floating-point
- *          vectors with automatic down-casting and hardware acceleration.
+ *  @brief  Oversimplified type-punned index for equidimensional vectors
+ *          with automatic down-casting and hardware acceleration.
  */
 template <typename label_at = std::int64_t, typename id_at = std::uint32_t> //
-class punned_gt {
+class index_punned_dense_gt {
   public:
     using label_t = label_at;
     using id_t = id_at;
@@ -431,11 +96,13 @@ class punned_gt {
   private:
     /// @brief Schema: input buffer, bytes in input buffer, output buffer.
     using cast_t = std::function<bool(byte_t const*, std::size_t, byte_t*)>;
+    /// @brief Punned metric object.
+    using metric_t = std::function<punned_distance_t(span_gt<byte_t const>, span_gt<byte_t const>)>;
     /// @brief Punned index.
-    using index_t = index_gt<punned_stateful_metric_t, label_t, id_t, byte_t>;
+    using index_t = index_gt<metric_t, label_t, id_t, byte_t>;
     /// @brief A type-punned metric and metadata about present isa support.
     struct metric_and_meta_t {
-        punned_stateful_metric_t metric;
+        metric_t metric;
         isa_t acceleration;
     };
 
@@ -445,24 +112,30 @@ class punned_gt {
     using member_cref_t = typename index_t::member_cref_t;
 
     std::size_t dimensions_ = 0;
-    std::size_t casted_vector_bytes_ = 0;
-    accuracy_t accuracy_ = accuracy_t::f32_k;
-    isa_t acceleration_ = isa_t::auto_k;
+    std::size_t expansion_add_ = 0;
+    std::size_t expansion_search_ = 0;
+    index_t* typed_ = nullptr;
 
-    index_t* typed_{};
-    mutable std::vector<byte_t> cast_buffer_{};
+    std::size_t casted_vector_bytes_ = 0;
+    scalar_kind_t scalar_kind_ = scalar_kind_t::f32_k;
+    isa_t isa_ = isa_t::auto_k;
+
+    mutable std::vector<byte_t> cast_buffer_;
     struct casts_t {
-        cast_t from_f8{};
-        cast_t from_f16{};
-        cast_t from_f32{};
-        cast_t from_f64{};
-        cast_t to_f8{};
-        cast_t to_f16{};
-        cast_t to_f32{};
-        cast_t to_f64{};
+        cast_t from_b1x8;
+        cast_t from_f8d2;
+        cast_t from_f16;
+        cast_t from_f32;
+        cast_t from_f64;
+
+        cast_t to_b1x8;
+        cast_t to_f8d2;
+        cast_t to_f16;
+        cast_t to_f32;
+        cast_t to_f64;
     } casts_;
 
-    punned_stateful_metric_t root_metric_;
+    metric_t root_metric_;
 
     mutable std::vector<std::size_t> available_threads_;
     mutable std::mutex available_threads_mutex_;
@@ -480,20 +153,20 @@ class punned_gt {
     using serialization_result_t = typename index_t::serialization_result_t;
     using stats_t = typename index_t::stats_t;
 
-    punned_gt() = default;
-    punned_gt(punned_gt&& other) { swap(other); }
-    punned_gt& operator=(punned_gt&& other) {
+    index_punned_dense_gt() = default;
+    index_punned_dense_gt(index_punned_dense_gt&& other) { swap(other); }
+    index_punned_dense_gt& operator=(index_punned_dense_gt&& other) {
         swap(other);
         return *this;
     }
 
-    ~punned_gt() { aligned_index_free_(typed_); }
+    ~index_punned_dense_gt() { aligned_index_free_(typed_); }
 
-    void swap(punned_gt& other) {
+    void swap(index_punned_dense_gt& other) {
         std::swap(dimensions_, other.dimensions_);
         std::swap(casted_vector_bytes_, other.casted_vector_bytes_);
-        std::swap(accuracy_, other.accuracy_);
-        std::swap(acceleration_, other.acceleration_);
+        std::swap(scalar_kind_, other.scalar_kind_);
+        std::swap(isa_, other.isa_);
         std::swap(typed_, other.typed_);
         std::swap(cast_buffer_, other.cast_buffer_);
         std::swap(casts_, other.casts_);
@@ -510,8 +183,11 @@ class punned_gt {
     index_config_t const& config() const { return typed_->config(); }
     index_limits_t const& limits() const { return typed_->limits(); }
     void clear() { return typed_->clear(); }
-    void change_expansion_add(std::size_t n) { typed_->change_expansion_add(n); }
-    void change_expansion_search(std::size_t n) { typed_->change_expansion_search(n); }
+
+    std::size_t expansion_add() const { return expansion_add_; }
+    std::size_t expansion_search() const { return expansion_search_; }
+    void change_expansion_add(std::size_t n) { expansion_add_ = n; }
+    void change_expansion_search(std::size_t n) { expansion_search_ = n; }
 
     member_citerator_t cbegin() const { return typed_->cbegin(); }
     member_citerator_t cend() const { return typed_->cend(); }
@@ -523,8 +199,8 @@ class punned_gt {
     stats_t stats() const { return typed_->stats(); }
     stats_t stats(std::size_t level) const { return typed_->stats(level); }
 
-    accuracy_t accuracy() const { return accuracy_; }
-    isa_t acceleration() const { return acceleration_; }
+    scalar_kind_t scalar_kind() const { return scalar_kind_; }
+    isa_t isa() const { return isa_; }
 
     serialization_result_t save(char const* path) const { return typed_->save(path); }
     serialization_result_t load(char const* path) { return typed_->load(path); }
@@ -547,59 +223,66 @@ class punned_gt {
     }
 
     // clang-format off
-    add_result_t add(label_t label, f8_bits_t const* vector) { return add_(label, vector, casts_.from_f8); }
+    add_result_t add(label_t label, b1x8_t const* vector) { return add_(label, vector, casts_.from_b1x8); }
+    add_result_t add(label_t label, f8d2_bits_t const* vector) { return add_(label, vector, casts_.from_f8d2); }
     add_result_t add(label_t label, f16_bits_t const* vector) { return add_(label, vector, casts_.from_f16); }
     add_result_t add(label_t label, f32_t const* vector) { return add_(label, vector, casts_.from_f32); }
     add_result_t add(label_t label, f64_t const* vector) { return add_(label, vector, casts_.from_f64); }
 
-    add_result_t add(label_t label, f8_bits_t const* vector, add_config_t config) { return add_(label, vector, config, casts_.from_f8); }
+    add_result_t add(label_t label, b1x8_t const* vector, add_config_t config) { return add_(label, vector, config, casts_.from_b1x8); }
+    add_result_t add(label_t label, f8d2_bits_t const* vector, add_config_t config) { return add_(label, vector, config, casts_.from_f8d2); }
     add_result_t add(label_t label, f16_bits_t const* vector, add_config_t config) { return add_(label, vector, config, casts_.from_f16); }
     add_result_t add(label_t label, f32_t const* vector, add_config_t config) { return add_(label, vector, config, casts_.from_f32); }
     add_result_t add(label_t label, f64_t const* vector, add_config_t config) { return add_(label, vector, config, casts_.from_f64); }
 
-    search_result_t search(f8_bits_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f8); }
+    search_result_t search(b1x8_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_b1x8); }
+    search_result_t search(f8d2_bits_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f8d2); }
     search_result_t search(f16_bits_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f16); }
     search_result_t search(f32_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f32); }
     search_result_t search(f64_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f64); }
 
-    search_result_t search(f8_bits_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f8); }
+    search_result_t search(b1x8_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_b1x8); }
+    search_result_t search(f8d2_bits_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f8d2); }
     search_result_t search(f16_bits_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f16); }
     search_result_t search(f32_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f32); }
     search_result_t search(f64_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f64); }
 
-    search_result_t search_around(label_t hint, f8_bits_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f8); }
+    search_result_t search_around(label_t hint, b1x8_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_b1x8); }
+    search_result_t search_around(label_t hint, f8d2_bits_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f8d2); }
     search_result_t search_around(label_t hint, f16_bits_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f16); }
     search_result_t search_around(label_t hint, f32_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f32); }
     search_result_t search_around(label_t hint, f64_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f64); }
 
-    search_result_t search_around(label_t hint, f8_bits_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f8); }
+    search_result_t search_around(label_t hint, b1x8_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_b1x8); }
+    search_result_t search_around(label_t hint, f8d2_bits_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f8d2); }
     search_result_t search_around(label_t hint, f16_bits_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f16); }
     search_result_t search_around(label_t hint, f32_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f32); }
     search_result_t search_around(label_t hint, f64_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f64); }
 
-    void reconstruct(label_t label, f8_bits_t* vector) const { return reconstruct_(label, vector, casts_.to_f8); }
+    void reconstruct(label_t label, b1x8_t* vector) const { return reconstruct_(label, vector, casts_.to_b1x8); }
+    void reconstruct(label_t label, f8d2_bits_t* vector) const { return reconstruct_(label, vector, casts_.to_f8d2); }
     void reconstruct(label_t label, f16_bits_t* vector) const { return reconstruct_(label, vector, casts_.to_f16); }
     void reconstruct(label_t label, f32_t* vector) const { return reconstruct_(label, vector, casts_.to_f32); }
     void reconstruct(label_t label, f64_t* vector) const { return reconstruct_(label, vector, casts_.to_f64); }
 
-    static punned_gt ip(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, index_config_t config = {}) { return make_(dimensions, accuracy, ip_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
-    static punned_gt l2sq(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f16_k, index_config_t config = {}) { return make_(dimensions, accuracy, l2_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
-    static punned_gt cos(std::size_t dimensions, accuracy_t accuracy = accuracy_t::f32_k, index_config_t config = {}) { return make_(dimensions, accuracy, cos_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
-    static punned_gt haversine(accuracy_t accuracy = accuracy_t::f32_k, index_config_t config = {}) { return make_(2, accuracy, haversine_metric_(accuracy), make_casts_(accuracy), config); }
+    static index_punned_dense_gt ip(std::size_t dimensions, scalar_kind_t accuracy = scalar_kind_t::f16_k, index_config_t config = {}) { return make_(dimensions, accuracy, ip_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
+    static index_punned_dense_gt l2sq(std::size_t dimensions, scalar_kind_t accuracy = scalar_kind_t::f16_k, index_config_t config = {}) { return make_(dimensions, accuracy, l2_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
+    static index_punned_dense_gt cos(std::size_t dimensions, scalar_kind_t accuracy = scalar_kind_t::f32_k, index_config_t config = {}) { return make_(dimensions, accuracy, cos_metric_(dimensions, accuracy), make_casts_(accuracy), config); }
+    static index_punned_dense_gt haversine(scalar_kind_t accuracy = scalar_kind_t::f32_k, index_config_t config = {}) { return make_(2, accuracy, haversine_metric_(accuracy), make_casts_(accuracy), config); }
     // clang-format on
 
-    static punned_gt udf(                                        //
-        std::size_t dimensions, punned_stateful_metric_t metric, //
-        accuracy_t accuracy = accuracy_t::f32_k, index_config_t config = {}) {
+    static index_punned_dense_gt udf(            //
+        std::size_t dimensions, metric_t metric, //
+        scalar_kind_t accuracy = scalar_kind_t::f32_k, index_config_t config = {}) {
         return make_(dimensions, accuracy, {metric, isa_t::auto_k}, make_casts_(accuracy), config);
     }
 
-    punned_gt fork() const {
-        punned_gt result;
+    index_punned_dense_gt fork() const {
+        index_punned_dense_gt result;
 
         result.dimensions_ = dimensions_;
-        result.accuracy_ = accuracy_;
-        result.acceleration_ = acceleration_;
+        result.scalar_kind_ = scalar_kind_;
+        result.isa_ = isa_;
         result.casted_vector_bytes_ = casted_vector_bytes_;
         result.cast_buffer_ = cast_buffer_;
         result.casts_ = casts_;
@@ -630,7 +313,7 @@ class punned_gt {
     }
 
     struct thread_lock_t {
-        punned_gt const& parent;
+        index_punned_dense_gt const& parent;
         std::size_t thread_id;
 
         ~thread_lock_t() { parent.thread_unlock_(thread_id); }
@@ -742,19 +425,19 @@ class punned_gt {
         return search_around_(hint, vector, wanted, search_config, cast);
     }
 
-    static punned_gt make_(                               //
-        std::size_t dimensions, accuracy_t accuracy,      //
+    static index_punned_dense_gt make_(                   //
+        std::size_t dimensions, scalar_kind_t accuracy,   //
         metric_and_meta_t metric_and_meta, casts_t casts, //
         index_config_t config) {
 
         std::size_t hardware_threads = std::thread::hardware_concurrency();
-        punned_gt result;
+        index_punned_dense_gt result;
         result.dimensions_ = dimensions;
-        result.accuracy_ = accuracy;
+        result.scalar_kind_ = accuracy;
         result.casted_vector_bytes_ = bytes_per_scalar(accuracy) * dimensions;
         result.cast_buffer_.resize(hardware_threads * result.casted_vector_bytes_);
         result.casts_ = casts;
-        result.acceleration_ = metric_and_meta.acceleration;
+        result.isa_ = metric_and_meta.acceleration;
         result.root_metric_ = metric_and_meta.metric;
 
         // Fill the thread IDs.
@@ -770,31 +453,41 @@ class punned_gt {
 
     template <typename to_scalar_at> static casts_t make_casts_() {
         casts_t result;
-        result.from_f8 = cast_gt<f8_bits_t, to_scalar_at>{};
+
+        result.from_b1x8 = cast_gt<b1x8_t, to_scalar_at>{};
+        result.from_f8d2 = cast_gt<f8d2_bits_t, to_scalar_at>{};
         result.from_f16 = cast_gt<f16_bits_t, to_scalar_at>{};
         result.from_f32 = cast_gt<f32_t, to_scalar_at>{};
         result.from_f64 = cast_gt<f64_t, to_scalar_at>{};
-        result.to_f8 = cast_gt<to_scalar_at, f8_bits_t>{};
+
+        result.to_b1x8 = cast_gt<to_scalar_at, b1x8_t>{};
+        result.to_f8d2 = cast_gt<to_scalar_at, f8d2_bits_t>{};
         result.to_f16 = cast_gt<to_scalar_at, f16_bits_t>{};
         result.to_f32 = cast_gt<to_scalar_at, f32_t>{};
         result.to_f64 = cast_gt<to_scalar_at, f64_t>{};
+
         return result;
     }
 
-    static casts_t make_casts_(accuracy_t accuracy) {
+    static casts_t make_casts_(scalar_kind_t accuracy) {
         switch (accuracy) {
-        case accuracy_t::f64_k: return make_casts_<f64_t>();
-        case accuracy_t::f32_k: return make_casts_<f32_t>();
-        case accuracy_t::f16_k: return make_casts_<f16_bits_t>();
-        case accuracy_t::f8_k: return make_casts_<f8_bits_t>();
+        case scalar_kind_t::f64_k: return make_casts_<f64_t>();
+        case scalar_kind_t::f32_k: return make_casts_<f32_t>();
+        case scalar_kind_t::f16_k: return make_casts_<f16_bits_t>();
+        case scalar_kind_t::f8d2_k: return make_casts_<f8d2_bits_t>();
+        case scalar_kind_t::b1x8_k: return make_casts_<b1x8_t>();
         default: return {};
         }
     }
 
-    template <typename scalar_at, typename typed_at> //
-    static punned_stateful_metric_t pun_metric_(typed_at metric) {
-        return [=](byte_t const* a, byte_t const* b, std::size_t bytes, std::size_t) -> float {
-            return metric((scalar_at const*)a, (scalar_at const*)b, bytes / sizeof(scalar_at));
+    template <typename scalar_at, typename typed_at> static metric_t pun_metric_(typed_at metric) {
+        using scalar_t = scalar_at;
+        using vector_view_t = span_gt<scalar_t const>;
+        return [=](punned_vector_view_t a, punned_vector_view_t b) -> punned_distance_t {
+            std::size_t dims = a.size() / sizeof(scalar_t);
+            vector_view_t a_typed{(scalar_t const*)a.data(), dims};
+            vector_view_t b_typed{(scalar_t const*)b.data(), dims};
+            return metric(a_typed, b_typed);
         };
     }
 
@@ -804,23 +497,23 @@ class punned_gt {
 #if defined(USEARCH_IS_X86)
         if (dimensions % 4 == 0)
             return {
-                pun_metric_<simsimd_f32_t>([](simsimd_f32_t const* a, simsimd_f32_t const* b, size_t d) {
-                    return 1.f - simsimd_dot_f32x4avx2(a, b, d);
+                pun_metric_<simsimd_f32_t>([=](simsimd_f32_t const* a, simsimd_f32_t const* b) {
+                    return 1.f - simsimd_dot_f32x4avx2(a, b, dimensions);
                 }),
                 isa_t::avx2_k,
             };
 #elif defined(USEARCH_IS_ARM)
         if (supports_arm_sve())
             return {
-                pun_metric_<simsimd_f32_t>([](simsimd_f32_t const* a, simsimd_f32_t const* b, size_t d) {
-                    return 1.f - simsimd_dot_f32sve(a, b, d);
+                pun_metric_<simsimd_f32_t>([=](simsimd_f32_t const* a, simsimd_f32_t const* b) {
+                    return 1.f - simsimd_dot_f32sve(a, b, dimensions);
                 }),
                 isa_t::sve_k,
             };
         if (dimensions % 4 == 0)
             return {
-                pun_metric_<simsimd_f32_t>([](simsimd_f32_t const* a, simsimd_f32_t const* b, size_t d) {
-                    return 1.f - simsimd_dot_f32x4neon(a, b, d);
+                pun_metric_<simsimd_f32_t>([=](simsimd_f32_t const* a, simsimd_f32_t const* b) {
+                    return 1.f - simsimd_dot_f32x4neon(a, b, dimensions);
                 }),
                 isa_t::neon_k,
             };
@@ -835,16 +528,16 @@ class punned_gt {
 #if defined(USEARCH_IS_X86)
         if (dimensions % 16 == 0)
             return {
-                pun_metric_<simsimd_f16_t>([](simsimd_f16_t const* a, simsimd_f16_t const* b, size_t d) {
-                    return 1.f - simsimd_cos_f16x16avx512(a, b, d);
+                pun_metric_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) {
+                    return 1.f - simsimd_cos_f16x16avx512(a, b, dimensions);
                 }),
                 isa_t::avx512_k,
             };
 #elif defined(USEARCH_IS_ARM)
         if (dimensions % 4 == 0)
             return {
-                pun_metric_<simsimd_f16_t>([](simsimd_f16_t const* a, simsimd_f16_t const* b, size_t d) {
-                    return 1.f - simsimd_cos_f16x4neon(a, b, d);
+                pun_metric_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) {
+                    return 1.f - simsimd_cos_f16x4neon(a, b, dimensions);
                 }),
                 isa_t::neon_k,
             };
@@ -853,54 +546,55 @@ class punned_gt {
         return {pun_metric_<f16_bits_t>(cos_gt<f16_bits_t, f32_t>{}), isa_t::auto_k};
     }
 
-    static metric_and_meta_t ip_metric_(std::size_t dimensions, accuracy_t accuracy) {
+    static metric_and_meta_t ip_metric_(std::size_t dimensions, scalar_kind_t accuracy) {
         switch (accuracy) {
-        case accuracy_t::f32_k:
+        case scalar_kind_t::f32_k:
             // The two most common numeric types for the most common metric have optimized versions
             return ip_metric_f32_(dimensions);
-        case accuracy_t::f16_k:
+        case scalar_kind_t::f16_k:
             // Dot-product accumulates error, Cosine-distance normalizes it
             return cos_metric_f16_(dimensions);
 
-        case accuracy_t::f8_k: return {pun_metric_<f8_bits_t>(cos_f8_t{}), isa_t::auto_k};
-        case accuracy_t::f64_k: return {pun_metric_<f64_t>(ip_gt<f64_t>{}), isa_t::auto_k};
+        case scalar_kind_t::f8d2_k: return {pun_metric_<f8d2_bits_t>(cos_f8d2_t{dimensions}), isa_t::auto_k};
+        case scalar_kind_t::f64_k: return {pun_metric_<f64_t>(ip_gt<f64_t>{}), isa_t::auto_k};
         default: return {};
         }
     }
 
-    static metric_and_meta_t l2_metric_(std::size_t, accuracy_t accuracy) {
+    static metric_and_meta_t l2_metric_(std::size_t dimensions, scalar_kind_t accuracy) {
         switch (accuracy) {
-        case accuracy_t::f8_k: return {pun_metric_<f8_bits_t>(l2sq_f8_t{}), isa_t::auto_k};
-        case accuracy_t::f16_k: return {pun_metric_<f16_bits_t>(l2sq_gt<f16_bits_t, f32_t>{}), isa_t::auto_k};
-        case accuracy_t::f32_k: return {pun_metric_<f32_t>(l2sq_gt<f32_t>{}), isa_t::auto_k};
-        case accuracy_t::f64_k: return {pun_metric_<f64_t>(l2sq_gt<f64_t>{}), isa_t::auto_k};
+        case scalar_kind_t::f8d2_k: return {pun_metric_<f8d2_bits_t>(l2sq_f8d2_t{dimensions}), isa_t::auto_k};
+        case scalar_kind_t::f16_k: return {pun_metric_<f16_bits_t>(l2sq_gt<f16_bits_t, f32_t>{}), isa_t::auto_k};
+        case scalar_kind_t::f32_k: return {pun_metric_<f32_t>(l2sq_gt<f32_t>{}), isa_t::auto_k};
+        case scalar_kind_t::f64_k: return {pun_metric_<f64_t>(l2sq_gt<f64_t>{}), isa_t::auto_k};
         default: return {};
         }
     }
 
-    static metric_and_meta_t cos_metric_(std::size_t dimensions, accuracy_t accuracy) {
+    static metric_and_meta_t cos_metric_(std::size_t dimensions, scalar_kind_t accuracy) {
         switch (accuracy) {
-        case accuracy_t::f8_k: return {pun_metric_<f8_bits_t>(cos_f8_t{}), isa_t::auto_k};
-        case accuracy_t::f16_k: return cos_metric_f16_(dimensions);
-        case accuracy_t::f32_k: return {pun_metric_<f32_t>(cos_gt<f32_t>{}), isa_t::auto_k};
-        case accuracy_t::f64_k: return {pun_metric_<f64_t>(cos_gt<f64_t>{}), isa_t::auto_k};
+        case scalar_kind_t::f8d2_k: return {pun_metric_<f8d2_bits_t>(cos_f8d2_t{dimensions}), isa_t::auto_k};
+        case scalar_kind_t::f16_k: return cos_metric_f16_(dimensions);
+        case scalar_kind_t::f32_k: return {pun_metric_<f32_t>(cos_gt<f32_t>{}), isa_t::auto_k};
+        case scalar_kind_t::f64_k: return {pun_metric_<f64_t>(cos_gt<f64_t>{}), isa_t::auto_k};
         default: return {};
         }
     }
 
-    static metric_and_meta_t haversine_metric_(accuracy_t accuracy) {
+    static metric_and_meta_t haversine_metric_(scalar_kind_t accuracy) {
         switch (accuracy) {
-        case accuracy_t::f8_k: return {pun_metric_<f8_bits_t>(haversine_gt<f8_bits_t, f32_t>{}), isa_t::auto_k};
-        case accuracy_t::f16_k: return {pun_metric_<f16_bits_t>(haversine_gt<f16_bits_t, f32_t>{}), isa_t::auto_k};
-        case accuracy_t::f32_k: return {pun_metric_<f32_t>(haversine_gt<f32_t>{}), isa_t::auto_k};
-        case accuracy_t::f64_k: return {pun_metric_<f64_t>(haversine_gt<f64_t>{}), isa_t::auto_k};
+        case scalar_kind_t::f8d2_k:
+            return {pun_metric_<f8d2_bits_t>(haversine_gt<f8d2_bits_t, f32_t>{}), isa_t::auto_k};
+        case scalar_kind_t::f16_k: return {pun_metric_<f16_bits_t>(haversine_gt<f16_bits_t, f32_t>{}), isa_t::auto_k};
+        case scalar_kind_t::f32_k: return {pun_metric_<f32_t>(haversine_gt<f32_t>{}), isa_t::auto_k};
+        case scalar_kind_t::f64_k: return {pun_metric_<f64_t>(haversine_gt<f64_t>{}), isa_t::auto_k};
         default: return {};
         }
     }
 };
 
-using punned_small_t = punned_gt<std::int64_t, std::uint32_t>;
-using punned_big_t = punned_gt<uuid_t, uint40_t>;
+using punned_small_t = index_punned_dense_gt<std::int64_t, std::uint32_t>;
+using punned_big_t = index_punned_dense_gt<uuid_t, uint40_t>;
 
 } // namespace usearch
 } // namespace unum
