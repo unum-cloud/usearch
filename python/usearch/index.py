@@ -9,7 +9,7 @@ from typing import Optional, Callable, Union, NamedTuple, List, Iterable
 import numpy as np
 
 from usearch.compiled import Index as _CompiledIndex
-from usearch.compiled import SetsIndex as _CompiledSetsIndex
+from usearch.compiled import SparseIndex as _CompiledSetsIndex
 from usearch.compiled import BitsIndex as _CompiledBitsIndex
 
 from usearch.compiled import MetricKind
@@ -28,7 +28,7 @@ BitwiseMetricKind = (
     MetricKind.BitwiseSorensen,
 )
 
-SetsIndex = _CompiledSetsIndex
+SparseIndex = _CompiledSetsIndex
 
 Label = np.longlong
 
@@ -114,7 +114,7 @@ class Index:
             Kind of the distance function, or the Numba `cfunc` JIT-compiled object.
             Possible `MetricKind` values: IP, Cos, L2sq, Haversine, Pearson,
             BitwiseHamming, BitwiseTanimoto, BitwiseSorensen.
-            Not every kind is JIT-able. For Jaccard distance, use `SetsIndex`.
+            Not every kind is JIT-able. For Jaccard distance, use `SparseIndex`.
 
         :param dtype: Scalar type for internal vector storage, defaults to None
         :type dtype: str, optional

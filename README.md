@@ -50,7 +50,7 @@ Linux • MacOS • Windows • Docker • WebAssembly 🔜
 - [x] USearch + UForm Transformers = [Semantic Search](#ai--vector-search--semantic-search).
 - [x] USearch + RDKit = [Molecule Search](#ai--vector-search--semantic-search).
 
-[usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/usearch.hpp
+[usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/index.hpp
 [obscure-use-cases]: https://ashvardanian.com/posts/abusing-vector-search
 
 ---
@@ -133,14 +133,14 @@ Of course, the latency of external memory access will be higher, but it is in pa
 
 There are two usage patters:
 
-1. Bare-bones with `usearch/usearch.hpp`, only available in C++.
+1. Bare-bones with `usearch/index.hpp`, only available in C++.
 2. Full-fat version with it's own threads, mutexes, type-punning, quantization, that is available both in C++ and is wrapped for higher-level bindings.
 
 ### C++
 
 #### Installation
 
-To use in a C++ project simply copy the `include/usearch/usearch.hpp` header into your project.
+To use in a C++ project simply copy the `include/usearch/index.hpp` header into your project.
 Alternatively fetch it with CMake:
 
 ```cmake

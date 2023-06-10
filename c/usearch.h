@@ -11,14 +11,14 @@ typedef enum {
 } usearch_metric_t;
 
 typedef enum {
-    usearch_accuracy_f32_k = 0,
-    usearch_accuracy_f16_k = 1,
-    usearch_accuracy_f8_k = 2,
-} usearch_accuracy_t;
+    usearch_scalar_f32_k = 0,
+    usearch_scalar_f16_k = 1,
+    usearch_scalar_f8_k = 2,
+} usearch_scalar_kind_t;
 
-void* usearch_new(                                        //
-    usearch_metric_t metric, usearch_accuracy_t accuracy, //
-    int dimensions, int capacity, int connectivity,       //
+void* usearch_new(                                           //
+    usearch_metric_t metric, usearch_scalar_kind_t accuracy, //
+    int dimensions, int capacity, int connectivity,          //
     int expansion_add, int expansion_search);
 
 void usearch_destroy(void* index);

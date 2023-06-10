@@ -38,7 +38,7 @@
 
 #include <simsimd/simsimd.h>
 
-#include "punned.hpp"
+#include <usearch/index_punned_dense.hpp>
 
 using namespace unum::usearch;
 using namespace unum;
@@ -442,7 +442,8 @@ struct args_t {
 };
 
 template <typename index_at, typename dataset_at> //
-index_at punned_index_for_metric(dataset_at& dataset, args_t const& args, index_config_t config, accuracy_t accuracy) {
+index_at punned_index_for_metric(dataset_at& dataset, args_t const& args, index_config_t config,
+                                 scalar_kind_t accuracy) {
     if (args.metric_l2) {
         std::printf("-- Metric: Euclidean\n");
         return index_at::l2sq(dataset.dimensions(), accuracy, config);
@@ -461,17 +462,17 @@ index_at punned_index_for_metric(dataset_at& dataset, args_t const& args, index_
 template <typename index_at, typename dataset_at> //
 void run_punned(dataset_at& dataset, args_t const& args, index_config_t config, index_limits_t limits) {
 
-    accuracy_t accuracy = accuracy_t::f32_k;
+    scalar_kind_t accuracy = scalar_kind_t::f32_k;
     if (args.quantize_f16)
-        accuracy = accuracy_t::f16_k;
+        accuracy = scalar_kind_t::f16_k;
     if (args.quantize_f8)
-        accuracy = accuracy_t::f8_k;
+        accuracy = scalar_kind_t::f8_k;
 
-    std::printf("-- Accuracy: %s\n", accuracy_name(accuracy));
+    std::printf("-- Accuracy: %s\n", scalar_kind_name(accuracy));
 
     index_at index{punned_index_for_metric<index_at>(dataset, args, config, accuracy)};
     index.reserve(limits);
-    std::printf("-- Hardware acceleration: %s\n", isa_name(index.acceleration()));
+    std::printf("-- Hardware acceleration: %s\n", isa_name(index.isa()));
     std::printf("Will benchmark in-memory\n");
 
     single_shot(dataset, index, true);
@@ -518,7 +519,7 @@ void run_big_or_small(dataset_at& dataset, args_t const& args, index_config_t co
             run_typed<index_gt<ip_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config, limits);
         }
     } else
-        run_punned<punned_gt<std::size_t, neighbor_id_at>>(dataset, args, config, limits);
+        run_punned<index_punned_dense_gt<std::size_t, neighbor_id_at>>(dataset, args, config, limits);
 }
 
 void report_alternative_setups() {
@@ -609,7 +610,7 @@ int main(int argc, char** argv) {
         exit(0);
     }
 
-    // Instead of relying on `multithreaded` from "punned.hpp" we will use OpenMP
+    // Instead of relying on `multithreaded` from "index_punned_dense.hpp" we will use OpenMP
     // to better estimate statistics between tasks batches, without having to recreate
     // the threads.
     omp_set_dynamic(true);
@@ -638,16 +639,16 @@ int main(int argc, char** argv) {
 
     index_config_t config;
     config.connectivity = args.connectivity;
-    config.expansion_add = args.expansion_add;
-    config.expansion_search = args.expansion_search;
+    // config.expansion_add = args.expansion_add;
+    // config.expansion_search = args.expansion_search;
     index_limits_t limits;
     limits.threads_add = limits.threads_search = args.threads;
     limits.elements = dataset.vectors_count();
 
     std::printf("- Index: \n");
     std::printf("-- Connectivity: %zu\n", config.connectivity);
-    std::printf("-- Expansion @ Add: %zu\n", config.expansion_add);
-    std::printf("-- Expansion @ Search: %zu\n", config.expansion_search);
+    // std::printf("-- Expansion @ Add: %zu\n", config.expansion_add);
+    // std::printf("-- Expansion @ Search: %zu\n", config.expansion_search);
 
     if (args.big)
         run_big_or_small<uint40_t>(dataset, args, config, limits);

@@ -74,7 +74,7 @@ enum class scalar_kind_t {
     f64_k,
     f32_k,
     f16_k,
-    f8d2_k,
+    f8_k,
     b1x8_k,
 };
 
@@ -83,7 +83,7 @@ inline std::size_t bytes_per_scalar(scalar_kind_t accuracy) noexcept {
     case scalar_kind_t::f32_k: return 4;
     case scalar_kind_t::f16_k: return 2;
     case scalar_kind_t::f64_k: return 8;
-    case scalar_kind_t::f8d2_k: return 1;
+    case scalar_kind_t::f8_k: return 1;
     case scalar_kind_t::b1x8_k: return 1;
     default: return 0;
     }
@@ -94,7 +94,7 @@ inline char const* scalar_kind_name(scalar_kind_t accuracy) noexcept {
     case scalar_kind_t::f32_k: return "f32";
     case scalar_kind_t::f16_k: return "f16";
     case scalar_kind_t::f64_k: return "f64";
-    case scalar_kind_t::f8d2_k: return "f8d2";
+    case scalar_kind_t::f8_k: return "f8";
     case scalar_kind_t::b1x8_k: return "b1x8";
     default: return "";
     }
@@ -108,10 +108,10 @@ inline expected_gt<scalar_kind_t> scalar_kind_from_name(char const* name, std::s
         parsed.result = scalar_kind_t::f64_k;
     else if (str_equals(name, len, "f16"))
         parsed.result = scalar_kind_t::f16_k;
-    else if (str_equals(name, len, "f8d2"))
-        parsed.result = scalar_kind_t::f8d2_k;
+    else if (str_equals(name, len, "f8"))
+        parsed.result = scalar_kind_t::f8_k;
     else
-        parsed.failed("Unknown type, choose: f32, f16, f64, f8d2");
+        parsed.failed("Unknown type, choose: f32, f16, f64, f8");
     return parsed;
 }
 
@@ -141,8 +141,9 @@ inline expected_gt<metric_kind_t> metric_from_name(char const* name, std::size_t
 
 using punned_distance_t = float;
 using punned_vector_view_t = span_gt<byte_t const>;
+using punned_metric_t = std::function<punned_distance_t(punned_vector_view_t, punned_vector_view_t)>;
 
-class f8d2_bits_t;
+class f8_bits_t;
 class f16_bits_t;
 
 inline float f16_to_f32(std::uint16_t u16) noexcept {
@@ -188,7 +189,7 @@ class f16_bits_t {
     inline operator float() const noexcept { return f16_to_f32(uint16_); }
     inline explicit operator bool() const noexcept { return f16_to_f32(uint16_) > 0.5f; }
 
-    inline f16_bits_t(f8d2_bits_t) noexcept;
+    inline f16_bits_t(f8_bits_t) noexcept;
     inline f16_bits_t(bool v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(float v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(double v) noexcept : uint16_(f32_to_f16(v)) {}
@@ -231,7 +232,7 @@ class f16_bits_t {
  *  @brief  Numeric type for uniformly-distributed floating point
  *          values within [-1,1] range, quantized to integers [-100,100].
  */
-class f8d2_bits_t {
+class f8_bits_t {
     std::int8_t int8_{};
 
   public:
@@ -239,13 +240,13 @@ class f8d2_bits_t {
     constexpr static std::int8_t min_k = -100;
     constexpr static std::int8_t max_k = 100;
 
-    inline f8d2_bits_t() noexcept : int8_(0) {}
-    inline f8d2_bits_t(bool v) noexcept : int8_(v ? max_k : 0) {}
+    inline f8_bits_t() noexcept : int8_(0) {}
+    inline f8_bits_t(bool v) noexcept : int8_(v ? max_k : 0) {}
 
-    inline f8d2_bits_t(f8d2_bits_t&&) = default;
-    inline f8d2_bits_t& operator=(f8d2_bits_t&&) = default;
-    inline f8d2_bits_t(f8d2_bits_t const&) = default;
-    inline f8d2_bits_t& operator=(f8d2_bits_t const&) = default;
+    inline f8_bits_t(f8_bits_t&&) = default;
+    inline f8_bits_t& operator=(f8_bits_t&&) = default;
+    inline f8_bits_t(f8_bits_t const&) = default;
+    inline f8_bits_t& operator=(f8_bits_t const&) = default;
 
     inline operator float() const noexcept { return float(int8_) / divisor_k; }
     inline operator f16_bits_t() const noexcept { return float(int8_) / divisor_k; }
@@ -256,13 +257,13 @@ class f8d2_bits_t {
     inline explicit operator std::int32_t() const noexcept { return int8_; }
     inline explicit operator std::int64_t() const noexcept { return int8_; }
 
-    inline f8d2_bits_t(float v)
+    inline f8_bits_t(float v)
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
-    inline f8d2_bits_t(double v)
+    inline f8_bits_t(double v)
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
 };
 
-inline f16_bits_t::f16_bits_t(f8d2_bits_t v) noexcept : f16_bits_t(float(v)) {}
+inline f16_bits_t::f16_bits_t(f8_bits_t v) noexcept : f16_bits_t(float(v)) {}
 
 struct uuid_t {
     std::uint8_t octets[16];
@@ -360,7 +361,7 @@ template <> struct cast_gt<f16_bits_t, f16_bits_t> {
     bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
 };
 
-template <> struct cast_gt<f8d2_bits_t, f8d2_bits_t> {
+template <> struct cast_gt<f8_bits_t, f8_bits_t> {
     bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
 };
 

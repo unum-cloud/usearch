@@ -55,7 +55,7 @@ Also worth noting, 8-bit quantization results in almost no accuracy loss and may
 
 Within this repository you will find two commonly used utilities:
 
-- `src/bench.cpp` the produces the `bench` binary for broad USearch benchmarks.
+- `cpp/bench.cpp` the produces the `bench` binary for broad USearch benchmarks.
 - `python/bench.py` for simple benchmarks against FAISS.
 
 To achieve best highest results we suggest compiling locally for the target architecture.

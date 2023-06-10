@@ -5,7 +5,6 @@ fn main() {
         .flag_if_supported("-Wno-unknown-pragmas")
         .include("include")
         .include("rust")
-        .include("src")
         .include("fp16/include")
         .include("robin-map/include")
         .include("simsimd/include")
@@ -14,6 +13,7 @@ fn main() {
     println!("cargo:rerun-if-changed=rust/lib.rs");
     println!("cargo:rerun-if-changed=rust/lib.cpp");
     println!("cargo:rerun-if-changed=rust/lib.hpp");
-    println!("cargo:rerun-if-changed=src/punned.hpp");
-    println!("cargo:rerun-if-changed=include/usearch/usearch.hpp");
+    println!("cargo:rerun-if-changed=include/index_punned_helpers.hpp");
+    println!("cargo:rerun-if-changed=include/index_punned_dense.hpp");
+    println!("cargo:rerun-if-changed=include/usearch/index.hpp");
 }

@@ -83,12 +83,9 @@ setup(
     ],
 
     include_dirs=[
-        'include', 'src',
+        'include',
         'fp16/include', 'robin-map/include', 'simsimd/include'],
-    install_requires=[
-        'numpy',
-        'ucall',
-    ],
+
     ext_modules=ext_modules,
     install_requires=[
         'numpy',

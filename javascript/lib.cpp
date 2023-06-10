@@ -20,14 +20,14 @@
 #include <napi.h>
 #include <node_api.h>
 
-#include "punned.hpp"
+#include <usearch/index_punned_dense.hpp>
 
 using namespace unum::usearch;
 using namespace unum;
 
 using label_t = std::uint32_t;
 using distance_t = punned_distance_t;
-using punned_t = punned_gt<label_t>;
+using punned_t = index_punned_dense_gt<label_t>;
 
 class Index : public Napi::ObjectWrap<Index> {
   public:
@@ -94,17 +94,17 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
     if (params.Has("connectivity"))
         config.connectivity = params.Get("connectivity").As<Napi::Number>().Uint32Value();
 
-    accuracy_t accuracy = accuracy_t::f32_k;
+    scalar_kind_t accuracy = scalar_kind_t::f32_k;
     if (params.Has("accuracy")) {
         std::string accuracy_str = params.Get("connectivity").As<Napi::String>().Utf8Value();
         if (accuracy_str == "f32")
-            accuracy = accuracy_t::f32_k;
+            accuracy = scalar_kind_t::f32_k;
         else if (accuracy_str == "f64")
-            accuracy = accuracy_t::f64_k;
+            accuracy = scalar_kind_t::f64_k;
         else if (accuracy_str == "f16")
-            accuracy = accuracy_t::f16_k;
+            accuracy = scalar_kind_t::f16_k;
         else if (accuracy_str == "f8")
-            accuracy = accuracy_t::f8_k;
+            accuracy = scalar_kind_t::f8_k;
         else {
             Napi::TypeError::New(env, "Supported metrics are: [ip, cos, l2sq, haversine]").ThrowAsJavaScriptException();
             return;

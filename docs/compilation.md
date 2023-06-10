@@ -41,7 +41,10 @@ cmake -B ./build_release \
 Linting:
 
 ```sh
-cppcheck --enable=all --suppress=cstyleCast --suppress=unusedFunction include/usearch/usearch.hpp src/punned.hpp
+cppcheck --enable=all --suppress=cstyleCast --suppress=unusedFunction \
+    include/usearch/index.hpp \
+    include/index_punned_dense.hpp \
+    include/index_punned_helpers.hpp
 ```
 
 Benchmarking:
@@ -134,7 +137,6 @@ g++ -shared -o USearchJNI.dll cloud_unum_usearch_Index.o -Wl,--add-stdcall-alias
 # MacOS
 g++ -std=c++11 -c -fPIC \
     -I../../../../include \
-    -I../../../../src \
     -I../../../../fp16/include \
     -I../../../../robin-map/include \
     -I../../../../simsimd/include \
