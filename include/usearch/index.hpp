@@ -9,17 +9,9 @@
 #ifndef UNUM_USEARCH_HPP
 #define UNUM_USEARCH_HPP
 
-#if !defined(USEARCH_VERSION_MAJOR)
 #define USEARCH_VERSION_MAJOR 0
-#endif
-
-#if !defined(USEARCH_VERSION_MINOR)
 #define USEARCH_VERSION_MINOR 0
-#endif
-
-#if !defined(USEARCH_VERSION_PATCH)
 #define USEARCH_VERSION_PATCH 0
-#endif
 
 // Inferring C++ version
 #if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
@@ -970,16 +962,6 @@ struct index_config_t {
     /// > It is called `M` in the paper.
     std::size_t connectivity = default_connectivity();
 
-    /// @brief Hyper-parameter controlling the quality of indexing.
-    /// Defaults to 40 in FAISS and 200 in hnswlib.
-    /// > It is called `efConstruction` in the paper.
-    std::size_t expansion_add = default_expansion_add();
-
-    /// @brief Hyper-parameter controlling the quality of search.
-    /// Defaults to 16 in FAISS and 10 in hnswlib.
-    /// > It is called `ef` in the paper.
-    std::size_t expansion_search = default_expansion_search();
-
     /// @brief Parameter controlling the physical layout of vectors
     /// in memory. When using multi-byte scalar types, like `float`,
     /// dereferencing at mis-aligned locations may cause UB. So you
@@ -1002,14 +984,28 @@ struct index_limits_t {
 };
 
 struct add_config_t {
+    /// @brief Hyper-parameter controlling the quality of indexing.
+    /// Defaults to 40 in FAISS and 200 in hnswlib.
+    /// > It is called `efConstruction` in the paper.
+    std::size_t expansion = default_expansion_add();
+
     /// @brief Optional thread identifier for multi-threaded construction.
     std::size_t thread{};
+
     /// @brief Don't copy the ::vector, if it's persisted elsewhere.
     bool store_vector{true};
 };
 
 struct search_config_t {
+    /// @brief Hyper-parameter controlling the quality of search.
+    /// Defaults to 16 in FAISS and 10 in hnswlib.
+    /// > It is called `ef` in the paper.
+    std::size_t expansion = default_expansion_search();
+
+    /// @brief Optional thread identifier for multi-threaded construction.
     std::size_t thread{};
+
+    /// @brief Brute-forces exhaustive search over all entries in the index.
     bool exact{};
 };
 
