@@ -100,6 +100,21 @@ inline char const* scalar_kind_name(scalar_kind_t accuracy) noexcept {
     }
 }
 
+inline char const* metric_kind_name(metric_kind_t metric) noexcept {
+    switch (metric) {
+    case metric_kind_t::unknown_k: return "unknown";
+    case metric_kind_t::ip_k: return "ip";
+    case metric_kind_t::cos_k: return "cos";
+    case metric_kind_t::l2sq_k: return "l2sq";
+    case metric_kind_t::pearson_k: return "pearson";
+    case metric_kind_t::haversine_k: return "haversine";
+    case metric_kind_t::jaccard_k: return "jaccard";
+    case metric_kind_t::bitwise_hamming_k: return "bitwise_hamming";
+    case metric_kind_t::bitwise_tanimoto_k: return "bitwise_tanimoto";
+    case metric_kind_t::bitwise_sorensen_k: return "bitwise_sorensen";
+    }
+    return "";
+}
 inline expected_gt<scalar_kind_t> scalar_kind_from_name(char const* name, std::size_t len) {
     expected_gt<scalar_kind_t> parsed;
     if (str_equals(name, len, "f32"))
@@ -314,7 +329,7 @@ using executor_default_t = executor_stl_t;
 #endif
 
 /**
- *  @brief Relies on `posix_memalign` for aligned memory allocations.
+ *  @brief Uses OS-specific APIs for aligned memory allocations.
  */
 template <typename element_at = char, std::size_t alignment_ak = 64> //
 class aligned_allocator_gt {
@@ -327,13 +342,28 @@ class aligned_allocator_gt {
         using other = aligned_allocator_gt<other_element_at>;
     };
 
+    constexpr std::size_t alignment() const { return alignment_ak; }
+
     pointer allocate(size_type length) const {
-        void* result = nullptr;
-        int status = posix_memalign(&result, alignment_ak, ceil2(length * sizeof(value_type)));
-        return status == 0 ? (pointer)result : nullptr;
+        std::size_t length_bytes = alignment_ak * divide_round_up<alignment_ak>(length * sizeof(value_type));
+        std::size_t alignment = alignment_ak;
+        // void* result = nullptr;
+        // int status = posix_memalign(&result, alignment, length_bytes);
+        // return status == 0 ? (pointer)result : nullptr;
+#if defined(USEARCH_IS_WINDOWS)
+        return (pointer)_aligned_malloc(length_bytes, alignment);
+#else
+        return (pointer)aligned_alloc(alignment, length_bytes);
+#endif
     }
 
-    void deallocate(pointer begin, size_type) const { std::free(begin); }
+    void deallocate(pointer begin, size_type) const {
+#if defined(USEARCH_IS_WINDOWS)
+        _aligned_free(begin);
+#else
+        free(begin);
+#endif
+    }
 };
 
 using aligned_allocator_t = aligned_allocator_gt<>;

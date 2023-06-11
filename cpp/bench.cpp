@@ -432,45 +432,56 @@ struct args_t {
 
     bool big = false;
     bool native = false;
+
     bool quantize_f16 = false;
     bool quantize_f8 = false;
+    bool quantize_b1 = false;
 
     bool metric_ip = false;
     bool metric_l2 = false;
     bool metric_cos = false;
     bool metric_haversine = false;
-};
+    bool metric_hamming = false;
+    bool metric_tanimoto = false;
+    bool metric_sorensen = false;
 
-template <typename index_at, typename dataset_at> //
-index_at punned_index_for_metric(dataset_at& dataset, args_t const& args, index_config_t config,
-                                 scalar_kind_t accuracy) {
-    if (args.metric_l2) {
-        std::printf("-- Metric: Euclidean\n");
-        return index_at::l2sq(dataset.dimensions(), accuracy, config);
-    } else if (args.metric_cos) {
-        std::printf("-- Metric: Angular\n");
-        return index_at::cos(dataset.dimensions(), accuracy, config);
-    } else if (args.metric_haversine) {
-        std::printf("-- Metric: Haversine\n");
-        return index_at::haversine(accuracy, config);
-    } else {
-        std::printf("-- Metric: Inner Product\n");
-        return index_at::ip(dataset.dimensions(), accuracy, config);
+    metric_kind_t metric() const noexcept {
+        if (metric_l2)
+            return metric_kind_t::l2sq_k;
+        if (metric_cos)
+            return metric_kind_t::cos_k;
+        if (metric_haversine)
+            return metric_kind_t::haversine_k;
+        if (metric_hamming)
+            return metric_kind_t::bitwise_hamming_k;
+        if (metric_tanimoto)
+            return metric_kind_t::bitwise_tanimoto_k;
+        if (metric_sorensen)
+            return metric_kind_t::bitwise_sorensen_k;
+        return metric_kind_t::ip_k;
     }
-}
+
+    scalar_kind_t accuracy() const noexcept {
+        if (quantize_f16)
+            return scalar_kind_t::f16_k;
+        if (quantize_f8)
+            return scalar_kind_t::f8_k;
+        if (quantize_b1)
+            return scalar_kind_t::b1x8_k;
+        return scalar_kind_t::f32_k;
+    }
+};
 
 template <typename index_at, typename dataset_at> //
 void run_punned(dataset_at& dataset, args_t const& args, index_config_t config, index_limits_t limits) {
 
-    scalar_kind_t accuracy = scalar_kind_t::f32_k;
-    if (args.quantize_f16)
-        accuracy = scalar_kind_t::f16_k;
-    if (args.quantize_f8)
-        accuracy = scalar_kind_t::f8_k;
-
+    scalar_kind_t accuracy = args.accuracy();
     std::printf("-- Accuracy: %s\n", scalar_kind_name(accuracy));
 
-    index_at index{punned_index_for_metric<index_at>(dataset, args, config, accuracy)};
+    metric_kind_t kind = args.metric();
+    std::printf("-- Metric: %s\n", metric_kind_name(kind));
+
+    index_at index = index_at::make(dataset.dimensions(), kind, config, accuracy);
     index.reserve(limits);
     std::printf("-- Hardware acceleration: %s\n", isa_name(index.isa()));
     std::printf("Will benchmark in-memory\n");
@@ -592,12 +603,16 @@ int main(int argc, char** argv) {
         (option("--rows-take") & value("integer", args.vectors_to_take)).doc("Number of vectors to take"),
         ( //
             option("--native").set(args.native).doc("Use raw templates instead of type-punned classes") |
-            option("--f16quant").set(args.quantize_f16).doc("Enable `f16_t` quantization") |
-            option("--f8quant").set(args.quantize_f8).doc("Enable `f8_t` quantization")),
+            option("-f16", "--f16quant").set(args.quantize_f16).doc("Enable `f16_t` quantization") |
+            option("-f8", "--f8quant").set(args.quantize_f8).doc("Enable `f8_t` quantization") |
+            option("-b1", "--b1quant").set(args.quantize_b1).doc("Enable `b1x8_t` quantization")),
         ( //
             option("--ip").set(args.metric_ip).doc("Choose Inner Product metric") |
             option("--l2sq").set(args.metric_l2).doc("Choose L2 Euclidean metric") |
             option("--cos").set(args.metric_cos).doc("Choose Angular metric") |
+            option("--hamming").set(args.metric_hamming).doc("Choose Hamming metric") |
+            option("--tanimoto").set(args.metric_tanimoto).doc("Choose Tanimoto metric") |
+            option("--sorensen").set(args.metric_sorensen).doc("Choose Sorensen metric") |
             option("--haversine").set(args.metric_haversine).doc("Choose Haversine metric")),
         option("-h", "--help").set(args.help).doc("Print this help information on this tool and exit"));
 

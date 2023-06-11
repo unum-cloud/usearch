@@ -68,7 +68,9 @@ class index_punned_dense_gt {
     /// @brief Schema: input buffer, bytes in input buffer, output buffer.
     using cast_t = std::function<bool(byte_t const*, std::size_t, byte_t*)>;
     /// @brief Punned index.
-    using index_t = index_gt<metric_t, label_t, id_t, byte_t>;
+    using index_t = index_gt<metric_t, label_t, id_t, byte_t, aligned_allocator_t>;
+    using index_allocator_t = aligned_allocator_gt<index_t, 64>;
+
     /// @brief A type-punned metric and metadata about present isa support.
     struct metric_and_meta_t {
         metric_t metric;
@@ -133,7 +135,7 @@ class index_punned_dense_gt {
         return *this;
     }
 
-    ~index_punned_dense_gt() { aligned_index_free_(typed_); }
+    ~index_punned_dense_gt() { index_allocator_t{}.deallocate(typed_, 1); }
 
     void swap(index_punned_dense_gt& other) {
         std::swap(dimensions_, other.dimensions_);
@@ -276,7 +278,7 @@ class index_punned_dense_gt {
         result.casts_ = casts_;
 
         result.root_metric_ = root_metric_;
-        index_t* raw = aligned_index_alloc_();
+        index_t* raw = index_allocator_t{}.allocate(1);
         new (raw) index_t(config(), root_metric_);
         result.typed_ = raw;
 
@@ -284,22 +286,6 @@ class index_punned_dense_gt {
     }
 
   private:
-    static index_t* aligned_index_alloc_() {
-#if defined(USEARCH_IS_WINDOWS)
-        return (index_t*)_aligned_malloc(64 * divide_round_up<64>(sizeof(index_t)), 64);
-#else
-        return (index_t*)aligned_alloc(64, 64 * divide_round_up<64>(sizeof(index_t)));
-#endif
-    }
-
-    static void aligned_index_free_(index_t* raw) {
-#if defined(USEARCH_IS_WINDOWS)
-        _aligned_free(raw);
-#else
-        free(raw);
-#endif
-    }
-
     struct thread_lock_t {
         index_punned_dense_gt const& parent;
         std::size_t thread_id;
@@ -435,7 +421,7 @@ class index_punned_dense_gt {
         std::iota(result.available_threads_.begin(), result.available_threads_.end(), 0ul);
 
         // Available since C11, but only C++17, so we use the C version.
-        index_t* raw = aligned_index_alloc_();
+        index_t* raw = index_allocator_t{}.allocate(1);
         new (raw) index_t(config, metric_and_meta.metric);
         result.typed_ = raw;
         return result;
@@ -602,7 +588,7 @@ class index_punned_dense_gt {
         case metric_kind_t::jaccard_k: // Equivalent to Tanimoto
         case metric_kind_t::bitwise_tanimoto_k: return pun_metric_<unsigned char>(bitwise_tanimoto_gt<unsigned char>{});
         case metric_kind_t::bitwise_sorensen_k: return pun_metric_<unsigned char>(bitwise_sorensen_gt<unsigned char>{});
-        case metric_kind_t::unknown_k: return {};
+        default: return {};
         }
     }
 };

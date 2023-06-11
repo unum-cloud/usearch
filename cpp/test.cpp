@@ -140,14 +140,14 @@ int main(int, char**) {
     test3d<double>(index_gt<cos_gt<double>, point_id_t, std::uint32_t, double>{});
     test3d<double>(index_gt<l2sq_gt<double>, point_id_t, std::uint32_t, double>{});
 
-    test3d<float>(punned_small_t::cos(3));
-    test3d<float>(punned_small_t::l2sq(3));
+    test3d<float>(punned_small_t::make(3, metric_kind_t::cos_k));
+    test3d<float>(punned_small_t::make(3, metric_kind_t::l2sq_k));
 
-    test3d<double>(punned_small_t::cos(3));
-    test3d<double>(punned_small_t::l2sq(3));
+    test3d<double>(punned_small_t::make(3, metric_kind_t::cos_k));
+    test3d<double>(punned_small_t::make(3, metric_kind_t::l2sq_k));
 
-    test3d_punned<float>(punned_small_t::cos(3));
-    test3d_punned<float>(punned_small_t::l2sq(3));
+    test3d_punned<float>(punned_small_t::make(3, metric_kind_t::cos_k));
+    test3d_punned<float>(punned_small_t::make(3, metric_kind_t::l2sq_k));
 
     test_sets(index_gt<jaccard_gt<std::int32_t, float>, point_id_t, std::uint32_t, std::int32_t>{});
     test_sets(index_gt<jaccard_gt<std::int64_t, float>, point_id_t, std::uint32_t, std::int64_t>{});
