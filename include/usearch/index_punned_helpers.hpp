@@ -368,6 +368,97 @@ class aligned_allocator_gt {
 
 using aligned_allocator_t = aligned_allocator_gt<>;
 
+#if !defined(USEARCH_IS_WINDOWS)
+
+/**
+ *  @brief  Memory-mapping allocator designed for "alloc many, free at once" usage patterns.
+ *          Thread-safe.
+ *
+ *  Using this memory allocator won't affect your overall speed much, as that is not the bottleneck.
+ *  However, it can drastically improve memory usage especcially for huge indexes of small vectors.
+ */
+template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
+
+    static constexpr std::size_t min_size() { return 1024 * 1024 * 4; }
+    static constexpr std::size_t head_size() {
+        /// Pointer to the the previous arena and the size of the current one.
+        return divide_round_up<alignment_ak>(sizeof(byte_t*) + sizeof(std::size_t)) * alignment_ak;
+    }
+
+    std::mutex mutex_;
+    byte_t* last_arena_ = nullptr;
+    std::size_t last_usage_ = head_size();
+    std::size_t last_capacity_ = min_size();
+
+    void reset() noexcept {
+        byte_t* last_arena = last_arena_;
+        while (last_arena) {
+            byte_t* previous_arena;
+            std::memcpy(&previous_arena, last_arena, sizeof(byte_t*));
+            std::size_t current_size;
+            std::memcpy(&current_size, last_arena + sizeof(byte_t*), sizeof(std::size_t));
+            munmap(last_arena, current_size);
+            last_arena = previous_arena;
+        }
+
+        // Clear the references:
+        last_arena_ = nullptr;
+        last_usage_ = head_size();
+        last_capacity_ = min_size();
+    }
+
+  public:
+    using value_type = byte_t;
+    using size_type = std::size_t;
+    using pointer = byte_t*;
+    using const_pointer = byte_t const*;
+
+    memory_mapping_allocator_gt() = default;
+    memory_mapping_allocator_gt(memory_mapping_allocator_gt&& other) noexcept
+        : last_arena_(other.last_arena_), last_usage_(other.last_usage_), last_capacity_(other.last_capacity_) {}
+    memory_mapping_allocator_gt& operator=(memory_mapping_allocator_gt&& other) noexcept {
+        std::swap(last_arena_, other.last_arena_);
+        std::swap(last_usage_, other.last_usage_);
+        std::swap(last_capacity_, other.last_capacity_);
+        return *this;
+    }
+
+    ~memory_mapping_allocator_gt() noexcept { reset(); }
+
+    inline byte_t* allocate(std::size_t count_bytes) noexcept {
+        count_bytes = divide_round_up<alignment_ak>(count_bytes) * alignment_ak;
+
+        std::unique_lock<std::mutex> lock(mutex_);
+        if (!last_arena_ || (last_usage_ + count_bytes > last_capacity_)) {
+            std::size_t new_capacity = last_capacity_ * 2;
+            int prot = PROT_WRITE | PROT_READ;
+            int flags = MAP_PRIVATE | MAP_ANONYMOUS;
+            byte_t* new_arena = (byte_t*)mmap(NULL, new_capacity, prot, flags, 0, 0);
+            std::memcpy(new_arena, &last_arena_, sizeof(byte_t*));
+            std::memcpy(new_arena + sizeof(byte_t*), &new_capacity, sizeof(std::size_t));
+
+            last_arena_ = new_arena;
+            last_capacity_ = new_capacity;
+            last_usage_ = head_size();
+        }
+
+        return last_arena_ + exchange(last_usage_, last_usage_ + count_bytes);
+    }
+
+    /**
+     *  @warning The very first memory de-allocation discards all the arenas!
+     */
+    void deallocate(std::size_t) noexcept { reset(); }
+};
+
+using memory_mapping_allocator_t = memory_mapping_allocator_gt<>;
+
+#else
+
+using memory_mapping_allocator_t = aligned_allocator_t;
+
+#endif
+
 template <typename from_scalar_at, typename to_scalar_at> struct cast_gt {
     inline bool operator()(byte_t const* input, std::size_t bytes_in_input, byte_t* output) const {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);

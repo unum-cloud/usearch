@@ -68,7 +68,7 @@ class index_punned_dense_gt {
     /// @brief Schema: input buffer, bytes in input buffer, output buffer.
     using cast_t = std::function<bool(byte_t const*, std::size_t, byte_t*)>;
     /// @brief Punned index.
-    using index_t = index_gt<metric_t, label_t, id_t, byte_t, aligned_allocator_t>;
+    using index_t = index_gt<metric_t, label_t, id_t, byte_t, aligned_allocator_t, memory_mapping_allocator_t>;
     using index_allocator_t = aligned_allocator_gt<index_t, 64>;
 
     /// @brief A type-punned metric and metadata about present isa support.

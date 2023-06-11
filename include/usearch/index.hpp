@@ -1190,7 +1190,8 @@ template <typename metric_at = ip_gt<float>,            //
           typename label_at = std::size_t,              //
           typename id_at = std::uint32_t,               //
           typename scalar_at = float,                   //
-          typename allocator_at = std::allocator<char>> //
+          typename allocator_at = std::allocator<char>, //
+          typename point_allocator_at = allocator_at>   //
 class index_gt {
   public:
     using metric_t = metric_at;
@@ -1198,6 +1199,7 @@ class index_gt {
     using label_t = label_at;
     using id_t = id_at;
     using allocator_t = allocator_at;
+    using point_allocator_t = point_allocator_at;
 
     using vector_view_t = span_gt<scalar_t const>;
     using distance_t = return_type_gt<metric_t, vector_view_t, vector_view_t>;
@@ -1284,6 +1286,10 @@ class index_gt {
     using allocator_traits_t = std::allocator_traits<allocator_t>;
     using byte_t = typename allocator_t::value_type;
     static_assert(sizeof(byte_t) == 1, "Allocator must allocate separate addressable bytes");
+
+    using point_allocator_traits_t = std::allocator_traits<point_allocator_t>;
+    static_assert(sizeof(typename point_allocator_traits_t::value_type) == 1,
+                  "Allocator must allocate separate addressable bytes");
 
     /**
      *  @brief  How much larger (number of neighbors per node) will
@@ -1403,6 +1409,7 @@ class index_gt {
     index_limits_t limits_{};
     metric_t metric_{};
     allocator_t allocator_{};
+    point_allocator_t point_allocator_{};
     precomputed_constants_t pre_{};
     int viewed_file_descriptor_{};
 
@@ -1435,10 +1442,11 @@ class index_gt {
      *  @section Exceptions
      *      Doesn't throw, unless the ::metric's and ::allocators's throw on copy-construction.
      */
-    explicit index_gt(index_config_t config = {}, metric_t metric = {}, allocator_t allocator = {}) noexcept
-        : config_(config), limits_(0, 0), metric_(metric), allocator_(allocator), pre_(precompute_(config)),
-          viewed_file_descriptor_(0), size_(0u), max_level_(-1), entry_id_(0u), nodes_(nullptr), nodes_mutexes_(),
-          contexts_(nullptr) {}
+    explicit index_gt(index_config_t config = {}, metric_t metric = {}, allocator_t allocator = {},
+                      point_allocator_t point_allocator = {}) noexcept
+        : config_(config), limits_(0, 0), metric_(metric), allocator_(std::move(allocator)),
+          point_allocator_(std::move(point_allocator)), pre_(precompute_(config)), viewed_file_descriptor_(0),
+          size_(0u), max_level_(-1), entry_id_(0u), nodes_(nullptr), nodes_mutexes_(), contexts_(nullptr) {}
 
     /**
      *  @brief  Clones the structure with the same hyper-parameters, but without contents.
@@ -2153,7 +2161,7 @@ class index_gt {
 
         node_t& node = nodes_[id];
         std::size_t node_bytes = node_bytes_(node) - node_vector_bytes_(node) * !node_stored_(node);
-        allocator_t{}.deallocate(node.tape(), node_bytes);
+        point_allocator_.deallocate(node.tape(), node_bytes);
         node = node_t{};
     }
 
@@ -2163,7 +2171,7 @@ class index_gt {
         std::size_t stored_vector_bytes = node_vector_bytes_(dim) * store_vector;
         std::size_t node_bytes = node_bytes_(dim, level) - node_vector_bytes_(dim) * !store_vector;
 
-        byte_t* data = (byte_t*)allocator_t{}.allocate(node_bytes);
+        byte_t* data = (byte_t*)point_allocator_.allocate(node_bytes);
         if (!data)
             return {};
 
