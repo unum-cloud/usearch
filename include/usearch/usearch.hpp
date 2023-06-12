@@ -1147,11 +1147,11 @@ static_assert(sizeof(file_header_t) == 64, "File header should be exactly 64 byt
  *  Internally, a number of `std::vector`-s is created, often `mutable`.
  *
  */
-template <typename metric_at = ip_gt<float>,            //
-          typename label_at = std::size_t,              //
-          typename id_at = std::uint32_t,               //
-          typename scalar_at = float,                   //
-          typename allocator_at = std::allocator<char>> //
+template <typename metric_at = ip_gt<float>,                 //
+          typename label_at = std::size_t,                   //
+          typename id_at = std::uint32_t,                    //
+          typename scalar_at = typename metric_at::scalar_t, //
+          typename allocator_at = std::allocator<char>>      //
 class index_gt {
   public:
     using metric_t = metric_at;
