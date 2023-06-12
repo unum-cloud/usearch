@@ -107,6 +107,7 @@
         "arange",
         "astype",
         "Availible",
+        "bidict",
         "BLAS",
         "cflags",
         "citerator",
