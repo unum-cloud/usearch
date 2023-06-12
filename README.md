@@ -164,7 +164,7 @@ index.add(/* label: */ 42, /* vector: */ {&vec[0], 3});
 auto results = index.search(/* query: */ {&vec[0], 3}, 5 /* neighbors */);
 
 for (std::size_t i = 0; i != results.size(); ++i)
-    results[i].member.label, results[i].member.vector, results[i].distance;
+    results[i].element.label, results[i].element.vector, results[i].distance;
 ```
 
 The `add` is thread-safe for concurrent index construction.
