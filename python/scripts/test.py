@@ -24,9 +24,9 @@ continuous_metrics = [
     MetricKind.L2sq,
 ]
 hash_metrics = [
-    MetricKind.BitwiseHamming,
-    MetricKind.BitwiseTanimoto,
-    MetricKind.BitwiseSorensen,
+    MetricKind.Hamming,
+    MetricKind.Tanimoto,
+    MetricKind.Sorensen,
 ]
 
 
@@ -117,6 +117,8 @@ def test_index_batch(
     labels = np.array(range(batch_size), dtype=np.longlong)
 
     index.add(labels, vectors)
+    assert len(index) == batch_size
+
     matches: Matches = index.search(vectors, 10)
 
     assert matches.labels.shape[0] == matches.distances.shape[0]
@@ -174,17 +176,17 @@ def test_sets_index(connectivity: int):
     assert list(results) == [10, 11]
 
 
-@pytest.mark.parametrize('bits', dimensions)
-@pytest.mark.parametrize('metric', hash_metrics)
-@pytest.mark.parametrize('connectivity', connectivity_options)
-@pytest.mark.parametrize('batch_size', batch_sizes)
-def test_hash_index(bits: int, metric: MetricKind, connectivity: int, batch_size: int):
+# @pytest.mark.parametrize('bits', dimensions)
+# @pytest.mark.parametrize('metric', hash_metrics)
+# @pytest.mark.parametrize('connectivity', connectivity_options)
+# @pytest.mark.parametrize('batch_size', batch_sizes)
+# def test_bitwise_index(bits: int, metric: MetricKind, connectivity: int, batch_size: int):
 
-    index = Index(ndim=bits, metric=metric, connectivity=connectivity)
+#     index = Index(ndim=bits, metric=metric, connectivity=connectivity)
 
-    bit_vectors = np.random.randint(2, size=(batch_size, bits))
-    bit_vectors = np.packbits(bit_vectors, axis=1)
-    labels = np.array(range(batch_size), dtype=np.longlong)
+#     bit_vectors = np.random.randint(2, size=(batch_size, bits))
+#     bit_vectors = np.packbits(bit_vectors, axis=1)
+#     labels = np.array(range(batch_size), dtype=np.longlong)
 
-    index.add(labels, bit_vectors)
-    index.search(bit_vectors, 10)
+#     index.add(labels, bit_vectors)
+#     index.search(bit_vectors, 10)

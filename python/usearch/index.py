@@ -10,9 +10,8 @@ import numpy as np
 
 from usearch.compiled import Index as _CompiledIndex
 from usearch.compiled import SparseIndex as _CompiledSetsIndex
-from usearch.compiled import BitsIndex as _CompiledBitsIndex
 
-from usearch.compiled import MetricKind
+from usearch.compiled import MetricKind, ScalarKind
 from usearch.compiled import (
     DEFAULT_CONNECTIVITY,
     DEFAULT_EXPANSION_ADD,
@@ -22,10 +21,10 @@ from usearch.compiled import (
     USES_SIMSIMD,
 )
 
-BitwiseMetricKind = (
-    MetricKind.BitwiseHamming,
-    MetricKind.BitwiseTanimoto,
-    MetricKind.BitwiseSorensen,
+MetricKindBitwise = (
+    MetricKind.Hamming,
+    MetricKind.Tanimoto,
+    MetricKind.Sorensen,
 )
 
 SparseIndex = _CompiledSetsIndex
@@ -113,7 +112,7 @@ class Index:
         :type metric: Union[MetricKind, Callable, str], optional
             Kind of the distance function, or the Numba `cfunc` JIT-compiled object.
             Possible `MetricKind` values: IP, Cos, L2sq, Haversine, Pearson,
-            BitwiseHamming, BitwiseTanimoto, BitwiseSorensen.
+            Hamming, Tanimoto, Sorensen.
             Not every kind is JIT-able. For Jaccard distance, use `SparseIndex`.
 
         :param dtype: Scalar type for internal vector storage, defaults to None
@@ -165,9 +164,9 @@ class Index:
                 'l2_sq': MetricKind.L2sq,
                 'haversine': MetricKind.Haversine,
                 'perason': MetricKind.Pearson,
-                'hamming': MetricKind.BitwiseHamming,
-                'tanimoto': MetricKind.BitwiseTanimoto,
-                'sorensen': MetricKind.BitwiseSorensen,
+                'hamming': MetricKind.Hamming,
+                'tanimoto': MetricKind.Tanimoto,
+                'sorensen': MetricKind.Sorensen,
             }
             metric = _normalize[metric.lower()]
 
@@ -202,27 +201,35 @@ class Index:
             raise ValueError(
                 'The `metric` must be Numba callback or a `MetricKind`')
 
-        if metric in BitwiseMetricKind:
-            self._compiled = _CompiledBitsIndex(
-                bits=ndim,
-                metric=self._metric_kind,
-                connectivity=connectivity,
-                expansion_add=expansion_add,
-                expansion_search=expansion_search,
-            )
-        else:
-            if dtype is None:
-                dtype = 'f32'
-            self._compiled = _CompiledIndex(
-                ndim=ndim,
-                metric=self._metric_kind,
-                metric_pointer=self._metric_pointer,
-                dtype=dtype,
-                connectivity=connectivity,
-                expansion_add=expansion_add,
-                expansion_search=expansion_search,
-                tune=tune,
-            )
+        if dtype is None:
+            dtype = ScalarKind.F32
+        elif isinstance(dtype, str):
+            _normalize = {
+                'f64': ScalarKind.F64,
+                'f32': ScalarKind.F32,
+                'f16': ScalarKind.F16,
+                'f8': ScalarKind.F8,
+                'b1': ScalarKind.B1,
+            }
+            dtype = _normalize[dtype.lower()]
+        elif not isinstance(dtype, ScalarKind):
+            _normalize = {
+                np.float64: ScalarKind.F64,
+                np.float32: ScalarKind.F32,
+                np.float16: ScalarKind.F16,
+            }
+            dtype = _normalize[dtype]
+
+        self._compiled = _CompiledIndex(
+            ndim=ndim,
+            metric=self._metric_kind,
+            metric_pointer=self._metric_pointer,
+            dtype=dtype,
+            connectivity=connectivity,
+            expansion_add=expansion_add,
+            expansion_search=expansion_search,
+            tune=tune,
+        )
 
         self.path = path
         if path and os.path.exists(path):

@@ -453,11 +453,11 @@ struct args_t {
         if (metric_haversine)
             return metric_kind_t::haversine_k;
         if (metric_hamming)
-            return metric_kind_t::bitwise_hamming_k;
+            return metric_kind_t::hamming_k;
         if (metric_tanimoto)
-            return metric_kind_t::bitwise_tanimoto_k;
+            return metric_kind_t::tanimoto_k;
         if (metric_sorensen)
-            return metric_kind_t::bitwise_sorensen_k;
+            return metric_kind_t::sorensen_k;
         return metric_kind_t::ip_k;
     }
 

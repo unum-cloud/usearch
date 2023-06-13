@@ -7,7 +7,7 @@ from collections import defaultdict
 import numpy as np
 
 from usearch.io import load_matrix
-from usearch.index import Index, Matches, MetricKind, BitwiseMetricKind
+from usearch.index import Index, Matches, MetricKind, MetricKindBitwise
 
 
 def random_vectors(
@@ -31,7 +31,7 @@ def random_vectors(
         metric = index.metric
 
     # Produce data
-    if metric in BitwiseMetricKind:
+    if metric in MetricKindBitwise:
         bit_vectors = np.random.randint(2, size=(count, ndim))
         bit_vectors = np.packbits(bit_vectors, axis=1)
         return bit_vectors
@@ -53,6 +53,9 @@ def recall_members(index: Index, *args, **kwargs) -> float:
     :return: Value from 0 to 1, for the share of found self-references
     :rtype: float
     """
+    if len(index) == 0:
+        return 0
+
     vectors: np.ndarray = np.vstack([
         index[i] for i in range(len(index))
     ])

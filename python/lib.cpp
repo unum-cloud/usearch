@@ -82,7 +82,7 @@ metric_t udf(std::size_t metric_uintptr, scalar_kind_t accuracy) {
 
 static punned_index_py_t make_index( //
     std::size_t dimensions,          //
-    std::string const& scalar_type,  //
+    scalar_kind_t scalar_kind,       //
     metric_kind_t metric_kind,       //
     std::size_t connectivity,        //
     std::size_t expansion_add,       //
@@ -96,12 +96,11 @@ static punned_index_py_t make_index( //
     if (tune)
         config = punned_index_t::optimize(config);
 
-    scalar_kind_t accuracy = scalar_kind_from_name(scalar_type.c_str(), scalar_type.size());
     if (metric_uintptr)
         return punned_index_t::make( //
-            dimensions, udf(metric_uintptr, accuracy), config, accuracy, expansion_add, expansion_search);
+            dimensions, udf(metric_uintptr, scalar_kind), config, scalar_kind, expansion_add, expansion_search);
     else
-        return punned_index_t::make(dimensions, metric_kind, config, accuracy, expansion_add, expansion_search);
+        return punned_index_t::make(dimensions, metric_kind, config, scalar_kind, expansion_add, expansion_search);
 }
 
 static std::unique_ptr<sparse_index_py_t> make_sparse_index( //
@@ -554,9 +553,9 @@ PYBIND11_MODULE(compiled, m) {
         .value("Haversine", metric_kind_t::haversine_k)
         .value("Pearson", metric_kind_t::pearson_k)
         .value("Jaccard", metric_kind_t::jaccard_k)
-        .value("BitwiseHamming", metric_kind_t::bitwise_hamming_k)
-        .value("BitwiseTanimoto", metric_kind_t::bitwise_tanimoto_k)
-        .value("BitwiseSorensen", metric_kind_t::bitwise_sorensen_k);
+        .value("Hamming", metric_kind_t::hamming_k)
+        .value("Tanimoto", metric_kind_t::tanimoto_k)
+        .value("Sorensen", metric_kind_t::sorensen_k);
 
     py::enum_<scalar_kind_t>(m, "ScalarKind")
         .value("F64", scalar_kind_t::f64_k)
@@ -570,7 +569,7 @@ PYBIND11_MODULE(compiled, m) {
     i.def(py::init(&make_index),                                    //
           py::kw_only(),                                            //
           py::arg("ndim") = 0,                                      //
-          py::arg("dtype") = std::string("f32"),                    //
+          py::arg("dtype") = scalar_kind_t::f32_k,                  //
           py::arg("metric") = metric_kind_t::ip_k,                  //
           py::arg("connectivity") = default_connectivity(),         //
           py::arg("expansion_add") = default_expansion_add(),       //
@@ -624,9 +623,9 @@ PYBIND11_MODULE(compiled, m) {
     i.def( //
         "__getitem__", &get_member<punned_index_py_t>, py::arg("label"), py::arg("dtype") = scalar_kind_t::f32_k);
 
-    i.def("save", &punned_index_py_t::save, py::arg("path"));
-    i.def("load", &punned_index_py_t::load, py::arg("path"));
-    i.def("view", &punned_index_py_t::view, py::arg("path"));
+    i.def("save", &save_index<punned_index_py_t>, py::arg("path"));
+    i.def("load", &load_index<punned_index_py_t>, py::arg("path"));
+    i.def("view", &view_index<punned_index_py_t>, py::arg("path"));
     i.def("clear", &punned_index_py_t::clear);
 
     auto si = py::class_<sparse_index_py_t>(m, "SparseIndex");

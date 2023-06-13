@@ -215,7 +215,7 @@ template <typename scalar_at> class span_gt {
 /**
  *  @brief  Inner (Dot) Product distance.
  */
-template <typename scalar_at, typename result_at = scalar_at> struct ip_gt {
+template <typename scalar_at = float, typename result_at = scalar_at> struct ip_gt {
     using scalar_t = scalar_at;
     using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
@@ -244,7 +244,7 @@ template <typename scalar_at, typename result_at = scalar_at> struct ip_gt {
  *          Unless you are running on an tiny embedded platform, this metric
  *          is recommended over `::ip_gt` for low-precision scalars.
  */
-template <typename scalar_at, typename result_at = scalar_at> struct cos_gt {
+template <typename scalar_at = float, typename result_at = scalar_at> struct cos_gt {
     using scalar_t = scalar_at;
     using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
@@ -273,7 +273,7 @@ template <typename scalar_at, typename result_at = scalar_at> struct cos_gt {
  *  @brief  Squared Euclidean (L2) distance.
  *          Square root is avoided at the end, as it won't affect the ordering.
  */
-template <typename scalar_at, typename result_at = scalar_at> struct l2sq_gt {
+template <typename scalar_at = float, typename result_at = scalar_at> struct l2sq_gt {
     using scalar_t = scalar_at;
     using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
@@ -297,38 +297,11 @@ template <typename scalar_at, typename result_at = scalar_at> struct l2sq_gt {
 };
 
 /**
- *  @brief  Hamming distance computes the number of differing elements in
- *          two arrays. An example would be a chess board.
- */
-template <typename scalar_at, typename result_at = std::size_t> struct hamming_gt {
-    using scalar_t = scalar_at;
-    using view_t = span_gt<scalar_t const>;
-    using result_t = result_at;
-    using result_type = result_t;
-
-    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
-
-    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
-        result_t matches{};
-#if defined(USEARCH_USE_OPENMP)
-#pragma omp simd reduction(+ : matches)
-#elif defined(USEARCH_IS_CLANG)
-#pragma clang loop vectorize(enable)
-#elif defined(USEARCH_IS_GCC)
-#pragma GCC ivdep
-#endif
-        for (std::size_t i = 0; i != dim; ++i)
-            matches += a[i] != b[i];
-        return matches;
-    }
-};
-
-/**
  *  @brief  Hamming distance computes the number of differing bits in
  *          two arrays of integers. An example would be a textual document,
  *          tokenized and hashed into a fixed-capacity bitset.
  */
-template <typename scalar_at, typename result_at = std::size_t> struct bitwise_hamming_gt {
+template <typename scalar_at = std::uint64_t, typename result_at = std::size_t> struct hamming_gt {
     using scalar_t = scalar_at;
     using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
@@ -357,7 +330,7 @@ template <typename scalar_at, typename result_at = std::size_t> struct bitwise_h
  *  @brief  Tanimoto distance is the intersection over bitwise union.
  *          Often used in chemistry and biology to compare molecular fingerprints.
  */
-template <typename scalar_at, typename result_at = float> struct bitwise_tanimoto_gt {
+template <typename scalar_at = std::uint64_t, typename result_at = float> struct tanimoto_gt {
     using scalar_t = scalar_at;
     using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
@@ -389,7 +362,7 @@ template <typename scalar_at, typename result_at = float> struct bitwise_tanimot
  *  @brief  Sorensen-Dice or F1 distance is the intersection over bitwise union.
  *          Often used in chemistry and biology to compare molecular fingerprints.
  */
-template <typename scalar_at, typename result_at = float> struct bitwise_sorensen_gt {
+template <typename scalar_at = std::uint64_t, typename result_at = float> struct sorensen_gt {
     using scalar_t = scalar_at;
     using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
@@ -421,9 +394,9 @@ template <typename scalar_at, typename result_at = float> struct bitwise_sorense
  *  @brief  Counts the number of matching elements in two unique sorted sets.
  *          Can be used to compute the similarity between two textual documents
  *          using the IDs of tokens present in them.
- *          Similar to `bitwise_tanimoto_gt` for dense represenations.
+ *          Similar to `tanimoto_gt` for dense representations.
  */
-template <typename scalar_at, typename result_at = float> struct jaccard_gt {
+template <typename scalar_at = std::int32_t, typename result_at = float> struct jaccard_gt {
     using scalar_t = scalar_at;
     using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
@@ -453,7 +426,7 @@ template <typename scalar_at, typename result_at = float> struct jaccard_gt {
  *          Can be used to compute the similarity between two textual documents
  *          using the IDs of tokens present in them.
  */
-template <typename scalar_at, typename result_at = float> struct pearson_correlation_gt {
+template <typename scalar_at = float, typename result_at = float> struct pearson_correlation_gt {
     using scalar_t = scalar_at;
     using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
@@ -488,7 +461,7 @@ template <typename scalar_at, typename result_at = float> struct pearson_correla
  *  @brief  Haversine distance for the shortest distance between two nodes on
  *          the surface of a 3D sphere, defined with latitude and longitude.
  */
-template <typename scalar_at, typename result_at = scalar_at> struct haversine_gt {
+template <typename scalar_at = float, typename result_at = scalar_at> struct haversine_gt {
     using scalar_t = scalar_at;
     using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
@@ -1060,9 +1033,9 @@ enum class metric_kind_t : std::uint8_t {
 
     // Sets:
     jaccard_k = 'j',
-    bitwise_hamming_k = 'b',
-    bitwise_tanimoto_k = 't',
-    bitwise_sorensen_k = 's',
+    hamming_k = 'b',
+    tanimoto_k = 't',
+    sorensen_k = 's',
 };
 
 using file_header_t = byte_t[64];

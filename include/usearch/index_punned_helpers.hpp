@@ -109,9 +109,9 @@ inline char const* metric_kind_name(metric_kind_t metric) noexcept {
     case metric_kind_t::pearson_k: return "pearson";
     case metric_kind_t::haversine_k: return "haversine";
     case metric_kind_t::jaccard_k: return "jaccard";
-    case metric_kind_t::bitwise_hamming_k: return "bitwise_hamming";
-    case metric_kind_t::bitwise_tanimoto_k: return "bitwise_tanimoto";
-    case metric_kind_t::bitwise_sorensen_k: return "bitwise_sorensen";
+    case metric_kind_t::hamming_k: return "hamming";
+    case metric_kind_t::tanimoto_k: return "tanimoto";
+    case metric_kind_t::sorensen_k: return "sorensen";
     }
     return "";
 }
@@ -143,11 +143,11 @@ inline expected_gt<metric_kind_t> metric_from_name(char const* name, std::size_t
     } else if (str_equals(name, len, "pearson")) {
         parsed.result = metric_kind_t::pearson_k;
     } else if (str_equals(name, len, "hamming")) {
-        parsed.result = metric_kind_t::bitwise_hamming_k;
+        parsed.result = metric_kind_t::hamming_k;
     } else if (str_equals(name, len, "tanimoto")) {
-        parsed.result = metric_kind_t::bitwise_tanimoto_k;
+        parsed.result = metric_kind_t::tanimoto_k;
     } else if (str_equals(name, len, "sorensen")) {
-        parsed.result = metric_kind_t::bitwise_sorensen_k;
+        parsed.result = metric_kind_t::sorensen_k;
     } else
         parsed.failed(
             "Unknown distance, choose: l2sq, ip, cos, haversine, jaccard, pearson, hamming, tanimoto, sorensen");
@@ -451,7 +451,7 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
     /**
      *  @warning The very first memory de-allocation discards all the arenas!
      */
-    void deallocate(std::size_t) noexcept { reset(); }
+    void deallocate(byte_t*, std::size_t) noexcept { reset(); }
 };
 
 using memory_mapping_allocator_t = memory_mapping_allocator_gt<>;

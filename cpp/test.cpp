@@ -134,6 +134,16 @@ template <typename index_at> void test_sets_moved() {
 
 int main(int, char**) {
 
+    static_assert(!std::is_same<index_gt<ip_gt<>>::value_type, std::true_type>());
+    static_assert(!std::is_same<index_gt<cos_gt<>>::value_type, std::true_type>());
+    static_assert(!std::is_same<index_gt<l2sq_gt<>>::value_type, std::true_type>());
+    // static_assert(!std::is_same<index_gt<hamming_gt<>>::value_type, std::true_type>());
+    // static_assert(!std::is_same<index_gt<tanimoto_gt<>>::value_type, std::true_type>());
+    // static_assert(!std::is_same<index_gt<sorensen_gt<>>::value_type, std::true_type>());
+    // static_assert(!std::is_same<index_gt<jaccard_gt<>>::value_type, std::true_type>());
+    // static_assert(!std::is_same<index_gt<pearson_correlation_gt<>>::value_type, std::true_type>());
+    // static_assert(!std::is_same<index_gt<haversine_gt<>>::value_type, std::true_type>());
+
     test3d<float>(index_gt<cos_gt<float>, point_id_t, std::uint32_t, float>{});
     test3d<float>(index_gt<l2sq_gt<float>, point_id_t, std::uint32_t, float>{});
 

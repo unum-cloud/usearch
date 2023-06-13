@@ -64,7 +64,7 @@ if(${USEARCH_USE_JEMALLOC})
     include(jemalloc)
 endif()
 
-include(clipp)
+# include(clipp)
 
 set(USEARCH_PUNNED_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/../include"
