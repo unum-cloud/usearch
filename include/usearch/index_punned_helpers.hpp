@@ -288,7 +288,8 @@ class executor_stl_t {
     std::size_t threads_count_{};
 
   public:
-    executor_stl_t(std::size_t threads_count) noexcept : threads_count_(threads_count) {}
+    executor_stl_t(std::size_t threads_count) noexcept
+        : threads_count_(threads_count ? threads_count : std::thread::hardware_concurrency()) {}
 
     template <typename thread_aware_function_at>
     void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
@@ -310,7 +311,9 @@ class executor_stl_t {
 
 class executor_openmp_t {
   public:
-    executor_openmp_t(std::size_t threads_count) noexcept { omp_set_num_threads(threads_count); }
+    executor_openmp_t(std::size_t threads_count) noexcept {
+        omp_set_num_threads(threads_count ? threads_count : std::thread::hardware_concurrency());
+    }
 
     template <typename thread_aware_function_at>
     void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
