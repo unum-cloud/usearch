@@ -3,9 +3,9 @@ import pytest
 import numpy as np
 
 from usearch.io import load_matrix, save_matrix
-from usearch.eval import recall_members
+from usearch.eval import recall_members, random_vectors
 
-from usearch.index import Index, SparseIndex, MetricKind, Matches
+from usearch.index import Index, SparseIndex, MetricKind, ScalarKind, Matches
 from usearch.index import (
     DEFAULT_CONNECTIVITY,
     DEFAULT_EXPANSION_ADD,
@@ -15,8 +15,12 @@ from usearch.index import (
 
 dimensions = [3, 97, 256]
 batch_sizes = [1, 33]
-index_types = ['f32', 'f64', 'f16', 'f8']
-numpy_types = [np.float32, np.float64, np.float16, np.byte]
+index_types = [
+    ScalarKind.F32, ScalarKind.F64,
+    ScalarKind.F16, ScalarKind.F8,
+]
+numpy_types = [np.float32, np.float64, np.float16]
+
 connectivity_options = [3, 13, 50, DEFAULT_CONNECTIVITY]
 jit_options = [False]
 continuous_metrics = [
@@ -77,20 +81,21 @@ def test_index(
 
     limit = 0.7 if numpy_type != np.byte else 70
     vector = np.random.uniform(0, limit, (index.ndim)).astype(numpy_type)
-    index.add(42, vector)
-    matches, distances, count = index.search(vector, 10)
 
+    index.add(42, vector)
+
+    assert 42 in index
+    assert 42 in index.labels
+    if numpy_type != np.byte:
+        assert np.allclose(index[42], vector, atol=0.1)
+
+    matches, distances, count = index.search(vector, 10)
     assert len(index) == 1
     assert len(matches) == count
     assert len(distances) == count
     assert count == 1
     assert matches[0] == 42
     assert distances[0] == pytest.approx(0, abs=1e-3)
-
-    assert 42 in index
-    assert 42 in index.labels
-    if numpy_type != np.byte:
-        assert np.allclose(index[42], vector, atol=0.1)
 
     index.save('tmp.usearch')
     index.clear()
@@ -111,16 +116,15 @@ def test_index_batch(
 
     index = Index(ndim=ndim, metric=metric, dtype=index_type)
 
-    limit = 0.7 if numpy_type != np.byte else 70
-    vectors = np.random.uniform(
-        0, limit, (batch_size, index.ndim)).astype(numpy_type)
-    labels = np.array(range(batch_size), dtype=np.longlong)
+    labels = np.arange(batch_size)
+    vectors = random_vectors(count=batch_size, ndim=ndim, dtype=numpy_type)
 
     index.add(labels, vectors)
     assert len(index) == batch_size
+    assert np.allclose(index.get_vectors(
+        labels).astype(numpy_type), vectors, atol=0.1)
 
     matches: Matches = index.search(vectors, 10)
-
     assert matches.labels.shape[0] == matches.distances.shape[0]
     assert matches.counts.shape[0] == batch_size
     assert np.all(np.sort(index.labels) == np.sort(labels))
@@ -139,31 +143,29 @@ def test_index_numba(ndim: int, batch_size: int):
 
     # Showcases how to use Numba to JIT-compile similarity measures for USearch.
     # https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
-    signature = types.float32(
-        types.CPointer(types.float32),
-        types.CPointer(types.float32),
-        types.uint64, types.uint64)
+    signature = types.float32(types.CPointer(
+        types.float32), types.CPointer(types.float32))
 
     @cfunc(signature)
-    def python_dot(a, b, n, m):
-        a_array = carray(a, n)
-        b_array = carray(b, n)
+    def python_dot(a, b):
+        a_array = carray(a, ndim)
+        b_array = carray(b, ndim)
         c = 0.0
-        for i in range(n):
+        for i in range(ndim):
             c += a_array[i] * b_array[i]
-        return c
+        return 1 - c
 
     index = Index(ndim=ndim, metric=python_dot)
 
-    vectors = np.random.uniform(
-        0, 0.3, (batch_size, index.ndim)).astype(np.float32)
-    labels = np.array(range(batch_size), dtype=np.longlong)
+    labels = np.arange(batch_size)
+    vectors = random_vectors(count=batch_size, ndim=ndim)
 
     index.add(labels, vectors)
     matches, distances, count = index.search(vectors, 10)
-
     assert matches.shape[0] == distances.shape[0]
     assert count.shape[0] == batch_size
+
+    assert recall_members(index, exact=True) == 1
 
 
 @pytest.mark.parametrize('connectivity', connectivity_options)
@@ -176,17 +178,17 @@ def test_sets_index(connectivity: int):
     assert list(results) == [10, 11]
 
 
-# @pytest.mark.parametrize('bits', dimensions)
-# @pytest.mark.parametrize('metric', hash_metrics)
-# @pytest.mark.parametrize('connectivity', connectivity_options)
-# @pytest.mark.parametrize('batch_size', batch_sizes)
-# def test_bitwise_index(bits: int, metric: MetricKind, connectivity: int, batch_size: int):
+@pytest.mark.parametrize('bits', dimensions)
+@pytest.mark.parametrize('metric', hash_metrics)
+@pytest.mark.parametrize('connectivity', connectivity_options)
+@pytest.mark.parametrize('batch_size', batch_sizes)
+def test_bitwise_index(bits: int, metric: MetricKind, connectivity: int, batch_size: int):
 
-#     index = Index(ndim=bits, metric=metric, connectivity=connectivity)
+    index = Index(ndim=bits, metric=metric, connectivity=connectivity)
 
-#     bit_vectors = np.random.randint(2, size=(batch_size, bits))
-#     bit_vectors = np.packbits(bit_vectors, axis=1)
-#     labels = np.array(range(batch_size), dtype=np.longlong)
+    labels = np.arange(batch_size)
+    bit_vectors = np.random.randint(2, size=(batch_size, bits))
+    bit_vectors = np.packbits(bit_vectors, axis=1)
 
-#     index.add(labels, bit_vectors)
-#     index.search(bit_vectors, 10)
+    index.add(labels, bit_vectors)
+    index.search(bit_vectors, 10)

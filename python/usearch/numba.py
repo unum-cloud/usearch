@@ -11,26 +11,24 @@ from numba import cfunc, types, carray
 from usearch.compiled import MetricKind
 
 
-signature_f16args = types.float32(
-    types.CPointer(types.float16),
-    types.CPointer(types.float16),
-    types.uint64, types.uint64)
+signature_f16args = types.float32(types.CPointer(
+    types.float16), types.CPointer(types.float16))
 
-signature_f32args = types.float32(
-    types.CPointer(types.float32),
-    types.CPointer(types.float32),
-    types.uint64, types.uint64)
+signature_f32args = types.float32(types.CPointer(
+    types.float32), types.CPointer(types.float32))
 
-signature_f64args = types.float32(
-    types.CPointer(types.float64),
-    types.CPointer(types.float64),
-    types.uint64, types.uint64)
+signature_f64args = types.float32(types.CPointer(
+    types.float64), types.CPointer(types.float64))
 
 
-def jit(ndim: int, metric: MetricKind = MetricKind.Cos, dtype: np.generic = np.float32) -> Callable:
-    """JIT-compiles a distance metric specifically tuned for the target hardware and number of dimensions.
+def jit(ndim: int,
+        metric: MetricKind = MetricKind.Cos,
+        dtype: np.generic = np.float32) -> Callable:
+    """JIT-compiles a distance metric specifically tuned for the target hardware
+    and number of dimensions.
 
-    Uses Numba `cfunc` functionality, annotating it with Numba `types` instead of `ctypes` to support half-precision.
+    Uses Numba `cfunc` functionality, annotating it with Numba `types` instead 
+    of `ctypes` to support half-precision.
     https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
     """
     normalize_dtype = {
@@ -52,7 +50,7 @@ def jit(ndim: int, metric: MetricKind = MetricKind.Cos, dtype: np.generic = np.f
     }
     accumulator = scalar_kind_to_accumulator_type[dtype]
 
-    def numba_ip(a, b, _n, _m):
+    def numba_ip(a, b):
         a_array = carray(a, ndim)
         b_array = carray(b, ndim)
         ab = accumulator(0)
@@ -60,7 +58,7 @@ def jit(ndim: int, metric: MetricKind = MetricKind.Cos, dtype: np.generic = np.f
             ab += a_array[i] * b_array[i]
         return types.float32(1 - ab)
 
-    def numba_cos(a, b, _n, _m):
+    def numba_cos(a, b):
         a_array = carray(a, ndim)
         b_array = carray(b, ndim)
         ab = accumulator(0)
@@ -79,7 +77,7 @@ def jit(ndim: int, metric: MetricKind = MetricKind.Cos, dtype: np.generic = np.f
         else:
             return types.float32(1 - ab / (a_norm * b_norm))
 
-    def numba_l2sq(a, b, _n, _m):
+    def numba_l2sq(a, b):
         a_array = carray(a, ndim)
         b_array = carray(b, ndim)
         ab_delta_sq = accumulator(0)

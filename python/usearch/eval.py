@@ -37,9 +37,14 @@ def random_vectors(
         return bit_vectors
 
     else:
-        x = np.random.rand(count, ndim).astype(dtype)
-        if metric == MetricKind.IP:
-            return x / np.linalg.norm(x, axis=1, keepdims=True)
+
+        x = np.random.rand(count, ndim)
+        if dtype == np.int8:
+            x = (x * 100).astype(np.int8)
+        else:
+            x = x.astype(dtype)
+            if metric == MetricKind.IP:
+                return x / np.linalg.norm(x, axis=1, keepdims=True)
         return x
 
 
@@ -56,12 +61,8 @@ def recall_members(index: Index, *args, **kwargs) -> float:
     if len(index) == 0:
         return 0
 
-    vectors: np.ndarray = np.vstack([
-        index[i] for i in range(len(index))
-    ])
-    labels: np.ndarray = np.arange(vectors.shape[0])
-    matches: Matches = index.search(vectors, 1, *args, **kwargs)
-    return matches.recall_first(labels)
+    matches: Matches = index.search(index.vectors, 1, *args, **kwargs)
+    return matches.recall_first(index.labels)
 
 
 def measure_seconds(f: Callable) -> Tuple[float, Any]:

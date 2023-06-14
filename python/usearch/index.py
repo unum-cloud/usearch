@@ -32,6 +32,34 @@ SparseIndex = _CompiledSetsIndex
 Label = np.longlong
 
 
+def _normalize_dtype(dtype) -> ScalarKind:
+    if dtype is None:
+        return ScalarKind.F32
+    if isinstance(dtype, ScalarKind):
+        return dtype
+
+    if isinstance(dtype, str):
+        _normalize = {
+            'f64': ScalarKind.F64,
+            'f32': ScalarKind.F32,
+            'f16': ScalarKind.F16,
+            'f8': ScalarKind.F8,
+            'b1': ScalarKind.B1,
+        }
+        return _normalize[dtype.lower()]
+
+    if not isinstance(dtype, ScalarKind):
+        _normalize = {
+            np.float64: ScalarKind.F64,
+            np.float32: ScalarKind.F32,
+            np.float16: ScalarKind.F16,
+            np.int8: ScalarKind.F8,
+        }
+        return _normalize[dtype]
+
+    return dtype
+
+
 class Matches(NamedTuple):
     labels: np.ndarray
     distances: np.ndarray
@@ -201,24 +229,11 @@ class Index:
             raise ValueError(
                 'The `metric` must be Numba callback or a `MetricKind`')
 
-        if dtype is None:
-            dtype = ScalarKind.F32
-        elif isinstance(dtype, str):
-            _normalize = {
-                'f64': ScalarKind.F64,
-                'f32': ScalarKind.F32,
-                'f16': ScalarKind.F16,
-                'f8': ScalarKind.F8,
-                'b1': ScalarKind.B1,
-            }
-            dtype = _normalize[dtype.lower()]
-        elif not isinstance(dtype, ScalarKind):
-            _normalize = {
-                np.float64: ScalarKind.F64,
-                np.float32: ScalarKind.F32,
-                np.float16: ScalarKind.F16,
-            }
-            dtype = _normalize[dtype]
+        if metric in MetricKindBitwise:
+            assert dtype is None or dtype == ScalarKind.B1
+            dtype = ScalarKind.B1
+        else:
+            dtype = _normalize_dtype(dtype)
 
         self._compiled = _CompiledIndex(
             ndim=ndim,
@@ -347,7 +362,7 @@ class Index:
         return self._metric_kind
 
     @property
-    def dtype(self) -> str:
+    def dtype(self) -> ScalarKind:
         return self._compiled.dtype
 
     @property
@@ -393,6 +408,18 @@ class Index:
     @property
     def labels(self) -> np.ndarray:
         return self._compiled.labels
+
+    def get_vectors(
+            self,
+            labels: np.ndarray,
+            dtype: ScalarKind = ScalarKind.F32) -> np.ndarray:
+
+        dtype = _normalize_dtype(dtype)
+        return np.vstack([self._compiled.__getitem__(l, dtype) for l in labels])
+
+    @property
+    def vectors(self) -> np.ndarray:
+        return self.get_vectors(self.labels)
 
     def __delitem__(self, label: int):
         raise NotImplementedError()

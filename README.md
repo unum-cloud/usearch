@@ -299,19 +299,19 @@ Luckily, with the help of [Numba][numba], we can JIT compile a function with a m
 ```py
 from numba import cfunc, types, carray
 
+ndim = 256
 signature = types.float32(
     types.CPointer(types.float32),
-    types.CPointer(types.float32),
-    types.uint64, types.uint64)
+    types.CPointer(types.float32))
 
 @cfunc(signature)
-def python_dot(a, b, n, m):
-    a_array = carray(a, n)
-    b_array = carray(b, n)
+def python_dot(a, b):
+    a_array = carray(a, ndim)
+    b_array = carray(b, ndim)
     c = 0.0
-    for i in range(n):
+    for i in range(ndim):
         c += a_array[i] * b_array[i]
-    return c
+    return 1 - c
 
 index = Index(ndim=ndim, metric=python_dot.address)
 ```

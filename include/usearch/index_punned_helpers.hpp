@@ -161,13 +161,19 @@ using punned_metric_t = std::function<punned_distance_t(punned_vector_view_t, pu
 class f8_bits_t;
 class f16_bits_t;
 
-inline float f16_to_f32(std::uint16_t u16) noexcept {
 #if defined(__AVX512F__)
-    _Float16 f16;
-    std::memcpy(&f16, &u16, sizeof(std::uint16_t));
-    return float(f16);
+#define USEARCH_F16_NATIVE_SUPPORT 1
+using f16_native_t = _Float16;
 #elif defined(USEARCH_IS_ARM)
-    __fp16 f16;
+#define USEARCH_F16_NATIVE_SUPPORT 1
+using f16_native_t = __fp16;
+#else
+using f16_native_t = void;
+#endif
+
+inline float f16_to_f32(std::uint16_t u16) noexcept {
+#if defined(USEARCH_F16_NATIVE_SUPPORT)
+    f16_native_t f16;
     std::memcpy(&f16, &u16, sizeof(std::uint16_t));
     return float(f16);
 #else
@@ -176,13 +182,8 @@ inline float f16_to_f32(std::uint16_t u16) noexcept {
 }
 
 inline std::uint16_t f32_to_f16(float f32) noexcept {
-#if defined(__AVX512F__)
-    _Float16 f16 = _Float16(f32);
-    std::uint16_t u16;
-    std::memcpy(&u16, &f16, sizeof(std::uint16_t));
-    return u16;
-#elif defined(USEARCH_IS_ARM)
-    __fp16 f16 = __fp16(f32);
+#if defined(USEARCH_F16_NATIVE_SUPPORT)
+    f16_native_t f16 = f16_native_t(f32);
     std::uint16_t u16;
     std::memcpy(&u16, &f16, sizeof(std::uint16_t));
     return u16;
@@ -499,7 +500,7 @@ template <typename from_scalar_at> struct cast_gt<from_scalar_at, b1x8_t> {
         unsigned char* typed_output = reinterpret_cast<unsigned char*>(output);
         std::size_t size_input = bytes_in_input / sizeof(from_scalar_at);
         for (std::size_t i = 0; i != size_input; ++i)
-            typed_output[i / 8] |= bool(typed_input[i]) ? (1 << (i & 7)) : 0;
+            typed_output[i / CHAR_BIT] |= bool(typed_input[i]) ? (1 << (i & (CHAR_BIT - 1))) : 0;
         return true;
     }
 };
@@ -508,9 +509,9 @@ template <typename to_scalar_at> struct cast_gt<b1x8_t, to_scalar_at> {
     inline bool operator()(byte_t const* input, std::size_t bytes_in_input, byte_t* output) const {
         unsigned char const* typed_input = reinterpret_cast<unsigned char const*>(input);
         to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
-        std::size_t size_input = bytes_in_input * 8;
+        std::size_t size_input = bytes_in_input * CHAR_BIT;
         for (std::size_t i = 0; i != size_input; ++i)
-            typed_output[i] = bool(typed_input[i / 8] & (1 << (i & 7)));
+            typed_output[i] = bool(typed_input[i / CHAR_BIT] & (1 << (i & (CHAR_BIT - 1))));
         return true;
     }
 };
