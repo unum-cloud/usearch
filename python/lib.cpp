@@ -122,7 +122,7 @@ static void add_one_to_index(punned_index_py_t& index, label_t label, py::buffer
 
     Py_ssize_t vector_dimensions = vector_info.shape[0];
     char const* vector_data = reinterpret_cast<char const*>(vector_info.ptr);
-    if (vector_dimensions != static_cast<Py_ssize_t>(index.dimensions()))
+    if (vector_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
     if (index.size() + 1 >= index.capacity())
@@ -143,7 +143,7 @@ static void add_one_to_index(punned_index_py_t& index, label_t label, py::buffer
     else if (vector_info.format == "d" || vector_info.format == "f8" || vector_info.format == "<f8")
         index.add(label, reinterpret_cast<double const*>(vector_data), config).error.raise();
     else
-        throw std::invalid_argument("Incompatible scalars in the vector!");
+        throw std::invalid_argument("Incompatible scalars in the vector: " + vector_info.format);
 }
 
 static void add_many_to_index(                                       //
@@ -168,7 +168,7 @@ static void add_many_to_index(                                       //
     Py_ssize_t labels_count = labels_info.shape[0];
     Py_ssize_t vectors_count = vectors_info.shape[0];
     Py_ssize_t vectors_dimensions = vectors_info.shape[1];
-    if (vectors_dimensions != static_cast<Py_ssize_t>(index.dimensions()))
+    if (vectors_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
     if (labels_count != vectors_count)
@@ -181,7 +181,7 @@ static void add_many_to_index(                                       //
     char const* labels_data = reinterpret_cast<char const*>(labels_info.ptr);
 
     // https://docs.python.org/3/library/struct.html#format-characters
-    if (vectors_info.format == "c" || vectors_info.format == "b")
+    if (vectors_info.format == "B")
         executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             add_config_t config;
             config.store_vector = copy;
@@ -229,7 +229,7 @@ static void add_many_to_index(                                       //
             index.add(label, vector, config).error.raise();
         });
     else
-        throw std::invalid_argument("Incompatible scalars in the vectors matrix!");
+        throw std::invalid_argument("Incompatible scalars in the vectors matrix: " + vectors_info.format);
 }
 
 static py::tuple search_one_in_index(punned_index_py_t& index, py::buffer vector, std::size_t wanted, bool exact) {
@@ -237,7 +237,7 @@ static py::tuple search_one_in_index(punned_index_py_t& index, py::buffer vector
     py::buffer_info vector_info = vector.request();
     Py_ssize_t vector_dimensions = vector_info.shape[0];
     char const* vector_data = reinterpret_cast<char const*>(vector_info.ptr);
-    if (vector_dimensions != static_cast<Py_ssize_t>(index.dimensions()))
+    if (vector_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
     py::array_t<label_t> labels_py(static_cast<Py_ssize_t>(wanted));
@@ -271,7 +271,7 @@ static py::tuple search_one_in_index(punned_index_py_t& index, py::buffer vector
         result.error.raise();
         count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
     } else
-        throw std::invalid_argument("Incompatible scalars in the query vector!");
+        throw std::invalid_argument("Incompatible scalars in the query vector: " + vector_info.format);
 
     labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(count)});
     distances_py.resize(py_shape_t{static_cast<Py_ssize_t>(count)});
@@ -310,7 +310,7 @@ static py::tuple search_many_in_index( //
     Py_ssize_t vectors_count = vectors_info.shape[0];
     Py_ssize_t vectors_dimensions = vectors_info.shape[1];
     char const* vectors_data = reinterpret_cast<char const*>(vectors_info.ptr);
-    if (vectors_dimensions != static_cast<Py_ssize_t>(index.dimensions()))
+    if (vectors_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
     py::array_t<label_t> labels_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
@@ -377,7 +377,7 @@ static py::tuple search_many_in_index( //
                 static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
     else
-        throw std::invalid_argument("Incompatible scalars in the query matrix!");
+        throw std::invalid_argument("Incompatible scalars in the query matrix: " + vectors_info.format);
 
     py::tuple results(3);
     results[0] = labels_py;
@@ -392,11 +392,11 @@ template <typename index_at> void load_index(index_at& index, std::string const&
 template <typename index_at> void view_index(index_at& index, std::string const& path) { index.view(path.c_str()).error.raise(); }
 // clang-format on
 
-template <typename scalar_at, typename index_at>
-py::array_t<scalar_at> get_typed_member(index_at const& index, label_t label) {
-    py::array_t<scalar_at> result_py(static_cast<Py_ssize_t>(index.dimensions()));
+template <typename internal_at, typename external_at = internal_at, typename index_at = void>
+py::array_t<external_at> get_typed_member(index_at const& index, label_t label) {
+    py::array_t<external_at> result_py(static_cast<Py_ssize_t>(index.scalar_words()));
     auto result_py1d = result_py.template mutable_unchecked<1>();
-    index.reconstruct(label, &result_py1d(0));
+    index.reconstruct(label, (internal_at*)&result_py1d(0));
     return result_py;
 }
 
@@ -406,11 +406,11 @@ template <typename index_at> py::array get_member(index_at const& index, label_t
     else if (scalar_kind == scalar_kind_t::f64_k)
         return get_typed_member<f64_t>(index, label);
     else if (scalar_kind == scalar_kind_t::f16_k)
-        return get_typed_member<f16_bits_t>(index, label);
+        return get_typed_member<f16_bits_t, f16_native_t>(index, label);
     else if (scalar_kind == scalar_kind_t::f8_k)
-        return get_typed_member<f8_bits_t>(index, label);
+        return get_typed_member<f8_bits_t, std::int8_t>(index, label);
     else if (scalar_kind == scalar_kind_t::b1x8_k)
-        return get_typed_member<b1x8_t>(index, label);
+        return get_typed_member<b1x8_t, std::uint8_t>(index, label);
     else
         throw std::invalid_argument("Incompatible scalars in the query matrix!");
 }

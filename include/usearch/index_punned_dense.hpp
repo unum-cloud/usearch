@@ -86,7 +86,10 @@ class index_punned_dense_gt {
     using member_ref_t = typename index_t::member_ref_t;
     using member_cref_t = typename index_t::member_cref_t;
 
+    /// @brief Number of unique dimensions in the vectors.
     std::size_t dimensions_ = 0;
+    /// @brief Similar to `dimensions_`, but different for fraction byte-length scalars.
+    std::size_t scalar_words_ = 0;
     std::size_t expansion_add_ = 0;
     std::size_t expansion_search_ = 0;
     index_t* typed_ = nullptr;
@@ -139,6 +142,7 @@ class index_punned_dense_gt {
 
     void swap(index_punned_dense_gt& other) {
         std::swap(dimensions_, other.dimensions_);
+        std::swap(scalar_words_, other.scalar_words_);
         std::swap(casted_vector_bytes_, other.casted_vector_bytes_);
         std::swap(scalar_kind_, other.scalar_kind_);
         std::swap(isa_, other.isa_);
@@ -152,6 +156,7 @@ class index_punned_dense_gt {
     static index_config_t optimize(index_config_t config) { return index_t::optimize(config); }
 
     std::size_t dimensions() const { return dimensions_; }
+    std::size_t scalar_words() const { return scalar_words_; }
     std::size_t connectivity() const { return typed_->connectivity(); }
     std::size_t size() const { return typed_->size(); }
     std::size_t capacity() const { return typed_->capacity(); }
@@ -271,6 +276,7 @@ class index_punned_dense_gt {
         index_punned_dense_gt result;
 
         result.dimensions_ = dimensions_;
+        result.scalar_words_ = scalar_words_;
         result.scalar_kind_ = scalar_kind_;
         result.isa_ = isa_;
         result.casted_vector_bytes_ = casted_vector_bytes_;
@@ -400,17 +406,18 @@ class index_punned_dense_gt {
     }
 
     static index_punned_dense_gt make_(                                                 //
-        std::size_t dimensions, scalar_kind_t accuracy,                                 //
+        std::size_t dimensions, scalar_kind_t scalar_kind,                              //
         index_config_t config, std::size_t expansion_add, std::size_t expansion_search, //
         metric_and_meta_t metric_and_meta, casts_t casts) {
 
         std::size_t hardware_threads = std::thread::hardware_concurrency();
         index_punned_dense_gt result;
         result.dimensions_ = dimensions;
-        result.scalar_kind_ = accuracy;
+        result.scalar_kind_ = scalar_kind;
+        result.scalar_words_ = count_scalar_words_(dimensions, scalar_kind);
         result.expansion_add_ = expansion_add;
         result.expansion_search_ = expansion_search;
-        result.casted_vector_bytes_ = bytes_per_scalar(accuracy) * dimensions;
+        result.casted_vector_bytes_ = bytes_per_scalar(scalar_kind) * result.scalar_words_;
         result.cast_buffer_.resize(hardware_threads * result.casted_vector_bytes_);
         result.casts_ = casts;
         result.isa_ = metric_and_meta.isa;
@@ -452,6 +459,17 @@ class index_punned_dense_gt {
         case scalar_kind_t::f16_k: return make_casts_<f16_bits_t>();
         case scalar_kind_t::f8_k: return make_casts_<f8_bits_t>();
         case scalar_kind_t::b1x8_k: return make_casts_<b1x8_t>();
+        default: return {};
+        }
+    }
+
+    static std::size_t count_scalar_words_(std::size_t dimensions, scalar_kind_t accuracy) {
+        switch (accuracy) {
+        case scalar_kind_t::f64_k: return dimensions;
+        case scalar_kind_t::f32_k: return dimensions;
+        case scalar_kind_t::f16_k: return dimensions;
+        case scalar_kind_t::f8_k: return dimensions;
+        case scalar_kind_t::b1x8_k: return divide_round_up<CHAR_BIT>(dimensions);
         default: return {};
         }
     }
