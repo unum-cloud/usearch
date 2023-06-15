@@ -89,8 +89,8 @@ setup(
     ext_modules=ext_modules,
     install_requires=[
         'numpy',
-        'ucall',
         'pandas',
+        'ucall; python_version => "3.9"',
     ],
     extras_require={
         'jit': ['numba', 'cppyy'],
