@@ -117,7 +117,7 @@ cargo publish
 
 ```sh
 gradle clean build
-java -cp . -Djava.library.path=/Users/av/github/usearch/build/libs/usearch/shared java/cloud/unum/usearch/Index.java
+java -cp . -Djava.library.path="$(pwd)/build/libs/usearch/shared" java/cloud/unum/usearch/Index.java
 ```
 
 Or step by-step:
@@ -143,8 +143,8 @@ g++ -std=c++11 -c -fPIC \
     -I${JAVA_HOME}/include -I${JAVA_HOME}/include/darwin cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
 g++ -dynamiclib -o libusearch.dylib cloud_unum_usearch_Index.o -lc
 # Run linking to that directory
-java -cp . -Djava.library.path=/Users/av/github/usearch/java/cloud/unum/usearch/ Index.java
-java -cp . -Djava.library.path=/Users/av/github/usearch/java cloud.unum.usearch.Index
+java -cp . -Djava.library.path="$(pwd)/java/cloud/unum/usearch/" Index.java
+java -cp . -Djava.library.path="$(pwd)/java" cloud.unum.usearch.Index
 ```
 
 ## Wolfram
@@ -187,4 +187,12 @@ docker buildx create --use &&
         --tag unum/usearch:$version \
         --tag unum/usearch:latest \
         --push .
+```
+
+---
+
+Extending metrics in SimSIMD:
+
+```
+git push --set-upstream https://github.com/ashvardanian/simsimd.git HEAD:main
 ```

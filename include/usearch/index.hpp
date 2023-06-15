@@ -501,6 +501,7 @@ class error_t {
         return *this;
     }
     explicit operator bool() const noexcept { return message_ != nullptr; }
+    char const* what() const noexcept { return message_; }
 
 #if defined(__cpp_exceptions) && (1 == __cpp_exceptions)
     ~error_t() noexcept(false) {
@@ -533,6 +534,7 @@ template <typename result_at> struct expected_gt {
         error.raise();
         return std::move(result);
     }
+    result_at const& operator*() const noexcept { return result; }
     explicit operator bool() const noexcept { return !error; }
     expected_gt failed(char const* message) noexcept {
         error = message;

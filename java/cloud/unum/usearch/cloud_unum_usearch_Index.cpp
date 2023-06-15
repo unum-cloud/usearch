@@ -30,9 +30,9 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
     try {
 
         index_config_t config;
-        config.expansion_add = static_cast<std::size_t>(expansion_add);
-        config.expansion_search = static_cast<std::size_t>(expansion_search);
         config.connectivity = static_cast<std::size_t>(connectivity);
+        std::size_t expansion_add = static_cast<std::size_t>(expansion_add);
+        std::size_t expansion_search = static_cast<std::size_t>(expansion_search);
 
         metric_cstr = (*env).GetStringUTFChars(metric, 0);
         std::size_t metric_length = (*env).GetStringUTFLength(metric);
@@ -41,7 +41,8 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
 
         scalar_kind_t accuracy = scalar_kind_from_name(accuracy_cstr, accuracy_length);
         metric_kind_t metric_kind = metric_from_name(metric_cstr, metric_length);
-        punned_t index = make_punned<punned_t>(metric_kind, static_cast<std::size_t>(dimensions), accuracy, config);
+        punned_t index = punned_t::make(static_cast<std::size_t>(dimensions), metric_kind, config, accuracy,
+                                        expansion_add, expansion_search);
         if (!index.reserve(static_cast<std::size_t>(capacity))) {
             jclass jc = (*env).FindClass("java/lang/Error");
             if (jc)
