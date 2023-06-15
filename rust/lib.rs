@@ -28,12 +28,12 @@ pub mod ffi {
     }
 
     struct IndexOptions {
-        dimensions: usize
-        metric: MetricKind
-        quantization: ScalarKind
-        connectivity: usize
-        expansion_add: usize
-        expansion_search: usize
+        dimensions: usize,
+        metric: MetricKind,
+        quantization: ScalarKind,
+        connectivity: usize,
+        expansion_add: usize,
+        expansion_search: usize,
     }
 
     // C++ types and signatures exposed to Rust.
@@ -41,13 +41,10 @@ pub mod ffi {
         include!("lib.hpp");
 
         type Index;
-        type MetricKind;
-        type ScalarKind;
 
-        pub fn new_index(options: IndexOptions) -> Result<UniquePtr<Index>>;
+        pub fn new_index(options: &IndexOptions) -> Result<UniquePtr<Index>>;
 
         pub fn reserve(self: &Index, capacity: usize) -> Result<()>;
-        pub fn clear(self: &Index) -> Result<()>;
 
         pub fn dimensions(self: &Index) -> usize;
         pub fn connectivity(self: &Index) -> usize;
@@ -66,16 +63,24 @@ pub mod ffi {
 
 #[cfg(test)]
 mod tests {
-    use crate::ffi::new_ip;
-    use crate::ffi::new_l2sq;
-    use crate::ffi::new_cos;
-    use crate::ffi::new_haversine;
+    use crate::ffi::MetricKind;
+    use crate::ffi::ScalarKind;
+    use crate::ffi::IndexOptions;
+    use crate::ffi::new_index;
 
     #[test]
     fn integration() {
 
-        let quant = "f16";
-        let index = new_ip(5,  &quant, 0, 0, 0).unwrap();
+        let mut options = IndexOptions {
+            dimensions: 5,
+            metric: MetricKind::IP,
+            quantization: ScalarKind::F16,
+            connectivity: 0,
+            expansion_add: 0,
+            expansion_search: 0
+        };
+
+        let index = new_index(&options).unwrap();
     
         assert!(index.reserve(10).is_ok());
         assert!(index.capacity() >= 10);
@@ -100,9 +105,12 @@ mod tests {
         assert!(index.view("index.rust.usearch").is_ok());
     
         // Make sure every function is called at least once
-        assert!(new_ip(5,  &quant, 0, 0, 0).is_ok());
-        assert!(new_l2sq(5,  &quant, 0, 0, 0).is_ok());
-        assert!(new_cos(5,  &quant, 0, 0, 0).is_ok());
-        assert!(new_haversine(&quant, 0, 0, 0).is_ok());
+        assert!(new_index(&options).is_ok());
+        options.metric = MetricKind::L2Sq;
+        assert!(new_index(&options).is_ok());
+        options.metric = MetricKind::Cos;
+        assert!(new_index(&options).is_ok());
+        options.metric = MetricKind::Haversine;
+        assert!(new_index(&options).is_ok());
     }
 }
