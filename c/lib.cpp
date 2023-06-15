@@ -12,10 +12,33 @@ using distance_t = float;
 using punned_index_t = index_punned_dense_gt<label_t>;
 using span_t = span_gt<float>;
 
-void* usearch_new(                                        //
-    usearch_metric_t metric, usearch_scalar_kind_t accuracy, //
-    int dimensions, int capacity, int connectivity,       //
-    int expansion_add, int expansion_search) {
+metric_kind_t to_native_metric(usearch_metric_kind_t kind) {
+    switch (kind) {
+    case usearch_metric_ip_k: return metric_kind_t::ip_k;
+    case usearch_metric_l2sq_k: return metric_kind_t::l2sq_k;
+    case usearch_metric_cos_k: return metric_kind_t::cos_k;
+    case usearch_metric_haversine_k: return metric_kind_t::haversine_k;
+    case usearch_metric_pearson_k: return metric_kind_t::pearson_k;
+    case usearch_metric_jaccard_k: return metric_kind_t::jaccard_k;
+    case usearch_metric_hamming_k: return metric_kind_t::hamming_k;
+    case usearch_metric_tanimoto_k: return metric_kind_t::tanimoto_k;
+    case usearch_metric_sorensen_k: return metric_kind_t::sorensen_k;
+    default: return metric_kind_t::unknown_k;
+    }
+}
+
+scalar_kind_t to_native_scalar(usearch_scalar_kind_t kind) {
+    switch (kind) {
+    case usearch_scalar_f32_k: return scalar_kind_t::f32_k;
+    case usearch_scalar_f64_k: return scalar_kind_t::f64_k;
+    case usearch_scalar_f16_k: return scalar_kind_t::f16_k;
+    case usearch_scalar_f8_k: return scalar_kind_t::f8_k;
+    case usearch_scalar_b1_k: return scalar_kind_t::b1_k;
+    default: return scalar_kind_t::unknown_k;
+    }
+}
+
+void usearch_init(usearch_init_options_t* options, usearch_index_t* index, usearch_error_t* error) {
 
     try {
         config_t config;
@@ -49,7 +72,7 @@ void* usearch_new(                                        //
     return NULL;
 }
 
-void usearch_destroy(punned_index_t* index) { delete index; }
+void usearch_free(punned_index_t* index) { delete index; }
 
 char const* usearch_save(punned_index_t* index, char const* path) {
     try {

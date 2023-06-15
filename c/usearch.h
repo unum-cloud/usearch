@@ -4,8 +4,10 @@
 #include <stdint.h> // `size_t`
 
 typedef void* usearch_index_t;
-typedef size_t usearch_label_t;
+typedef uint32_t usearch_label_t;
 typedef char const* usearch_error_t;
+
+typedef float (*)(void const*, void const*) usearch_metric_t;
 
 typedef enum usearch_metric_kind_t {
     usearch_metric_ip_k = 0,
@@ -17,6 +19,7 @@ typedef enum usearch_metric_kind_t {
     usearch_metric_hamming_k,
     usearch_metric_tanimoto_k,
     usearch_metric_sorensen_k,
+    usearch_metric_unknown_k,
 } usearch_metric_kind_t;
 
 typedef enum usearch_scalar_kind_t {
@@ -25,10 +28,14 @@ typedef enum usearch_scalar_kind_t {
     usearch_scalar_f16_k,
     usearch_scalar_f8_k,
     usearch_scalar_b1_k,
+    usearch_scalar_unknown_k,
 } usearch_scalar_kind_t;
 
 typedef struct usearch_init_options_t {
-    usearch_metric_kind_t metric;
+
+    usearch_metric_kind_t metric_kind;
+    usearch_metric_t metric;
+
     usearch_scalar_kind_t quantization;
     size_t dimensions;
     size_t capacity;
