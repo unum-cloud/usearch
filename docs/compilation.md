@@ -160,6 +160,12 @@ cd golang
 go test -v
 ```
 
+## Objective-C and Swift
+
+```sh
+swift build
+```
+
 ## C
 
 ### Linux
