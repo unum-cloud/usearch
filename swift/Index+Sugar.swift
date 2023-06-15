@@ -6,7 +6,7 @@
 //
 
 @available(iOS 13, macOS 10.15, tvOS 13.0, watchOS 6.0, *)
-extension Index {
+extension USearchIndex {
 
     public func add(label: UInt32, vector: ArraySlice<Float32>) -> () {
         vector.withContiguousStorageIfAvailable {
@@ -28,7 +28,7 @@ extension Index {
 
     public func add(label: UInt32, vector: ArraySlice<Float64>) -> () {
         vector.withContiguousStorageIfAvailable {
-            addPrecise(label: label, vector: $0.baseAddress!)
+            addDouble(label: label, vector: $0.baseAddress!)
         }
     }
 
@@ -36,7 +36,7 @@ extension Index {
         var matches: [UInt32] = Array(repeating: 0, count: count)
         var distances: [Float] = Array(repeating: 0, count: count)
         let results = vector.withContiguousStorageIfAvailable {
-            searchPrecise(vector: $0.baseAddress!, count: CUnsignedInt(count), labels: &matches, distances: &distances)
+            searchDouble(vector: $0.baseAddress!, count: CUnsignedInt(count), labels: &matches, distances: &distances)
         }
         matches.removeLast(count - Int(results!))
         distances.removeLast(count - Int(results!))
@@ -48,7 +48,7 @@ extension Index {
     @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, *)
     public func add(label: UInt32, vector: ArraySlice<Float16>) -> () {
         vector.withContiguousStorageIfAvailable { buffer in
-            addImprecise(label: label, vector: buffer.baseAddress!)
+            addHalf(label: label, vector: buffer.baseAddress!)
         }
     }
 
@@ -57,7 +57,7 @@ extension Index {
         var matches: [UInt32] = Array(repeating: 0, count: count)
         var distances: [Float] = Array(repeating: 0, count: count)
         let results = vector.withContiguousStorageIfAvailable {
-            searchImprecise(vector: $0.baseAddress!, count: CUnsignedInt(count), labels: &matches, distances: &distances)
+            searchHalf(vector: $0.baseAddress!, count: CUnsignedInt(count), labels: &matches, distances: &distances)
         }
         matches.removeLast(count - Int(results!))
         distances.removeLast(count - Int(results!))

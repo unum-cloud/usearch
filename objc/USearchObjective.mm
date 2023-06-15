@@ -2,7 +2,7 @@
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
-#import "index_punned_dense.hpp"
+#import <usearch/index_punned_dense.hpp>
 #pragma clang diagnostic pop
 
 using namespace unum::usearch;
@@ -12,7 +12,47 @@ using distance_t = punned_distance_t;
 using punned_t = index_punned_dense_gt<UInt32>;
 using shared_index_t = std::shared_ptr<punned_t>;
 
-@interface Index ()
+metric_kind_t to_native_metric(USearchMetric m) {
+    switch (m) {
+        case USearchMetricIP:
+            return metric_kind_t::ip_k;
+        case USearchMetricCos:
+            return metric_kind_t::cos_k;
+        case USearchMetricL2sq:
+            return metric_kind_t::l2sq_k;
+        case USearchMetricHamming:
+            return metric_kind_t::hamming_k;
+        case USearchMetricHaversine:
+            return metric_kind_t::haversine_k;
+        case USearchMetricJaccard:
+            return metric_kind_t::jaccard_k;
+        case USearchMetricPearson:
+            return metric_kind_t::pearson_k;
+        case USearchMetricSorensen:
+            return metric_kind_t::sorensen_k;
+        case USearchMetricTanimoto:
+            return metric_kind_t::tanimoto_k;
+        default:
+            return metric_kind_t::unknown_k;
+    }
+}
+
+scalar_kind_t to_native_scalar(USearchScalar m) {
+    switch (m) {
+        case USearchScalarF8:
+            return scalar_kind_t::f8_k;
+        case USearchScalarF16:
+            return scalar_kind_t::f16_k;
+        case USearchScalarF32:
+            return scalar_kind_t::f32_k;
+        case USearchScalarF64:
+            return scalar_kind_t::f64_k;
+        default:
+            return scalar_kind_t::unknown_k;
+    }
+}
+
+@interface USearchIndex ()
 
 @property (readonly) shared_index_t native;
 
@@ -20,7 +60,7 @@ using shared_index_t = std::shared_ptr<punned_t>;
 
 @end
 
-@implementation Index
+@implementation USearchIndex
 
 - (instancetype)initWithIndex:(shared_index_t)native {
     self = [super init];
@@ -48,38 +88,21 @@ using shared_index_t = std::shared_ptr<punned_t>;
     return static_cast<UInt32>(_native->capacity());
 }
 
-- (UInt32)expansion_add {
-    return static_cast<UInt32>(_native->config().expansion_add);
+- (UInt32)expansionAdd {
+    return static_cast<UInt32>(_native->expansion_add());
 }
 
-- (UInt32)expansion_search {
-    return static_cast<UInt32>(_native->config().expansion_search);
+- (UInt32)expansionSearch {
+    return static_cast<UInt32>(_native->expansion_search());
 }
 
-+ (instancetype)indexIP:(UInt32)dimensions connectivity:(UInt32)connectivity {
++ (instancetype)make:(USearchMetric)metric dimensions:(UInt32)dimensions connectivity:(UInt32)connectivity quantization:(USearchScalar)quantization{
     std::size_t dims = static_cast<std::size_t>(dimensions);
     index_config_t config;
 
     config.connectivity = static_cast<std::size_t>(connectivity);
-    shared_index_t ptr = std::make_shared<punned_t>(punned_t::ip(dims, scalar_kind_t::f32_k, config));
-    return [[Index alloc] initWithIndex:ptr];
-}
-
-+ (instancetype)indexL2sq:(UInt32)dimensions connectivity:(UInt32)connectivity {
-    std::size_t dims = static_cast<std::size_t>(dimensions);
-    index_config_t config;
-
-    config.connectivity = static_cast<std::size_t>(connectivity);
-    shared_index_t ptr = std::make_shared<punned_t>(punned_t::l2sq(dims, scalar_kind_t::f32_k, config));
-    return [[Index alloc] initWithIndex:ptr];
-}
-
-+ (instancetype)indexHaversine:(UInt32)connectivity {
-    index_config_t config;
-
-    config.connectivity = static_cast<std::size_t>(connectivity);
-    shared_index_t ptr = std::make_shared<punned_t>(punned_t::haversine(scalar_kind_t::f32_k, config));
-    return [[Index alloc] initWithIndex:ptr];
+    shared_index_t ptr = std::make_shared<punned_t>(punned_t::make(dims, to_native_metric(metric), config, to_native_scalar(quantization)));
+    return [[USearchIndex alloc] initWithIndex:ptr];
 }
 
 - (void)addSingle:(UInt32)label
@@ -96,12 +119,12 @@ using shared_index_t = std::shared_ptr<punned_t>;
     return static_cast<UInt32>(found);
 }
 
-- (void)addPrecise:(UInt32)label
+- (void)addDouble:(UInt32)label
             vector:(Float64 const *_Nonnull)vector {
     _native->add(label, (f64_t const *)vector);
 }
 
-- (UInt32)searchPrecise:(Float64 const *_Nonnull)vector
+- (UInt32)searchDouble:(Float64 const *_Nonnull)vector
                   count:(UInt32)wanted
                  labels:(UInt32 *_Nullable)labels
               distances:(Float32 *_Nullable)distances {
@@ -110,12 +133,12 @@ using shared_index_t = std::shared_ptr<punned_t>;
     return static_cast<UInt32>(found);
 }
 
-- (void)addImprecise:(UInt32)label
+- (void)addHalf:(UInt32)label
               vector:(void const *_Nonnull)vector {
     _native->add(label, (f16_bits_t const *)vector);
 }
 
-- (UInt32)searchImprecise:(void const *_Nonnull)vector
+- (UInt32)searchHalf:(void const *_Nonnull)vector
                     count:(UInt32)wanted
                    labels:(UInt32 *_Nullable)labels
                 distances:(Float32 *_Nullable)distances {

@@ -2143,8 +2143,9 @@ class index_gt {
     node_t node_malloc_(label_t label, vector_view_t vector, level_t level, bool store_vector) noexcept {
 
         std::size_t dim = vector.size();
-        std::size_t stored_vector_bytes = node_vector_bytes_(dim) * store_vector;
-        std::size_t node_bytes = node_bytes_(dim, level) - node_vector_bytes_(dim) * !store_vector;
+        std::size_t stored_vector_bytes = node_vector_bytes_(static_cast<dim_t>(dim)) * std::size_t(store_vector);
+        std::size_t node_bytes = node_bytes_(static_cast<dim_t>(dim), level) -
+                                 node_vector_bytes_(static_cast<dim_t>(dim)) * std::size_t(!store_vector);
 
         byte_t* data = (byte_t*)point_allocator_.allocate(node_bytes);
         if (!data)
