@@ -549,8 +549,8 @@ void report_expected_losses(persisted_dataset_gt<float, vector_id_t> const& data
 
     auto vec1 = dataset.vector(0);
     auto vec2 = dataset.query(0);
-    std::vector<f16_bits_t> vec1f16(dataset.dimensions());
-    std::vector<f16_bits_t> vec2f16(dataset.dimensions());
+    std::vector<f16_t> vec1f16(dataset.dimensions());
+    std::vector<f16_t> vec2f16(dataset.dimensions());
     std::transform(vec1, vec1 + dataset.dimensions(), vec1f16.data(), [](float v) { return v; });
     std::transform(vec2, vec2 + dataset.dimensions(), vec2f16.data(), [](float v) { return v; });
     std::vector<f8_bits_t> vec1f8(dataset.dimensions());
@@ -560,7 +560,7 @@ void report_expected_losses(persisted_dataset_gt<float, vector_id_t> const& data
 
 #if 0
     auto ip_default = ip_gt<float>{}(vec1, vec2, dataset.dimensions());
-    auto ip_f16 = ip_gt<f16_bits_t, float>{}(vec1f16.data(), vec2f16.data(), dataset.dimensions());
+    auto ip_f16 = ip_gt<f16_t, float>{}(vec1f16.data(), vec2f16.data(), dataset.dimensions());
     auto ip_f8 = ip_gt<f8_bits_t, float>{}(vec1f8.data(), vec2f8.data(), dataset.dimensions());
 
 #if defined(__AVX512F__)

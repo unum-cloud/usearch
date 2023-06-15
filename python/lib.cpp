@@ -73,7 +73,7 @@ template <typename scalar_at> metric_t udf(std::size_t metric_uintptr) {
 metric_t udf(std::size_t metric_uintptr, scalar_kind_t accuracy) {
     switch (accuracy) {
     case scalar_kind_t::f8_k: return udf<f8_bits_t>(metric_uintptr);
-    case scalar_kind_t::f16_k: return udf<f16_bits_t>(metric_uintptr);
+    case scalar_kind_t::f16_k: return udf<f16_t>(metric_uintptr);
     case scalar_kind_t::f32_k: return udf<f32_t>(metric_uintptr);
     case scalar_kind_t::f64_k: return udf<f64_t>(metric_uintptr);
     default: return {};
@@ -137,7 +137,7 @@ static void add_one_to_index(punned_index_py_t& index, label_t label, py::buffer
     else if (vector_info.format == "c" || vector_info.format == "b")
         index.add(label, reinterpret_cast<f8_bits_t const*>(vector_data), config).error.raise();
     else if (vector_info.format == "e")
-        index.add(label, reinterpret_cast<f16_bits_t const*>(vector_data), config).error.raise();
+        index.add(label, reinterpret_cast<f16_t const*>(vector_data), config).error.raise();
     else if (vector_info.format == "f" || vector_info.format == "f4" || vector_info.format == "<f4")
         index.add(label, reinterpret_cast<float const*>(vector_data), config).error.raise();
     else if (vector_info.format == "d" || vector_info.format == "f8" || vector_info.format == "<f8")
@@ -206,8 +206,7 @@ static void add_many_to_index(                                       //
             config.store_vector = copy;
             config.thread = thread_idx;
             label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
-            f16_bits_t const* vector =
-                reinterpret_cast<f16_bits_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
+            f16_t const* vector = reinterpret_cast<f16_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
             index.add(label, vector, config).error.raise();
         });
     else if (vectors_info.format == "f" || vectors_info.format == "f4" || vectors_info.format == "<f4")
@@ -259,7 +258,7 @@ static py::tuple search_one_in_index(punned_index_py_t& index, py::buffer vector
         result.error.raise();
         count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
     } else if (vector_info.format == "e") {
-        punned_search_result_t result = index.search(reinterpret_cast<f16_bits_t const*>(vector_data), wanted, config);
+        punned_search_result_t result = index.search(reinterpret_cast<f16_t const*>(vector_data), wanted, config);
         result.error.raise();
         count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
     } else if (vector_info.format == "f" || vector_info.format == "f4" || vector_info.format == "<f4") {
@@ -348,7 +347,7 @@ static py::tuple search_many_in_index( //
             search_config_t config;
             config.thread = thread_idx;
             config.exact = exact;
-            f16_bits_t const* vector = (f16_bits_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
+            f16_t const* vector = (f16_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
             punned_search_result_t result = index.search(vector, wanted, config);
             result.error.raise();
             counts_py1d(task_idx) =
@@ -406,7 +405,7 @@ template <typename index_at> py::array get_member(index_at const& index, label_t
     else if (scalar_kind == scalar_kind_t::f64_k)
         return get_typed_member<f64_t>(index, label);
     else if (scalar_kind == scalar_kind_t::f16_k)
-        return get_typed_member<f16_bits_t, f16_native_t>(index, label);
+        return get_typed_member<f16_t>(index, label);
     else if (scalar_kind == scalar_kind_t::f8_k)
         return get_typed_member<f8_bits_t, std::int8_t>(index, label);
     else if (scalar_kind == scalar_kind_t::b1x8_k)
