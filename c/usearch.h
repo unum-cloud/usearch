@@ -5,9 +5,10 @@
 
 typedef void* usearch_index_t;
 typedef uint32_t usearch_label_t;
+typedef float usearch_distance_t;
 typedef char const* usearch_error_t;
 
-typedef float (*)(void const*, void const*) usearch_metric_t;
+typedef usearch_distance_t (*)(void const*, void const*) usearch_metric_t;
 
 typedef enum usearch_metric_kind_t {
     usearch_metric_ip_k = 0,
@@ -57,18 +58,25 @@ size_t usearch_dimensions(usearch_index_t, usearch_error_t*);
 size_t usearch_connectivity(usearch_index_t, usearch_error_t*);
 
 void usearch_reserve(usearch_index_t, size_t capacity, usearch_error_t*);
-void usearch_add(usearch_index_t, usearch_label_t, float const* vector, usearch_error_t*);
+
+void usearch_add(                                                                            //
+    usearch_index_t, usearch_label_t, void const* vector, usearch_scalar_kind_t vector_kind, //
+    usearch_error_t*);
+
+bool usearch_contains(usearch_index_t, usearch_label_t, usearch_error_t*);
 
 /**
  *  @brief      Performs k-Approximate Nearest Neighbors Search.
  *  @return     Number of found matches.
  */
-size_t usearch_search(                                                //
-    usearch_index_t, float const* query_vector, size_t results_limit, //
-    usearch_label_t* found_labels, float* found_distances, usearch_error_t*);
+size_t usearch_search(                                                                                 //
+    usearch_index_t, void const* query_vector, usearch_scalar_kind_t query_kind, size_t results_limit, //
+    usearch_label_t* found_labels, usearch_distance_t* found_distances, usearch_error_t*);
 
-bool usearch_contains(usearch_index_t, usearch_label_t, usearch_error_t*);
-void usearch_get(usearch_index_t, usearch_label_t, float* vector, usearch_error_t*);
+bool usearch_get(                     //
+    usearch_index_t, usearch_label_t, //
+    void* vector, usearch_scalar_kind_t vector_kind, usearch_error_t*);
+
 void usearch_remove(usearch_index_t, usearch_label_t, usearch_error_t*);
 
 #endif
