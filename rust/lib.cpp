@@ -98,7 +98,7 @@ scalar_kind_t rust_to_cpp_scalar(ScalarKind value) {
     case ScalarKind::F16: return scalar_kind_t::f16_k;
     case ScalarKind::F32: return scalar_kind_t::f32_k;
     case ScalarKind::F64: return scalar_kind_t::f64_k;
-    case ScalarKind::B1x8: return scalar_kind_t::b1x8_k;
+    case ScalarKind::B1: return scalar_kind_t::b1x8_k;
     default: return scalar_kind_t::unknown_k;
     }
 }

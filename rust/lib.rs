@@ -24,7 +24,7 @@ pub mod ffi {
         F32,
         F16,
         F8,
-        B1x8,
+        B1,
     }
 
     struct IndexOptions {

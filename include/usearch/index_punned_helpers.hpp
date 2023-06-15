@@ -161,6 +161,8 @@ using punned_metric_t = std::function<punned_distance_t(punned_vector_view_t, pu
 class f8_bits_t;
 class f16_bits_t;
 
+// using f16_native_t = __bf16;
+
 #if defined(__AVX512F__)
 #define USEARCH_F16_NATIVE_SUPPORT 1
 using f16_native_t = _Float16;
