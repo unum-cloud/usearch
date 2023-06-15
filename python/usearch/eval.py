@@ -1,4 +1,3 @@
-from __future__ import annotations
 from time import time_ns
 from typing import Tuple, Any, Callable, Union, Optional, List
 from dataclasses import dataclass, asdict
@@ -246,7 +245,7 @@ class AddTask:
         self.labels = self.labels[new_order]
         self.vectors = self.vectors[new_order, :]
 
-    def slices(self, batch_size: int) -> List[AddTask]:
+    def slices(self, batch_size: int) -> list:
         """Splits this dataset into smaller chunks."""
 
         return [
@@ -255,7 +254,7 @@ class AddTask:
                 vectors=self.vectors[start_row:start_row+batch_size, :],
             ) for start_row in range(0, self.count, batch_size)]
 
-    def clusters(self, number_of_clusters: int) -> List[AddTask]:
+    def clusters(self, number_of_clusters: int) -> list:
         """Splits this dataset into smaller chunks."""
 
         from sklearn.cluster import KMeans
@@ -291,7 +290,7 @@ class SearchTask:
             recall_at_one=results.recall_first(self.neighbors[:, 0].flatten()),
         )
 
-    def slices(self, batch_size: int) -> List[SearchTask]:
+    def slices(self, batch_size: int) -> list:
         """Splits this dataset into smaller chunks."""
 
         return [
@@ -312,7 +311,7 @@ class Evaluation:
     def for_dataset(
             dataset: Dataset,
             batch_size: int = 0,
-            clusters: int = 1) -> Evaluation:
+            clusters: int = 1):
 
         tasks = []
         add = AddTask(
