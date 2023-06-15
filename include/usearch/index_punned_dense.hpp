@@ -239,11 +239,11 @@ class index_punned_dense_gt {
     search_result_t search_around(label_t hint, f32_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f32); }
     search_result_t search_around(label_t hint, f64_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f64); }
 
-    void reconstruct(label_t label, b1x8_t* vector) const { return reconstruct_(label, vector, casts_.to_b1x8); }
-    void reconstruct(label_t label, f8_bits_t* vector) const { return reconstruct_(label, vector, casts_.to_f8); }
-    void reconstruct(label_t label, f16_t* vector) const { return reconstruct_(label, vector, casts_.to_f16); }
-    void reconstruct(label_t label, f32_t* vector) const { return reconstruct_(label, vector, casts_.to_f32); }
-    void reconstruct(label_t label, f64_t* vector) const { return reconstruct_(label, vector, casts_.to_f64); }
+    bool get(label_t label, b1x8_t* vector) const { return get_(label, vector, casts_.to_b1x8); }
+    bool get(label_t label, f8_bits_t* vector) const { return get_(label, vector, casts_.to_f8); }
+    bool get(label_t label, f16_t* vector) const { return get_(label, vector, casts_.to_f16); }
+    bool get(label_t label, f32_t* vector) const { return get_(label, vector, casts_.to_f32); }
+    bool get(label_t label, f64_t* vector) const { return get_(label, vector, casts_.to_f64); }
     // clang-format on
 
     static index_punned_dense_gt make(                       //
@@ -368,14 +368,22 @@ class index_punned_dense_gt {
         return lookup_table_.at(label);
     }
 
-    template <typename scalar_at> void reconstruct_(label_t label, scalar_at* reconstructed, cast_t const& cast) const {
-        id_t id = lookup_id_(label);
+    template <typename scalar_at> bool get_(label_t label, scalar_at* reconstructed, cast_t const& cast) const {
+        id_t id;
+        {
+            shared_lock_t lock(lookup_table_mutex_);
+            auto it = lookup_table_.find(label);
+            if (it == lookup_table_.end())
+                return false;
+            id = it->second;
+        }
         member_citerator_t iterator = typed_->cbegin() + id;
         member_cref_t member = *iterator;
         byte_t const* casted_vector = reinterpret_cast<byte_t const*>(member.vector.data());
         bool casted = cast(casted_vector, casted_vector_bytes_, (byte_t*)reconstructed);
         if (!casted)
             std::memcpy(reconstructed, casted_vector, casted_vector_bytes_);
+        return true;
     }
 
     template <typename scalar_at> add_result_t add_(label_t label, scalar_at const* vector, cast_t const& cast) {

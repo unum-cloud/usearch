@@ -79,13 +79,15 @@ def test_index(
     assert index.ndim == ndim
     assert index.connectivity == connectivity
 
-    limit = 0.7 if numpy_type != np.byte else 70
-    vector = np.random.uniform(0, limit, (index.ndim)).astype(numpy_type)
+    vector = random_vectors(count=1, ndim=ndim, dtype=numpy_type).flatten()
 
     index.add(42, vector)
 
     assert 42 in index
     assert 42 in index.labels
+    assert 43 not in index
+    assert index[42] is not None
+    assert index[43] is None
     if numpy_type != np.byte:
         assert np.allclose(index[42], vector, atol=0.1)
 

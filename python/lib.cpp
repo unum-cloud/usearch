@@ -392,14 +392,15 @@ template <typename index_at> void view_index(index_at& index, std::string const&
 // clang-format on
 
 template <typename internal_at, typename external_at = internal_at, typename index_at = void>
-py::array_t<external_at> get_typed_member(index_at const& index, label_t label) {
+py::object get_typed_member(index_at const& index, label_t label) {
     py::array_t<external_at> result_py(static_cast<Py_ssize_t>(index.scalar_words()));
     auto result_py1d = result_py.template mutable_unchecked<1>();
-    index.reconstruct(label, (internal_at*)&result_py1d(0));
-    return result_py;
+    if (!index.get(label, (internal_at*)&result_py1d(0)))
+        return py::none();
+    return py::object(result_py);
 }
 
-template <typename index_at> py::array get_member(index_at const& index, label_t label, scalar_kind_t scalar_kind) {
+template <typename index_at> py::object get_member(index_at const& index, label_t label, scalar_kind_t scalar_kind) {
     if (scalar_kind == scalar_kind_t::f32_k)
         return get_typed_member<f32_t>(index, label);
     else if (scalar_kind == scalar_kind_t::f64_k)
