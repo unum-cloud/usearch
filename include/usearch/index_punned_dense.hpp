@@ -540,6 +540,21 @@ class index_punned_dense_gt {
         return pun_metric_<f16_bits_t>(cos_gt<f16_bits_t, f32_t>{});
     }
 
+    static metric_and_meta_t cos_metric_f8_(std::size_t dimensions) {
+        (void)dimensions;
+#if defined(USEARCH_USE_SIMSIMD)
+#if defined(USEARCH_IS_ARM)
+        if (dimensions % 16 == 0)
+            return {
+                pun_metric_<int8_t>(
+                    [=](int8_t const* a, int8_t const* b) { return 1.f - simsimd_cos_i8x16neon(a, b, dimensions); }),
+                isa_t::neon_k,
+            };
+#endif
+#endif
+        return pun_metric_<f8_bits_t>(cos_f8_t{dimensions});
+    }
+
     static metric_and_meta_t ip_metric_(std::size_t dimensions, scalar_kind_t accuracy) {
         switch (accuracy) {
         case scalar_kind_t::f32_k:
@@ -549,7 +564,7 @@ class index_punned_dense_gt {
             // Dot-product accumulates error, Cosine-distance normalizes it
             return cos_metric_f16_(dimensions);
 
-        case scalar_kind_t::f8_k: return pun_metric_<f8_bits_t>(cos_f8_t{dimensions});
+        case scalar_kind_t::f8_k: return cos_metric_f8_(dimensions);
         case scalar_kind_t::f64_k: return pun_metric_<f64_t>(ip_gt<f64_t>{});
         default: return {};
         }
@@ -567,7 +582,7 @@ class index_punned_dense_gt {
 
     static metric_and_meta_t cos_metric_(std::size_t dimensions, scalar_kind_t accuracy) {
         switch (accuracy) {
-        case scalar_kind_t::f8_k: return pun_metric_<f8_bits_t>(cos_f8_t{dimensions});
+        case scalar_kind_t::f8_k: return cos_metric_f8_(dimensions);
         case scalar_kind_t::f16_k: return cos_metric_f16_(dimensions);
         case scalar_kind_t::f32_k: return pun_metric_<f32_t>(cos_gt<f32_t>{});
         case scalar_kind_t::f64_k: return pun_metric_<f64_t>(cos_gt<f64_t>{});
