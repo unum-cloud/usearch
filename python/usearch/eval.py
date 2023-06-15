@@ -1,4 +1,3 @@
-from time import time_ns
 from typing import Tuple, Any, Callable, Union, Optional, List
 from dataclasses import dataclass, asdict
 from collections import defaultdict
@@ -7,6 +6,17 @@ import numpy as np
 
 from usearch.io import load_matrix
 from usearch.index import Index, Matches, MetricKind, MetricKindBitwise
+
+
+# For compatibility with Python 3.6
+try:
+    from time import time_ns
+except ImportError:
+    from datetime import datetime
+
+    def time_ns():
+        now = datetime.now()
+        return int(now.timestamp() * 1e9)
 
 
 def random_vectors(
