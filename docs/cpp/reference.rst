@@ -4,4 +4,4 @@ API Reference
 ===============
 usearch
 ===============
-.. doxygenfile:: usearch.hpp
+.. doxygenfile:: index.hpp

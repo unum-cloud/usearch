@@ -20,14 +20,14 @@
 #include <napi.h>
 #include <node_api.h>
 
-#include "punned.hpp"
+#include <usearch/index_punned_dense.hpp>
 
 using namespace unum::usearch;
 using namespace unum;
 
 using label_t = std::uint32_t;
 using distance_t = punned_distance_t;
-using punned_t = punned_gt<label_t>;
+using punned_t = index_punned_dense_gt<label_t>;
 
 class Index : public Napi::ObjectWrap<Index> {
   public:
@@ -78,8 +78,7 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
 
     int length = ctx.Length();
     if (length == 0 || length >= 2 || !ctx[0].IsObject()) {
-        Napi::TypeError::New(
-            env, "Pass args as named objects: dimensions: uint, capacity: uint, metric: [ip, cos, l2sq, haversine]")
+        Napi::TypeError::New(env, "Pass args as named objects: dimensions: uint, capacity: uint, metric: str")
             .ThrowAsJavaScriptException();
         return;
     }
@@ -89,67 +88,44 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
 
     index_config_t config;
     index_limits_t limits;
+    std::size_t expansion_add = default_expansion_add();
+    std::size_t expansion_search = default_expansion_search();
+
     if (params.Has("capacity"))
         limits.elements = params.Get("capacity").As<Napi::Number>().Uint32Value();
     if (params.Has("connectivity"))
         config.connectivity = params.Get("connectivity").As<Napi::Number>().Uint32Value();
+    if (params.Has("expansion_add"))
+        expansion_add = params.Get("expansion_add").As<Napi::Number>().Uint32Value();
+    if (params.Has("expansion_search"))
+        expansion_search = params.Get("expansion_search").As<Napi::Number>().Uint32Value();
 
-    accuracy_t accuracy = accuracy_t::f32_k;
+    scalar_kind_t accuracy = scalar_kind_t::f32_k;
     if (params.Has("accuracy")) {
-        std::string accuracy_str = params.Get("connectivity").As<Napi::String>().Utf8Value();
-        if (accuracy_str == "f32")
-            accuracy = accuracy_t::f32_k;
-        else if (accuracy_str == "f64")
-            accuracy = accuracy_t::f64_k;
-        else if (accuracy_str == "f16")
-            accuracy = accuracy_t::f16_k;
-        else if (accuracy_str == "f8")
-            accuracy = accuracy_t::f8_k;
-        else {
-            Napi::TypeError::New(env, "Supported metrics are: [ip, cos, l2sq, haversine]").ThrowAsJavaScriptException();
+        std::string accuracy_str = params.Get("accuracy").As<Napi::String>().Utf8Value();
+        expected_gt<scalar_kind_t> expected = scalar_kind_from_name(accuracy_str.c_str(), accuracy_str.size());
+        if (!expected) {
+            Napi::TypeError::New(env, expected.error.what()).ThrowAsJavaScriptException();
             return;
         }
+        accuracy = *expected;
     }
 
     // By default we use the Inner Product similarity
+    metric_kind_t metric_kind = metric_kind_t::ip_k;
     if (params.Has("metric")) {
-        std::string name = params.Get("metric").As<Napi::String>().Utf8Value();
-        if (name == "l2sq" || name == "euclidean_sq") {
-            if (!dimensions) {
-                Napi::TypeError::New(env, "Please define the number of dimensions").ThrowAsJavaScriptException();
-                return;
-            }
-            native_.reset(new punned_t(punned_t::l2sq(dimensions, accuracy, config)));
-            native_->reserve(limits);
-        } else if (name == "ip" || name == "inner" || name == "dot") {
-            if (!dimensions) {
-                Napi::TypeError::New(env, "Please define the number of dimensions").ThrowAsJavaScriptException();
-                return;
-            }
-            native_.reset(new punned_t(punned_t::ip(dimensions, accuracy, config)));
-            native_->reserve(limits);
-        } else if (name == "cos" || name == "angular") {
-            if (!dimensions) {
-                Napi::TypeError::New(env, "Please define the number of dimensions").ThrowAsJavaScriptException();
-                return;
-            }
-            native_.reset(new punned_t(punned_t::cos(dimensions, accuracy, config)));
-            native_->reserve(limits);
-        } else if (name == "haversine") {
-            native_.reset(new punned_t(punned_t::haversine(accuracy, config)));
-            native_->reserve(limits);
-        } else {
-            Napi::TypeError::New(env, "Supported metrics are: [ip, cos, l2sq, haversine]").ThrowAsJavaScriptException();
+        std::string metric_str = params.Get("metric").As<Napi::String>().Utf8Value();
+        expected_gt<metric_kind_t> expected = metric_from_name(metric_str.c_str(), metric_str.size());
+        if (!expected) {
+            Napi::TypeError::New(env, expected.error.what()).ThrowAsJavaScriptException();
             return;
         }
-    } else {
-        if (!dimensions) {
-            Napi::TypeError::New(env, "Please define the number of dimensions").ThrowAsJavaScriptException();
-            return;
-        }
-        native_.reset(new punned_t(punned_t::ip(dimensions, accuracy, config)));
-        native_->reserve(limits);
+        metric_kind = *expected;
     }
+
+    native_.reset(
+        new punned_t(punned_t::make(dimensions, metric_kind, config, accuracy, expansion_add, expansion_search)));
+    native_->reserve(limits);
 }
 
 Napi::Value Index::GetDimensions(Napi::CallbackInfo const& ctx) {

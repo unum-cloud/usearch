@@ -18,7 +18,6 @@ let package = Package(
             sources: ["USearchObjective.mm"],
             cxxSettings: [
                 .headerSearchPath("../include/"),
-                .headerSearchPath("../src/"),
                 .headerSearchPath("../fp16/include/"),
                 .headerSearchPath("../robin-map/include/"),
                 .headerSearchPath("../simismd/include/")

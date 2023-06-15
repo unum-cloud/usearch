@@ -3,19 +3,16 @@
 
 #include <memory> // `std::shared_ptr`
 
-#include "punned.hpp"
+#include <usearch/index_punned_dense.hpp>
 
 struct Matches;
-
-enum class Metric;
-
-enum class Accuracy;
+struct IndexOptions;
 
 class Index {
   public:
     using label_t = std::uint32_t;
     using distance_t = unum::usearch::punned_distance_t;
-    using punned_t = unum::usearch::punned_gt<label_t>;
+    using punned_t = unum::usearch::index_punned_dense_gt<label_t>;
 
     Index(std::unique_ptr<punned_t> index);
 
@@ -40,7 +37,4 @@ class Index {
     std::unique_ptr<punned_t> index_;
 };
 
-std::unique_ptr<Index> new_ip(size_t dims, rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search);
-std::unique_ptr<Index> new_l2sq(size_t dims, rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search);
-std::unique_ptr<Index> new_cos(size_t dims, rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search);
-std::unique_ptr<Index> new_haversine(rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search);
+std::unique_ptr<Index> new_index(IndexOptions const& options);

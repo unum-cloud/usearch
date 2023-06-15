@@ -38,7 +38,7 @@
 
 #include <simsimd/simsimd.h>
 
-#include "punned.hpp"
+#include <usearch/index_punned_dense.hpp>
 
 using namespace unum::usearch;
 using namespace unum;
@@ -432,46 +432,58 @@ struct args_t {
 
     bool big = false;
     bool native = false;
+
     bool quantize_f16 = false;
     bool quantize_f8 = false;
+    bool quantize_b1 = false;
 
     bool metric_ip = false;
     bool metric_l2 = false;
     bool metric_cos = false;
     bool metric_haversine = false;
-};
+    bool metric_hamming = false;
+    bool metric_tanimoto = false;
+    bool metric_sorensen = false;
 
-template <typename index_at, typename dataset_at> //
-index_at punned_index_for_metric(dataset_at& dataset, args_t const& args, index_config_t config, accuracy_t accuracy) {
-    if (args.metric_l2) {
-        std::printf("-- Metric: Euclidean\n");
-        return index_at::l2sq(dataset.dimensions(), accuracy, config);
-    } else if (args.metric_cos) {
-        std::printf("-- Metric: Angular\n");
-        return index_at::cos(dataset.dimensions(), accuracy, config);
-    } else if (args.metric_haversine) {
-        std::printf("-- Metric: Haversine\n");
-        return index_at::haversine(accuracy, config);
-    } else {
-        std::printf("-- Metric: Inner Product\n");
-        return index_at::ip(dataset.dimensions(), accuracy, config);
+    metric_kind_t metric() const noexcept {
+        if (metric_l2)
+            return metric_kind_t::l2sq_k;
+        if (metric_cos)
+            return metric_kind_t::cos_k;
+        if (metric_haversine)
+            return metric_kind_t::haversine_k;
+        if (metric_hamming)
+            return metric_kind_t::hamming_k;
+        if (metric_tanimoto)
+            return metric_kind_t::tanimoto_k;
+        if (metric_sorensen)
+            return metric_kind_t::sorensen_k;
+        return metric_kind_t::ip_k;
     }
-}
+
+    scalar_kind_t accuracy() const noexcept {
+        if (quantize_f16)
+            return scalar_kind_t::f16_k;
+        if (quantize_f8)
+            return scalar_kind_t::f8_k;
+        if (quantize_b1)
+            return scalar_kind_t::b1x8_k;
+        return scalar_kind_t::f32_k;
+    }
+};
 
 template <typename index_at, typename dataset_at> //
 void run_punned(dataset_at& dataset, args_t const& args, index_config_t config, index_limits_t limits) {
 
-    accuracy_t accuracy = accuracy_t::f32_k;
-    if (args.quantize_f16)
-        accuracy = accuracy_t::f16_k;
-    if (args.quantize_f8)
-        accuracy = accuracy_t::f8_k;
+    scalar_kind_t accuracy = args.accuracy();
+    std::printf("-- Accuracy: %s\n", scalar_kind_name(accuracy));
 
-    std::printf("-- Accuracy: %s\n", accuracy_name(accuracy));
+    metric_kind_t kind = args.metric();
+    std::printf("-- Metric: %s\n", metric_kind_name(kind));
 
-    index_at index{punned_index_for_metric<index_at>(dataset, args, config, accuracy)};
+    index_at index = index_at::make(dataset.dimensions(), kind, config, accuracy);
     index.reserve(limits);
-    std::printf("-- Hardware acceleration: %s\n", isa_name(index.acceleration()));
+    std::printf("-- Hardware acceleration: %s\n", isa_name(index.isa()));
     std::printf("Will benchmark in-memory\n");
 
     single_shot(dataset, index, true);
@@ -518,7 +530,7 @@ void run_big_or_small(dataset_at& dataset, args_t const& args, index_config_t co
             run_typed<index_gt<ip_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config, limits);
         }
     } else
-        run_punned<punned_gt<std::size_t, neighbor_id_at>>(dataset, args, config, limits);
+        run_punned<index_punned_dense_gt<std::size_t, neighbor_id_at>>(dataset, args, config, limits);
 }
 
 void report_alternative_setups() {
@@ -537,8 +549,8 @@ void report_expected_losses(persisted_dataset_gt<float, vector_id_t> const& data
 
     auto vec1 = dataset.vector(0);
     auto vec2 = dataset.query(0);
-    std::vector<f16_bits_t> vec1f16(dataset.dimensions());
-    std::vector<f16_bits_t> vec2f16(dataset.dimensions());
+    std::vector<f16_t> vec1f16(dataset.dimensions());
+    std::vector<f16_t> vec2f16(dataset.dimensions());
     std::transform(vec1, vec1 + dataset.dimensions(), vec1f16.data(), [](float v) { return v; });
     std::transform(vec2, vec2 + dataset.dimensions(), vec2f16.data(), [](float v) { return v; });
     std::vector<f8_bits_t> vec1f8(dataset.dimensions());
@@ -548,7 +560,7 @@ void report_expected_losses(persisted_dataset_gt<float, vector_id_t> const& data
 
 #if 0
     auto ip_default = ip_gt<float>{}(vec1, vec2, dataset.dimensions());
-    auto ip_f16 = ip_gt<f16_bits_t, float>{}(vec1f16.data(), vec2f16.data(), dataset.dimensions());
+    auto ip_f16 = ip_gt<f16_t, float>{}(vec1f16.data(), vec2f16.data(), dataset.dimensions());
     auto ip_f8 = ip_gt<f8_bits_t, float>{}(vec1f8.data(), vec2f8.data(), dataset.dimensions());
 
 #if defined(__AVX512F__)
@@ -591,12 +603,16 @@ int main(int argc, char** argv) {
         (option("--rows-take") & value("integer", args.vectors_to_take)).doc("Number of vectors to take"),
         ( //
             option("--native").set(args.native).doc("Use raw templates instead of type-punned classes") |
-            option("--f16quant").set(args.quantize_f16).doc("Enable `f16_t` quantization") |
-            option("--f8quant").set(args.quantize_f8).doc("Enable `f8_t` quantization")),
+            option("-f16", "--f16quant").set(args.quantize_f16).doc("Enable `f16_t` quantization") |
+            option("-f8", "--f8quant").set(args.quantize_f8).doc("Enable `f8_t` quantization") |
+            option("-b1", "--b1quant").set(args.quantize_b1).doc("Enable `b1x8_t` quantization")),
         ( //
             option("--ip").set(args.metric_ip).doc("Choose Inner Product metric") |
             option("--l2sq").set(args.metric_l2).doc("Choose L2 Euclidean metric") |
             option("--cos").set(args.metric_cos).doc("Choose Angular metric") |
+            option("--hamming").set(args.metric_hamming).doc("Choose Hamming metric") |
+            option("--tanimoto").set(args.metric_tanimoto).doc("Choose Tanimoto metric") |
+            option("--sorensen").set(args.metric_sorensen).doc("Choose Sorensen metric") |
             option("--haversine").set(args.metric_haversine).doc("Choose Haversine metric")),
         option("-h", "--help").set(args.help).doc("Print this help information on this tool and exit"));
 
@@ -609,7 +625,7 @@ int main(int argc, char** argv) {
         exit(0);
     }
 
-    // Instead of relying on `multithreaded` from "punned.hpp" we will use OpenMP
+    // Instead of relying on `multithreaded` from "index_punned_dense.hpp" we will use OpenMP
     // to better estimate statistics between tasks batches, without having to recreate
     // the threads.
     omp_set_dynamic(true);
@@ -638,16 +654,16 @@ int main(int argc, char** argv) {
 
     index_config_t config;
     config.connectivity = args.connectivity;
-    config.expansion_add = args.expansion_add;
-    config.expansion_search = args.expansion_search;
+    // config.expansion_add = args.expansion_add;
+    // config.expansion_search = args.expansion_search;
     index_limits_t limits;
     limits.threads_add = limits.threads_search = args.threads;
     limits.elements = dataset.vectors_count();
 
     std::printf("- Index: \n");
     std::printf("-- Connectivity: %zu\n", config.connectivity);
-    std::printf("-- Expansion @ Add: %zu\n", config.expansion_add);
-    std::printf("-- Expansion @ Search: %zu\n", config.expansion_search);
+    // std::printf("-- Expansion @ Add: %zu\n", config.expansion_add);
+    // std::printf("-- Expansion @ Search: %zu\n", config.expansion_search);
 
     if (args.big)
         run_big_or_small<uint40_t>(dataset, args, config, limits);

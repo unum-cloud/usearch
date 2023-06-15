@@ -7,7 +7,7 @@ from collections import defaultdict
 import numpy as np
 
 from usearch.io import load_matrix
-from usearch.index import Index, Matches, MetricKind, BitwiseMetricKind
+from usearch.index import Index, Matches, MetricKind, MetricKindBitwise
 
 
 def random_vectors(
@@ -31,15 +31,20 @@ def random_vectors(
         metric = index.metric
 
     # Produce data
-    if metric in BitwiseMetricKind:
+    if metric in MetricKindBitwise:
         bit_vectors = np.random.randint(2, size=(count, ndim))
         bit_vectors = np.packbits(bit_vectors, axis=1)
         return bit_vectors
 
     else:
-        x = np.random.rand(count, ndim).astype(dtype)
-        if metric == MetricKind.IP:
-            return x / np.linalg.norm(x, axis=1, keepdims=True)
+
+        x = np.random.rand(count, ndim)
+        if dtype == np.int8:
+            x = (x * 100).astype(np.int8)
+        else:
+            x = x.astype(dtype)
+            if metric == MetricKind.IP:
+                return x / np.linalg.norm(x, axis=1, keepdims=True)
         return x
 
 
@@ -53,12 +58,11 @@ def recall_members(index: Index, *args, **kwargs) -> float:
     :return: Value from 0 to 1, for the share of found self-references
     :rtype: float
     """
-    vectors: np.ndarray = np.vstack([
-        index[i] for i in range(len(index))
-    ])
-    labels: np.ndarray = np.arange(vectors.shape[0])
-    matches: Matches = index.search(vectors, 1, *args, **kwargs)
-    return matches.recall_first(labels)
+    if len(index) == 0:
+        return 0
+
+    matches: Matches = index.search(index.vectors, 1, *args, **kwargs)
+    return matches.recall_first(index.labels)
 
 
 def measure_seconds(f: Callable) -> Tuple[float, Any]:

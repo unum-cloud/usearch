@@ -118,7 +118,7 @@ func (ind *Index) Destroy() {
 	if ind.opaque_handle == nil {
 		panic("index not initialized")
 	}
-	C.usearch_destroy(unsafe.Pointer(ind.opaque_handle))
+	C.usearch_free(unsafe.Pointer(ind.opaque_handle))
 	ind.opaque_handle = nil
 	ind.config = IndexConfig{}
 }

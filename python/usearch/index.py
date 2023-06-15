@@ -9,10 +9,9 @@ from typing import Optional, Callable, Union, NamedTuple, List, Iterable
 import numpy as np
 
 from usearch.compiled import Index as _CompiledIndex
-from usearch.compiled import SetsIndex as _CompiledSetsIndex
-from usearch.compiled import BitsIndex as _CompiledBitsIndex
+from usearch.compiled import SparseIndex as _CompiledSetsIndex
 
-from usearch.compiled import MetricKind
+from usearch.compiled import MetricKind, ScalarKind
 from usearch.compiled import (
     DEFAULT_CONNECTIVITY,
     DEFAULT_EXPANSION_ADD,
@@ -22,15 +21,43 @@ from usearch.compiled import (
     USES_SIMSIMD,
 )
 
-BitwiseMetricKind = (
-    MetricKind.BitwiseHamming,
-    MetricKind.BitwiseTanimoto,
-    MetricKind.BitwiseSorensen,
+MetricKindBitwise = (
+    MetricKind.Hamming,
+    MetricKind.Tanimoto,
+    MetricKind.Sorensen,
 )
 
-SetsIndex = _CompiledSetsIndex
+SparseIndex = _CompiledSetsIndex
 
 Label = np.longlong
+
+
+def _normalize_dtype(dtype) -> ScalarKind:
+    if dtype is None:
+        return ScalarKind.F32
+    if isinstance(dtype, ScalarKind):
+        return dtype
+
+    if isinstance(dtype, str):
+        _normalize = {
+            'f64': ScalarKind.F64,
+            'f32': ScalarKind.F32,
+            'f16': ScalarKind.F16,
+            'f8': ScalarKind.F8,
+            'b1': ScalarKind.B1,
+        }
+        return _normalize[dtype.lower()]
+
+    if not isinstance(dtype, ScalarKind):
+        _normalize = {
+            np.float64: ScalarKind.F64,
+            np.float32: ScalarKind.F32,
+            np.float16: ScalarKind.F16,
+            np.int8: ScalarKind.F8,
+        }
+        return _normalize[dtype]
+
+    return dtype
 
 
 class Matches(NamedTuple):
@@ -113,8 +140,8 @@ class Index:
         :type metric: Union[MetricKind, Callable, str], optional
             Kind of the distance function, or the Numba `cfunc` JIT-compiled object.
             Possible `MetricKind` values: IP, Cos, L2sq, Haversine, Pearson,
-            BitwiseHamming, BitwiseTanimoto, BitwiseSorensen.
-            Not every kind is JIT-able. For Jaccard distance, use `SetsIndex`.
+            Hamming, Tanimoto, Sorensen.
+            Not every kind is JIT-able. For Jaccard distance, use `SparseIndex`.
 
         :param dtype: Scalar type for internal vector storage, defaults to None
         :type dtype: str, optional
@@ -165,9 +192,9 @@ class Index:
                 'l2_sq': MetricKind.L2sq,
                 'haversine': MetricKind.Haversine,
                 'perason': MetricKind.Pearson,
-                'hamming': MetricKind.BitwiseHamming,
-                'tanimoto': MetricKind.BitwiseTanimoto,
-                'sorensen': MetricKind.BitwiseSorensen,
+                'hamming': MetricKind.Hamming,
+                'tanimoto': MetricKind.Tanimoto,
+                'sorensen': MetricKind.Sorensen,
             }
             metric = _normalize[metric.lower()]
 
@@ -202,27 +229,22 @@ class Index:
             raise ValueError(
                 'The `metric` must be Numba callback or a `MetricKind`')
 
-        if metric in BitwiseMetricKind:
-            self._compiled = _CompiledBitsIndex(
-                bits=ndim,
-                metric=self._metric_kind,
-                connectivity=connectivity,
-                expansion_add=expansion_add,
-                expansion_search=expansion_search,
-            )
+        if metric in MetricKindBitwise:
+            assert dtype is None or dtype == ScalarKind.B1
+            dtype = ScalarKind.B1
         else:
-            if dtype is None:
-                dtype = 'f32'
-            self._compiled = _CompiledIndex(
-                ndim=ndim,
-                metric=self._metric_kind,
-                metric_pointer=self._metric_pointer,
-                dtype=dtype,
-                connectivity=connectivity,
-                expansion_add=expansion_add,
-                expansion_search=expansion_search,
-                tune=tune,
-            )
+            dtype = _normalize_dtype(dtype)
+
+        self._compiled = _CompiledIndex(
+            ndim=ndim,
+            metric=self._metric_kind,
+            metric_pointer=self._metric_pointer,
+            dtype=dtype,
+            connectivity=connectivity,
+            expansion_add=expansion_add,
+            expansion_search=expansion_search,
+            tune=tune,
+        )
 
         self.path = path
         if path and os.path.exists(path):
@@ -340,7 +362,7 @@ class Index:
         return self._metric_kind
 
     @property
-    def dtype(self) -> str:
+    def dtype(self) -> ScalarKind:
         return self._compiled.dtype
 
     @property
@@ -386,6 +408,18 @@ class Index:
     @property
     def labels(self) -> np.ndarray:
         return self._compiled.labels
+
+    def get_vectors(
+            self,
+            labels: np.ndarray,
+            dtype: ScalarKind = ScalarKind.F32) -> np.ndarray:
+
+        dtype = _normalize_dtype(dtype)
+        return np.vstack([self._compiled.__getitem__(l, dtype) for l in labels])
+
+    @property
+    def vectors(self) -> np.ndarray:
+        return self.get_vectors(self.labels)
 
     def __delitem__(self, label: int):
         raise NotImplementedError()

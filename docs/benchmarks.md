@@ -55,7 +55,7 @@ Also worth noting, 8-bit quantization results in almost no accuracy loss and may
 
 Within this repository you will find two commonly used utilities:
 
-- `src/bench.cpp` the produces the `bench` binary for broad USearch benchmarks.
+- `cpp/bench.cpp` the produces the `bench` binary for broad USearch benchmarks.
 - `python/bench.py` for simple benchmarks against FAISS.
 
 To achieve best highest results we suggest compiling locally for the target architecture.
@@ -170,15 +170,6 @@ mkdir -p datasets/deep_1B/ && \
 
 ## Profiling
 
-Enabling Huge Pages:
-
-```sh
-sudo cat /proc/sys/vm/nr_hugepages
-sudo sysctl -w vm.nr_hugepages=2048
-sudo reboot
-sudo cat /proc/sys/vm/nr_hugepages
-```
-
 With `perf`:
 
 ```sh
@@ -189,3 +180,35 @@ sudo -E perf mem -d ./build_release/bench ...
 sudo -E perf record -F 1000 ./build_release/bench ...
 perf record -d -e arm_spe// -- ./build_release/bench ..
 ```
+
+### Caches
+
+```sh
+sudo perf stat -e 'faults,dTLB-loads,dTLB-load-misses,cache-misses,cache-references' ./build_release/bench ...
+```
+
+Typical output on a 1M vectors dataset is:
+
+```txt
+            255426      faults                                                      
+      305988813388      dTLB-loads                                                  
+        8845723783      dTLB-load-misses          #    2.89% of all dTLB cache accesses
+       20094264206      cache-misses              #    6.567 % of all cache refs    
+      305988812745      cache-references                                            
+
+       8.285148010 seconds time elapsed
+
+     500.705967000 seconds user
+       1.371118000 seconds sys
+```
+
+If you notice problems and the stalls are closer to 90%, it might be a good reason to consider enabling Huge Pages and tuning allocations alignment.
+To enable Huge Pages:
+
+```sh
+sudo cat /proc/sys/vm/nr_hugepages
+sudo sysctl -w vm.nr_hugepages=2048
+sudo reboot
+sudo cat /proc/sys/vm/nr_hugepages
+```
+

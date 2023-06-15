@@ -8,16 +8,41 @@ pub mod ffi {
         distances: Vec<f32>,
     }
 
+    enum MetricKind {
+        IP,
+        L2Sq,
+        Cos,
+        Pearson,
+        Haversine,
+        Hamming,
+        Tanimoto,
+        Sorensen,
+    }
+
+    enum ScalarKind {
+        F64,
+        F32,
+        F16,
+        F8,
+        B1,
+    }
+
+    struct IndexOptions {
+        dimensions: usize,
+        metric: MetricKind,
+        quantization: ScalarKind,
+        connectivity: usize,
+        expansion_add: usize,
+        expansion_search: usize,
+    }
+
     // C++ types and signatures exposed to Rust.
     unsafe extern "C++" {
         include!("lib.hpp");
 
         type Index;
 
-        pub fn new_ip(dimensions: usize, quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
-        pub fn new_l2sq(dimensions: usize, quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
-        pub fn new_cos(dimensions: usize, quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
-        pub fn new_haversine(quantization: &str, connectivity: usize, expansion_add: usize, expansion_search: usize) -> Result<UniquePtr<Index>>;
+        pub fn new_index(options: &IndexOptions) -> Result<UniquePtr<Index>>;
 
         pub fn reserve(self: &Index, capacity: usize) -> Result<()>;
 
@@ -29,9 +54,6 @@ pub mod ffi {
         pub fn add(self: &Index, label: u32, vector: &[f32]) -> Result<()>;
         pub fn search(self: &Index, query: &[f32], count: usize) -> Result<Matches>;
 
-        pub fn add_in_thread(self: &Index, label: u32, vector: &[f32], thread: usize) -> Result<()>;
-        pub fn search_in_thread(self: &Index, query: &[f32], count: usize, thread: usize) -> Result<Matches>;
-
         pub fn save(self: &Index, path: &str) -> Result<()>;
         pub fn load(self: &Index, path: &str) -> Result<()>;
         pub fn view(self: &Index, path: &str) -> Result<()>;
@@ -41,16 +63,24 @@ pub mod ffi {
 
 #[cfg(test)]
 mod tests {
-    use crate::ffi::new_ip;
-    use crate::ffi::new_l2sq;
-    use crate::ffi::new_cos;
-    use crate::ffi::new_haversine;
+    use crate::ffi::MetricKind;
+    use crate::ffi::ScalarKind;
+    use crate::ffi::IndexOptions;
+    use crate::ffi::new_index;
 
     #[test]
     fn integration() {
 
-        let quant = "f16";
-        let index = new_ip(5,  &quant, 0, 0, 0).unwrap();
+        let mut options = IndexOptions {
+            dimensions: 5,
+            metric: MetricKind::IP,
+            quantization: ScalarKind::F16,
+            connectivity: 0,
+            expansion_add: 0,
+            expansion_search: 0
+        };
+
+        let index = new_index(&options).unwrap();
     
         assert!(index.reserve(10).is_ok());
         assert!(index.capacity() >= 10);
@@ -75,9 +105,12 @@ mod tests {
         assert!(index.view("index.rust.usearch").is_ok());
     
         // Make sure every function is called at least once
-        assert!(new_ip(5,  &quant, 0, 0, 0).is_ok());
-        assert!(new_l2sq(5,  &quant, 0, 0, 0).is_ok());
-        assert!(new_cos(5,  &quant, 0, 0, 0).is_ok());
-        assert!(new_haversine(&quant, 0, 0, 0).is_ok());
+        assert!(new_index(&options).is_ok());
+        options.metric = MetricKind::L2Sq;
+        assert!(new_index(&options).is_ok());
+        options.metric = MetricKind::Cos;
+        assert!(new_index(&options).is_ok());
+        options.metric = MetricKind::Haversine;
+        assert!(new_index(&options).is_ok());
     }
 }

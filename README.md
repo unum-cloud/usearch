@@ -50,7 +50,7 @@ Linux • MacOS • Windows • Docker • WebAssembly 🔜
 - [x] USearch + UForm Transformers = [Semantic Search](#ai--vector-search--semantic-search).
 - [x] USearch + RDKit = [Molecule Search](#ai--vector-search--semantic-search).
 
-[usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/usearch.hpp
+[usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/index.hpp
 [obscure-use-cases]: https://ashvardanian.com/posts/abusing-vector-search
 
 ---
@@ -133,14 +133,14 @@ Of course, the latency of external memory access will be higher, but it is in pa
 
 There are two usage patters:
 
-1. Bare-bones with `usearch/usearch.hpp`, only available in C++.
+1. Bare-bones with `usearch/index.hpp`, only available in C++.
 2. Full-fat version with it's own threads, mutexes, type-punning, quantization, that is available both in C++ and is wrapped for higher-level bindings.
 
 ### C++
 
 #### Installation
 
-To use in a C++ project simply copy the `include/usearch/usearch.hpp` header into your project.
+To use in a C++ project simply copy the `include/usearch/index.hpp` header into your project.
 Alternatively fetch it with CMake:
 
 ```cmake
@@ -205,9 +205,9 @@ The following distances are pre-packaged:
 - `ip_gt<scalar_t>` for "Inner Product" or "Dot Product" distance.
 - `l2sq_gt<scalar_t>` for the squared "L2" or "Euclidean" distance.
 - `jaccard_gt<scalar_t>` for "Jaccard" distance between two ordered sets of unique elements.
-- `bitwise_hamming_gt<scalar_t>` for "Hamming" distance, as the number of shared bits in hashes.
-- `bitwise_tanimoto_gt<scalar_t>` for "Tanimoto" coefficient for bit-strings.
-- `bitwise_sorensen_gt<scalar_t>` for "Dice-Sorensen" coefficient for bit-strings.
+- `hamming_gt<scalar_t>` for "Hamming" distance, as the number of shared bits in hashes.
+- `tanimoto_gt<scalar_t>` for "Tanimoto" coefficient for bit-strings.
+- `sorensen_gt<scalar_t>` for "Dice-Sorensen" coefficient for bit-strings.
 - `pearson_correlation_gt<scalar_t>` for "Pearson" correlation between probability distributions.
 - `haversine_gt<scalar_t>` for "Haversine" or "Great Circle" distance between coordinates used in GIS applications.
 
@@ -299,19 +299,19 @@ Luckily, with the help of [Numba][numba], we can JIT compile a function with a m
 ```py
 from numba import cfunc, types, carray
 
+ndim = 256
 signature = types.float32(
     types.CPointer(types.float32),
-    types.CPointer(types.float32),
-    types.uint64, types.uint64)
+    types.CPointer(types.float32))
 
 @cfunc(signature)
-def python_dot(a, b, n, m):
-    a_array = carray(a, n)
-    b_array = carray(b, n)
+def python_dot(a, b):
+    a_array = carray(a, ndim)
+    b_array = carray(b, ndim)
     c = 0.0
-    for i in range(n):
+    for i in range(ndim):
         c += a_array[i] * b_array[i]
-    return c
+    return 1 - c
 
 index = Index(ndim=ndim, metric=python_dot.address)
 ```
@@ -374,8 +374,17 @@ cargo add usearch
 #### Quickstart
 
 ```rust
-let quant: &str = "f16";
-let index = new_ip(3, &quant, 0, 0, 0).unwrap();
+
+let options = IndexOptions {
+            dimensions: 5,
+            metric: MetricKind::IP,
+            quantization: ScalarKind::F16,
+            connectivity: 0,
+            expansion_add: 0,
+            expansion_search: 0
+        };
+
+let index = new_index(&options).unwrap();
 
 assert!(index.reserve(10).is_ok());
 assert!(index.capacity() >= 10);

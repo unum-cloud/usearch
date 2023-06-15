@@ -1,5 +1,5 @@
 /**
- *  @file usearch.hpp
+ *  @file index.hpp
  *  @author Ashot Vardanian
  *  @brief Single-header Vector Search.
  *  @date 2023-04-26
@@ -9,17 +9,9 @@
 #ifndef UNUM_USEARCH_HPP
 #define UNUM_USEARCH_HPP
 
-#if !defined(USEARCH_VERSION_MAJOR)
 #define USEARCH_VERSION_MAJOR 0
-#endif
-
-#if !defined(USEARCH_VERSION_MINOR)
 #define USEARCH_VERSION_MINOR 0
-#endif
-
-#if !defined(USEARCH_VERSION_PATCH)
 #define USEARCH_VERSION_PATCH 0
-#endif
 
 // Inferring C++ version
 #if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
@@ -206,14 +198,32 @@ template <typename at> class misaligned_ptr_gt {
 };
 
 /**
+ *  @brief  Non-owning memory range view, similar to `std::span`, but for C++11.
+ */
+template <typename scalar_at> class span_gt {
+    scalar_at* data_;
+    std::size_t size_;
+
+  public:
+    span_gt(scalar_at* begin, scalar_at const* end) noexcept : data_(begin), size_(end - begin) {}
+    span_gt(scalar_at* begin, std::size_t size) noexcept : data_(begin), size_(size) {}
+    scalar_at* data() const noexcept { return data_; }
+    std::size_t size() const noexcept { return size_; }
+    operator scalar_at*() const noexcept { return data(); }
+};
+
+/**
  *  @brief  Inner (Dot) Product distance.
  */
-template <typename scalar_at, typename result_at = scalar_at> struct ip_gt {
+template <typename scalar_at = float, typename result_at = scalar_at> struct ip_gt {
     using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
     using result_type = result_t;
 
-    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
+    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
+
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
         result_type ab{};
 #if defined(USEARCH_USE_OPENMP)
 #pragma omp simd reduction(+ : ab)
@@ -234,12 +244,15 @@ template <typename scalar_at, typename result_at = scalar_at> struct ip_gt {
  *          Unless you are running on an tiny embedded platform, this metric
  *          is recommended over `::ip_gt` for low-precision scalars.
  */
-template <typename scalar_at, typename result_at = scalar_at> struct cos_gt {
+template <typename scalar_at = float, typename result_at = scalar_at> struct cos_gt {
     using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
     using result_type = result_t;
 
-    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
+    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
+
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
         result_t ab{}, a2{}, b2{};
 #if defined(USEARCH_USE_OPENMP)
 #pragma omp simd reduction(+ : ab, a2, b2)
@@ -260,12 +273,15 @@ template <typename scalar_at, typename result_at = scalar_at> struct cos_gt {
  *  @brief  Squared Euclidean (L2) distance.
  *          Square root is avoided at the end, as it won't affect the ordering.
  */
-template <typename scalar_at, typename result_at = scalar_at> struct l2sq_gt {
+template <typename scalar_at = float, typename result_at = scalar_at> struct l2sq_gt {
     using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
     using result_type = result_t;
 
-    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
+    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
+
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
         result_t ab_deltas_sq{};
 #if defined(USEARCH_USE_OPENMP)
 #pragma omp simd reduction(+ : ab_deltas_sq)
@@ -281,42 +297,20 @@ template <typename scalar_at, typename result_at = scalar_at> struct l2sq_gt {
 };
 
 /**
- *  @brief  Hamming distance computes the number of differing elements in
- *          two arrays. An example would be a chess board.
- */
-template <typename scalar_at, typename result_at = std::size_t> struct hamming_gt {
-    using scalar_t = scalar_at;
-    using result_t = result_at;
-    using result_type = result_t;
-
-    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
-        result_t matches{};
-#if defined(USEARCH_USE_OPENMP)
-#pragma omp simd reduction(+ : matches)
-#elif defined(USEARCH_IS_CLANG)
-#pragma clang loop vectorize(enable)
-#elif defined(USEARCH_IS_GCC)
-#pragma GCC ivdep
-#endif
-        for (std::size_t i = 0; i != dim; ++i)
-            matches += a[i] != b[i];
-        return matches;
-    }
-};
-
-/**
  *  @brief  Hamming distance computes the number of differing bits in
  *          two arrays of integers. An example would be a textual document,
  *          tokenized and hashed into a fixed-capacity bitset.
  */
-template <typename scalar_at, typename result_at = std::size_t> struct bitwise_hamming_gt {
+template <typename scalar_at = std::uint64_t, typename result_at = std::size_t> struct hamming_gt {
     using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
     using result_type = result_t;
     static_assert(std::is_unsigned<scalar_t>::value, "Hamming distance requires unsigned integral words");
 
-    inline result_t operator()( //
-        scalar_t const* a, scalar_t const* b, std::size_t words, std::size_t = 0) const noexcept {
+    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
+
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
         constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
         result_t matches{};
 #if defined(USEARCH_USE_OPENMP)
@@ -336,15 +330,17 @@ template <typename scalar_at, typename result_at = std::size_t> struct bitwise_h
  *  @brief  Tanimoto distance is the intersection over bitwise union.
  *          Often used in chemistry and biology to compare molecular fingerprints.
  */
-template <typename scalar_at, typename result_at = float> struct bitwise_tanimoto_gt {
+template <typename scalar_at = std::uint64_t, typename result_at = float> struct tanimoto_gt {
     using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
     using result_type = result_t;
     static_assert(std::is_unsigned<scalar_t>::value, "Tanimoto distance requires unsigned integral words");
     static_assert(std::is_floating_point<result_t>::value, "Tanimoto distance will be a fraction");
 
-    inline result_t operator()( //
-        scalar_t const* a, scalar_t const* b, std::size_t words, std::size_t = 0) const noexcept {
+    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
+
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
         constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
         result_t and_count{};
         result_t or_count{};
@@ -366,15 +362,17 @@ template <typename scalar_at, typename result_at = float> struct bitwise_tanimot
  *  @brief  Sorensen-Dice or F1 distance is the intersection over bitwise union.
  *          Often used in chemistry and biology to compare molecular fingerprints.
  */
-template <typename scalar_at, typename result_at = float> struct bitwise_sorensen_gt {
+template <typename scalar_at = std::uint64_t, typename result_at = float> struct sorensen_gt {
     using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
     using result_type = result_t;
     static_assert(std::is_unsigned<scalar_t>::value, "Sorensen-Dice distance requires unsigned integral words");
     static_assert(std::is_floating_point<result_t>::value, "Sorensen-Dice distance will be a fraction");
 
-    inline result_t operator()( //
-        scalar_t const* a, scalar_t const* b, std::size_t words, std::size_t = 0) const noexcept {
+    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
+
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
         constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
         result_t and_count{};
         result_t any_count{};
@@ -396,12 +394,18 @@ template <typename scalar_at, typename result_at = float> struct bitwise_sorense
  *  @brief  Counts the number of matching elements in two unique sorted sets.
  *          Can be used to compute the similarity between two textual documents
  *          using the IDs of tokens present in them.
+ *          Similar to `tanimoto_gt` for dense representations.
  */
-template <typename scalar_at, typename result_at = float> struct jaccard_gt {
+template <typename scalar_at = std::int32_t, typename result_at = float> struct jaccard_gt {
     using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
     using result_type = result_t;
     static_assert(!std::is_floating_point<scalar_t>::value, "Jaccard distance requires integral scalars");
+
+    inline result_t operator()(view_t a, view_t b) const noexcept {
+        return operator()(a.data(), b.data(), a.size(), b.size());
+    }
 
     inline result_t operator()( //
         scalar_t const* a, scalar_t const* b, std::size_t a_length, std::size_t b_length) const noexcept {
@@ -422,13 +426,15 @@ template <typename scalar_at, typename result_at = float> struct jaccard_gt {
  *          Can be used to compute the similarity between two textual documents
  *          using the IDs of tokens present in them.
  */
-template <typename scalar_at, typename result_at = float> struct pearson_correlation_gt {
+template <typename scalar_at = float, typename result_at = float> struct pearson_correlation_gt {
     using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
     using result_type = result_t;
 
-    inline result_t operator()( //
-        scalar_t const* a, scalar_t const* b, std::size_t dim, std::size_t = 0) const noexcept {
+    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
+
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
         result_t a_sum{}, b_sum{}, ab_sum{};
         result_t a_sq_sum{}, b_sq_sum{};
 #if defined(USEARCH_USE_OPENMP)
@@ -439,11 +445,11 @@ template <typename scalar_at, typename result_at = float> struct pearson_correla
 #pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i) {
-            a_sum += a[i];
-            b_sum += b[i];
-            ab_sum += a[i] * b[i];
-            a_sq_sum += a[i] * a[i];
-            b_sq_sum += b[i] * b[i];
+            a_sum += result_t(a[i]);
+            b_sum += result_t(b[i]);
+            ab_sum += result_t(a[i]) * result_t(b[i]);
+            a_sq_sum += result_t(a[i]) * result_t(a[i]);
+            b_sq_sum += result_t(b[i]) * result_t(b[i]);
         }
         result_t denom = std::sqrt((dim * a_sq_sum - a_sum * a_sum) * (dim * b_sq_sum - b_sum * b_sum));
         result_t corr = (dim * ab_sum - a_sum * b_sum) / denom;
@@ -455,13 +461,14 @@ template <typename scalar_at, typename result_at = float> struct pearson_correla
  *  @brief  Haversine distance for the shortest distance between two nodes on
  *          the surface of a 3D sphere, defined with latitude and longitude.
  */
-template <typename scalar_at, typename result_at = scalar_at> struct haversine_gt {
+template <typename scalar_at = float, typename result_at = scalar_at> struct haversine_gt {
     using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
     using result_type = result_t;
     static_assert(!std::is_integral<scalar_t>::value, "Latitude and longitude must be floating-node");
 
-    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t = 2, std::size_t = 2) const noexcept {
+    inline result_t operator()(scalar_t const* a, scalar_t const* b) const noexcept {
         result_t lat_a = a[0], lon_a = a[1];
         result_t lat_b = b[0], lon_b = b[1];
 
@@ -494,6 +501,7 @@ class error_t {
         return *this;
     }
     explicit operator bool() const noexcept { return message_ != nullptr; }
+    char const* what() const noexcept { return message_; }
 
 #if defined(__cpp_exceptions) && (1 == __cpp_exceptions)
     ~error_t() noexcept(false) {
@@ -526,6 +534,7 @@ template <typename result_at> struct expected_gt {
         error.raise();
         return std::move(result);
     }
+    result_at const& operator*() const noexcept { return result; }
     explicit operator bool() const noexcept { return !error; }
     expected_gt failed(char const* message) noexcept {
         error = message;
@@ -932,31 +941,28 @@ class usearch_pack_m uint40_t {
 
 static_assert(sizeof(uint40_t) == 5, "uint40_t must be exactly 5 bytes");
 
-/**
- *  @brief  Non-owning memory range view, similar to `std::span`, but for C++11.
- */
-template <typename scalar_at> class span_gt {
-    scalar_at* data_;
-    std::size_t size_;
-
-  public:
-    span_gt(scalar_at* begin, scalar_at const* end) noexcept : data_(begin), size_(end - begin) {}
-    span_gt(scalar_at* begin, std::size_t size) noexcept : data_(begin), size_(size) {}
-    scalar_at* data() const noexcept { return data_; }
-    std::size_t size() const noexcept { return size_; }
-    operator scalar_at*() const noexcept { return data(); }
-};
-
+/// @brief Number of neighbors per graph node.
+/// Defaults to 32 in FAISS and 16 in hnswlib.
+/// > It is called `M` in the paper.
 constexpr std::size_t default_connectivity() { return 16; }
+
+/// @brief Hyper-parameter controlling the quality of indexing.
+/// Defaults to 40 in FAISS and 200 in hnswlib.
+/// > It is called `efConstruction` in the paper.
 constexpr std::size_t default_expansion_add() { return 128; }
+
+/// @brief Hyper-parameter controlling the quality of search.
+/// Defaults to 16 in FAISS and 10 in hnswlib.
+/// > It is called `ef` in the paper.
 constexpr std::size_t default_expansion_search() { return 64; }
+
 constexpr std::size_t default_allocator_entry_bytes() { return 64; }
 
 /**
  *  @brief  The "magic" sequence helps infer the type of the file.
  *          USearch indexes start with the "unumusearch" string.
  */
-static constexpr char const* default_magic() { return "unumusearch"; }
+constexpr char const* default_magic() { return "unumusearch"; }
 
 /**
  *  @brief  Configuration settings for the index construction.
@@ -964,21 +970,10 @@ static constexpr char const* default_magic() { return "unumusearch"; }
  *          and two expansion factors - for construction and search.
  */
 struct index_config_t {
-
     /// @brief Number of neighbors per graph node.
     /// Defaults to 32 in FAISS and 16 in hnswlib.
     /// > It is called `M` in the paper.
     std::size_t connectivity = default_connectivity();
-
-    /// @brief Hyper-parameter controlling the quality of indexing.
-    /// Defaults to 40 in FAISS and 200 in hnswlib.
-    /// > It is called `efConstruction` in the paper.
-    std::size_t expansion_add = default_expansion_add();
-
-    /// @brief Hyper-parameter controlling the quality of search.
-    /// Defaults to 16 in FAISS and 10 in hnswlib.
-    /// > It is called `ef` in the paper.
-    std::size_t expansion_search = default_expansion_search();
 
     /// @brief Parameter controlling the physical layout of vectors
     /// in memory. When using multi-byte scalar types, like `float`,
@@ -1002,18 +997,32 @@ struct index_limits_t {
 };
 
 struct add_config_t {
+    /// @brief Hyper-parameter controlling the quality of indexing.
+    /// Defaults to 40 in FAISS and 200 in hnswlib.
+    /// > It is called `efConstruction` in the paper.
+    std::size_t expansion = default_expansion_add();
+
     /// @brief Optional thread identifier for multi-threaded construction.
-    std::size_t thread{};
+    std::size_t thread = 0;
+
     /// @brief Don't copy the ::vector, if it's persisted elsewhere.
-    bool store_vector{true};
+    bool store_vector = true;
 };
 
 struct search_config_t {
-    std::size_t thread{};
-    bool exact{};
+    /// @brief Hyper-parameter controlling the quality of search.
+    /// Defaults to 16 in FAISS and 10 in hnswlib.
+    /// > It is called `ef` in the paper.
+    std::size_t expansion = default_expansion_search();
+
+    /// @brief Optional thread identifier for multi-threaded construction.
+    std::size_t thread = 0;
+
+    /// @brief Brute-forces exhaustive search over all entries in the index.
+    bool exact = false;
 };
 
-enum class common_metric_kind_t : std::uint8_t {
+enum class metric_kind_t : std::uint8_t {
     unknown_k = 0,
     // Classics:
     ip_k = 'i',
@@ -1026,9 +1035,9 @@ enum class common_metric_kind_t : std::uint8_t {
 
     // Sets:
     jaccard_k = 'j',
-    bitwise_hamming_k = 'b',
-    bitwise_tanimoto_k = 't',
-    bitwise_sorensen_k = 's',
+    hamming_k = 'b',
+    tanimoto_k = 't',
+    sorensen_k = 's',
 };
 
 using file_header_t = byte_t[64];
@@ -1057,7 +1066,7 @@ struct file_head_t {
     misaligned_ref_gt<version_major_t> version_major;
     misaligned_ref_gt<version_minor_t> version_minor;
     misaligned_ref_gt<version_patch_t> version_patch;
-    misaligned_ref_gt<common_metric_kind_t> metric;
+    misaligned_ref_gt<metric_kind_t> metric;
     misaligned_ref_gt<connectivity_t> connectivity;
     misaligned_ref_gt<max_level_t> max_level;
     misaligned_ref_gt<vector_alignment_t> vector_alignment;
@@ -1071,8 +1080,7 @@ struct file_head_t {
           version_major(exchange(ptr, ptr + sizeof(version_major_t))),
           version_minor(exchange(ptr, ptr + sizeof(version_minor_t))),
           version_patch(exchange(ptr, ptr + sizeof(version_patch_t))),
-          metric(exchange(ptr, ptr + sizeof(common_metric_kind_t))),
-          connectivity(exchange(ptr, ptr + sizeof(connectivity_t))),
+          metric(exchange(ptr, ptr + sizeof(metric_kind_t))), connectivity(exchange(ptr, ptr + sizeof(connectivity_t))),
           max_level(exchange(ptr, ptr + sizeof(max_level_t))),
           vector_alignment(exchange(ptr, ptr + sizeof(vector_alignment_t))),
           bytes_per_label(exchange(ptr, ptr + sizeof(bytes_per_label_t))),
@@ -1081,6 +1089,15 @@ struct file_head_t {
 };
 
 static_assert(sizeof(file_header_t) == 64, "File header should be exactly 64 bytes");
+
+/// @brief  C++17 and newer version deprecate the `std::result_of`
+template <typename metric_at, typename... args_at>
+using return_type_gt =
+#if defined(USEARCH_IS_CPP17)
+    typename std::invoke_result<metric_at, args_at...>::type;
+#else
+    typename std::result_of<metric_at(args_at...)>::type;
+#endif
 
 /**
  *  @brief  Approximate Nearest Neighbors Search index using the
@@ -1092,9 +1109,10 @@ static_assert(sizeof(file_header_t) == 64, "File header should be exactly 64 byt
  *      - Search for vectors of different dimensionality, if ::`metric_at` supports that.
  *
  *  @tparam metric_at
- *      A function vector responsible for computing the distance between two vectors.
- *      Must overload the call operator with the following signature:
- *          - `result_type (*) (scalar_t const *, scalar_t const *, std::size_t, std::size_t)`
+ *      A function responsible for computing the distance (dis-similarity) between two vectors.
+ *      Can have following signatures:
+ *          - `distance_t (*) (span_gt<scalar_t const>, span_gt<scalar_t const>)`
+ *          - `distance_t (*) (scalar_t const *, scalar_t const *)`
  *
  *  @tparam label_at
  *      The type of unique labels to assign to vectors.
@@ -1140,14 +1158,15 @@ static_assert(sizeof(file_header_t) == 64, "File header should be exactly 64 byt
  *  @subsection Missing Functionality
  *
  *  To simplify the implementation, the `index_gt` lacks endpoints to remove existing
- *  vectors. That, however, is solved by `punned_gt`, which also adds automatic casting.
+ *  vectors. That, however, is solved by `index_punned_dense_gt`, which also adds automatic casting.
  *
  */
 template <typename metric_at = ip_gt<float>,            //
           typename label_at = std::size_t,              //
           typename id_at = std::uint32_t,               //
           typename scalar_at = float,                   //
-          typename allocator_at = std::allocator<char>> //
+          typename allocator_at = std::allocator<char>, //
+          typename point_allocator_at = allocator_at>   //
 class index_gt {
   public:
     using metric_t = metric_at;
@@ -1155,16 +1174,10 @@ class index_gt {
     using label_t = label_at;
     using id_t = id_at;
     using allocator_t = allocator_at;
-
-    /// C++17 and newer version deprecate the `std::result_of`
-    using distance_t =
-#if defined(USEARCH_IS_CPP17)
-        typename std::invoke_result<metric_t, scalar_t const*, scalar_t const*, std::size_t, std::size_t>::type;
-#else
-        typename std::result_of<metric_t(scalar_t const*, scalar_t const*, std::size_t, std::size_t)>::type;
-#endif
+    using point_allocator_t = point_allocator_at;
 
     using vector_view_t = span_gt<scalar_t const>;
+    using distance_t = return_type_gt<metric_t, vector_view_t, vector_view_t>;
 
     struct member_ref_t {
         misaligned_ref_gt<label_t> label;
@@ -1248,6 +1261,10 @@ class index_gt {
     using allocator_traits_t = std::allocator_traits<allocator_t>;
     using byte_t = typename allocator_t::value_type;
     static_assert(sizeof(byte_t) == 1, "Allocator must allocate separate addressable bytes");
+
+    using point_allocator_traits_t = std::allocator_traits<point_allocator_t>;
+    static_assert(sizeof(typename point_allocator_traits_t::value_type) == 1,
+                  "Allocator must allocate separate addressable bytes");
 
     /**
      *  @brief  How much larger (number of neighbors per node) will
@@ -1359,7 +1376,7 @@ class index_gt {
 
         inline distance_t measure(vector_view_t a, vector_view_t b) noexcept {
             measurements_count++;
-            return metric(a.data(), b.data(), a.size(), b.size());
+            return metric(a, b);
         }
     };
 
@@ -1367,6 +1384,7 @@ class index_gt {
     index_limits_t limits_{};
     metric_t metric_{};
     allocator_t allocator_{};
+    point_allocator_t point_allocator_{};
     precomputed_constants_t pre_{};
     int viewed_file_descriptor_{};
 
@@ -1399,10 +1417,11 @@ class index_gt {
      *  @section Exceptions
      *      Doesn't throw, unless the ::metric's and ::allocators's throw on copy-construction.
      */
-    explicit index_gt(index_config_t config = {}, metric_t metric = {}, allocator_t allocator = {}) noexcept
-        : config_(normalize(config)), limits_(0, 0), metric_(metric), allocator_(allocator), pre_(precompute_(config)),
-          viewed_file_descriptor_(0), size_(0u), max_level_(-1), entry_id_(0u), nodes_(nullptr), nodes_mutexes_(),
-          contexts_(nullptr) {}
+    explicit index_gt(index_config_t config = {}, metric_t metric = {}, allocator_t allocator = {},
+                      point_allocator_t point_allocator = {}) noexcept
+        : config_(config), limits_(0, 0), metric_(metric), allocator_(std::move(allocator)),
+          point_allocator_(std::move(point_allocator)), pre_(precompute_(config)), viewed_file_descriptor_(0),
+          size_(0u), max_level_(-1), entry_id_(0u), nodes_(nullptr), nodes_mutexes_(), contexts_(nullptr) {}
 
     /**
      *  @brief  Clones the structure with the same hyper-parameters, but without contents.
@@ -1554,16 +1573,6 @@ class index_gt {
         return config;
     }
 
-    /**
-     *  @brief  Validates/normalizes the configuration options.
-     */
-    static index_config_t normalize(index_config_t config) noexcept {
-        config.expansion_add = (std::max<std::size_t>)(config.expansion_add, config.connectivity);
-        // config.threads_add = (std::max<std::size_t>)(1u, config.threads_add);
-        // config.threads_search = (std::max<std::size_t>)(1u, config.threads_search);
-        return config;
-    }
-
 #pragma endregion
 
 #pragma region Construction and Search
@@ -1653,10 +1662,10 @@ class index_gt {
 
         // The top list needs one more slot than the connectivity of the base level
         // for the heuristic, that tries to squeeze one more element into saturated list.
-        std::size_t top_limit = (std::max)(base_level_multiple_() * config_.connectivity + 1, config_.expansion_add);
+        std::size_t top_limit = (std::max)(base_level_multiple_() * config_.connectivity + 1, config.expansion);
         if (!top.reserve(top_limit))
             return result.failed("Out of memory!");
-        if (!next.reserve(config_.expansion_add))
+        if (!next.reserve(config.expansion))
             return result.failed("Out of memory!");
 
         // Determining how much memory to allocate for the node depends on the target level
@@ -1694,7 +1703,8 @@ class index_gt {
 
         // From `target_level` down perform proper extensive search
         for (level_t level = (std::min)(target_level, max_level_copy); level >= 0; --level) {
-            search_to_insert_(closest_id, vector, level, context); // TODO: Handle out of memory conditions
+            // TODO: Handle out of memory conditions
+            search_to_insert_(closest_id, vector, level, config.expansion, context);
             closest_id = connect_new_node_(new_id, level, context);
         }
 
@@ -1736,7 +1746,7 @@ class index_gt {
             search_exact_(query, wanted, context);
         } else {
             next_candidates_t& next = context.next_candidates;
-            std::size_t expansion = (std::max)(config_.expansion_search, wanted);
+            std::size_t expansion = (std::max)(config.expansion, wanted);
             if (!next.reserve(expansion))
                 return result.failed("Out of memory!");
             if (!top.reserve(expansion))
@@ -1770,7 +1780,7 @@ class index_gt {
         if (!size_)
             return result;
 
-        std::size_t expansion = (std::max)(config_.expansion_search, wanted);
+        std::size_t expansion = (std::max)(config.expansion, wanted);
         if (!next.reserve(expansion))
             return result.failed("Out of memory!");
         if (!top.reserve(expansion))
@@ -1850,13 +1860,10 @@ class index_gt {
         total += limits_.elements * sizeof(node_t) + allocator_entry_bytes;
 
         // Temporary data-structures, proportional to the number of threads:
-        std::size_t per_thread = (std::max)(config_.expansion_search, config_.expansion_add) * sizeof(candidate_t);
-        total += limits_.threads() * (sizeof(context_t) + per_thread) + allocator_entry_bytes * 3;
+        total += limits_.threads() * sizeof(context_t) + allocator_entry_bytes * 3;
         return total;
     }
 
-    void change_expansion_add(std::size_t n) noexcept { config_.expansion_add = n; }
-    void change_expansion_search(std::size_t n) noexcept { config_.expansion_search = n; }
     void change_metric(metric_t const& m) noexcept {
         metric_ = m;
         for (std::size_t i = 0; i != limits_.threads(); ++i)
@@ -1894,7 +1901,7 @@ class index_gt {
         state.version_major = USEARCH_VERSION_MAJOR;
         state.version_minor = USEARCH_VERSION_MINOR;
         state.version_patch = USEARCH_VERSION_PATCH;
-        state.metric = common_metric_kind_t::unknown_k;
+        state.metric = metric_kind_t::unknown_k;
 
         // Describe state
         state.connectivity = config_.connectivity;
@@ -2129,17 +2136,18 @@ class index_gt {
 
         node_t& node = nodes_[id];
         std::size_t node_bytes = node_bytes_(node) - node_vector_bytes_(node) * !node_stored_(node);
-        allocator_t{}.deallocate(node.tape(), node_bytes);
+        point_allocator_.deallocate(node.tape(), node_bytes);
         node = node_t{};
     }
 
     node_t node_malloc_(label_t label, vector_view_t vector, level_t level, bool store_vector) noexcept {
 
         std::size_t dim = vector.size();
-        std::size_t stored_vector_bytes = node_vector_bytes_(dim) * store_vector;
-        std::size_t node_bytes = node_bytes_(dim, level) - node_vector_bytes_(dim) * !store_vector;
+        std::size_t stored_vector_bytes = node_vector_bytes_(static_cast<dim_t>(dim)) * std::size_t(store_vector);
+        std::size_t node_bytes = node_bytes_(static_cast<dim_t>(dim), level) -
+                                 node_vector_bytes_(static_cast<dim_t>(dim)) * std::size_t(!store_vector);
 
-        byte_t* data = (byte_t*)allocator_t{}.allocate(node_bytes);
+        byte_t* data = (byte_t*)point_allocator_.allocate(node_bytes);
         if (!data)
             return {};
 
@@ -2273,12 +2281,12 @@ class index_gt {
      *          Locks the nodes in the process, assuming other threads are updating neighbors lists.
      *  @return `true` if procedure succeeded, `false` if run out of memory.
      */
-    bool search_to_insert_(id_t start_id, vector_view_t query, level_t level, context_t& context) noexcept {
+    bool search_to_insert_( //
+        id_t start_id, vector_view_t query, level_t level, std::size_t top_limit, context_t& context) noexcept {
 
         visits_bitset_t& visits = context.visits;
         next_candidates_t& next = context.next_candidates; // pop min, push
         top_candidates_t& top = context.top_candidates;    // pop max, push
-        std::size_t const top_limit = config_.expansion_add;
 
         visits.clear();
         next.clear();

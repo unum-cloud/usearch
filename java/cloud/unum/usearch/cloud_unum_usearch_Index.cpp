@@ -4,7 +4,7 @@
 
 #include <thread>
 
-#include "punned.hpp"
+#include <usearch/index_punned_dense.hpp>
 
 using namespace unum::usearch;
 using namespace unum;
@@ -12,7 +12,7 @@ using namespace unum;
 using label_t = jint;
 using span_t = span_gt<float>;
 using distance_t = punned_distance_t;
-using punned_t = punned_gt<label_t>;
+using punned_t = index_punned_dense_gt<label_t>;
 
 using add_result_t = typename punned_t::add_result_t;
 using search_result_t = typename punned_t::search_result_t;
@@ -30,18 +30,19 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
     try {
 
         index_config_t config;
-        config.expansion_add = static_cast<std::size_t>(expansion_add);
-        config.expansion_search = static_cast<std::size_t>(expansion_search);
         config.connectivity = static_cast<std::size_t>(connectivity);
+        std::size_t expansion_add = static_cast<std::size_t>(expansion_add);
+        std::size_t expansion_search = static_cast<std::size_t>(expansion_search);
 
         metric_cstr = (*env).GetStringUTFChars(metric, 0);
         std::size_t metric_length = (*env).GetStringUTFLength(metric);
         accuracy_cstr = (*env).GetStringUTFChars(accuracy, 0);
         std::size_t accuracy_length = (*env).GetStringUTFLength(accuracy);
 
-        accuracy_t accuracy = accuracy_from_name(accuracy_cstr, accuracy_length);
-        common_metric_kind_t metric_kind = common_metric_from_name(metric_cstr, metric_length);
-        punned_t index = make_punned<punned_t>(metric_kind, static_cast<std::size_t>(dimensions), accuracy, config);
+        scalar_kind_t accuracy = scalar_kind_from_name(accuracy_cstr, accuracy_length);
+        metric_kind_t metric_kind = metric_from_name(metric_cstr, metric_length);
+        punned_t index = punned_t::make(static_cast<std::size_t>(dimensions), metric_kind, config, accuracy,
+                                        expansion_add, expansion_search);
         if (!index.reserve(static_cast<std::size_t>(capacity))) {
             jclass jc = (*env).FindClass("java/lang/Error");
             if (jc)

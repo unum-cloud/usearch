@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <stdexcept>
 
-#include "punned.hpp"
+#include <usearch/index_punned_dense.hpp>
 
 using namespace unum::usearch;
 using namespace unum;
@@ -134,20 +134,30 @@ template <typename index_at> void test_sets_moved() {
 
 int main(int, char**) {
 
+    static_assert(!std::is_same<index_gt<ip_gt<>>::value_type, std::true_type>());
+    static_assert(!std::is_same<index_gt<cos_gt<>>::value_type, std::true_type>());
+    static_assert(!std::is_same<index_gt<l2sq_gt<>>::value_type, std::true_type>());
+    // static_assert(!std::is_same<index_gt<hamming_gt<>>::value_type, std::true_type>());
+    // static_assert(!std::is_same<index_gt<tanimoto_gt<>>::value_type, std::true_type>());
+    // static_assert(!std::is_same<index_gt<sorensen_gt<>>::value_type, std::true_type>());
+    // static_assert(!std::is_same<index_gt<jaccard_gt<>>::value_type, std::true_type>());
+    // static_assert(!std::is_same<index_gt<pearson_correlation_gt<>>::value_type, std::true_type>());
+    // static_assert(!std::is_same<index_gt<haversine_gt<>>::value_type, std::true_type>());
+
     test3d<float>(index_gt<cos_gt<float>, point_id_t, std::uint32_t, float>{});
     test3d<float>(index_gt<l2sq_gt<float>, point_id_t, std::uint32_t, float>{});
 
     test3d<double>(index_gt<cos_gt<double>, point_id_t, std::uint32_t, double>{});
     test3d<double>(index_gt<l2sq_gt<double>, point_id_t, std::uint32_t, double>{});
 
-    test3d<float>(punned_small_t::cos(3));
-    test3d<float>(punned_small_t::l2sq(3));
+    test3d<float>(punned_small_t::make(3, metric_kind_t::cos_k));
+    test3d<float>(punned_small_t::make(3, metric_kind_t::l2sq_k));
 
-    test3d<double>(punned_small_t::cos(3));
-    test3d<double>(punned_small_t::l2sq(3));
+    test3d<double>(punned_small_t::make(3, metric_kind_t::cos_k));
+    test3d<double>(punned_small_t::make(3, metric_kind_t::l2sq_k));
 
-    test3d_punned<float>(punned_small_t::cos(3));
-    test3d_punned<float>(punned_small_t::l2sq(3));
+    test3d_punned<float>(punned_small_t::make(3, metric_kind_t::cos_k));
+    test3d_punned<float>(punned_small_t::make(3, metric_kind_t::l2sq_k));
 
     test_sets(index_gt<jaccard_gt<std::int32_t, float>, point_id_t, std::uint32_t, std::int32_t>{});
     test_sets(index_gt<jaccard_gt<std::int64_t, float>, point_id_t, std::uint32_t, std::int64_t>{});
