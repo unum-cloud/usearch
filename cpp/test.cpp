@@ -90,7 +90,7 @@ template <typename scalar_at, typename index_at> void test3d_punned(index_at&& i
 
     // Reconstruct
     scalar_t vec_reconstructed[3] = {0, 0, 0};
-    index.reconstruct(42, span_t{&vec_reconstructed[0], 3ul});
+    index.get(42, span_t{&vec_reconstructed[0], 3ul});
     expect(vec_reconstructed[0] == vec[0]);
     expect(vec_reconstructed[1] == vec[1]);
     expect(vec_reconstructed[2] == vec[2]);
