@@ -171,6 +171,12 @@ using f16_native_t = __fp16;
 using f16_native_t = void;
 #endif
 
+#if defined(USEARCH_F16_NATIVE_SUPPORT)
+using f16_t = f16_native_t;
+#else
+using f16_t = f16_bits_t;
+#endif
+
 inline float f16_to_f32(std::uint16_t u16) noexcept {
 #if defined(USEARCH_F16_NATIVE_SUPPORT)
     f16_native_t f16;
@@ -265,7 +271,7 @@ class f8_bits_t {
     inline f8_bits_t& operator=(f8_bits_t const&) = default;
 
     inline operator float() const noexcept { return float(int8_) / divisor_k; }
-    inline operator f16_bits_t() const noexcept { return float(int8_) / divisor_k; }
+    inline operator f16_t() const noexcept { return float(int8_) / divisor_k; }
     inline operator double() const noexcept { return double(int8_) / divisor_k; }
     inline explicit operator bool() const noexcept { return int8_ > (max_k / 2); }
     inline explicit operator std::int8_t() const noexcept { return int8_; }
