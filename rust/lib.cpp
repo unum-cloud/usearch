@@ -72,26 +72,39 @@ std::unique_ptr<Index> wrap(punned_t&& index) {
     return result;
 }
 
-index_config_t config(size_t connectivity, size_t exp_add, size_t exp_search) {
+index_config_t config(size_t connectivity) {
     index_config_t result;
     result.connectivity = connectivity ? connectivity : default_connectivity();
-    result.expansion_add = exp_add ? exp_add : default_expansion_add();
-    result.expansion_search = exp_search ? exp_search : default_expansion_search();
     return result;
 }
 
-std::unique_ptr<Index> new_ip(size_t dims, rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search) {
-    return wrap(punned_t::ip(dims, accuracy(quant), config(connectivity, exp_add, exp_search)));
+metric_kind_t rust_to_cpp_metric(MetricKind value) {
+    switch (value) {
+    case MetricKind::IP: return metric_kind_t::ip_k;
+    case MetricKind::L2Sq: return metric_kind_t::l2sq_k;
+    case MetricKind::Cos: return metric_kind_t::cos_k;
+    case MetricKind::Pearson: return metric_kind_t::pearson_k;
+    case MetricKind::Haversine: return metric_kind_t::haversine_k;
+    case MetricKind::Hamming: return metric_kind_t::hamming_k;
+    case MetricKind::Tanimoto: return metric_kind_t::tanimoto_k;
+    case MetricKind::Sorensen: return metric_kind_t::sorensen_k;
+    default: return metric_kind_t::unknown_k;
+    }
 }
 
-std::unique_ptr<Index> new_l2sq(size_t dims, rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search) {
-    return wrap(punned_t::l2sq(dims, accuracy(quant), config(connectivity, exp_add, exp_search)));
+scalar_kind_t rust_to_cpp_scalar(ScalarKind value) {
+    switch (value) {
+    case ScalarKind::F8: return scalar_kind_t::f8_k;
+    case ScalarKind::F16: return scalar_kind_t::f16_k;
+    case ScalarKind::F32: return scalar_kind_t::f32_k;
+    case ScalarKind::F64: return scalar_kind_t::f64_k;
+    case ScalarKind::B1x8: return scalar_kind_t::b1x8_k;
+    default: return scalar_kind_t::unknown_k;
+    }
 }
 
-std::unique_ptr<Index> new_cos(size_t dims, rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search) {
-    return wrap(punned_t::cos(dims, accuracy(quant), config(connectivity, exp_add, exp_search)));
-}
-
-std::unique_ptr<Index> new_haversine(rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search) {
-    return wrap(punned_t::haversine(accuracy(quant), config(connectivity, exp_add, exp_search)));
+std::unique_ptr<Index> new_index(IndexOptions const& options) {
+    return wrap(punned_t::make(options.dimensions, rust_to_cpp_metric(options.metric), config(options.connectivity),
+                               rust_to_cpp_scalar(options.quantization), options.expansion_add,
+                               options.expansion_search));
 }
