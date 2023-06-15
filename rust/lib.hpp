@@ -6,10 +6,7 @@
 #include <usearch/index_punned_dense.hpp>
 
 struct Matches;
-
-enum class Metric;
-
-enum class Accuracy;
+struct IndexOptions;
 
 class Index {
   public:
@@ -40,7 +37,4 @@ class Index {
     std::unique_ptr<punned_t> index_;
 };
 
-std::unique_ptr<Index> new_ip(size_t dims, rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search);
-std::unique_ptr<Index> new_l2sq(size_t dims, rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search);
-std::unique_ptr<Index> new_cos(size_t dims, rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search);
-std::unique_ptr<Index> new_haversine(rust::Str quant, size_t connectivity, size_t exp_add, size_t exp_search);
+std::unique_ptr<Index> new_index(IndexOptions const& options);

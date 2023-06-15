@@ -374,8 +374,17 @@ cargo add usearch
 #### Quickstart
 
 ```rust
-let quant: &str = "f16";
-let index = new_ip(3, &quant, 0, 0, 0).unwrap();
+
+let options = IndexOptions {
+            dimensions: 5,
+            metric: MetricKind::IP,
+            quantization: ScalarKind::F16,
+            connectivity: 0,
+            expansion_add: 0,
+            expansion_search: 0
+        };
+
+let index = new_index(&options).unwrap();
 
 assert!(index.reserve(10).is_ok());
 assert!(index.capacity() >= 10);
