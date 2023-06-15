@@ -184,7 +184,7 @@ class TaskResult:
     def search_seconds(self) -> float:
         return self.search_operations / self.search_per_second
 
-    def __add__(self, other: TaskResult, /):
+    def __add__(self, other: TaskResult):
         result = TaskResult()
         if self.add_operations and other.add_operations:
             result.add_operations = self.add_operations + other.add_operations
@@ -309,7 +309,11 @@ class Evaluation:
     ndim: int
 
     @staticmethod
-    def for_dataset(dataset: Dataset, batch_size: int = 0, clusters: int = 1) -> Evaluation:
+    def for_dataset(
+            dataset: Dataset,
+            batch_size: int = 0,
+            clusters: int = 1) -> Evaluation:
+
         tasks = []
         add = AddTask(
             vectors=dataset.vectors,
