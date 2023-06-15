@@ -90,7 +90,7 @@ setup(
     install_requires=[
         'numpy',
         'pandas',
-        'ucall; python_version => "3.9"',
+        'ucall; python_version >= "3.9"',
     ],
     extras_require={
         'jit': ['numba', 'cppyy'],
