@@ -1,5 +1,4 @@
-from typing import Tuple, Any, Callable, Union, Optional, List
-from dataclasses import dataclass, asdict
+from typing import Tuple, Any, Callable, Union, Optional, List, NamedTuple
 from collections import defaultdict
 
 import numpy as np
@@ -90,8 +89,7 @@ def measure_seconds(f: Callable) -> Tuple[float, Any]:
     return secs, result
 
 
-@dataclass
-class Dataset:
+class Dataset(NamedTuple):
 
     labels: np.ndarray
     vectors: np.ndarray
@@ -165,8 +163,7 @@ class Dataset:
         return d
 
 
-@dataclass
-class TaskResult:
+class TaskResult(NamedTuple):
 
     add_operations: Optional[int] = None
     add_per_second: Optional[float] = None
@@ -193,7 +190,7 @@ class TaskResult:
     def search_seconds(self) -> float:
         return self.search_operations / self.search_per_second
 
-    def __add__(self, other: TaskResult):
+    def __add__(self, other):
         result = TaskResult()
         if self.add_operations and other.add_operations:
             result.add_operations = self.add_operations + other.add_operations
@@ -220,8 +217,7 @@ class TaskResult:
         return result
 
 
-@dataclass
-class AddTask:
+class AddTask(NamedTuple):
 
     labels: np.ndarray
     vectors: np.ndarray
@@ -284,8 +280,7 @@ class AddTask:
             ) for rows in partitioning.values()]
 
 
-@dataclass
-class SearchTask:
+class SearchTask(NamedTuple):
 
     queries: np.ndarray
     neighbors: np.ndarray
@@ -310,8 +305,7 @@ class SearchTask:
             ) for start_row in range(0, self.queries.shape[0], batch_size)]
 
 
-@dataclass
-class Evaluation:
+class Evaluation(NamedTuple):
 
     tasks: List[Union[AddTask, SearchTask]]
     count: int
@@ -362,5 +356,5 @@ class Evaluation:
             index.clear()
         return {
             **index.specs,
-            **asdict(task_result),
+            **task_result._asdict(),
         }
