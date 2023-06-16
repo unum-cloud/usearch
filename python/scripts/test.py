@@ -6,6 +6,7 @@ from usearch.io import load_matrix, save_matrix
 from usearch.eval import recall_members, random_vectors
 
 from usearch.index import Index, SparseIndex, MetricKind, ScalarKind, Matches
+from usearch.index import _normalize_dtype
 from usearch.index import (
     DEFAULT_CONNECTIVITY,
     DEFAULT_EXPANSION_ADD,
@@ -131,7 +132,8 @@ def test_index_batch(
     assert matches.counts.shape[0] == batch_size
     assert np.all(np.sort(index.labels) == np.sort(labels))
 
-    assert recall_members(index, exact=True) == 1
+    if _normalize_dtype(numpy_type) == _normalize_dtype(index_type):
+        assert recall_members(index, exact=True) == 1
 
 
 @pytest.mark.parametrize('ndim', dimensions)
