@@ -17,7 +17,7 @@ permissions:
 
 jobs:
 
-  test_python:
+  test_python_311:
     name: Test Python
     runs-on: ${{ matrix.os }}
     strategy:
@@ -42,7 +42,7 @@ jobs:
         run: pytest python/scripts/test.py
 
 
-  test_python_3-6:
+  test_python_36:
     name: Test Python 3.6
     runs-on: ${{ matrix.os }}
     strategy:
