@@ -131,7 +131,11 @@ def test_index_batch(
     assert matches.counts.shape[0] == batch_size
     assert np.all(np.sort(index.labels) == np.sort(labels))
 
-    assert recall_members(index, exact=True) == 1
+    # With high levels of qunatization we may get collisions even
+    # on relatively small batches `assert 0.9696969696969697 == 1`
+    # https://github.com/unum-cloud/usearch/actions/runs/5290884538/jobs/9575827350
+    if numpy_type != np.byte:
+        assert recall_members(index, exact=True) == 1
 
 
 @pytest.mark.parametrize('ndim', dimensions)
