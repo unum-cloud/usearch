@@ -42,7 +42,7 @@ jobs:
         run: pytest python/scripts/test.py
 
 
-  test_python_3.6:
+  test_python_3-6:
     name: Test Python 3.6
     runs-on: ${{ matrix.os }}
     strategy:
