@@ -126,7 +126,7 @@ jobs:
       - name: Build wheels
         run: python -m cibuildwheel
         env:
-          CIBW_SKIP: cp37-*
+          CIBW_SKIP: cp36-*
 
       - uses: actions/upload-artifact@v3
         with:
