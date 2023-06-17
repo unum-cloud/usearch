@@ -21,12 +21,15 @@ def bench_speed(
     connectivity: int = DEFAULT_CONNECTIVITY,
     expansion_add: int = DEFAULT_EXPANSION_ADD,
     expansion_search: int = DEFAULT_EXPANSION_SEARCH,
+    jit: bool = False,
     train: bool = False,
 ) -> pd.DataFrame:
 
     # Build various indexes:
     indexes = []
     jit_options = [False]
+    if jit:
+        jit_options.append(jit)
     dtype_options = ['f32', 'f16', 'f8']
     for jit, dtype in itertools.product(jit_options, dtype_options):
 
@@ -39,6 +42,10 @@ def bench_speed(
             connectivity=connectivity,
             path='USearch' + ['', '+JIT'][jit] + ':' + dtype,
         )
+        
+        # Skip the cases, where JIT-ing is impossible
+        if jit and not index.jit:
+            continue
         indexes.append(index)
 
     # Add FAISS indexes to the mix:

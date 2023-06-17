@@ -69,11 +69,13 @@ Both USearch and FAISS implement the same HNSW algorithm.
 But they differ in a lot of design decisions.
 USearch is designed to be compact and broadly compatible without sacrificing performance.
 
-|            | FAISS, `f32` | USearch, `f32` | USearch, `f16` | USearch, `f8` |
-| :--------- | -----------: | -------------: | -------------: | ------------: |
-| Insertions |       76 K/s |        105 K/s |        115 K/s |   **202 K/s** |
-| Queries    |      118 K/s |        174 K/s |        173 K/s |   **304 K/s** |
-| Recall @1  |          99% |          99.2% |          99.1% |     **99.2%** |
+|              | FAISS, `f32` | USearch, `f32` | USearch, `f16` | USearch, `f8` |
+| :----------- | -----------: | -------------: | -------------: | ------------: |
+| Batch Insert |       16 K/s |         73 K/s |        100 K/s |   **104 K/s** |
+| Batch Search |       82 K/s |        103 K/s |        113 K/s |   **134 K/s** |
+| Bulk Insert  |       76 K/s |        105 K/s |        115 K/s |   **202 K/s** |
+| Bulk Search  |      118 K/s |        174 K/s |        173 K/s |   **304 K/s** |
+| Recall @1    |          99% |          99.2% |          99.1% |     **99.2%** |
 
 > Dataset: 1M vectors sample of the Deep1B dataset.
 > Hardware: `c7g.metal` AWS instance with 64 cores and DDR5 memory.
@@ -81,6 +83,7 @@ USearch is designed to be compact and broadly compatible without sacrificing per
 > connectivity `M=16`,
 > expansion @ construction `efConstruction=128`,
 > and expansion @ search `ef=64`.
+> Batch size is 256.
 > Both libraries were compiled for the target architecture.
 > Jump to the [Performance Tuning][benchmarking] section to read about the effects of those hyper-parameters.
 
