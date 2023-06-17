@@ -19,6 +19,7 @@ from usearch.compiled import (
 
     USES_OPENMP,
     USES_SIMSIMD,
+    USES_NATIVE_F16,
 )
 
 MetricKindBitwise = (
@@ -337,6 +338,7 @@ class Index:
             'Expansion@Search': self.expansion_search,
             'OpenMP': USES_OPENMP,
             'SimSIMD': USES_SIMSIMD,
+            'NativeF16': USES_NATIVE_F16,
             'JIT': self.jit,
             'DType': self.dtype,
             'Path': self.path,
