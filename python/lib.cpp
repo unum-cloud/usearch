@@ -533,13 +533,13 @@ PYBIND11_MODULE(compiled, m) {
     m.attr("DEFAULT_EXPANSION_ADD") = py::int_(default_expansion_add());
     m.attr("DEFAULT_EXPANSION_SEARCH") = py::int_(default_expansion_search());
 
-#if defined(USEARCH_USE_OPENMP)
+#if USEARCH_USE_OPENMP
     m.attr("USES_OPENMP") = py::int_(1);
 #else
     m.attr("USES_OPENMP") = py::int_(0);
 #endif
 
-#if defined(USEARCH_USE_SIMSIMD)
+#if USEARCH_USE_SIMSIMD
     m.attr("USES_SIMSIMD") = py::int_(1);
 #else
     m.attr("USES_SIMSIMD") = py::int_(0);

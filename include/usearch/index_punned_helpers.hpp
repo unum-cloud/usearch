@@ -6,21 +6,41 @@
 #include <thread>  // `std::thread`
 #include <vector>  // `std::vector`
 
-#include <fp16/fp16.h>
+#include <usearch/index.hpp> // `expected_gt` and macros
 
-#if defined(USEARCH_USE_OPENMP)
+#if USEARCH_USE_OPENMP
 #include <omp.h> // `omp_get_num_threads()`
 #endif
 
-#if defined(USEARCH_IS_LINUX)
+#if defined(USEARCH_DEFINED_LINUX)
 #include <sys/auxv.h> // `getauxval()`
 #endif
 
-#if defined(USEARCH_IS_ARM)
+#if defined(USEARCH_DEFINED_ARM)
 #include <arm_fp16.h> // `__fp16`
 #endif
 
-#include <usearch/index.hpp> // `expected_gt`
+#if !defined(USEARCH_USE_NATIVE_F16)
+#if defined(__AVX512F__)
+#define USEARCH_USE_NATIVE_F16 1
+#elif defined(USEARCH_DEFINED_ARM)
+#define USEARCH_USE_NATIVE_F16 1
+#else
+#define USEARCH_USE_NATIVE_F16 0
+#include <fp16/fp16.h>
+#endif
+#else
+#define USEARCH_USE_NATIVE_F16 0
+#include <fp16/fp16.h>
+#endif
+
+#if !defined(USEARCH_USE_SIMSIMD)
+#define USEARCH_USE_SIMSIMD 0
+#endif
+
+#if USEARCH_USE_SIMSIMD
+#include <simsimd/simsimd.h>
+#endif
 
 namespace unum {
 namespace usearch {
@@ -57,8 +77,8 @@ inline char const* isa_name(isa_t isa) noexcept {
 }
 
 inline bool supports_arm_sve() noexcept {
-#if defined(USEARCH_IS_ARM)
-#if defined(USEARCH_IS_LINUX)
+#if defined(USEARCH_DEFINED_ARM)
+#if defined(USEARCH_DEFINED_LINUX)
     unsigned long capabilities = getauxval(AT_HWCAP);
     if (capabilities & HWCAP_SVE)
         return true;
@@ -161,26 +181,16 @@ using punned_metric_t = std::function<punned_distance_t(punned_vector_view_t, pu
 class f8_bits_t;
 class f16_bits_t;
 
-// using f16_native_t = __bf16;
-
-#if defined(__AVX512F__)
-#define USEARCH_F16_NATIVE_SUPPORT 1
+#if USEARCH_USE_NATIVE_F16
 using f16_native_t = _Float16;
-#elif defined(USEARCH_IS_ARM)
-#define USEARCH_F16_NATIVE_SUPPORT 1
-using f16_native_t = __fp16;
-#else
-using f16_native_t = void;
-#endif
-
-#if defined(USEARCH_F16_NATIVE_SUPPORT)
 using f16_t = f16_native_t;
 #else
+using f16_native_t = void;
 using f16_t = f16_bits_t;
 #endif
 
 inline float f16_to_f32(std::uint16_t u16) noexcept {
-#if defined(USEARCH_F16_NATIVE_SUPPORT)
+#if USEARCH_USE_NATIVE_F16
     f16_native_t f16;
     std::memcpy(&f16, &u16, sizeof(std::uint16_t));
     return float(f16);
@@ -190,7 +200,7 @@ inline float f16_to_f32(std::uint16_t u16) noexcept {
 }
 
 inline std::uint16_t f32_to_f16(float f32) noexcept {
-#if defined(USEARCH_F16_NATIVE_SUPPORT)
+#if USEARCH_USE_NATIVE_F16
     f16_native_t f16 = f16_native_t(f32);
     std::uint16_t u16;
     std::memcpy(&u16, &f16, sizeof(std::uint16_t));
@@ -316,7 +326,7 @@ class executor_stl_t {
     }
 };
 
-#if defined(USEARCH_USE_OPENMP)
+#if USEARCH_USE_OPENMP
 
 class executor_openmp_t {
   public:
@@ -362,7 +372,7 @@ class aligned_allocator_gt {
         // void* result = nullptr;
         // int status = posix_memalign(&result, alignment, length_bytes);
         // return status == 0 ? (pointer)result : nullptr;
-#if defined(USEARCH_IS_WINDOWS)
+#if defined(USEARCH_DEFINED_WINDOWS)
         return (pointer)_aligned_malloc(length_bytes, alignment);
 #else
         return (pointer)aligned_alloc(alignment, length_bytes);
@@ -370,7 +380,7 @@ class aligned_allocator_gt {
     }
 
     void deallocate(pointer begin, size_type) const {
-#if defined(USEARCH_IS_WINDOWS)
+#if defined(USEARCH_DEFINED_WINDOWS)
         _aligned_free(begin);
 #else
         free(begin);
@@ -380,7 +390,7 @@ class aligned_allocator_gt {
 
 using aligned_allocator_t = aligned_allocator_gt<>;
 
-#if !defined(USEARCH_IS_WINDOWS)
+#if !defined(USEARCH_DEFINED_WINDOWS)
 
 /**
  *  @brief  Memory-mapping allocator designed for "alloc many, free at once" usage patterns.
