@@ -42,13 +42,13 @@ jobs:
         run: pytest python/scripts/test.py
 
 
-  test_python_36:
-    name: Test Python 3.6
+  test_python_37:
+    name: Test Python 3.7
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-20.04]
-        python-version: ["3.6"]
+        python-version: ["3.7"]
 
     steps:
       - uses: actions/checkout@v3
