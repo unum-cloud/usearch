@@ -1,3 +1,4 @@
+from __future__ import annotations
 from time import time_ns
 from typing import Tuple, Any, Callable, Union, Optional, List
 from dataclasses import dataclass, asdict
