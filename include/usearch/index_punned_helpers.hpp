@@ -14,6 +14,7 @@
 
 #if defined(USEARCH_DEFINED_LINUX)
 #include <sys/auxv.h> // `getauxval()`
+#include <asm/hwcap.h> // `HW_NEON`
 #endif
 
 #if defined(USEARCH_DEFINED_ARM)
@@ -80,7 +81,7 @@ inline bool hardware_supports(isa_t isa) noexcept {
 #if defined(USEARCH_DEFINED_ARM) && defined(USEARCH_DEFINED_LINUX)
     unsigned long capabilities = getauxval(AT_HWCAP);
     switch (isa) {
-    case isa_t::neon_k: return capabilities & HWCAP_NEON;
+    case isa_t::neon_k: return true; // Must be supported on 64-bit Arm
     case isa_t::sve_k: return capabilities & HWCAP_SVE;
     default: return false;
     }
@@ -192,7 +193,11 @@ class f8_bits_t;
 class f16_bits_t;
 
 #if USEARCH_USE_NATIVE_F16
+#if defined(USEARCH_DEFINED_ARM)
+using f16_native_t = __fp16;
+#else
 using f16_native_t = _Float16;
+#endif
 using f16_t = f16_native_t;
 #else
 using f16_native_t = void;

@@ -11,14 +11,16 @@ git submodule update --init --recursive
 Linux:
 
 ```sh
+sudo apt-get update
+sudo apt-get install cmake g++-12 build-essential libjemalloc-dev
 cmake -B ./build_release \
     -DCMAKE_CXX_COMPILER="g++-12" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DUSEARCH_USE_JEMALLOC=1 \
+    -DUSEARCH_BUILD_TEST=1 \
     -DUSEARCH_USE_OPENMP=1 \
     -DUSEARCH_USE_SIMSIMD=1 \
+    -DUSEARCH_USE_JEMALLOC=1 \
     -DUSEARCH_BUILD_BENCHMARK=1 \
-    -DUSEARCH_BUILD_TEST=1 \
     && \
     make -C ./build_release -j
 ```
