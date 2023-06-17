@@ -186,7 +186,7 @@ def test_bitwise_index(bits: int, metric: MetricKind, connectivity: int, batch_s
 
     index.add(labels, bit_vectors)
     assert np.allclose(index.get_vectors(labels), byte_vectors, atol=0.1)
-    assert np.alltrue(index.get_vectors(labels, ScalarKind.B1) == bit_vectors)
+    assert np.all(index.get_vectors(labels, ScalarKind.B1) == bit_vectors)
     
     index.search(bit_vectors, 10)
 
