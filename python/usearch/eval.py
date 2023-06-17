@@ -1,21 +1,12 @@
-from typing import Tuple, Any, Callable, Union, Optional, List, NamedTuple
+from time import time_ns
+from typing import Tuple, Any, Callable, Union, Optional, List
+from dataclasses import dataclass, asdict
 from collections import defaultdict
 
 import numpy as np
 
 from usearch.io import load_matrix
 from usearch.index import Index, Matches, MetricKind, MetricKindBitwise
-
-
-# For compatibility with Python 3.6
-try:
-    from time import time_ns
-except ImportError:
-    from datetime import datetime
-
-    def time_ns():
-        now = datetime.now()
-        return int(now.timestamp() * 1e9)
 
 
 def random_vectors(
@@ -89,7 +80,8 @@ def measure_seconds(f: Callable) -> Tuple[float, Any]:
     return secs, result
 
 
-class Dataset(NamedTuple):
+@dataclass
+class Dataset:
 
     labels: np.ndarray
     vectors: np.ndarray
@@ -163,7 +155,8 @@ class Dataset(NamedTuple):
         return d
 
 
-class TaskResult(NamedTuple):
+@dataclass
+class TaskResult:
 
     add_operations: Optional[int] = None
     add_per_second: Optional[float] = None
@@ -190,7 +183,7 @@ class TaskResult(NamedTuple):
     def search_seconds(self) -> float:
         return self.search_operations / self.search_per_second
 
-    def __add__(self, other):
+    def __add__(self, other: TaskResult):
         result = TaskResult()
         if self.add_operations and other.add_operations:
             result.add_operations = self.add_operations + other.add_operations
@@ -217,7 +210,8 @@ class TaskResult(NamedTuple):
         return result
 
 
-class AddTask(NamedTuple):
+@dataclass
+class AddTask:
 
     labels: np.ndarray
     vectors: np.ndarray
@@ -251,7 +245,7 @@ class AddTask(NamedTuple):
         self.labels = self.labels[new_order]
         self.vectors = self.vectors[new_order, :]
 
-    def slices(self, batch_size: int) -> list:
+    def slices(self, batch_size: int) -> List[AddTask]:
         """Splits this dataset into smaller chunks."""
 
         return [
@@ -260,7 +254,7 @@ class AddTask(NamedTuple):
                 vectors=self.vectors[start_row:start_row+batch_size, :],
             ) for start_row in range(0, self.count, batch_size)]
 
-    def clusters(self, number_of_clusters: int) -> list:
+    def clusters(self, number_of_clusters: int) -> List[AddTask]:
         """Splits this dataset into smaller chunks."""
 
         from sklearn.cluster import KMeans
@@ -280,7 +274,8 @@ class AddTask(NamedTuple):
             ) for rows in partitioning.values()]
 
 
-class SearchTask(NamedTuple):
+@dataclass
+class SearchTask:
 
     queries: np.ndarray
     neighbors: np.ndarray
@@ -295,7 +290,7 @@ class SearchTask(NamedTuple):
             recall_at_one=results.recall_first(self.neighbors[:, 0].flatten()),
         )
 
-    def slices(self, batch_size: int) -> list:
+    def slices(self, batch_size: int) -> List[SearchTask]:
         """Splits this dataset into smaller chunks."""
 
         return [
@@ -305,7 +300,8 @@ class SearchTask(NamedTuple):
             ) for start_row in range(0, self.queries.shape[0], batch_size)]
 
 
-class Evaluation(NamedTuple):
+@dataclass
+class Evaluation:
 
     tasks: List[Union[AddTask, SearchTask]]
     count: int
@@ -315,7 +311,7 @@ class Evaluation(NamedTuple):
     def for_dataset(
             dataset: Dataset,
             batch_size: int = 0,
-            clusters: int = 1):
+            clusters: int = 1) -> Evaluation:
 
         tasks = []
         add = AddTask(
@@ -356,5 +352,5 @@ class Evaluation(NamedTuple):
             index.clear()
         return {
             **index.specs,
-            **task_result._asdict(),
+            **asdict(task_result),
         }
