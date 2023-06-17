@@ -9,7 +9,7 @@ compile_args = ['-std=c++11', '-O3']
 link_args = []
 macros_args = [
     ('USEARCH_USE_NATIVE_F16', '0'),
-    ('USEARCH_USE_SIMSIMD', '1'),
+    ('USEARCH_USE_SIMSIMD', '0'),
 ]
 
 if sys.platform == 'linux':

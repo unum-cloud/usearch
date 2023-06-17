@@ -76,13 +76,23 @@ inline char const* isa_name(isa_t isa) noexcept {
     }
 }
 
-inline bool supports_arm_sve() noexcept {
-#if defined(USEARCH_DEFINED_ARM)
-#if defined(USEARCH_DEFINED_LINUX)
+inline bool hardware_supports(isa_t isa) noexcept {
+#if defined(USEARCH_DEFINED_ARM) && defined(USEARCH_DEFINED_LINUX)
     unsigned long capabilities = getauxval(AT_HWCAP);
-    if (capabilities & HWCAP_SVE)
-        return true;
+    switch (isa) {
+    case isa_t::neon_k: return capabilities & HWCAP_NEON;
+    case isa_t::sve_k: return capabilities & HWCAP_SVE;
+    default: return false;
+    }
 #endif
+
+#if defined(USEARCH_DEFINED_X86) && defined(USEARCH_DEFINED_GCC)
+    __builtin_cpu_init();
+    switch (isa) {
+    case isa_t::avx2_k: return __builtin_cpu_supports("avx2");
+    case isa_t::avx512_k: return __builtin_cpu_supports("avx512f");
+    default: return false;
+    }
 #endif
     return false;
 }

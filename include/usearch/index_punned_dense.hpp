@@ -36,7 +36,7 @@ struct cos_f8_t {
             a2 += square(ai);
             b2 += square(bi);
         }
-        return 1.f - ab / (std::sqrt(a2) * std::sqrt(b2));
+        return (ab != 0) ? (1.f - ab / (std::sqrt(a2) * std::sqrt(b2))) : 0;
     }
 };
 
@@ -505,23 +505,21 @@ class index_punned_dense_gt {
     static metric_and_meta_t ip_metric_f32_(std::size_t dimensions) {
         (void)dimensions;
 #if USEARCH_USE_SIMSIMD
-#if defined(USEARCH_DEFINED_X86)
-        if (dimensions % 4 == 0)
+        if (hardware_supports(isa_t::avx2_k) && dimensions % 4 == 0)
             return {
                 pun_metric_<simsimd_f32_t>([=](simsimd_f32_t const* a, simsimd_f32_t const* b) {
                     return 1.f - simsimd_dot_f32x4avx2(a, b, dimensions);
                 }),
                 isa_t::avx2_k,
             };
-#elif defined(USEARCH_DEFINED_ARM)
-        if (supports_arm_sve())
+        if (hardware_supports(isa_t::sve_k))
             return {
                 pun_metric_<simsimd_f32_t>([=](simsimd_f32_t const* a, simsimd_f32_t const* b) {
                     return 1.f - simsimd_dot_f32sve(a, b, dimensions);
                 }),
                 isa_t::sve_k,
             };
-        if (dimensions % 4 == 0)
+        if (hardware_supports(isa_t::neon_k) && dimensions % 4 == 0)
             return {
                 pun_metric_<simsimd_f32_t>([=](simsimd_f32_t const* a, simsimd_f32_t const* b) {
                     return 1.f - simsimd_dot_f32x4neon(a, b, dimensions);
@@ -529,23 +527,20 @@ class index_punned_dense_gt {
                 isa_t::neon_k,
             };
 #endif
-#endif
         return pun_metric_<f32_t>(ip_gt<f32_t>{});
     }
 
     static metric_and_meta_t cos_metric_f16_(std::size_t dimensions) {
         (void)dimensions;
 #if USEARCH_USE_SIMSIMD
-#if defined(USEARCH_DEFINED_X86)
-        if (dimensions % 16 == 0)
+        if (hardware_supports(isa_t::avx512_k) && dimensions % 16 == 0)
             return {
                 pun_metric_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) {
                     return 1.f - simsimd_cos_f16x16avx512(a, b, dimensions);
                 }),
                 isa_t::avx512_k,
             };
-#elif defined(USEARCH_DEFINED_ARM)
-        if (dimensions % 4 == 0)
+        if (hardware_supports(isa_t::neon_k) && dimensions % 4 == 0)
             return {
                 pun_metric_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) {
                     return 1.f - simsimd_cos_f16x4neon(a, b, dimensions);
@@ -553,21 +548,18 @@ class index_punned_dense_gt {
                 isa_t::neon_k,
             };
 #endif
-#endif
         return pun_metric_<f16_t>(cos_gt<f16_t, f32_t>{});
     }
 
     static metric_and_meta_t cos_metric_f8_(std::size_t dimensions) {
         (void)dimensions;
 #if USEARCH_USE_SIMSIMD
-#if defined(USEARCH_DEFINED_ARM)
-        if (dimensions % 16 == 0)
+        if (hardware_supports(isa_t::neon_k) && dimensions % 16 == 0)
             return {
                 pun_metric_<int8_t>(
                     [=](int8_t const* a, int8_t const* b) { return 1.f - simsimd_cos_i8x16neon(a, b, dimensions); }),
                 isa_t::neon_k,
             };
-#endif
 #endif
         return pun_metric_<f8_bits_t>(cos_f8_t{dimensions});
     }
