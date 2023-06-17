@@ -533,17 +533,9 @@ PYBIND11_MODULE(compiled, m) {
     m.attr("DEFAULT_EXPANSION_ADD") = py::int_(default_expansion_add());
     m.attr("DEFAULT_EXPANSION_SEARCH") = py::int_(default_expansion_search());
 
-#if defined(USEARCH_USE_OPENMP)
-    m.attr("USES_OPENMP") = py::int_(1);
-#else
-    m.attr("USES_OPENMP") = py::int_(0);
-#endif
-
-#if defined(USEARCH_USE_SIMSIMD)
-    m.attr("USES_SIMSIMD") = py::int_(1);
-#else
-    m.attr("USES_SIMSIMD") = py::int_(0);
-#endif
+    m.attr("USES_OPENMP") = py::int_(USEARCH_USE_OPENMP);
+    m.attr("USES_SIMSIMD") = py::int_(USEARCH_USE_SIMSIMD);
+    m.attr("USES_NATIVE_F16") = py::int_(USEARCH_USE_NATIVE_F16);
 
     py::enum_<metric_kind_t>(m, "MetricKind")
         .value("Unknown", metric_kind_t::unknown_k)
