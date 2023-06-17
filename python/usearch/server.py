@@ -7,7 +7,7 @@ import numpy as np
 from typing import List
 
 from ucall.rich_posix import Server
-from usearch.index import Index, list_matches
+from usearch.index import Index, Matches, Label
 
 
 def _ascii_to_vector(string: str) -> np.ndarray:
@@ -58,26 +58,25 @@ def serve(
     @server
     def add_one(label: int, vector: np.ndarray):
         print('adding', label, vector)
-        labels = np.array([label], dtype=np.longlong)
+        labels = np.array([label], dtype=Label)
         vectors = vector.flatten().reshape(vector.shape[0], 1)
         index.add(labels, vectors)
 
     @server
     def add_many(labels: np.ndarray, vectors: np.ndarray):
-        labels = labels.astype(np.longlong)
         index.add(labels, vectors, threads=threads)
 
     @server
     def search_one(vector: np.ndarray, count: int) -> List[dict]:
         print('search', vector, count)
         vectors = vector.reshape(vector.shape[0], 1)
-        results = index.search(vectors, count)
-        return list_matches(results, 0)
+        results: Matches = index.search(vectors, count)
+        return results.to_list()
 
     @server
     def search_many(vectors: np.ndarray, count: int) -> List[List[dict]]:
-        results = index.search(vectors, count)
-        return [list_matches(results, i) for i in range(vectors.shape[0])]
+        results: Matches = index.search(vectors, count)
+        return results.to_list()
 
     @server
     def add_ascii(label: int, string: str):

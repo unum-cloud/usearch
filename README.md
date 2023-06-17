@@ -276,7 +276,7 @@ The difference would be in the shape of the tensors.
 
 ```py
 n = 100
-labels = np.array(range(n), dtype=np.longlong)
+labels = np.arange(n)
 vectors = np.random.uniform(0, 0.3, (n, index.ndim)).astype(np.float32)
 
 index.add(labels, vectors, threads=..., copy=...)
@@ -584,7 +584,7 @@ fingerprints = np.vstack([encoder.GetFingerprint(x) for x in molecules])
 fingerprints = np.packbits(fingerprints, axis=1)
 
 index = Index(ndim=2048, metric=MetricKind.BitwiseTanimoto)
-labels = np.array(len(molecules), dtype=np.longlong)
+labels = np.arange(len(molecules))
 
 index.add(labels, fingerprints)
 matches = index.search(fingerprints, 10)

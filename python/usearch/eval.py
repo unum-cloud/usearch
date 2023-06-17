@@ -7,7 +7,7 @@ from collections import defaultdict
 import numpy as np
 
 from usearch.io import load_matrix
-from usearch.index import Index, Matches, MetricKind, MetricKindBitwise
+from usearch.index import Index, Matches, MetricKind, MetricKindBitwise, Label
 
 
 def random_vectors(
@@ -127,7 +127,7 @@ class Dataset:
             count = min(
                 d.vectors.shape[0], count) if count is not None else d.vectors.shape[0]
             d.vectors = d.vectors[:count, :]
-            d.labels = np.arange(count, dtype=np.longlong)
+            d.labels = np.arange(count, dtype=Label)
 
             if queries is not None:
                 d.queries = load_matrix(queries)
@@ -150,7 +150,7 @@ class Dataset:
 
             d.vectors = random_vectors(count=count, ndim=ndim)
             d.queries = d.vectors
-            d.labels = np.arange(count, dtype=np.longlong)
+            d.labels = np.arange(count, dtype=Label)
             d.neighbors = np.reshape(d.labels, (count, 1))
 
         return d

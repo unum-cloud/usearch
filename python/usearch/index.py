@@ -29,7 +29,7 @@ MetricKindBitwise = (
 
 SparseIndex = _CompiledSetsIndex
 
-Label = np.longlong
+Label = np.uint32
 
 
 def _normalize_dtype(dtype) -> ScalarKind:
@@ -295,9 +295,9 @@ class Index:
             else:
                 labels = start_id
         if isinstance(labels, np.ndarray):
-            labels = labels.astype(np.longlong)
+            labels = labels.astype(Label)
         elif isinstance(labels, Iterable):
-            labels = np.array(labels, dtype=np.longlong)
+            labels = np.array(labels, dtype=Label)
 
         self._compiled.add(labels, vectors, copy=copy, threads=threads)
 
