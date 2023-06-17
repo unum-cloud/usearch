@@ -7,13 +7,16 @@ from pybind11.setup_helpers import Pybind11Extension
 
 compile_args = ['-std=c++11', '-O3']
 link_args = []
-macros_args = []
+macros_args = [
+    ('USEARCH_USE_NATIVE_F16', '0'),
+    ('USEARCH_USE_SIMSIMD', '1'),
+]
 
 if sys.platform == 'linux':
     compile_args.append('-fopenmp')
     link_args.append('-lgomp')
-    macros_args.append(('USEARCH_USE_OPENMP', '1'))
     compile_args.append('-Wno-unknown-pragmas')
+    macros_args.append(('USEARCH_USE_OPENMP', '1'))
 
 if sys.platform == 'darwin':
     # MacOS 10.15 or higher is needed for `aligned_alloc` support.

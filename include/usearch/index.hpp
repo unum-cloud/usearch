@@ -15,34 +15,38 @@
 
 // Inferring C++ version
 #if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
-#define USEARCH_IS_CPP17
+#define USEARCH_DEFINED_CPP17
 #endif
 
 // Inferring target OS
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
-#define USEARCH_IS_WINDOWS
+#define USEARCH_DEFINED_WINDOWS
 #elif defined(__APPLE__) && defined(__MACH__)
-#define USEARCH_IS_APPLE
+#define USEARCH_DEFINED_APPLE
 #elif defined(__linux__)
-#define USEARCH_IS_LINUX
+#define USEARCH_DEFINED_LINUX
 #endif
 
 // Inferring the compiler
 #if defined(__clang__)
-#define USEARCH_IS_CLANG
+#define USEARCH_DEFINED_CLANG
 #elif defined(__GNUC__)
-#define USEARCH_IS_GCC
+#define USEARCH_DEFINED_GCC
 #endif
 
 // Inferring hardware architecture: x86 vs Arm
 #if defined(__x86_64__)
-#define USEARCH_IS_X86
+#define USEARCH_DEFINED_X86
 #elif defined(__aarch64__)
-#define USEARCH_IS_ARM
+#define USEARCH_DEFINED_ARM
+#endif
+
+#if !defined(USEARCH_USE_OPENMP)
+#define USEARCH_USE_OPENMP 0
 #endif
 
 // OS-specific includes
-#if defined(USEARCH_IS_WINDOWS)
+#if defined(USEARCH_DEFINED_WINDOWS)
 #define _USE_MATH_DEFINES
 #include <Windows.h>
 #include <sys/stat.h> // `fstat` for file size
@@ -69,20 +73,20 @@
 #include <utility>   // `std::pair`
 
 // Prefetching
-#if defined(USEARCH_IS_GCC)
+#if defined(USEARCH_DEFINED_GCC)
 // https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html
 // Zero means we are only going to read from that memory.
 // Three means high temporal locality and suggests to keep
 // the data in all layers of cache.
 #define prefetch_m(ptr) __builtin_prefetch((void*)(ptr), 0, 3)
-#elif defined(USEARCH_IS_X86)
+#elif defined(USEARCH_DEFINED_X86)
 #define prefetch_m(ptr) _mm_prefetch((void*)(ptr), _MM_HINT_T0)
 #else
 #define prefetch_m(ptr)
 #endif
 
 // Alignment
-#if defined(USEARCH_IS_WINDOWS)
+#if defined(USEARCH_DEFINED_WINDOWS)
 #define usearch_pack_m
 #define usearch_align_m __declspec(align(64))
 #else
@@ -225,11 +229,11 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct ip_
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
         result_type ab{};
-#if defined(USEARCH_USE_OPENMP)
+#if USEARCH_USE_OPENMP
 #pragma omp simd reduction(+ : ab)
-#elif defined(USEARCH_IS_CLANG)
+#elif defined(USEARCH_DEFINED_CLANG)
 #pragma clang loop vectorize(enable)
-#elif defined(USEARCH_IS_GCC)
+#elif defined(USEARCH_DEFINED_GCC)
 #pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i)
@@ -254,11 +258,11 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct cos
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
         result_t ab{}, a2{}, b2{};
-#if defined(USEARCH_USE_OPENMP)
+#if USEARCH_USE_OPENMP
 #pragma omp simd reduction(+ : ab, a2, b2)
-#elif defined(USEARCH_IS_CLANG)
+#elif defined(USEARCH_DEFINED_CLANG)
 #pragma clang loop vectorize(enable)
-#elif defined(USEARCH_IS_GCC)
+#elif defined(USEARCH_DEFINED_GCC)
 #pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i)
@@ -283,11 +287,11 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct l2s
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
         result_t ab_deltas_sq{};
-#if defined(USEARCH_USE_OPENMP)
+#if USEARCH_USE_OPENMP
 #pragma omp simd reduction(+ : ab_deltas_sq)
-#elif defined(USEARCH_IS_CLANG)
+#elif defined(USEARCH_DEFINED_CLANG)
 #pragma clang loop vectorize(enable)
-#elif defined(USEARCH_IS_GCC)
+#elif defined(USEARCH_DEFINED_GCC)
 #pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i)
@@ -313,11 +317,11 @@ template <typename scalar_at = std::uint64_t, typename result_at = std::size_t> 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
         constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
         result_t matches{};
-#if defined(USEARCH_USE_OPENMP)
+#if USEARCH_USE_OPENMP
 #pragma omp simd reduction(+ : matches)
-#elif defined(USEARCH_IS_CLANG)
+#elif defined(USEARCH_DEFINED_CLANG)
 #pragma clang loop vectorize(enable)
-#elif defined(USEARCH_IS_GCC)
+#elif defined(USEARCH_DEFINED_GCC)
 #pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != words; ++i)
@@ -344,11 +348,11 @@ template <typename scalar_at = std::uint64_t, typename result_at = float> struct
         constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
         result_t and_count{};
         result_t or_count{};
-#if defined(USEARCH_USE_OPENMP)
+#if USEARCH_USE_OPENMP
 #pragma omp simd reduction(+ : and_count, or_count)
-#elif defined(USEARCH_IS_CLANG)
+#elif defined(USEARCH_DEFINED_CLANG)
 #pragma clang loop vectorize(enable)
-#elif defined(USEARCH_IS_GCC)
+#elif defined(USEARCH_DEFINED_GCC)
 #pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != words; ++i)
@@ -376,11 +380,11 @@ template <typename scalar_at = std::uint64_t, typename result_at = float> struct
         constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
         result_t and_count{};
         result_t any_count{};
-#if defined(USEARCH_USE_OPENMP)
+#if USEARCH_USE_OPENMP
 #pragma omp simd reduction(+ : and_count, any_count)
-#elif defined(USEARCH_IS_CLANG)
+#elif defined(USEARCH_DEFINED_CLANG)
 #pragma clang loop vectorize(enable)
-#elif defined(USEARCH_IS_GCC)
+#elif defined(USEARCH_DEFINED_GCC)
 #pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != words; ++i)
@@ -437,11 +441,11 @@ template <typename scalar_at = float, typename result_at = float> struct pearson
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
         result_t a_sum{}, b_sum{}, ab_sum{};
         result_t a_sq_sum{}, b_sq_sum{};
-#if defined(USEARCH_USE_OPENMP)
+#if USEARCH_USE_OPENMP
 #pragma omp simd reduction(+ : a_sum, b_sum, ab_sum, a_sq_sum, b_sq_sum)
-#elif defined(USEARCH_IS_CLANG)
+#elif defined(USEARCH_DEFINED_CLANG)
 #pragma clang loop vectorize(enable)
-#elif defined(USEARCH_IS_GCC)
+#elif defined(USEARCH_DEFINED_GCC)
 #pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i) {
@@ -603,7 +607,7 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
     inline bool test(std::size_t i) const noexcept { return slots_[i / bits_per_slot()] & (1ul << (i & bits_mask())); }
     inline void set(std::size_t i) noexcept { slots_[i / bits_per_slot()] |= (1ul << (i & bits_mask())); }
 
-#if defined(USEARCH_IS_WINDOWS)
+#if defined(USEARCH_DEFINED_WINDOWS)
 
     inline bool atomic_set(std::size_t i) noexcept {
         slot_t mask{1ul << (i & bits_mask())};
@@ -890,7 +894,7 @@ class sorted_buffer_gt {
     static bool less(element_t const& a, element_t const& b) noexcept { return comparator_t{}(a, b); }
 };
 
-#if defined(USEARCH_IS_WINDOWS)
+#if defined(USEARCH_DEFINED_WINDOWS)
 #pragma pack(push, 1) // Pack struct elements on 1-byte alignment
 #endif
 
@@ -904,7 +908,7 @@ class usearch_pack_m uint40_t {
     inline uint40_t() noexcept { std::memset(octets, 0, 5); }
     inline uint40_t(std::uint32_t n) noexcept { std::memcpy(octets + 1, (char*)&n, 4), octets[0] = 0; }
     inline uint40_t(std::uint64_t n) noexcept { std::memcpy(octets, (char*)&n + 3, 5); }
-#if defined(USEARCH_IS_CLANG) && defined(USEARCH_IS_APPLE)
+#if defined(USEARCH_DEFINED_CLANG) && defined(USEARCH_DEFINED_APPLE)
     inline uint40_t(std::size_t n) noexcept { std::memcpy(octets, (char*)&n + 3, 5); }
 #endif
 
@@ -935,7 +939,7 @@ class usearch_pack_m uint40_t {
     }
 };
 
-#if defined(USEARCH_IS_WINDOWS)
+#if defined(USEARCH_DEFINED_WINDOWS)
 #pragma pack(pop) // Reset alignment to default
 #endif
 
@@ -1093,7 +1097,7 @@ static_assert(sizeof(file_header_t) == 64, "File header should be exactly 64 byt
 /// @brief  C++17 and newer version deprecate the `std::result_of`
 template <typename metric_at, typename... args_at>
 using return_type_gt =
-#if defined(USEARCH_IS_CPP17)
+#if defined(USEARCH_DEFINED_CPP17)
     typename std::invoke_result<metric_at, args_at...>::type;
 #else
     typename std::result_of<metric_at(args_at...)>::type;
@@ -2034,7 +2038,7 @@ class index_gt {
      */
     serialization_result_t view(char const* file_path) noexcept {
         serialization_result_t result;
-#if defined(USEARCH_IS_WINDOWS)
+#if defined(USEARCH_DEFINED_WINDOWS)
         return result.failed("Memory-mapping is not yet available for Windows");
 #else
         int open_flags = O_RDONLY;

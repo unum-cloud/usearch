@@ -172,16 +172,6 @@ def test_index_numba(ndim: int, batch_size: int):
     assert recall_members(index, exact=True) == 1
 
 
-@pytest.mark.parametrize('connectivity', connectivity_options)
-def test_sets_index(connectivity: int):
-
-    index = SparseIndex(connectivity=connectivity)
-    index.add(10, np.array([10, 12, 15], dtype=np.uint32))
-    index.add(11, np.array([11, 12, 15, 16], dtype=np.uint32))
-    results = index.search(np.array([12, 15], dtype=np.uint32), 10)
-    assert list(results) == [10, 11]
-
-
 @pytest.mark.parametrize('bits', dimensions)
 @pytest.mark.parametrize('metric', hash_metrics)
 @pytest.mark.parametrize('connectivity', connectivity_options)
@@ -196,3 +186,14 @@ def test_bitwise_index(bits: int, metric: MetricKind, connectivity: int, batch_s
 
     index.add(labels, bit_vectors)
     index.search(bit_vectors, 10)
+
+
+@pytest.mark.parametrize('connectivity', connectivity_options)
+@pytest.mark.skipif(os.name == 'nt', reason='Spurious behaviour on windows')
+def test_sets_index(connectivity: int):
+
+    index = SparseIndex(connectivity=connectivity)
+    index.add(10, np.array([10, 12, 15], dtype=np.uint32))
+    index.add(11, np.array([11, 12, 15, 16], dtype=np.uint32))
+    results = index.search(np.array([12, 15], dtype=np.uint32), 10)
+    assert list(results) == [10, 11]

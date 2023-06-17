@@ -80,6 +80,13 @@ pip install ruff
 ruff --format=github --select=E9,F63,F7,F82 --target-version=py37 python
 ```
 
+Testing wheel builds locally:
+
+```sh
+pip install cibuildwheel
+cibuildwheel --platform linux
+```
+
 Benchmarking:
 
 ```sh

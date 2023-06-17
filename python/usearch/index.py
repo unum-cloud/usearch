@@ -19,6 +19,7 @@ from usearch.compiled import (
 
     USES_OPENMP,
     USES_SIMSIMD,
+    USES_NATIVE_F16,
 )
 
 MetricKindBitwise = (
@@ -29,7 +30,7 @@ MetricKindBitwise = (
 
 SparseIndex = _CompiledSetsIndex
 
-Label = np.longlong
+Label = np.uint32
 
 
 def _normalize_dtype(dtype) -> ScalarKind:
@@ -295,9 +296,9 @@ class Index:
             else:
                 labels = start_id
         if isinstance(labels, np.ndarray):
-            labels = labels.astype(np.longlong)
+            labels = labels.astype(Label)
         elif isinstance(labels, Iterable):
-            labels = np.array(labels, dtype=np.longlong)
+            labels = np.array(labels, dtype=Label)
 
         self._compiled.add(labels, vectors, copy=copy, threads=threads)
 
@@ -337,6 +338,7 @@ class Index:
             'Expansion@Search': self.expansion_search,
             'OpenMP': USES_OPENMP,
             'SimSIMD': USES_SIMSIMD,
+            'NativeF16': USES_NATIVE_F16,
             'JIT': self.jit,
             'DType': self.dtype,
             'Path': self.path,

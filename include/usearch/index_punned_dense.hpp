@@ -7,15 +7,10 @@
 #include <thread>       // `std::thread`
 #include <vector>       // `std::vector`
 
-#include <fp16/fp16.h>
-#include <tsl/robin_map.h>
-
-#if defined(USEARCH_USE_SIMSIMD)
-#include <simsimd/simsimd.h>
-#endif
-
 #include <usearch/index.hpp>
 #include <usearch/index_punned_helpers.hpp>
+
+#include <tsl/robin_map.h>
 
 namespace unum {
 namespace usearch {
@@ -27,6 +22,13 @@ struct cos_f8_t {
     inline cos_f8_t(std::size_t dims) noexcept : dimensions(dims) {}
     inline punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b) const noexcept {
         std::int32_t ab{}, a2{}, b2{};
+#if USEARCH_USE_OPENMP
+#pragma omp simd reduction(+ : ab, a2, b2)
+#elif defined(USEARCH_DEFINED_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_DEFINED_GCC)
+#pragma GCC ivdep
+#endif
         for (std::size_t i = 0; i != dimensions; i++) {
             std::int16_t ai{a[i]};
             std::int16_t bi{b[i]};
@@ -45,6 +47,13 @@ struct l2sq_f8_t {
     inline l2sq_f8_t(std::size_t dims) noexcept : dimensions(dims) {}
     inline punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b) const noexcept {
         std::int32_t ab_deltas_sq{};
+#if USEARCH_USE_OPENMP
+#pragma omp simd reduction(+ : ab_deltas_sq)
+#elif defined(USEARCH_DEFINED_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_DEFINED_GCC)
+#pragma GCC ivdep
+#endif
         for (std::size_t i = 0; i != dimensions; i++)
             ab_deltas_sq += square(std::int16_t(a[i]) - std::int16_t(b[i]));
         return ab_deltas_sq;
@@ -495,8 +504,8 @@ class index_punned_dense_gt {
 
     static metric_and_meta_t ip_metric_f32_(std::size_t dimensions) {
         (void)dimensions;
-#if defined(USEARCH_USE_SIMSIMD)
-#if defined(USEARCH_IS_X86)
+#if USEARCH_USE_SIMSIMD
+#if defined(USEARCH_DEFINED_X86)
         if (dimensions % 4 == 0)
             return {
                 pun_metric_<simsimd_f32_t>([=](simsimd_f32_t const* a, simsimd_f32_t const* b) {
@@ -504,7 +513,7 @@ class index_punned_dense_gt {
                 }),
                 isa_t::avx2_k,
             };
-#elif defined(USEARCH_IS_ARM)
+#elif defined(USEARCH_DEFINED_ARM)
         if (supports_arm_sve())
             return {
                 pun_metric_<simsimd_f32_t>([=](simsimd_f32_t const* a, simsimd_f32_t const* b) {
@@ -526,8 +535,8 @@ class index_punned_dense_gt {
 
     static metric_and_meta_t cos_metric_f16_(std::size_t dimensions) {
         (void)dimensions;
-#if defined(USEARCH_USE_SIMSIMD)
-#if defined(USEARCH_IS_X86)
+#if USEARCH_USE_SIMSIMD
+#if defined(USEARCH_DEFINED_X86)
         if (dimensions % 16 == 0)
             return {
                 pun_metric_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) {
@@ -535,7 +544,7 @@ class index_punned_dense_gt {
                 }),
                 isa_t::avx512_k,
             };
-#elif defined(USEARCH_IS_ARM)
+#elif defined(USEARCH_DEFINED_ARM)
         if (dimensions % 4 == 0)
             return {
                 pun_metric_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) {
@@ -550,8 +559,8 @@ class index_punned_dense_gt {
 
     static metric_and_meta_t cos_metric_f8_(std::size_t dimensions) {
         (void)dimensions;
-#if defined(USEARCH_USE_SIMSIMD)
-#if defined(USEARCH_IS_ARM)
+#if USEARCH_USE_SIMSIMD
+#if defined(USEARCH_DEFINED_ARM)
         if (dimensions % 16 == 0)
             return {
                 pun_metric_<int8_t>(
