@@ -5,7 +5,7 @@ import numpy as np
 from usearch.io import load_matrix, save_matrix
 from usearch.eval import recall_members, random_vectors
 
-from usearch.index import Index, SparseIndex, MetricKind, ScalarKind, Matches
+from usearch.index import Index, SparseIndex, MetricKind, ScalarKind, Matches, MetricKindBitwise
 from usearch.index import _normalize_dtype
 from usearch.index import (
     DEFAULT_CONNECTIVITY,
@@ -181,10 +181,13 @@ def test_bitwise_index(bits: int, metric: MetricKind, connectivity: int, batch_s
     index = Index(ndim=bits, metric=metric, connectivity=connectivity)
 
     labels = np.arange(batch_size)
-    bit_vectors = np.random.randint(2, size=(batch_size, bits))
-    bit_vectors = np.packbits(bit_vectors, axis=1)
+    byte_vectors = np.random.randint(2, size=(batch_size, bits))
+    bit_vectors = np.packbits(byte_vectors, axis=1)
 
     index.add(labels, bit_vectors)
+    assert np.allclose(index.get_vectors(labels), byte_vectors, atol=0.1)
+    assert np.alltrue(index.get_vectors(labels, ScalarKind.B1) == bit_vectors)
+    
     index.search(bit_vectors, 10)
 
 
