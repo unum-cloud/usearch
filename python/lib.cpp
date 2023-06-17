@@ -26,7 +26,7 @@ using namespace unum;
 namespace py = pybind11;
 using py_shape_t = py::array::ShapeContainer;
 
-using label_t = Py_ssize_t;
+using label_t = std::uint32_t;
 using distance_t = punned_distance_t;
 using metric_t = punned_metric_t;
 using id_t = std::uint32_t;
@@ -132,11 +132,11 @@ static void add_one_to_index(punned_index_py_t& index, label_t label, py::buffer
     config.store_vector = copy;
 
     // https://docs.python.org/3/library/struct.html#format-characters
-    if (vector_info.format == "B")
+    if (vector_info.format == "B" || vector_info.format == "u1" || vector_info.format == "|u1")
         index.add(label, reinterpret_cast<b1x8_t const*>(vector_data), config).error.raise();
-    else if (vector_info.format == "c" || vector_info.format == "b")
+    else if (vector_info.format == "b" || vector_info.format == "i1" || vector_info.format == "|i1")
         index.add(label, reinterpret_cast<f8_bits_t const*>(vector_data), config).error.raise();
-    else if (vector_info.format == "e")
+    else if (vector_info.format == "e" || vector_info.format == "f2" || vector_info.format == "<f2")
         index.add(label, reinterpret_cast<f16_t const*>(vector_data), config).error.raise();
     else if (vector_info.format == "f" || vector_info.format == "f4" || vector_info.format == "<f4")
         index.add(label, reinterpret_cast<float const*>(vector_data), config).error.raise();
@@ -156,7 +156,7 @@ static void add_many_to_index(                                       //
     py::buffer_info labels_info = labels.request();
     py::buffer_info vectors_info = vectors.request();
 
-    if (labels_info.format != py::format_descriptor<label_t>::format())
+    if (labels_info.itemsize != sizeof(label_t))
         throw std::invalid_argument("Incompatible label type!");
 
     if (labels_info.ndim != 1)
@@ -181,7 +181,7 @@ static void add_many_to_index(                                       //
     char const* labels_data = reinterpret_cast<char const*>(labels_info.ptr);
 
     // https://docs.python.org/3/library/struct.html#format-characters
-    if (vectors_info.format == "B")
+    if (vectors_info.format == "B" || vectors_info.format == "u1" || vectors_info.format == "|u1")
         executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             add_config_t config;
             config.store_vector = copy;
@@ -190,7 +190,7 @@ static void add_many_to_index(                                       //
             b1x8_t const* vector = reinterpret_cast<b1x8_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
             index.add(label, vector, config).error.raise();
         });
-    else if (vectors_info.format == "c" || vectors_info.format == "b")
+    else if (vectors_info.format == "b" || vectors_info.format == "i1" || vectors_info.format == "|i1")
         executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             add_config_t config;
             config.store_vector = copy;
@@ -200,7 +200,7 @@ static void add_many_to_index(                                       //
                 reinterpret_cast<f8_bits_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
             index.add(label, vector, config).error.raise();
         });
-    else if (vectors_info.format == "e")
+    else if (vectors_info.format == "e" || vectors_info.format == "f2" || vectors_info.format == "<f2")
         executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             add_config_t config;
             config.store_vector = copy;
@@ -249,15 +249,15 @@ static py::tuple search_one_in_index(punned_index_py_t& index, py::buffer vector
     config.exact = exact;
 
     // https://docs.python.org/3/library/struct.html#format-characters
-    if (vector_info.format == "B") {
+    if (vector_info.format == "B" || vector_info.format == "u1" || vector_info.format == "|u1") {
         punned_search_result_t result = index.search(reinterpret_cast<b1x8_t const*>(vector_data), wanted, config);
         result.error.raise();
         count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
-    } else if (vector_info.format == "c" || vector_info.format == "b") {
+    } else if (vector_info.format == "b" || vector_info.format == "i1" || vector_info.format == "|i1") {
         punned_search_result_t result = index.search(reinterpret_cast<f8_bits_t const*>(vector_data), wanted, config);
         result.error.raise();
         count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
-    } else if (vector_info.format == "e") {
+    } else if (vector_info.format == "e" || vector_info.format == "f2" || vector_info.format == "<f2") {
         punned_search_result_t result = index.search(reinterpret_cast<f16_t const*>(vector_data), wanted, config);
         result.error.raise();
         count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
@@ -320,7 +320,7 @@ static py::tuple search_many_in_index( //
     auto counts_py1d = counts_py.template mutable_unchecked<1>();
 
     // https://docs.python.org/3/library/struct.html#format-characters
-    if (vectors_info.format == "B")
+    if (vectors_info.format == "B" || vectors_info.format == "u1" || vectors_info.format == "|u1")
         executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
@@ -331,7 +331,7 @@ static py::tuple search_many_in_index( //
             counts_py1d(task_idx) =
                 static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
-    else if (vectors_info.format == "c" || vectors_info.format == "b")
+    else if (vectors_info.format == "b" || vectors_info.format == "i1" || vectors_info.format == "|i1")
         executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
@@ -342,7 +342,7 @@ static py::tuple search_many_in_index( //
             counts_py1d(task_idx) =
                 static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
         });
-    else if (vectors_info.format == "e")
+    else if (vectors_info.format == "e" || vectors_info.format == "f2" || vectors_info.format == "<f2")
         executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
             search_config_t config;
             config.thread = thread_idx;
