@@ -13,6 +13,7 @@
  *  @copyright Copyright (c) 2023
  */
 #define PY_SSIZE_T_CLEAN
+#define NOMINMAX // Some of our dependencies call `std::max(x, y)`, which crashes Windows builds
 #include <thread>
 
 #include <pybind11/numpy.h>
