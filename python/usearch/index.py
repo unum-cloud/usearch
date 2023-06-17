@@ -184,6 +184,13 @@ class Index:
         :type view: bool, optional
         """
 
+        if metric in MetricKindBitwise:
+            assert dtype is None or dtype == ScalarKind.B1
+            dtype = ScalarKind.B1
+        else:
+            dtype = _normalize_dtype(dtype)
+
+
         if metric is None:
             metric = MetricKind.IP
         elif isinstance(metric, str):
@@ -229,12 +236,6 @@ class Index:
         else:
             raise ValueError(
                 'The `metric` must be Numba callback or a `MetricKind`')
-
-        if metric in MetricKindBitwise:
-            assert dtype is None or dtype == ScalarKind.B1
-            dtype = ScalarKind.B1
-        else:
-            dtype = _normalize_dtype(dtype)
 
         self._compiled = _CompiledIndex(
             ndim=ndim,

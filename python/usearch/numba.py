@@ -8,8 +8,11 @@ from typing import Callable
 import numpy as np
 from numba import cfunc, types, carray
 
-from usearch.compiled import MetricKind
+from usearch.compiled import MetricKind, ScalarKind
 
+
+signature_i8args = types.float32(types.CPointer(
+    types.int8), types.CPointer(types.int8))
 
 signature_f16args = types.float32(types.CPointer(
     types.float16), types.CPointer(types.float16))
@@ -23,7 +26,7 @@ signature_f64args = types.float32(types.CPointer(
 
 def jit(ndim: int,
         metric: MetricKind = MetricKind.Cos,
-        dtype: np.generic = np.float32) -> Callable:
+        dtype: ScalarKind = ScalarKind.F32) -> Callable:
     """JIT-compiles a distance metric specifically tuned for the target hardware
     and number of dimensions.
 
@@ -31,22 +34,25 @@ def jit(ndim: int,
     of `ctypes` to support half-precision.
     https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
     """
-    normalize_dtype = {
+    assert isinstance(metric, MetricKind)
+    assert isinstance(dtype, ScalarKind)
+
+    numba_supported_types = (
+        ScalarKind.F8,
         # Half-precision is still unsupported
         # https://github.com/numba/numba/issues/4402
-        # 'f16': np.float16,
-        'f32': np.float32,
-        'f64': np.float64,
-    }
-    if dtype in normalize_dtype.keys():
-        dtype = normalize_dtype[dtype]
-    if dtype not in normalize_dtype.values():
+        # ScalarKind.F16: np.float16,
+        ScalarKind.F32,
+        ScalarKind.F64,
+    )
+    if dtype not in numba_supported_types:
         return None
 
     scalar_kind_to_accumulator_type = {
-        np.float16: types.float32,
-        np.float32: types.float32,
-        np.float64: types.float64,
+        ScalarKind.F8: types.int32,
+        ScalarKind.F16: types.float16,
+        ScalarKind.F32: types.float32,
+        ScalarKind.F64: types.float64,
     }
     accumulator = scalar_kind_to_accumulator_type[dtype]
 
@@ -87,9 +93,10 @@ def jit(ndim: int,
         return types.float32(ab_delta_sq)
 
     scalar_kind_to_signature = {
-        np.float16: signature_f16args,
-        np.float32: signature_f32args,
-        np.float64: signature_f64args,
+        ScalarKind.F8: signature_i8args,
+        ScalarKind.F16: signature_f16args,
+        ScalarKind.F32: signature_f32args,
+        ScalarKind.F64: signature_f64args,
     }
 
     metric_kind_to_function = {
@@ -97,5 +104,8 @@ def jit(ndim: int,
         MetricKind.Cos: numba_cos,
         MetricKind.L2sq: numba_l2sq,
     }
+
+    if dtype == ScalarKind.F8 and metric == MetricKind.IP:
+        metric = MetricKind.Cos
 
     return cfunc(scalar_kind_to_signature[dtype])(metric_kind_to_function[metric])
