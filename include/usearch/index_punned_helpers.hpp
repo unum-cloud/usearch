@@ -492,12 +492,11 @@ using memory_mapping_allocator_t = aligned_allocator_t;
 #endif
 
 template <typename from_scalar_at, typename to_scalar_at> struct cast_gt {
-    inline bool operator()(byte_t const* input, std::size_t bytes_in_input, byte_t* output) const {
+    inline bool operator()(byte_t const* input, std::size_t dimensions, byte_t* output) const {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
         to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
-        std::size_t size_input = bytes_in_input / sizeof(from_scalar_at);
         auto converter = [](from_scalar_at from) { return to_scalar_at(from); };
-        std::transform(typed_input, typed_input + size_input, typed_output, converter);
+        std::transform(typed_input, typed_input + dimensions, typed_output, converter);
         return true;
     }
 };
@@ -523,23 +522,21 @@ template <> struct cast_gt<b1x8_t, b1x8_t> {
 };
 
 template <typename from_scalar_at> struct cast_gt<from_scalar_at, b1x8_t> {
-    inline bool operator()(byte_t const* input, std::size_t bytes_in_input, byte_t* output) const {
+    inline bool operator()(byte_t const* input, std::size_t dimensions, byte_t* output) const {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
         unsigned char* typed_output = reinterpret_cast<unsigned char*>(output);
-        std::size_t size_input = bytes_in_input / sizeof(from_scalar_at);
-        for (std::size_t i = 0; i != size_input; ++i)
-            typed_output[i / CHAR_BIT] |= bool(typed_input[i]) ? (1 << (i & (CHAR_BIT - 1))) : 0;
+        for (std::size_t i = 0; i != dimensions; ++i)
+            typed_output[i / CHAR_BIT] |= bool(typed_input[i]) ? (128 >> (i & (CHAR_BIT - 1))) : 0;
         return true;
     }
 };
 
 template <typename to_scalar_at> struct cast_gt<b1x8_t, to_scalar_at> {
-    inline bool operator()(byte_t const* input, std::size_t bytes_in_input, byte_t* output) const {
+    inline bool operator()(byte_t const* input, std::size_t dimensions, byte_t* output) const {
         unsigned char const* typed_input = reinterpret_cast<unsigned char const*>(input);
         to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
-        std::size_t size_input = bytes_in_input * CHAR_BIT;
-        for (std::size_t i = 0; i != size_input; ++i)
-            typed_output[i] = bool(typed_input[i / CHAR_BIT] & (1 << (i & (CHAR_BIT - 1))));
+        for (std::size_t i = 0; i != dimensions; ++i)
+            typed_output[i] = bool(typed_input[i / CHAR_BIT] & (128 >> (i & (CHAR_BIT - 1))));
         return true;
     }
 };

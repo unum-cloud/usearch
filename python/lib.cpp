@@ -394,7 +394,8 @@ template <typename index_at> void view_index(index_at& index, std::string const&
 
 template <typename internal_at, typename external_at = internal_at, typename index_at = void>
 py::object get_typed_member(index_at const& index, label_t label) {
-    py::array_t<external_at> result_py(static_cast<Py_ssize_t>(index.scalar_words()));
+    std::size_t result_slots = std::is_same<internal_at, b1x8_t>() ? index.scalar_words() : index.dimensions();
+    py::array_t<external_at> result_py(static_cast<Py_ssize_t>(result_slots));
     auto result_py1d = result_py.template mutable_unchecked<1>();
     if (!index.get(label, (internal_at*)&result_py1d(0)))
         return py::none();

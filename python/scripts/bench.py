@@ -4,7 +4,6 @@ import itertools
 from typing import List, Optional, Iterable
 from dataclasses import asdict
 
-import fire
 import numpy as np
 import pandas as pd
 

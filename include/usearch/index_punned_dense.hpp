@@ -328,7 +328,7 @@ class index_punned_dense_gt {
         std::size_t vector_bytes = dimensions_ * sizeof(scalar_at);
 
         byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * config.thread;
-        bool casted = cast(vector_data, vector_bytes, casted_data);
+        bool casted = cast(vector_data, dimensions_, casted_data);
         if (casted)
             vector_data = casted_data, vector_bytes = casted_vector_bytes_, config.store_vector = true;
 
@@ -349,7 +349,7 @@ class index_punned_dense_gt {
         std::size_t vector_bytes = dimensions_ * sizeof(scalar_at);
 
         byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * config.thread;
-        bool casted = cast(vector_data, vector_bytes, casted_data);
+        bool casted = cast(vector_data, dimensions_, casted_data);
         if (casted)
             vector_data = casted_data, vector_bytes = casted_vector_bytes_;
 
@@ -365,7 +365,7 @@ class index_punned_dense_gt {
         std::size_t vector_bytes = dimensions_ * sizeof(scalar_at);
 
         byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * config.thread;
-        bool casted = cast(vector_data, vector_bytes, casted_data);
+        bool casted = cast(vector_data, dimensions_, casted_data);
         if (casted)
             vector_data = casted_data, vector_bytes = casted_vector_bytes_;
 
@@ -388,10 +388,10 @@ class index_punned_dense_gt {
         }
         member_citerator_t iterator = typed_->cbegin() + id;
         member_cref_t member = *iterator;
-        byte_t const* casted_vector = reinterpret_cast<byte_t const*>(member.vector.data());
-        bool casted = cast(casted_vector, casted_vector_bytes_, (byte_t*)reconstructed);
+        byte_t const* punned_vector = reinterpret_cast<byte_t const*>(member.vector.data());
+        bool casted = cast(punned_vector, dimensions_, (byte_t*)reconstructed);
         if (!casted)
-            std::memcpy(reconstructed, casted_vector, casted_vector_bytes_);
+            std::memcpy(reconstructed, punned_vector, casted_vector_bytes_);
         return true;
     }
 
