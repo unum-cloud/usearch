@@ -269,7 +269,7 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct cos
             ab += result_t(a[i]) * result_t(b[i]), //
                 a2 += square<result_t>(a[i]),      //
                 b2 += square<result_t>(b[i]);
-        return ab ? (1 - ab / (std::sqrt(a2) * std::sqrt(b2))) : 0;
+        return (ab != 0) ? (1 - ab / (std::sqrt(a2) * std::sqrt(b2))) : 0;
     }
 };
 
