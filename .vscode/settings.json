@@ -152,5 +152,17 @@
         "python"
     ],
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+    "python.testing.pytestEnabled": true,
+    "terminal.integrated.profiles.linux": {
+        "tmux": {
+            "path": "/usr/bin/tmux",
+            "args": [
+                "new-session",
+                "-A",
+                "-s",
+                "vscode-usearch"
+            ]
+        }
+    },
+    "terminal.integrated.defaultProfile.linux": "tmux"
 }
