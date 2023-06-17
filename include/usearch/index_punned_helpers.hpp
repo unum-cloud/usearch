@@ -14,7 +14,6 @@
 
 #if defined(USEARCH_DEFINED_LINUX)
 #include <sys/auxv.h> // `getauxval()`
-#include <asm/hwcap.h> // `HW_NEON`
 #endif
 
 #if defined(USEARCH_DEFINED_ARM)
