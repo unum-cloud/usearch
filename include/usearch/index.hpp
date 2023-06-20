@@ -2038,12 +2038,10 @@ class index_gt {
      */
     serialization_result_t view(char const* file_path) noexcept {
         serialization_result_t result;
-#if defined(USEARCH_DEFINED_WINDOWS)
-        return result.failed("Memory-mapping is not yet available for Windows");
+#if defined(__linux__)
+        int open_flags = O_NOATIME;
 #else
         int open_flags = O_RDONLY;
-#if __linux__
-        open_flags |= O_NOATIME;
 #endif
         int descriptor = open(file_path, open_flags);
 
@@ -2056,11 +2054,33 @@ class index_gt {
         }
 
         // Map the entire file
+#if defined(USEARCH_IS_WINDOWS)
+        off_t end = length + offset;
+        HANDLE mmap_fd, h;
+        mmap_fd = (HANDLE)_get_osfhandle(fd);
+        if (fd == -1)
+            mmap_fd = INVALID_HANDLE_VALUE;
+        else
+            mmap_fd = (HANDLE)_get_osfhandle(fd);
+
+        DWORD flProtect = PAGE_READWRITE;
+        h = CreateFileMapping(mmap_fd, NULL, flProtect, 0, end, NULL);
+        if (h == NULL)
+            return result.failed(std::strerror(errno));
+
+        DWORD dwDesiredAccess = FILE_MAP_READ | FILE_MAP_COPY;
+        byte_t* file = MapViewOfFile(h, dwDesiredAccess, 0, offset, length);
+        if (file == NULL) {
+            CloseHandle(h);
+            return result.failed(std::strerror(errno));
+        }
+#else
         byte_t* file = (byte_t*)mmap(NULL, file_stat.st_size, PROT_READ, MAP_PRIVATE, descriptor, 0);
         if (file == MAP_FAILED) {
             close(descriptor);
             return result.failed(std::strerror(errno));
         }
+#endif
 
         // Read the header
         {
