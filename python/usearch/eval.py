@@ -24,7 +24,7 @@ def random_vectors(
     # Infer default parameters from the `index`, if passed
     if index is not None:
         if not isinstance(index, Index):
-            raise ValueError('Unsupported `index` type')
+            raise ValueError("Unsupported `index` type")
 
         ndim = index.ndim
         dtype = index.numpy_dtype
@@ -37,7 +37,6 @@ def random_vectors(
         return bit_vectors
 
     else:
-
         x = np.random.rand(count, ndim)
         if dtype == np.int8:
             x = (x * 100).astype(np.int8)
@@ -77,13 +76,63 @@ def measure_seconds(f: Callable) -> Tuple[float, Any]:
     result = f()
     b = time_ns()
     c = b - a
-    secs = c / (10 ** 9)
+    secs = c / (10**9)
     return secs, result
+
+
+def dcg_at_k(relevances, k=None):
+    """Calculate DCG (Discounted Cumulative Gain) up to position k.
+
+    :param relevances: List of true relevance scores (in the order as they are ranked)
+    :type relevances: list
+    :param k: Position up to which DCG is computed
+    :type k: int
+    :return: The DCG score at position k
+    :rtype: float
+    """
+    if k:
+        relevances = np.asarray(relevances)[:k]
+
+    n_relevances = len(relevances)
+    if n_relevances == 0:
+        return 0.0
+
+    discounts = np.log2(np.arange(n_relevances) + 2)
+    return np.sum(relevances / discounts)
+
+
+def ndcg_at_k(relevances, k):
+    """Calculate NDCG (Normalized Discounted Cumulative Gain) at position k.
+
+    :param relevances: List of true relevance scores (in the order as they are ranked)
+    :type relevances: list
+    :param k: Position up to which NDCG is computed
+    :type k: int
+    :return: The NDCG score at position k
+    :rtype: float
+    """
+    best_dcg = dcg_at_k(sorted(relevances, reverse=True), k)
+    if best_dcg == 0:
+        return 0.0
+
+    return dcg_at_k(relevances, k) / best_dcg
+
+
+def relevance(y_true, y_score, k):
+    """Calculate relevance scores. Binary relevance scores
+
+    :param y_true: ground-truth values
+    :type y_true: np.ndarray
+    :param y_score: predicted values
+    :type y_score: np.ndarray
+    """
+    y_true = y_true[:k]
+    y_score = y_score[:k]
+    return [1 if i in y_true else 0 for i in y_score]
 
 
 @dataclass
 class Dataset:
-
     labels: np.ndarray
     vectors: np.ndarray
     queries: np.ndarray
@@ -124,8 +173,11 @@ class Dataset:
 
             d.vectors = load_matrix(vectors)
             ndim = d.vectors.shape[1]
-            count = min(
-                d.vectors.shape[0], count) if count is not None else d.vectors.shape[0]
+            count = (
+                min(d.vectors.shape[0], count)
+                if count is not None
+                else d.vectors.shape[0]
+            )
             d.vectors = d.vectors[:count, :]
             d.labels = np.arange(count, dtype=Label)
 
@@ -139,14 +191,13 @@ class Dataset:
                 if k is not None:
                     d.neighbors = d.neighbors[:, :k]
             else:
-                assert k is None, 'Cant ovveride `k`, will retrieve one neighbor'
+                assert k is None, "Cant ovveride `k`, will retrieve one neighbor"
                 d.neighbors = np.reshape(d.labels, (count, 1))
 
         else:
-
             assert ndim is not None
             assert count is not None
-            assert k is None, 'Cant ovveride `k`, will retrieve one neighbor'
+            assert k is None, "Cant ovveride `k`, will retrieve one neighbor"
 
             d.vectors = random_vectors(count=count, ndim=ndim)
             d.queries = d.vectors
@@ -158,7 +209,6 @@ class Dataset:
 
 @dataclass
 class TaskResult:
-
     add_operations: Optional[int] = None
     add_per_second: Optional[float] = None
 
@@ -169,12 +219,12 @@ class TaskResult:
     def __repr__(self) -> str:
         parts = []
         if self.add_per_second:
-            parts.append(f'{self.add_per_second:.2f} add/s')
+            parts.append(f"{self.add_per_second:.2f} add/s")
         if self.search_per_second:
-            parts.append(f'{self.search_per_second:.2f} search/s')
+            parts.append(f"{self.search_per_second:.2f} search/s")
         if self.recall_at_one:
-            parts.append(f'{self.recall_at_one * 100:.2f}% recall@1')
-        return ', '.join(parts)
+            parts.append(f"{self.recall_at_one * 100:.2f}% recall@1")
+        return ", ".join(parts)
 
     @property
     def add_seconds(self) -> float:
@@ -188,8 +238,9 @@ class TaskResult:
         result = TaskResult()
         if self.add_operations and other.add_operations:
             result.add_operations = self.add_operations + other.add_operations
-            result.add_per_second = result.add_operations / \
-                (self.add_seconds + other.add_seconds)
+            result.add_per_second = result.add_operations / (
+                self.add_seconds + other.add_seconds
+            )
         else:
             base = self if self.add_operations else other
             result.add_operations = base.add_operations
@@ -198,10 +249,12 @@ class TaskResult:
         if self.search_operations and other.search_operations:
             result.search_operations = self.search_operations + other.search_operations
             result.recall_at_one = (
-                self.recall_at_one * self.search_operations + other.recall_at_one *
-                other.search_operations) / (self.search_operations + other.search_operations)
-            result.search_per_second = result.search_operations / \
-                (self.search_seconds + other.search_seconds)
+                self.recall_at_one * self.search_operations
+                + other.recall_at_one * other.search_operations
+            ) / (self.search_operations + other.search_operations)
+            result.search_per_second = result.search_operations / (
+                self.search_seconds + other.search_seconds
+            )
         else:
             base = self if self.search_operations else other
             result.search_operations = base.search_operations
@@ -213,21 +266,18 @@ class TaskResult:
 
 @dataclass
 class AddTask:
-
     labels: np.ndarray
     vectors: np.ndarray
 
     def __call__(self, index: Index) -> TaskResult:
-
         batch_size: int = self.vectors.shape[0]
         old_size: int = len(index)
-        dt, _ = measure_seconds(
-            lambda: index.add(self.labels, self.vectors))
+        dt, _ = measure_seconds(lambda: index.add(self.labels, self.vectors))
 
         assert len(index) == old_size + batch_size
         return TaskResult(
             add_operations=batch_size,
-            add_per_second=batch_size/dt,
+            add_per_second=batch_size / dt,
         )
 
     @property
@@ -251,17 +301,21 @@ class AddTask:
 
         return [
             AddTask(
-                labels=self.labels[start_row:start_row+batch_size],
-                vectors=self.vectors[start_row:start_row+batch_size, :],
-            ) for start_row in range(0, self.count, batch_size)]
+                labels=self.labels[start_row: start_row + batch_size],
+                vectors=self.vectors[start_row: start_row + batch_size, :],
+            )
+            for start_row in range(0, self.count, batch_size)
+        ]
 
     def clusters(self, number_of_clusters: int) -> List[AddTask]:
         """Splits this dataset into smaller chunks."""
 
         from sklearn.cluster import KMeans
+
         clustering = KMeans(
             n_clusters=number_of_clusters,
-            random_state=0, n_init='auto',
+            random_state=0,
+            n_init="auto",
         ).fit(self.vectors)
 
         partitioning = defaultdict(list)
@@ -272,22 +326,23 @@ class AddTask:
             AddTask(
                 labels=self.labels[rows],
                 vectors=self.vectors[rows, :],
-            ) for rows in partitioning.values()]
+            )
+            for rows in partitioning.values()
+        ]
 
 
 @dataclass
 class SearchTask:
-
     queries: np.ndarray
     neighbors: np.ndarray
 
     def __call__(self, index: Index) -> TaskResult:
-
         dt, results = measure_seconds(
-            lambda: index.search(self.queries, self.neighbors.shape[1]))
+            lambda: index.search(self.queries, self.neighbors.shape[1])
+        )
 
         return TaskResult(
-            search_per_second=self.queries.shape[0]/dt,
+            search_per_second=self.queries.shape[0] / dt,
             recall_at_one=results.recall_first(self.neighbors[:, 0].flatten()),
         )
 
@@ -296,31 +351,27 @@ class SearchTask:
 
         return [
             SearchTask(
-                queries=self.queries[start_row:start_row+batch_size, :],
-                neighbors=self.neighbors[start_row:start_row+batch_size, :],
-            ) for start_row in range(0, self.queries.shape[0], batch_size)]
+                queries=self.queries[start_row: start_row + batch_size, :],
+                neighbors=self.neighbors[start_row: start_row + batch_size, :],
+            )
+            for start_row in range(0, self.queries.shape[0], batch_size)
+        ]
 
 
 @dataclass
 class Evaluation:
-
     tasks: List[Union[AddTask, SearchTask]]
     count: int
     ndim: int
 
     @staticmethod
     def for_dataset(
-            dataset: Dataset,
-            batch_size: int = 0,
-            clusters: int = 1) -> Evaluation:
-
+        dataset: Dataset, batch_size: int = 0, clusters: int = 1
+    ) -> Evaluation:
         tasks = []
-        add = AddTask(
-            vectors=dataset.vectors,
-            labels=dataset.labels)
-        search = SearchTask(
-            queries=dataset.queries,
-            neighbors=dataset.neighbors)
+        add = AddTask(vectors=dataset.vectors, labels=dataset.labels)
+        search = SearchTask(queries=dataset.queries,
+                            neighbors=dataset.neighbors)
 
         if batch_size:
             tasks.extend(add.slices(batch_size))
@@ -340,7 +391,6 @@ class Evaluation:
         )
 
     def __call__(self, index: Index, post_clean: bool = True) -> dict:
-
         task_result = TaskResult()
 
         try:
