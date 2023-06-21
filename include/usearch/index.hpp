@@ -2038,7 +2038,10 @@ class index_gt {
      */
     serialization_result_t view(char const* file_path) noexcept {
         serialization_result_t result;
-    int open_flags = O_RDONLY;
+#if defined(USEARCH_DEFINED_WINDOWS)
+        int open_flags = _O_RDONLY;
+#else
+        int open_flags = O_RDONLY;
 #if __linux__
         open_flags |= O_NOATIME;
 #endif
@@ -2123,6 +2126,7 @@ class index_gt {
 
         viewed_file_descriptor_ = descriptor;
         return {};
+#endif // POSIX
     }
 
 #pragma endregion
