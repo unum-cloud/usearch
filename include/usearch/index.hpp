@@ -2054,7 +2054,7 @@ class index_gt {
         }
 
         // Map the entire file
-#if defined(USEARCH_IS_WINDOWS)
+#if defined(USEARCH_DEFINED_WINDOWS)
         off_t end = length + offset;
         HANDLE mmap_fd, h;
         mmap_fd = (HANDLE)_get_osfhandle(fd);
