@@ -2055,21 +2055,20 @@ class index_gt {
 
         // Map the entire file
 #if defined(USEARCH_DEFINED_WINDOWS)
-        off_t end = length + offset;
         HANDLE mmap_fd, h;
-        mmap_fd = (HANDLE)_get_osfhandle(fd);
+        mmap_fd = (HANDLE)_get_osfhandle(descriptor);
         if (fd == -1)
             mmap_fd = INVALID_HANDLE_VALUE;
         else
-            mmap_fd = (HANDLE)_get_osfhandle(fd);
+            mmap_fd = (HANDLE)_get_osfhandle(descriptor);
 
         DWORD flProtect = PAGE_READWRITE;
-        h = CreateFileMapping(mmap_fd, NULL, flProtect, 0, end, NULL);
+        h = CreateFileMapping(mmap_fd, NULL, flProtect, 0, file_stat.st_size, NULL);
         if (h == NULL)
             return result.failed(std::strerror(errno));
 
         DWORD dwDesiredAccess = FILE_MAP_READ | FILE_MAP_COPY;
-        byte_t* file = MapViewOfFile(h, dwDesiredAccess, 0, offset, length);
+        byte_t* file = MapViewOfFile(h, dwDesiredAccess, 0, 0, file_stat.st_size);
         if (file == NULL) {
             CloseHandle(h);
             return result.failed(std::strerror(errno));
