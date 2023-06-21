@@ -2038,7 +2038,7 @@ class index_gt {
      */
     serialization_result_t view(char const* file_path) noexcept {
         serialization_result_t result;
-#if defined(__linux__)
+#if __linux__
         int open_flags = O_NOATIME;
 #else
         int open_flags = O_RDONLY;
