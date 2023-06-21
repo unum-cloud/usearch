@@ -1103,6 +1103,23 @@ using return_type_gt =
     typename std::result_of<metric_at(args_at...)>::type;
 #endif
 
+#if defined(USEARCH_DEFINED_WINDOWS)
+struct viewed_file_t {
+    HANDLE file_handle{};
+    HANDLE mapping_handle{};
+    void* ptr{};
+    size_t length{};
+    explicit operator bool() const noexcept { return mapping_handle != nullptr; }
+};
+#else
+struct viewed_file_t {
+    int file_descriptor{};
+    void* ptr{};
+    size_t length{};
+    explicit operator bool() const noexcept { return file_descriptor != 0; }
+};
+#endif
+
 /**
  *  @brief  Approximate Nearest Neighbors Search index using the
  *          Hierarchical Navigable Small World graph algorithm.
@@ -1390,7 +1407,7 @@ class index_gt {
     allocator_t allocator_{};
     point_allocator_t point_allocator_{};
     precomputed_constants_t pre_{};
-    int viewed_file_descriptor_{};
+    viewed_file_t viewed_file_{};
 
     usearch_align_m mutable std::atomic<std::size_t> capacity_{};
     usearch_align_m mutable std::atomic<std::size_t> size_{};
@@ -1415,7 +1432,7 @@ class index_gt {
     std::size_t max_level() const noexcept { return static_cast<std::size_t>(max_level_); }
     index_config_t const& config() const noexcept { return config_; }
     index_limits_t const& limits() const noexcept { return limits_; }
-    bool is_immutable() const noexcept { return viewed_file_descriptor_ != 0; }
+    bool is_immutable() const noexcept { return bool(viewed_file_); }
 
     /**
      *  @section Exceptions
@@ -1424,8 +1441,8 @@ class index_gt {
     explicit index_gt(index_config_t config = {}, metric_t metric = {}, allocator_t allocator = {},
                       point_allocator_t point_allocator = {}) noexcept
         : config_(config), limits_(0, 0), metric_(metric), allocator_(std::move(allocator)),
-          point_allocator_(std::move(point_allocator)), pre_(precompute_(config)), viewed_file_descriptor_(0),
-          size_(0u), max_level_(-1), entry_id_(0u), nodes_(nullptr), nodes_mutexes_(), contexts_(nullptr) {}
+          point_allocator_(std::move(point_allocator)), pre_(precompute_(config)), size_(0u), max_level_(-1),
+          entry_id_(0u), nodes_(nullptr), nodes_mutexes_(), contexts_(nullptr) {}
 
     /**
      *  @brief  Clones the structure with the same hyper-parameters, but without contents.
@@ -1476,6 +1493,7 @@ class index_gt {
             context_allocator_t{}.deallocate(exchange(contexts_, nullptr), limits_.threads());
         limits_ = index_limits_t{0, 0};
         capacity_ = 0;
+        reset_view_();
     }
 
     /**
@@ -1487,7 +1505,7 @@ class index_gt {
         std::swap(metric_, other.metric_);
         std::swap(allocator_, other.allocator_);
         std::swap(pre_, other.pre_);
-        std::swap(viewed_file_descriptor_, other.viewed_file_descriptor_);
+        std::swap(viewed_file_, other.viewed_file_);
         std::swap(max_level_, other.max_level_);
         std::swap(entry_id_, other.entry_id_);
         std::swap(nodes_, other.nodes_);
@@ -1854,7 +1872,7 @@ class index_gt {
      */
     std::size_t memory_usage(std::size_t allocator_entry_bytes = default_allocator_entry_bytes()) const noexcept {
         std::size_t total = 0;
-        if (viewed_file_descriptor_ == 0) {
+        if (!viewed_file_) {
             stats_t s = stats();
             total += s.allocated_bytes;
             total += s.nodes * allocator_entry_bytes;
@@ -2027,7 +2045,7 @@ class index_gt {
         }
 
         std::fclose(file);
-        viewed_file_descriptor_ = 0;
+        reset_view_();
         return {};
     }
 
@@ -2038,14 +2056,38 @@ class index_gt {
      */
     serialization_result_t view(char const* file_path) noexcept {
         serialization_result_t result;
+
 #if defined(USEARCH_DEFINED_WINDOWS)
-        return result.failed("Memory-mapping is not yet available for Windows");
+
+        HANDLE file_handle =
+            CreateFile(file_path, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+        if (file_handle == INVALID_HANDLE_VALUE)
+            return result.failed("Opening file failed!");
+
+        size_t file_length = GetFileSize(file_handle, 0);
+        HANDLE mapping_handle = CreateFileMapping(file_handle, 0, PAGE_READONLY, 0, 0, 0);
+        if (mapping_handle == 0) {
+            CloseHandle(file_handle);
+            return result.failed("Mapping file failed!");
+        }
+
+        byte_t* file = (byte_t*)MapViewOfFile(mapping_handle, FILE_MAP_READ, 0, 0, 0);
+        if (file == 0) {
+            CloseHandle(mapping_handle);
+            CloseHandle(file_handle);
+            return result.failed("View the map failed!");
+        }
+        viewed_file_.file_handle = file_handle;
+        viewed_file_.mapping_handle = mapping_handle;
+        viewed_file_.ptr = file;
+        viewed_file_.length = file_length;
 #else
-        int open_flags = O_RDONLY;
-#if __linux__
-        open_flags |= O_NOATIME;
+
+#if defined(USEARCH_DEFINED_LINUX)
+        int descriptor = open(file_path, O_RDONLY | O_NOATIME);
+#else
+        int descriptor = open(file_path, O_RDONLY);
 #endif
-        int descriptor = open(file_path, open_flags);
 
         // Estimate the file size
         struct stat file_stat;
@@ -2061,16 +2103,20 @@ class index_gt {
             close(descriptor);
             return result.failed(std::strerror(errno));
         }
+        viewed_file_.file_descriptor = descriptor;
+        viewed_file_.ptr = file;
+        viewed_file_.length = file_stat.st_size;
+#endif // Platform specific code
 
         // Read the header
         {
             file_head_t state{file};
             if (state.bytes_per_label != sizeof(label_t)) {
-                close(descriptor);
+                reset_view_();
                 return result.failed("Incompatible label type!");
             }
             if (state.bytes_per_id != sizeof(id_t)) {
-                close(descriptor);
+                reset_view_();
                 return result.failed("Incompatible ID type!");
             }
 
@@ -2103,14 +2149,27 @@ class index_gt {
             max_level_ = (std::max)(max_level_, level);
         }
 
-        viewed_file_descriptor_ = descriptor;
         return {};
-#endif // POSIX
     }
 
 #pragma endregion
 
   private:
+    void reset_view_() noexcept {
+        if (!viewed_file_)
+            return;
+#if defined(USEARCH_DEFINED_WINDOWS)
+        UnmapViewOfFile(viewed_file_.ptr);
+        CloseHandle(viewed_file_.mapping_handle);
+        CloseHandle(viewed_file_.file_handle);
+
+#else
+        munmap(viewed_file_.ptr, viewed_file_.length);
+        close(viewed_file_.file_descriptor);
+#endif
+        viewed_file_ = {};
+    }
+
     inline static precomputed_constants_t precompute_(index_config_t const& config) noexcept {
         precomputed_constants_t pre;
         pre.connectivity_max_base = config.connectivity * base_level_multiple_();
@@ -2135,7 +2194,7 @@ class index_gt {
 
     void node_free_(std::size_t id) noexcept {
 
-        if (viewed_file_descriptor_ != 0)
+        if (viewed_file_)
             return;
 
         node_t& node = nodes_[id];
