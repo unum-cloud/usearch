@@ -2068,7 +2068,7 @@ class index_gt {
             return result.failed(std::strerror(errno));
 
         DWORD dwDesiredAccess = FILE_MAP_READ | FILE_MAP_COPY;
-        byte_t* file = MapViewOfFile(h, dwDesiredAccess, 0, 0, file_stat.st_size);
+        byte_t* file = static_cast<byte_t*>(MapViewOfFile(h, dwDesiredAccess, 0, 0, file_stat.st_size));
         if (file == NULL) {
             CloseHandle(h);
             return result.failed(std::strerror(errno));
