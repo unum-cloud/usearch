@@ -2057,7 +2057,7 @@ class index_gt {
 #if defined(USEARCH_DEFINED_WINDOWS)
         HANDLE mmap_fd, h;
         mmap_fd = (HANDLE)_get_osfhandle(descriptor);
-        if (fd == -1)
+        if (descriptor == -1)
             mmap_fd = INVALID_HANDLE_VALUE;
         else
             mmap_fd = (HANDLE)_get_osfhandle(descriptor);
