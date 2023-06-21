@@ -2125,7 +2125,6 @@ class index_gt {
 
         viewed_file_descriptor_ = descriptor;
         return {};
-#endif // POSIX
     }
 
 #pragma endregion
