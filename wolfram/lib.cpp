@@ -4,6 +4,7 @@
 using namespace unum::usearch;
 using distance_t = punned_distance_t;
 using punned_t = index_punned_dense_gt<int>;
+using punned_search_result_t = typename punned_t::search_result_t;
 using span_t = span_gt<float>;
 
 EXTERN_C DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) { return LIBRARY_NO_ERROR; }
@@ -19,15 +20,16 @@ EXTERN_C DLLEXPORT int IndexCreate(WolframLibraryData libData, mint Argc, MArgum
         std::size_t dimensions = static_cast<std::size_t>(MArgument_getInteger(Args[2]));
         std::size_t capacity = static_cast<std::size_t>(MArgument_getInteger(Args[3]));
         config.connectivity = static_cast<std::size_t>(MArgument_getInteger(Args[4]));
-        config.expansion_add = static_cast<std::size_t>(MArgument_getInteger(Args[5]));
-        config.expansion_search = static_cast<std::size_t>(MArgument_getInteger(Args[6]));
+        std::size_t expansion_add = static_cast<std::size_t>(MArgument_getInteger(Args[5]));
+        std::size_t expansion_search = static_cast<std::size_t>(MArgument_getInteger(Args[6]));
 
         scalar_kind_t accuracy = scalar_kind_from_name(accuracy_cstr, std::strlen(accuracy_cstr));
         metric_kind_t metric_kind = metric_from_name(metric_cstr, std::strlen(metric_cstr));
-        punned_t index = make_punned<punned_t>(metric_kind, dimensions, accuracy, config);
+        punned_t index = punned_t::make(dimensions, metric_kind, config, accuracy, expansion_add, expansion_search);
         index.reserve(capacity);
 
         punned_t* result_ptr = new punned_t(std::move(index));
+        
         MArgument_setInteger(Res, (long)result_ptr);
 
     } catch (...) {
@@ -131,7 +133,6 @@ EXTERN_C DLLEXPORT int IndexSearch(WolframLibraryData libData, mint Argc, MArgum
     int wanted = MArgument_getInteger(Args[2]);
     float* vector_data = nullptr;
     int* matches_data = nullptr;
-    std::size_t found = 0;
 
     try {
         libData->MTensor_new(MType_Integer, 1, dims, &matches);
@@ -140,16 +141,15 @@ EXTERN_C DLLEXPORT int IndexSearch(WolframLibraryData libData, mint Argc, MArgum
         size_t len = libData->MTensor_getFlattenedLength(tens);
         vector_data = (float*)libData->MTensor_getRealData(tens);
         span_t vector_span = span_t{vector_data, len};
+        search_config_t config;
 
-        matches_data = (int*)std::malloc(sizeof(int) * wanted);
-        found = c_ptr->search(vector_span, (size_t)wanted, matches_data, nullptr);
-        for (mint i = 0; i < found; i++)
-            libData->MTensor_setInteger(matches, &i, matches_data[i]);
+        punned_search_result_t result = c_ptr->search(vector_span, (size_t)wanted, config);
+        for (mint i = 0; i < result.size(); i++)
+            libData->MTensor_setInteger(matches, &i, result[i].element.label);
 
         MArgument_setMTensor(Res, matches);
     } catch (...) {
         return LIBRARY_FUNCTION_ERROR;
     }
-    std::free(matches_data);
     return LIBRARY_NO_ERROR;
 }
