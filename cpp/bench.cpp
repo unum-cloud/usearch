@@ -15,7 +15,7 @@
 
 #define STDERR_FILENO HANDLE(2)
 #else
-#if defined(USEARCH_DEFINED_LINUX)
+#if defined(__linux__)
 #include <execinfo.h> // `backtrace`
 #endif
 #include <fcntl.h>    // `open`
