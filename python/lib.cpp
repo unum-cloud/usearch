@@ -29,7 +29,7 @@ using py_shape_t = py::array::ShapeContainer;
 
 using label_t = std::uint32_t;
 using distance_t = punned_distance_t;
-using metric_t = punned_metric_t;
+using metric_t = index_punned_dense_metric_t;
 using id_t = std::uint32_t;
 using big_id_t = std::uint64_t;
 
@@ -50,7 +50,7 @@ struct punned_index_py_t : public punned_index_t {
 
 using set_member_t = std::uint32_t;
 using set_view_t = span_gt<set_member_t const>;
-using sparse_index_t = index_gt<jaccard_gt<set_member_t>, label_t, id_t, set_member_t>;
+using sparse_index_t = index_gt<jaccard_gt<set_member_t>, label_t, id_t>;
 
 struct sparse_index_py_t : public sparse_index_t {
     using native_t = sparse_index_t;
@@ -63,15 +63,17 @@ struct sparse_index_py_t : public sparse_index_t {
     sparse_index_py_t(native_t&& base) : native_t(std::move(base)) {}
 };
 
-template <typename scalar_at> metric_t udf(std::size_t metric_uintptr) {
-    return [metric_uintptr](punned_vector_view_t a, punned_vector_view_t b) -> distance_t {
+template <typename scalar_at> metric_t udf(std::uintptr_t metric_uintptr) {
+    metric_t result;
+    result.func_ = [metric_uintptr](punned_vector_view_t a, punned_vector_view_t b) -> distance_t {
         using metric_raw_t = punned_distance_t (*)(scalar_at const*, scalar_at const*);
         metric_raw_t metric_ptr = reinterpret_cast<metric_raw_t>(metric_uintptr);
         return metric_ptr((scalar_at const*)a.data(), (scalar_at const*)b.data());
     };
+    return result;
 }
 
-metric_t udf(std::size_t metric_uintptr, scalar_kind_t accuracy) {
+metric_t udf(std::uintptr_t metric_uintptr, scalar_kind_t accuracy) {
     switch (accuracy) {
     case scalar_kind_t::f8_k: return udf<f8_bits_t>(metric_uintptr);
     case scalar_kind_t::f16_k: return udf<f16_t>(metric_uintptr);
@@ -88,7 +90,7 @@ static punned_index_py_t make_index( //
     std::size_t connectivity,        //
     std::size_t expansion_add,       //
     std::size_t expansion_search,    //
-    std::size_t metric_uintptr,      //
+    std::uintptr_t metric_uintptr,   //
     bool tune) {
 
     index_config_t config;

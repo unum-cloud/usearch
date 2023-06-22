@@ -20,6 +20,7 @@ struct cos_f8_t {
     std::size_t dimensions;
 
     inline cos_f8_t(std::size_t dims) noexcept : dimensions(dims) {}
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::cos_k; }
     inline punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b) const noexcept {
         std::int32_t ab{}, a2{}, b2{};
 #if USEARCH_USE_OPENMP
@@ -45,6 +46,7 @@ struct l2sq_f8_t {
     std::size_t dimensions;
 
     inline l2sq_f8_t(std::size_t dims) noexcept : dimensions(dims) {}
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::l2sq_k; }
     inline punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b) const noexcept {
         std::int32_t ab_deltas_sq{};
 #if USEARCH_USE_OPENMP
@@ -60,6 +62,40 @@ struct l2sq_f8_t {
     }
 };
 
+struct index_punned_dense_metric_t {
+    using scalar_t = byte_t;
+    using result_t = punned_distance_t;
+    using view_t = punned_vector_view_t;
+    using stl_func_t = std::function<punned_distance_t(punned_vector_view_t, punned_vector_view_t)>;
+
+    stl_func_t func_;
+    metric_kind_t kind_ = metric_kind_t::unknown_k;
+    isa_t isa_ = isa_t::auto_k;
+
+    index_punned_dense_metric_t() = default;
+
+    template <typename typed_at, typename scalar_at = typename typed_at::scalar_t>
+    index_punned_dense_metric_t(typed_at typed)
+        : index_punned_dense_metric_t(typed.kind(), isa_t::auto_k, scalar_at{}, typed) {}
+
+    template <typename typed_at, typename scalar_at>
+    index_punned_dense_metric_t(metric_kind_t kind, isa_t isa, scalar_at, typed_at metric) {
+        using scalar_t = scalar_at;
+        using typed_view_t = span_gt<scalar_t const>;
+        func_ = [=](view_t a, view_t b) -> result_t {
+            std::size_t dims = a.size() / sizeof(scalar_t);
+            typed_view_t a_typed{(scalar_t const*)a.data(), dims};
+            typed_view_t b_typed{(scalar_t const*)b.data(), dims};
+            return metric(a_typed, b_typed);
+        };
+        kind_ = kind;
+        isa_ = isa;
+    }
+
+    inline metric_kind_t kind() const noexcept { return kind_; }
+    inline result_t operator()(view_t a, view_t b) const { return func_(a, b); }
+};
+
 /**
  *  @brief  Oversimplified type-punned index for equidimensional vectors
  *          with automatic down-casting and hardware isa.
@@ -71,24 +107,14 @@ class index_punned_dense_gt {
     using id_t = id_at;
     using distance_t = punned_distance_t;
     /// @brief Punned metric object.
-    using metric_t = punned_metric_t;
+    using metric_t = index_punned_dense_metric_t;
 
   private:
     /// @brief Schema: input buffer, bytes in input buffer, output buffer.
     using cast_t = std::function<bool(byte_t const*, std::size_t, byte_t*)>;
     /// @brief Punned index.
-    using index_t = index_gt<metric_t, label_t, id_t, byte_t, aligned_allocator_t, memory_mapping_allocator_t>;
+    using index_t = index_gt<metric_t, label_t, id_t, aligned_allocator_t, memory_mapping_allocator_t>;
     using index_allocator_t = aligned_allocator_gt<index_t, 64>;
-
-    /// @brief A type-punned metric and metadata about present isa support.
-    struct metric_and_meta_t {
-        metric_t metric;
-        isa_t isa;
-
-        metric_and_meta_t(metric_t m = {}, isa_t i = isa_t::auto_k) : metric(m), isa(i) {}
-        metric_and_meta_t(metric_and_meta_t const&) = default;
-        metric_and_meta_t& operator=(metric_and_meta_t const&) = default;
-    };
 
     using member_iterator_t = typename index_t::member_iterator_t;
     using member_citerator_t = typename index_t::member_citerator_t;
@@ -191,6 +217,7 @@ class index_punned_dense_gt {
     scalar_kind_t scalar_kind() const { return scalar_kind_; }
     isa_t isa() const { return isa_; }
 
+    static file_head_result_t head(char const* path) noexcept { return index_t::head(path); }
     serialization_result_t save(char const* path) const { return typed_->save(path); }
     serialization_result_t load(char const* path) { return typed_->load(path); }
     serialization_result_t view(char const* path) { return typed_->view(path); }
@@ -278,7 +305,7 @@ class index_punned_dense_gt {
         return make_(                                //
             dimensions, accuracy,                    //
             config, expansion_add, expansion_search, //
-            metric_and_meta_t(metric), make_casts_(accuracy));
+            metric_t(metric), make_casts_(accuracy));
     }
 
     index_punned_dense_gt fork() const {
@@ -425,7 +452,7 @@ class index_punned_dense_gt {
     static index_punned_dense_gt make_(                                                 //
         std::size_t dimensions, scalar_kind_t scalar_kind,                              //
         index_config_t config, std::size_t expansion_add, std::size_t expansion_search, //
-        metric_and_meta_t metric_and_meta, casts_t casts) {
+        metric_t metric, casts_t casts) {
 
         std::size_t hardware_threads = std::thread::hardware_concurrency();
         index_punned_dense_gt result;
@@ -437,8 +464,7 @@ class index_punned_dense_gt {
         result.casted_vector_bytes_ = bytes_per_scalar(scalar_kind) * result.scalar_words_;
         result.cast_buffer_.resize(hardware_threads * result.casted_vector_bytes_);
         result.casts_ = casts;
-        result.isa_ = metric_and_meta.isa;
-        result.root_metric_ = metric_and_meta.metric;
+        result.root_metric_ = metric;
 
         // Fill the thread IDs.
         result.available_threads_.resize(hardware_threads);
@@ -446,7 +472,7 @@ class index_punned_dense_gt {
 
         // Available since C11, but only C++17, so we use the C version.
         index_t* raw = index_allocator_t{}.allocate(1);
-        new (raw) index_t(config, metric_and_meta.metric);
+        new (raw) index_t(config, metric);
         result.typed_ = raw;
         return result;
     }
@@ -491,80 +517,49 @@ class index_punned_dense_gt {
         }
     }
 
-    template <typename scalar_at, typename typed_at> static metric_t pun_metric_(typed_at metric) {
-        using scalar_t = scalar_at;
-        using vector_view_t = span_gt<scalar_t const>;
-        return [=](punned_vector_view_t a, punned_vector_view_t b) -> punned_distance_t {
-            std::size_t dims = a.size() / sizeof(scalar_t);
-            vector_view_t a_typed{(scalar_t const*)a.data(), dims};
-            vector_view_t b_typed{(scalar_t const*)b.data(), dims};
-            return metric(a_typed, b_typed);
-        };
-    }
-
-    static metric_and_meta_t ip_metric_f32_(std::size_t dimensions) {
+    static metric_t ip_metric_f32_(std::size_t dimensions) {
         (void)dimensions;
 #if USEARCH_USE_SIMSIMD
         if (hardware_supports(isa_t::avx2_k) && dimensions % 4 == 0)
-            return {
-                pun_metric_<simsimd_f32_t>([=](simsimd_f32_t const* a, simsimd_f32_t const* b) {
-                    return 1.f - simsimd_dot_f32x4avx2(a, b, dimensions);
-                }),
-                isa_t::avx2_k,
-            };
+            return {metric_kind_t::ip_k, isa_t::avx2_k, 0.f,
+                    [=](f32_t const* a, f32_t const* b) { return 1.f - simsimd_dot_f32x4avx2(a, b, dimensions); }};
         if (hardware_supports(isa_t::sve_k))
-            return {
-                pun_metric_<simsimd_f32_t>([=](simsimd_f32_t const* a, simsimd_f32_t const* b) {
-                    return 1.f - simsimd_dot_f32sve(a, b, dimensions);
-                }),
-                isa_t::sve_k,
-            };
+            return {metric_kind_t::ip_k, isa_t::sve_k, 0.f,
+                    [=](f32_t const* a, f32_t const* b) { return 1.f - simsimd_dot_f32sve(a, b, dimensions); }};
         if (hardware_supports(isa_t::neon_k) && dimensions % 4 == 0)
-            return {
-                pun_metric_<simsimd_f32_t>([=](simsimd_f32_t const* a, simsimd_f32_t const* b) {
-                    return 1.f - simsimd_dot_f32x4neon(a, b, dimensions);
-                }),
-                isa_t::neon_k,
-            };
+            return {metric_kind_t::ip_k, isa_t::neon_k, 0.f,
+                    [=](f32_t const* a, f32_t const* b) { return 1.f - simsimd_dot_f32x4neon(a, b, dimensions); }};
 #endif
-        return pun_metric_<f32_t>(ip_gt<f32_t>{});
+        return ip_gt<f32_t>{};
     }
 
-    static metric_and_meta_t cos_metric_f16_(std::size_t dimensions) {
+    static metric_t cos_metric_f16_(std::size_t dimensions) {
         (void)dimensions;
 #if USEARCH_USE_SIMSIMD
         if (hardware_supports(isa_t::avx512_k) && dimensions % 16 == 0)
-            return {
-                pun_metric_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) {
-                    return 1.f - simsimd_cos_f16x16avx512(a, b, dimensions);
-                }),
-                isa_t::avx512_k,
-            };
+            return {metric_kind_t::cos_k, isa_t::avx512_k, simsimd_f16_t(0),
+                    [=](simsimd_f16_t const* a, simsimd_f16_t const* b) {
+                        return 1.f - simsimd_cos_f16x16avx512(a, b, dimensions);
+                    }};
         if (hardware_supports(isa_t::neon_k) && dimensions % 4 == 0)
-            return {
-                pun_metric_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) {
-                    return 1.f - simsimd_cos_f16x4neon(a, b, dimensions);
-                }),
-                isa_t::neon_k,
-            };
+            return {metric_kind_t::cos_k, isa_t::neon_k, simsimd_f16_t(0),
+                    [=](simsimd_f16_t const* a, simsimd_f16_t const* b) {
+                        return 1.f - simsimd_cos_f16x4neon(a, b, dimensions);
+                    }};
 #endif
-        return pun_metric_<f16_t>(cos_gt<f16_t, f32_t>{});
+        return cos_gt<f16_t, f32_t>{};
     }
 
-    static metric_and_meta_t cos_metric_f8_(std::size_t dimensions) {
-        (void)dimensions;
+    static metric_t cos_metric_f8_(std::size_t dimensions) {
 #if USEARCH_USE_SIMSIMD
         if (hardware_supports(isa_t::neon_k) && dimensions % 16 == 0)
-            return {
-                pun_metric_<int8_t>(
-                    [=](int8_t const* a, int8_t const* b) { return 1.f - simsimd_cos_i8x16neon(a, b, dimensions); }),
-                isa_t::neon_k,
-            };
+            return {metric_kind_t::cos_k, isa_t::neon_k, int8_t(0),
+                    [=](int8_t const* a, int8_t const* b) { return 1.f - simsimd_cos_i8x16neon(a, b, dimensions); }};
 #endif
-        return pun_metric_<f8_bits_t>(cos_f8_t{dimensions});
+        return cos_f8_t{dimensions};
     }
 
-    static metric_and_meta_t ip_metric_(std::size_t dimensions, scalar_kind_t accuracy) {
+    static metric_t ip_metric_(std::size_t dimensions, scalar_kind_t accuracy) {
         switch (accuracy) {
         case scalar_kind_t::f32_k:
             // The two most common numeric types for the most common metric have optimized versions
@@ -574,62 +569,62 @@ class index_punned_dense_gt {
             return cos_metric_f16_(dimensions);
 
         case scalar_kind_t::f8_k: return cos_metric_f8_(dimensions);
-        case scalar_kind_t::f64_k: return pun_metric_<f64_t>(ip_gt<f64_t>{});
+        case scalar_kind_t::f64_k: return ip_gt<f64_t>{};
         default: return {};
         }
     }
 
-    static metric_and_meta_t l2sq_metric_(std::size_t dimensions, scalar_kind_t accuracy) {
+    static metric_t l2sq_metric_(std::size_t dimensions, scalar_kind_t accuracy) {
         switch (accuracy) {
-        case scalar_kind_t::f8_k: return pun_metric_<f8_bits_t>(l2sq_f8_t{dimensions});
-        case scalar_kind_t::f16_k: return pun_metric_<f16_t>(l2sq_gt<f16_t, f32_t>{});
-        case scalar_kind_t::f32_k: return pun_metric_<f32_t>(l2sq_gt<f32_t>{});
-        case scalar_kind_t::f64_k: return pun_metric_<f64_t>(l2sq_gt<f64_t>{});
+        case scalar_kind_t::f8_k: return l2sq_f8_t{dimensions};
+        case scalar_kind_t::f16_k: return l2sq_gt<f16_t, f32_t>{};
+        case scalar_kind_t::f32_k: return l2sq_gt<f32_t>{};
+        case scalar_kind_t::f64_k: return l2sq_gt<f64_t>{};
         default: return {};
         }
     }
 
-    static metric_and_meta_t cos_metric_(std::size_t dimensions, scalar_kind_t accuracy) {
+    static metric_t cos_metric_(std::size_t dimensions, scalar_kind_t accuracy) {
         switch (accuracy) {
         case scalar_kind_t::f8_k: return cos_metric_f8_(dimensions);
         case scalar_kind_t::f16_k: return cos_metric_f16_(dimensions);
-        case scalar_kind_t::f32_k: return pun_metric_<f32_t>(cos_gt<f32_t>{});
-        case scalar_kind_t::f64_k: return pun_metric_<f64_t>(cos_gt<f64_t>{});
+        case scalar_kind_t::f32_k: return cos_gt<f32_t>{};
+        case scalar_kind_t::f64_k: return cos_gt<f64_t>{};
         default: return {};
         }
     }
 
-    static metric_and_meta_t haversine_metric_(scalar_kind_t accuracy) {
+    static metric_t haversine_metric_(scalar_kind_t accuracy) {
         switch (accuracy) {
-        case scalar_kind_t::f8_k: return pun_metric_<f8_bits_t>(haversine_gt<f8_bits_t, f32_t>{});
-        case scalar_kind_t::f16_k: return pun_metric_<f16_t>(haversine_gt<f16_t, f32_t>{});
-        case scalar_kind_t::f32_k: return pun_metric_<f32_t>(haversine_gt<f32_t>{});
-        case scalar_kind_t::f64_k: return pun_metric_<f64_t>(haversine_gt<f64_t>{});
+        case scalar_kind_t::f8_k: return haversine_gt<f8_bits_t, f32_t>{};
+        case scalar_kind_t::f16_k: return haversine_gt<f16_t, f32_t>{};
+        case scalar_kind_t::f32_k: return haversine_gt<f32_t>{};
+        case scalar_kind_t::f64_k: return haversine_gt<f64_t>{};
         default: return {};
         }
     }
 
-    static metric_and_meta_t pearson_metric_(scalar_kind_t accuracy) {
+    static metric_t pearson_metric_(scalar_kind_t accuracy) {
         switch (accuracy) {
-        case scalar_kind_t::f8_k: return pun_metric_<f8_bits_t>(pearson_correlation_gt<f8_bits_t, f32_t>{});
-        case scalar_kind_t::f16_k: return pun_metric_<f16_t>(pearson_correlation_gt<f16_t, f32_t>{});
-        case scalar_kind_t::f32_k: return pun_metric_<f32_t>(pearson_correlation_gt<f32_t>{});
-        case scalar_kind_t::f64_k: return pun_metric_<f64_t>(pearson_correlation_gt<f64_t>{});
+        case scalar_kind_t::f8_k: return pearson_correlation_gt<f8_bits_t, f32_t>{};
+        case scalar_kind_t::f16_k: return pearson_correlation_gt<f16_t, f32_t>{};
+        case scalar_kind_t::f32_k: return pearson_correlation_gt<f32_t>{};
+        case scalar_kind_t::f64_k: return pearson_correlation_gt<f64_t>{};
         default: return {};
         }
     }
 
-    static metric_and_meta_t make_metric_(metric_kind_t kind, std::size_t dimensions, scalar_kind_t accuracy) {
+    static metric_t make_metric_(metric_kind_t kind, std::size_t dimensions, scalar_kind_t accuracy) {
         switch (kind) {
         case metric_kind_t::ip_k: return ip_metric_(dimensions, accuracy);
         case metric_kind_t::cos_k: return cos_metric_(dimensions, accuracy);
         case metric_kind_t::l2sq_k: return l2sq_metric_(dimensions, accuracy);
         case metric_kind_t::pearson_k: return pearson_metric_(accuracy);
         case metric_kind_t::haversine_k: return haversine_metric_(accuracy);
-        case metric_kind_t::hamming_k: return pun_metric_<unsigned char>(hamming_gt<unsigned char>{});
+        case metric_kind_t::hamming_k: return hamming_gt<uint8_t>{};
         case metric_kind_t::jaccard_k: // Equivalent to Tanimoto
-        case metric_kind_t::tanimoto_k: return pun_metric_<unsigned char>(tanimoto_gt<unsigned char>{});
-        case metric_kind_t::sorensen_k: return pun_metric_<unsigned char>(sorensen_gt<unsigned char>{});
+        case metric_kind_t::tanimoto_k: return tanimoto_gt<uint8_t>{};
+        case metric_kind_t::sorensen_k: return sorensen_gt<uint8_t>{};
         default: return {};
         }
     }

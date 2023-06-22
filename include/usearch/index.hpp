@@ -113,6 +113,24 @@ using f64_t = double;
 using f32_t = float;
 using byte_t = char;
 
+enum class metric_kind_t : std::uint8_t {
+    unknown_k = 0,
+    // Classics:
+    ip_k = 'i',
+    cos_k = 'c',
+    l2sq_k = 'e',
+
+    // Custom:
+    pearson_k = 'p',
+    haversine_k = 'h',
+
+    // Sets:
+    jaccard_k = 'j',
+    hamming_k = 'b',
+    tanimoto_k = 't',
+    sorensen_k = 's',
+};
+
 template <typename at> at angle_to_radians(at angle) noexcept { return angle * at(3.14159265358979323846) / at(180); }
 
 template <typename at> at square(at value) noexcept { return value * value; }
@@ -225,6 +243,7 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct ip_
     using result_t = result_at;
     using result_type = result_t;
 
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::ip_k; }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
@@ -254,6 +273,7 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct cos
     using result_t = result_at;
     using result_type = result_t;
 
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::cos_k; }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
@@ -283,6 +303,7 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct l2s
     using result_t = result_at;
     using result_type = result_t;
 
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::l2sq_k; }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
@@ -312,6 +333,7 @@ template <typename scalar_at = std::uint64_t, typename result_at = std::size_t> 
     using result_type = result_t;
     static_assert(std::is_unsigned<scalar_t>::value, "Hamming distance requires unsigned integral words");
 
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::hamming_k; }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
@@ -342,6 +364,7 @@ template <typename scalar_at = std::uint64_t, typename result_at = float> struct
     static_assert(std::is_unsigned<scalar_t>::value, "Tanimoto distance requires unsigned integral words");
     static_assert(std::is_floating_point<result_t>::value, "Tanimoto distance will be a fraction");
 
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::tanimoto_k; }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
@@ -374,6 +397,7 @@ template <typename scalar_at = std::uint64_t, typename result_at = float> struct
     static_assert(std::is_unsigned<scalar_t>::value, "Sorensen-Dice distance requires unsigned integral words");
     static_assert(std::is_floating_point<result_t>::value, "Sorensen-Dice distance will be a fraction");
 
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::sorensen_k; }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
@@ -407,6 +431,7 @@ template <typename scalar_at = std::int32_t, typename result_at = float> struct 
     using result_type = result_t;
     static_assert(!std::is_floating_point<scalar_t>::value, "Jaccard distance requires integral scalars");
 
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::jaccard_k; }
     inline result_t operator()(view_t a, view_t b) const noexcept {
         return operator()(a.data(), b.data(), a.size(), b.size());
     }
@@ -436,6 +461,7 @@ template <typename scalar_at = float, typename result_at = float> struct pearson
     using result_t = result_at;
     using result_type = result_t;
 
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::pearson_k; }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
@@ -471,6 +497,8 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct hav
     using result_t = result_at;
     using result_type = result_t;
     static_assert(!std::is_integral<scalar_t>::value, "Latitude and longitude must be floating-node");
+
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::haversine_k; }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b) const noexcept {
         result_t lat_a = a[0], lon_a = a[1];
@@ -1026,24 +1054,6 @@ struct search_config_t {
     bool exact = false;
 };
 
-enum class metric_kind_t : std::uint8_t {
-    unknown_k = 0,
-    // Classics:
-    ip_k = 'i',
-    cos_k = 'c',
-    l2sq_k = 'e',
-
-    // Custom:
-    pearson_k = 'p',
-    haversine_k = 'h',
-
-    // Sets:
-    jaccard_k = 'j',
-    hamming_k = 'b',
-    tanimoto_k = 't',
-    sorensen_k = 's',
-};
-
 using file_header_t = byte_t[64];
 
 /**
@@ -1092,6 +1102,43 @@ struct file_head_t {
           entry_idx(exchange(ptr, ptr + sizeof(entry_idx_t))) {}
 };
 
+struct file_head_result_t {
+
+    using magic_t = file_head_t::magic_t;
+    using version_major_t = file_head_t::version_major_t;
+    using version_minor_t = file_head_t::version_minor_t;
+    using version_patch_t = file_head_t::version_patch_t;
+
+    using connectivity_t = file_head_t::connectivity_t;
+    using max_level_t = file_head_t::max_level_t;
+    using vector_alignment_t = file_head_t::vector_alignment_t;
+    using bytes_per_label_t = file_head_t::bytes_per_label_t;
+    using bytes_per_id_t = file_head_t::bytes_per_id_t;
+    using size_t = file_head_t::size_t;
+    using entry_idx_t = file_head_t::entry_idx_t;
+
+    version_major_t version_major;
+    version_minor_t version_minor;
+    version_patch_t version_patch;
+
+    metric_kind_t metric;
+    connectivity_t connectivity;
+    max_level_t max_level;
+    vector_alignment_t vector_alignment;
+    bytes_per_label_t bytes_per_label;
+    bytes_per_id_t bytes_per_id;
+    size_t size;
+    entry_idx_t entry_idx;
+
+    error_t error;
+
+    explicit operator bool() const noexcept { return !error; }
+    file_head_result_t failed(char const* message) noexcept {
+        error = message;
+        return std::move(*this);
+    }
+};
+
 static_assert(sizeof(file_header_t) == 64, "File header should be exactly 64 bytes");
 
 /// @brief  C++17 and newer version deprecate the `std::result_of`
@@ -1103,6 +1150,7 @@ using return_type_gt =
     typename std::result_of<metric_at(args_at...)>::type;
 #endif
 
+/// @brief  OS-specific to wrap open file-descriptors/handles.
 #if defined(USEARCH_DEFINED_WINDOWS)
 struct viewed_file_t {
     HANDLE file_handle{};
@@ -1185,18 +1233,17 @@ struct viewed_file_t {
 template <typename metric_at = ip_gt<float>,            //
           typename label_at = std::size_t,              //
           typename id_at = std::uint32_t,               //
-          typename scalar_at = float,                   //
           typename allocator_at = std::allocator<char>, //
           typename point_allocator_at = allocator_at>   //
 class index_gt {
   public:
     using metric_t = metric_at;
-    using scalar_t = scalar_at;
     using label_t = label_at;
     using id_t = id_at;
     using allocator_t = allocator_at;
     using point_allocator_t = point_allocator_at;
 
+    using scalar_t = typename metric_t::scalar_t;
     using vector_view_t = span_gt<scalar_t const>;
     using distance_t = return_type_gt<metric_t, vector_view_t, vector_view_t>;
 
@@ -1923,7 +1970,7 @@ class index_gt {
         state.version_major = USEARCH_VERSION_MAJOR;
         state.version_minor = USEARCH_VERSION_MINOR;
         state.version_patch = USEARCH_VERSION_PATCH;
-        state.metric = metric_kind_t::unknown_k;
+        state.metric = metric_.kind();
 
         // Describe state
         state.connectivity = config_.connectivity;
@@ -2047,6 +2094,43 @@ class index_gt {
         std::fclose(file);
         reset_view_();
         return {};
+    }
+
+    /**
+     *  @brief  Extracts metadata from pre-constructed index on disk, without loading it
+     *          or mapping the whole binary file.
+     */
+    static file_head_result_t head(char const* file_path) noexcept {
+
+        file_head_result_t result;
+        file_header_t state_buffer{};
+        std::FILE* file = std::fopen(file_path, "rb");
+        if (!file)
+            return result.failed(std::strerror(errno));
+
+        // Read the header
+        std::size_t read = std::fread(&state_buffer[0], sizeof(file_header_t), 1, file);
+        std::fclose(file);
+        if (!read)
+            return result.failed(std::strerror(errno));
+
+        // Parse and validate the MIME type
+        file_head_t state{state_buffer};
+        if (std::strncmp(state.magic, default_magic(), std::strlen(default_magic())) != 0)
+            return result.failed("Wrong MIME type!");
+
+        result.version_major = state.version_major;
+        result.version_minor = state.version_minor;
+        result.version_patch = state.version_patch;
+        result.metric = state.metric;
+        result.connectivity = state.connectivity;
+        result.max_level = state.max_level;
+        result.vector_alignment = state.vector_alignment;
+        result.bytes_per_label = state.bytes_per_label;
+        result.bytes_per_id = state.bytes_per_id;
+        result.size = state.size;
+        result.entry_idx = state.entry_idx;
+        return result;
     }
 
     /**

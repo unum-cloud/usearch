@@ -186,7 +186,6 @@ inline expected_gt<metric_kind_t> metric_from_name(char const* name, std::size_t
 
 using punned_distance_t = float;
 using punned_vector_view_t = span_gt<byte_t const>;
-using punned_metric_t = std::function<punned_distance_t(punned_vector_view_t, punned_vector_view_t)>;
 
 class f8_bits_t;
 class f16_bits_t;
