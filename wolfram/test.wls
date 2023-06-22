@@ -1,16 +1,6 @@
 #!/usr/bin/env wolframscript
 
-IndexCreate = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexCreate", {"UTF8String", "UTF8String", Integer, Integer, Integer, Integer, Integer}, Integer]
-IndexSave = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexSave", {Integer, "UTF8String"}, "Void"]
-IndexLoad = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexLoad", {Integer, "UTF8String"}, "Void"]
-IndexView = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexView", {Integer, "UTF8String"}, "Void"]
-IndexDestroy = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexDestroy", {Integer}, "Void"]
-IndexSize = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexSize", {Integer}, Integer]
-IndexConnectivity = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexConnectivity", {Integer}, Integer]
-IndexDimensions = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexDimensions", {Integer}, Integer]
-IndexCapacity = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexCapacity", {Integer}, Integer]
-IndexAdd = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexAdd", {Integer, Integer, {Real, 1}}, "Void"]
-IndexSearch = LibraryFunctionLoad["wolfram/usearchWFM.so", "IndexSearch", {Integer, {Real, 1}, Integer}, {Integer, 1}]
+Needs["UnumCloud`USearch`"]
 Print["Functions Loaded"]
 
 $index = IndexCreate["cos", "f16", 10, 10, 10, 10, 10]
