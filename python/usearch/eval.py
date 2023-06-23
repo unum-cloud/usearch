@@ -80,7 +80,7 @@ def measure_seconds(f: Callable) -> Tuple[float, Any]:
     return secs, result
 
 
-def dcg_at_k(relevances, k=None):
+def dcg(relevances: np.ndarray, k: Optional[int] = None) -> np.ndarray:
     """Calculate DCG (Discounted Cumulative Gain) up to position k.
 
     :param relevances: List of true relevance scores (in the order as they are ranked)
@@ -101,7 +101,7 @@ def dcg_at_k(relevances, k=None):
     return np.sum(relevances / discounts)
 
 
-def ndcg_at_k(relevances, k):
+def ndcg(relevances: np.ndarray, k: Optional[int] = None) -> np.ndarray:
     """Calculate NDCG (Normalized Discounted Cumulative Gain) at position k.
 
     :param relevances: List of true relevance scores (in the order as they are ranked)
@@ -111,14 +111,16 @@ def ndcg_at_k(relevances, k):
     :return: The NDCG score at position k
     :rtype: float
     """
-    best_dcg = dcg_at_k(sorted(relevances, reverse=True), k)
+    best_dcg = dcg(sorted(relevances, reverse=True), k)
     if best_dcg == 0:
         return 0.0
 
-    return dcg_at_k(relevances, k) / best_dcg
+    return dcg(relevances, k) / best_dcg
 
 
-def relevance(y_true, y_score, k):
+def relevance(
+    y_true: np.ndarray, y_score: np.ndarray, k: Optional[int] = None
+) -> np.ndarray:
     """Calculate relevance scores. Binary relevance scores
 
     :param y_true: ground-truth values
@@ -126,8 +128,8 @@ def relevance(y_true, y_score, k):
     :param y_score: predicted values
     :type y_score: np.ndarray
     """
-    y_true = y_true[:k]
-    y_score = y_score[:k]
+    y_true = y_true[:k].astype(Label)
+    y_score = y_score[:k].astype(Label)
     return [1 if i in y_true else 0 for i in y_score]
 
 
