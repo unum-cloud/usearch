@@ -11,26 +11,28 @@ from numba import cfunc, types, carray
 from usearch.compiled import MetricKind, ScalarKind
 
 
-signature_i8args = types.float32(types.CPointer(
-    types.int8), types.CPointer(types.int8))
+signature_i8args = types.float32(types.CPointer(types.int8), types.CPointer(types.int8))
 
-signature_f16args = types.float32(types.CPointer(
-    types.float16), types.CPointer(types.float16))
+signature_f16args = types.float32(
+    types.CPointer(types.float16), types.CPointer(types.float16)
+)
 
-signature_f32args = types.float32(types.CPointer(
-    types.float32), types.CPointer(types.float32))
+signature_f32args = types.float32(
+    types.CPointer(types.float32), types.CPointer(types.float32)
+)
 
-signature_f64args = types.float32(types.CPointer(
-    types.float64), types.CPointer(types.float64))
+signature_f64args = types.float32(
+    types.CPointer(types.float64), types.CPointer(types.float64)
+)
 
 
-def jit(ndim: int,
-        metric: MetricKind = MetricKind.Cos,
-        dtype: ScalarKind = ScalarKind.F32) -> Callable:
+def jit(
+    ndim: int, metric: MetricKind = MetricKind.Cos, dtype: ScalarKind = ScalarKind.F32
+) -> Callable:
     """JIT-compiles a distance metric specifically tuned for the target hardware
     and number of dimensions.
 
-    Uses Numba `cfunc` functionality, annotating it with Numba `types` instead 
+    Uses Numba `cfunc` functionality, annotating it with Numba `types` instead
     of `ctypes` to support half-precision.
     https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
     """
@@ -88,8 +90,7 @@ def jit(ndim: int,
         b_array = carray(b, ndim)
         ab_delta_sq = accumulator(0)
         for i in range(ndim):
-            ab_delta_sq += (a_array[i] - b_array[i]) * \
-                (a_array[i] - b_array[i])
+            ab_delta_sq += (a_array[i] - b_array[i]) * (a_array[i] - b_array[i])
         return types.float32(ab_delta_sq)
 
     scalar_kind_to_signature = {

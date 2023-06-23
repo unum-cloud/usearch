@@ -16,7 +16,6 @@ from usearch.compiled import (
     DEFAULT_CONNECTIVITY,
     DEFAULT_EXPANSION_ADD,
     DEFAULT_EXPANSION_SEARCH,
-
     USES_OPENMP,
     USES_SIMSIMD,
     USES_NATIVE_F16,
@@ -41,11 +40,11 @@ def _normalize_dtype(dtype) -> ScalarKind:
 
     if isinstance(dtype, str):
         _normalize = {
-            'f64': ScalarKind.F64,
-            'f32': ScalarKind.F32,
-            'f16': ScalarKind.F16,
-            'f8': ScalarKind.F8,
-            'b1': ScalarKind.B1,
+            "f64": ScalarKind.F64,
+            "f32": ScalarKind.F32,
+            "f16": ScalarKind.F16,
+            "f8": ScalarKind.F8,
+            "b1": ScalarKind.B1,
         }
         return _normalize[dtype.lower()]
 
@@ -79,9 +78,8 @@ class Matches(NamedTuple):
         return np.sum(self.counts)
 
     def to_list(self, row: Optional[int] = None) -> Union[List[dict], List[List[dict]]]:
-
         if not self.is_batch:
-            assert row is None, 'Exporting a single sequence is only for batch requests'
+            assert row is None, "Exporting a single sequence is only for batch requests"
             labels = self.labels
             distances = self.distances
 
@@ -94,7 +92,7 @@ class Matches(NamedTuple):
             distances = self.distances[row, :count]
 
         return [
-            {'label': int(label), 'distance': float(distance)}
+            {"label": int(label), "distance": float(distance)}
             for label, distance in zip(labels, distances)
         ]
 
@@ -103,8 +101,11 @@ class Matches(NamedTuple):
         return np.sum(best_matches == expected) / len(expected)
 
     def __repr__(self) -> str:
-        return f'usearch.Matches({self.total_matches})' if self.is_batch else \
-            f'usearch.Matches({self.total_matches} across {self.batch_size} queries)'
+        return (
+            f"usearch.Matches({self.total_matches})"
+            if self.is_batch
+            else f"usearch.Matches({self.total_matches} across {self.batch_size} queries)"
+        )
 
 
 class Index:
@@ -123,12 +124,10 @@ class Index:
         metric: Union[MetricKind, Callable, str] = MetricKind.IP,
         dtype: Optional[str] = None,
         jit: bool = False,
-
         connectivity: int = DEFAULT_CONNECTIVITY,
         expansion_add: int = DEFAULT_EXPANSION_ADD,
         expansion_search: int = DEFAULT_EXPANSION_SEARCH,
         tune: bool = False,
-
         path: Optional[os.PathLike] = None,
         view: bool = False,
     ) -> None:
@@ -171,7 +170,7 @@ class Index:
 
         :param expansion_search: Traversal depth on queries, defaults to None
         :type expansion_search: Optional[int], optional
-            Hyper-parameter for the search depth when querying 
+            Hyper-parameter for the search depth when querying
             nearest neighbors. The original paper calls it "ef".
             Can be changed afterwards, as the `.expansion_search`.
 
@@ -190,19 +189,18 @@ class Index:
         else:
             dtype = _normalize_dtype(dtype)
 
-
         if metric is None:
             metric = MetricKind.IP
         elif isinstance(metric, str):
             _normalize = {
-                'cos': MetricKind.Cos,
-                'ip': MetricKind.IP,
-                'l2_sq': MetricKind.L2sq,
-                'haversine': MetricKind.Haversine,
-                'perason': MetricKind.Pearson,
-                'hamming': MetricKind.Hamming,
-                'tanimoto': MetricKind.Tanimoto,
-                'sorensen': MetricKind.Sorensen,
+                "cos": MetricKind.Cos,
+                "ip": MetricKind.IP,
+                "l2_sq": MetricKind.L2sq,
+                "haversine": MetricKind.Haversine,
+                "perason": MetricKind.Pearson,
+                "hamming": MetricKind.Hamming,
+                "tanimoto": MetricKind.Tanimoto,
+                "sorensen": MetricKind.Sorensen,
             }
             metric = _normalize[metric.lower()]
 
@@ -213,13 +211,13 @@ class Index:
 
         elif isinstance(metric, MetricKind):
             if jit:
-
                 try:
                     from usearch.numba import jit
                 except ImportError:
                     raise ModuleNotFoundError(
-                        'To use JIT install Numba with `pip install numba`.'
-                        'Alternatively, reinstall usearch with `pip install usearch[jit]`')
+                        "To use JIT install Numba with `pip install numba`."
+                        "Alternatively, reinstall with `pip install usearch[jit]`"
+                    )
 
                 self._metric_kind = metric
                 self._metric_jit = jit(
@@ -227,15 +225,15 @@ class Index:
                     metric=metric,
                     dtype=dtype,
                 )
-                self._metric_pointer = self._metric_jit.address if \
-                    self._metric_jit else 0
+                self._metric_pointer = (
+                    self._metric_jit.address if self._metric_jit else 0
+                )
             else:
                 self._metric_kind = metric
                 self._metric_jit = None
                 self._metric_pointer = 0
         else:
-            raise ValueError(
-                'The `metric` must be Numba callback or a `MetricKind`')
+            raise ValueError("The `metric` must be Numba callback or a `MetricKind`")
 
         self._compiled = _CompiledIndex(
             ndim=ndim,
@@ -256,16 +254,16 @@ class Index:
                 self._compiled.load(path)
 
     def add(
-            self, labels, vectors, *,
-            copy: bool = True, threads: int = 0) -> Union[int, np.ndarray]:
+        self, labels, vectors, *, copy: bool = True, threads: int = 0
+    ) -> Union[int, np.ndarray]:
         """Inserts one or move vectors into the index.
 
         For maximal performance the `labels` and `vectors`
         should conform to the Python's "buffer protocol" spec.
 
-        To index a single entry: 
+        To index a single entry:
             labels: int, vectors: np.ndarray.
-        To index many entries: 
+        To index many entries:
             labels: np.ndarray, vectors: np.ndarray.
 
         When working with extremely large indexes, you may want to
@@ -284,8 +282,8 @@ class Index:
         :return: Inserted label or labels
         :type: Union[int, np.ndarray]
         """
-        assert isinstance(vectors, np.ndarray), 'Expects a NumPy array'
-        assert vectors.ndim == 1 or vectors.ndim == 2, 'Expects a matrix or vector'
+        assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
+        assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
         is_batch = vectors.ndim == 2
         generate_labels = labels is None
 
@@ -306,8 +304,8 @@ class Index:
         return labels
 
     def search(
-            self, vectors, k: int = 10, *,
-            threads: int = 0, exact: bool = False) -> Matches:
+        self, vectors, k: int = 10, *, threads: int = 0, exact: bool = False
+    ) -> Matches:
         """Performs approximate nearest neighbors search for one or more queries.
 
         :param vectors: Query vector or vectors.
@@ -323,26 +321,28 @@ class Index:
         :rtype: Matches
         """
         tuple_ = self._compiled.search(
-            vectors, k,
-            exact=exact, threads=threads,
+            vectors,
+            k,
+            exact=exact,
+            threads=threads,
         )
         return Matches(*tuple_)
 
     @property
     def specs(self) -> dict:
         return {
-            'Class': 'usearch.Index',
-            'Connectivity': self.connectivity,
-            'Size': self.size,
-            'Dimensions': self.ndim,
-            'Expansion@Add': self.expansion_add,
-            'Expansion@Search': self.expansion_search,
-            'OpenMP': USES_OPENMP,
-            'SimSIMD': USES_SIMSIMD,
-            'NativeF16': USES_NATIVE_F16,
-            'JIT': self.jit,
-            'DType': self.dtype,
-            'Path': self.path,
+            "Class": "usearch.Index",
+            "Connectivity": self.connectivity,
+            "Size": self.size,
+            "Dimensions": self.ndim,
+            "Expansion@Add": self.expansion_add,
+            "Expansion@Search": self.expansion_search,
+            "OpenMP": USES_OPENMP,
+            "SimSIMD": USES_SIMSIMD,
+            "NativeF16": USES_NATIVE_F16,
+            "JIT": self.jit,
+            "DType": self.dtype,
+            "Path": self.path,
         }
 
     def __len__(self) -> int:
@@ -413,10 +413,8 @@ class Index:
         return self._compiled.labels
 
     def get_vectors(
-            self,
-            labels: np.ndarray,
-            dtype: ScalarKind = ScalarKind.F32) -> np.ndarray:
-
+        self, labels: np.ndarray, dtype: ScalarKind = ScalarKind.F32
+    ) -> np.ndarray:
         dtype = _normalize_dtype(dtype)
         return np.vstack([self._compiled.__getitem__(l, dtype) for l in labels])
 
