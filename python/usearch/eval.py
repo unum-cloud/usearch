@@ -80,6 +80,57 @@ def measure_seconds(f: Callable) -> Tuple[float, Any]:
     return secs, result
 
 
+def dcg_at_k(relevances, k=None):
+    """Calculate DCG (Discounted Cumulative Gain) up to position k.
+
+    :param relevances: List of true relevance scores (in the order as they are ranked)
+    :type relevances: list
+    :param k: Position up to which DCG is computed
+    :type k: int
+    :return: The DCG score at position k
+    :rtype: float
+    """
+    if k:
+        relevances = np.asarray(relevances)[:k]
+
+    n_relevances = len(relevances)
+    if n_relevances == 0:
+        return 0.0
+
+    discounts = np.log2(np.arange(n_relevances) + 2)
+    return np.sum(relevances / discounts)
+
+
+def ndcg_at_k(relevances, k):
+    """Calculate NDCG (Normalized Discounted Cumulative Gain) at position k.
+
+    :param relevances: List of true relevance scores (in the order as they are ranked)
+    :type relevances: list
+    :param k: Position up to which NDCG is computed
+    :type k: int
+    :return: The NDCG score at position k
+    :rtype: float
+    """
+    best_dcg = dcg_at_k(sorted(relevances, reverse=True), k)
+    if best_dcg == 0:
+        return 0.0
+
+    return dcg_at_k(relevances, k) / best_dcg
+
+
+def relevance(y_true, y_score, k):
+    """Calculate relevance scores. Binary relevance scores
+
+    :param y_true: ground-truth values
+    :type y_true: np.ndarray
+    :param y_score: predicted values
+    :type y_score: np.ndarray
+    """
+    y_true = y_true[:k]
+    y_score = y_score[:k]
+    return [1 if i in y_true else 0 for i in y_score]
+
+
 @dataclass
 class Dataset:
     labels: np.ndarray
