@@ -347,6 +347,29 @@ index = Index(ndim=ndim, metric=CompiledMetric(
 ))
 ```
 
+Similarly, you can use Cppyy with Cling to JIT-compile native C or C++ code and pass it to USearch, which may be a good idea, if you want to explicitly request loop-unrolling or other low-level optimizations!
+
+```py
+import cppyy
+import cppyy.ll
+
+cppyy.cppdef("""
+float inner_product_two_args(float *a, float *b) {
+    float result = 0;
+#pragma GCC unroll ndim
+    for (size_t i = 0; i != ndim; ++i)
+        result += a[i] * b[i];
+    return 1 - result;
+}
+""".replace("ndim", str(ndim)))
+
+index = Index(ndim=ndim, metric=CompiledMetric(
+    pointer=cppyy.ll.addressof(function),
+    kind=MetricKind.IP,
+    signature=MetricSignature.ArrayArraySize,
+))
+```
+
 To use Numba JIT, install USearch with extras:
 
 ```sh

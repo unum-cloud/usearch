@@ -173,7 +173,7 @@ def test_index_numba(ndim: int, batch_size: int):
     )
 
     @cfunc(signature_two_args)
-    def python_ip_two_args(a, b):
+    def python_inner_product_two_args(a, b):
         a_array = carray(a, ndim)
         b_array = carray(b, ndim)
         c = 0.0
@@ -182,7 +182,7 @@ def test_index_numba(ndim: int, batch_size: int):
         return 1 - c
 
     @cfunc(signature_three_args)
-    def python_ip_three_args(a, b, ndim):
+    def python_inner_product_three_args(a, b, ndim):
         a_array = carray(a, ndim)
         b_array = carray(b, ndim)
         c = 0.0
@@ -191,7 +191,7 @@ def test_index_numba(ndim: int, batch_size: int):
         return 1 - c
 
     @cfunc(signature_four_args)
-    def python_ip_four_args(a, a_ndim, b, b_ndim):
+    def python_inner_product_four_args(a, a_ndim, b, b_ndim):
         a_array = carray(a, a_ndim)
         b_array = carray(b, b_ndim)
         c = 0.0
@@ -199,7 +199,11 @@ def test_index_numba(ndim: int, batch_size: int):
             c += a_array[i] * b_array[i]
         return 1 - c
 
-    functions = [python_ip_two_args, python_ip_three_args, python_ip_four_args]
+    functions = [
+        python_inner_product_two_args,
+        python_inner_product_three_args,
+        python_inner_product_four_args,
+    ]
     signatures = [
         MetricSignature.ArrayArray,
         MetricSignature.ArrayArraySize,
@@ -208,6 +212,72 @@ def test_index_numba(ndim: int, batch_size: int):
     for function, signature in zip(functions, signatures):
         metric = CompiledMetric(
             pointer=function.address,
+            kind=MetricKind.IP,
+            signature=signature,
+        )
+        index = Index(ndim=ndim, metric=metric)
+
+        labels = np.arange(batch_size)
+        vectors = random_vectors(count=batch_size, ndim=ndim)
+
+        index.add(labels, vectors)
+        matches, distances, count = index.search(vectors, 10)
+        assert matches.shape[0] == distances.shape[0]
+        assert count.shape[0] == batch_size
+
+        assert recall_members(index, exact=True) == 1
+
+
+@pytest.mark.parametrize("ndim", dimensions[-1:])
+@pytest.mark.parametrize("batch_size", batch_sizes[-1:])
+def test_index_cppyy(ndim: int, batch_size: int):
+    try:
+        import cppyy
+        import cppyy.ll
+    except ImportError:
+        return
+
+    cppyy.cppdef(
+        """
+    float inner_product_two_args(float *a, float *b) {
+        float result = 0;
+        #pragma GCC unroll ndim
+        for (size_t i = 0; i != ndim; ++i)
+            result += a[i] * b[i];
+        return 1 - result;
+    }
+    
+    float inner_product_three_args(float *a, float *b, size_t n) {
+        float result = 0;
+        for (size_t i = 0; i != n; ++i)
+            result += a[i] * b[i];
+        return 1 - result;
+    }
+    
+    float inner_product_four_args(float *a, size_t an, float *b, size_t) {
+        float result = 0;
+        for (size_t i = 0; i != an; ++i)
+            result += a[i] * b[i];
+        return 1 - result;
+    }
+    """.replace(
+            "ndim", str(ndim)
+        )
+    )
+
+    functions = [
+        cppyy.gbl.inner_product_two_args,
+        cppyy.gbl.inner_product_three_args,
+        cppyy.gbl.inner_product_four_args,
+    ]
+    signatures = [
+        MetricSignature.ArrayArray,
+        MetricSignature.ArrayArraySize,
+        MetricSignature.ArraySizeArraySize,
+    ]
+    for function, signature in zip(functions, signatures):
+        metric = CompiledMetric(
+            pointer=cppyy.ll.addressof(function),
             kind=MetricKind.IP,
             signature=signature,
         )
