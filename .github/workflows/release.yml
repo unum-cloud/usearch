@@ -192,7 +192,6 @@ jobs:
 
   build_wolfram:
     name: Build Paclet
-    needs: versioning
     runs-on: ubuntu-latest
     container:
       image: wolframresearch/wolframengine:latest
@@ -217,13 +216,12 @@ jobs:
       - name: Build Shared Lib
         run: cmake . -DUSEARCH_BUILD_WOLFRAM=1 -DWOLFRAM_PATH=/usr/local/Wolfram/WolframEngine/13.2/ && make -j4 usearchWFM
       - name: Build paclet
-        uses: WolframResearch/build-paclet@v1.7.1
-        with:
-          definition_notebook: "./wolfram/PacletInfo.wl"
+        run: wolframscript wolfram/build.wls
       - name: UploadArtifact
         uses: actions/upload-artifact@v3
         with:
-          path: ${{ env.PACLET_BUILD_DIR }} # set during the build-paclet step
+          path: "wolfram/build" # set during the build-paclet step
+        
 
   publish_java:
     name: Publish Java
