@@ -101,6 +101,7 @@ def test_index(
     assert 43 not in index
     assert index[42] is not None
     assert index[43] is None
+    assert len(index[42]) == ndim
     if numpy_type != np.byte:
         assert np.allclose(index[42], vector, atol=0.1)
 
@@ -118,6 +119,14 @@ def test_index(
 
     index.load("tmp.usearch")
     assert len(index) == 1
+    assert len(index[42]) == ndim
+
+    index = Index.restore("tmp.usearch")
+    assert len(index) == 1
+    assert len(index[42]) == ndim
+
+    # Cleanup
+    os.remove("tmp.usearch")
 
 
 @pytest.mark.parametrize("ndim", dimensions)

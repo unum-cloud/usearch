@@ -97,17 +97,6 @@ inline bool hardware_supports(isa_t isa) noexcept {
     return false;
 }
 
-enum class b1x8_t : unsigned char {};
-
-enum class scalar_kind_t {
-    unknown_k = 0,
-    f64_k,
-    f32_k,
-    f16_k,
-    f8_k,
-    b1x8_k,
-};
-
 inline std::size_t bytes_per_scalar(scalar_kind_t accuracy) noexcept {
     switch (accuracy) {
     case scalar_kind_t::f32_k: return 4;

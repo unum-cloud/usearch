@@ -112,6 +112,7 @@ namespace usearch {
 using f64_t = double;
 using f32_t = float;
 using byte_t = char;
+enum class b1x8_t : unsigned char {};
 
 enum class metric_kind_t : std::uint8_t {
     unknown_k = 0,
@@ -131,11 +132,30 @@ enum class metric_kind_t : std::uint8_t {
     sorensen_k = 's',
 };
 
+enum class scalar_kind_t : std::uint8_t {
+    unknown_k = 0,
+    f64_k,
+    f32_k,
+    f16_k,
+    f8_k,
+    b1x8_k,
+};
+
+template <typename scalar_at> scalar_kind_t common_scalar_kind() noexcept {
+    if (std::is_same<scalar_at, f32_t>())
+        return scalar_kind_t::f32_k;
+    if (std::is_same<scalar_at, f64_t>())
+        return scalar_kind_t::f64_k;
+    if (std::is_same<scalar_at, b1x8_t>())
+        return scalar_kind_t::b1x8_k;
+    return scalar_kind_t::unknown_k;
+}
+
 template <typename at> at angle_to_radians(at angle) noexcept { return angle * at(3.14159265358979323846) / at(180); }
 
 template <typename at> at square(at value) noexcept { return value * value; }
 
-template <std::size_t multiple_ak> inline std::size_t divide_round_up(std::size_t num) noexcept {
+template <std::size_t multiple_ak> std::size_t divide_round_up(std::size_t num) noexcept {
     return (num + multiple_ak - 1) / multiple_ak;
 }
 
@@ -244,6 +264,7 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct ip_
     using result_type = result_t;
 
     inline metric_kind_t kind() const noexcept { return metric_kind_t::ip_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
@@ -274,6 +295,7 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct cos
     using result_type = result_t;
 
     inline metric_kind_t kind() const noexcept { return metric_kind_t::cos_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
@@ -304,6 +326,7 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct l2s
     using result_type = result_t;
 
     inline metric_kind_t kind() const noexcept { return metric_kind_t::l2sq_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
@@ -334,6 +357,7 @@ template <typename scalar_at = std::uint64_t, typename result_at = std::size_t> 
     static_assert(std::is_unsigned<scalar_t>::value, "Hamming distance requires unsigned integral words");
 
     inline metric_kind_t kind() const noexcept { return metric_kind_t::hamming_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
@@ -365,6 +389,7 @@ template <typename scalar_at = std::uint64_t, typename result_at = float> struct
     static_assert(std::is_floating_point<result_t>::value, "Tanimoto distance will be a fraction");
 
     inline metric_kind_t kind() const noexcept { return metric_kind_t::tanimoto_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
@@ -398,6 +423,7 @@ template <typename scalar_at = std::uint64_t, typename result_at = float> struct
     static_assert(std::is_floating_point<result_t>::value, "Sorensen-Dice distance will be a fraction");
 
     inline metric_kind_t kind() const noexcept { return metric_kind_t::sorensen_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
@@ -432,6 +458,7 @@ template <typename scalar_at = std::int32_t, typename result_at = float> struct 
     static_assert(!std::is_floating_point<scalar_t>::value, "Jaccard distance requires integral scalars");
 
     inline metric_kind_t kind() const noexcept { return metric_kind_t::jaccard_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
     inline result_t operator()(view_t a, view_t b) const noexcept {
         return operator()(a.data(), b.data(), a.size(), b.size());
     }
@@ -462,6 +489,7 @@ template <typename scalar_at = float, typename result_at = float> struct pearson
     using result_type = result_t;
 
     inline metric_kind_t kind() const noexcept { return metric_kind_t::pearson_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
@@ -499,6 +527,7 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct hav
     static_assert(!std::is_integral<scalar_t>::value, "Latitude and longitude must be floating-node");
 
     inline metric_kind_t kind() const noexcept { return metric_kind_t::haversine_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b) const noexcept {
         result_t lat_a = a[0], lon_a = a[1];
@@ -992,9 +1021,9 @@ constexpr std::size_t default_allocator_entry_bytes() { return 64; }
 
 /**
  *  @brief  The "magic" sequence helps infer the type of the file.
- *          USearch indexes start with the "unumusearch" string.
+ *          USearch indexes start with the "usearch" string.
  */
-constexpr char const* default_magic() { return "unumusearch"; }
+constexpr char const* default_magic() { return "usearch"; }
 
 /**
  *  @brief  Configuration settings for the index construction.
@@ -1060,34 +1089,49 @@ using file_header_t = byte_t[64];
  *  @brief  Serialized binary representations of the USearch index start with metadata.
  *          Metadata is parsed into a `file_head_t`, containing the USearch package version,
  *          and the properties of the index.
+ *
+ *  It uses: 13 bytes for file versioning, 22 bytes for structural information = 35 bytes.
+ *  The following 24 bytes contain binary size of the graph, of the vectors, and the checksum,
+ *  leaving 5 bytes at the end vacant.
  */
 struct file_head_t {
 
-    using magic_t = char[11];
+    // Versioning: 7 + 2 * 3 = 13 bytes
+    using magic_t = char[7];
     using version_major_t = std::uint16_t;
     using version_minor_t = std::uint16_t;
     using version_patch_t = std::uint16_t;
 
+    // Structural: 1 * 6 + 8 * 2 = 22 bytes
     using connectivity_t = std::uint8_t;
     using max_level_t = std::uint8_t;
     using vector_alignment_t = std::uint8_t;
-    using bytes_per_label_t = std::uint16_t;
-    using bytes_per_id_t = std::uint16_t;
+    using bytes_per_label_t = std::uint8_t;
+    using bytes_per_id_t = std::uint8_t;
     using size_t = std::uint64_t;
     using entry_idx_t = std::uint64_t;
 
+    // Versioning:
     char const* magic;
     misaligned_ref_gt<version_major_t> version_major;
     misaligned_ref_gt<version_minor_t> version_minor;
     misaligned_ref_gt<version_patch_t> version_patch;
+
+    // Structural:
     misaligned_ref_gt<metric_kind_t> metric;
     misaligned_ref_gt<connectivity_t> connectivity;
     misaligned_ref_gt<max_level_t> max_level;
     misaligned_ref_gt<vector_alignment_t> vector_alignment;
     misaligned_ref_gt<bytes_per_label_t> bytes_per_label;
     misaligned_ref_gt<bytes_per_id_t> bytes_per_id;
+    misaligned_ref_gt<scalar_kind_t> scalar_kind;
     misaligned_ref_gt<size_t> size;
     misaligned_ref_gt<entry_idx_t> entry_idx;
+
+    // Additional:
+    misaligned_ref_gt<size_t> bytes_for_graphs;
+    misaligned_ref_gt<size_t> bytes_for_vectors;
+    misaligned_ref_gt<size_t> bytes_checksum;
 
     file_head_t(byte_t* ptr) noexcept
         : magic((char const*)exchange(ptr, ptr + sizeof(magic_t))),
@@ -1098,8 +1142,10 @@ struct file_head_t {
           max_level(exchange(ptr, ptr + sizeof(max_level_t))),
           vector_alignment(exchange(ptr, ptr + sizeof(vector_alignment_t))),
           bytes_per_label(exchange(ptr, ptr + sizeof(bytes_per_label_t))),
-          bytes_per_id(exchange(ptr, ptr + sizeof(bytes_per_id_t))), size(exchange(ptr, ptr + sizeof(size_t))),
-          entry_idx(exchange(ptr, ptr + sizeof(entry_idx_t))) {}
+          bytes_per_id(exchange(ptr, ptr + sizeof(bytes_per_id_t))),
+          scalar_kind(exchange(ptr, ptr + sizeof(scalar_kind_t))), size(exchange(ptr, ptr + sizeof(size_t))),
+          entry_idx(exchange(ptr, ptr + sizeof(entry_idx_t))), bytes_for_graphs(exchange(ptr, ptr + sizeof(size_t))),
+          bytes_for_vectors(exchange(ptr, ptr + sizeof(size_t))), bytes_checksum(exchange(ptr, ptr + sizeof(size_t))) {}
 };
 
 struct file_head_result_t {
@@ -1117,18 +1163,26 @@ struct file_head_result_t {
     using size_t = file_head_t::size_t;
     using entry_idx_t = file_head_t::entry_idx_t;
 
+    // Versioning:
     version_major_t version_major;
     version_minor_t version_minor;
     version_patch_t version_patch;
 
+    // Structural:
     metric_kind_t metric;
     connectivity_t connectivity;
     max_level_t max_level;
     vector_alignment_t vector_alignment;
     bytes_per_label_t bytes_per_label;
     bytes_per_id_t bytes_per_id;
+    scalar_kind_t scalar_kind;
     size_t size;
     entry_idx_t entry_idx;
+
+    // Additional:
+    size_t bytes_for_graphs;
+    size_t bytes_for_vectors;
+    size_t bytes_checksum;
 
     error_t error;
 
@@ -1960,13 +2014,19 @@ class index_gt {
      */
     serialization_result_t save(char const* file_path) const noexcept {
 
+        // Make sure we have right to write to that file
         serialization_result_t result;
+        std::FILE* file = std::fopen(file_path, "wb");
+        if (!file)
+            return result.failed(std::strerror(errno));
+
+        // Prepare the header with metadata
         file_header_t state_buffer{};
         std::memset(state_buffer, 0, sizeof(file_header_t));
         file_head_t state{state_buffer};
         std::memcpy(state_buffer, default_magic(), std::strlen(default_magic()));
 
-        // Check compatibility
+        // Mark compatibility
         state.version_major = USEARCH_VERSION_MAJOR;
         state.version_minor = USEARCH_VERSION_MINOR;
         state.version_patch = USEARCH_VERSION_PATCH;
@@ -1978,13 +2038,25 @@ class index_gt {
         state.vector_alignment = config_.vector_alignment;
         state.bytes_per_label = sizeof(label_t);
         state.bytes_per_id = sizeof(id_t);
+        state.scalar_kind = metric_.scalar_kind();
         state.size = size_;
         state.entry_idx = entry_id_;
 
-        std::FILE* file = std::fopen(file_path, "wb");
-        if (!file)
-            return result.failed(std::strerror(errno));
+        // Augment with metadata
+        std::size_t graphs_bytes = 0;
+        std::size_t vectors_bytes = 0;
+        for (std::size_t i = 0; i != state.size; ++i) {
+            node_t node = node_with_id_(i);
+            std::size_t node_bytes = node_bytes_(node);
+            std::size_t node_vector_bytes = node_vector_bytes_(node);
+            graphs_bytes += node_bytes - node_vector_bytes;
+            vectors_bytes += node_vector_bytes;
+        }
+        state.bytes_for_graphs = graphs_bytes;
+        state.bytes_for_vectors = vectors_bytes;
+        state.bytes_checksum = 0;
 
+        // Perform serialization
         auto write_chunk = [&](void* begin, std::size_t length) {
             std::size_t written = std::fwrite(begin, length, 1, file);
             if (!written) {
@@ -2094,43 +2166,6 @@ class index_gt {
         std::fclose(file);
         reset_view_();
         return {};
-    }
-
-    /**
-     *  @brief  Extracts metadata from pre-constructed index on disk, without loading it
-     *          or mapping the whole binary file.
-     */
-    static file_head_result_t head(char const* file_path) noexcept {
-
-        file_head_result_t result;
-        file_header_t state_buffer{};
-        std::FILE* file = std::fopen(file_path, "rb");
-        if (!file)
-            return result.failed(std::strerror(errno));
-
-        // Read the header
-        std::size_t read = std::fread(&state_buffer[0], sizeof(file_header_t), 1, file);
-        std::fclose(file);
-        if (!read)
-            return result.failed(std::strerror(errno));
-
-        // Parse and validate the MIME type
-        file_head_t state{state_buffer};
-        if (std::strncmp(state.magic, default_magic(), std::strlen(default_magic())) != 0)
-            return result.failed("Wrong MIME type!");
-
-        result.version_major = state.version_major;
-        result.version_minor = state.version_minor;
-        result.version_patch = state.version_patch;
-        result.metric = state.metric;
-        result.connectivity = state.connectivity;
-        result.max_level = state.max_level;
-        result.vector_alignment = state.vector_alignment;
-        result.bytes_per_label = state.bytes_per_label;
-        result.bytes_per_id = state.bytes_per_id;
-        result.size = state.size;
-        result.entry_idx = state.entry_idx;
-        return result;
     }
 
     /**
@@ -2586,6 +2621,47 @@ class index_gt {
         return {top_data, submitted_count};
     }
 };
+
+/**
+ *  @brief  Extracts metadata from pre-constructed index on disk, without loading it
+ *          or mapping the whole binary file.
+ */
+inline file_head_result_t index_metadata(char const* file_path) noexcept {
+
+    file_head_result_t result;
+    file_header_t state_buffer{};
+    std::FILE* file = std::fopen(file_path, "rb");
+    if (!file)
+        return result.failed(std::strerror(errno));
+
+    // Read the header
+    std::size_t read = std::fread(&state_buffer[0], sizeof(file_header_t), 1, file);
+    std::fclose(file);
+    if (!read)
+        return result.failed(std::strerror(errno));
+
+    // Parse and validate the MIME type
+    file_head_t state{state_buffer};
+    if (std::strncmp(state.magic, default_magic(), std::strlen(default_magic())) != 0)
+        return result.failed("Wrong MIME type!");
+
+    result.version_major = state.version_major;
+    result.version_minor = state.version_minor;
+    result.version_patch = state.version_patch;
+    result.metric = state.metric;
+    result.connectivity = state.connectivity;
+    result.max_level = state.max_level;
+    result.vector_alignment = state.vector_alignment;
+    result.bytes_per_label = state.bytes_per_label;
+    result.bytes_per_id = state.bytes_per_id;
+    result.scalar_kind = state.scalar_kind;
+    result.size = state.size;
+    result.entry_idx = state.entry_idx;
+    result.bytes_for_graphs = state.bytes_for_graphs;
+    result.bytes_for_vectors = state.bytes_for_vectors;
+    result.bytes_checksum = state.bytes_checksum;
+    return result;
+}
 
 } // namespace usearch
 } // namespace unum

@@ -68,7 +68,7 @@ template <typename scalar_at, typename index_at> void test3d(index_at&& index) {
     expect(std::abs(matched_distances[0]) < 0.01);
 
     // Search again over mapped index
-    index_t::head("tmp.usearch");
+    index_metadata("tmp.usearch");
     index.view("tmp.usearch");
     matched_count = index.search(view_t{&vec[0], 3ul}, 5).dump_to(matched_labels, matched_distances);
     expect(matched_count == 3);

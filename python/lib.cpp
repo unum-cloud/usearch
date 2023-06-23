@@ -13,8 +13,9 @@
  *  @copyright Copyright (c) 2023
  */
 #define PY_SSIZE_T_CLEAN
-#define NOMINMAX // Some of our dependencies call `std::max(x, y)`, which crashes Windows builds
-#include <thread>
+#define NOMINMAX  // Some of our dependencies call `std::max(x, y)`, which crashes Windows builds
+#include <limits> // `std::numeric_limits`
+#include <thread> // `std::thread`
 
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
@@ -455,12 +456,16 @@ template <typename index_at> py::object get_member(index_at const& index, label_
         throw std::invalid_argument("Incompatible scalars in the query matrix!");
 }
 
-template <typename index_at> py::array_t<label_t> get_labels(index_at const& index) {
-    std::size_t result_length = index.size();
-    py::array_t<label_t> result_py(static_cast<Py_ssize_t>(result_length));
+template <typename index_at> py::array_t<label_t> get_labels(index_at const& index, std::size_t limit) {
+    limit = std::min(index.size(), limit);
+    py::array_t<label_t> result_py(static_cast<Py_ssize_t>(limit));
     auto result_py1d = result_py.template mutable_unchecked<1>();
-    index.export_labels(&result_py1d(0), result_length);
+    index.export_labels(&result_py1d(0), limit);
     return result_py;
+}
+
+template <typename index_at> py::array_t<label_t> get_all_labels(index_at const& index) {
+    return get_labels(index, index.size());
 }
 
 template <typename element_at> bool has_duplicates(element_at const* begin, element_at const* end) {
@@ -601,6 +606,31 @@ PYBIND11_MODULE(compiled, m) {
         .value("F8", scalar_kind_t::f8_k)
         .value("B1", scalar_kind_t::b1x8_k);
 
+    auto h = py::class_<file_head_result_t>(m, "IndexMetadata");
+    h.def(py::init([](std::string const& path) {
+        file_head_result_t h = index_metadata(path.c_str());
+        h.error.raise();
+        return h;
+    }));
+    h.def_property_readonly("version", [](file_head_result_t const& h) {
+        return                                      //
+            std::to_string(h.version_major) + "." + //
+            std::to_string(h.version_minor) + "." + //
+            std::to_string(h.version_patch);
+    });
+    h.def_readonly("metric", &file_head_result_t::metric);
+    h.def_readonly("connectivity", &file_head_result_t::connectivity);
+    h.def_readonly("max_level", &file_head_result_t::max_level);
+    h.def_readonly("vector_alignment", &file_head_result_t::vector_alignment);
+    h.def_readonly("bytes_per_label", &file_head_result_t::bytes_per_label);
+    h.def_readonly("bytes_per_id", &file_head_result_t::bytes_per_id);
+    h.def_readonly("scalar_kind", &file_head_result_t::scalar_kind);
+    h.def_readonly("size", &file_head_result_t::size);
+    h.def_readonly("entry_idx", &file_head_result_t::entry_idx);
+    h.def_readonly("bytes_for_graphs", &file_head_result_t::bytes_for_graphs);
+    h.def_readonly("bytes_for_vectors", &file_head_result_t::bytes_for_vectors);
+    h.def_readonly("bytes_checksum", &file_head_result_t::bytes_checksum);
+
     auto i = py::class_<punned_index_py_t>(m, "Index");
 
     i.def(py::init(&make_index),                                           //
@@ -648,7 +678,8 @@ PYBIND11_MODULE(compiled, m) {
     i.def_property_readonly("connectivity", &punned_index_py_t::connectivity);
     i.def_property_readonly("capacity", &punned_index_py_t::capacity);
     i.def_property_readonly( //
-        "dtype", [](punned_index_py_t const& index) -> std::string { return scalar_kind_name(index.scalar_kind()); });
+        "dtype",
+        [](punned_index_py_t const& index) -> std::string { return scalar_kind_name(index.metric().scalar_kind_); });
     i.def_property_readonly( //
         "memory_usage", [](punned_index_py_t const& index) -> std::size_t { return index.memory_usage(); });
 
@@ -656,7 +687,8 @@ PYBIND11_MODULE(compiled, m) {
     i.def_property("expansion_search", &punned_index_py_t::expansion_search,
                    &punned_index_py_t::change_expansion_search);
 
-    i.def_property_readonly("labels", &get_labels<punned_index_py_t>);
+    i.def_property_readonly("labels", &get_all_labels<punned_index_py_t>);
+    i.def("get_labels", &get_labels<punned_index_py_t>, py::arg("limit") = std::numeric_limits<std::size_t>::max());
     i.def("__contains__", &punned_index_py_t::contains);
     i.def( //
         "__getitem__", &get_member<punned_index_py_t>, py::arg("label"), py::arg("dtype") = scalar_kind_t::f32_k);

@@ -1,14 +1,15 @@
+from __future__ import annotations
+
 # The purpose of this file is to provide Pythonic wrapper on top
 # the native precompiled CPython module. It improves compatibility
 # Python tooling, linters, and static analyzers. It also embeds JIT
 # into the primary `Index` class, connecting USearch with Numba.
 import os
-from math import sqrt
-from typing import Optional, Callable, Union, NamedTuple, List, Iterable
+from typing import Optional, Union, NamedTuple, List, Iterable
 
 import numpy as np
 
-from usearch.compiled import Index as _CompiledIndex
+from usearch.compiled import Index as _CompiledIndex, IndexMetadata
 from usearch.compiled import SparseIndex as _CompiledSetsIndex
 
 from usearch.compiled import MetricKind, ScalarKind, MetricSignature
@@ -259,6 +260,29 @@ class Index:
                 self._compiled.view(path)
             else:
                 self._compiled.load(path)
+
+    @staticmethod
+    def metadata(path: os.PathLike) -> IndexMetadata:
+        return IndexMetadata(path)
+
+    @staticmethod
+    def restore(path: os.PathLike, view: bool = False) -> Index:
+        meta = Index.metadata(path)
+        bits_per_scalar = {
+            ScalarKind.F8: 8,
+            ScalarKind.F16: 16,
+            ScalarKind.F32: 32,
+            ScalarKind.F64: 64,
+            ScalarKind.B1: 1,
+        }[meta.scalar_kind]
+        ndim = meta.bytes_for_vectors * 8 // meta.size // bits_per_scalar
+        return Index(
+            ndim=ndim,
+            connectivity=meta.connectivity,
+            metric=meta.metric,
+            path=path,
+            view=view,
+        )
 
     def add(
         self, labels, vectors, *, copy: bool = True, threads: int = 0

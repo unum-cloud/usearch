@@ -47,6 +47,7 @@ struct l2sq_f8_t {
 
     inline l2sq_f8_t(std::size_t dims) noexcept : dimensions(dims) {}
     inline metric_kind_t kind() const noexcept { return metric_kind_t::l2sq_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return scalar_kind_t::f8_k; }
     inline punned_distance_t operator()(f8_bits_t const* a, f8_bits_t const* b) const noexcept {
         std::int32_t ab_deltas_sq{};
 #if USEARCH_USE_OPENMP
@@ -70,6 +71,7 @@ struct index_punned_dense_metric_t {
 
     stl_func_t func_;
     metric_kind_t kind_ = metric_kind_t::unknown_k;
+    scalar_kind_t scalar_kind_ = scalar_kind_t::unknown_k;
     isa_t isa_ = isa_t::auto_k;
 
     index_punned_dense_metric_t() = default;
@@ -88,11 +90,18 @@ struct index_punned_dense_metric_t {
             typed_view_t b_typed{(scalar_t const*)b.data(), dims};
             return metric(a_typed, b_typed);
         };
+        if (std::is_same<scalar_at, f8_bits_t>())
+            scalar_kind_ = scalar_kind_t::f8_k;
+        else if (std::is_same<scalar_at, f16_bits_t>())
+            scalar_kind_ = scalar_kind_t::f16_k;
+        else
+            scalar_kind_ = common_scalar_kind<scalar_at>();
         kind_ = kind;
         isa_ = isa;
     }
 
     inline metric_kind_t kind() const noexcept { return kind_; }
+    inline scalar_kind_t scalar_kind() const noexcept { return scalar_kind_; }
     inline result_t operator()(view_t a, view_t b) const { return func_(a, b); }
 };
 
@@ -130,9 +139,6 @@ class index_punned_dense_gt {
     index_t* typed_ = nullptr;
 
     std::size_t casted_vector_bytes_ = 0;
-    scalar_kind_t scalar_kind_ = scalar_kind_t::f32_k;
-    isa_t isa_ = isa_t::auto_k;
-
     mutable std::vector<byte_t> cast_buffer_;
     struct casts_t {
         cast_t from_b1x8;
@@ -179,8 +185,6 @@ class index_punned_dense_gt {
         std::swap(dimensions_, other.dimensions_);
         std::swap(scalar_words_, other.scalar_words_);
         std::swap(casted_vector_bytes_, other.casted_vector_bytes_);
-        std::swap(scalar_kind_, other.scalar_kind_);
-        std::swap(isa_, other.isa_);
         std::swap(typed_, other.typed_);
         std::swap(cast_buffer_, other.cast_buffer_);
         std::swap(casts_, other.casts_);
@@ -199,6 +203,7 @@ class index_punned_dense_gt {
     index_limits_t const& limits() const { return typed_->limits(); }
     void clear() { return typed_->clear(); }
 
+    metric_t const& metric() const { return root_metric_; }
     std::size_t expansion_add() const { return expansion_add_; }
     std::size_t expansion_search() const { return expansion_search_; }
     void change_expansion_add(std::size_t n) { expansion_add_ = n; }
@@ -214,10 +219,6 @@ class index_punned_dense_gt {
     stats_t stats() const { return typed_->stats(); }
     stats_t stats(std::size_t level) const { return typed_->stats(level); }
 
-    scalar_kind_t scalar_kind() const { return scalar_kind_; }
-    isa_t isa() const { return isa_; }
-
-    static file_head_result_t head(char const* path) noexcept { return index_t::head(path); }
     serialization_result_t save(char const* path) const { return typed_->save(path); }
     serialization_result_t load(char const* path) { return typed_->load(path); }
     serialization_result_t view(char const* path) { return typed_->view(path); }
@@ -313,8 +314,6 @@ class index_punned_dense_gt {
 
         result.dimensions_ = dimensions_;
         result.scalar_words_ = scalar_words_;
-        result.scalar_kind_ = scalar_kind_;
-        result.isa_ = isa_;
         result.casted_vector_bytes_ = casted_vector_bytes_;
         result.cast_buffer_ = cast_buffer_;
         result.casts_ = casts_;
@@ -457,7 +456,6 @@ class index_punned_dense_gt {
         std::size_t hardware_threads = std::thread::hardware_concurrency();
         index_punned_dense_gt result;
         result.dimensions_ = dimensions;
-        result.scalar_kind_ = scalar_kind;
         result.scalar_words_ = count_scalar_words_(dimensions, scalar_kind);
         result.expansion_add_ = expansion_add;
         result.expansion_search_ = expansion_search;

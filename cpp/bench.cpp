@@ -483,7 +483,7 @@ void run_punned(dataset_at& dataset, args_t const& args, index_config_t config, 
 
     index_at index = index_at::make(dataset.dimensions(), kind, config, accuracy);
     index.reserve(limits);
-    std::printf("-- Hardware acceleration: %s\n", isa_name(index.isa()));
+    std::printf("-- Hardware acceleration: %s\n", isa_name(index.metric().isa_));
     std::printf("Will benchmark in-memory\n");
 
     single_shot(dataset, index, true);
