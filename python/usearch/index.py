@@ -11,7 +11,7 @@ import numpy as np
 from usearch.compiled import Index as _CompiledIndex
 from usearch.compiled import SparseIndex as _CompiledSetsIndex
 
-from usearch.compiled import MetricKind, ScalarKind
+from usearch.compiled import MetricKind, ScalarKind, MetricSignature
 from usearch.compiled import (
     DEFAULT_CONNECTIVITY,
     DEFAULT_EXPANSION_ADD,
@@ -108,6 +108,12 @@ class Matches(NamedTuple):
         )
 
 
+class CompiledMetric(NamedTuple):
+    pointer: int
+    kind: MetricKind
+    signature: MetricSignature
+
+
 class Index:
     """Fast JIT-compiled vector-search index for dense equi-dimensional embeddings.
 
@@ -121,7 +127,7 @@ class Index:
     def __init__(
         self,
         ndim: int,
-        metric: Union[MetricKind, Callable, str] = MetricKind.IP,
+        metric: Union[str, MetricKind, CompiledMetric] = MetricKind.IP,
         dtype: Optional[str] = None,
         jit: bool = False,
         connectivity: int = DEFAULT_CONNECTIVITY,
@@ -191,7 +197,8 @@ class Index:
 
         if metric is None:
             metric = MetricKind.IP
-        elif isinstance(metric, str):
+
+        if isinstance(metric, str):
             _normalize = {
                 "cos": MetricKind.Cos,
                 "ip": MetricKind.IP,
@@ -204,42 +211,42 @@ class Index:
             }
             metric = _normalize[metric.lower()]
 
-        if isinstance(metric, Callable):
-            self._metric_kind = MetricKind.Unknown
+        if isinstance(metric, MetricKind) and jit:
+            try:
+                from usearch.numba import jit
+            except ImportError:
+                raise ModuleNotFoundError(
+                    "To use JIT install Numba with `pip install numba`."
+                    "Alternatively, reinstall with `pip install usearch[jit]`"
+                )
+
+            metric = jit(
+                ndim=ndim,
+                metric=metric,
+                dtype=dtype,
+            )
+
+        if isinstance(metric, MetricKind):
+            self._metric_kind = metric
+            self._metric_jit = None
+            self._metric_pointer = 0
+            self._metric_signature = MetricSignature.ArrayArraySize
+        elif isinstance(metric, CompiledMetric):
             self._metric_jit = metric
-            self._metric_pointer = int(metric.address)
-
-        elif isinstance(metric, MetricKind):
-            if jit:
-                try:
-                    from usearch.numba import jit
-                except ImportError:
-                    raise ModuleNotFoundError(
-                        "To use JIT install Numba with `pip install numba`."
-                        "Alternatively, reinstall with `pip install usearch[jit]`"
-                    )
-
-                self._metric_kind = metric
-                self._metric_jit = jit(
-                    ndim=ndim,
-                    metric=metric,
-                    dtype=dtype,
-                )
-                self._metric_pointer = (
-                    self._metric_jit.address if self._metric_jit else 0
-                )
-            else:
-                self._metric_kind = metric
-                self._metric_jit = None
-                self._metric_pointer = 0
+            self._metric_kind = metric.kind
+            self._metric_pointer = metric.pointer
+            self._metric_signature = metric.signature
         else:
-            raise ValueError("The `metric` must be Numba callback or a `MetricKind`")
+            raise ValueError(
+                "The `metric` must be a `CompiledMetric` or a `MetricKind`"
+            )
 
         self._compiled = _CompiledIndex(
             ndim=ndim,
+            dtype=dtype,
             metric=self._metric_kind,
             metric_pointer=self._metric_pointer,
-            dtype=dtype,
+            metric_signature=self._metric_signature,
             connectivity=connectivity,
             expansion_add=expansion_add,
             expansion_search=expansion_search,

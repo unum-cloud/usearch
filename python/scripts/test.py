@@ -10,6 +10,8 @@ from usearch.index import (
     SparseIndex,
     MetricKind,
     ScalarKind,
+    MetricSignature,
+    CompiledMetric,
     Matches,
     MetricKindBitwise,
 )
@@ -154,12 +156,24 @@ def test_index_numba(ndim: int, batch_size: int):
 
     # Showcases how to use Numba to JIT-compile similarity measures for USearch.
     # https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
-    signature = types.float32(
-        types.CPointer(types.float32), types.CPointer(types.float32)
+    signature_two_args = types.float32(
+        types.CPointer(types.float32),
+        types.CPointer(types.float32),
+    )
+    signature_three_args = types.float32(
+        types.CPointer(types.float32),
+        types.CPointer(types.float32),
+        types.uint64,
+    )
+    signature_four_args = types.float32(
+        types.CPointer(types.float32),
+        types.uint64,
+        types.CPointer(types.float32),
+        types.uint64,
     )
 
-    @cfunc(signature)
-    def python_dot(a, b):
+    @cfunc(signature_two_args)
+    def python_ip_two_args(a, b):
         a_array = carray(a, ndim)
         b_array = carray(b, ndim)
         c = 0.0
@@ -167,17 +181,47 @@ def test_index_numba(ndim: int, batch_size: int):
             c += a_array[i] * b_array[i]
         return 1 - c
 
-    index = Index(ndim=ndim, metric=python_dot)
+    @cfunc(signature_three_args)
+    def python_ip_three_args(a, b, ndim):
+        a_array = carray(a, ndim)
+        b_array = carray(b, ndim)
+        c = 0.0
+        for i in range(ndim):
+            c += a_array[i] * b_array[i]
+        return 1 - c
 
-    labels = np.arange(batch_size)
-    vectors = random_vectors(count=batch_size, ndim=ndim)
+    @cfunc(signature_four_args)
+    def python_ip_four_args(a, a_ndim, b, b_ndim):
+        a_array = carray(a, a_ndim)
+        b_array = carray(b, b_ndim)
+        c = 0.0
+        for i in range(a_ndim):
+            c += a_array[i] * b_array[i]
+        return 1 - c
 
-    index.add(labels, vectors)
-    matches, distances, count = index.search(vectors, 10)
-    assert matches.shape[0] == distances.shape[0]
-    assert count.shape[0] == batch_size
+    functions = [python_ip_two_args, python_ip_three_args, python_ip_four_args]
+    signatures = [
+        MetricSignature.ArrayArray,
+        MetricSignature.ArrayArraySize,
+        MetricSignature.ArraySizeArraySize,
+    ]
+    for function, signature in zip(functions, signatures):
+        metric = CompiledMetric(
+            pointer=function.address,
+            kind=MetricKind.IP,
+            signature=signature,
+        )
+        index = Index(ndim=ndim, metric=metric)
 
-    assert recall_members(index, exact=True) == 1
+        labels = np.arange(batch_size)
+        vectors = random_vectors(count=batch_size, ndim=ndim)
+
+        index.add(labels, vectors)
+        matches, distances, count = index.search(vectors, 10)
+        assert matches.shape[0] == distances.shape[0]
+        assert count.shape[0] == batch_size
+
+        assert recall_members(index, exact=True) == 1
 
 
 @pytest.mark.parametrize("bits", dimensions)

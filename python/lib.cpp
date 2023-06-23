@@ -24,6 +24,17 @@
 using namespace unum::usearch;
 using namespace unum;
 
+/**
+ *  @brief  The signature of the user-defined function.
+ *          Can be just two array pointers, precompiled for a specific array length,
+ *          or include one or two array sizes as 64-bit unsigned integers.
+ */
+enum class metric_signature_t {
+    array_array_k = 0,
+    array_array_size_k,
+    array_size_array_size_k,
+};
+
 namespace py = pybind11;
 using py_shape_t = py::array::ShapeContainer;
 
@@ -63,34 +74,58 @@ struct sparse_index_py_t : public sparse_index_t {
     sparse_index_py_t(native_t&& base) : native_t(std::move(base)) {}
 };
 
-template <typename scalar_at> metric_t udf(std::uintptr_t metric_uintptr) {
+template <typename scalar_at>
+metric_t udf(metric_kind_t kind, metric_signature_t signature, std::uintptr_t metric_uintptr) {
+    //
     metric_t result;
-    result.func_ = [metric_uintptr](punned_vector_view_t a, punned_vector_view_t b) -> distance_t {
-        using metric_raw_t = punned_distance_t (*)(scalar_at const*, scalar_at const*);
-        metric_raw_t metric_ptr = reinterpret_cast<metric_raw_t>(metric_uintptr);
-        return metric_ptr((scalar_at const*)a.data(), (scalar_at const*)b.data());
-    };
+    result.kind_ = kind;
+    switch (signature) {
+    case metric_signature_t::array_array_k:
+        result.func_ = [metric_uintptr](punned_vector_view_t a, punned_vector_view_t b) -> distance_t {
+            using metric_raw_t = punned_distance_t (*)(scalar_at const*, scalar_at const*);
+            metric_raw_t metric_ptr = reinterpret_cast<metric_raw_t>(metric_uintptr);
+            return metric_ptr((scalar_at const*)a.data(), (scalar_at const*)b.data());
+        };
+        break;
+    case metric_signature_t::array_array_size_k:
+        result.func_ = [metric_uintptr](punned_vector_view_t a, punned_vector_view_t b) -> distance_t {
+            using metric_raw_t = punned_distance_t (*)(scalar_at const*, scalar_at const*, size_t);
+            metric_raw_t metric_ptr = reinterpret_cast<metric_raw_t>(metric_uintptr);
+            return metric_ptr((scalar_at const*)a.data(), (scalar_at const*)b.data(), a.size() / sizeof(scalar_at));
+        };
+        break;
+    case metric_signature_t::array_size_array_size_k:
+        result.func_ = [metric_uintptr](punned_vector_view_t a, punned_vector_view_t b) -> distance_t {
+            using metric_raw_t = punned_distance_t (*)(scalar_at const*, size_t, scalar_at const*, size_t);
+            metric_raw_t metric_ptr = reinterpret_cast<metric_raw_t>(metric_uintptr);
+            return metric_ptr(                                            //
+                (scalar_at const*)a.data(), a.size() / sizeof(scalar_at), //
+                (scalar_at const*)b.data(), b.size() / sizeof(scalar_at));
+        };
+        break;
+    }
     return result;
 }
 
-metric_t udf(std::uintptr_t metric_uintptr, scalar_kind_t accuracy) {
+metric_t udf(metric_kind_t kind, metric_signature_t signature, std::uintptr_t metric_uintptr, scalar_kind_t accuracy) {
     switch (accuracy) {
-    case scalar_kind_t::f8_k: return udf<f8_bits_t>(metric_uintptr);
-    case scalar_kind_t::f16_k: return udf<f16_t>(metric_uintptr);
-    case scalar_kind_t::f32_k: return udf<f32_t>(metric_uintptr);
-    case scalar_kind_t::f64_k: return udf<f64_t>(metric_uintptr);
+    case scalar_kind_t::f8_k: return udf<f8_bits_t>(kind, signature, metric_uintptr);
+    case scalar_kind_t::f16_k: return udf<f16_t>(kind, signature, metric_uintptr);
+    case scalar_kind_t::f32_k: return udf<f32_t>(kind, signature, metric_uintptr);
+    case scalar_kind_t::f64_k: return udf<f64_t>(kind, signature, metric_uintptr);
     default: return {};
     }
 }
 
-static punned_index_py_t make_index( //
-    std::size_t dimensions,          //
-    scalar_kind_t scalar_kind,       //
-    metric_kind_t metric_kind,       //
-    std::size_t connectivity,        //
-    std::size_t expansion_add,       //
-    std::size_t expansion_search,    //
-    std::uintptr_t metric_uintptr,   //
+static punned_index_py_t make_index(     //
+    std::size_t dimensions,              //
+    scalar_kind_t scalar_kind,           //
+    metric_kind_t metric_kind,           //
+    std::size_t connectivity,            //
+    std::size_t expansion_add,           //
+    std::size_t expansion_search,        //
+    metric_signature_t metric_signature, //
+    std::uintptr_t metric_uintptr,       //
     bool tune) {
 
     index_config_t config;
@@ -101,7 +136,8 @@ static punned_index_py_t make_index( //
 
     if (metric_uintptr)
         return punned_index_t::make( //
-            dimensions, udf(metric_uintptr, scalar_kind), config, scalar_kind, expansion_add, expansion_search);
+            dimensions, udf(metric_kind, metric_signature, metric_uintptr, scalar_kind), config, scalar_kind,
+            expansion_add, expansion_search);
     else
         return punned_index_t::make(dimensions, metric_kind, config, scalar_kind, expansion_add, expansion_search);
 }
@@ -541,6 +577,11 @@ PYBIND11_MODULE(compiled, m) {
     m.attr("USES_SIMSIMD") = py::int_(USEARCH_USE_SIMSIMD);
     m.attr("USES_NATIVE_F16") = py::int_(USEARCH_USE_NATIVE_F16);
 
+    py::enum_<metric_signature_t>(m, "MetricSignature")
+        .value("ArrayArray", metric_signature_t::array_array_k)
+        .value("ArrayArraySize", metric_signature_t::array_array_size_k)
+        .value("ArraySizeArraySize", metric_signature_t::array_size_array_size_k);
+
     py::enum_<metric_kind_t>(m, "MetricKind")
         .value("Unknown", metric_kind_t::unknown_k)
         .value("IP", metric_kind_t::ip_k)
@@ -562,16 +603,17 @@ PYBIND11_MODULE(compiled, m) {
 
     auto i = py::class_<punned_index_py_t>(m, "Index");
 
-    i.def(py::init(&make_index),                                    //
-          py::kw_only(),                                            //
-          py::arg("ndim") = 0,                                      //
-          py::arg("dtype") = scalar_kind_t::f32_k,                  //
-          py::arg("metric") = metric_kind_t::ip_k,                  //
-          py::arg("connectivity") = default_connectivity(),         //
-          py::arg("expansion_add") = default_expansion_add(),       //
-          py::arg("expansion_search") = default_expansion_search(), //
-          py::arg("metric_pointer") = 0,                            //
-          py::arg("tune") = false                                   //
+    i.def(py::init(&make_index),                                           //
+          py::kw_only(),                                                   //
+          py::arg("ndim") = 0,                                             //
+          py::arg("dtype") = scalar_kind_t::f32_k,                         //
+          py::arg("metric") = metric_kind_t::ip_k,                         //
+          py::arg("connectivity") = default_connectivity(),                //
+          py::arg("expansion_add") = default_expansion_add(),              //
+          py::arg("expansion_search") = default_expansion_search(),        //
+          py::arg("metric_signature") = metric_signature_t::array_array_k, //
+          py::arg("metric_pointer") = 0,                                   //
+          py::arg("tune") = false                                          //
     );
 
     i.def(                         //

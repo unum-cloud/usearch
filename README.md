@@ -294,7 +294,7 @@ The first controls the number of threads spawned for the task.
 The second controls whether the vector itself will be persisted inside the index.
 If you can preserve the lifetime of the vector somewhere else, you can avoid the copy.
 
-#### User-Defined Metrics in Python
+#### User-Defined Metrics and JIT in Python
 
 Assuming the language boundary exists between Python user code and C++ implementation, there are more efficient solutions than passing a Python callable to the engine.
 Luckily, with the help of [Numba][numba], we can JIT compile a function with a matching signature and pass it down to the engine.
@@ -308,7 +308,7 @@ signature = types.float32(
     types.CPointer(types.float32))
 
 @cfunc(signature)
-def python_dot(a, b):
+def inner_product(a, b):
     a_array = carray(a, ndim)
     b_array = carray(b, ndim)
     c = 0.0
@@ -316,7 +316,35 @@ def python_dot(a, b):
         c += a_array[i] * b_array[i]
     return 1 - c
 
-index = Index(ndim=ndim, metric=python_dot.address)
+index = Index(ndim=ndim, metric=CompiledMetric(
+    pointer=inner_product.address,
+    kind=MetricKind.IP,
+    signature=MetricSignature.ArrayArray,
+))
+```
+
+Alternatively, you can avoid pre-defining the number of dimensions, and pass it separately:
+
+```py
+signature = types.float32(
+    types.CPointer(types.float32),
+    types.CPointer(types.float32),
+    types.uint64)
+
+@cfunc(signature)
+def inner_product(a, b, ndim):
+    a_array = carray(a, ndim)
+    b_array = carray(b, ndim)
+    c = 0.0
+    for i in range(ndim):
+        c += a_array[i] * b_array[i]
+    return 1 - c
+
+index = Index(ndim=ndim, metric=CompiledMetric(
+    pointer=inner_product.address,
+    kind=MetricKind.IP,
+    signature=MetricSignature.ArrayArraySize,
+))
 ```
 
 To use Numba JIT, install USearch with extras:

@@ -3,12 +3,10 @@
 # Python tooling, linters, and static analyzers. It also embeds JIT
 # into the primary `Index` class, connecting USearch with Numba.
 from math import sqrt
-from typing import Callable
 
-import numpy as np
 from numba import cfunc, types, carray
 
-from usearch.compiled import MetricKind, ScalarKind
+from usearch.index import MetricKind, ScalarKind, MetricSignature, CompiledMetric
 
 
 signature_i8args = types.float32(types.CPointer(types.int8), types.CPointer(types.int8))
@@ -28,7 +26,7 @@ signature_f64args = types.float32(
 
 def jit(
     ndim: int, metric: MetricKind = MetricKind.Cos, dtype: ScalarKind = ScalarKind.F32
-) -> Callable:
+) -> CompiledMetric:
     """JIT-compiles a distance metric specifically tuned for the target hardware
     and number of dimensions.
 
@@ -109,4 +107,9 @@ def jit(
     if dtype == ScalarKind.F8 and metric == MetricKind.IP:
         metric = MetricKind.Cos
 
-    return cfunc(scalar_kind_to_signature[dtype])(metric_kind_to_function[metric])
+    pointer = cfunc(scalar_kind_to_signature[dtype])(metric_kind_to_function[metric])
+    return CompiledMetric(
+        pointer=pointer,
+        kind=metric,
+        signature=MetricSignature.ArrayArray,
+    )
