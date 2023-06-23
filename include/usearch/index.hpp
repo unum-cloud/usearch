@@ -2155,7 +2155,7 @@ class index_gt {
             return result.failed("Mapping file failed!");
         }
 
-        byte_t* file = (byte_t*)MapViewOfFile(mapping_handle, FILE_MAP_READ, 0, 0, 0);
+        byte_t* file = (byte_t*)MapViewOfFile(mapping_handle, FILE_MAP_READ, 0, 0, file_length);
         if (file == 0) {
             CloseHandle(mapping_handle);
             CloseHandle(file_handle);
