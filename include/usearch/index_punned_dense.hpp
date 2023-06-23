@@ -219,10 +219,22 @@ class index_punned_dense_gt {
     stats_t stats() const { return typed_->stats(); }
     stats_t stats(std::size_t level) const { return typed_->stats(level); }
 
-    serialization_result_t save(char const* path) const { return typed_->save(path); }
-    serialization_result_t load(char const* path) { return typed_->load(path); }
-    serialization_result_t view(char const* path) { return typed_->view(path); }
     bool reserve(index_limits_t limits) { return typed_->reserve(limits); }
+    serialization_result_t save(char const* path) const { return typed_->save(path); }
+
+    serialization_result_t load(char const* path) {
+        serialization_result_t result = typed_->load(path);
+        if (result)
+            reindex_labels();
+        return result;
+    }
+
+    serialization_result_t view(char const* path) {
+        serialization_result_t result = typed_->view(path);
+        if (result)
+            reindex_labels();
+        return result;
+    }
 
     std::size_t memory_usage(std::size_t allocator_entry_bytes = default_allocator_entry_bytes()) const {
         return typed_->memory_usage(allocator_entry_bytes);
@@ -396,6 +408,16 @@ class index_punned_dense_gt {
             vector_data = casted_data, vector_bytes = casted_vector_bytes_;
 
         return typed_->search_around(static_cast<id_t>(hint), {vector_data, vector_bytes}, wanted, config);
+    }
+
+    void reindex_labels() {
+        shared_lock_t lock(lookup_table_mutex_);
+        lookup_table_.clear();
+        for (std::size_t i = 0; i != typed_->size(); ++i) {
+            member_citerator_t iterator = typed_->cbegin() + i;
+            member_cref_t member = *iterator;
+            lookup_table_[member.label] = static_cast<id_t>(i);
+        }
     }
 
     id_t lookup_id_(label_t label) const {
