@@ -3,7 +3,7 @@ if(NOT WOLFRAM_PATH)
     set(WOLFRAM_PATH "/usr/local/Wolfram/Mathematica")
 endif()
 
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/LibraryResources")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/LibraryResources/Linux-x86-64")
 
 set(USEARCH_PUNNED_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/../include"
