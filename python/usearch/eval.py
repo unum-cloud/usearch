@@ -119,18 +119,18 @@ def ndcg(relevances: np.ndarray, k: Optional[int] = None) -> np.ndarray:
 
 
 def relevance(
-    y_true: np.ndarray, y_score: np.ndarray, k: Optional[int] = None
+    expected: np.ndarray, predicted: np.ndarray, k: Optional[int] = None
 ) -> np.ndarray:
     """Calculate relevance scores. Binary relevance scores
 
-    :param y_true: ground-truth values
-    :type y_true: np.ndarray
-    :param y_score: predicted values
-    :type y_score: np.ndarray
+    :param expected: ground-truth labels
+    :type expected: np.ndarray
+    :param predicted: predicted labels
+    :type predicted: np.ndarray
     """
-    y_true = y_true[:k].astype(Label)
-    y_score = y_score[:k].astype(Label)
-    return [1 if i in y_true else 0 for i in y_score]
+    expected = expected[:k]
+    predicted = predicted[:k]
+    return [1 if i in expected else 0 for i in predicted]
 
 
 @dataclass

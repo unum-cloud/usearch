@@ -250,7 +250,7 @@ def test_index_cppyy(ndim: int, batch_size: int):
         """
     float inner_product_two_args(float *a, float *b) {
         float result = 0;
-        #pragma GCC unroll ndim
+    #pragma unroll
         for (size_t i = 0; i != ndim; ++i)
             result += a[i] * b[i];
         return 1 - result;
