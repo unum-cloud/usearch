@@ -112,12 +112,50 @@ namespace usearch {
 using f64_t = double;
 using f32_t = float;
 using byte_t = char;
+enum class b1x8_t : unsigned char {};
+
+enum class metric_kind_t : std::uint8_t {
+    unknown_k = 0,
+    // Classics:
+    ip_k = 'i',
+    cos_k = 'c',
+    l2sq_k = 'e',
+
+    // Custom:
+    pearson_k = 'p',
+    haversine_k = 'h',
+
+    // Sets:
+    jaccard_k = 'j',
+    hamming_k = 'b',
+    tanimoto_k = 't',
+    sorensen_k = 's',
+};
+
+enum class scalar_kind_t : std::uint8_t {
+    unknown_k = 0,
+    f64_k,
+    f32_k,
+    f16_k,
+    f8_k,
+    b1x8_k,
+};
+
+template <typename scalar_at> scalar_kind_t common_scalar_kind() noexcept {
+    if (std::is_same<scalar_at, f32_t>())
+        return scalar_kind_t::f32_k;
+    if (std::is_same<scalar_at, f64_t>())
+        return scalar_kind_t::f64_k;
+    if (std::is_same<scalar_at, b1x8_t>())
+        return scalar_kind_t::b1x8_k;
+    return scalar_kind_t::unknown_k;
+}
 
 template <typename at> at angle_to_radians(at angle) noexcept { return angle * at(3.14159265358979323846) / at(180); }
 
 template <typename at> at square(at value) noexcept { return value * value; }
 
-template <std::size_t multiple_ak> inline std::size_t divide_round_up(std::size_t num) noexcept {
+template <std::size_t multiple_ak> std::size_t divide_round_up(std::size_t num) noexcept {
     return (num + multiple_ak - 1) / multiple_ak;
 }
 
@@ -225,6 +263,8 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct ip_
     using result_t = result_at;
     using result_type = result_t;
 
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::ip_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
@@ -254,6 +294,8 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct cos
     using result_t = result_at;
     using result_type = result_t;
 
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::cos_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
@@ -283,6 +325,8 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct l2s
     using result_t = result_at;
     using result_type = result_t;
 
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::l2sq_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
@@ -312,6 +356,8 @@ template <typename scalar_at = std::uint64_t, typename result_at = std::size_t> 
     using result_type = result_t;
     static_assert(std::is_unsigned<scalar_t>::value, "Hamming distance requires unsigned integral words");
 
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::hamming_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
@@ -342,6 +388,8 @@ template <typename scalar_at = std::uint64_t, typename result_at = float> struct
     static_assert(std::is_unsigned<scalar_t>::value, "Tanimoto distance requires unsigned integral words");
     static_assert(std::is_floating_point<result_t>::value, "Tanimoto distance will be a fraction");
 
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::tanimoto_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
@@ -374,6 +422,8 @@ template <typename scalar_at = std::uint64_t, typename result_at = float> struct
     static_assert(std::is_unsigned<scalar_t>::value, "Sorensen-Dice distance requires unsigned integral words");
     static_assert(std::is_floating_point<result_t>::value, "Sorensen-Dice distance will be a fraction");
 
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::sorensen_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
@@ -407,6 +457,8 @@ template <typename scalar_at = std::int32_t, typename result_at = float> struct 
     using result_type = result_t;
     static_assert(!std::is_floating_point<scalar_t>::value, "Jaccard distance requires integral scalars");
 
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::jaccard_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
     inline result_t operator()(view_t a, view_t b) const noexcept {
         return operator()(a.data(), b.data(), a.size(), b.size());
     }
@@ -436,6 +488,8 @@ template <typename scalar_at = float, typename result_at = float> struct pearson
     using result_t = result_at;
     using result_type = result_t;
 
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::pearson_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
     inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
@@ -471,6 +525,9 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct hav
     using result_t = result_at;
     using result_type = result_t;
     static_assert(!std::is_integral<scalar_t>::value, "Latitude and longitude must be floating-node");
+
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::haversine_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b) const noexcept {
         result_t lat_a = a[0], lon_a = a[1];
@@ -964,9 +1021,9 @@ constexpr std::size_t default_allocator_entry_bytes() { return 64; }
 
 /**
  *  @brief  The "magic" sequence helps infer the type of the file.
- *          USearch indexes start with the "unumusearch" string.
+ *          USearch indexes start with the "usearch" string.
  */
-constexpr char const* default_magic() { return "unumusearch"; }
+constexpr char const* default_magic() { return "usearch"; }
 
 /**
  *  @brief  Configuration settings for the index construction.
@@ -1026,58 +1083,55 @@ struct search_config_t {
     bool exact = false;
 };
 
-enum class metric_kind_t : std::uint8_t {
-    unknown_k = 0,
-    // Classics:
-    ip_k = 'i',
-    cos_k = 'c',
-    l2sq_k = 'e',
-
-    // Custom:
-    pearson_k = 'p',
-    haversine_k = 'h',
-
-    // Sets:
-    jaccard_k = 'j',
-    hamming_k = 'b',
-    tanimoto_k = 't',
-    sorensen_k = 's',
-};
-
 using file_header_t = byte_t[64];
 
 /**
  *  @brief  Serialized binary representations of the USearch index start with metadata.
  *          Metadata is parsed into a `file_head_t`, containing the USearch package version,
  *          and the properties of the index.
+ *
+ *  It uses: 13 bytes for file versioning, 22 bytes for structural information = 35 bytes.
+ *  The following 24 bytes contain binary size of the graph, of the vectors, and the checksum,
+ *  leaving 5 bytes at the end vacant.
  */
 struct file_head_t {
 
-    using magic_t = char[11];
+    // Versioning: 7 + 2 * 3 = 13 bytes
+    using magic_t = char[7];
     using version_major_t = std::uint16_t;
     using version_minor_t = std::uint16_t;
     using version_patch_t = std::uint16_t;
 
+    // Structural: 1 * 6 + 8 * 2 = 22 bytes
     using connectivity_t = std::uint8_t;
     using max_level_t = std::uint8_t;
     using vector_alignment_t = std::uint8_t;
-    using bytes_per_label_t = std::uint16_t;
-    using bytes_per_id_t = std::uint16_t;
+    using bytes_per_label_t = std::uint8_t;
+    using bytes_per_id_t = std::uint8_t;
     using size_t = std::uint64_t;
     using entry_idx_t = std::uint64_t;
 
+    // Versioning:
     char const* magic;
     misaligned_ref_gt<version_major_t> version_major;
     misaligned_ref_gt<version_minor_t> version_minor;
     misaligned_ref_gt<version_patch_t> version_patch;
+
+    // Structural:
     misaligned_ref_gt<metric_kind_t> metric;
     misaligned_ref_gt<connectivity_t> connectivity;
     misaligned_ref_gt<max_level_t> max_level;
     misaligned_ref_gt<vector_alignment_t> vector_alignment;
     misaligned_ref_gt<bytes_per_label_t> bytes_per_label;
     misaligned_ref_gt<bytes_per_id_t> bytes_per_id;
+    misaligned_ref_gt<scalar_kind_t> scalar_kind;
     misaligned_ref_gt<size_t> size;
     misaligned_ref_gt<entry_idx_t> entry_idx;
+
+    // Additional:
+    misaligned_ref_gt<size_t> bytes_for_graphs;
+    misaligned_ref_gt<size_t> bytes_for_vectors;
+    misaligned_ref_gt<size_t> bytes_checksum;
 
     file_head_t(byte_t* ptr) noexcept
         : magic((char const*)exchange(ptr, ptr + sizeof(magic_t))),
@@ -1088,8 +1142,55 @@ struct file_head_t {
           max_level(exchange(ptr, ptr + sizeof(max_level_t))),
           vector_alignment(exchange(ptr, ptr + sizeof(vector_alignment_t))),
           bytes_per_label(exchange(ptr, ptr + sizeof(bytes_per_label_t))),
-          bytes_per_id(exchange(ptr, ptr + sizeof(bytes_per_id_t))), size(exchange(ptr, ptr + sizeof(size_t))),
-          entry_idx(exchange(ptr, ptr + sizeof(entry_idx_t))) {}
+          bytes_per_id(exchange(ptr, ptr + sizeof(bytes_per_id_t))),
+          scalar_kind(exchange(ptr, ptr + sizeof(scalar_kind_t))), size(exchange(ptr, ptr + sizeof(size_t))),
+          entry_idx(exchange(ptr, ptr + sizeof(entry_idx_t))), bytes_for_graphs(exchange(ptr, ptr + sizeof(size_t))),
+          bytes_for_vectors(exchange(ptr, ptr + sizeof(size_t))), bytes_checksum(exchange(ptr, ptr + sizeof(size_t))) {}
+};
+
+struct file_head_result_t {
+
+    using magic_t = file_head_t::magic_t;
+    using version_major_t = file_head_t::version_major_t;
+    using version_minor_t = file_head_t::version_minor_t;
+    using version_patch_t = file_head_t::version_patch_t;
+
+    using connectivity_t = file_head_t::connectivity_t;
+    using max_level_t = file_head_t::max_level_t;
+    using vector_alignment_t = file_head_t::vector_alignment_t;
+    using bytes_per_label_t = file_head_t::bytes_per_label_t;
+    using bytes_per_id_t = file_head_t::bytes_per_id_t;
+    using size_t = file_head_t::size_t;
+    using entry_idx_t = file_head_t::entry_idx_t;
+
+    // Versioning:
+    version_major_t version_major;
+    version_minor_t version_minor;
+    version_patch_t version_patch;
+
+    // Structural:
+    metric_kind_t metric;
+    connectivity_t connectivity;
+    max_level_t max_level;
+    vector_alignment_t vector_alignment;
+    bytes_per_label_t bytes_per_label;
+    bytes_per_id_t bytes_per_id;
+    scalar_kind_t scalar_kind;
+    size_t size;
+    entry_idx_t entry_idx;
+
+    // Additional:
+    size_t bytes_for_graphs;
+    size_t bytes_for_vectors;
+    size_t bytes_checksum;
+
+    error_t error;
+
+    explicit operator bool() const noexcept { return !error; }
+    file_head_result_t failed(char const* message) noexcept {
+        error = message;
+        return std::move(*this);
+    }
 };
 
 static_assert(sizeof(file_header_t) == 64, "File header should be exactly 64 bytes");
@@ -1101,6 +1202,24 @@ using return_type_gt =
     typename std::invoke_result<metric_at, args_at...>::type;
 #else
     typename std::result_of<metric_at(args_at...)>::type;
+#endif
+
+/// @brief  OS-specific to wrap open file-descriptors/handles.
+#if defined(USEARCH_DEFINED_WINDOWS)
+struct viewed_file_t {
+    HANDLE file_handle{};
+    HANDLE mapping_handle{};
+    void* ptr{};
+    size_t length{};
+    explicit operator bool() const noexcept { return mapping_handle != nullptr; }
+};
+#else
+struct viewed_file_t {
+    int file_descriptor{};
+    void* ptr{};
+    size_t length{};
+    explicit operator bool() const noexcept { return file_descriptor != 0; }
+};
 #endif
 
 /**
@@ -1168,18 +1287,17 @@ using return_type_gt =
 template <typename metric_at = ip_gt<float>,            //
           typename label_at = std::size_t,              //
           typename id_at = std::uint32_t,               //
-          typename scalar_at = float,                   //
           typename allocator_at = std::allocator<char>, //
           typename point_allocator_at = allocator_at>   //
 class index_gt {
   public:
     using metric_t = metric_at;
-    using scalar_t = scalar_at;
     using label_t = label_at;
     using id_t = id_at;
     using allocator_t = allocator_at;
     using point_allocator_t = point_allocator_at;
 
+    using scalar_t = typename metric_t::scalar_t;
     using vector_view_t = span_gt<scalar_t const>;
     using distance_t = return_type_gt<metric_t, vector_view_t, vector_view_t>;
 
@@ -1390,7 +1508,7 @@ class index_gt {
     allocator_t allocator_{};
     point_allocator_t point_allocator_{};
     precomputed_constants_t pre_{};
-    int viewed_file_descriptor_{};
+    viewed_file_t viewed_file_{};
 
     usearch_align_m mutable std::atomic<std::size_t> capacity_{};
     usearch_align_m mutable std::atomic<std::size_t> size_{};
@@ -1415,7 +1533,7 @@ class index_gt {
     std::size_t max_level() const noexcept { return static_cast<std::size_t>(max_level_); }
     index_config_t const& config() const noexcept { return config_; }
     index_limits_t const& limits() const noexcept { return limits_; }
-    bool is_immutable() const noexcept { return viewed_file_descriptor_ != 0; }
+    bool is_immutable() const noexcept { return bool(viewed_file_); }
 
     /**
      *  @section Exceptions
@@ -1424,8 +1542,8 @@ class index_gt {
     explicit index_gt(index_config_t config = {}, metric_t metric = {}, allocator_t allocator = {},
                       point_allocator_t point_allocator = {}) noexcept
         : config_(config), limits_(0, 0), metric_(metric), allocator_(std::move(allocator)),
-          point_allocator_(std::move(point_allocator)), pre_(precompute_(config)), viewed_file_descriptor_(0),
-          size_(0u), max_level_(-1), entry_id_(0u), nodes_(nullptr), nodes_mutexes_(), contexts_(nullptr) {}
+          point_allocator_(std::move(point_allocator)), pre_(precompute_(config)), size_(0u), max_level_(-1),
+          entry_id_(0u), nodes_(nullptr), nodes_mutexes_(), contexts_(nullptr) {}
 
     /**
      *  @brief  Clones the structure with the same hyper-parameters, but without contents.
@@ -1476,6 +1594,7 @@ class index_gt {
             context_allocator_t{}.deallocate(exchange(contexts_, nullptr), limits_.threads());
         limits_ = index_limits_t{0, 0};
         capacity_ = 0;
+        reset_view_();
     }
 
     /**
@@ -1487,7 +1606,7 @@ class index_gt {
         std::swap(metric_, other.metric_);
         std::swap(allocator_, other.allocator_);
         std::swap(pre_, other.pre_);
-        std::swap(viewed_file_descriptor_, other.viewed_file_descriptor_);
+        std::swap(viewed_file_, other.viewed_file_);
         std::swap(max_level_, other.max_level_);
         std::swap(entry_id_, other.entry_id_);
         std::swap(nodes_, other.nodes_);
@@ -1854,7 +1973,7 @@ class index_gt {
      */
     std::size_t memory_usage(std::size_t allocator_entry_bytes = default_allocator_entry_bytes()) const noexcept {
         std::size_t total = 0;
-        if (viewed_file_descriptor_ == 0) {
+        if (!viewed_file_) {
             stats_t s = stats();
             total += s.allocated_bytes;
             total += s.nodes * allocator_entry_bytes;
@@ -1895,17 +2014,23 @@ class index_gt {
      */
     serialization_result_t save(char const* file_path) const noexcept {
 
+        // Make sure we have right to write to that file
         serialization_result_t result;
+        std::FILE* file = std::fopen(file_path, "wb");
+        if (!file)
+            return result.failed(std::strerror(errno));
+
+        // Prepare the header with metadata
         file_header_t state_buffer{};
         std::memset(state_buffer, 0, sizeof(file_header_t));
         file_head_t state{state_buffer};
         std::memcpy(state_buffer, default_magic(), std::strlen(default_magic()));
 
-        // Check compatibility
+        // Mark compatibility
         state.version_major = USEARCH_VERSION_MAJOR;
         state.version_minor = USEARCH_VERSION_MINOR;
         state.version_patch = USEARCH_VERSION_PATCH;
-        state.metric = metric_kind_t::unknown_k;
+        state.metric = metric_.kind();
 
         // Describe state
         state.connectivity = config_.connectivity;
@@ -1913,13 +2038,25 @@ class index_gt {
         state.vector_alignment = config_.vector_alignment;
         state.bytes_per_label = sizeof(label_t);
         state.bytes_per_id = sizeof(id_t);
+        state.scalar_kind = metric_.scalar_kind();
         state.size = size_;
         state.entry_idx = entry_id_;
 
-        std::FILE* file = std::fopen(file_path, "wb");
-        if (!file)
-            return result.failed(std::strerror(errno));
+        // Augment with metadata
+        std::size_t graphs_bytes = 0;
+        std::size_t vectors_bytes = 0;
+        for (std::size_t i = 0; i != state.size; ++i) {
+            node_t node = node_with_id_(i);
+            std::size_t node_bytes = node_bytes_(node);
+            std::size_t node_vector_bytes = node_vector_bytes_(node);
+            graphs_bytes += node_bytes - node_vector_bytes;
+            vectors_bytes += node_vector_bytes;
+        }
+        state.bytes_for_graphs = graphs_bytes;
+        state.bytes_for_vectors = vectors_bytes;
+        state.bytes_checksum = 0;
 
+        // Perform serialization
         auto write_chunk = [&](void* begin, std::size_t length) {
             std::size_t written = std::fwrite(begin, length, 1, file);
             if (!written) {
@@ -2027,7 +2164,7 @@ class index_gt {
         }
 
         std::fclose(file);
-        viewed_file_descriptor_ = 0;
+        reset_view_();
         return {};
     }
 
@@ -2038,14 +2175,38 @@ class index_gt {
      */
     serialization_result_t view(char const* file_path) noexcept {
         serialization_result_t result;
+
 #if defined(USEARCH_DEFINED_WINDOWS)
-        return result.failed("Memory-mapping is not yet available for Windows");
+
+        HANDLE file_handle =
+            CreateFile(file_path, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+        if (file_handle == INVALID_HANDLE_VALUE)
+            return result.failed("Opening file failed!");
+
+        size_t file_length = GetFileSize(file_handle, 0);
+        HANDLE mapping_handle = CreateFileMapping(file_handle, 0, PAGE_READONLY, 0, 0, 0);
+        if (mapping_handle == 0) {
+            CloseHandle(file_handle);
+            return result.failed("Mapping file failed!");
+        }
+
+        byte_t* file = (byte_t*)MapViewOfFile(mapping_handle, FILE_MAP_READ, 0, 0, file_length);
+        if (file == 0) {
+            CloseHandle(mapping_handle);
+            CloseHandle(file_handle);
+            return result.failed("View the map failed!");
+        }
+        viewed_file_.file_handle = file_handle;
+        viewed_file_.mapping_handle = mapping_handle;
+        viewed_file_.ptr = file;
+        viewed_file_.length = file_length;
 #else
-        int open_flags = O_RDONLY;
-#if __linux__
-        open_flags |= O_NOATIME;
+
+#if defined(USEARCH_DEFINED_LINUX)
+        int descriptor = open(file_path, O_RDONLY | O_NOATIME);
+#else
+        int descriptor = open(file_path, O_RDONLY);
 #endif
-        int descriptor = open(file_path, open_flags);
 
         // Estimate the file size
         struct stat file_stat;
@@ -2061,16 +2222,20 @@ class index_gt {
             close(descriptor);
             return result.failed(std::strerror(errno));
         }
+        viewed_file_.file_descriptor = descriptor;
+        viewed_file_.ptr = file;
+        viewed_file_.length = file_stat.st_size;
+#endif // Platform specific code
 
         // Read the header
         {
             file_head_t state{file};
             if (state.bytes_per_label != sizeof(label_t)) {
-                close(descriptor);
+                reset_view_();
                 return result.failed("Incompatible label type!");
             }
             if (state.bytes_per_id != sizeof(id_t)) {
-                close(descriptor);
+                reset_view_();
                 return result.failed("Incompatible ID type!");
             }
 
@@ -2103,14 +2268,27 @@ class index_gt {
             max_level_ = (std::max)(max_level_, level);
         }
 
-        viewed_file_descriptor_ = descriptor;
         return {};
-#endif // POSIX
     }
 
 #pragma endregion
 
   private:
+    void reset_view_() noexcept {
+        if (!viewed_file_)
+            return;
+#if defined(USEARCH_DEFINED_WINDOWS)
+        UnmapViewOfFile(viewed_file_.ptr);
+        CloseHandle(viewed_file_.mapping_handle);
+        CloseHandle(viewed_file_.file_handle);
+
+#else
+        munmap(viewed_file_.ptr, viewed_file_.length);
+        close(viewed_file_.file_descriptor);
+#endif
+        viewed_file_ = {};
+    }
+
     inline static precomputed_constants_t precompute_(index_config_t const& config) noexcept {
         precomputed_constants_t pre;
         pre.connectivity_max_base = config.connectivity * base_level_multiple_();
@@ -2135,7 +2313,7 @@ class index_gt {
 
     void node_free_(std::size_t id) noexcept {
 
-        if (viewed_file_descriptor_ != 0)
+        if (viewed_file_)
             return;
 
         node_t& node = nodes_[id];
@@ -2443,6 +2621,47 @@ class index_gt {
         return {top_data, submitted_count};
     }
 };
+
+/**
+ *  @brief  Extracts metadata from pre-constructed index on disk, without loading it
+ *          or mapping the whole binary file.
+ */
+inline file_head_result_t index_metadata(char const* file_path) noexcept {
+
+    file_head_result_t result;
+    file_header_t state_buffer{};
+    std::FILE* file = std::fopen(file_path, "rb");
+    if (!file)
+        return result.failed(std::strerror(errno));
+
+    // Read the header
+    std::size_t read = std::fread(&state_buffer[0], sizeof(file_header_t), 1, file);
+    std::fclose(file);
+    if (!read)
+        return result.failed(std::strerror(errno));
+
+    // Parse and validate the MIME type
+    file_head_t state{state_buffer};
+    if (std::strncmp(state.magic, default_magic(), std::strlen(default_magic())) != 0)
+        return result.failed("Wrong MIME type!");
+
+    result.version_major = state.version_major;
+    result.version_minor = state.version_minor;
+    result.version_patch = state.version_patch;
+    result.metric = state.metric;
+    result.connectivity = state.connectivity;
+    result.max_level = state.max_level;
+    result.vector_alignment = state.vector_alignment;
+    result.bytes_per_label = state.bytes_per_label;
+    result.bytes_per_id = state.bytes_per_id;
+    result.scalar_kind = state.scalar_kind;
+    result.size = state.size;
+    result.entry_idx = state.entry_idx;
+    result.bytes_for_graphs = state.bytes_for_graphs;
+    result.bytes_for_vectors = state.bytes_for_vectors;
+    result.bytes_checksum = state.bytes_checksum;
+    return result;
+}
 
 } // namespace usearch
 } // namespace unum

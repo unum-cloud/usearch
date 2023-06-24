@@ -1,22 +1,22 @@
+from __future__ import annotations
+
 # The purpose of this file is to provide Pythonic wrapper on top
 # the native precompiled CPython module. It improves compatibility
 # Python tooling, linters, and static analyzers. It also embeds JIT
 # into the primary `Index` class, connecting USearch with Numba.
 import os
-from math import sqrt
-from typing import Optional, Callable, Union, NamedTuple, List, Iterable
+from typing import Optional, Union, NamedTuple, List, Iterable
 
 import numpy as np
 
-from usearch.compiled import Index as _CompiledIndex
+from usearch.compiled import Index as _CompiledIndex, IndexMetadata
 from usearch.compiled import SparseIndex as _CompiledSetsIndex
 
-from usearch.compiled import MetricKind, ScalarKind
+from usearch.compiled import MetricKind, ScalarKind, MetricSignature
 from usearch.compiled import (
     DEFAULT_CONNECTIVITY,
     DEFAULT_EXPANSION_ADD,
     DEFAULT_EXPANSION_SEARCH,
-
     USES_OPENMP,
     USES_SIMSIMD,
     USES_NATIVE_F16,
@@ -41,11 +41,11 @@ def _normalize_dtype(dtype) -> ScalarKind:
 
     if isinstance(dtype, str):
         _normalize = {
-            'f64': ScalarKind.F64,
-            'f32': ScalarKind.F32,
-            'f16': ScalarKind.F16,
-            'f8': ScalarKind.F8,
-            'b1': ScalarKind.B1,
+            "f64": ScalarKind.F64,
+            "f32": ScalarKind.F32,
+            "f16": ScalarKind.F16,
+            "f8": ScalarKind.F8,
+            "b1": ScalarKind.B1,
         }
         return _normalize[dtype.lower()]
 
@@ -79,9 +79,8 @@ class Matches(NamedTuple):
         return np.sum(self.counts)
 
     def to_list(self, row: Optional[int] = None) -> Union[List[dict], List[List[dict]]]:
-
         if not self.is_batch:
-            assert row is None, 'Exporting a single sequence is only for batch requests'
+            assert row is None, "Exporting a single sequence is only for batch requests"
             labels = self.labels
             distances = self.distances
 
@@ -94,7 +93,7 @@ class Matches(NamedTuple):
             distances = self.distances[row, :count]
 
         return [
-            {'label': int(label), 'distance': float(distance)}
+            {"label": int(label), "distance": float(distance)}
             for label, distance in zip(labels, distances)
         ]
 
@@ -103,8 +102,17 @@ class Matches(NamedTuple):
         return np.sum(best_matches == expected) / len(expected)
 
     def __repr__(self) -> str:
-        return f'usearch.Matches({self.total_matches})' if self.is_batch else \
-            f'usearch.Matches({self.total_matches} across {self.batch_size} queries)'
+        return (
+            f"usearch.Matches({self.total_matches})"
+            if self.is_batch
+            else f"usearch.Matches({self.total_matches} across {self.batch_size} queries)"
+        )
+
+
+class CompiledMetric(NamedTuple):
+    pointer: int
+    kind: MetricKind
+    signature: MetricSignature
 
 
 class Index:
@@ -120,15 +128,13 @@ class Index:
     def __init__(
         self,
         ndim: int,
-        metric: Union[MetricKind, Callable, str] = MetricKind.IP,
+        metric: Union[str, MetricKind, CompiledMetric] = MetricKind.IP,
         dtype: Optional[str] = None,
         jit: bool = False,
-
         connectivity: int = DEFAULT_CONNECTIVITY,
         expansion_add: int = DEFAULT_EXPANSION_ADD,
         expansion_search: int = DEFAULT_EXPANSION_SEARCH,
         tune: bool = False,
-
         path: Optional[os.PathLike] = None,
         view: bool = False,
     ) -> None:
@@ -171,7 +177,7 @@ class Index:
 
         :param expansion_search: Traversal depth on queries, defaults to None
         :type expansion_search: Optional[int], optional
-            Hyper-parameter for the search depth when querying 
+            Hyper-parameter for the search depth when querying
             nearest neighbors. The original paper calls it "ef".
             Can be changed afterwards, as the `.expansion_search`.
 
@@ -190,58 +196,58 @@ class Index:
         else:
             dtype = _normalize_dtype(dtype)
 
-
         if metric is None:
             metric = MetricKind.IP
-        elif isinstance(metric, str):
+
+        if isinstance(metric, str):
             _normalize = {
-                'cos': MetricKind.Cos,
-                'ip': MetricKind.IP,
-                'l2_sq': MetricKind.L2sq,
-                'haversine': MetricKind.Haversine,
-                'perason': MetricKind.Pearson,
-                'hamming': MetricKind.Hamming,
-                'tanimoto': MetricKind.Tanimoto,
-                'sorensen': MetricKind.Sorensen,
+                "cos": MetricKind.Cos,
+                "ip": MetricKind.IP,
+                "l2_sq": MetricKind.L2sq,
+                "haversine": MetricKind.Haversine,
+                "perason": MetricKind.Pearson,
+                "hamming": MetricKind.Hamming,
+                "tanimoto": MetricKind.Tanimoto,
+                "sorensen": MetricKind.Sorensen,
             }
             metric = _normalize[metric.lower()]
 
-        if isinstance(metric, Callable):
-            self._metric_kind = MetricKind.Unknown
-            self._metric_jit = metric
-            self._metric_pointer = int(metric.address)
-
-        elif isinstance(metric, MetricKind):
-            if jit:
-
-                try:
-                    from usearch.numba import jit
-                except ImportError:
-                    raise ModuleNotFoundError(
-                        'To use JIT install Numba with `pip install numba`.'
-                        'Alternatively, reinstall usearch with `pip install usearch[jit]`')
-
-                self._metric_kind = metric
-                self._metric_jit = jit(
-                    ndim=ndim,
-                    metric=metric,
-                    dtype=dtype,
+        if isinstance(metric, MetricKind) and jit:
+            try:
+                from usearch.numba import jit
+            except ImportError:
+                raise ModuleNotFoundError(
+                    "To use JIT install Numba with `pip install numba`."
+                    "Alternatively, reinstall with `pip install usearch[jit]`"
                 )
-                self._metric_pointer = self._metric_jit.address if \
-                    self._metric_jit else 0
-            else:
-                self._metric_kind = metric
-                self._metric_jit = None
-                self._metric_pointer = 0
+
+            metric = jit(
+                ndim=ndim,
+                metric=metric,
+                dtype=dtype,
+            )
+
+        if isinstance(metric, MetricKind):
+            self._metric_kind = metric
+            self._metric_jit = None
+            self._metric_pointer = 0
+            self._metric_signature = MetricSignature.ArrayArraySize
+        elif isinstance(metric, CompiledMetric):
+            self._metric_jit = metric
+            self._metric_kind = metric.kind
+            self._metric_pointer = metric.pointer
+            self._metric_signature = metric.signature
         else:
             raise ValueError(
-                'The `metric` must be Numba callback or a `MetricKind`')
+                "The `metric` must be a `CompiledMetric` or a `MetricKind`"
+            )
 
         self._compiled = _CompiledIndex(
             ndim=ndim,
+            dtype=dtype,
             metric=self._metric_kind,
             metric_pointer=self._metric_pointer,
-            dtype=dtype,
+            metric_signature=self._metric_signature,
             connectivity=connectivity,
             expansion_add=expansion_add,
             expansion_search=expansion_search,
@@ -255,17 +261,40 @@ class Index:
             else:
                 self._compiled.load(path)
 
+    @staticmethod
+    def metadata(path: os.PathLike) -> IndexMetadata:
+        return IndexMetadata(path)
+
+    @staticmethod
+    def restore(path: os.PathLike, view: bool = False) -> Index:
+        meta = Index.metadata(path)
+        bits_per_scalar = {
+            ScalarKind.F8: 8,
+            ScalarKind.F16: 16,
+            ScalarKind.F32: 32,
+            ScalarKind.F64: 64,
+            ScalarKind.B1: 1,
+        }[meta.scalar_kind]
+        ndim = meta.bytes_for_vectors * 8 // meta.size // bits_per_scalar
+        return Index(
+            ndim=ndim,
+            connectivity=meta.connectivity,
+            metric=meta.metric,
+            path=path,
+            view=view,
+        )
+
     def add(
-            self, labels, vectors, *,
-            copy: bool = True, threads: int = 0) -> Union[int, np.ndarray]:
+        self, labels, vectors, *, copy: bool = True, threads: int = 0
+    ) -> Union[int, np.ndarray]:
         """Inserts one or move vectors into the index.
 
         For maximal performance the `labels` and `vectors`
         should conform to the Python's "buffer protocol" spec.
 
-        To index a single entry: 
+        To index a single entry:
             labels: int, vectors: np.ndarray.
-        To index many entries: 
+        To index many entries:
             labels: np.ndarray, vectors: np.ndarray.
 
         When working with extremely large indexes, you may want to
@@ -284,8 +313,8 @@ class Index:
         :return: Inserted label or labels
         :type: Union[int, np.ndarray]
         """
-        assert isinstance(vectors, np.ndarray), 'Expects a NumPy array'
-        assert vectors.ndim == 1 or vectors.ndim == 2, 'Expects a matrix or vector'
+        assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
+        assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
         is_batch = vectors.ndim == 2
         generate_labels = labels is None
 
@@ -306,8 +335,8 @@ class Index:
         return labels
 
     def search(
-            self, vectors, k: int = 10, *,
-            threads: int = 0, exact: bool = False) -> Matches:
+        self, vectors, k: int = 10, *, threads: int = 0, exact: bool = False
+    ) -> Matches:
         """Performs approximate nearest neighbors search for one or more queries.
 
         :param vectors: Query vector or vectors.
@@ -323,26 +352,28 @@ class Index:
         :rtype: Matches
         """
         tuple_ = self._compiled.search(
-            vectors, k,
-            exact=exact, threads=threads,
+            vectors,
+            k,
+            exact=exact,
+            threads=threads,
         )
         return Matches(*tuple_)
 
     @property
     def specs(self) -> dict:
         return {
-            'Class': 'usearch.Index',
-            'Connectivity': self.connectivity,
-            'Size': self.size,
-            'Dimensions': self.ndim,
-            'Expansion@Add': self.expansion_add,
-            'Expansion@Search': self.expansion_search,
-            'OpenMP': USES_OPENMP,
-            'SimSIMD': USES_SIMSIMD,
-            'NativeF16': USES_NATIVE_F16,
-            'JIT': self.jit,
-            'DType': self.dtype,
-            'Path': self.path,
+            "Class": "usearch.Index",
+            "Connectivity": self.connectivity,
+            "Size": self.size,
+            "Dimensions": self.ndim,
+            "Expansion@Add": self.expansion_add,
+            "Expansion@Search": self.expansion_search,
+            "OpenMP": USES_OPENMP,
+            "SimSIMD": USES_SIMSIMD,
+            "NativeF16": USES_NATIVE_F16,
+            "JIT": self.jit,
+            "DType": self.dtype,
+            "Path": self.path,
         }
 
     def __len__(self) -> int:
@@ -413,10 +444,8 @@ class Index:
         return self._compiled.labels
 
     def get_vectors(
-            self,
-            labels: np.ndarray,
-            dtype: ScalarKind = ScalarKind.F32) -> np.ndarray:
-
+        self, labels: np.ndarray, dtype: ScalarKind = ScalarKind.F32
+    ) -> np.ndarray:
         dtype = _normalize_dtype(dtype)
         return np.vstack([self._compiled.__getitem__(l, dtype) for l in labels])
 

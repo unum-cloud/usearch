@@ -483,7 +483,7 @@ void run_punned(dataset_at& dataset, args_t const& args, index_config_t config, 
 
     index_at index = index_at::make(dataset.dimensions(), kind, config, accuracy);
     index.reserve(limits);
-    std::printf("-- Hardware acceleration: %s\n", isa_name(index.isa()));
+    std::printf("-- Hardware acceleration: %s\n", isa_name(index.metric().isa_));
     std::printf("Will benchmark in-memory\n");
 
     single_shot(dataset, index, true);
@@ -535,7 +535,7 @@ void run_big_or_small(dataset_at& dataset, args_t const& args, index_config_t co
 
 void report_alternative_setups() {
     using set_member_t = std::uint32_t;
-    using sets_index_t = index_gt<jaccard_gt<set_member_t>, std::size_t, std::uint32_t, set_member_t>;
+    using sets_index_t = index_gt<jaccard_gt<set_member_t>, std::size_t, std::uint32_t>;
     set_member_t set_a[] = {10, 12, 15};
     set_member_t set_b[] = {11, 12, 15, 16};
     sets_index_t index;
