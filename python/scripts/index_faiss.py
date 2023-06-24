@@ -13,7 +13,6 @@ from usearch.index import (
 
 
 class IndexFAISS:
-
     def __init__(
         self,
         index: IndexHNSWFlat = None,
@@ -22,9 +21,9 @@ class IndexFAISS:
         expansion_add: int = DEFAULT_EXPANSION_ADD,
         expansion_search: int = DEFAULT_EXPANSION_SEARCH,
         path: Optional[os.PathLike] = None,
-        *args, **kwargs,
+        *args,
+        **kwargs,
     ):
-
         if index is None:
             index = IndexHNSWFlat(ndim, connectivity)
             index.hnsw.efConstruction = expansion_add
@@ -32,11 +31,11 @@ class IndexFAISS:
 
         self._faiss = index
         self._specs = {
-            'Class': 'usearch.IndexFAISS',
-            'Dimensions': ndim,
-            'Connectivity': connectivity,
-            'Expansion@Add': expansion_add,
-            'Expansion@Search': expansion_search,
+            "Class": "usearch.IndexFAISS",
+            "Dimensions": ndim,
+            "Connectivity": connectivity,
+            "Expansion@Add": expansion_add,
+            "Expansion@Search": expansion_search,
         }
 
         self.path = path
@@ -58,9 +57,11 @@ class IndexFAISS:
 
     @property
     def specs(self) -> dict:
-        self._specs.update({
-            'Size': len(self),
-        })
+        self._specs.update(
+            {
+                "Size": len(self),
+            }
+        )
         return self._specs
 
     def load(self, path: os.PathLike):
@@ -68,33 +69,32 @@ class IndexFAISS:
 
 
 class IndexQuantizedFAISS(IndexFAISS):
-
     def __init__(
         self,
         train: np.ndarray,
         connectivity: int = DEFAULT_CONNECTIVITY,
         expansion_add: int = DEFAULT_EXPANSION_ADD,
         expansion_search: int = DEFAULT_EXPANSION_SEARCH,
-        *args, **kwargs,
+        *args,
+        **kwargs,
     ):
-
         ndim = train.shape[1]
         super().__init__(
             ndim=ndim,
             connectivity=connectivity,
             expansion_add=expansion_add,
             expansion_search=expansion_search,
-            *args, **kwargs,
+            *args,
+            **kwargs,
         )
 
         nlist = 10000  # Number of inverted lists (number of partitions).
         nsegment = 16  # Number of segments for PQ (number of subquantizers).
-        nbit = 8       # Number of bits to encode each segment.
+        nbit = 8  # Number of bits to encode each segment.
 
         self._original_faiss = self._faiss
-        self._faiss = IndexIVFPQ(
-            self._faiss, ndim, nlist, nsegment, nbit)
+        self._faiss = IndexIVFPQ(self._faiss, ndim, nlist, nsegment, nbit)
 
         self._faiss.train(train)
         self._faiss.nprobe = 10
-        self._specs['Class'] = 'usearch.IndexQuantizedFAISS'
+        self._specs["Class"] = "usearch.IndexQuantizedFAISS"

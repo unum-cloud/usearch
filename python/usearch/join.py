@@ -7,7 +7,6 @@ from index import Index, Matches, Label
 
 
 class bidict(dict):
-
     def __init__(self, *args, **kwargs):
         super(bidict, self).__init__(*args, **kwargs)
         self.inverse = {}
@@ -37,10 +36,10 @@ def index_in_array(array: np.ndarray, item: Label) -> int:
 
 
 def semantic_join(a: Index, b: Index, resolution: int = 10) -> bidict:
-    """Performs a Semantic Join, matching one entry from `a` with 
+    """Performs a Semantic Join, matching one entry from `a` with
     one entry from `b`, converging towards a Stable Marriage.
     Assuming the collections can be different in size, classical solution
-    doesn't provide 
+    doesn't provide
 
     :param resolution: Approximate matches per member to consider, defaults to 10
     :type resolution: int, optional
@@ -65,7 +64,6 @@ def semantic_join(a: Index, b: Index, resolution: int = 10) -> bidict:
     idle_cycles: int = 0
     hopeless_men_count = len(men) - len(women)
     while len(free_men) > hopeless_men_count:
-
         # In the worst case scenario we may need to match more candidates for every
         # remaining man. This, however, may drastically increase the runtime.
         if len(free_men) == idle_cycles:

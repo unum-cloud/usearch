@@ -97,17 +97,6 @@ inline bool hardware_supports(isa_t isa) noexcept {
     return false;
 }
 
-enum class b1x8_t : unsigned char {};
-
-enum class scalar_kind_t {
-    unknown_k = 0,
-    f64_k,
-    f32_k,
-    f16_k,
-    f8_k,
-    b1x8_k,
-};
-
 inline std::size_t bytes_per_scalar(scalar_kind_t accuracy) noexcept {
     switch (accuracy) {
     case scalar_kind_t::f32_k: return 4;
@@ -186,7 +175,6 @@ inline expected_gt<metric_kind_t> metric_from_name(char const* name, std::size_t
 
 using punned_distance_t = float;
 using punned_vector_view_t = span_gt<byte_t const>;
-using punned_metric_t = std::function<punned_distance_t(punned_vector_view_t, punned_vector_view_t)>;
 
 class f8_bits_t;
 class f16_bits_t;

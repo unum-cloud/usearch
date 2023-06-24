@@ -80,7 +80,7 @@ def measure_seconds(f: Callable) -> Tuple[float, Any]:
     return secs, result
 
 
-def dcg_at_k(relevances, k=None):
+def dcg(relevances: np.ndarray, k: Optional[int] = None) -> np.ndarray:
     """Calculate DCG (Discounted Cumulative Gain) up to position k.
 
     :param relevances: List of true relevance scores (in the order as they are ranked)
@@ -101,7 +101,7 @@ def dcg_at_k(relevances, k=None):
     return np.sum(relevances / discounts)
 
 
-def ndcg_at_k(relevances, k):
+def ndcg(relevances: np.ndarray, k: Optional[int] = None) -> np.ndarray:
     """Calculate NDCG (Normalized Discounted Cumulative Gain) at position k.
 
     :param relevances: List of true relevance scores (in the order as they are ranked)
@@ -111,24 +111,26 @@ def ndcg_at_k(relevances, k):
     :return: The NDCG score at position k
     :rtype: float
     """
-    best_dcg = dcg_at_k(sorted(relevances, reverse=True), k)
+    best_dcg = dcg(sorted(relevances, reverse=True), k)
     if best_dcg == 0:
         return 0.0
 
-    return dcg_at_k(relevances, k) / best_dcg
+    return dcg(relevances, k) / best_dcg
 
 
-def relevance(y_true, y_score, k):
+def relevance(
+    expected: np.ndarray, predicted: np.ndarray, k: Optional[int] = None
+) -> np.ndarray:
     """Calculate relevance scores. Binary relevance scores
 
-    :param y_true: ground-truth values
-    :type y_true: np.ndarray
-    :param y_score: predicted values
-    :type y_score: np.ndarray
+    :param expected: ground-truth labels
+    :type expected: np.ndarray
+    :param predicted: predicted labels
+    :type predicted: np.ndarray
     """
-    y_true = y_true[:k]
-    y_score = y_score[:k]
-    return [1 if i in y_true else 0 for i in y_score]
+    expected = expected[:k]
+    predicted = predicted[:k]
+    return [1 if i in expected else 0 for i in predicted]
 
 
 @dataclass
@@ -301,8 +303,8 @@ class AddTask:
 
         return [
             AddTask(
-                labels=self.labels[start_row: start_row + batch_size],
-                vectors=self.vectors[start_row: start_row + batch_size, :],
+                labels=self.labels[start_row : start_row + batch_size],
+                vectors=self.vectors[start_row : start_row + batch_size, :],
             )
             for start_row in range(0, self.count, batch_size)
         ]
@@ -351,8 +353,8 @@ class SearchTask:
 
         return [
             SearchTask(
-                queries=self.queries[start_row: start_row + batch_size, :],
-                neighbors=self.neighbors[start_row: start_row + batch_size, :],
+                queries=self.queries[start_row : start_row + batch_size, :],
+                neighbors=self.neighbors[start_row : start_row + batch_size, :],
             )
             for start_row in range(0, self.queries.shape[0], batch_size)
         ]
@@ -370,8 +372,7 @@ class Evaluation:
     ) -> Evaluation:
         tasks = []
         add = AddTask(vectors=dataset.vectors, labels=dataset.labels)
-        search = SearchTask(queries=dataset.queries,
-                            neighbors=dataset.neighbors)
+        search = SearchTask(queries=dataset.queries, neighbors=dataset.neighbors)
 
         if batch_size:
             tasks.extend(add.slices(batch_size))

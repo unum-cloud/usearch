@@ -26,10 +26,13 @@ def _ascii_to_vector(string: str) -> np.ndarray:
 
 
 def serve(
-        ndim_: int, metric: str = 'ip',
-        port: int = 8545, threads: int = 1,
-        path: str = 'index.usearch', immutable: bool = False):
-
+    ndim_: int,
+    metric: str = "ip",
+    port: int = 8545,
+    threads: int = 1,
+    path: str = "index.usearch",
+    immutable: bool = False,
+):
     server = Server(port=port)
     index = Index(ndim=ndim_, metric=metric)
 
@@ -57,7 +60,7 @@ def serve(
 
     @server
     def add_one(label: int, vector: np.ndarray):
-        print('adding', label, vector)
+        print("adding", label, vector)
         labels = np.array([label], dtype=Label)
         vectors = vector.flatten().reshape(vector.shape[0], 1)
         index.add(labels, vectors)
@@ -68,7 +71,7 @@ def serve(
 
     @server
     def search_one(vector: np.ndarray, count: int) -> List[dict]:
-        print('search', vector, count)
+        print("search", vector, count)
         vectors = vector.reshape(vector.shape[0], 1)
         results: Matches = index.search(vectors, count)
         return results.to_list()
@@ -93,33 +96,42 @@ def serve(
             index.save(path)
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-v', '--verbose', help='log server activity')
+    parser.add_argument("-v", "--verbose", help="log server activity")
+    parser.add_argument("--ndim", type=int, help="dimensionality of the vectors")
     parser.add_argument(
-        '--ndim', type=int,
-        help='dimensionality of the vectors')
-    parser.add_argument(
-        '--immutable', type=bool, default=False,
-        help='the index can not be updated')
+        "--immutable", type=bool, default=False, help="the index can not be updated"
+    )
 
     parser.add_argument(
-        '--metric', type=str, default='ip', choices=['ip', 'cos', 'l2sq', 'haversine'],
-        help='distance function to compare vectors')
+        "--metric",
+        type=str,
+        default="ip",
+        choices=["ip", "cos", "l2sq", "haversine"],
+        help="distance function to compare vectors",
+    )
     parser.add_argument(
-        '-p', '--port', type=int, default=8545,
-        help='port to open for client connections')
+        "-p",
+        "--port",
+        type=int,
+        default=8545,
+        help="port to open for client connections",
+    )
     parser.add_argument(
-        '-j', '--threads', type=int, default=1,
-        help='number of CPU threads to use')
+        "-j", "--threads", type=int, default=1, help="number of CPU threads to use"
+    )
     parser.add_argument(
-        '--path', type=str, default='index.usearch',
-        help='where to store the index')
+        "--path", type=str, default="index.usearch", help="where to store the index"
+    )
 
     args = parser.parse_args()
-    assert args.ndim is not None, 'Define the number of dimensions!'
+    assert args.ndim is not None, "Define the number of dimensions!"
     serve(
-        ndim_=args.ndim, metric=args.metric,
-        threads=args.threads, port=args.port,
-        path=args.path, immutable=args.immutable)
+        ndim_=args.ndim,
+        metric=args.metric,
+        threads=args.threads,
+        port=args.port,
+        path=args.path,
+        immutable=args.immutable,
+    )
