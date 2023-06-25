@@ -190,12 +190,6 @@ class Index:
         :type view: bool, optional
         """
 
-        if metric in MetricKindBitwise:
-            assert dtype is None or dtype == ScalarKind.B1
-            dtype = ScalarKind.B1
-        else:
-            dtype = _normalize_dtype(dtype)
-
         if metric is None:
             metric = MetricKind.IP
 
@@ -224,7 +218,7 @@ class Index:
             metric = jit(
                 ndim=ndim,
                 metric=metric,
-                dtype=dtype,
+                dtype=_normalize_dtype(dtype),
             )
 
         if isinstance(metric, MetricKind):
@@ -241,6 +235,11 @@ class Index:
             raise ValueError(
                 "The `metric` must be a `CompiledMetric` or a `MetricKind`"
             )
+
+        # Validate, that the right scalar type is defined
+        if self._metric_kind in MetricKindBitwise:
+            if dtype is not None:
+                assert dtype == ScalarKind.B1
 
         self._compiled = _CompiledIndex(
             ndim=ndim,
@@ -427,17 +426,29 @@ class Index:
     def expansion_search(self, v: int):
         self._compiled.expansion_search = v
 
-    def save(self, path: os.PathLike):
+    def save(self, path: Optional[os.PathLike] = None):
+        path = path if path else self.path
+        if path is None:
+            raise Exception("Define `path` argument")
         self._compiled.save(path)
 
-    def load(self, path: os.PathLike):
+    def load(self, path: Optional[os.PathLike] = None):
+        path = path if path else self.path
+        if path is None:
+            raise Exception("Define `path` argument")
         self._compiled.load(path)
 
-    def view(self, path: os.PathLike):
+    def view(self, path: Optional[os.PathLike] = None):
+        path = path if path else self.path
+        if path is None:
+            raise Exception("Define `path` argument")
         self._compiled.view(path)
 
     def clear(self):
         self._compiled.clear()
+
+    def close(self):
+        self._compiled.close()
 
     @property
     def labels(self) -> np.ndarray:
