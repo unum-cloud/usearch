@@ -1,14 +1,18 @@
 #ifndef UNUM_USEARCH_H
 #define UNUM_USEARCH_H
-
-#include <stdint.h> // `size_t`
+// in case the header is included from cpp code
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include <stdbool.h> // `bool`
+#include <stdint.h>  // `size_t`
 
 typedef void* usearch_index_t;
 typedef uint32_t usearch_label_t;
 typedef float usearch_distance_t;
 typedef char const* usearch_error_t;
 
-typedef usearch_distance_t (*)(void const*, void const*) usearch_metric_t;
+typedef usearch_distance_t (*usearch_metric_t)(void const*, void const*);
 
 typedef enum usearch_metric_kind_t {
     usearch_metric_ip_k = 0,
@@ -39,13 +43,12 @@ typedef struct usearch_init_options_t {
 
     usearch_scalar_kind_t quantization;
     size_t dimensions;
-    size_t capacity;
     size_t connectivity;
     size_t expansion_add;
     size_t expansion_search;
 } usearch_init_options_t;
 
-void usearch_init(usearch_init_options_t*, usearch_index_t*, usearch_error_t*);
+usearch_index_t usearch_init(usearch_init_options_t*, usearch_error_t*);
 void usearch_free(usearch_index_t, usearch_error_t*);
 
 void usearch_save(usearch_index_t, char const* path, usearch_error_t*);
@@ -79,4 +82,7 @@ bool usearch_get(                     //
 
 void usearch_remove(usearch_index_t, usearch_label_t, usearch_error_t*);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

@@ -1732,6 +1732,11 @@ class index_gt {
         std::size_t measurements{};
         error_t error{};
 
+        // todo: this is a hack to get a handle to a failed search_result_t without changing its member types
+        // given that search_result_t can represent a failed result (which implies no valid top_candidates_t &top_),
+        // the top_ probably needs to be a pointer.
+        inline search_result_t(index_gt const& index) noexcept
+            : index_(index), top_(index.contexts_[0].top_candidates) {}
         inline search_result_t(search_result_t&&) = default;
         inline search_result_t& operator=(search_result_t&&) = default;
 
