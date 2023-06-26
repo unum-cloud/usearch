@@ -186,6 +186,28 @@ static void add_one_to_index(punned_index_py_t& index, label_t label, py::buffer
         throw std::invalid_argument("Incompatible scalars in the vector: " + vector_info.format);
 }
 
+template <typename scalar_at>
+static void add_typed_to_index(                                              //
+    punned_index_py_t& index,                                                //
+    py::buffer_info const& labels_info, py::buffer_info const& vectors_info, //
+    bool copy, std::size_t threads) {
+
+    Py_ssize_t vectors_count = vectors_info.shape[0];
+    char const* vectors_data = reinterpret_cast<char const*>(vectors_info.ptr);
+    char const* labels_data = reinterpret_cast<char const*>(labels_info.ptr);
+
+    executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        add_config_t config;
+        config.store_vector = copy;
+        config.thread = thread_idx;
+        label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
+        scalar_at const* vector = reinterpret_cast<scalar_at const*>(vectors_data + task_idx * vectors_info.strides[0]);
+        index.add(label, vector, config).error.raise();
+        if (PyErr_CheckSignals() != 0)
+            throw py::error_already_set();
+    });
+}
+
 static void add_many_to_index(                                       //
     punned_index_py_t& index, py::buffer labels, py::buffer vectors, //
     bool copy, std::size_t threads) {
@@ -217,56 +239,17 @@ static void add_many_to_index(                                       //
     if (index.size() + vectors_count >= index.capacity())
         index.reserve(ceil2(index.size() + vectors_count));
 
-    char const* vectors_data = reinterpret_cast<char const*>(vectors_info.ptr);
-    char const* labels_data = reinterpret_cast<char const*>(labels_info.ptr);
-
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vectors_info.format == "B" || vectors_info.format == "u1" || vectors_info.format == "|u1")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            add_config_t config;
-            config.store_vector = copy;
-            config.thread = thread_idx;
-            label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
-            b1x8_t const* vector = reinterpret_cast<b1x8_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, config).error.raise();
-        });
+        add_typed_to_index<b1x8_t>(index, labels_info, vectors_info, copy, threads);
     else if (vectors_info.format == "b" || vectors_info.format == "i1" || vectors_info.format == "|i1")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            add_config_t config;
-            config.store_vector = copy;
-            config.thread = thread_idx;
-            label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
-            f8_bits_t const* vector =
-                reinterpret_cast<f8_bits_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, config).error.raise();
-        });
+        add_typed_to_index<f8_bits_t>(index, labels_info, vectors_info, copy, threads);
     else if (vectors_info.format == "e" || vectors_info.format == "f2" || vectors_info.format == "<f2")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            add_config_t config;
-            config.store_vector = copy;
-            config.thread = thread_idx;
-            label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
-            f16_t const* vector = reinterpret_cast<f16_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, config).error.raise();
-        });
+        add_typed_to_index<f16_t>(index, labels_info, vectors_info, copy, threads);
     else if (vectors_info.format == "f" || vectors_info.format == "f4" || vectors_info.format == "<f4")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            add_config_t config;
-            config.store_vector = copy;
-            config.thread = thread_idx;
-            label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
-            float const* vector = reinterpret_cast<float const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, config).error.raise();
-        });
+        add_typed_to_index<f32_t>(index, labels_info, vectors_info, copy, threads);
     else if (vectors_info.format == "d" || vectors_info.format == "f8" || vectors_info.format == "<f8")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            add_config_t config;
-            config.store_vector = copy;
-            config.thread = thread_idx;
-            label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
-            double const* vector = reinterpret_cast<double const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, config).error.raise();
-        });
+        add_typed_to_index<f64_t>(index, labels_info, vectors_info, copy, threads);
     else
         throw std::invalid_argument("Incompatible scalars in the vectors matrix: " + vectors_info.format);
 }
@@ -322,6 +305,33 @@ static py::tuple search_one_in_index(punned_index_py_t& index, py::buffer vector
     return results;
 }
 
+template <typename scalar_at>
+static void search_typed_in_index(                           //
+    punned_index_py_t& index, py::buffer_info& vectors_info, //
+    std::size_t wanted, bool exact, std::size_t threads,     //
+    py::array_t<label_t>& labels_py, py::array_t<distance_t>& distances_py, py::array_t<Py_ssize_t>& counts_py) {
+
+    auto labels_py2d = labels_py.template mutable_unchecked<2>();
+    auto distances_py2d = distances_py.template mutable_unchecked<2>();
+    auto counts_py1d = counts_py.template mutable_unchecked<1>();
+
+    Py_ssize_t vectors_count = vectors_info.shape[0];
+    char const* vectors_data = reinterpret_cast<char const*>(vectors_info.ptr);
+
+    executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        search_config_t config;
+        config.thread = thread_idx;
+        config.exact = exact;
+        scalar_at const* vector = (scalar_at const*)(vectors_data + task_idx * vectors_info.strides[0]);
+        punned_search_result_t result = index.search(vector, wanted, config);
+        result.error.raise();
+        counts_py1d(task_idx) =
+            static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
+        if (PyErr_CheckSignals() != 0)
+            throw py::error_already_set();
+    });
+}
+
 /**
  *  @param vectors Matrix of vectors to search for.
  *  @param wanted Number of matches per request.
@@ -355,66 +365,19 @@ static py::tuple search_many_in_index( //
     py::array_t<label_t> labels_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
     py::array_t<distance_t> distances_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
     py::array_t<Py_ssize_t> counts_py(vectors_count);
-    auto labels_py2d = labels_py.template mutable_unchecked<2>();
-    auto distances_py2d = distances_py.template mutable_unchecked<2>();
-    auto counts_py1d = counts_py.template mutable_unchecked<1>();
 
     // https://docs.python.org/3/library/struct.html#format-characters
     if (vectors_info.format == "B" || vectors_info.format == "u1" || vectors_info.format == "|u1")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            search_config_t config;
-            config.thread = thread_idx;
-            config.exact = exact;
-            b1x8_t const* vector = (b1x8_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
-            punned_search_result_t result = index.search(vector, wanted, config);
-            result.error.raise();
-            counts_py1d(task_idx) =
-                static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
-        });
+        search_typed_in_index<b1x8_t>(index, vectors_info, wanted, exact, threads, labels_py, distances_py, counts_py);
     else if (vectors_info.format == "b" || vectors_info.format == "i1" || vectors_info.format == "|i1")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            search_config_t config;
-            config.thread = thread_idx;
-            config.exact = exact;
-            f8_bits_t const* vector = (f8_bits_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
-            punned_search_result_t result = index.search(vector, wanted, config);
-            result.error.raise();
-            counts_py1d(task_idx) =
-                static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
-        });
+        search_typed_in_index<f8_bits_t>(index, vectors_info, wanted, exact, threads, labels_py, distances_py,
+                                         counts_py);
     else if (vectors_info.format == "e" || vectors_info.format == "f2" || vectors_info.format == "<f2")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            search_config_t config;
-            config.thread = thread_idx;
-            config.exact = exact;
-            f16_t const* vector = (f16_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
-            punned_search_result_t result = index.search(vector, wanted, config);
-            result.error.raise();
-            counts_py1d(task_idx) =
-                static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
-        });
+        search_typed_in_index<f16_t>(index, vectors_info, wanted, exact, threads, labels_py, distances_py, counts_py);
     else if (vectors_info.format == "f" || vectors_info.format == "f4" || vectors_info.format == "<f4")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            search_config_t config;
-            config.thread = thread_idx;
-            config.exact = exact;
-            float const* vector = (float const*)(vectors_data + task_idx * vectors_info.strides[0]);
-            punned_search_result_t result = index.search(vector, wanted, config);
-            result.error.raise();
-            counts_py1d(task_idx) =
-                static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
-        });
+        search_typed_in_index<f32_t>(index, vectors_info, wanted, exact, threads, labels_py, distances_py, counts_py);
     else if (vectors_info.format == "d" || vectors_info.format == "f8" || vectors_info.format == "<f8")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            search_config_t config;
-            config.thread = thread_idx;
-            config.exact = exact;
-            double const* vector = (double const*)(vectors_data + task_idx * vectors_info.strides[0]);
-            punned_search_result_t result = index.search(vector, wanted, config);
-            result.error.raise();
-            counts_py1d(task_idx) =
-                static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
-        });
+        search_typed_in_index<f64_t>(index, vectors_info, wanted, exact, threads, labels_py, distances_py, counts_py);
     else
         throw std::invalid_argument("Incompatible scalars in the query matrix: " + vectors_info.format);
 
@@ -677,11 +640,12 @@ PYBIND11_MODULE(compiled, m) {
     i.def_property_readonly("ndim", &punned_index_py_t::dimensions);
     i.def_property_readonly("connectivity", &punned_index_py_t::connectivity);
     i.def_property_readonly("capacity", &punned_index_py_t::capacity);
-    i.def_property_readonly( //
-        "dtype",
-        [](punned_index_py_t const& index) -> std::string { return scalar_kind_name(index.metric().scalar_kind_); });
-    i.def_property_readonly( //
-        "memory_usage", [](punned_index_py_t const& index) -> std::size_t { return index.memory_usage(); });
+    i.def_property_readonly("dtype", [](punned_index_py_t const& index) -> std::string {
+        return scalar_kind_name(index.metric().scalar_kind_);
+    });
+    i.def_property_readonly(
+        "memory_usage", [](punned_index_py_t const& index) -> std::size_t { return index.memory_usage(); },
+        py::call_guard<py::gil_scoped_release>());
 
     i.def_property("expansion_add", &punned_index_py_t::expansion_add, &punned_index_py_t::change_expansion_add);
     i.def_property("expansion_search", &punned_index_py_t::expansion_search,
@@ -690,13 +654,12 @@ PYBIND11_MODULE(compiled, m) {
     i.def_property_readonly("labels", &get_all_labels<punned_index_py_t>);
     i.def("get_labels", &get_labels<punned_index_py_t>, py::arg("limit") = std::numeric_limits<std::size_t>::max());
     i.def("__contains__", &punned_index_py_t::contains);
-    i.def( //
-        "__getitem__", &get_member<punned_index_py_t>, py::arg("label"), py::arg("dtype") = scalar_kind_t::f32_k);
+    i.def("__getitem__", &get_member<punned_index_py_t>, py::arg("label"), py::arg("dtype") = scalar_kind_t::f32_k);
 
-    i.def("save", &save_index<punned_index_py_t>, py::arg("path"));
-    i.def("load", &load_index<punned_index_py_t>, py::arg("path"));
-    i.def("view", &view_index<punned_index_py_t>, py::arg("path"));
-    i.def("clear", &punned_index_py_t::clear);
+    i.def("save", &save_index<punned_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
+    i.def("load", &load_index<punned_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
+    i.def("view", &view_index<punned_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
+    i.def("clear", &punned_index_py_t::clear, py::call_guard<py::gil_scoped_release>());
 
     auto si = py::class_<sparse_index_py_t>(m, "SparseIndex");
 
