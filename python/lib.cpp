@@ -154,6 +154,22 @@ static std::unique_ptr<sparse_index_py_t> make_sparse_index( //
     return std::unique_ptr<sparse_index_py_t>(new sparse_index_py_t(sparse_index_t(config)));
 }
 
+scalar_kind_t numpy_string_to_kind(std::string const& name) {
+    // https://docs.python.org/3/library/struct.html#format-characters
+    if (name == "B" || name == "<B" || name == "u1" || name == "|u1")
+        return scalar_kind_t::b1x8_k;
+    else if (name == "b" || name == "<b" || name == "i1" || name == "|i1")
+        return scalar_kind_t::f8_k;
+    else if (name == "e" || name == "<e" || name == "f2" || name == "<f2")
+        return scalar_kind_t::f16_k;
+    else if (name == "f" || name == "<f" || name == "f4" || name == "<f4")
+        return scalar_kind_t::f32_k;
+    else if (name == "d" || name == "<d" || name == "f8" || name == "<f8")
+        return scalar_kind_t::f64_k;
+    else
+        return scalar_kind_t::unknown_k;
+}
+
 static void add_one_to_index(punned_index_py_t& index, label_t label, py::buffer vector, bool copy, std::size_t) {
 
     py::buffer_info vector_info = vector.request();
@@ -171,19 +187,15 @@ static void add_one_to_index(punned_index_py_t& index, label_t label, py::buffer
     add_config_t config;
     config.store_vector = copy;
 
-    // https://docs.python.org/3/library/struct.html#format-characters
-    if (vector_info.format == "B" || vector_info.format == "u1" || vector_info.format == "|u1")
-        index.add(label, reinterpret_cast<b1x8_t const*>(vector_data), config).error.raise();
-    else if (vector_info.format == "b" || vector_info.format == "i1" || vector_info.format == "|i1")
-        index.add(label, reinterpret_cast<f8_bits_t const*>(vector_data), config).error.raise();
-    else if (vector_info.format == "e" || vector_info.format == "f2" || vector_info.format == "<f2")
-        index.add(label, reinterpret_cast<f16_t const*>(vector_data), config).error.raise();
-    else if (vector_info.format == "f" || vector_info.format == "f4" || vector_info.format == "<f4")
-        index.add(label, reinterpret_cast<float const*>(vector_data), config).error.raise();
-    else if (vector_info.format == "d" || vector_info.format == "f8" || vector_info.format == "<f8")
-        index.add(label, reinterpret_cast<double const*>(vector_data), config).error.raise();
-    else
+    switch (numpy_string_to_kind(vector_info.format)) {
+    case scalar_kind_t::b1x8_k: index.add(label, (b1x8_t const*)(vector_data), config).error.raise(); break;
+    case scalar_kind_t::f8_k: index.add(label, (f8_bits_t const*)(vector_data), config).error.raise(); break;
+    case scalar_kind_t::f16_k: index.add(label, (f16_t const*)(vector_data), config).error.raise(); break;
+    case scalar_kind_t::f32_k: index.add(label, (f32_t const*)(vector_data), config).error.raise(); break;
+    case scalar_kind_t::f64_k: index.add(label, (f64_t const*)(vector_data), config).error.raise(); break;
+    case scalar_kind_t::unknown_k:
         throw std::invalid_argument("Incompatible scalars in the vector: " + vector_info.format);
+    }
 }
 
 template <typename scalar_at>
@@ -239,19 +251,15 @@ static void add_many_to_index(                                       //
     if (index.size() + vectors_count >= index.capacity())
         index.reserve(ceil2(index.size() + vectors_count));
 
-    // https://docs.python.org/3/library/struct.html#format-characters
-    if (vectors_info.format == "B" || vectors_info.format == "u1" || vectors_info.format == "|u1")
-        add_typed_to_index<b1x8_t>(index, labels_info, vectors_info, copy, threads);
-    else if (vectors_info.format == "b" || vectors_info.format == "i1" || vectors_info.format == "|i1")
-        add_typed_to_index<f8_bits_t>(index, labels_info, vectors_info, copy, threads);
-    else if (vectors_info.format == "e" || vectors_info.format == "f2" || vectors_info.format == "<f2")
-        add_typed_to_index<f16_t>(index, labels_info, vectors_info, copy, threads);
-    else if (vectors_info.format == "f" || vectors_info.format == "f4" || vectors_info.format == "<f4")
-        add_typed_to_index<f32_t>(index, labels_info, vectors_info, copy, threads);
-    else if (vectors_info.format == "d" || vectors_info.format == "f8" || vectors_info.format == "<f8")
-        add_typed_to_index<f64_t>(index, labels_info, vectors_info, copy, threads);
-    else
+    switch (numpy_string_to_kind(vectors_info.format)) {
+    case scalar_kind_t::b1x8_k: add_typed_to_index<b1x8_t>(index, labels_info, vectors_info, copy, threads); break;
+    case scalar_kind_t::f8_k: add_typed_to_index<f8_bits_t>(index, labels_info, vectors_info, copy, threads); break;
+    case scalar_kind_t::f16_k: add_typed_to_index<f16_t>(index, labels_info, vectors_info, copy, threads); break;
+    case scalar_kind_t::f32_k: add_typed_to_index<f32_t>(index, labels_info, vectors_info, copy, threads); break;
+    case scalar_kind_t::f64_k: add_typed_to_index<f64_t>(index, labels_info, vectors_info, copy, threads); break;
+    case scalar_kind_t::unknown_k:
         throw std::invalid_argument("Incompatible scalars in the vectors matrix: " + vectors_info.format);
+    }
 }
 
 static py::tuple search_one_in_index(punned_index_py_t& index, py::buffer vector, std::size_t wanted, bool exact) {
@@ -271,29 +279,20 @@ static py::tuple search_one_in_index(punned_index_py_t& index, py::buffer vector
     search_config_t config;
     config.exact = exact;
 
-    // https://docs.python.org/3/library/struct.html#format-characters
-    if (vector_info.format == "B" || vector_info.format == "u1" || vector_info.format == "|u1") {
-        punned_search_result_t result = index.search(reinterpret_cast<b1x8_t const*>(vector_data), wanted, config);
+    auto raise_and_dump = [&](punned_search_result_t result) {
         result.error.raise();
         count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
-    } else if (vector_info.format == "b" || vector_info.format == "i1" || vector_info.format == "|i1") {
-        punned_search_result_t result = index.search(reinterpret_cast<f8_bits_t const*>(vector_data), wanted, config);
-        result.error.raise();
-        count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
-    } else if (vector_info.format == "e" || vector_info.format == "f2" || vector_info.format == "<f2") {
-        punned_search_result_t result = index.search(reinterpret_cast<f16_t const*>(vector_data), wanted, config);
-        result.error.raise();
-        count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
-    } else if (vector_info.format == "f" || vector_info.format == "f4" || vector_info.format == "<f4") {
-        punned_search_result_t result = index.search(reinterpret_cast<float const*>(vector_data), wanted, config);
-        result.error.raise();
-        count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
-    } else if (vector_info.format == "d" || vector_info.format == "f8" || vector_info.format == "<f8") {
-        punned_search_result_t result = index.search(reinterpret_cast<double const*>(vector_data), wanted, config);
-        result.error.raise();
-        count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
-    } else
+    };
+
+    switch (numpy_string_to_kind(vector_info.format)) {
+    case scalar_kind_t::b1x8_k: raise_and_dump(index.search((b1x8_t const*)(vector_data), wanted, config)); break;
+    case scalar_kind_t::f8_k: raise_and_dump(index.search((f8_bits_t const*)(vector_data), wanted, config)); break;
+    case scalar_kind_t::f16_k: raise_and_dump(index.search((f16_t const*)(vector_data), wanted, config)); break;
+    case scalar_kind_t::f32_k: raise_and_dump(index.search((f32_t const*)(vector_data), wanted, config)); break;
+    case scalar_kind_t::f64_k: raise_and_dump(index.search((f64_t const*)(vector_data), wanted, config)); break;
+    case scalar_kind_t::unknown_k:
         throw std::invalid_argument("Incompatible scalars in the query vector: " + vector_info.format);
+    }
 
     labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(count)});
     distances_py.resize(py_shape_t{static_cast<Py_ssize_t>(count)});
@@ -306,7 +305,7 @@ static py::tuple search_one_in_index(punned_index_py_t& index, py::buffer vector
 }
 
 template <typename scalar_at>
-static void search_typed_in_index(                           //
+static void search_typed(                                    //
     punned_index_py_t& index, py::buffer_info& vectors_info, //
     std::size_t wanted, bool exact, std::size_t threads,     //
     py::array_t<label_t>& labels_py, py::array_t<distance_t>& distances_py, py::array_t<Py_ssize_t>& counts_py) {
@@ -362,29 +361,24 @@ static py::tuple search_many_in_index( //
     if (vectors_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
-    py::array_t<label_t> labels_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
-    py::array_t<distance_t> distances_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
-    py::array_t<Py_ssize_t> counts_py(vectors_count);
+    py::array_t<label_t> ls({vectors_count, static_cast<Py_ssize_t>(wanted)});
+    py::array_t<distance_t> ds({vectors_count, static_cast<Py_ssize_t>(wanted)});
+    py::array_t<Py_ssize_t> cs(vectors_count);
 
-    // https://docs.python.org/3/library/struct.html#format-characters
-    if (vectors_info.format == "B" || vectors_info.format == "u1" || vectors_info.format == "|u1")
-        search_typed_in_index<b1x8_t>(index, vectors_info, wanted, exact, threads, labels_py, distances_py, counts_py);
-    else if (vectors_info.format == "b" || vectors_info.format == "i1" || vectors_info.format == "|i1")
-        search_typed_in_index<f8_bits_t>(index, vectors_info, wanted, exact, threads, labels_py, distances_py,
-                                         counts_py);
-    else if (vectors_info.format == "e" || vectors_info.format == "f2" || vectors_info.format == "<f2")
-        search_typed_in_index<f16_t>(index, vectors_info, wanted, exact, threads, labels_py, distances_py, counts_py);
-    else if (vectors_info.format == "f" || vectors_info.format == "f4" || vectors_info.format == "<f4")
-        search_typed_in_index<f32_t>(index, vectors_info, wanted, exact, threads, labels_py, distances_py, counts_py);
-    else if (vectors_info.format == "d" || vectors_info.format == "f8" || vectors_info.format == "<f8")
-        search_typed_in_index<f64_t>(index, vectors_info, wanted, exact, threads, labels_py, distances_py, counts_py);
-    else
+    switch (numpy_string_to_kind(vectors_info.format)) {
+    case scalar_kind_t::b1x8_k: search_typed<b1x8_t>(index, vectors_info, wanted, exact, threads, ls, ds, cs); break;
+    case scalar_kind_t::f8_k: search_typed<f8_bits_t>(index, vectors_info, wanted, exact, threads, ls, ds, cs); break;
+    case scalar_kind_t::f16_k: search_typed<f16_t>(index, vectors_info, wanted, exact, threads, ls, ds, cs); break;
+    case scalar_kind_t::f32_k: search_typed<f32_t>(index, vectors_info, wanted, exact, threads, ls, ds, cs); break;
+    case scalar_kind_t::f64_k: search_typed<f64_t>(index, vectors_info, wanted, exact, threads, ls, ds, cs); break;
+    case scalar_kind_t::unknown_k:
         throw std::invalid_argument("Incompatible scalars in the query matrix: " + vectors_info.format);
+    }
 
     py::tuple results(3);
-    results[0] = labels_py;
-    results[1] = distances_py;
-    results[2] = counts_py;
+    results[0] = ls;
+    results[1] = ds;
+    results[2] = cs;
     return results;
 }
 
