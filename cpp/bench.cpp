@@ -36,7 +36,9 @@
 #include <variant>   // `std::monostate`
 
 #include <clipp.h> // Command Line Interface
-#include <omp.h>   // `omp_set_num_threads()`
+#if USEARCH_USE_OPENMP
+#include <omp.h> // `omp_set_num_threads()`
+#endif
 
 #include <simsimd/simsimd.h>
 
@@ -277,7 +279,9 @@ void index_many(index_at& native, std::size_t n, vector_id_at const* ids, real_a
 
     running_stats_printer_t printer{n, "Indexing"};
 
+#if USEARCH_USE_OPENMP
 #pragma omp parallel for schedule(static, 32)
+#endif
     for (std::size_t i = 0; i < n; ++i) {
         add_config_t config;
         config.thread = omp_get_thread_num();
@@ -298,7 +302,9 @@ void search_many( //
     std::string name = "Search " + std::to_string(wanted);
     running_stats_printer_t printer{n, name.c_str()};
 
+#if USEARCH_USE_OPENMP
 #pragma omp parallel for schedule(static, 32)
+#endif
     for (std::size_t i = 0; i < n; ++i) {
         search_config_t config;
         config.thread = omp_get_thread_num();
@@ -318,7 +324,9 @@ void paginate_many( //
     std::string name = "Paginate " + std::to_string(wanted);
     running_stats_printer_t printer{n, name.c_str()};
 
+#if USEARCH_USE_OPENMP
 #pragma omp parallel for schedule(static, 32)
+#endif
     for (std::size_t i = 0; i < n; ++i) {
         search_config_t config;
         config.thread = omp_get_thread_num();
@@ -627,12 +635,14 @@ int main(int argc, char** argv) {
         exit(0);
     }
 
-    // Instead of relying on `multithreaded` from "index_punned_dense.hpp" we will use OpenMP
-    // to better estimate statistics between tasks batches, without having to recreate
-    // the threads.
+// Instead of relying on `multithreaded` from "index_punned_dense.hpp" we will use OpenMP
+// to better estimate statistics between tasks batches, without having to recreate
+// the threads.
+#if USEARCH_USE_OPENMP
     omp_set_dynamic(true);
     omp_set_num_threads(args.threads);
     std::printf("- OpenMP threads: %d\n", omp_get_max_threads());
+#endif
 
     std::printf("- Dataset: \n");
     std::printf("-- Base vectors path: %s\n", args.path_vectors.c_str());
