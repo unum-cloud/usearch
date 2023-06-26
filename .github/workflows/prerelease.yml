@@ -128,13 +128,13 @@ jobs:
     - uses: actions/checkout@v3
     - run: git submodule update --init --recursive
     - name: Prepare WASM Environment
-      run: git clone https://github.com/emscripten-core/emsdk.git
-    - name: Install WASM SDK
-      run: ./emsdk/emsdk install latest
-    - name: Activate WASM SDK Environment
-      run: ./emsdk/emsdk activate latest && source ./emsdk/emsdk_env.sh
+      run: |
+        git clone https://github.com/emscripten-core/emsdk.git
+        ./emsdk/emsdk install latest
     - name: Build USearch WASM by Emscripten
-      run: emcmake cmake . -B build-wasm && make -C ./build-wasm
+      run: |
+        ./emsdk/emsdk activate latest && source ./emsdk/emsdk_env.sh
+        emcmake cmake . -B build-wasm && make -C ./build-wasm
 
   build_docker:
     name: Test Docker Image
