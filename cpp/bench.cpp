@@ -15,7 +15,9 @@
 
 #define STDERR_FILENO HANDLE(2)
 #else
+#if __linux__
 #include <execinfo.h>
+#endif
 #include <fcntl.h>    // `open`
 #include <stdlib.h>   // `getenv`
 #include <sys/mman.h> // `mmap`
