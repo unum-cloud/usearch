@@ -16,7 +16,7 @@
 #define STDERR_FILENO HANDLE(2)
 #else
 #if __linux__
-#include <execinfo.h>
+#include <execinfo.h> // `backtrace`
 #endif
 #include <fcntl.h>    // `open`
 #include <stdlib.h>   // `getenv`
@@ -38,6 +38,8 @@
 #include <clipp.h> // Command Line Interface
 #if USEARCH_USE_OPENMP
 #include <omp.h> // `omp_set_num_threads()`
+#else
+int omp_get_thread_num() { return 0; }
 #endif
 
 #include <simsimd/simsimd.h>
@@ -389,7 +391,7 @@ void handler(int sig) {
     // get void*'s for all entries on the stack
 #if defined(USEARCH_DEFINED_WINDOWS)
     size = CaptureStackBackTrace(0, 10, array, NULL);
-#else
+#elif __linux__
     size = backtrace(array, 10);
 #endif // WINDOWS
 
@@ -411,7 +413,7 @@ void handler(int sig) {
         WriteFile(STDERR_FILENO, "\n", 1, &bytes_written, NULL);
     }
     free(symbol);
-#else
+#elif __linux__
     backtrace_symbols_fd(array, size, STDERR_FILENO);
 #endif // WINDOWS
 
