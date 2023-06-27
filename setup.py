@@ -91,6 +91,7 @@ setup(
     install_requires=[
         "numpy",
         "pandas",
+        "tqdm",
         'ucall; python_version >= "3.9"',
     ],
 )

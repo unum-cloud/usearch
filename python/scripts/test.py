@@ -154,6 +154,21 @@ def test_index_batch(
     if _normalize_dtype(numpy_type) == _normalize_dtype(index_type):
         assert recall_members(index, exact=True) == 1
 
+    index.save("tmp.usearch")
+    index.clear()
+    assert len(index) == 0
+
+    index.load("tmp.usearch")
+    assert len(index) == batch_size
+    assert len(index[0]) == ndim
+
+    index = Index.restore("tmp.usearch")
+    assert len(index) == batch_size
+    assert len(index[0]) == ndim
+
+    # Cleanup
+    os.remove("tmp.usearch")
+
 
 @pytest.mark.parametrize("ndim", dimensions)
 @pytest.mark.parametrize("batch_size", batch_sizes)
