@@ -425,6 +425,8 @@ def test_bitwise_index(
 
     index.search(bit_vectors, 10)
 
+    assert recall_members(index, exact=True) > 0.9
+
 
 @pytest.mark.parametrize("connectivity", connectivity_options)
 @pytest.mark.skipif(os.name == "nt", reason="Spurious behaviour on windows")

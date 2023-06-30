@@ -35,7 +35,7 @@ Label = np.uint32
 
 
 def _normalize_dtype(dtype, metric: MetricKind = MetricKind.IP) -> ScalarKind:
-    if dtype is None:
+    if dtype is None or dtype == "":
         return ScalarKind.B1 if metric in MetricKindBitwise else ScalarKind.F32
 
     if isinstance(dtype, ScalarKind):
@@ -50,10 +50,33 @@ def _normalize_dtype(dtype, metric: MetricKind = MetricKind.IP) -> ScalarKind:
         "f16": ScalarKind.F16,
         "f8": ScalarKind.F8,
         "b1": ScalarKind.B1,
+        "b1x8": ScalarKind.B1,
         np.float64: ScalarKind.F64,
         np.float32: ScalarKind.F32,
         np.float16: ScalarKind.F16,
         np.int8: ScalarKind.F8,
+    }
+    return _normalize[dtype]
+
+
+def _to_numpy_compatible_dtype(dtype: ScalarKind) -> ScalarKind:
+    _normalize = {
+        ScalarKind.F64: ScalarKind.F64,
+        ScalarKind.F32: ScalarKind.F32,
+        ScalarKind.F16: ScalarKind.F16,
+        ScalarKind.F8: ScalarKind.F16,
+        ScalarKind.B1: ScalarKind.B1,
+    }
+    return _normalize[dtype]
+
+
+def _to_numpy_dtype(dtype: ScalarKind):
+    _normalize = {
+        ScalarKind.F64: np.float64,
+        ScalarKind.F32: np.float32,
+        ScalarKind.F16: np.float16,
+        ScalarKind.F8: np.float16,
+        ScalarKind.B1: np.uint8,
     }
     return _normalize[dtype]
 
@@ -503,12 +526,15 @@ class Index:
     def get_vectors(
         self, labels: np.ndarray, dtype: ScalarKind = ScalarKind.F32
     ) -> np.ndarray:
-        dtype = _normalize_dtype(dtype)
-        return np.vstack([self._compiled.__getitem__(l, dtype) for l in labels])
+        dtype = _normalize_dtype(dtype, self._metric_kind)
+        get_dtype = _to_numpy_compatible_dtype(dtype)
+        vectors = np.vstack([self._compiled.__getitem__(l, get_dtype) for l in labels])
+        view_dtype = _to_numpy_dtype(dtype)
+        return vectors.view(view_dtype)
 
     @property
     def vectors(self) -> np.ndarray:
-        return self.get_vectors(self.labels)
+        return self.get_vectors(self.labels, self.dtype)
 
     def __delitem__(self, label: int):
         raise NotImplementedError()
@@ -517,4 +543,8 @@ class Index:
         return self._compiled.__contains__(label)
 
     def __getitem__(self, label: int) -> np.ndarray:
-        return self._compiled.__getitem__(label)
+        dtype = self.dtype
+        get_dtype = _to_numpy_compatible_dtype(dtype)
+        vector = self._compiled.__getitem__(label, get_dtype)
+        view_dtype = _to_numpy_dtype(dtype)
+        return None if vector is None else vector.view(view_dtype)

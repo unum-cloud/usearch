@@ -76,10 +76,12 @@ struct sparse_index_py_t : public sparse_index_t {
 };
 
 template <typename scalar_at>
-metric_t udf(metric_kind_t kind, metric_signature_t signature, std::uintptr_t metric_uintptr) {
+metric_t typed_udf( //
+    metric_kind_t kind, metric_signature_t signature, std::uintptr_t metric_uintptr, scalar_kind_t accuracy) {
     //
     metric_t result;
     result.kind_ = kind;
+    result.scalar_kind_ = accuracy;
     switch (signature) {
     case metric_signature_t::array_array_k:
         result.func_ = [metric_uintptr](punned_vector_view_t a, punned_vector_view_t b) -> distance_t {
@@ -110,10 +112,11 @@ metric_t udf(metric_kind_t kind, metric_signature_t signature, std::uintptr_t me
 
 metric_t udf(metric_kind_t kind, metric_signature_t signature, std::uintptr_t metric_uintptr, scalar_kind_t accuracy) {
     switch (accuracy) {
-    case scalar_kind_t::f8_k: return udf<f8_bits_t>(kind, signature, metric_uintptr);
-    case scalar_kind_t::f16_k: return udf<f16_t>(kind, signature, metric_uintptr);
-    case scalar_kind_t::f32_k: return udf<f32_t>(kind, signature, metric_uintptr);
-    case scalar_kind_t::f64_k: return udf<f64_t>(kind, signature, metric_uintptr);
+    case scalar_kind_t::b1x8_k: return typed_udf<b1x8_t>(kind, signature, metric_uintptr, accuracy);
+    case scalar_kind_t::f8_k: return typed_udf<f8_bits_t>(kind, signature, metric_uintptr, accuracy);
+    case scalar_kind_t::f16_k: return typed_udf<f16_t>(kind, signature, metric_uintptr, accuracy);
+    case scalar_kind_t::f32_k: return typed_udf<f32_t>(kind, signature, metric_uintptr, accuracy);
+    case scalar_kind_t::f64_k: return typed_udf<f64_t>(kind, signature, metric_uintptr, accuracy);
     default: return {};
     }
 }
@@ -346,7 +349,7 @@ static py::tuple search_many_in_index( //
     if (wanted == 0)
         return py::tuple(3);
 
-    if (index.limits().threads_add < threads)
+    if (index.limits().threads_search < threads)
         throw std::invalid_argument("Can't use that many threads!");
 
     py::buffer_info vectors_info = vectors.request();
@@ -404,7 +407,7 @@ template <typename index_at> py::object get_member(index_at const& index, label_
     else if (scalar_kind == scalar_kind_t::f64_k)
         return get_typed_member<f64_t>(index, label);
     else if (scalar_kind == scalar_kind_t::f16_k)
-        return get_typed_member<f16_t>(index, label);
+        return get_typed_member<f16_t, std::uint16_t>(index, label);
     else if (scalar_kind == scalar_kind_t::f8_k)
         return get_typed_member<f8_bits_t, std::int8_t>(index, label);
     else if (scalar_kind == scalar_kind_t::b1x8_k)
@@ -634,10 +637,9 @@ PYBIND11_MODULE(compiled, m) {
     i.def_property_readonly("ndim", &punned_index_py_t::dimensions);
     i.def_property_readonly("connectivity", &punned_index_py_t::connectivity);
     i.def_property_readonly("capacity", &punned_index_py_t::capacity);
-    i.def_property_readonly("dtype", [](punned_index_py_t const& index) -> std::string {
-        return scalar_kind_name(index.metric().scalar_kind_);
-    });
-    i.def_property_readonly(
+    i.def_property_readonly( //
+        "dtype", [](punned_index_py_t const& index) -> scalar_kind_t { return index.metric().scalar_kind_; });
+    i.def_property_readonly( //
         "memory_usage", [](punned_index_py_t const& index) -> std::size_t { return index.memory_usage(); },
         py::call_guard<py::gil_scoped_release>());
 

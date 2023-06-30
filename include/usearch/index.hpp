@@ -112,7 +112,7 @@ namespace usearch {
 using f64_t = double;
 using f32_t = float;
 using byte_t = char;
-enum class b1x8_t : unsigned char {};
+enum b1x8_t : unsigned char {};
 
 enum class metric_kind_t : std::uint8_t {
     unknown_k = 0,
@@ -354,7 +354,10 @@ template <typename scalar_at = std::uint64_t, typename result_at = std::size_t> 
     using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
     using result_type = result_t;
-    static_assert(std::is_unsigned<scalar_t>::value, "Hamming distance requires unsigned integral words");
+    static_assert( //
+        std::is_unsigned<scalar_t>::value ||
+            (std::is_enum<scalar_t>::value && std::is_unsigned<typename std::underlying_type<scalar_t>::type>::value),
+        "Hamming distance requires unsigned integral words");
 
     inline metric_kind_t kind() const noexcept { return metric_kind_t::hamming_k; }
     inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
@@ -385,7 +388,10 @@ template <typename scalar_at = std::uint64_t, typename result_at = float> struct
     using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
     using result_type = result_t;
-    static_assert(std::is_unsigned<scalar_t>::value, "Tanimoto distance requires unsigned integral words");
+    static_assert( //
+        std::is_unsigned<scalar_t>::value ||
+            (std::is_enum<scalar_t>::value && std::is_unsigned<typename std::underlying_type<scalar_t>::type>::value),
+        "Tanimoto distance requires unsigned integral words");
     static_assert(std::is_floating_point<result_t>::value, "Tanimoto distance will be a fraction");
 
     inline metric_kind_t kind() const noexcept { return metric_kind_t::tanimoto_k; }
@@ -419,7 +425,10 @@ template <typename scalar_at = std::uint64_t, typename result_at = float> struct
     using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
     using result_type = result_t;
-    static_assert(std::is_unsigned<scalar_t>::value, "Sorensen-Dice distance requires unsigned integral words");
+    static_assert( //
+        std::is_unsigned<scalar_t>::value ||
+            (std::is_enum<scalar_t>::value && std::is_unsigned<typename std::underlying_type<scalar_t>::type>::value),
+        "Sorensen-Dice distance requires unsigned integral words");
     static_assert(std::is_floating_point<result_t>::value, "Sorensen-Dice distance will be a fraction");
 
     inline metric_kind_t kind() const noexcept { return metric_kind_t::sorensen_k; }
@@ -1571,6 +1580,7 @@ class index_gt {
     /**
      *  @brief  Erases all the vectors from the index.
      *          Will change `size()` to zero, but will keep the same `capacity()`.
+     *          Will keep the number of available threads/contexts the same as it was.
      */
     void clear() noexcept {
         std::size_t n = size_;
@@ -1584,6 +1594,7 @@ class index_gt {
     /**
      *  @brief  Erases all the vectors from the index, also deallocating the registry.
      *          Will change both `size()` and `capacity()` to zero.
+     *          Will deallocate all threads/contexts.
      */
     void reset() noexcept {
         clear();
