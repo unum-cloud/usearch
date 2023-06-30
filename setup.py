@@ -29,9 +29,10 @@ if sys.platform == "darwin":
     compile_args.append("-O3")
     compile_args.append("-Wno-unknown-pragmas")
 
-    macros_args.append(("USEARCH_USE_OPENMP", "1"))
-    compile_args.append("-Xpreprocessor -fopenmp")
-    link_args.append("-Xpreprocessor -lomp")
+    # Linking OpenMP requires additional preparion in CIBuildWheel
+    # macros_args.append(("USEARCH_USE_OPENMP", "1"))
+    # compile_args.append("-Xpreprocessor -fopenmp")
+    # link_args.append("-Xpreprocessor -lomp")
 
 if sys.platform == "win32":
     compile_args.append("/std:c++14")
