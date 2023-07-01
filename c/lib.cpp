@@ -1,5 +1,6 @@
-#include "../include/usearch/index_punned_dense.hpp"
 #include <cassert>
+
+#include <usearch/index_punned_dense.hpp>
 
 extern "C" {
 #include "usearch.h"
@@ -77,20 +78,32 @@ search_result_t search_(index_t* index, void const* vector, scalar_kind_t kind, 
     }
 }
 
+index_punned_dense_metric_t udf(metric_kind_t kind, usearch_metric_t raw_ptr) {
+    index_punned_dense_metric_t result;
+    result.kind_ = kind;
+    result.func_ = [raw_ptr](punned_vector_view_t a, punned_vector_view_t b) -> distance_t {
+        return raw_ptr((void const*)a.data(), (void const*)b.data());
+    };
+    return result;
+}
+
 extern "C" {
 
 usearch_index_t usearch_init(usearch_init_options_t* options, usearch_error_t* error) {
 
-    assert(options != nullptr);
-    if (options->metric != nullptr && error != nullptr) {
-        *error = "Custom metric from C is not supported yet. Please do not pass it in options";
-        return nullptr;
-    }
+    assert(options && error);
 
-    index_config_t config = {options->connectivity, sizeof(float)};
-    index_t index =
-        index_t::make(options->dimensions, to_native_metric(options->metric_kind), config,
-                      to_native_scalar(options->quantization), options->expansion_add, options->expansion_search);
+    index_config_t config;
+    config.connectivity = options->connectivity;
+    index_t index =        //
+        options->metric ?  //
+            index_t::make( //
+                options->dimensions, udf(to_native_metric(options->metric_kind), options->metric), config,
+                to_native_scalar(options->quantization), options->expansion_add, options->expansion_search)
+                        :  //
+            index_t::make( //
+                options->dimensions, to_native_metric(options->metric_kind), config,
+                to_native_scalar(options->quantization), options->expansion_add, options->expansion_search);
 
     index_t* result_ptr = new index_t(std::move(index));
     return result_ptr;
@@ -100,8 +113,7 @@ void usearch_free(usearch_index_t index, usearch_error_t*) { delete reinterpret_
 
 void usearch_save(usearch_index_t index, char const* path, usearch_error_t* error) {
     serialization_result_t result = reinterpret_cast<index_t*>(index)->save(path);
-    // q::this is passing the pointer to what() and not the actual string. is that intended?
-    if (!result && error != nullptr)
+    if (!result)
         *error = result.error.what();
 }
 
@@ -170,6 +182,6 @@ bool usearch_get(                                 //
 
 void usearch_remove(usearch_index_t, usearch_label_t, usearch_error_t* error) {
     if (error != nullptr)
-        *error = "Usearch does not support removal of elements yet.";
+        *error = "USearch does not support removal of elements yet.";
 }
 }

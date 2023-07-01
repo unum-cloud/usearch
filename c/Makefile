@@ -6,7 +6,7 @@ C_CXX_FLAGS += -O3 -march=native
 
 C_FLAGS = -std=c99
 
-CXX_FLAGS =
+CXX_FLAGS = -std=c++11
 
 HEADER_INCLUDES = -I.  -I ../include/  -I ../fp16/include/ -I ../robin-map/include/
 
@@ -16,4 +16,4 @@ build:
 
 .PHONY: test
 test:
-	$(CC) $(C_CXX_FLAGS) $(CXX_FLAGS) test.c -L. -lusearch -Wl,-rpath,. -o test
+	$(CXX) $(C_CXX_FLAGS) $(CXX_FLAGS) test.c -L. -lusearch -Wl,-rpath,. -o test
