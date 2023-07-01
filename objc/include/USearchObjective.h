@@ -52,6 +52,11 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
 + (instancetype)make:(USearchMetric)metric dimensions:(UInt32)dimensions connectivity:(UInt32)connectivity quantization:(USearchScalar)quantization NS_SWIFT_NAME(make(metric:dimensions:connectivity:quantization:));
 
 /**
+ * @brief Pre-allocates space in the index for the given number of vectors.
+ */
+- (void)reserve:(UInt32)count NS_SWIFT_NAME(reserve(_:));
+
+/**
  * @brief Adds a labeled vector to the index.
  * @param vector Single-precision vector.
  */

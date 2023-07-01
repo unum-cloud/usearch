@@ -15,6 +15,7 @@ class Test: XCTestCase {
         let index = USearchIndex.make(metric:USearchMetric.l2sq, dimensions: 4, connectivity: 8, quantization:USearchScalar.F32)
         let vectorA: [Float32] = [0.3, 0.5, 1.2, 1.4]
         let vectorB: [Float32] = [0.4, 0.2, 1.2, 1.1]
+        index.reserve(2)
         index.add(label: 42, vector: vectorA[...])
         index.add(label: 43, vector: vectorB[...])
         
