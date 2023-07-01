@@ -288,6 +288,8 @@ class index_punned_dense_gt {
     search_result_t search_around(label_t hint, f32_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f32); }
     search_result_t search_around(label_t hint, f64_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f64); }
 
+    search_result_t empty_search_result() const { return search_result_t{*typed_}; }
+
     bool get(label_t label, b1x8_t* vector) const { return get_(label, vector, casts_.to_b1x8); }
     bool get(label_t label, f8_bits_t* vector) const { return get_(label, vector, casts_.to_f8); }
     bool get(label_t label, f16_t* vector) const { return get_(label, vector, casts_.to_f16); }
