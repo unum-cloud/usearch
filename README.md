@@ -641,6 +641,7 @@ https://github.com/unum-cloud/usearch
 let index = Index.l2sq(dimensions: 3, connectivity: 8)
 let vectorA: [Float32] = [0.3, 0.5, 1.2]
 let vectorB: [Float32] = [0.4, 0.2, 1.2]
+index.reserve(2)
 index.add(label: 42, vector: vectorA[...])
 index.add(label: 43, vector: vectorB[...])
 
