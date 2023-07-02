@@ -643,10 +643,10 @@ class index_punned_dense_gt {
         case metric_kind_t::l2sq_k: return l2sq_metric_(dimensions, accuracy);
         case metric_kind_t::pearson_k: return pearson_metric_(accuracy);
         case metric_kind_t::haversine_k: return haversine_metric_(accuracy);
-        case metric_kind_t::hamming_k: return hamming_gt<uint8_t>{};
+        case metric_kind_t::hamming_k: return hamming_gt<b1x8_t>{};
         case metric_kind_t::jaccard_k: // Equivalent to Tanimoto
-        case metric_kind_t::tanimoto_k: return tanimoto_gt<uint8_t>{};
-        case metric_kind_t::sorensen_k: return sorensen_gt<uint8_t>{};
+        case metric_kind_t::tanimoto_k: return tanimoto_gt<b1x8_t>{};
+        case metric_kind_t::sorensen_k: return sorensen_gt<b1x8_t>{};
         default: return {};
         }
     }

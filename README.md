@@ -387,6 +387,10 @@ index = Index(ndim=ndim, metric=CompiledMetric(
 ))
 ```
 
+```sh
+conda install -c conda-forge cppyy
+```
+
 ##### [PeachPy][peachpy]
 
 We have covered JIT-ing Python with Numba and C++ with Cppyy and Cling.
@@ -718,22 +722,16 @@ server.run()
 
 We have pre-processed some commonly used datasets, cleaning the images, producing the vectors, and pre-building the index.
 
-| Dataset                             | Size | Images |          Preprocessed |
-| :---------------------------------- | ---: | -----: | --------------------: |
-| [Unsplash 25K][unsplash-25k-origin] |    - |   25 K | [HF][unsplash-25k-hf] |
-| [Unsplash 2M][unsplash-2m-origin]   |    - |    2 M |  [HF][unsplash-2m-hf] |
-| [LAION 400M][laion-400m-origin]     |    - |  400 M |   [HF][laion-400m-hf] |
-| [LAION 5B][laion-5b-origin]         |    - |    5 B |     [HF][laion-5b-hf] |
+| Dataset                              | Size | Images |          Preprocessed |
+| :----------------------------------- | ---: | -----: | --------------------: |
+| [Unsplash 25K][unsplash-25k-origin]  |    - |   25 K | [HF][unsplash-25k-hf] |
+| [Createve Captions 3M][cc-3m-origin] |    - |    3 M |        [HF][cc-3m-hf] |
 
 
 [unsplash-25k-origin]: https://unum.cloud
-[unsplash-2m-origin]: https://unum.cloud
-[laion-400m-origin]: https://unum.cloud
-[laion-5b-origin]: https://unum.cloud
+[cc-3m-origin]: https://unum.cloud
 [unsplash-25k-hf]: https://unum.cloud
-[unsplash-2m-hf]: https://unum.cloud
-[laion-400m-hf]: https://unum.cloud
-[laion-5b-hf]: https://unum.cloud
+[cc-3m-hf]: https://unum.cloud
 
 ### USearch + RDKit = Molecular Search
 
@@ -764,30 +762,8 @@ index.add(labels, fingerprints)
 matches = index.search(fingerprints, 10)
 ```
 
-RDKit [provides][rdkit-fingerprints] following fingerprinting techniques:
-
-- Atom-Pair, 
-- Topological Torsion, 
-- Morgan,
-- Layered Fingerprints.
-
-We have preprocessed some of the most commonly used datasets, and made it available for free on the HuggingFace portal, together with visual interface.
-
-| Dataset                   |     Size |   Molecules |     Preprocessed |
-| :------------------------ | -------: | ----------: | ---------------: |
-| [PubChem][pubchem-origin] |     8 GB | 115'034'339 | [HF][pubchem-hf] |
-| [GDB 13][gdb13-origin]    |   2.3 GB | 977'468'301 |   [HF][gdb13-hf] |
-| [REAL][real-origin]       | > 100 GB |         6 B |    [HF][real-hf] |
-
 [smiles]: https://en.wikipedia.org/wiki/Simplified_molecular-input_line-entry_system
 [rdkit-fingerprints]: https://www.rdkit.org/docs/RDKit_Book.html#additional-information-about-the-fingerprints
-
-[gdb13-origin]: https://zenodo.org/record/5172018/files/gdb13.tgz?download=1
-[pubchem-origin]: ftp://ftp.ncbi.nlm.nih.gov/pubchem/Compound/Extras/CID-SMILES.gz
-[real-origin]: https://enamine.net/compound-collections/real-compounds/real-database
-[pubchem-hf]: https://unum.cloud
-[gdb13-hf]: https://unum.cloud
-[real-hf]: https://unum.cloud
 
 ## TODO
 
