@@ -8,6 +8,7 @@ import os
 from typing import Optional, Union, NamedTuple, List, Iterable
 
 import numpy as np
+from tqdm import tqdm
 
 from usearch.compiled import Index as _CompiledIndex, IndexMetadata
 from usearch.compiled import SparseIndex as _CompiledSetsIndex
@@ -33,32 +34,71 @@ SparseIndex = _CompiledSetsIndex
 Label = np.uint32
 
 
-def _normalize_dtype(dtype) -> ScalarKind:
-    if dtype is None:
-        return ScalarKind.F32
+def _normalize_dtype(dtype, metric: MetricKind = MetricKind.IP) -> ScalarKind:
+    if dtype is None or dtype == "":
+        return ScalarKind.B1 if metric in MetricKindBitwise else ScalarKind.F32
+
     if isinstance(dtype, ScalarKind):
         return dtype
 
     if isinstance(dtype, str):
-        _normalize = {
-            "f64": ScalarKind.F64,
-            "f32": ScalarKind.F32,
-            "f16": ScalarKind.F16,
-            "f8": ScalarKind.F8,
-            "b1": ScalarKind.B1,
-        }
-        return _normalize[dtype.lower()]
+        dtype = dtype.lower()
 
-    if not isinstance(dtype, ScalarKind):
-        _normalize = {
-            np.float64: ScalarKind.F64,
-            np.float32: ScalarKind.F32,
-            np.float16: ScalarKind.F16,
-            np.int8: ScalarKind.F8,
-        }
-        return _normalize[dtype]
+    _normalize = {
+        "f64": ScalarKind.F64,
+        "f32": ScalarKind.F32,
+        "f16": ScalarKind.F16,
+        "f8": ScalarKind.F8,
+        "b1": ScalarKind.B1,
+        "b1x8": ScalarKind.B1,
+        np.float64: ScalarKind.F64,
+        np.float32: ScalarKind.F32,
+        np.float16: ScalarKind.F16,
+        np.int8: ScalarKind.F8,
+    }
+    return _normalize[dtype]
 
-    return dtype
+
+def _to_numpy_compatible_dtype(dtype: ScalarKind) -> ScalarKind:
+    _normalize = {
+        ScalarKind.F64: ScalarKind.F64,
+        ScalarKind.F32: ScalarKind.F32,
+        ScalarKind.F16: ScalarKind.F16,
+        ScalarKind.F8: ScalarKind.F16,
+        ScalarKind.B1: ScalarKind.B1,
+    }
+    return _normalize[dtype]
+
+
+def _to_numpy_dtype(dtype: ScalarKind):
+    _normalize = {
+        ScalarKind.F64: np.float64,
+        ScalarKind.F32: np.float32,
+        ScalarKind.F16: np.float16,
+        ScalarKind.F8: np.float16,
+        ScalarKind.B1: np.uint8,
+    }
+    return _normalize[dtype]
+
+
+def _normalize_metric(metric):
+    if metric is None:
+        return MetricKind.IP
+
+    if isinstance(metric, str):
+        _normalize = {
+            "cos": MetricKind.Cos,
+            "ip": MetricKind.IP,
+            "l2_sq": MetricKind.L2sq,
+            "haversine": MetricKind.Haversine,
+            "perason": MetricKind.Pearson,
+            "hamming": MetricKind.Hamming,
+            "tanimoto": MetricKind.Tanimoto,
+            "sorensen": MetricKind.Sorensen,
+        }
+        return _normalize[metric.lower()]
+
+    return metric
 
 
 class Matches(NamedTuple):
@@ -67,7 +107,7 @@ class Matches(NamedTuple):
     counts: Union[np.ndarray, int]
 
     @property
-    def is_batch(self) -> bool:
+    def is_multiple(self) -> bool:
         return isinstance(self.counts, np.ndarray)
 
     @property
@@ -79,7 +119,7 @@ class Matches(NamedTuple):
         return np.sum(self.counts)
 
     def to_list(self, row: Optional[int] = None) -> Union[List[dict], List[List[dict]]]:
-        if not self.is_batch:
+        if not self.is_multiple:
             assert row is None, "Exporting a single sequence is only for batch requests"
             labels = self.labels
             distances = self.distances
@@ -98,13 +138,13 @@ class Matches(NamedTuple):
         ]
 
     def recall_first(self, expected: np.ndarray) -> float:
-        best_matches = self.labels if not self.is_batch else self.labels[:, 0]
+        best_matches = self.labels if not self.is_multiple else self.labels[:, 0]
         return np.sum(best_matches == expected) / len(expected)
 
     def __repr__(self) -> str:
         return (
             f"usearch.Matches({self.total_matches})"
-            if self.is_batch
+            if self.is_multiple
             else f"usearch.Matches({self.total_matches} across {self.batch_size} queries)"
         )
 
@@ -190,28 +230,7 @@ class Index:
         :type view: bool, optional
         """
 
-        if metric in MetricKindBitwise:
-            assert dtype is None or dtype == ScalarKind.B1
-            dtype = ScalarKind.B1
-        else:
-            dtype = _normalize_dtype(dtype)
-
-        if metric is None:
-            metric = MetricKind.IP
-
-        if isinstance(metric, str):
-            _normalize = {
-                "cos": MetricKind.Cos,
-                "ip": MetricKind.IP,
-                "l2_sq": MetricKind.L2sq,
-                "haversine": MetricKind.Haversine,
-                "perason": MetricKind.Pearson,
-                "hamming": MetricKind.Hamming,
-                "tanimoto": MetricKind.Tanimoto,
-                "sorensen": MetricKind.Sorensen,
-            }
-            metric = _normalize[metric.lower()]
-
+        metric = _normalize_metric(metric)
         if isinstance(metric, MetricKind) and jit:
             try:
                 from usearch.numba import jit
@@ -224,7 +243,7 @@ class Index:
             metric = jit(
                 ndim=ndim,
                 metric=metric,
-                dtype=dtype,
+                dtype=_normalize_dtype(dtype, metric),
             )
 
         if isinstance(metric, MetricKind):
@@ -242,6 +261,8 @@ class Index:
                 "The `metric` must be a `CompiledMetric` or a `MetricKind`"
             )
 
+        # Validate, that the right scalar type is defined
+        dtype = _normalize_dtype(dtype, self._metric_kind)
         self._compiled = _CompiledIndex(
             ndim=ndim,
             dtype=dtype,
@@ -285,7 +306,14 @@ class Index:
         )
 
     def add(
-        self, labels, vectors, *, copy: bool = True, threads: int = 0
+        self,
+        labels,
+        vectors,
+        *,
+        copy: bool = True,
+        threads: int = 0,
+        log: Union[str, bool] = False,
+        batch_size: int = 0,
     ) -> Union[int, np.ndarray]:
         """Inserts one or move vectors into the index.
 
@@ -315,27 +343,67 @@ class Index:
         """
         assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
         assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
-        is_batch = vectors.ndim == 2
-        generate_labels = labels is None
+        count_vectors = vectors.shape[0] if vectors.ndim == 2 else 1
+        is_multiple = count_vectors > 1
+        if not is_multiple:
+            vectors = vectors.flatten()
 
-        # If no `labels` were provided, generate some
+        # Validate of generate teh labels
+        generate_labels = labels is None
         if generate_labels:
             start_id = len(self._compiled)
-            if is_batch:
-                labels = np.arange(start_id, start_id + vectors.shape[0])
+            if is_multiple:
+                labels = np.arange(start_id, start_id + count_vectors, dtype=Label)
             else:
                 labels = start_id
-        if isinstance(labels, np.ndarray):
-            labels = labels.astype(Label)
-        elif isinstance(labels, Iterable):
-            labels = np.array(labels, dtype=Label)
+        else:
+            if isinstance(labels, np.ndarray):
+                if not is_multiple:
+                    labels = int(labels[0])
+                else:
+                    labels = labels.astype(Label)
+        count_labels = len(labels) if isinstance(labels, Iterable) else 1
+        assert count_labels == count_vectors
 
-        self._compiled.add(labels, vectors, copy=copy, threads=threads)
+        # Split into batches and log progress, if needed
+        if batch_size:
+            labels = [
+                labels[start_row : start_row + batch_size]
+                for start_row in range(0, count_vectors, batch_size)
+            ]
+            vectors = [
+                vectors[start_row : start_row + batch_size, :]
+                for start_row in range(0, count_vectors, batch_size)
+            ]
+            tasks = zip(labels, vectors)
+            name = log if isinstance(log, str) else "Add"
+            pbar = tqdm(
+                tasks,
+                desc=name,
+                total=count_vectors,
+                unit="Vector",
+                disable=log is False,
+            )
+            for labels, vectors in tasks:
+                self._compiled.add(labels, vectors, copy=copy, threads=threads)
+                pbar.update(len(labels))
+
+            pbar.close()
+
+        else:
+            self._compiled.add(labels, vectors, copy=copy, threads=threads)
 
         return labels
 
     def search(
-        self, vectors, k: int = 10, *, threads: int = 0, exact: bool = False
+        self,
+        vectors,
+        k: int = 10,
+        *,
+        threads: int = 0,
+        exact: bool = False,
+        log: Union[str, bool] = False,
+        batch_size: int = 0,
     ) -> Matches:
         """Performs approximate nearest neighbors search for one or more queries.
 
@@ -427,17 +495,29 @@ class Index:
     def expansion_search(self, v: int):
         self._compiled.expansion_search = v
 
-    def save(self, path: os.PathLike):
+    def save(self, path: Optional[os.PathLike] = None):
+        path = path if path else self.path
+        if path is None:
+            raise Exception("Define `path` argument")
         self._compiled.save(path)
 
-    def load(self, path: os.PathLike):
+    def load(self, path: Optional[os.PathLike] = None):
+        path = path if path else self.path
+        if path is None:
+            raise Exception("Define `path` argument")
         self._compiled.load(path)
 
-    def view(self, path: os.PathLike):
+    def view(self, path: Optional[os.PathLike] = None):
+        path = path if path else self.path
+        if path is None:
+            raise Exception("Define `path` argument")
         self._compiled.view(path)
 
     def clear(self):
         self._compiled.clear()
+
+    def close(self):
+        self._compiled.close()
 
     @property
     def labels(self) -> np.ndarray:
@@ -446,12 +526,15 @@ class Index:
     def get_vectors(
         self, labels: np.ndarray, dtype: ScalarKind = ScalarKind.F32
     ) -> np.ndarray:
-        dtype = _normalize_dtype(dtype)
-        return np.vstack([self._compiled.__getitem__(l, dtype) for l in labels])
+        dtype = _normalize_dtype(dtype, self._metric_kind)
+        get_dtype = _to_numpy_compatible_dtype(dtype)
+        vectors = np.vstack([self._compiled.__getitem__(l, get_dtype) for l in labels])
+        view_dtype = _to_numpy_dtype(dtype)
+        return vectors.view(view_dtype)
 
     @property
     def vectors(self) -> np.ndarray:
-        return self.get_vectors(self.labels)
+        return self.get_vectors(self.labels, self.dtype)
 
     def __delitem__(self, label: int):
         raise NotImplementedError()
@@ -460,4 +543,8 @@ class Index:
         return self._compiled.__contains__(label)
 
     def __getitem__(self, label: int) -> np.ndarray:
-        return self._compiled.__getitem__(label)
+        dtype = self.dtype
+        get_dtype = _to_numpy_compatible_dtype(dtype)
+        vector = self._compiled.__getitem__(label, get_dtype)
+        view_dtype = _to_numpy_dtype(dtype)
+        return None if vector is None else vector.view(view_dtype)

@@ -31,7 +31,7 @@ def load_matrix(
         dtype = np.int32
         scalar_size = 4
     elif filename.endswith(".bbin"):
-        dtype = np.int8
+        dtype = np.uint8
         scalar_size = 1
     else:
         raise Exception("Unknown file type")
@@ -69,7 +69,7 @@ def save_matrix(vectors: np.ndarray, filename: str):
     elif filename.endswith(".ibin"):
         dtype = np.int32
     elif filename.endswith(".bbin"):
-        dtype = np.int8
+        dtype = np.uint8
     else:
         raise Exception("Unknown file type")
 

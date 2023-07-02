@@ -24,7 +24,7 @@ from usearch.index import (
 
 
 dimensions = [3, 97, 256]
-batch_sizes = [1, 33]
+batch_sizes = [1, 77]
 index_types = [
     ScalarKind.F32,
     ScalarKind.F64,
@@ -75,7 +75,7 @@ def test_serializing_ibin_matrix(rows: int, cols: int):
 def test_index(
     ndim: int,
     metric: MetricKind,
-    index_type: str,
+    index_type: ScalarKind,
     numpy_type: str,
     connectivity: int,
     jit: bool,
@@ -135,7 +135,11 @@ def test_index(
 @pytest.mark.parametrize("index_type", index_types)
 @pytest.mark.parametrize("numpy_type", numpy_types)
 def test_index_batch(
-    ndim: int, metric: MetricKind, batch_size: int, index_type: str, numpy_type: str
+    ndim: int,
+    metric: MetricKind,
+    batch_size: int,
+    index_type: ScalarKind,
+    numpy_type: str,
 ):
     index = Index(ndim=ndim, metric=metric, dtype=index_type)
 
@@ -151,8 +155,50 @@ def test_index_batch(
     assert matches.counts.shape[0] == batch_size
     assert np.all(np.sort(index.labels) == np.sort(labels))
 
-    if _normalize_dtype(numpy_type) == _normalize_dtype(index_type):
-        assert recall_members(index, exact=True) == 1
+    index.save("tmp.usearch")
+    index.clear()
+    assert len(index) == 0
+
+    index.load("tmp.usearch")
+    assert len(index) == batch_size
+    assert len(index[0]) == ndim
+
+    index = Index.restore("tmp.usearch")
+    assert len(index) == batch_size
+    assert len(index[0]) == ndim
+
+    # Cleanup
+    os.remove("tmp.usearch")
+
+
+@pytest.mark.parametrize("metric", [MetricKind.L2sq])
+@pytest.mark.parametrize("batch_size", batch_sizes)
+@pytest.mark.parametrize("index_type", index_types)
+@pytest.mark.parametrize("numpy_type", numpy_types)
+def test_exact_recall(
+    metric: MetricKind, batch_size: int, index_type: ScalarKind, numpy_type: str
+):
+    ndim: int = batch_size
+    index = Index(ndim=ndim, metric=metric, dtype=index_type)
+
+    vectors = np.zeros((batch_size, ndim), dtype=numpy_type)
+    for i in range(batch_size):
+        vectors[i, i] = 1
+    labels = np.arange(batch_size)
+    index.add(labels, vectors)
+    assert len(index) == batch_size
+
+    # Search one at a time
+    for i in range(batch_size):
+        matches: Matches = index.search(vectors[i], 10, exact=True)
+        found_labels = matches.labels
+        assert found_labels[0] == i
+
+    # Search the whole batch
+    matches: Matches = index.search(vectors, 10, exact=True)
+    found_labels = matches.labels
+    for i in range(batch_size):
+        assert found_labels[i, 0] == i
 
 
 @pytest.mark.parametrize("ndim", dimensions)
@@ -234,8 +280,6 @@ def test_index_numba(ndim: int, batch_size: int):
         assert matches.shape[0] == distances.shape[0]
         assert count.shape[0] == batch_size
 
-        assert recall_members(index, exact=True) == 1
-
 
 @pytest.mark.parametrize("ndim", dimensions[-1:])
 @pytest.mark.parametrize("batch_size", batch_sizes[-1:])
@@ -299,8 +343,6 @@ def test_index_cppyy(ndim: int, batch_size: int):
         matches, distances, count = index.search(vectors, 10)
         assert matches.shape[0] == distances.shape[0]
         assert count.shape[0] == batch_size
-
-        assert recall_members(index, exact=True) == 1
 
 
 @pytest.mark.parametrize("ndim", [8])
@@ -387,8 +429,6 @@ def test_index_peachpy(ndim: int, batch_size: int):
     matches, distances, count = index.search(vectors, 10)
     assert matches.shape[0] == distances.shape[0]
     assert count.shape[0] == batch_size
-
-    assert recall_members(index, exact=True) == 1
 
 
 @pytest.mark.parametrize("bits", dimensions)

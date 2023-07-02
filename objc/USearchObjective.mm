@@ -206,6 +206,10 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
     _native->clear();
 }
 
+- (void)reserve:(UInt32)count {
+    _native->reserve(static_cast<std::size_t>(count));
+}
+
 - (void)save:(NSString *)path {
     char const *path_c = [path UTF8String];
 

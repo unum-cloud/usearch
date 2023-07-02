@@ -94,6 +94,8 @@ inline bool hardware_supports(isa_t isa) noexcept {
     default: return false;
     }
 #endif
+
+    (void)isa;
     return false;
 }
 
