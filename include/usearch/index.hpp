@@ -311,7 +311,7 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct cos
             ab += result_t(a[i]) * result_t(b[i]), //
                 a2 += square<result_t>(a[i]),      //
                 b2 += square<result_t>(b[i]);
-        return (ab != 0) ? (1 - ab / (std::sqrt(a2) * std::sqrt(b2))) : 0;
+        return (ab != 0) ? (1 - ab / (std::sqrt(a2) * std::sqrt(b2))) : 1;
     }
 };
 
@@ -2585,6 +2585,7 @@ class index_gt {
     void search_exact_(vector_view_t query, std::size_t count, context_t& context) const noexcept {
         top_candidates_t& top = context.top_candidates;
         top.clear();
+        top.reserve(count);
         for (std::size_t i = 0; i != size(); ++i)
             top.insert({context.measure(query, node_with_id_(i)), static_cast<id_t>(i)}, count);
     }
