@@ -1,5 +1,5 @@
-CXX = g++
-CC = gcc
+CXX = g++-12
+CC = gcc-12
 
 C_CXX_FLAGS = -pedantic -Wall -Wextra -Wno-conversion -Wno-unknown-pragmas
 C_CXX_FLAGS += -O3 -march=native
