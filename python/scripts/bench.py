@@ -1,14 +1,13 @@
-import os
-import logging
 import itertools
-from typing import List, Optional, Iterable
+from typing import List
 from dataclasses import asdict
 
 import numpy as np
 import pandas as pd
 
-from usearch.index import Index, Label
-from usearch.eval import Evaluation, Dataset, AddTask
+from usearch.index import Index, Label, MetricKind, ScalarKind
+from usearch.numba import jit as njit
+from usearch.eval import Evaluation, AddTask
 from usearch.index import (
     DEFAULT_CONNECTIVITY,
     DEFAULT_EXPANSION_ADD,
@@ -26,14 +25,15 @@ def bench_speed(
 ) -> pd.DataFrame:
     # Build various indexes:
     indexes = []
-    jit_options = [False]
-    if jit:
-        jit_options.append(jit)
-    dtype_options = ["f32", "f16", "f8"]
+    jit_options = [False, True] if jit else [False]
+    dtype_options = [ScalarKind.F32, ScalarKind.F16, ScalarKind.F8]
     for jit, dtype in itertools.product(jit_options, dtype_options):
+        metric = MetricKind.IP
+        if jit:
+            metric = njit(eval.ndim, metric, dtype)
         index = Index(
             ndim=eval.ndim,
-            jit=jit,
+            metric=metric,
             dtype=dtype,
             expansion_add=expansion_add,
             expansion_search=expansion_search,
