@@ -38,8 +38,6 @@
 #include <clipp.h> // Command Line Interface
 #if USEARCH_USE_OPENMP
 #include <omp.h> // `omp_set_num_threads()`
-#else
-int omp_get_thread_num() { return 0; }
 #endif
 
 #include <simsimd/simsimd.h>
@@ -286,12 +284,14 @@ void index_many(index_at& native, std::size_t n, vector_id_at const* ids, real_a
 #endif
     for (std::size_t i = 0; i < n; ++i) {
         add_config_t config;
+#if USEARCH_USE_OPENMP
         config.thread = omp_get_thread_num();
+#endif
         config.store_vector = true;
         vector_view_t vector{vectors + dims * i, dims};
         native.add(ids[i], vector, config);
         printer.progress++;
-        if (omp_get_thread_num() == 0)
+        if (config.thread == 0)
             printer.refresh();
     }
 }
@@ -309,11 +309,13 @@ void search_many( //
 #endif
     for (std::size_t i = 0; i < n; ++i) {
         search_config_t config;
+#if USEARCH_USE_OPENMP
         config.thread = omp_get_thread_num();
+#endif
         vector_view_t vector{vectors + dims * i, dims};
         native.search(vector, wanted, config).dump_to(ids + wanted * i, distances + wanted * i);
         printer.progress++;
-        if (omp_get_thread_num() == 0)
+        if (config.thread == 0)
             printer.refresh();
     }
 }
@@ -331,11 +333,13 @@ void paginate_many( //
 #endif
     for (std::size_t i = 0; i < n; ++i) {
         search_config_t config;
+#if USEARCH_USE_OPENMP
         config.thread = omp_get_thread_num();
+#endif
         vector_view_t vector{vectors + dims * i, dims};
         native.search_around(hints[i], vector, wanted, config);
         printer.progress++;
-        if (omp_get_thread_num() == 0)
+        if (config.thread == 0)
             printer.refresh();
     }
 }
