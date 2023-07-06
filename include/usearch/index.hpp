@@ -166,7 +166,9 @@ inline std::size_t ceil2(std::size_t v) noexcept {
     v |= v >> 4;
     v |= v >> 8;
     v |= v >> 16;
-    v |= v >> 32;
+    // For 64 bit systems
+    if constexpr (sizeof(void*) == 8)
+        v |= v >> 32;
     v++;
     return v;
 }
