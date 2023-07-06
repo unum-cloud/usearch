@@ -25,7 +25,7 @@ typedef NS_ENUM(NSUInteger, USearchMetric) {
     USearchMetricSorensen
 };
 
-typedef UInt32 USearchLabel;
+typedef UInt64 USearchLabel;
 
 API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
 @interface USearchIndex : NSObject
@@ -80,7 +80,7 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
  * @brief Adds a labeled vector to the index.
  * @param vector Double-precision vector.
  */
-- (void)addDouble:(UInt32)label
+- (void)addDouble:(USearchLabel)label
            vector:(Float64 const *_Nonnull)vector NS_SWIFT_NAME(addDouble(label:vector:));
 
 /**
@@ -100,7 +100,7 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
  * @brief Adds a labeled vector to the index.
  * @param vector Half-precision vector.
  */
-- (void)addHalf:(UInt32)label
+- (void)addHalf:(USearchLabel)label
          vector:(void const *_Nonnull)vector NS_SWIFT_NAME(addHalf(label:vector:));
 
 /**

@@ -1,7 +1,7 @@
 /**
- * @brief A benchmark for the construction speed of the USearch index
- * and the resulting accuracy (recall) of the Approximate Nearest Neighbors
- * Search queries.
+ *  @brief A benchmark for the construction speed of the USearch index
+ *  and the resulting accuracy (recall) of the Approximate Nearest Neighbors
+ *  Search queries.
  */
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)

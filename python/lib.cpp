@@ -12,11 +12,10 @@
  *
  *  @copyright Copyright (c) 2023
  */
-#define PY_SSIZE_T_CLEAN
-#define NOMINMAX  // Some of our dependencies call `std::max(x, y)`, which crashes Windows builds
 #include <limits> // `std::numeric_limits`
 #include <thread> // `std::thread`
 
+#define PY_SSIZE_T_CLEAN
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 
@@ -38,26 +37,23 @@ enum class metric_signature_t {
 
 namespace py = pybind11;
 using py_shape_t = py::array::ShapeContainer;
-
-using label_t = std::uint32_t;
-using distance_t = punned_distance_t;
+using label_t = typename punned_small_t::label_t;
+using id_t = typename punned_small_t::id_t;
 using metric_t = index_punned_dense_metric_t;
-using id_t = std::uint32_t;
-using big_id_t = std::uint64_t;
+using distance_t = punned_distance_t;
+using dense_index_t = punned_small_t;
+using dense_add_result_t = typename dense_index_t::add_result_t;
+using dense_search_result_t = typename dense_index_t::search_result_t;
 
-using punned_index_t = index_punned_dense_gt<label_t, id_t>;
-using punned_add_result_t = typename punned_index_t::add_result_t;
-using punned_search_result_t = typename punned_index_t::search_result_t;
-
-struct punned_index_py_t : public punned_index_t {
-    using native_t = punned_index_t;
+struct dense_index_py_t : public dense_index_t {
+    using native_t = dense_index_t;
     using native_t::add;
     using native_t::capacity;
     using native_t::reserve;
     using native_t::search;
     using native_t::size;
 
-    punned_index_py_t(native_t&& base) : native_t(std::move(base)) {}
+    dense_index_py_t(native_t&& base) : native_t(std::move(base)) {}
 };
 
 using set_member_t = std::uint32_t;
@@ -121,7 +117,7 @@ metric_t udf(metric_kind_t kind, metric_signature_t signature, std::uintptr_t me
     }
 }
 
-static punned_index_py_t make_index(     //
+static dense_index_py_t make_index(      //
     std::size_t dimensions,              //
     scalar_kind_t scalar_kind,           //
     metric_kind_t metric_kind,           //
@@ -136,14 +132,14 @@ static punned_index_py_t make_index(     //
     config.connectivity = connectivity;
 
     if (tune)
-        config = punned_index_t::optimize(config);
+        config = dense_index_t::optimize(config);
 
     if (metric_uintptr)
-        return punned_index_t::make( //
+        return dense_index_t::make( //
             dimensions, udf(metric_kind, metric_signature, metric_uintptr, scalar_kind), config, scalar_kind,
             expansion_add, expansion_search);
     else
-        return punned_index_t::make(dimensions, metric_kind, config, scalar_kind, expansion_add, expansion_search);
+        return dense_index_t::make(dimensions, metric_kind, config, scalar_kind, expansion_add, expansion_search);
 }
 
 static std::unique_ptr<sparse_index_py_t> make_sparse_index( //
@@ -173,7 +169,7 @@ scalar_kind_t numpy_string_to_kind(std::string const& name) {
         return scalar_kind_t::unknown_k;
 }
 
-static void add_one_to_index(punned_index_py_t& index, label_t label, py::buffer vector, bool copy, std::size_t) {
+static void add_one_to_index(dense_index_py_t& index, label_t label, py::buffer vector, bool copy, std::size_t) {
 
     py::buffer_info vector_info = vector.request();
     if (vector_info.ndim != 1)
@@ -203,7 +199,7 @@ static void add_one_to_index(punned_index_py_t& index, label_t label, py::buffer
 
 template <typename scalar_at>
 static void add_typed_to_index(                                              //
-    punned_index_py_t& index,                                                //
+    dense_index_py_t& index,                                                 //
     py::buffer_info const& labels_info, py::buffer_info const& vectors_info, //
     bool copy, std::size_t threads) {
 
@@ -223,8 +219,8 @@ static void add_typed_to_index(                                              //
     });
 }
 
-static void add_many_to_index(                                       //
-    punned_index_py_t& index, py::buffer labels, py::buffer vectors, //
+static void add_many_to_index(                                      //
+    dense_index_py_t& index, py::buffer labels, py::buffer vectors, //
     bool copy, std::size_t threads) {
 
     if (index.limits().threads_add < threads)
@@ -265,7 +261,7 @@ static void add_many_to_index(                                       //
     }
 }
 
-static py::tuple search_one_in_index(punned_index_py_t& index, py::buffer vector, std::size_t wanted, bool exact) {
+static py::tuple search_one_in_index(dense_index_py_t& index, py::buffer vector, std::size_t wanted, bool exact) {
 
     py::buffer_info vector_info = vector.request();
     Py_ssize_t vector_dimensions = vector_info.shape[0];
@@ -282,7 +278,7 @@ static py::tuple search_one_in_index(punned_index_py_t& index, py::buffer vector
     search_config_t config;
     config.exact = exact;
 
-    auto raise_and_dump = [&](punned_search_result_t result) {
+    auto raise_and_dump = [&](dense_search_result_t result) {
         result.error.raise();
         count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
     };
@@ -308,9 +304,9 @@ static py::tuple search_one_in_index(punned_index_py_t& index, py::buffer vector
 }
 
 template <typename scalar_at>
-static void search_typed(                                    //
-    punned_index_py_t& index, py::buffer_info& vectors_info, //
-    std::size_t wanted, bool exact, std::size_t threads,     //
+static void search_typed(                                   //
+    dense_index_py_t& index, py::buffer_info& vectors_info, //
+    std::size_t wanted, bool exact, std::size_t threads,    //
     py::array_t<label_t>& labels_py, py::array_t<distance_t>& distances_py, py::array_t<Py_ssize_t>& counts_py) {
 
     auto labels_py2d = labels_py.template mutable_unchecked<2>();
@@ -325,7 +321,7 @@ static void search_typed(                                    //
         config.thread = thread_idx;
         config.exact = exact;
         scalar_at const* vector = (scalar_at const*)(vectors_data + task_idx * vectors_info.strides[0]);
-        punned_search_result_t result = index.search(vector, wanted, config);
+        dense_search_result_t result = index.search(vector, wanted, config);
         result.error.raise();
         counts_py1d(task_idx) =
             static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
@@ -344,7 +340,7 @@ static void search_typed(                                    //
  *      3. array with match counts.
  */
 static py::tuple search_many_in_index( //
-    punned_index_py_t& index, py::buffer vectors, std::size_t wanted, bool exact, std::size_t threads) {
+    dense_index_py_t& index, py::buffer vectors, std::size_t wanted, bool exact, std::size_t threads) {
 
     if (wanted == 0)
         return py::tuple(3);
@@ -591,7 +587,7 @@ PYBIND11_MODULE(compiled, m) {
     h.def_readonly("bytes_for_vectors", &file_head_result_t::bytes_for_vectors);
     h.def_readonly("bytes_checksum", &file_head_result_t::bytes_checksum);
 
-    auto i = py::class_<punned_index_py_t>(m, "Index");
+    auto i = py::class_<dense_index_py_t>(m, "Index");
 
     i.def(py::init(&make_index),                                           //
           py::kw_only(),                                                   //
@@ -632,30 +628,29 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("threads") = 0           //
     );
 
-    i.def("__len__", &punned_index_py_t::size);
-    i.def_property_readonly("size", &punned_index_py_t::size);
-    i.def_property_readonly("ndim", &punned_index_py_t::dimensions);
-    i.def_property_readonly("connectivity", &punned_index_py_t::connectivity);
-    i.def_property_readonly("capacity", &punned_index_py_t::capacity);
+    i.def("__len__", &dense_index_py_t::size);
+    i.def_property_readonly("size", &dense_index_py_t::size);
+    i.def_property_readonly("ndim", &dense_index_py_t::dimensions);
+    i.def_property_readonly("connectivity", &dense_index_py_t::connectivity);
+    i.def_property_readonly("capacity", &dense_index_py_t::capacity);
     i.def_property_readonly( //
-        "dtype", [](punned_index_py_t const& index) -> scalar_kind_t { return index.metric().scalar_kind_; });
+        "dtype", [](dense_index_py_t const& index) -> scalar_kind_t { return index.metric().scalar_kind_; });
     i.def_property_readonly( //
-        "memory_usage", [](punned_index_py_t const& index) -> std::size_t { return index.memory_usage(); },
+        "memory_usage", [](dense_index_py_t const& index) -> std::size_t { return index.memory_usage(); },
         py::call_guard<py::gil_scoped_release>());
 
-    i.def_property("expansion_add", &punned_index_py_t::expansion_add, &punned_index_py_t::change_expansion_add);
-    i.def_property("expansion_search", &punned_index_py_t::expansion_search,
-                   &punned_index_py_t::change_expansion_search);
+    i.def_property("expansion_add", &dense_index_py_t::expansion_add, &dense_index_py_t::change_expansion_add);
+    i.def_property("expansion_search", &dense_index_py_t::expansion_search, &dense_index_py_t::change_expansion_search);
 
-    i.def_property_readonly("labels", &get_all_labels<punned_index_py_t>);
-    i.def("get_labels", &get_labels<punned_index_py_t>, py::arg("limit") = std::numeric_limits<std::size_t>::max());
-    i.def("__contains__", &punned_index_py_t::contains);
-    i.def("__getitem__", &get_member<punned_index_py_t>, py::arg("label"), py::arg("dtype") = scalar_kind_t::f32_k);
+    i.def_property_readonly("labels", &get_all_labels<dense_index_py_t>);
+    i.def("get_labels", &get_labels<dense_index_py_t>, py::arg("limit") = std::numeric_limits<std::size_t>::max());
+    i.def("__contains__", &dense_index_py_t::contains);
+    i.def("__getitem__", &get_member<dense_index_py_t>, py::arg("label"), py::arg("dtype") = scalar_kind_t::f32_k);
 
-    i.def("save", &save_index<punned_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
-    i.def("load", &load_index<punned_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
-    i.def("view", &view_index<punned_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
-    i.def("clear", &punned_index_py_t::clear, py::call_guard<py::gil_scoped_release>());
+    i.def("save", &save_index<dense_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
+    i.def("load", &load_index<dense_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
+    i.def("view", &view_index<dense_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
+    i.def("clear", &dense_index_py_t::clear, py::call_guard<py::gil_scoped_release>());
 
     auto si = py::class_<sparse_index_py_t>(m, "SparseIndex");
 

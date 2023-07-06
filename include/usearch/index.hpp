@@ -48,8 +48,11 @@
 // OS-specific includes
 #if defined(USEARCH_DEFINED_WINDOWS)
 #define _USE_MATH_DEFINES
+#define NOMINMAX
 #include <Windows.h>
 #include <sys/stat.h> // `fstat` for file size
+#undef NOMINMAX
+#undef _USE_MATH_DEFINES
 #else
 #include <fcntl.h>    // `fallocate`
 #include <stdlib.h>   // `posix_memalign`
@@ -1305,6 +1308,7 @@ class index_gt {
     using id_t = id_at;
     using allocator_t = allocator_at;
     using point_allocator_t = point_allocator_at;
+    static_assert(sizeof(label_t) >= sizeof(id_t), "Having tiny labels doesn't make sense.");
 
     using scalar_t = typename metric_t::scalar_t;
     using vector_view_t = span_gt<scalar_t const>;
