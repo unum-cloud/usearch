@@ -641,10 +641,10 @@ int main(int argc, char** argv) {
         exit(0);
     }
 
-// Instead of relying on `multithreaded` from "index_punned_dense.hpp" we will use OpenMP
-// to better estimate statistics between tasks batches, without having to recreate
-// the threads.
 #if USEARCH_USE_OPENMP
+    // Instead of relying on `multithreaded` from "index_punned_dense.hpp" we will use OpenMP
+    // to better estimate statistics between tasks batches, without having to recreate
+    // the threads.
     omp_set_dynamic(true);
     omp_set_num_threads(args.threads);
     std::printf("- OpenMP threads: %d\n", omp_get_max_threads());
