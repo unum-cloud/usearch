@@ -31,7 +31,7 @@ MetricKindBitwise = (
 
 SparseIndex = _CompiledSetsIndex
 
-Label = np.uint32
+Label = np.uint64
 
 
 def _normalize_dtype(dtype, metric: MetricKind = MetricKind.IP) -> ScalarKind:
