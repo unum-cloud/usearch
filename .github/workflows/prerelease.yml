@@ -130,8 +130,8 @@ jobs:
     - name: Prepare Environment
       run: |
         sudo apt update && 
-        sudo apt install -y install cmake g++-12 build-essential libjemalloc-dev
-    - name: Build test of USearch
+        sudo apt install -y cmake g++-12 build-essential libjemalloc-dev
+    - name: Build
       run: |
         cmake -B ./build_release \
         -DCMAKE_CXX_COMPILER="g++-12" \
@@ -142,7 +142,7 @@ jobs:
         -DUSEARCH_USE_JEMALLOC=1 \
         -DUSEARCH_BUILD_BENCHMARK=0 &&
         make -C ./build_release -j
-    - name: Run test of USearch
+    - name: Run tests
       run: ./build_release/test
 
   build_wasm:
