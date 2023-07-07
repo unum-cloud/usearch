@@ -173,6 +173,7 @@ go test -v
 
 ```sh
 swift build
+swift test -v
 ```
 
 ## C

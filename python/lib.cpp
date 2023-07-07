@@ -76,10 +76,12 @@ struct sparse_index_py_t : public sparse_index_t {
 };
 
 template <typename scalar_at>
-metric_t udf(metric_kind_t kind, metric_signature_t signature, std::uintptr_t metric_uintptr) {
+metric_t typed_udf( //
+    metric_kind_t kind, metric_signature_t signature, std::uintptr_t metric_uintptr, scalar_kind_t accuracy) {
     //
     metric_t result;
     result.kind_ = kind;
+    result.scalar_kind_ = accuracy;
     switch (signature) {
     case metric_signature_t::array_array_k:
         result.func_ = [metric_uintptr](punned_vector_view_t a, punned_vector_view_t b) -> distance_t {
@@ -110,10 +112,11 @@ metric_t udf(metric_kind_t kind, metric_signature_t signature, std::uintptr_t me
 
 metric_t udf(metric_kind_t kind, metric_signature_t signature, std::uintptr_t metric_uintptr, scalar_kind_t accuracy) {
     switch (accuracy) {
-    case scalar_kind_t::f8_k: return udf<f8_bits_t>(kind, signature, metric_uintptr);
-    case scalar_kind_t::f16_k: return udf<f16_t>(kind, signature, metric_uintptr);
-    case scalar_kind_t::f32_k: return udf<f32_t>(kind, signature, metric_uintptr);
-    case scalar_kind_t::f64_k: return udf<f64_t>(kind, signature, metric_uintptr);
+    case scalar_kind_t::b1x8_k: return typed_udf<b1x8_t>(kind, signature, metric_uintptr, accuracy);
+    case scalar_kind_t::f8_k: return typed_udf<f8_bits_t>(kind, signature, metric_uintptr, accuracy);
+    case scalar_kind_t::f16_k: return typed_udf<f16_t>(kind, signature, metric_uintptr, accuracy);
+    case scalar_kind_t::f32_k: return typed_udf<f32_t>(kind, signature, metric_uintptr, accuracy);
+    case scalar_kind_t::f64_k: return typed_udf<f64_t>(kind, signature, metric_uintptr, accuracy);
     default: return {};
     }
 }
@@ -154,6 +157,22 @@ static std::unique_ptr<sparse_index_py_t> make_sparse_index( //
     return std::unique_ptr<sparse_index_py_t>(new sparse_index_py_t(sparse_index_t(config)));
 }
 
+scalar_kind_t numpy_string_to_kind(std::string const& name) {
+    // https://docs.python.org/3/library/struct.html#format-characters
+    if (name == "B" || name == "<B" || name == "u1" || name == "|u1")
+        return scalar_kind_t::b1x8_k;
+    else if (name == "b" || name == "<b" || name == "i1" || name == "|i1")
+        return scalar_kind_t::f8_k;
+    else if (name == "e" || name == "<e" || name == "f2" || name == "<f2")
+        return scalar_kind_t::f16_k;
+    else if (name == "f" || name == "<f" || name == "f4" || name == "<f4")
+        return scalar_kind_t::f32_k;
+    else if (name == "d" || name == "<d" || name == "f8" || name == "<f8")
+        return scalar_kind_t::f64_k;
+    else
+        return scalar_kind_t::unknown_k;
+}
+
 static void add_one_to_index(punned_index_py_t& index, label_t label, py::buffer vector, bool copy, std::size_t) {
 
     py::buffer_info vector_info = vector.request();
@@ -171,19 +190,37 @@ static void add_one_to_index(punned_index_py_t& index, label_t label, py::buffer
     add_config_t config;
     config.store_vector = copy;
 
-    // https://docs.python.org/3/library/struct.html#format-characters
-    if (vector_info.format == "B" || vector_info.format == "u1" || vector_info.format == "|u1")
-        index.add(label, reinterpret_cast<b1x8_t const*>(vector_data), config).error.raise();
-    else if (vector_info.format == "b" || vector_info.format == "i1" || vector_info.format == "|i1")
-        index.add(label, reinterpret_cast<f8_bits_t const*>(vector_data), config).error.raise();
-    else if (vector_info.format == "e" || vector_info.format == "f2" || vector_info.format == "<f2")
-        index.add(label, reinterpret_cast<f16_t const*>(vector_data), config).error.raise();
-    else if (vector_info.format == "f" || vector_info.format == "f4" || vector_info.format == "<f4")
-        index.add(label, reinterpret_cast<float const*>(vector_data), config).error.raise();
-    else if (vector_info.format == "d" || vector_info.format == "f8" || vector_info.format == "<f8")
-        index.add(label, reinterpret_cast<double const*>(vector_data), config).error.raise();
-    else
+    switch (numpy_string_to_kind(vector_info.format)) {
+    case scalar_kind_t::b1x8_k: index.add(label, (b1x8_t const*)(vector_data), config).error.raise(); break;
+    case scalar_kind_t::f8_k: index.add(label, (f8_bits_t const*)(vector_data), config).error.raise(); break;
+    case scalar_kind_t::f16_k: index.add(label, (f16_t const*)(vector_data), config).error.raise(); break;
+    case scalar_kind_t::f32_k: index.add(label, (f32_t const*)(vector_data), config).error.raise(); break;
+    case scalar_kind_t::f64_k: index.add(label, (f64_t const*)(vector_data), config).error.raise(); break;
+    case scalar_kind_t::unknown_k:
         throw std::invalid_argument("Incompatible scalars in the vector: " + vector_info.format);
+    }
+}
+
+template <typename scalar_at>
+static void add_typed_to_index(                                              //
+    punned_index_py_t& index,                                                //
+    py::buffer_info const& labels_info, py::buffer_info const& vectors_info, //
+    bool copy, std::size_t threads) {
+
+    Py_ssize_t vectors_count = vectors_info.shape[0];
+    char const* vectors_data = reinterpret_cast<char const*>(vectors_info.ptr);
+    char const* labels_data = reinterpret_cast<char const*>(labels_info.ptr);
+
+    executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        add_config_t config;
+        config.store_vector = copy;
+        config.thread = thread_idx;
+        label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
+        scalar_at const* vector = reinterpret_cast<scalar_at const*>(vectors_data + task_idx * vectors_info.strides[0]);
+        index.add(label, vector, config).error.raise();
+        if (PyErr_CheckSignals() != 0)
+            throw py::error_already_set();
+    });
 }
 
 static void add_many_to_index(                                       //
@@ -217,58 +254,15 @@ static void add_many_to_index(                                       //
     if (index.size() + vectors_count >= index.capacity())
         index.reserve(ceil2(index.size() + vectors_count));
 
-    char const* vectors_data = reinterpret_cast<char const*>(vectors_info.ptr);
-    char const* labels_data = reinterpret_cast<char const*>(labels_info.ptr);
-
-    // https://docs.python.org/3/library/struct.html#format-characters
-    if (vectors_info.format == "B" || vectors_info.format == "u1" || vectors_info.format == "|u1")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            add_config_t config;
-            config.store_vector = copy;
-            config.thread = thread_idx;
-            label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
-            b1x8_t const* vector = reinterpret_cast<b1x8_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, config).error.raise();
-        });
-    else if (vectors_info.format == "b" || vectors_info.format == "i1" || vectors_info.format == "|i1")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            add_config_t config;
-            config.store_vector = copy;
-            config.thread = thread_idx;
-            label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
-            f8_bits_t const* vector =
-                reinterpret_cast<f8_bits_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, config).error.raise();
-        });
-    else if (vectors_info.format == "e" || vectors_info.format == "f2" || vectors_info.format == "<f2")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            add_config_t config;
-            config.store_vector = copy;
-            config.thread = thread_idx;
-            label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
-            f16_t const* vector = reinterpret_cast<f16_t const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, config).error.raise();
-        });
-    else if (vectors_info.format == "f" || vectors_info.format == "f4" || vectors_info.format == "<f4")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            add_config_t config;
-            config.store_vector = copy;
-            config.thread = thread_idx;
-            label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
-            float const* vector = reinterpret_cast<float const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, config).error.raise();
-        });
-    else if (vectors_info.format == "d" || vectors_info.format == "f8" || vectors_info.format == "<f8")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            add_config_t config;
-            config.store_vector = copy;
-            config.thread = thread_idx;
-            label_t label = *reinterpret_cast<label_t const*>(labels_data + task_idx * labels_info.strides[0]);
-            double const* vector = reinterpret_cast<double const*>(vectors_data + task_idx * vectors_info.strides[0]);
-            index.add(label, vector, config).error.raise();
-        });
-    else
+    switch (numpy_string_to_kind(vectors_info.format)) {
+    case scalar_kind_t::b1x8_k: add_typed_to_index<b1x8_t>(index, labels_info, vectors_info, copy, threads); break;
+    case scalar_kind_t::f8_k: add_typed_to_index<f8_bits_t>(index, labels_info, vectors_info, copy, threads); break;
+    case scalar_kind_t::f16_k: add_typed_to_index<f16_t>(index, labels_info, vectors_info, copy, threads); break;
+    case scalar_kind_t::f32_k: add_typed_to_index<f32_t>(index, labels_info, vectors_info, copy, threads); break;
+    case scalar_kind_t::f64_k: add_typed_to_index<f64_t>(index, labels_info, vectors_info, copy, threads); break;
+    case scalar_kind_t::unknown_k:
         throw std::invalid_argument("Incompatible scalars in the vectors matrix: " + vectors_info.format);
+    }
 }
 
 static py::tuple search_one_in_index(punned_index_py_t& index, py::buffer vector, std::size_t wanted, bool exact) {
@@ -288,29 +282,20 @@ static py::tuple search_one_in_index(punned_index_py_t& index, py::buffer vector
     search_config_t config;
     config.exact = exact;
 
-    // https://docs.python.org/3/library/struct.html#format-characters
-    if (vector_info.format == "B" || vector_info.format == "u1" || vector_info.format == "|u1") {
-        punned_search_result_t result = index.search(reinterpret_cast<b1x8_t const*>(vector_data), wanted, config);
+    auto raise_and_dump = [&](punned_search_result_t result) {
         result.error.raise();
         count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
-    } else if (vector_info.format == "b" || vector_info.format == "i1" || vector_info.format == "|i1") {
-        punned_search_result_t result = index.search(reinterpret_cast<f8_bits_t const*>(vector_data), wanted, config);
-        result.error.raise();
-        count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
-    } else if (vector_info.format == "e" || vector_info.format == "f2" || vector_info.format == "<f2") {
-        punned_search_result_t result = index.search(reinterpret_cast<f16_t const*>(vector_data), wanted, config);
-        result.error.raise();
-        count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
-    } else if (vector_info.format == "f" || vector_info.format == "f4" || vector_info.format == "<f4") {
-        punned_search_result_t result = index.search(reinterpret_cast<float const*>(vector_data), wanted, config);
-        result.error.raise();
-        count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
-    } else if (vector_info.format == "d" || vector_info.format == "f8" || vector_info.format == "<f8") {
-        punned_search_result_t result = index.search(reinterpret_cast<double const*>(vector_data), wanted, config);
-        result.error.raise();
-        count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
-    } else
+    };
+
+    switch (numpy_string_to_kind(vector_info.format)) {
+    case scalar_kind_t::b1x8_k: raise_and_dump(index.search((b1x8_t const*)(vector_data), wanted, config)); break;
+    case scalar_kind_t::f8_k: raise_and_dump(index.search((f8_bits_t const*)(vector_data), wanted, config)); break;
+    case scalar_kind_t::f16_k: raise_and_dump(index.search((f16_t const*)(vector_data), wanted, config)); break;
+    case scalar_kind_t::f32_k: raise_and_dump(index.search((f32_t const*)(vector_data), wanted, config)); break;
+    case scalar_kind_t::f64_k: raise_and_dump(index.search((f64_t const*)(vector_data), wanted, config)); break;
+    case scalar_kind_t::unknown_k:
         throw std::invalid_argument("Incompatible scalars in the query vector: " + vector_info.format);
+    }
 
     labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(count)});
     distances_py.resize(py_shape_t{static_cast<Py_ssize_t>(count)});
@@ -320,6 +305,33 @@ static py::tuple search_one_in_index(punned_index_py_t& index, py::buffer vector
     results[1] = distances_py;
     results[2] = static_cast<Py_ssize_t>(count);
     return results;
+}
+
+template <typename scalar_at>
+static void search_typed(                                    //
+    punned_index_py_t& index, py::buffer_info& vectors_info, //
+    std::size_t wanted, bool exact, std::size_t threads,     //
+    py::array_t<label_t>& labels_py, py::array_t<distance_t>& distances_py, py::array_t<Py_ssize_t>& counts_py) {
+
+    auto labels_py2d = labels_py.template mutable_unchecked<2>();
+    auto distances_py2d = distances_py.template mutable_unchecked<2>();
+    auto counts_py1d = counts_py.template mutable_unchecked<1>();
+
+    Py_ssize_t vectors_count = vectors_info.shape[0];
+    char const* vectors_data = reinterpret_cast<char const*>(vectors_info.ptr);
+
+    executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        search_config_t config;
+        config.thread = thread_idx;
+        config.exact = exact;
+        scalar_at const* vector = (scalar_at const*)(vectors_data + task_idx * vectors_info.strides[0]);
+        punned_search_result_t result = index.search(vector, wanted, config);
+        result.error.raise();
+        counts_py1d(task_idx) =
+            static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
+        if (PyErr_CheckSignals() != 0)
+            throw py::error_already_set();
+    });
 }
 
 /**
@@ -337,7 +349,7 @@ static py::tuple search_many_in_index( //
     if (wanted == 0)
         return py::tuple(3);
 
-    if (index.limits().threads_add < threads)
+    if (index.limits().threads_search < threads)
         throw std::invalid_argument("Can't use that many threads!");
 
     py::buffer_info vectors_info = vectors.request();
@@ -352,76 +364,24 @@ static py::tuple search_many_in_index( //
     if (vectors_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
-    py::array_t<label_t> labels_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
-    py::array_t<distance_t> distances_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
-    py::array_t<Py_ssize_t> counts_py(vectors_count);
-    auto labels_py2d = labels_py.template mutable_unchecked<2>();
-    auto distances_py2d = distances_py.template mutable_unchecked<2>();
-    auto counts_py1d = counts_py.template mutable_unchecked<1>();
+    py::array_t<label_t> ls({vectors_count, static_cast<Py_ssize_t>(wanted)});
+    py::array_t<distance_t> ds({vectors_count, static_cast<Py_ssize_t>(wanted)});
+    py::array_t<Py_ssize_t> cs(vectors_count);
 
-    // https://docs.python.org/3/library/struct.html#format-characters
-    if (vectors_info.format == "B" || vectors_info.format == "u1" || vectors_info.format == "|u1")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            search_config_t config;
-            config.thread = thread_idx;
-            config.exact = exact;
-            b1x8_t const* vector = (b1x8_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
-            punned_search_result_t result = index.search(vector, wanted, config);
-            result.error.raise();
-            counts_py1d(task_idx) =
-                static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
-        });
-    else if (vectors_info.format == "b" || vectors_info.format == "i1" || vectors_info.format == "|i1")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            search_config_t config;
-            config.thread = thread_idx;
-            config.exact = exact;
-            f8_bits_t const* vector = (f8_bits_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
-            punned_search_result_t result = index.search(vector, wanted, config);
-            result.error.raise();
-            counts_py1d(task_idx) =
-                static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
-        });
-    else if (vectors_info.format == "e" || vectors_info.format == "f2" || vectors_info.format == "<f2")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            search_config_t config;
-            config.thread = thread_idx;
-            config.exact = exact;
-            f16_t const* vector = (f16_t const*)(vectors_data + task_idx * vectors_info.strides[0]);
-            punned_search_result_t result = index.search(vector, wanted, config);
-            result.error.raise();
-            counts_py1d(task_idx) =
-                static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
-        });
-    else if (vectors_info.format == "f" || vectors_info.format == "f4" || vectors_info.format == "<f4")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            search_config_t config;
-            config.thread = thread_idx;
-            config.exact = exact;
-            float const* vector = (float const*)(vectors_data + task_idx * vectors_info.strides[0]);
-            punned_search_result_t result = index.search(vector, wanted, config);
-            result.error.raise();
-            counts_py1d(task_idx) =
-                static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
-        });
-    else if (vectors_info.format == "d" || vectors_info.format == "f8" || vectors_info.format == "<f8")
-        executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-            search_config_t config;
-            config.thread = thread_idx;
-            config.exact = exact;
-            double const* vector = (double const*)(vectors_data + task_idx * vectors_info.strides[0]);
-            punned_search_result_t result = index.search(vector, wanted, config);
-            result.error.raise();
-            counts_py1d(task_idx) =
-                static_cast<Py_ssize_t>(result.dump_to(&labels_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
-        });
-    else
+    switch (numpy_string_to_kind(vectors_info.format)) {
+    case scalar_kind_t::b1x8_k: search_typed<b1x8_t>(index, vectors_info, wanted, exact, threads, ls, ds, cs); break;
+    case scalar_kind_t::f8_k: search_typed<f8_bits_t>(index, vectors_info, wanted, exact, threads, ls, ds, cs); break;
+    case scalar_kind_t::f16_k: search_typed<f16_t>(index, vectors_info, wanted, exact, threads, ls, ds, cs); break;
+    case scalar_kind_t::f32_k: search_typed<f32_t>(index, vectors_info, wanted, exact, threads, ls, ds, cs); break;
+    case scalar_kind_t::f64_k: search_typed<f64_t>(index, vectors_info, wanted, exact, threads, ls, ds, cs); break;
+    case scalar_kind_t::unknown_k:
         throw std::invalid_argument("Incompatible scalars in the query matrix: " + vectors_info.format);
+    }
 
     py::tuple results(3);
-    results[0] = labels_py;
-    results[1] = distances_py;
-    results[2] = counts_py;
+    results[0] = ls;
+    results[1] = ds;
+    results[2] = cs;
     return results;
 }
 
@@ -447,7 +407,7 @@ template <typename index_at> py::object get_member(index_at const& index, label_
     else if (scalar_kind == scalar_kind_t::f64_k)
         return get_typed_member<f64_t>(index, label);
     else if (scalar_kind == scalar_kind_t::f16_k)
-        return get_typed_member<f16_t>(index, label);
+        return get_typed_member<f16_t, std::uint16_t>(index, label);
     else if (scalar_kind == scalar_kind_t::f8_k)
         return get_typed_member<f8_bits_t, std::int8_t>(index, label);
     else if (scalar_kind == scalar_kind_t::b1x8_k)
@@ -678,10 +638,10 @@ PYBIND11_MODULE(compiled, m) {
     i.def_property_readonly("connectivity", &punned_index_py_t::connectivity);
     i.def_property_readonly("capacity", &punned_index_py_t::capacity);
     i.def_property_readonly( //
-        "dtype",
-        [](punned_index_py_t const& index) -> std::string { return scalar_kind_name(index.metric().scalar_kind_); });
+        "dtype", [](punned_index_py_t const& index) -> scalar_kind_t { return index.metric().scalar_kind_; });
     i.def_property_readonly( //
-        "memory_usage", [](punned_index_py_t const& index) -> std::size_t { return index.memory_usage(); });
+        "memory_usage", [](punned_index_py_t const& index) -> std::size_t { return index.memory_usage(); },
+        py::call_guard<py::gil_scoped_release>());
 
     i.def_property("expansion_add", &punned_index_py_t::expansion_add, &punned_index_py_t::change_expansion_add);
     i.def_property("expansion_search", &punned_index_py_t::expansion_search,
@@ -690,13 +650,12 @@ PYBIND11_MODULE(compiled, m) {
     i.def_property_readonly("labels", &get_all_labels<punned_index_py_t>);
     i.def("get_labels", &get_labels<punned_index_py_t>, py::arg("limit") = std::numeric_limits<std::size_t>::max());
     i.def("__contains__", &punned_index_py_t::contains);
-    i.def( //
-        "__getitem__", &get_member<punned_index_py_t>, py::arg("label"), py::arg("dtype") = scalar_kind_t::f32_k);
+    i.def("__getitem__", &get_member<punned_index_py_t>, py::arg("label"), py::arg("dtype") = scalar_kind_t::f32_k);
 
-    i.def("save", &save_index<punned_index_py_t>, py::arg("path"));
-    i.def("load", &load_index<punned_index_py_t>, py::arg("path"));
-    i.def("view", &view_index<punned_index_py_t>, py::arg("path"));
-    i.def("clear", &punned_index_py_t::clear);
+    i.def("save", &save_index<punned_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
+    i.def("load", &load_index<punned_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
+    i.def("view", &view_index<punned_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
+    i.def("clear", &punned_index_py_t::clear, py::call_guard<py::gil_scoped_release>());
 
     auto si = py::class_<sparse_index_py_t>(m, "SparseIndex");
 

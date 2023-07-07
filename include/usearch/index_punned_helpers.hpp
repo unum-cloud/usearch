@@ -94,6 +94,8 @@ inline bool hardware_supports(isa_t isa) noexcept {
     default: return false;
     }
 #endif
+
+    (void)isa;
     return false;
 }
 
@@ -293,6 +295,8 @@ class f8_bits_t {
     inline explicit operator std::int32_t() const noexcept { return int8_; }
     inline explicit operator std::int64_t() const noexcept { return int8_; }
 
+    inline f8_bits_t(f16_t v)
+        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
     inline f8_bits_t(float v)
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
     inline f8_bits_t(double v)
