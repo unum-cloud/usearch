@@ -122,7 +122,7 @@ jobs:
       run: swift test
 
   build_wasm:
-    name: USearch WASM Build
+    name: Test WASM Build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -134,7 +134,7 @@ jobs:
     - name: Build USearch WASM by Emscripten
       run: |
         ./emsdk/emsdk activate latest && source ./emsdk/emsdk_env.sh
-        emcmake cmake . -B build-wasm && make -C ./build-wasm
+        emcmake cmake -B ./build-wasm -DCMAKE_CXX_COMPILER="g++-12" && make -C ./build-wasm
 
   build_docker:
     name: Test Docker Image
