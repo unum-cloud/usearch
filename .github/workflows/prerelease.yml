@@ -121,6 +121,30 @@ jobs:
     - name: Run tests
       run: swift test
 
+  build_test:
+    name: Test USearch
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: git submodule update --init --recursive
+    - name: Prepare Environment
+      run: |
+        sudo apt update && 
+        sudo apt install -y install cmake g++-12 build-essential libjemalloc-dev
+    - name: Build test of USearch
+      run: |
+        cmake -B ./build_release \
+        -DCMAKE_CXX_COMPILER="g++-12" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DUSEARCH_BUILD_TEST=1 \
+        -DUSEARCH_USE_OPENMP=1 \
+        -DUSEARCH_USE_SIMSIMD=1 \
+        -DUSEARCH_USE_JEMALLOC=1 \
+        -DUSEARCH_BUILD_BENCHMARK=0 &&
+        make -C ./build_release -j
+    - name: Run test of USearch
+      run: ./build_release/test
+
   build_wasm:
     name: Test WASM Build
     runs-on: ubuntu-latest
@@ -134,7 +158,7 @@ jobs:
     - name: Build USearch WASM by Emscripten
       run: |
         ./emsdk/emsdk activate latest && source ./emsdk/emsdk_env.sh
-        emcmake cmake -B ./build-wasm -DCMAKE_CXX_COMPILER="g++-12" && make -C ./build-wasm
+        emcmake cmake -B ./build-wasm -DUSEARCH_BUILD_WASM=1 && make -C ./build-wasm
 
   build_docker:
     name: Test Docker Image
