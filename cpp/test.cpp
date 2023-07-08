@@ -9,8 +9,6 @@
 using namespace unum::usearch;
 using namespace unum;
 
-using point_id_t = std::int64_t;
-
 void expect(bool must_be_true) {
     if (!must_be_true)
         throw std::runtime_error("Failed!");
@@ -22,6 +20,7 @@ template <typename scalar_at, typename index_at> void test3d(index_at&& index) {
     using view_t = span_gt<scalar_t const>;
     using index_t = typename std::remove_reference<index_at>::type;
     using distance_t = typename index_t::distance_t;
+    using label_t = typename index_t::label_t;
 
     scalar_t vec[3] = {10, 20, 15};
     scalar_t vec_a[3] = {15, 16, 17};
@@ -31,7 +30,7 @@ template <typename scalar_at, typename index_at> void test3d(index_at&& index) {
     index.add(42, view_t{&vec[0], 3ul});
 
     // Default approximate search
-    point_id_t matched_labels[10] = {0};
+    label_t matched_labels[10] = {0};
     distance_t matched_distances[10] = {0};
     std::size_t matched_count = index.search(view_t{&vec[0], 3ul}, 5).dump_to(matched_labels, matched_distances);
 
@@ -52,7 +51,7 @@ template <typename scalar_at, typename index_at> void test3d(index_at&& index) {
     // Validate scans
     std::size_t count = 0;
     for (auto member : index) {
-        point_id_t id = member.label;
+        label_t id = member.label;
         expect(id >= 42 && id <= 44);
         count++;
     }
@@ -146,11 +145,12 @@ int main(int, char**) {
     // static_assert(!std::is_same<index_gt<pearson_correlation_gt<>>::value_type, std::true_type>());
     // static_assert(!std::is_same<index_gt<haversine_gt<>>::value_type, std::true_type>());
 
-    test3d<float>(index_gt<cos_gt<float>, point_id_t, std::uint32_t>{});
-    test3d<float>(index_gt<l2sq_gt<float>, point_id_t, std::uint32_t>{});
+    using big_point_id_t = std::int64_t;
+    test3d<float>(index_gt<cos_gt<float>, big_point_id_t, std::uint32_t>{});
+    test3d<float>(index_gt<l2sq_gt<float>, big_point_id_t, std::uint32_t>{});
 
-    test3d<double>(index_gt<cos_gt<double>, point_id_t, std::uint32_t>{});
-    test3d<double>(index_gt<l2sq_gt<double>, point_id_t, std::uint32_t>{});
+    test3d<double>(index_gt<cos_gt<double>, big_point_id_t, std::uint32_t>{});
+    test3d<double>(index_gt<l2sq_gt<double>, big_point_id_t, std::uint32_t>{});
 
     test3d<float>(punned_small_t::make(3, metric_kind_t::cos_k));
     test3d<float>(punned_small_t::make(3, metric_kind_t::l2sq_k));
@@ -161,11 +161,11 @@ int main(int, char**) {
     test3d_punned<float>(punned_small_t::make(3, metric_kind_t::cos_k));
     test3d_punned<float>(punned_small_t::make(3, metric_kind_t::l2sq_k));
 
-    test_sets(index_gt<jaccard_gt<std::int32_t, float>, point_id_t, std::uint32_t>{});
-    test_sets(index_gt<jaccard_gt<std::int64_t, float>, point_id_t, std::uint32_t>{});
+    test_sets(index_gt<jaccard_gt<std::int32_t, float>, big_point_id_t, std::uint32_t>{});
+    test_sets(index_gt<jaccard_gt<std::int64_t, float>, big_point_id_t, std::uint32_t>{});
 
-    test_sets_moved<index_gt<jaccard_gt<std::int32_t, float>, point_id_t, std::uint32_t>>();
-    test_sets_moved<index_gt<jaccard_gt<std::int64_t, float>, point_id_t, std::uint32_t>>();
+    test_sets_moved<index_gt<jaccard_gt<std::int32_t, float>, big_point_id_t, std::uint32_t>>();
+    test_sets_moved<index_gt<jaccard_gt<std::int64_t, float>, big_point_id_t, std::uint32_t>>();
 
     return 0;
 }
