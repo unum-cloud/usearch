@@ -1906,15 +1906,23 @@ class index_gt {
         return result;
     }
 
+    struct dummy_predicate_t {
+        constexpr bool operator()(match_t const&) const noexcept { return true; }
+    };
+
     /**
      *  @brief Searches for the closest elements to the given ::query. Thread-safe.
      *
      *  @param[in] query Contiguous range of scalars forming a vector view.
      *  @param[in] wanted The upper bound for the number of results to return.
      *  @param[in] config Configuration options for this specific operation.
+     *  @param[in] predicate Optional filtering predicate for `member_cref_t`.
      *  @return Smart object referencing temporary memory. Valid until next `search()` or `add()`.
      */
-    search_result_t search(vector_view_t query, std::size_t wanted, search_config_t config = {}) const noexcept {
+    template <typename predicate_at = dummy_predicate_t>
+    search_result_t search( //
+        vector_view_t query, std::size_t wanted, search_config_t config = {},
+        predicate_at&& predicate = dummy_predicate_t{}) const noexcept {
 
         context_t& context = contexts_[config.thread];
         top_candidates_t& top = context.top_candidates;
@@ -1929,7 +1937,7 @@ class index_gt {
         if (config.exact) {
             if (!top.reserve(wanted))
                 return result.failed("Out of memory!");
-            search_exact_(query, wanted, context);
+            search_exact_(query, wanted, context, std::forward<predicate_at>(predicate));
         } else {
             next_candidates_t& next = context.next_candidates;
             std::size_t expansion = (std::max)(config.expansion, wanted);
@@ -1940,7 +1948,7 @@ class index_gt {
 
             id_t closest_id = search_for_one_(entry_id_, query, max_level_, 0, context);
             // For bottom layer we need a more optimized procedure
-            if (!search_to_find_in_base_(closest_id, query, expansion, context))
+            if (!search_to_find_in_base_(closest_id, query, expansion, context, std::forward<predicate_at>(predicate)))
                 return result.failed("Out of memory!");
         }
 
@@ -1954,9 +1962,10 @@ class index_gt {
         return result;
     }
 
+    template <typename predicate_at = dummy_predicate_t>
     search_result_t search_around(                          //
         id_t hint, vector_view_t query, std::size_t wanted, //
-        search_config_t config = {}) const noexcept {
+        search_config_t config = {}, predicate_at&& predicate = dummy_predicate_t{}) const noexcept {
 
         context_t& context = contexts_[config.thread];
         top_candidates_t& top = context.top_candidates;
@@ -1976,7 +1985,7 @@ class index_gt {
         result.measurements = context.measurements_count;
         result.cycles = context.iteration_cycles;
 
-        search_to_find_in_base_(hint, query, expansion, context);
+        search_to_find_in_base_(hint, query, expansion, context, std::forward<predicate_at>(predicate));
         top.sort_ascending();
         top.shrink(wanted);
 
@@ -1986,6 +1995,10 @@ class index_gt {
         result.count = top.size();
         return result;
     }
+
+#pragma endregion
+
+#pragma region Metadata
 
     struct stats_t {
         std::size_t nodes;
@@ -2581,8 +2594,10 @@ class index_gt {
      *          Doesn't lock any nodes, assuming read-only simultaneous access.
      *  @return `true` if procedure succeeded, `false` if run out of memory.
      */
+    template <typename predicate_at>
     bool search_to_find_in_base_( //
-        id_t start_id, vector_view_t query, std::size_t expansion, context_t& context) const noexcept {
+        id_t start_id, vector_view_t query, std::size_t expansion, context_t& context,
+        predicate_at&& predicate) const noexcept {
 
         visits_bitset_t& visits = context.visits;
         next_candidates_t& next = context.next_candidates; // pop min, push
@@ -2616,16 +2631,21 @@ class index_gt {
                     continue;
 
                 visits.set(successor_id);
-                distance_t successor_dist = context.measure(query, node_with_id_(successor_id));
+                node_t successor = node_with_id_(successor_id);
+                distance_t successor_dist = context.measure(query, successor);
 
                 if (top.size() < top_limit || successor_dist < radius) {
                     // This can substantially grow our priority queue:
                     next.insert({-successor_dist, successor_id});
+                    if (predicate( //
+                            match_t{member_cref_t{successor.label(), successor.vector_view(), successor_id},
+                                    successor_dist})) {
                     // This will automatically evict poor matches:
                     top.insert({successor_dist, successor_id}, top_limit);
                     radius = top.top().distance;
                 }
             }
+        }
         }
 
         return true;
@@ -2634,12 +2654,21 @@ class index_gt {
     /**
      *  @brief  Iterates through all managed vectors, without actually touching the index.
      */
-    void search_exact_(vector_view_t query, std::size_t count, context_t& context) const noexcept {
+    template <typename predicate_at>
+    void search_exact_(                                             //
+        vector_view_t query, std::size_t count, context_t& context, //
+        predicate_at&& predicate) const noexcept {
+
         top_candidates_t& top = context.top_candidates;
         top.clear();
         top.reserve(count);
-        for (std::size_t i = 0; i != size(); ++i)
-            top.insert({context.measure(query, node_with_id_(i)), static_cast<id_t>(i)}, count);
+        for (std::size_t i = 0; i != size(); ++i) {
+            id_t id = static_cast<id_t>(i);
+            node_t node = node_with_id_(i);
+            distance_t distance = context.measure(query, node);
+            if (predicate(match_t{member_cref_t{node.label(), node.vector_view(), id}, distance}))
+                top.insert(candidate_t{distance, id}, count);
+        }
     }
 
     void prefetch_neighbors_(neighbors_ref_t, visits_bitset_t const&) const noexcept {}
