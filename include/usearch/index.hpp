@@ -1892,6 +1892,7 @@ class index_gt {
             // TODO: Handle out of memory conditions
             search_to_insert_(closest_id, vector, level, config.expansion, context);
             closest_id = connect_new_node_(new_id, level, context);
+            reconnect_neighbor_nodes_(new_id, level, context);
         }
 
         // Normalize stats
@@ -2062,6 +2063,8 @@ class index_gt {
         total += limits_.threads() * sizeof(context_t) + allocator_entry_bytes * 3;
         return total;
     }
+
+    std::size_t memory_usage_per_node(dim_t dim, level_t level) const noexcept { return node_bytes_(dim, level); }
 
     void change_metric(metric_t const& m) noexcept {
         metric_ = m;
@@ -2341,7 +2344,6 @@ class index_gt {
             std::size_t node_vector_bytes = dim * sizeof(scalar_t);
             nodes_[i] = node_t{tape, (scalar_t*)(tape + node_bytes - node_vector_bytes)};
             progress += node_bytes;
-            max_level_ = (std::max)(max_level_, level);
         }
 
         return {};
@@ -2452,7 +2454,6 @@ class index_gt {
 
         node_t new_node = node_with_id_(new_id);
         top_candidates_t& top = context.top_candidates;
-        std::size_t const connectivity_max = level ? config_.connectivity : pre_.connectivity_max_base;
 
         // Outgoing links from `new_id`:
         neighbors_ref_t new_neighbors = neighbors_(new_node, level);
@@ -2467,7 +2468,17 @@ class index_gt {
             }
         }
 
+        return new_neighbors[0];
+    }
+
+    void reconnect_neighbor_nodes_(id_t new_id, level_t level, context_t& context) usearch_noexcept_m {
+
+        node_t new_node = node_with_id_(new_id);
+        top_candidates_t& top = context.top_candidates;
+        neighbors_ref_t new_neighbors = neighbors_(new_node, level);
+
         // Reverse links from the neighbors:
+        std::size_t const connectivity_max = level ? config_.connectivity : pre_.connectivity_max_base;
         for (id_t close_id : new_neighbors) {
             node_t close_node = node_with_id_(close_id);
             node_lock_t close_lock = node_lock_(close_id);
@@ -2497,8 +2508,6 @@ class index_gt {
             for (std::size_t idx = 0; idx != top_view.size(); idx++)
                 close_header.push_back(top_view[idx].id);
         }
-
-        return new_neighbors[0];
     }
 
     level_t choose_random_level_(std::default_random_engine& level_generator) const noexcept {
@@ -2640,12 +2649,12 @@ class index_gt {
                     if (predicate( //
                             match_t{member_cref_t{successor.label(), successor.vector_view(), successor_id},
                                     successor_dist})) {
-                    // This will automatically evict poor matches:
-                    top.insert({successor_dist, successor_id}, top_limit);
-                    radius = top.top().distance;
+                        // This will automatically evict poor matches:
+                        top.insert({successor_dist, successor_id}, top_limit);
+                        radius = top.top().distance;
+                    }
                 }
             }
-        }
         }
 
         return true;
