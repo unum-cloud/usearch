@@ -162,6 +162,10 @@ template <std::size_t multiple_ak> std::size_t divide_round_up(std::size_t num) 
     return (num + multiple_ak - 1) / multiple_ak;
 }
 
+inline std::size_t divide_round_up(std::size_t num, std::size_t denominator) noexcept {
+    return (num + denominator - 1) / denominator;
+}
+
 inline std::size_t ceil2(std::size_t v) noexcept {
     v--;
     v |= v >> 1;
@@ -174,12 +178,16 @@ inline std::size_t ceil2(std::size_t v) noexcept {
     return v;
 }
 
-template <typename at> void misaligned_store(void* ptr, at v) noexcept { std::memcpy(ptr, &v, sizeof(v)); }
+template <typename at> void misaligned_store(void* ptr, at v) noexcept {
+    static_assert(!std::is_reference<at>::value);
+    std::memcpy(ptr, &v, sizeof(at));
+}
 
 /// @brief  Simply dereferencing misaligned pointers can be dangerous.
 template <typename at> at misaligned_load(void* ptr) noexcept {
+    static_assert(!std::is_reference<at>::value);
     at v;
-    std::memcpy(&v, ptr, sizeof(v));
+    std::memcpy(&v, ptr, sizeof(at));
     return v;
 }
 
@@ -640,7 +648,9 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
 
     void reset() noexcept {
         if (slots_)
-            allocator_t{}.deallocate((byte_t*)slots_, count_ * sizeof(slot_t)), slots_ = nullptr, count_ = 0;
+            allocator_t{}.deallocate((byte_t*)slots_, count_ * sizeof(slot_t));
+        slots_ = nullptr;
+        count_ = 0;
     }
 
     bool resize(std::size_t capacity) noexcept {
@@ -661,10 +671,8 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
     }
 
     visits_bitset_gt(visits_bitset_gt&& other) noexcept {
-        slots_ = other.slots_;
-        count_ = other.count_;
-        other.slots_ = nullptr;
-        other.count_ = 0;
+        slots_ = exchange(other.slots_, nullptr);
+        count_ = exchange(other.count_, 0);
     }
 
     visits_bitset_gt& operator=(visits_bitset_gt&& other) noexcept {
@@ -672,6 +680,9 @@ template <typename allocator_at = std::allocator<char>> class visits_bitset_gt {
         std::swap(count_, other.count_);
         return *this;
     }
+
+    visits_bitset_gt(visits_bitset_gt const&) = delete;
+    visits_bitset_gt& operator=(visits_bitset_gt const&) = delete;
 
     inline bool test(std::size_t i) const noexcept { return slots_[i / bits_per_slot()] & (1ul << (i & bits_mask())); }
     inline void set(std::size_t i) noexcept { slots_[i / bits_per_slot()] |= (1ul << (i & bits_mask())); }
@@ -911,17 +922,18 @@ class sorted_buffer_gt {
         if (!new_elements)
             return false;
 
-        if (size_) {
+        if (size_)
             std::memcpy(new_elements, elements_, size_ * sizeof(element_t));
+        if (elements_)
             allocator.deallocate(elements_, capacity_);
-        }
+
         elements_ = new_elements;
         capacity_ = new_capacity;
         return true;
     }
 
     inline void insert_reserved(element_t&& element) noexcept {
-        std::size_t slot = std::lower_bound(elements_, elements_ + size_, element, &less) - elements_;
+        std::size_t slot = size_ ? std::lower_bound(elements_, elements_ + size_, element, &less) - elements_ : 0;
         std::size_t to_move = size_ - slot;
         element_t* source = elements_ + size_ - 1;
         for (; to_move; --to_move, --source)
@@ -934,7 +946,7 @@ class sorted_buffer_gt {
      *  @return `true` if the entry was added, `false` if it wasn't relevant enough.
      */
     inline bool insert(element_t&& element, std::size_t limit) noexcept {
-        std::size_t slot = std::lower_bound(elements_, elements_ + size_, element, &less) - elements_;
+        std::size_t slot = size_ ? std::lower_bound(elements_, elements_ + size_, element, &less) - elements_ : 0;
         if (slot == limit)
             return false;
         std::size_t to_move = size_ - slot - (size_ == limit);
@@ -975,10 +987,10 @@ class usearch_pack_m uint40_t {
 
   public:
     inline uint40_t() noexcept { std::memset(octets, 0, 5); }
-    inline uint40_t(std::uint32_t n) noexcept { std::memcpy(octets + 1, (char*)&n, 4), octets[0] = 0; }
-    inline uint40_t(std::uint64_t n) noexcept { std::memcpy(octets, (char*)&n + 3, 5); }
+    inline uint40_t(std::uint32_t n) noexcept { std::memcpy(octets, (char*)&n, 4); }
+    inline uint40_t(std::uint64_t n) noexcept { std::memcpy(octets, (char*)&n, 5); }
 #if defined(USEARCH_DEFINED_CLANG) && defined(USEARCH_DEFINED_APPLE)
-    inline uint40_t(std::size_t n) noexcept { std::memcpy(octets, (char*)&n + 3, 5); }
+    inline uint40_t(std::size_t n) noexcept { std::memcpy(octets, (char*)&n, 5); }
 #endif
 
     uint40_t(uint40_t&&) = default;
@@ -986,24 +998,40 @@ class usearch_pack_m uint40_t {
     uint40_t& operator=(uint40_t&&) = default;
     uint40_t& operator=(uint40_t const&) = default;
 
-    inline uint40_t& operator+=(std::uint32_t i) noexcept {
-        std::uint32_t& tail = *reinterpret_cast<std::uint32_t*>(octets + 1);
-        octets[0] += static_cast<unsigned char>((tail + i) < tail);
-        tail += i;
+    inline uint40_t& operator+=(std::uint32_t n) noexcept {
+        std::uint32_t& tail = *reinterpret_cast<std::uint32_t*>(octets);
+        octets[4] += static_cast<unsigned char>((tail + n) < tail);
+        tail += n;
         return *this;
+    }
+
+    inline uint40_t& operator+=(std::size_t n) noexcept {
+        unsigned char* n_octets = reinterpret_cast<unsigned char*>(&n);
+        std::uint32_t& n_tail = *reinterpret_cast<std::uint32_t*>(&n);
+        std::uint32_t& tail = *reinterpret_cast<std::uint32_t*>(octets);
+        octets[4] += static_cast<unsigned char>((tail + n_tail) < tail);
+        tail += n_tail;
+        octets[4] += n_octets[4];
+        return *this;
+    }
+
+    inline uint40_t operator+(std::size_t n) noexcept {
+        uint40_t other(*this);
+        other += n;
+        return other;
     }
 
     inline operator std::size_t() const noexcept {
         std::size_t result = 0;
-        std::memcpy((char*)&result + 3, octets, 5);
+        std::memcpy((char*)&result, octets, 5);
         return result;
     }
 
-    inline uint40_t& operator++() noexcept { return *this += 1; }
+    inline uint40_t& operator++() noexcept { return *this += 1u; }
 
     inline uint40_t operator++(int) noexcept {
         uint40_t old = *this;
-        *this += 1;
+        *this += 1u;
         return old;
     }
 };
