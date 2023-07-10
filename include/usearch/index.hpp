@@ -1639,8 +1639,11 @@ class index_gt {
 
         if (nodes_)
             node_allocator_t{}.deallocate(exchange(nodes_, nullptr), limits_.elements);
-        if (contexts_)
+        if (contexts_) {
+            for (std::size_t i = 0; i != limits_.threads(); ++i)
+                contexts_[i].~context_t();
             context_allocator_t{}.deallocate(exchange(contexts_, nullptr), limits_.threads());
+        }
         limits_ = index_limits_t{0, 0};
         capacity_ = 0;
         reset_view_();
