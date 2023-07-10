@@ -1345,11 +1345,13 @@ class index_gt {
     struct member_ref_t {
         misaligned_ref_gt<label_t> label;
         vector_view_t vector;
+        id_t id;
     };
 
     struct member_cref_t {
         label_t label;
         vector_view_t vector;
+        id_t id;
     };
 
     template <typename ref_at, typename index_at> class member_iterator_gt {
@@ -1369,7 +1371,11 @@ class index_gt {
         using pointer = void;
         using reference = ref_t;
 
-        reference operator*() const noexcept { return ref_t(index_->node_with_id_(offset_)); }
+        reference operator*() const noexcept {
+            node_t node = index_->node_with_id_(offset_);
+            return {node.label(), node.vector_view(), static_cast<id_t>(offset_)};
+        }
+
         member_iterator_gt operator++(int) noexcept { return member_iterator_gt(index_, offset_ + 1); }
         member_iterator_gt operator--(int) noexcept { return member_iterator_gt(index_, offset_ - 1); }
         member_iterator_gt operator+(difference_type d) noexcept { return member_iterator_gt(index_, offset_ + d); }
@@ -1481,9 +1487,9 @@ class index_gt {
         node_t(node_t const&) = default;
         node_t& operator=(node_t const&) = default;
 
-        label_t label() const noexcept { return misaligned_load<label_t>(tape_); }
-        dim_t dim() const noexcept { return misaligned_load<dim_t>(tape_ + sizeof(label_t)); }
-        level_t level() const noexcept { return misaligned_load<level_t>(tape_ + sizeof(label_t) + sizeof(dim_t)); }
+        misaligned_ref_gt<label_t> label() const noexcept { return {tape_}; }
+        misaligned_ref_gt<dim_t> dim() const noexcept { return {tape_ + sizeof(label_t)}; }
+        misaligned_ref_gt<level_t> level() const noexcept { return {tape_ + sizeof(label_t) + sizeof(dim_t)}; }
 
         void label(label_t v) noexcept { return misaligned_store<label_t>(tape_, v); }
         void dim(dim_t v) noexcept { return misaligned_store<dim_t>(tape_ + sizeof(label_t), v); }
@@ -1758,7 +1764,7 @@ class index_gt {
     };
 
     struct match_t {
-        member_cref_t element;
+        member_cref_t member;
         distance_t distance;
     };
 
@@ -1791,14 +1797,23 @@ class index_gt {
 
         inline operator std::size_t() const noexcept { return count; }
         inline std::size_t size() const noexcept { return count; }
-        inline match_t operator[](std::size_t i) const noexcept {
+        inline match_t operator[](std::size_t i) const noexcept { return at(i); }
+        inline bool contains(label_t label) const noexcept {
+            for (std::size_t i = 0; i != count; ++i)
+                if (at(i).member.label == label)
+                    return true;
+            return false;
+        }
+        inline match_t at(std::size_t i) const noexcept {
             candidate_t const* top_ordered = top_.data();
-            return {member_cref_t(index_.node_with_id_(top_ordered[i].id)), top_ordered[i].distance};
+            candidate_t candidate = top_ordered[i];
+            node_t node = index_.node_with_id_(candidate.id);
+            return {member_cref_t{node.label(), node.vector_view(), candidate.id}, candidate.distance};
         }
         inline std::size_t dump_to(label_t* labels, distance_t* distances) const noexcept {
             for (std::size_t i = 0; i != count; ++i) {
                 match_t result = operator[](i);
-                labels[i] = result.element.label;
+                labels[i] = result.member.label;
                 distances[i] = result.distance;
             }
             return count;
@@ -1806,7 +1821,7 @@ class index_gt {
         inline std::size_t dump_to(label_t* labels) const noexcept {
             for (std::size_t i = 0; i != count; ++i) {
                 match_t result = operator[](i);
-                labels[i] = result.element.label;
+                labels[i] = result.member.label;
             }
             return count;
         }
