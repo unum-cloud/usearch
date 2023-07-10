@@ -2014,7 +2014,7 @@ class index_gt {
             node_t node = node_with_id_(i);
             std::size_t max_edges = node.level() * config_.connectivity + base_level_multiple_() * config_.connectivity;
             std::size_t edges = 0;
-            for (level_t level = 0; level != node.level(); ++level)
+            for (level_t level = 0; level <= node.level(); ++level)
                 edges += neighbors_(node, level).size();
 
             result.allocated_bytes += node_bytes_(node);
