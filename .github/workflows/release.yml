@@ -296,8 +296,8 @@ jobs:
     - name: Login Wasmer.io
       run: wasmer login --token "${{ secrets.WASMER_TOKEN }}"
     
-    - name: Publish binary to Wasmer.io
-      run: wasmer publish
+    # - name: Publish binary to Wasmer.io
+    #   run: wasmer publish
 
 
   build_docs:
