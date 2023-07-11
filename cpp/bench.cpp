@@ -47,6 +47,7 @@
 using namespace unum::usearch;
 using namespace unum;
 
+using label_t = std::int64_t;
 using vector_id_t = std::uint32_t;
 using vector_view_t = span_gt<float const>;
 
@@ -534,24 +535,24 @@ void run_big_or_small(dataset_at& dataset, args_t const& args, index_config_t co
     if (args.native) {
         if (args.metric_cos) {
             std::printf("-- Metric: Angular\n");
-            run_typed<index_gt<cos_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config, limits);
+            run_typed<index_gt<cos_gt<float>, label_t, neighbor_id_at>>(dataset, args, config, limits);
         } else if (args.metric_l2) {
             std::printf("-- Metric: Euclidean\n");
-            run_typed<index_gt<l2sq_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config, limits);
+            run_typed<index_gt<l2sq_gt<float>, label_t, neighbor_id_at>>(dataset, args, config, limits);
         } else if (args.metric_haversine) {
             std::printf("-- Metric: Haversine\n");
-            run_typed<index_gt<haversine_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config, limits);
+            run_typed<index_gt<haversine_gt<float>, label_t, neighbor_id_at>>(dataset, args, config, limits);
         } else {
             std::printf("-- Metric: Inner Product\n");
-            run_typed<index_gt<ip_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config, limits);
+            run_typed<index_gt<ip_gt<float>, label_t, neighbor_id_at>>(dataset, args, config, limits);
         }
     } else
-        run_punned<index_punned_dense_gt<std::size_t, neighbor_id_at>>(dataset, args, config, limits);
+        run_punned<index_punned_dense_gt<label_t, neighbor_id_at>>(dataset, args, config, limits);
 }
 
 void report_alternative_setups() {
     using set_member_t = std::uint32_t;
-    using sets_index_t = index_gt<jaccard_gt<set_member_t>, std::size_t, std::uint32_t>;
+    using sets_index_t = index_gt<jaccard_gt<set_member_t>, label_t, std::uint32_t>;
     set_member_t set_a[] = {10, 12, 15};
     set_member_t set_b[] = {11, 12, 15, 16};
     sets_index_t index;
@@ -684,7 +685,11 @@ int main(int argc, char** argv) {
     // std::printf("-- Expansion @ Search: %zu\n", config.expansion_search);
 
     if (args.big)
+#ifdef USEARCH_64BIT_ENV
         run_big_or_small<uint40_t>(dataset, args, config, limits);
+#else
+        std::printf("Error: Don't use 40 bit identifiers in 32bit environment\n");
+#endif
     else
         run_big_or_small<std::uint32_t>(dataset, args, config, limits);
 
