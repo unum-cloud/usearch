@@ -170,6 +170,7 @@ class index_punned_dense_gt {
     using search_result_t = typename index_t::search_result_t;
     using add_result_t = typename index_t::add_result_t;
     using serialization_result_t = typename index_t::serialization_result_t;
+    using join_result_t = typename index_t::join_result_t;
     using stats_t = typename index_t::stats_t;
 
     index_punned_dense_gt() = default;
@@ -338,6 +339,20 @@ class index_punned_dense_gt {
         result.typed_ = raw;
 
         return result;
+    }
+
+    template <typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
+    static join_result_t join(                                    //
+        index_punned_dense_gt& big, index_punned_dense_gt& small, //
+        label_t* big_to_small, label_t* small_to_big,             //
+        join_config_t config = {},                                //
+        executor_at&& executor = executor_at{},                   //
+        progress_at&& progress = progress_at{}) noexcept {
+
+        return index_t::join(           //
+            *big.typed_, *small.typed_, //
+            big_to_small, small_to_big, //
+            config, std::forward<executor_at>(executor), std::forward<progress_at>(progress));
     }
 
   private:

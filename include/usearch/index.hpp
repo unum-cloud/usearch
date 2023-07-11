@@ -1042,6 +1042,89 @@ class usearch_pack_m uint40_t {
 
 static_assert(sizeof(uint40_t) == 5, "uint40_t must be exactly 5 bytes");
 
+template <typename element_at, typename allocator_at = std::allocator<element_at>> //
+class ring_gt {
+  public:
+    using element_t = element_at;
+    using allocator_t = allocator_at;
+
+    static_assert(std::is_trivially_destructible<element_t>(), "This heap is designed for trivial structs");
+    static_assert(std::is_trivially_copy_constructible<element_t>(), "This heap is designed for trivial structs");
+
+    using value_type = element_t;
+
+  private:
+    element_t* elements_;
+    std::size_t capacity_;
+    std::size_t head_;
+    std::size_t tail_;
+    bool empty_;
+    allocator_t allocator_;
+
+  public:
+    explicit ring_gt(allocator_t const& alloc = allocator_t()) noexcept
+        : elements_(nullptr), capacity_(0), head_(0), tail_(0), empty_(true), allocator_(alloc) {}
+
+    ring_gt(ring_gt const&) = delete;
+    ring_gt& operator=(ring_gt const&) = delete;
+
+    ~ring_gt() noexcept { reset(); }
+
+    bool empty() const noexcept { return empty_; }
+    size_t size() const noexcept {
+        if (empty_)
+            return 0;
+        else if (head_ >= tail_)
+            return head_ - tail_;
+        else
+            return capacity_ - (tail_ - head_);
+    }
+
+    void reset() noexcept {
+        if (elements_)
+            allocator_.deallocate(elements_, capacity_);
+        elements_ = nullptr;
+        capacity_ = 0;
+        head_ = 0;
+        tail_ = 0;
+        empty_ = true;
+    }
+
+    bool resize(std::size_t n) noexcept {
+        element_t* elements = allocator_.allocate(n);
+        if (!elements)
+            return false;
+        reset();
+        elements_ = elements;
+        capacity_ = n;
+        return true;
+    }
+
+    void push(element_t const& value) noexcept {
+        elements_[head_] = value;
+        head_ = (head_ + 1) % capacity_;
+        empty_ = false;
+    }
+
+    bool try_push(element_t const& value) noexcept {
+        if (head_ == tail_ && !empty_)
+            return false; // elements_ is full
+
+        return push(value);
+        return true;
+    }
+
+    bool try_pop(element_t& value) noexcept {
+        if (empty_)
+            return false;
+
+        value = std::move(elements_[tail_]);
+        tail_ = (tail_ + 1) % capacity_;
+        empty_ = head_ == tail_;
+        return true;
+    }
+};
+
 /// @brief Number of neighbors per graph node.
 /// Defaults to 32 in FAISS and 16 in hnswlib.
 /// > It is called `M` in the paper.
@@ -1121,6 +1204,10 @@ struct search_config_t {
 
     /// @brief Brute-forces exhaustive search over all entries in the index.
     bool exact = false;
+};
+
+struct join_config_t {
+    std::size_t max_proposals = 10;
 };
 
 using file_header_t = byte_t[64];
@@ -2385,7 +2472,155 @@ class index_gt {
 
 #pragma endregion
 
+    struct join_result_t {
+        error_t error{};
+        std::size_t intersection_size{};
+        std::size_t cycles{};
+        std::size_t measurements{};
+
+        explicit operator bool() const noexcept { return !error; }
+        join_result_t failed(char const* message) noexcept {
+            error = message;
+            return std::move(*this);
+        }
+    };
+
+    /**
+     *  @brief  Adapts the Male-Optimal Stable Marriage algorithm for unequal sets
+     *          to perform fast one-to-one matching between two large collections
+     *          of vectors, using approximate nearest neighbors search.
+     */
+    template <typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
+    static join_result_t join(                        //
+        index_gt& big, index_gt& small,               //
+        label_t* big_to_small, label_t* small_to_big, //
+        join_config_t config = {},                    //
+        executor_at&& executor = executor_at{},       //
+        progress_at&& progress = progress_at{}) noexcept {
+
+        if (big.size() == small.size())
+            return join_same_size_(                             //
+                big, small, big_to_small, small_to_big, config, //
+                std::forward<executor_at>(executor), std::forward<progress_at>(progress));
+
+        if (small.size() > big.size())
+            return join(                                        //
+                small, big, small_to_big, big_to_small, config, //
+                std::forward<executor_at>(executor), std::forward<progress_at>(progress));
+
+        return {};
+    }
+
   private:
+    template <typename executor_at, typename progress_at>
+    static join_result_t join_same_size_(             //
+        index_gt& men, index_gt& women,               //
+        label_t* man_to_woman, label_t* woman_to_man, //
+        join_config_t config,                         //
+        executor_at&& executor,                       //
+        progress_at&& progress) noexcept {
+
+        using proposals_count_t = std::uint16_t;
+        using ids_allocator_t = typename allocator_traits_t::template rebind_alloc<id_t>;
+        allocator_t& alloc = men.allocator_;
+
+        // Create an atomic queue, as a ring structure, from/to which
+        // free men will be added/pulled.
+        std::mutex free_men_mutex{};
+        ring_gt<id_t, ids_allocator_t> free_men;
+        free_men.resize(men.size());
+        for (std::size_t i = 0; i != men.size(); ++i)
+            free_men.push(static_cast<std::size_t>(i));
+
+        // We are gonna need some temporary memory.
+        proposals_count_t* proposal_counts = (proposals_count_t*)alloc.allocate(sizeof(proposals_count_t) * men.size());
+        id_t* man_to_woman_ids = (id_t*)alloc.allocate(sizeof(id_t) * men.size());
+        id_t* woman_to_man_ids = (id_t*)alloc.allocate(sizeof(id_t) * women.size());
+        id_t missing_id;
+        std::memset(&missing_id, 0xFF, sizeof(id_t));
+        std::memset(man_to_woman_ids, 0xFF, sizeof(id_t) * men.size());
+        std::memset(woman_to_man_ids, 0xFF, sizeof(id_t) * women.size());
+        std::memset(proposal_counts, 0, sizeof(proposals_count_t) * men.size());
+
+        join_result_t result;
+        std::atomic<std::size_t> rounds{0};
+        // Concurrently process all the men
+        executor.execute_bulk([&](std::size_t thread_idx) {
+            context_t& context = women.contexts_[thread_idx];
+            search_config_t search_config;
+            search_config.thread = thread_idx;
+            id_t free_man_id;
+
+            // While there exist a free man who still has a woman to propose to.
+            while (true) {
+                std::size_t passed_rounds = 0;
+                std::size_t total_rounds = 0;
+                {
+                    std::unique_lock<std::mutex> pop_lock(free_men_mutex);
+                    if (!free_men.try_pop(free_man_id))
+                        break;
+                    passed_rounds = ++rounds;
+                    total_rounds = passed_rounds + free_men.size();
+                }
+                progress(passed_rounds, total_rounds);
+
+                node_t free_man = men.node_with_id_(free_man_id);
+                proposals_count_t& free_man_proposal_count = proposal_counts[free_man_id];
+                if (free_man_proposal_count >= config.max_proposals)
+                    continue;
+
+                // Find the closest woman, to whom this man hasn't proposed yet.
+                search_result_t top_preference = women.search( //
+                    free_man.vector_view(), free_man_proposal_count + 1, search_config);
+
+                match_t match = top_preference.back();
+                member_cref_t woman = match.member;
+                id_t husband_id = woman_to_man_ids[woman.id];
+                bool woman_is_free = husband_id == missing_id;
+                free_man_proposal_count++;
+                if (woman_is_free) {
+                    // Engagement
+                    man_to_woman_ids[free_man_id] = woman.id;
+                    woman_to_man_ids[woman.id] = free_man_id;
+                } else {
+                    distance_t distance_from_husband = context.measure(woman.vector, men.node_with_id_(husband_id));
+                    distance_t distance_from_candidate = match.distance;
+                    if (distance_from_husband > distance_from_candidate) {
+                        // Break-up
+                        man_to_woman_ids[husband_id] = missing_id;
+                        // New Engagement
+                        man_to_woman_ids[free_man_id] = woman.id;
+                        woman_to_man_ids[woman.id] = free_man_id;
+
+                        std::unique_lock<std::mutex> push_lock(free_men_mutex);
+                        free_men.push(husband_id);
+                    } else {
+                        std::unique_lock<std::mutex> push_lock(free_men_mutex);
+                        free_men.push(free_man_id);
+                    }
+                }
+            }
+        });
+
+        // Export the IDs into labels:
+        for (std::size_t i = 0; i != men.size(); ++i)
+            if (man_to_woman_ids[i] != missing_id)
+                man_to_woman[i] = women.node_with_id_(man_to_woman_ids[i]).label();
+        for (std::size_t i = 0; i != women.size(); ++i)
+            if (woman_to_man_ids[i] != missing_id)
+                woman_to_man[i] = men.node_with_id_(woman_to_man_ids[i]).label();
+
+        // Deallocate memory
+        alloc.deallocate((byte_t*)proposal_counts, sizeof(proposals_count_t) * men.size());
+        alloc.deallocate((byte_t*)man_to_woman_ids, sizeof(id_t) * men.size());
+        alloc.deallocate((byte_t*)woman_to_man_ids, sizeof(id_t) * women.size());
+
+        result.cycles = rounds;
+        result.intersection_size = 0;
+        result.measurements = 0;
+        return result;
+    }
+
     void reset_view_() noexcept {
         if (!viewed_file_)
             return;

@@ -24,6 +24,7 @@
 
 #include <sys/stat.h> // `stat`
 
+#include <algorithm>
 #include <csignal>
 #include <cstdio>
 #include <iostream>  // `std::cerr`
@@ -32,6 +33,7 @@
 #include <string>    // `std::to_string`
 #include <thread>    // `std::thread::hardware_concurrency()`
 #include <variant>   // `std::monostate`
+#include <vector>
 
 #include <clipp.h> // Command Line Interface
 #include <omp.h>   // `omp_set_num_threads()`
@@ -332,6 +334,8 @@ template <typename dataset_at, typename index_at> //
 static void single_shot(dataset_at& dataset, index_at& index, bool construct = true) {
     using label_t = typename index_at::label_t;
     using distance_t = typename index_at::distance_t;
+    using join_result_t = typename index_at::join_result_t;
+    constexpr std::size_t missing_label = std::numeric_limits<label_t>::max();
 
     std::printf("\n");
     std::printf("------------\n");
@@ -348,7 +352,7 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
     search_many(index, dataset.queries_count(), dataset.query(0), dataset.dimensions(), dataset.neighborhood_size(),
                 found_neighbors.data(), found_distances.data());
 
-    // Evaluate quality
+    // Evaluate search quality
     std::size_t recall_at_1 = 0, recall_full = 0;
     for (std::size_t i = 0; i != dataset.queries_count(); ++i) {
         auto expected = dataset.neighborhood(i);
@@ -359,6 +363,35 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
 
     std::printf("Recall@1 %.2f %%\n", recall_at_1 * 100.f / dataset.queries_count());
     std::printf("Recall %.2f %%\n", recall_full * 100.f / dataset.queries_count());
+
+    // Perform joins
+    std::vector<label_t> man_to_woman(dataset.vectors_count());
+    std::vector<label_t> woman_to_man(dataset.vectors_count());
+    std::size_t join_attempts = 0;
+    {
+        std::fill(man_to_woman.begin(), man_to_woman.end(), missing_label);
+        std::fill(woman_to_man.begin(), woman_to_man.end(), missing_label);
+        {
+            executor_default_t executor{index.limits().threads()};
+            running_stats_printer_t printer{1, "Join"};
+            join_result_t result = index_at::join(                      //
+                index, index, man_to_woman.data(), woman_to_man.data(), //
+                join_config_t{executor.size()}, executor, [&](std::size_t progress, std::size_t total) {
+                    if (progress % 1000 == 0)
+                        printer.print(progress, total);
+                });
+            join_attempts = result.cycles;
+        }
+    }
+    // Evaluate join quality
+    std::size_t recall_join = 0, unmatched_count = 0;
+    for (std::size_t i = 0; i != dataset.vectors_count(); ++i) {
+        recall_join += man_to_woman[i] == i;
+        unmatched_count += man_to_woman[i] == missing_label;
+    }
+    std::printf("Recall Joins %.2f %%\n", recall_join * 100.f / dataset.vectors_count());
+    std::printf("Unmatched %.2f %% (%zu items)\n", unmatched_count * 100.f / dataset.vectors_count(), unmatched_count);
+    std::printf("Proposals %.2f / man (%zu total)\n", join_attempts * 1.f / dataset.vectors_count(), join_attempts);
 
     // Paginate
     std::vector<vector_id_t> hints(dataset.queries_count());
