@@ -1262,6 +1262,30 @@ struct viewed_file_t {
 };
 #endif
 
+struct dummy_predicate_t {
+    template <typename match_at> constexpr bool operator()(match_at&&) const noexcept { return true; }
+};
+
+struct dummy_progress_t {
+    constexpr void operator()(std::size_t progress, std::size_t total) const noexcept {}
+};
+
+struct dummy_executor_t {
+    dummy_executor_t() noexcept {}
+    std::size_t size() const noexcept { return 1; }
+
+    template <typename thread_aware_function_at>
+    void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept {
+        for (std::size_t task_idx = 0; task_idx != tasks; ++task_idx)
+            thread_aware_function(0, task_idx);
+    }
+
+    template <typename thread_aware_function_at>
+    void execute_bulk(thread_aware_function_at&& thread_aware_function) noexcept {
+        thread_aware_function(0);
+    }
+};
+
 /**
  *  @brief  Approximate Nearest Neighbors Search index using the
  *          Hierarchical Navigable Small World graph algorithm.
@@ -1800,7 +1824,10 @@ class index_gt {
 
         inline operator std::size_t() const noexcept { return count; }
         inline std::size_t size() const noexcept { return count; }
+        inline bool empty() const noexcept { return !count; }
         inline match_t operator[](std::size_t i) const noexcept { return at(i); }
+        inline match_t front() const noexcept { return at(0); }
+        inline match_t back() const noexcept { return at(count - 1); }
         inline bool contains(label_t label) const noexcept {
             for (std::size_t i = 0; i != count; ++i)
                 if (at(i).member.label == label)
@@ -1909,10 +1936,6 @@ class index_gt {
         }
         return result;
     }
-
-    struct dummy_predicate_t {
-        constexpr bool operator()(match_t const&) const noexcept { return true; }
-    };
 
     /**
      *  @brief Searches for the closest elements to the given ::query. Thread-safe.
@@ -2094,7 +2117,8 @@ class index_gt {
      *          co-locating vectors and neighbors lists.
      *          Available on Linux, MacOS, Windows.
      */
-    serialization_result_t save(char const* file_path) const noexcept {
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t save(char const* file_path, progress_at&& progress = {}) const noexcept {
 
         // Make sure we have right to write to that file
         serialization_result_t result;
@@ -2164,6 +2188,7 @@ class index_gt {
             write_chunk(node.vector(), node_vector_bytes);
             if (result.error)
                 return result;
+            progress(i, state.size);
         }
 
         std::fclose(file);
@@ -2175,7 +2200,8 @@ class index_gt {
      *          copying both vectors and neighbors lists into RAM.
      *          Available on Linux, MacOS, Windows.
      */
-    serialization_result_t load(char const* file_path) noexcept {
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t load(char const* file_path, progress_at&& progress = {}) noexcept {
 
         serialization_result_t result;
         file_header_t state_buffer{};
@@ -2223,7 +2249,8 @@ class index_gt {
         }
 
         // Load nodes one by one
-        for (std::size_t i = 0; i != size_; ++i) {
+        std::size_t const size = size_;
+        for (std::size_t i = 0; i != size; ++i) {
             label_t label;
             dim_t dim;
             level_t level;
@@ -2243,6 +2270,7 @@ class index_gt {
             if (result.error)
                 return result;
             nodes_[i] = node;
+            progress(i, size);
         }
 
         std::fclose(file);
@@ -2255,7 +2283,8 @@ class index_gt {
      *          @b without copying the vectors and neighbors lists into RAM.
      *          Available on Linux, MacOS, but @b not on Windows.
      */
-    serialization_result_t view(char const* file_path) noexcept {
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t view(char const* file_path, progress_at&& progress = {}) noexcept {
         serialization_result_t result;
 
 #if defined(USEARCH_DEFINED_WINDOWS)
@@ -2337,16 +2366,18 @@ class index_gt {
         }
 
         // Locate every node packed into file
-        std::size_t progress = sizeof(file_header_t);
-        for (std::size_t i = 0; i != size_; ++i) {
-            byte_t* tape = (byte_t*)(file + progress);
+        std::size_t progress_bytes = sizeof(file_header_t);
+        std::size_t const size = size_;
+        for (std::size_t i = 0; i != size; ++i) {
+            byte_t* tape = (byte_t*)(file + progress_bytes);
             dim_t dim = misaligned_load<dim_t>(tape + sizeof(label_t));
             level_t level = misaligned_load<level_t>(tape + sizeof(label_t) + sizeof(dim_t));
 
             std::size_t node_bytes = node_bytes_(dim, level);
             std::size_t node_vector_bytes = dim * sizeof(scalar_t);
             nodes_[i] = node_t{tape, (scalar_t*)(tape + node_bytes - node_vector_bytes)};
-            progress += node_bytes;
+            progress_bytes += node_bytes;
+            progress(i, size);
         }
 
         return {};

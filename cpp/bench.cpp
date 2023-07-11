@@ -243,10 +243,10 @@ struct running_stats_printer_t {
         std::size_t new_progress = progress.load();
         if (new_progress - last_printed_progress < step)
             return;
-        print(new_progress);
+        print(new_progress, total);
     }
 
-    void print(std::size_t progress) {
+    void print(std::size_t progress, std::size_t total) {
 
         constexpr char bars_k[] = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";
         constexpr std::size_t bars_len_k = 60;
