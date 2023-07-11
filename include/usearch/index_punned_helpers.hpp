@@ -313,8 +313,10 @@ class executor_stl_t {
     std::size_t threads_count_{};
 
   public:
-    executor_stl_t(std::size_t threads_count) noexcept
+    executor_stl_t(std::size_t threads_count = 0) noexcept
         : threads_count_(threads_count ? threads_count : std::thread::hardware_concurrency()) {}
+
+    std::size_t size() const noexcept { return threads_count_; }
 
     template <typename thread_aware_function_at>
     void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
@@ -330,21 +332,39 @@ class executor_stl_t {
         for (std::size_t thread_idx = 0; thread_idx != threads_count_; ++thread_idx)
             threads_pool[thread_idx].join();
     }
+
+    template <typename thread_aware_function_at>
+    void execute_bulk(thread_aware_function_at&& thread_aware_function) noexcept(false) {
+        std::vector<std::thread> threads_pool;
+        for (std::size_t thread_idx = 0; thread_idx != threads_count_; ++thread_idx)
+            threads_pool.emplace_back([=]() { thread_aware_function(thread_idx); });
+        for (std::size_t thread_idx = 0; thread_idx != threads_count_; ++thread_idx)
+            threads_pool[thread_idx].join();
+    }
 };
 
 #if USEARCH_USE_OPENMP
 
 class executor_openmp_t {
   public:
-    executor_openmp_t(std::size_t threads_count) noexcept {
+    executor_openmp_t(std::size_t threads_count = 0) noexcept {
         omp_set_num_threads(threads_count ? threads_count : std::thread::hardware_concurrency());
     }
+
+    std::size_t size() const noexcept { return omp_get_num_threads(); }
 
     template <typename thread_aware_function_at>
     void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
 #pragma omp parallel for schedule(dynamic)
         for (std::size_t i = 0; i < tasks; ++i)
             thread_aware_function(omp_get_thread_num(), i);
+    }
+
+    template <typename thread_aware_function_at>
+    void execute_bulk(thread_aware_function_at&& thread_aware_function) noexcept(false) {
+#pragma omp parallel for
+        for (std::size_t i = 0; i != size(); ++i)
+            thread_aware_function(omp_get_thread_num());
     }
 };
 
