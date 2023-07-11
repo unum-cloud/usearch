@@ -652,7 +652,7 @@ class index_punned_dense_gt {
     }
 };
 
-using punned_small_t = index_punned_dense_gt<std::int64_t, std::uint32_t>;
+using punned_small_t = index_punned_dense_gt<std::uint64_t, std::uint32_t>;
 using punned_big_t = index_punned_dense_gt<uuid_t, uint40_t>;
 
 } // namespace usearch

@@ -1,9 +1,12 @@
 import os
+import importlib.util
+
 import pytest
 import numpy as np
 
 from usearch.io import load_matrix, save_matrix
-from usearch.eval import recall_members, random_vectors
+from usearch.eval import random_vectors
+from usearch.numba import jit as njit
 
 from usearch.index import (
     Index,
@@ -13,9 +16,7 @@ from usearch.index import (
     MetricSignature,
     CompiledMetric,
     Matches,
-    MetricKindBitwise,
 )
-from usearch.index import _normalize_dtype
 from usearch.index import (
     DEFAULT_CONNECTIVITY,
     DEFAULT_EXPANSION_ADD,
@@ -34,7 +35,7 @@ index_types = [
 numpy_types = [np.float32, np.float64, np.float16]
 
 connectivity_options = [3, 13, 50, DEFAULT_CONNECTIVITY]
-jit_options = [False]
+jit_options = [False, True] if importlib.util.find_spec("spam") is not None else [False]
 continuous_metrics = [
     MetricKind.Cos,
     MetricKind.L2sq,
@@ -80,6 +81,8 @@ def test_index(
     connectivity: int,
     jit: bool,
 ):
+    if jit:
+        metric = njit(ndim, metric, index_type)
     index = Index(
         metric=metric,
         ndim=ndim,
@@ -87,7 +90,6 @@ def test_index(
         connectivity=connectivity,
         expansion_add=DEFAULT_EXPANSION_ADD,
         expansion_search=DEFAULT_EXPANSION_SEARCH,
-        jit=jit,
     )
     assert index.ndim == ndim
     assert index.connectivity == connectivity
@@ -176,7 +178,10 @@ def test_index_batch(
 @pytest.mark.parametrize("index_type", index_types)
 @pytest.mark.parametrize("numpy_type", numpy_types)
 def test_exact_recall(
-    metric: MetricKind, batch_size: int, index_type: ScalarKind, numpy_type: str
+    metric: MetricKind,
+    batch_size: int,
+    index_type: ScalarKind,
+    numpy_type: str,
 ):
     ndim: int = batch_size
     index = Index(ndim=ndim, metric=metric, dtype=index_type)
@@ -436,7 +441,10 @@ def test_index_peachpy(ndim: int, batch_size: int):
 @pytest.mark.parametrize("connectivity", connectivity_options)
 @pytest.mark.parametrize("batch_size", batch_sizes)
 def test_bitwise_index(
-    bits: int, metric: MetricKind, connectivity: int, batch_size: int
+    bits: int,
+    metric: MetricKind,
+    connectivity: int,
+    batch_size: int,
 ):
     index = Index(ndim=bits, metric=metric, connectivity=connectivity)
 

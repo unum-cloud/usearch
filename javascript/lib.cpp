@@ -9,14 +9,9 @@
  *  @see NodeJS docs: https://nodejs.org/api/addons.html#hello-world
  *
  */
-
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
-#define _USE_MATH_DEFINES
-#define NAPI_CPP_EXCEPTIONS
-#endif
-
 #include <new> // `std::bad_alloc`
 
+#define NAPI_CPP_EXCEPTIONS
 #include <napi.h>
 #include <node_api.h>
 
@@ -25,9 +20,13 @@
 using namespace unum::usearch;
 using namespace unum;
 
-using label_t = std::uint32_t;
+using metric_t = index_punned_dense_metric_t;
 using distance_t = punned_distance_t;
-using punned_t = index_punned_dense_gt<label_t>;
+using index_t = punned_small_t;
+using add_result_t = typename index_t::add_result_t;
+using search_result_t = typename index_t::search_result_t;
+using label_t = typename index_t::label_t;
+using id_t = typename index_t::id_t;
 
 class Index : public Napi::ObjectWrap<Index> {
   public:
@@ -47,7 +46,7 @@ class Index : public Napi::ObjectWrap<Index> {
     void Add(Napi::CallbackInfo const& ctx);
     Napi::Value Search(Napi::CallbackInfo const& ctx);
 
-    std::unique_ptr<punned_t> native_;
+    std::unique_ptr<index_t> native_;
 };
 
 Napi::Object Index::Init(Napi::Env env, Napi::Object exports) {
@@ -124,7 +123,7 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
     }
 
     native_.reset(
-        new punned_t(punned_t::make(dimensions, metric_kind, config, accuracy, expansion_add, expansion_search)));
+        new index_t(index_t::make(dimensions, metric_kind, config, accuracy, expansion_add, expansion_search)));
     native_->reserve(limits);
 }
 
@@ -235,7 +234,7 @@ Napi::Value Index::Search(Napi::CallbackInfo const& ctx) {
         return {};
     }
 
-    Napi::Uint32Array matches_js = Napi::Uint32Array::New(env, wanted);
+    Napi::TypedArrayOf<label_t> matches_js = Napi::TypedArrayOf<label_t>::New(env, wanted);
     Napi::Float32Array distances_js = Napi::Float32Array::New(env, wanted);
     try {
         std::size_t count = native_->search(vector, wanted).dump_to(matches_js.Data(), distances_js.Data());

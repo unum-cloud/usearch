@@ -15,8 +15,7 @@ using index_t = index_punned_dense_gt<label_t>;
 using add_result_t = index_t::add_result_t;
 using search_result_t = index_t::search_result_t;
 using serialization_result_t = index_t::serialization_result_t;
-
-using span_t = span_gt<float>;
+using vector_view_t = span_gt<float>;
 
 // helper functions that are not part of the C ABI
 metric_kind_t to_native_metric(usearch_metric_kind_t kind) {

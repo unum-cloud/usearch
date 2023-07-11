@@ -8,12 +8,15 @@
 using namespace unum::usearch;
 using namespace unum;
 
+using metric_t = index_punned_dense_metric_t;
 using distance_t = punned_distance_t;
-using punned_t = index_punned_dense_gt<UInt32>;
-using add_result_t = punned_t::add_result_t;
-using search_result_t = punned_t::search_result_t;
-using serialization_result_t = punned_t::serialization_result_t;
-using shared_index_t = std::shared_ptr<punned_t>;
+using index_t = punned_small_t;
+using add_result_t = typename index_t::add_result_t;
+using search_result_t = typename index_t::search_result_t;
+using serialization_result_t = typename index_t::serialization_result_t;
+using label_t = typename index_t::label_t;
+using id_t = typename index_t::id_t;
+using shared_index_t = std::shared_ptr<index_t>;
 
 metric_kind_t to_native_metric(USearchMetric m) {
     switch (m) {
@@ -117,11 +120,11 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
     index_config_t config;
 
     config.connectivity = static_cast<std::size_t>(connectivity);
-    shared_index_t ptr = std::make_shared<punned_t>(punned_t::make(dims, to_native_metric(metric), config, to_native_scalar(quantization)));
+    shared_index_t ptr = std::make_shared<index_t>(index_t::make(dims, to_native_metric(metric), config, to_native_scalar(quantization)));
     return [[USearchIndex alloc] initWithIndex:ptr];
 }
 
-- (void)addSingle:(UInt32)label
+- (void)addSingle:(USearchLabel)label
            vector:(Float32 const *_Nonnull)vector {
     add_result_t result = _native->add(label, vector);
 
@@ -134,7 +137,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
 - (UInt32)searchSingle:(Float32 const *_Nonnull)vector
                  count:(UInt32)wanted
-                labels:(UInt32 *_Nullable)labels
+                labels:(USearchLabel *_Nullable)labels
              distances:(Float32 *_Nullable)distances {
     search_result_t result = _native->search(vector, static_cast<std::size_t>(wanted));
 
@@ -148,7 +151,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
     return static_cast<UInt32>(found);
 }
 
-- (void)addDouble:(UInt32)label
+- (void)addDouble:(USearchLabel)label
            vector:(Float64 const *_Nonnull)vector {
     add_result_t result = _native->add(label, (f64_t const *)vector);
 
@@ -161,7 +164,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
 - (UInt32)searchDouble:(Float64 const *_Nonnull)vector
                  count:(UInt32)wanted
-                labels:(UInt32 *_Nullable)labels
+                labels:(USearchLabel *_Nullable)labels
              distances:(Float32 *_Nullable)distances {
     search_result_t result = _native->search((f64_t const *)vector, static_cast<std::size_t>(wanted));
 
@@ -175,7 +178,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
     return static_cast<UInt32>(found);
 }
 
-- (void)addHalf:(UInt32)label
+- (void)addHalf:(USearchLabel)label
          vector:(void const *_Nonnull)vector {
     add_result_t result = _native->add(label, (f16_t const *)vector);
 
@@ -188,7 +191,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
 - (UInt32)searchHalf:(void const *_Nonnull)vector
                count:(UInt32)wanted
-              labels:(UInt32 *_Nullable)labels
+              labels:(USearchLabel *_Nullable)labels
            distances:(Float32 *_Nullable)distances {
     search_result_t result = _native->search((f16_t const *)vector, static_cast<std::size_t>(wanted));
 

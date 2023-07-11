@@ -2,9 +2,16 @@
 #include <usearch/index_punned_dense.hpp>
 
 using namespace unum::usearch;
+
+using metric_t = index_punned_dense_metric_t;
 using distance_t = punned_distance_t;
-using punned_t = index_punned_dense_gt<int>;
-using span_t = span_gt<float>;
+using index_t = punned_small_t;
+using vector_view_t = span_gt<float>;
+
+using add_result_t = typename index_t::add_result_t;
+using search_result_t = typename index_t::search_result_t;
+using label_t = typename index_t::label_t;
+using id_t = typename index_t::id_t;
 
 EXTERN_C DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) { return LIBRARY_NO_ERROR; }
 EXTERN_C DLLEXPORT void WolframLibrary_uninitialize(WolframLibraryData libData) { return; }
@@ -24,10 +31,10 @@ EXTERN_C DLLEXPORT int IndexCreate(WolframLibraryData libData, mint Argc, MArgum
 
         scalar_kind_t accuracy = scalar_kind_from_name(accuracy_cstr, std::strlen(accuracy_cstr));
         metric_kind_t metric_kind = metric_from_name(metric_cstr, std::strlen(metric_cstr));
-        punned_t index = make_punned<punned_t>(metric_kind, dimensions, accuracy, config);
+        index_t index = make_punned<index_t>(metric_kind, dimensions, accuracy, config);
         index.reserve(capacity);
 
-        punned_t* result_ptr = new punned_t(std::move(index));
+        index_t* result_ptr = new index_t(std::move(index));
         MArgument_setInteger(Res, (long)result_ptr);
 
     } catch (...) {
@@ -41,7 +48,7 @@ EXTERN_C DLLEXPORT int IndexCreate(WolframLibraryData libData, mint Argc, MArgum
 
 EXTERN_C DLLEXPORT int IndexSave(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
     char* path_cstr = nullptr;
-    punned_t* c_ptr = (punned_t*)MArgument_getUTF8String(Args[0]);
+    index_t* c_ptr = (index_t*)MArgument_getUTF8String(Args[0]);
     try {
         path_cstr = MArgument_getUTF8String(Args[1]);
         c_ptr->save(path_cstr);
@@ -54,7 +61,7 @@ EXTERN_C DLLEXPORT int IndexSave(WolframLibraryData libData, mint Argc, MArgumen
 
 EXTERN_C DLLEXPORT int IndexLoad(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
     char* path_cstr = nullptr;
-    punned_t* c_ptr = (punned_t*)MArgument_getUTF8String(Args[0]);
+    index_t* c_ptr = (index_t*)MArgument_getUTF8String(Args[0]);
     try {
         path_cstr = MArgument_getUTF8String(Args[1]);
         c_ptr->load(path_cstr);
@@ -67,7 +74,7 @@ EXTERN_C DLLEXPORT int IndexLoad(WolframLibraryData libData, mint Argc, MArgumen
 
 EXTERN_C DLLEXPORT int IndexView(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
     char* path_cstr = nullptr;
-    punned_t* c_ptr = (punned_t*)MArgument_getUTF8String(Args[0]);
+    index_t* c_ptr = (index_t*)MArgument_getUTF8String(Args[0]);
     try {
         path_cstr = MArgument_getUTF8String(Args[1]);
         c_ptr->view(path_cstr);
@@ -79,44 +86,44 @@ EXTERN_C DLLEXPORT int IndexView(WolframLibraryData libData, mint Argc, MArgumen
 }
 
 EXTERN_C DLLEXPORT int IndexDestroy(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
-    delete (punned_t*)MArgument_getUTF8String(Args[0]);
+    delete (index_t*)MArgument_getUTF8String(Args[0]);
     return LIBRARY_NO_ERROR;
 }
 
 EXTERN_C DLLEXPORT int IndexSize(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
-    size_t res = ((punned_t*)MArgument_getUTF8String(Args[0]))->size();
+    std::size_t res = ((index_t*)MArgument_getUTF8String(Args[0]))->size();
     MArgument_setInteger(Res, res);
     return LIBRARY_NO_ERROR;
 }
 
 EXTERN_C DLLEXPORT int IndexConnectivity(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
-    size_t res = ((punned_t*)MArgument_getUTF8String(Args[0]))->connectivity();
+    std::size_t res = ((index_t*)MArgument_getUTF8String(Args[0]))->connectivity();
     MArgument_setInteger(Res, res);
     return LIBRARY_NO_ERROR;
 }
 
 EXTERN_C DLLEXPORT int IndexDimensions(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
-    size_t res = ((punned_t*)MArgument_getUTF8String(Args[0]))->dimensions();
+    std::size_t res = ((index_t*)MArgument_getUTF8String(Args[0]))->dimensions();
     MArgument_setInteger(Res, res);
     return LIBRARY_NO_ERROR;
 }
 
 EXTERN_C DLLEXPORT int IndexCapacity(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
-    size_t res = ((punned_t*)MArgument_getUTF8String(Args[0]))->capacity();
+    std::size_t res = ((index_t*)MArgument_getUTF8String(Args[0]))->capacity();
     MArgument_setInteger(Res, res);
     return LIBRARY_NO_ERROR;
 }
 
 EXTERN_C DLLEXPORT int IndexAdd(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
     char* path_cstr = nullptr;
-    punned_t* c_ptr = (punned_t*)MArgument_getUTF8String(Args[0]);
+    index_t* c_ptr = (index_t*)MArgument_getUTF8String(Args[0]);
     float* vector_data = nullptr;
     try {
         int label = MArgument_getInteger(Args[1]);
         MTensor tens = MArgument_getMTensor(Args[2]);
-        size_t len = libData->MTensor_getFlattenedLength(tens);
+        std::size_t len = libData->MTensor_getFlattenedLength(tens);
         vector_data = (float*)libData->MTensor_getRealData(tens);
-        span_t vector_span = span_t{vector_data, len};
+        vector_view_t vector_span = vector_view_t{vector_data, len};
         c_ptr->add(label, vector_span);
     } catch (...) {
         return LIBRARY_FUNCTION_ERROR;
@@ -125,7 +132,7 @@ EXTERN_C DLLEXPORT int IndexAdd(WolframLibraryData libData, mint Argc, MArgument
 }
 
 EXTERN_C DLLEXPORT int IndexSearch(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
-    punned_t* c_ptr = (punned_t*)MArgument_getUTF8String(Args[0]);
+    index_t* c_ptr = (index_t*)MArgument_getUTF8String(Args[0]);
     MTensor matches;
     mint dims[] = {1};
     int wanted = MArgument_getInteger(Args[2]);
@@ -137,12 +144,12 @@ EXTERN_C DLLEXPORT int IndexSearch(WolframLibraryData libData, mint Argc, MArgum
         libData->MTensor_new(MType_Integer, 1, dims, &matches);
 
         MTensor tens = MArgument_getMTensor(Args[1]);
-        size_t len = libData->MTensor_getFlattenedLength(tens);
+        std::size_t len = libData->MTensor_getFlattenedLength(tens);
         vector_data = (float*)libData->MTensor_getRealData(tens);
-        span_t vector_span = span_t{vector_data, len};
+        vector_view_t vector_span = vector_view_t{vector_data, len};
 
         matches_data = (int*)std::malloc(sizeof(int) * wanted);
-        found = c_ptr->search(vector_span, (size_t)wanted, matches_data, nullptr);
+        found = c_ptr->search(vector_span, static_cast<std::size_t>(wanted), matches_data, nullptr);
         for (mint i = 0; i < found; i++)
             libData->MTensor_setInteger(matches, &i, matches_data[i]);
 

@@ -9,14 +9,16 @@
 using namespace unum::usearch;
 using namespace unum;
 
-using label_t = jint;
-using span_t = span_gt<float>;
+using metric_t = index_punned_dense_metric_t;
 using distance_t = punned_distance_t;
-using punned_t = index_punned_dense_gt<label_t>;
+using index_t = punned_small_t;
 
-using add_result_t = typename punned_t::add_result_t;
-using search_result_t = typename punned_t::search_result_t;
-using serialization_result_t = typename punned_t::serialization_result_t;
+using add_result_t = typename index_t::add_result_t;
+using search_result_t = typename index_t::search_result_t;
+using serialization_result_t = typename index_t::serialization_result_t;
+using label_t = typename index_t::label_t;
+using id_t = typename index_t::id_t;
+using vector_view_t = unum::usearch::span_gt<float>;
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
     JNIEnv* env, jclass,                                         //
@@ -41,14 +43,14 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
 
         scalar_kind_t accuracy = scalar_kind_from_name(accuracy_cstr, accuracy_length);
         metric_kind_t metric_kind = metric_from_name(metric_cstr, metric_length);
-        punned_t index = punned_t::make(static_cast<std::size_t>(dimensions), metric_kind, config, accuracy,
-                                        expansion_add, expansion_search);
+        index_t index = index_t::make( //
+            static_cast<std::size_t>(dimensions), metric_kind, config, accuracy, expansion_add, expansion_search);
         if (!index.reserve(static_cast<std::size_t>(capacity))) {
             jclass jc = (*env).FindClass("java/lang/Error");
             if (jc)
                 (*env).ThrowNew(jc, "Failed to reserve desired capacity!");
         } else {
-            punned_t* result_ptr = new punned_t(std::move(index));
+            index_t* result_ptr = new index_t(std::move(index));
             std::memcpy(&result, &result_ptr, sizeof(jlong));
         }
 
@@ -65,7 +67,7 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1save(JNIEnv* env, jclass, jlong c_ptr, jstring path) {
     char const* path_cstr = (*env).GetStringUTFChars(path, 0);
-    if (!reinterpret_cast<punned_t*>(c_ptr)->save(path_cstr)) {
+    if (!reinterpret_cast<index_t*>(c_ptr)->save(path_cstr)) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
             (*env).ThrowNew(jc, "Failed to dump vector index to path!");
@@ -75,7 +77,7 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1save(JNIEnv* env, jclass
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1load(JNIEnv* env, jclass, jlong c_ptr, jstring path) {
     char const* path_cstr = (*env).GetStringUTFChars(path, 0);
-    if (!reinterpret_cast<punned_t*>(c_ptr)->load(path_cstr)) {
+    if (!reinterpret_cast<index_t*>(c_ptr)->load(path_cstr)) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
             (*env).ThrowNew(jc, "Failed to load vector index from path!");
@@ -85,7 +87,7 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1load(JNIEnv* env, jclass
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1view(JNIEnv* env, jclass, jlong c_ptr, jstring path) {
     char const* path_cstr = (*env).GetStringUTFChars(path, 0);
-    if (!reinterpret_cast<punned_t*>(c_ptr)->view(path_cstr)) {
+    if (!reinterpret_cast<index_t*>(c_ptr)->view(path_cstr)) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
             (*env).ThrowNew(jc, "Failed to view vector index from path!");
@@ -94,27 +96,27 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1view(JNIEnv* env, jclass
 }
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1destroy(JNIEnv*, jclass, jlong c_ptr) {
-    delete reinterpret_cast<punned_t*>(c_ptr);
+    delete reinterpret_cast<index_t*>(c_ptr);
 }
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1size(JNIEnv*, jclass, jlong c_ptr) {
-    return reinterpret_cast<punned_t*>(c_ptr)->size();
+    return reinterpret_cast<index_t*>(c_ptr)->size();
 }
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1connectivity(JNIEnv*, jclass, jlong c_ptr) {
-    return reinterpret_cast<punned_t*>(c_ptr)->connectivity();
+    return reinterpret_cast<index_t*>(c_ptr)->connectivity();
 }
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1dimensions(JNIEnv*, jclass, jlong c_ptr) {
-    return reinterpret_cast<punned_t*>(c_ptr)->dimensions();
+    return reinterpret_cast<index_t*>(c_ptr)->dimensions();
 }
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1capacity(JNIEnv*, jclass, jlong c_ptr) {
-    return reinterpret_cast<punned_t*>(c_ptr)->capacity();
+    return reinterpret_cast<index_t*>(c_ptr)->capacity();
 }
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1reserve(JNIEnv* env, jclass, jlong c_ptr, jlong capacity) {
-    if (!reinterpret_cast<punned_t*>(c_ptr)->reserve(static_cast<std::size_t>(capacity))) {
+    if (!reinterpret_cast<index_t*>(c_ptr)->reserve(static_cast<std::size_t>(capacity))) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
             (*env).ThrowNew(jc, "Failed to grow vector index!");
@@ -126,9 +128,9 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add( //
 
     jfloat* vector_data = (*env).GetFloatArrayElements(vector, 0);
     jsize vector_dims = (*env).GetArrayLength(vector);
-    span_t vector_span = span_t{vector_data, static_cast<std::size_t>(vector_dims)};
+    vector_view_t vector_span = vector_view_t{vector_data, static_cast<std::size_t>(vector_dims)};
 
-    if (!reinterpret_cast<punned_t*>(c_ptr)->add(label, vector_span)) {
+    if (!reinterpret_cast<index_t*>(c_ptr)->add(static_cast<label_t>(label), vector_span)) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
             (*env).ThrowNew(jc, "Failed to insert a new point in vector index!");
@@ -150,10 +152,10 @@ JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search( //
 
     jfloat* vector_data = (*env).GetFloatArrayElements(vector, 0);
     jsize vector_dims = (*env).GetArrayLength(vector);
-    span_t vector_span = span_t{vector_data, static_cast<std::size_t>(vector_dims)};
-    search_result_t result = reinterpret_cast<punned_t*>(c_ptr)->search(vector_span, static_cast<std::size_t>(wanted));
+    vector_view_t vector_span = vector_view_t{vector_data, static_cast<std::size_t>(vector_dims)};
+    search_result_t result = reinterpret_cast<index_t*>(c_ptr)->search(vector_span, static_cast<std::size_t>(wanted));
     if (result) {
-        std::size_t found = result.dump_to(matches_data, NULL);
+        std::size_t found = result.dump_to(reinterpret_cast<label_t*>(matches_data), NULL);
         (*env).SetIntArrayRegion(matches, 0, found, matches_data);
     } else {
         jclass jc = (*env).FindClass("java/lang/Error");

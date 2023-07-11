@@ -4,31 +4,19 @@
 # into the primary `Index` class, connecting USearch with Numba.
 from math import sqrt
 
-from numba import cfunc, types, carray
-
 from usearch.index import MetricKind, ScalarKind, MetricSignature, CompiledMetric
 
 
-signature_i8args = types.float32(types.CPointer(types.int8), types.CPointer(types.int8))
-
-signature_f16args = types.float32(
-    types.CPointer(types.float16), types.CPointer(types.float16)
-)
-
-signature_f32args = types.float32(
-    types.CPointer(types.float32), types.CPointer(types.float32)
-)
-
-signature_f64args = types.float32(
-    types.CPointer(types.float64), types.CPointer(types.float64)
-)
-
-
 def jit(
-    ndim: int, metric: MetricKind = MetricKind.Cos, dtype: ScalarKind = ScalarKind.F32
+    ndim: int,
+    metric: MetricKind = MetricKind.Cos,
+    dtype: ScalarKind = ScalarKind.F32,
 ) -> CompiledMetric:
-    """JIT-compiles a distance metric specifically tuned for the target hardware
-    and number of dimensions.
+    """JIT-compiles the metric for target hardware and number of dimensions.
+
+    This can result in up-to 3x performance difference on very large vectors
+    and very recent hardware, as the Python module is compiled with high
+    compatibility in mind and avoids very fancy assembly instructions.
 
     Uses Numba `cfunc` functionality, annotating it with Numba `types` instead
     of `ctypes` to support half-precision.
@@ -36,6 +24,24 @@ def jit(
     """
     assert isinstance(metric, MetricKind)
     assert isinstance(dtype, ScalarKind)
+
+    from numba import cfunc, types, carray
+
+    signature_i8args = types.float32(
+        types.CPointer(types.int8), types.CPointer(types.int8)
+    )
+
+    signature_f16args = types.float32(
+        types.CPointer(types.float16), types.CPointer(types.float16)
+    )
+
+    signature_f32args = types.float32(
+        types.CPointer(types.float32), types.CPointer(types.float32)
+    )
+
+    signature_f64args = types.float32(
+        types.CPointer(types.float64), types.CPointer(types.float64)
+    )
 
     numba_supported_types = (
         ScalarKind.F8,
@@ -46,7 +52,7 @@ def jit(
         ScalarKind.F64,
     )
     if dtype not in numba_supported_types:
-        return None
+        return metric
 
     scalar_kind_to_accumulator_type = {
         ScalarKind.F8: types.int32,
@@ -109,7 +115,7 @@ def jit(
 
     pointer = cfunc(scalar_kind_to_signature[dtype])(metric_kind_to_function[metric])
     return CompiledMetric(
-        pointer=pointer,
+        pointer=pointer.address,
         kind=metric,
         signature=MetricSignature.ArrayArray,
     )

@@ -1,7 +1,7 @@
 /**
- * @brief A benchmark for the construction speed of the USearch index
- * and the resulting accuracy (recall) of the Approximate Nearest Neighbors
- * Search queries.
+ *  @brief A benchmark for the construction speed of the USearch index
+ *  and the resulting accuracy (recall) of the Approximate Nearest Neighbors
+ *  Search queries.
  */
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
@@ -15,7 +15,7 @@
 
 #define STDERR_FILENO HANDLE(2)
 #else
-#if __linux__
+#if defined(__linux__)
 #include <execinfo.h> // `backtrace`
 #endif
 #include <fcntl.h>    // `open`
@@ -38,8 +38,6 @@
 #include <clipp.h> // Command Line Interface
 #if USEARCH_USE_OPENMP
 #include <omp.h> // `omp_set_num_threads()`
-#else
-int omp_get_thread_num() { return 0; }
 #endif
 
 #include <simsimd/simsimd.h>
@@ -286,12 +284,14 @@ void index_many(index_at& native, std::size_t n, vector_id_at const* ids, real_a
 #endif
     for (std::size_t i = 0; i < n; ++i) {
         add_config_t config;
+#if USEARCH_USE_OPENMP
         config.thread = omp_get_thread_num();
+#endif
         config.store_vector = true;
         vector_view_t vector{vectors + dims * i, dims};
         native.add(ids[i], vector, config);
         printer.progress++;
-        if (omp_get_thread_num() == 0)
+        if (config.thread == 0)
             printer.refresh();
     }
 }
@@ -309,11 +309,13 @@ void search_many( //
 #endif
     for (std::size_t i = 0; i < n; ++i) {
         search_config_t config;
+#if USEARCH_USE_OPENMP
         config.thread = omp_get_thread_num();
+#endif
         vector_view_t vector{vectors + dims * i, dims};
         native.search(vector, wanted, config).dump_to(ids + wanted * i, distances + wanted * i);
         printer.progress++;
-        if (omp_get_thread_num() == 0)
+        if (config.thread == 0)
             printer.refresh();
     }
 }
@@ -331,11 +333,13 @@ void paginate_many( //
 #endif
     for (std::size_t i = 0; i < n; ++i) {
         search_config_t config;
+#if USEARCH_USE_OPENMP
         config.thread = omp_get_thread_num();
+#endif
         vector_view_t vector{vectors + dims * i, dims};
         native.search_around(hints[i], vector, wanted, config);
         printer.progress++;
-        if (omp_get_thread_num() == 0)
+        if (config.thread == 0)
             printer.refresh();
     }
 }
@@ -391,7 +395,7 @@ void handler(int sig) {
     // get void*'s for all entries on the stack
 #if defined(USEARCH_DEFINED_WINDOWS)
     size = CaptureStackBackTrace(0, 10, array, NULL);
-#elif __linux__
+#elif defined(USEARCH_DEFINED_LINUX)
     size = backtrace(array, 10);
 #endif // WINDOWS
 
@@ -413,7 +417,7 @@ void handler(int sig) {
         WriteFile(STDERR_FILENO, "\n", 1, &bytes_written, NULL);
     }
     free(symbol);
-#elif __linux__
+#elif defined(USEARCH_DEFINED_LINUX)
     backtrace_symbols_fd(array, size, STDERR_FILENO);
 #endif // WINDOWS
 
@@ -637,10 +641,10 @@ int main(int argc, char** argv) {
         exit(0);
     }
 
-// Instead of relying on `multithreaded` from "index_punned_dense.hpp" we will use OpenMP
-// to better estimate statistics between tasks batches, without having to recreate
-// the threads.
 #if USEARCH_USE_OPENMP
+    // Instead of relying on `multithreaded` from "index_punned_dense.hpp" we will use OpenMP
+    // to better estimate statistics between tasks batches, without having to recreate
+    // the threads.
     omp_set_dynamic(true);
     omp_set_num_threads(args.threads);
     std::printf("- OpenMP threads: %d\n", omp_get_max_threads());

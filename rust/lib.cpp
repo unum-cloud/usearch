@@ -4,14 +4,14 @@
 using namespace unum::usearch;
 using namespace unum;
 
-using punned_t = typename Index::punned_t;
-using add_result_t = typename punned_t::add_result_t;
-using search_result_t = typename punned_t::search_result_t;
-using serialization_result_t = typename punned_t::serialization_result_t;
+using index_t = typename Index::index_t;
+using add_result_t = typename index_t::add_result_t;
+using search_result_t = typename index_t::search_result_t;
+using serialization_result_t = typename index_t::serialization_result_t;
 
-Index::Index(std::unique_ptr<punned_t> index) : index_(std::move(index)) {}
+Index::Index(std::unique_ptr<index_t> index) : index_(std::move(index)) {}
 
-void Index::add_in_thread(uint32_t label, rust::Slice<float const> vector, size_t thread) const {
+void Index::add_in_thread(label_t label, rust::Slice<float const> vector, size_t thread) const {
     add_config_t config;
     config.thread = thread;
     index_->add(label, vector.data(), config).error.raise();
@@ -33,7 +33,7 @@ Matches Index::search_in_thread(rust::Slice<float const> vector, size_t count, s
     return matches;
 }
 
-void Index::add(uint32_t label, rust::Slice<float const> vector) const {
+void Index::add(label_t label, rust::Slice<float const> vector) const {
     index_->add(label, vector.data()).error.raise();
 }
 
@@ -64,9 +64,9 @@ void Index::view(rust::Str path) const { index_->view(std::string(path).c_str())
 
 scalar_kind_t accuracy(rust::Str quant) { return scalar_kind_from_name(quant.data(), quant.size()); }
 
-std::unique_ptr<Index> wrap(punned_t&& index) {
-    std::unique_ptr<punned_t> punned_ptr;
-    punned_ptr.reset(new punned_t(std::move(index)));
+std::unique_ptr<Index> wrap(index_t&& index) {
+    std::unique_ptr<index_t> punned_ptr;
+    punned_ptr.reset(new index_t(std::move(index)));
     std::unique_ptr<Index> result;
     result.reset(new Index(std::move(punned_ptr)));
     return result;
@@ -104,7 +104,7 @@ scalar_kind_t rust_to_cpp_scalar(ScalarKind value) {
 }
 
 std::unique_ptr<Index> new_index(IndexOptions const& options) {
-    return wrap(punned_t::make(options.dimensions, rust_to_cpp_metric(options.metric), config(options.connectivity),
-                               rust_to_cpp_scalar(options.quantization), options.expansion_add,
-                               options.expansion_search));
+    return wrap(index_t::make(options.dimensions, rust_to_cpp_metric(options.metric), config(options.connectivity),
+                              rust_to_cpp_scalar(options.quantization), options.expansion_add,
+                              options.expansion_search));
 }

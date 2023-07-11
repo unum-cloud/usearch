@@ -31,7 +31,7 @@ MetricKindBitwise = (
 
 SparseIndex = _CompiledSetsIndex
 
-Label = np.uint32
+Label = np.uint64
 
 
 def _normalize_dtype(dtype, metric: MetricKind = MetricKind.IP) -> ScalarKind:
@@ -167,10 +167,9 @@ class Index:
 
     def __init__(
         self,
-        ndim: int,
+        ndim: int = 0,
         metric: Union[str, MetricKind, CompiledMetric] = MetricKind.IP,
-        dtype: Optional[str] = None,
-        jit: bool = False,
+        dtype: Optional[Union[str, ScalarKind]] = None,
         connectivity: int = DEFAULT_CONNECTIVITY,
         expansion_add: int = DEFAULT_EXPANSION_ADD,
         expansion_search: int = DEFAULT_EXPANSION_SEARCH,
@@ -182,6 +181,10 @@ class Index:
 
         :param ndim: Number of vector dimensions
         :type ndim: int
+            Required for some metrics, optional for others.
+            Haversine, for example, only applies to 2-dimensional latitude/longitude
+            coordinates. Angular (Cos) and Euclidean (L2sq), obviously, apply to
+            vectors with arbitrary number of dimensions.
 
         :param metric: Distance function, defaults to MetricKind.IP
         :type metric: Union[MetricKind, Callable, str], optional
@@ -191,17 +194,11 @@ class Index:
             Not every kind is JIT-able. For Jaccard distance, use `SparseIndex`.
 
         :param dtype: Scalar type for internal vector storage, defaults to None
-        :type dtype: str, optional
+        :type dtype: Optional[Union[str, ScalarKind]], optional
             For continuous metrics can be: f16, f32, f64, or f8.
             For bitwise metrics it's implementation-defined, and can't change.
             Example: you can use the `f16` index with `f32` vectors in Euclidean space,
             which will be automatically downcasted.
-
-        :param jit: Enable Numba to JIT compile the metric, defaults to False
-        :type jit: bool, optional
-            This can result in up-to 3x performance difference on very large vectors
-            and very recent hardware, as the Python module is compiled with high
-            compatibility in mind and avoids very fancy assembly instructions.
 
         :param connectivity: Connections per node in HNSW, defaults to None
         :type connectivity: Optional[int], optional
@@ -231,21 +228,6 @@ class Index:
         """
 
         metric = _normalize_metric(metric)
-        if isinstance(metric, MetricKind) and jit:
-            try:
-                from usearch.numba import jit
-            except ImportError:
-                raise ModuleNotFoundError(
-                    "To use JIT install Numba with `pip install numba`."
-                    "Alternatively, reinstall with `pip install usearch[jit]`"
-                )
-
-            metric = jit(
-                ndim=ndim,
-                metric=metric,
-                dtype=_normalize_dtype(dtype, metric),
-            )
-
         if isinstance(metric, MetricKind):
             self._metric_kind = metric
             self._metric_jit = None
