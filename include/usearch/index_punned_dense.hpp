@@ -185,12 +185,15 @@ class index_punned_dense_gt {
     void swap(index_punned_dense_gt& other) {
         std::swap(dimensions_, other.dimensions_);
         std::swap(scalar_words_, other.scalar_words_);
+        std::swap(expansion_add_, other.expansion_add_);
+        std::swap(expansion_search_, other.expansion_search_);
         std::swap(casted_vector_bytes_, other.casted_vector_bytes_);
         std::swap(typed_, other.typed_);
         std::swap(cast_buffer_, other.cast_buffer_);
         std::swap(casts_, other.casts_);
         std::swap(root_metric_, other.root_metric_);
         std::swap(available_threads_, other.available_threads_);
+        std::swap(lookup_table_, other.lookup_table_);
     }
 
     static index_config_t optimize(index_config_t config) { return index_t::optimize(config); }

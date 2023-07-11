@@ -1768,11 +1768,13 @@ class index_gt {
         std::swap(limits_, other.limits_);
         std::swap(metric_, other.metric_);
         std::swap(allocator_, other.allocator_);
+        std::swap(point_allocator_, other.point_allocator_);
         std::swap(pre_, other.pre_);
         std::swap(viewed_file_, other.viewed_file_);
         std::swap(max_level_, other.max_level_);
         std::swap(entry_id_, other.entry_id_);
         std::swap(nodes_, other.nodes_);
+        std::swap(nodes_mutexes_, other.nodes_mutexes_);
         std::swap(contexts_, other.contexts_);
 
         // Non-atomic parts.
