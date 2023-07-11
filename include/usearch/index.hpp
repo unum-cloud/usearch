@@ -1006,7 +1006,11 @@ class usearch_pack_m uint40_t {
 
     inline operator std::size_t() const noexcept {
         std::size_t result = 0;
+#ifdef USEARCH_64BIT_ENV
         std::memcpy((char*)&result + 3, octets, 5);
+#else
+        std::memcpy((char*)&result, octets + 1, 4);
+#endif
         return result;
     }
 
