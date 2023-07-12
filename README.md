@@ -759,9 +759,28 @@ index = Index(ndim=2048, metric=MetricKind.BitwiseTanimoto)
 labels = np.arange(len(molecules))
 
 index.add(labels, fingerprints)
-matches = index.search(fingerprints, 10)
+matches: Matches = index.search(fingerprints, 10)
 ```
 
+Of if you need a bit of our SIMD superpowers - take some Chemsitry-oriented precompiled metrics from [SimSIMD][simsimd].
+
+```python
+import simsimd as sisi
+
+index = Index(
+    ndim=166, # MACCS fingerprints are 166-dimensional
+    metric=CompiledMetric(
+        pointer=sisi.to_int(sisi.tanimoto_maccs_neon), # For Arm Neon
+        signature=MetricSignature.ArrayArray,
+        kind=MetricKind.Tanimoto,
+    ),
+)
+
+index.add(42, np.packbits([1] * 166))
+matches: Matches = index.search(np.packbits([1] * 166))
+```
+
+[simsimd]: https://github.com/ashvardanian/simsimd
 [smiles]: https://en.wikipedia.org/wiki/Simplified_molecular-input_line-entry_system
 [rdkit-fingerprints]: https://www.rdkit.org/docs/RDKit_Book.html#additional-information-about-the-fingerprints
 

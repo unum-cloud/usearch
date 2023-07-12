@@ -18,6 +18,7 @@
 #define PY_SSIZE_T_CLEAN
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 
 #include <usearch/index_punned_dense.hpp>
 
@@ -356,7 +357,6 @@ static py::tuple search_many_in_index( //
 
     Py_ssize_t vectors_count = vectors_info.shape[0];
     Py_ssize_t vectors_dimensions = vectors_info.shape[1];
-    char const* vectors_data = reinterpret_cast<char const*>(vectors_info.ptr);
     if (vectors_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
@@ -379,6 +379,40 @@ static py::tuple search_many_in_index( //
     results[1] = ds;
     results[2] = cs;
     return results;
+}
+
+static std::unordered_map<label_t, label_t> join_index(   //
+    dense_index_py_t const& a, dense_index_py_t const& b, //
+    std::size_t max_proposals, bool exact) {
+
+    std::unordered_map<label_t, label_t> a_to_b;
+    a_to_b.reserve((std::min)(a.size(), b.size()));
+
+    using join_result_t = typename dense_index_py_t::join_result_t;
+    join_config_t config;
+
+    config.max_proposals = max_proposals;
+    config.exact = exact;
+    config.expansion = (std::max)(a.expansion_search(), b.expansion_search());
+    std::size_t threads = (std::min)(a.limits().threads(), b.limits().threads());
+    executor_default_t executor{threads};
+    join_result_t result = dense_index_py_t::join( //
+        a, b, config,                              //
+        a_to_b,                                    //
+        dummy_label_to_label_mapping_t{},          //
+        executor);
+    result.error.raise();
+    return a_to_b;
+}
+
+static dense_index_py_t copy_index(dense_index_py_t const& index) {
+
+    using copy_result_t = typename dense_index_py_t::copy_result_t;
+    copy_config_t config;
+
+    copy_result_t result = index.copy();
+    result.error.raise();
+    return std::move(result.index);
 }
 
 // clang-format off
@@ -651,6 +685,9 @@ PYBIND11_MODULE(compiled, m) {
     i.def("load", &load_index<dense_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
     i.def("view", &view_index<dense_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
     i.def("clear", &dense_index_py_t::clear, py::call_guard<py::gil_scoped_release>());
+    i.def("copy", &copy_index, py::call_guard<py::gil_scoped_release>());
+    i.def("join", &join_index, py::arg("other"), py::arg("max_proposals") = 0, py::arg("exact") = false,
+          py::call_guard<py::gil_scoped_release>());
 
     auto si = py::class_<sparse_index_py_t>(m, "SparseIndex");
 
@@ -704,8 +741,8 @@ PYBIND11_MODULE(compiled, m) {
     si.def_property_readonly("connectivity", &sparse_index_py_t::connectivity);
     si.def_property_readonly("capacity", &sparse_index_py_t::capacity);
 
-    si.def("save", &sparse_index_py_t::save, py::arg("path"));
-    si.def("load", &sparse_index_py_t::load, py::arg("path"));
-    si.def("view", &sparse_index_py_t::view, py::arg("path"));
+    si.def("save", &save_index<sparse_index_py_t>, py::arg("path"));
+    si.def("load", &load_index<sparse_index_py_t>, py::arg("path"));
+    si.def("view", &view_index<sparse_index_py_t>, py::arg("path"));
     si.def("clear", &sparse_index_py_t::clear);
 }
