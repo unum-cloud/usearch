@@ -402,7 +402,7 @@ static std::unordered_map<label_t, label_t> join_index(   //
         dummy_label_to_label_mapping_t{},          //
         executor);
     result.error.raise();
-    return {};
+    return a_to_b;
 }
 
 static dense_index_py_t copy_index(dense_index_py_t const& index) {
