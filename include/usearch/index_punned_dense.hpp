@@ -374,18 +374,27 @@ class index_punned_dense_gt {
         return result;
     }
 
-    template <typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
-    static join_result_t join(                                    //
-        index_punned_dense_gt& big, index_punned_dense_gt& small, //
-        label_t* big_to_small, label_t* small_to_big,             //
-        join_config_t config = {},                                //
-        executor_at&& executor = executor_at{},                   //
+    template <                                                        //
+        typename first_to_second_at = dummy_label_to_label_mapping_t, //
+        typename second_to_first_at = dummy_label_to_label_mapping_t, //
+        typename executor_at = dummy_executor_t,                      //
+        typename progress_at = dummy_progress_t                       //
+        >
+    static join_result_t join(                                       //
+        index_punned_dense_gt const& first,                          //
+        index_punned_dense_gt const& second,                         //
+        join_config_t config = {},                                   //
+        first_to_second_at&& first_to_second = first_to_second_at{}, //
+        second_to_first_at&& second_to_first = second_to_first_at{}, //
+        executor_at&& executor = executor_at{},                      //
         progress_at&& progress = progress_at{}) noexcept {
 
-        return index_t::join(           //
-            *big.typed_, *small.typed_, //
-            big_to_small, small_to_big, //
-            config, std::forward<executor_at>(executor), std::forward<progress_at>(progress));
+        return index_t::join(                                  //
+            *first.typed_, *second.typed_, config,             //
+            std::forward<first_to_second_at>(first_to_second), //
+            std::forward<second_to_first_at>(second_to_first), //
+            std::forward<executor_at>(executor),               //
+            std::forward<progress_at>(progress));
     }
 
   private:

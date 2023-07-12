@@ -1215,6 +1215,7 @@ struct copy_config_t {
 
 struct join_config_t {
     std::size_t max_proposals = 10;
+    std::size_t expansion = default_expansion_search();
 };
 
 using file_header_t = byte_t[64];
@@ -1321,8 +1322,8 @@ struct file_head_result_t {
     error_t error;
 
     explicit operator bool() const noexcept { return !error; }
-    file_head_result_t failed(char const* message) noexcept {
-        error = message;
+    file_head_result_t failed(error_t message) noexcept {
+        error = std::move(message);
         return std::move(*this);
     }
 };
@@ -1378,6 +1379,13 @@ struct dummy_executor_t {
     void execute_bulk(thread_aware_function_at&& thread_aware_function) noexcept {
         thread_aware_function(0);
     }
+};
+
+struct dummy_label_to_label_mapping_t {
+    struct pseudo_mapping_t {
+        template <typename label_at> pseudo_mapping_t& operator=(label_at const&) noexcept { return *this; }
+    };
+    template <typename label_at> pseudo_mapping_t operator[](label_at const&) const noexcept { return {}; }
 };
 
 /**
@@ -1670,7 +1678,7 @@ class index_gt {
     index_config_t config_{};
     index_limits_t limits_{};
     metric_t metric_{};
-    allocator_t allocator_{};
+    mutable allocator_t allocator_{};
     point_allocator_t point_allocator_{};
     precomputed_constants_t pre_{};
     viewed_file_t viewed_file_{};
@@ -2516,12 +2524,13 @@ class index_gt {
     struct join_result_t {
         error_t error{};
         std::size_t intersection_size{};
+        std::size_t engagements{};
         std::size_t cycles{};
         std::size_t measurements{};
 
         explicit operator bool() const noexcept { return !error; }
-        join_result_t failed(char const* message) noexcept {
-            error = message;
+        join_result_t failed(error_t message) noexcept {
+            error = std::move(message);
             return std::move(*this);
         }
     };
@@ -2531,35 +2540,54 @@ class index_gt {
      *          to perform fast one-to-one matching between two large collections
      *          of vectors, using approximate nearest neighbors search.
      */
-    template <typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
-    static join_result_t join(                        //
-        index_gt& big, index_gt& small,               //
-        label_t* big_to_small, label_t* small_to_big, //
-        join_config_t config = {},                    //
-        executor_at&& executor = executor_at{},       //
+    template <                                                        //
+        typename first_to_second_at = dummy_label_to_label_mapping_t, //
+        typename second_to_first_at = dummy_label_to_label_mapping_t, //
+        typename executor_at = dummy_executor_t,                      //
+        typename progress_at = dummy_progress_t                       //
+        >
+    static join_result_t join(                                       //
+        index_gt const& first, index_gt const& second,               //
+        join_config_t config = {},                                   //
+        first_to_second_at&& first_to_second = first_to_second_at{}, //
+        second_to_first_at&& second_to_first = second_to_first_at{}, //
+        executor_at&& executor = executor_at{},                      //
         progress_at&& progress = progress_at{}) noexcept {
 
-        if (big.size() == small.size())
-            return join_same_size_(                             //
-                big, small, big_to_small, small_to_big, config, //
-                std::forward<executor_at>(executor), std::forward<progress_at>(progress));
+        if (first.size() == second.size())
+            return join_same_size_( //
+                first, second,
+                config,                                            //
+                std::forward<first_to_second_at>(first_to_second), //
+                std::forward<second_to_first_at>(second_to_first), //
+                std::forward<executor_at>(executor),               //
+                std::forward<progress_at>(progress));
 
-        if (small.size() > big.size())
-            return join(                                        //
-                small, big, small_to_big, big_to_small, config, //
-                std::forward<executor_at>(executor), std::forward<progress_at>(progress));
+        if (second.size() > first.size())
+            return join( //
+                second, first,
+                config,                                            //
+                std::forward<second_to_first_at>(second_to_first), //
+                std::forward<first_to_second_at>(first_to_second), //
+                std::forward<executor_at>(executor),               //
+                std::forward<progress_at>(progress));
 
         return {};
     }
 
   private:
-    template <typename executor_at, typename progress_at>
-    static join_result_t join_same_size_(             //
-        index_gt& men, index_gt& women,               //
-        label_t* man_to_woman, label_t* woman_to_man, //
-        join_config_t config,                         //
-        executor_at&& executor,                       //
+    template <typename label_to_label_mapping_at, typename executor_at, typename progress_at>
+    static join_result_t join_same_size_(           //
+        index_gt const& men, index_gt const& women, //
+        join_config_t config,                       //
+        label_to_label_mapping_at&& man_to_woman,   //
+        label_to_label_mapping_at&& woman_to_man,   //
+        executor_at&& executor,                     //
         progress_at&& progress) noexcept {
+
+        join_result_t result;
+        if (&men == &women)
+            return result.failed("Can't join with itself, consider copying");
 
         using proposals_count_t = std::uint16_t;
         using ids_allocator_t = typename allocator_traits_t::template rebind_alloc<id_t>;
@@ -2571,24 +2599,39 @@ class index_gt {
         ring_gt<id_t, ids_allocator_t> free_men;
         free_men.resize(men.size());
         for (std::size_t i = 0; i != men.size(); ++i)
-            free_men.push(static_cast<std::size_t>(i));
+            free_men.push(static_cast<id_t>(i));
 
         // We are gonna need some temporary memory.
         proposals_count_t* proposal_counts = (proposals_count_t*)alloc.allocate(sizeof(proposals_count_t) * men.size());
         id_t* man_to_woman_ids = (id_t*)alloc.allocate(sizeof(id_t) * men.size());
         id_t* woman_to_man_ids = (id_t*)alloc.allocate(sizeof(id_t) * women.size());
         id_t missing_id;
-        std::memset(&missing_id, 0xFF, sizeof(id_t));
-        std::memset(man_to_woman_ids, 0xFF, sizeof(id_t) * men.size());
-        std::memset(woman_to_man_ids, 0xFF, sizeof(id_t) * women.size());
+        std::memset((void*)&missing_id, 0xFF, sizeof(id_t));
+        std::memset((void*)man_to_woman_ids, 0xFF, sizeof(id_t) * men.size());
+        std::memset((void*)woman_to_man_ids, 0xFF, sizeof(id_t) * women.size());
         std::memset(proposal_counts, 0, sizeof(proposals_count_t) * men.size());
 
-        join_result_t result;
+        // Define locks, to limit concurrent accesses to `man_to_woman_ids` and `woman_to_man_ids`.
+        visits_bitset_t men_locks, women_locks;
+        men_locks.resize(men.size());
+        women_locks.resize(women.size());
+
+        // Accumulate statistics from all the contexts,
+        // to have a baseline to compare with, by the time the `join` is finished.
+        std::size_t old_measurements{};
+        std::size_t old_cycles{};
+        for (std::size_t thread_idx = 0; thread_idx != executor.size(); ++thread_idx) {
+            old_measurements += women.contexts_[thread_idx].measurements_count;
+            old_cycles += women.contexts_[thread_idx].iteration_cycles;
+        }
         std::atomic<std::size_t> rounds{0};
+        std::atomic<std::size_t> engagements{0};
+
         // Concurrently process all the men
         executor.execute_bulk([&](std::size_t thread_idx) {
             context_t& context = women.contexts_[thread_idx];
             search_config_t search_config;
+            search_config.expansion = config.expansion;
             search_config.thread = thread_idx;
             id_t free_man_id;
 
@@ -2599,11 +2642,14 @@ class index_gt {
                 {
                     std::unique_lock<std::mutex> pop_lock(free_men_mutex);
                     if (!free_men.try_pop(free_man_id))
+                        // Primary exit path, we have exhausted the list of candidates
                         break;
                     passed_rounds = ++rounds;
                     total_rounds = passed_rounds + free_men.size();
                 }
                 progress(passed_rounds, total_rounds);
+                while (men_locks.atomic_set(free_man_id))
+                    ;
 
                 node_t free_man = men.node_with_id_(free_man_id);
                 proposals_count_t& free_man_proposal_count = proposal_counts[free_man_id];
@@ -2616,6 +2662,9 @@ class index_gt {
 
                 match_t match = top_preference.back();
                 member_cref_t woman = match.member;
+                while (women_locks.atomic_set(woman.id))
+                    ;
+
                 id_t husband_id = woman_to_man_ids[woman.id];
                 bool woman_is_free = husband_id == missing_id;
                 free_man_proposal_count++;
@@ -2623,15 +2672,21 @@ class index_gt {
                     // Engagement
                     man_to_woman_ids[free_man_id] = woman.id;
                     woman_to_man_ids[woman.id] = free_man_id;
+                    engagements++;
                 } else {
                     distance_t distance_from_husband = context.measure(woman.vector, men.node_with_id_(husband_id));
                     distance_t distance_from_candidate = match.distance;
                     if (distance_from_husband > distance_from_candidate) {
                         // Break-up
+                        while (men_locks.atomic_set(husband_id))
+                            ;
                         man_to_woman_ids[husband_id] = missing_id;
+                        men_locks.atomic_reset(husband_id);
+
                         // New Engagement
                         man_to_woman_ids[free_man_id] = woman.id;
                         woman_to_man_ids[woman.id] = free_man_id;
+                        engagements++;
 
                         std::unique_lock<std::mutex> push_lock(free_men_mutex);
                         free_men.push(husband_id);
@@ -2640,25 +2695,38 @@ class index_gt {
                         free_men.push(free_man_id);
                     }
                 }
+
+                men_locks.atomic_reset(free_man_id);
+                women_locks.atomic_reset(woman.id);
             }
         });
 
         // Export the IDs into labels:
-        for (std::size_t i = 0; i != men.size(); ++i)
-            if (man_to_woman_ids[i] != missing_id)
-                man_to_woman[i] = women.node_with_id_(man_to_woman_ids[i]).label();
-        for (std::size_t i = 0; i != women.size(); ++i)
-            if (woman_to_man_ids[i] != missing_id)
-                woman_to_man[i] = men.node_with_id_(woman_to_man_ids[i]).label();
+        std::size_t intersection_size = 0;
+        for (std::size_t i = 0; i != men.size(); ++i) {
+            if (man_to_woman_ids[i] != missing_id) {
+                label_t man = men.node_with_id_(i).label();
+                label_t woman = women.node_with_id_(man_to_woman_ids[i]).label();
+                man_to_woman[man] = woman;
+                woman_to_man[woman] = man;
+                intersection_size++;
+            }
+        }
 
         // Deallocate memory
         alloc.deallocate((byte_t*)proposal_counts, sizeof(proposals_count_t) * men.size());
         alloc.deallocate((byte_t*)man_to_woman_ids, sizeof(id_t) * men.size());
         alloc.deallocate((byte_t*)woman_to_man_ids, sizeof(id_t) * women.size());
 
-        result.cycles = rounds;
-        result.intersection_size = 0;
-        result.measurements = 0;
+        // Export stats
+        result.engagements = engagements;
+        result.intersection_size = intersection_size;
+        for (std::size_t thread_idx = 0; thread_idx != executor.size(); ++thread_idx) {
+            result.measurements += women.contexts_[thread_idx].measurements_count;
+            result.cycles += women.contexts_[thread_idx].iteration_cycles;
+        }
+        result.measurements -= old_measurements;
+        result.cycles -= old_cycles;
         return result;
     }
 

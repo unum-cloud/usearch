@@ -269,6 +269,7 @@ struct running_stats_printer_t {
 
         last_printed_progress = progress;
         last_printed_time = time_new;
+        this->total = total;
     }
 };
 
@@ -369,14 +370,17 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
     std::vector<label_t> woman_to_man(dataset.vectors_count());
     std::size_t join_attempts = 0;
     {
+        index_at& men = index;
+        index_at women = index.copy().index;
         std::fill(man_to_woman.begin(), man_to_woman.end(), missing_label);
         std::fill(woman_to_man.begin(), woman_to_man.end(), missing_label);
         {
-            executor_default_t executor{index.limits().threads()};
+            executor_default_t executor(index.limits().threads());
             running_stats_printer_t printer{1, "Join"};
-            join_result_t result = index_at::join(                      //
-                index, index, man_to_woman.data(), woman_to_man.data(), //
-                join_config_t{executor.size()}, executor, [&](std::size_t progress, std::size_t total) {
+            join_result_t result = index_at::join(          //
+                men, women, join_config_t{executor.size()}, //
+                man_to_woman.data(), woman_to_man.data(),   //
+                executor, [&](std::size_t progress, std::size_t total) {
                     if (progress % 1000 == 0)
                         printer.print(progress, total);
                 });
@@ -385,13 +389,13 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
     }
     // Evaluate join quality
     std::size_t recall_join = 0, unmatched_count = 0;
-    for (std::size_t i = 0; i != dataset.vectors_count(); ++i) {
+    for (std::size_t i = 0; i != index.size(); ++i) {
         recall_join += man_to_woman[i] == i;
         unmatched_count += man_to_woman[i] == missing_label;
     }
-    std::printf("Recall Joins %.2f %%\n", recall_join * 100.f / dataset.vectors_count());
-    std::printf("Unmatched %.2f %% (%zu items)\n", unmatched_count * 100.f / dataset.vectors_count(), unmatched_count);
-    std::printf("Proposals %.2f / man (%zu total)\n", join_attempts * 1.f / dataset.vectors_count(), join_attempts);
+    std::printf("Recall Joins %.2f %%\n", recall_join * 100.f / index.size());
+    std::printf("Unmatched %.2f %% (%zu items)\n", unmatched_count * 100.f / index.size(), unmatched_count);
+    std::printf("Proposals %.2f / man (%zu total)\n", join_attempts * 1.f / index.size(), join_attempts);
 
     // Paginate
     std::vector<vector_id_t> hints(dataset.queries_count());
