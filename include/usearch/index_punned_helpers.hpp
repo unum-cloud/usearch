@@ -356,15 +356,14 @@ class executor_openmp_t {
     template <typename thread_aware_function_at>
     void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
 #pragma omp parallel for schedule(dynamic)
-        for (std::size_t i = 0; i < tasks; ++i)
+        for (std::size_t i = 0; i != tasks; ++i)
             thread_aware_function(omp_get_thread_num(), i);
     }
 
     template <typename thread_aware_function_at>
     void execute_bulk(thread_aware_function_at&& thread_aware_function) noexcept(false) {
-#pragma omp parallel for
-        for (std::size_t i = 0; i != size(); ++i)
-            thread_aware_function(omp_get_thread_num());
+#pragma omp parallel
+        { thread_aware_function(omp_get_thread_num()); }
     }
 };
 
@@ -468,6 +467,12 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
         std::swap(last_arena_, other.last_arena_);
         std::swap(last_usage_, other.last_usage_);
         std::swap(last_capacity_, other.last_capacity_);
+        return *this;
+    }
+
+    memory_mapping_allocator_gt(memory_mapping_allocator_gt const&) noexcept {}
+    memory_mapping_allocator_gt& operator=(memory_mapping_allocator_gt const&) noexcept {
+        reset();
         return *this;
     }
 

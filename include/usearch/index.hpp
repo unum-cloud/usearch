@@ -258,10 +258,13 @@ template <typename scalar_at> class span_gt {
     std::size_t size_;
 
   public:
-    span_gt(scalar_at* begin, scalar_at const* end) noexcept : data_(begin), size_(end - begin) {}
+    span_gt() noexcept : data_(nullptr), size_(0u) {}
+    span_gt(scalar_at* begin, scalar_at* end) noexcept : data_(begin), size_(end - begin) {}
     span_gt(scalar_at* begin, std::size_t size) noexcept : data_(begin), size_(size) {}
     scalar_at* data() const noexcept { return data_; }
     std::size_t size() const noexcept { return size_; }
+    scalar_at* begin() const noexcept { return data_; }
+    scalar_at* end() const noexcept { return data_ + size_; }
     operator scalar_at*() const noexcept { return data(); }
 };
 
@@ -617,8 +620,8 @@ template <typename result_at> struct expected_gt {
     }
     result_at const& operator*() const noexcept { return result; }
     explicit operator bool() const noexcept { return !error; }
-    expected_gt failed(char const* message) noexcept {
-        error = message;
+    expected_gt failed(error_t message) noexcept {
+        error = std::move(message);
         return std::move(*this);
     }
 };
@@ -1206,6 +1209,10 @@ struct search_config_t {
     bool exact = false;
 };
 
+struct copy_config_t {
+    bool copy_vectors = true;
+};
+
 struct join_config_t {
     std::size_t max_proposals = 10;
 };
@@ -1354,7 +1361,7 @@ struct dummy_predicate_t {
 };
 
 struct dummy_progress_t {
-    constexpr void operator()(std::size_t progress, std::size_t total) const noexcept {}
+    constexpr void operator()(std::size_t /*progress*/, std::size_t /*total*/) const noexcept {}
 };
 
 struct dummy_executor_t {
@@ -1717,6 +1724,35 @@ class index_gt {
         return *this;
     }
 
+    struct copy_result_t {
+        error_t error;
+        index_gt index;
+
+        explicit operator bool() const noexcept { return !error; }
+        copy_result_t failed(error_t message) noexcept {
+            error = std::move(message);
+            return std::move(*this);
+        }
+    };
+
+    copy_result_t copy(copy_config_t config = {}) const noexcept {
+        copy_result_t result;
+        index_gt& other = result.index;
+        other = index_gt(config_, metric_, allocator_, point_allocator_);
+        if (!other.reserve(limits_))
+            return result.failed("Failed to reserve the contexts");
+
+        // Now all is left - is to allocate new `node_t` instances and populate
+        // the `other.nodes_` array into it.
+        for (std::size_t i = 0; i != size_; ++i)
+            other.nodes_[i] = other.node_make_copy_(node_bytes_split_(nodes_[i]));
+
+        other.size_ = size_.load();
+        other.max_level_ = max_level_;
+        other.entry_id_ = entry_id_;
+        return result;
+    }
+
     member_citerator_t cbegin() const noexcept { return {this, 0}; }
     member_citerator_t cend() const noexcept { return {this, size()}; }
     member_citerator_t begin() const noexcept { return {this, 0}; }
@@ -1873,8 +1909,8 @@ class index_gt {
         id_t id{};
 
         explicit operator bool() const noexcept { return !error; }
-        add_result_t failed(char const* message) noexcept {
-            error = message;
+        add_result_t failed(error_t message) noexcept {
+            error = std::move(message);
             return std::move(*this);
         }
     };
@@ -1906,8 +1942,8 @@ class index_gt {
         inline search_result_t& operator=(search_result_t&&) = default;
 
         explicit operator bool() const noexcept { return !error; }
-        search_result_t failed(char const* message) noexcept {
-            error = message;
+        search_result_t failed(error_t message) noexcept {
+            error = std::move(message);
             return std::move(*this);
         }
 
@@ -1982,7 +2018,7 @@ class index_gt {
             new_level_lock.unlock();
 
         // Allocate the neighbors
-        node_t node = node_malloc_(label, vector, target_level, config.store_vector);
+        node_t node = node_make_(label, vector, target_level, config.store_vector);
         if (!node)
             return result.failed("Out of memory!");
         std::size_t old_size = size_.fetch_add(1);
@@ -2195,8 +2231,8 @@ class index_gt {
         error_t error;
 
         explicit operator bool() const noexcept { return !error; }
-        serialization_result_t failed(char const* message) noexcept {
-            error = message;
+        serialization_result_t failed(error_t message) noexcept {
+            error = std::move(message);
             return std::move(*this);
         }
     };
@@ -2354,7 +2390,10 @@ class index_gt {
                 return result;
 
             std::size_t node_bytes = node_bytes_(dim, level);
-            node_t node = node_malloc_(label, {nullptr, dim}, level, true);
+            node_t node = node_malloc_(dim, level);
+            node.label(label);
+            node.dim(dim);
+            node.level(level);
             read_chunk(node.tape() + node_head_bytes_(), node_bytes - node_head_bytes_());
             if (result.error)
                 return result;
@@ -2652,13 +2691,64 @@ class index_gt {
         return node_head_bytes_() + pre_.neighbors_base_bytes + pre_.neighbors_bytes * level + sizeof(scalar_t) * dim;
     }
 
-    inline bool node_stored_(node_t node) const noexcept {
+    struct node_bytes_split_t {
+        span_gt<byte_t> tape{};
+        span_gt<byte_t> vector{};
+
+        std::size_t memory_usage() const noexcept { return tape.size() + vector.size(); }
+        bool colocated() const noexcept { return tape.end() == vector.begin(); }
+        operator node_t() const noexcept { return node_t{tape.begin(), reinterpret_cast<scalar_t*>(vector.begin())}; }
+    };
+
+    inline node_bytes_split_t node_bytes_split_(node_t node) const noexcept {
         std::size_t levels_bytes = pre_.neighbors_base_bytes + pre_.neighbors_bytes * node.level();
-        return (node.tape() + node_head_bytes_() + levels_bytes) == (byte_t*)node.vector();
+        std::size_t bytes_in_tape = node_head_bytes_() + levels_bytes;
+        return {{node.tape(), bytes_in_tape}, {(byte_t*)node.vector(), node_vector_bytes_(node)}};
     }
 
     inline std::size_t node_vector_bytes_(dim_t dim) const noexcept { return dim * sizeof(scalar_t); }
     inline std::size_t node_vector_bytes_(node_t node) const noexcept { return node_vector_bytes_(node.dim()); }
+
+    node_bytes_split_t node_malloc_(dim_t dims_to_store, level_t level) noexcept {
+
+        std::size_t vector_bytes = node_vector_bytes_(dims_to_store);
+        std::size_t node_bytes = node_bytes_(dims_to_store, level);
+        std::size_t non_vector_bytes = node_bytes - vector_bytes;
+
+        byte_t* data = (byte_t*)point_allocator_.allocate(node_bytes);
+        if (!data)
+            return node_bytes_split_t{};
+        return {{data, non_vector_bytes}, {data + non_vector_bytes, vector_bytes}};
+    }
+
+    node_t node_make_(label_t label, vector_view_t vector, level_t level, bool store_vector) noexcept {
+        node_bytes_split_t node_bytes = node_malloc_(vector.size() * store_vector, level);
+        if (store_vector) {
+            std::memset(node_bytes.tape.data(), 0, node_bytes.tape.size());
+            std::memcpy(node_bytes.vector.data(), vector.data(), node_bytes.vector.size());
+        } else {
+            std::memset(node_bytes.tape.data(), 0, node_bytes.memory_usage());
+        }
+        node_t node = node_bytes;
+        node.label(label);
+        node.dim(static_cast<dim_t>(vector.size()));
+        node.level(level);
+        return node;
+    }
+
+    node_t node_make_copy_(node_bytes_split_t old_bytes) noexcept {
+        if (old_bytes.colocated()) {
+            byte_t* data = (byte_t*)point_allocator_.allocate(old_bytes.memory_usage());
+            std::memcpy(data, old_bytes.tape.data(), old_bytes.memory_usage());
+            return node_t{data, reinterpret_cast<scalar_t*>(data + old_bytes.tape.size())};
+        } else {
+            node_t old_node = old_bytes;
+            node_bytes_split_t node_bytes = node_malloc_(old_node.vector_view().size(), old_node.level());
+            std::memcpy(node_bytes.tape.data(), old_bytes.tape.data(), old_bytes.tape.size());
+            std::memcpy(node_bytes.vector.data(), old_bytes.vector.data(), old_bytes.vector.size());
+            return node_bytes;
+        }
+    }
 
     void node_free_(std::size_t id) noexcept {
 
@@ -2666,35 +2756,9 @@ class index_gt {
             return;
 
         node_t& node = nodes_[id];
-        std::size_t node_bytes = node_bytes_(node) - node_vector_bytes_(node) * !node_stored_(node);
+        std::size_t node_bytes = node_bytes_(node) - node_vector_bytes_(node) * !node_bytes_split_(node).colocated();
         point_allocator_.deallocate(node.tape(), node_bytes);
         node = node_t{};
-    }
-
-    node_t node_malloc_(label_t label, vector_view_t vector, level_t level, bool store_vector) noexcept {
-
-        std::size_t dim = vector.size();
-        std::size_t stored_vector_bytes = node_vector_bytes_(static_cast<dim_t>(dim)) * std::size_t(store_vector);
-        std::size_t node_bytes = node_bytes_(static_cast<dim_t>(dim), level) -
-                                 node_vector_bytes_(static_cast<dim_t>(dim)) * std::size_t(!store_vector);
-
-        byte_t* data = (byte_t*)point_allocator_.allocate(node_bytes);
-        if (!data)
-            return {};
-
-        std::memset(data, 0, node_bytes);
-        if (vector.data())
-            std::memcpy(data + node_bytes - stored_vector_bytes, vector.data(), stored_vector_bytes);
-
-        scalar_t* scalars = store_vector //
-                                ? (scalar_t*)(data + node_bytes - stored_vector_bytes)
-                                : (scalar_t*)(vector.data());
-
-        node_t node{data, scalars};
-        node.label(label);
-        node.dim(static_cast<dim_t>(dim));
-        node.level(level);
-        return node;
     }
 
     inline node_t node_with_id_(std::size_t idx) const noexcept { return nodes_[idx]; }

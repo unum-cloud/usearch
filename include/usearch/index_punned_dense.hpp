@@ -327,20 +327,50 @@ class index_punned_dense_gt {
             metric_t(metric), make_casts_(accuracy));
     }
 
-    index_punned_dense_gt fork() const {
-        index_punned_dense_gt result;
+    struct copy_result_t {
+        index_punned_dense_gt index;
+        error_t error;
 
-        result.dimensions_ = dimensions_;
-        result.scalar_words_ = scalar_words_;
-        result.casted_vector_bytes_ = casted_vector_bytes_;
-        result.cast_buffer_ = cast_buffer_;
-        result.casts_ = casts_;
+        explicit operator bool() const noexcept { return !error; }
+        copy_result_t failed(error_t message) noexcept {
+            error = std::move(message);
+            return std::move(*this);
+        }
+    };
 
-        result.root_metric_ = root_metric_;
+    copy_result_t copy(copy_config_t config = {}) const {
+        copy_result_t result = fork();
+        if (!result)
+            return result;
+        auto typed_result = typed_->copy(config);
+        if (!typed_result)
+            return result.failed(std::move(typed_result.error));
+        *result.index.typed_ = std::move(typed_result.index);
+        result.index.lookup_table_ = lookup_table_;
+        return result;
+    }
+
+    copy_result_t fork() const {
+        copy_result_t result;
+        index_punned_dense_gt& other = result.index;
+
+        other.dimensions_ = dimensions_;
+        other.scalar_words_ = scalar_words_;
+        other.expansion_add_ = expansion_add_;
+        other.expansion_search_ = expansion_search_;
+        other.casted_vector_bytes_ = casted_vector_bytes_;
+        other.cast_buffer_ = cast_buffer_;
+        other.casts_ = casts_;
+
+        other.root_metric_ = root_metric_;
+        other.available_threads_ = available_threads_;
+
         index_t* raw = index_allocator_t{}.allocate(1);
-        new (raw) index_t(config(), root_metric_);
-        result.typed_ = raw;
+        if (!raw)
+            return result.failed("Can't allocate the index");
 
+        new (raw) index_t(config(), root_metric_);
+        other.typed_ = raw;
         return result;
     }
 
