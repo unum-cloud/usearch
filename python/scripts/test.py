@@ -127,6 +127,10 @@ def test_index(
     assert len(index) == 1
     assert len(index[42]) == ndim
 
+    index_copy = index.copy()
+    assert len(index_copy) == 1
+    assert len(index_copy[42]) == ndim
+
     # Cleanup
     os.remove("tmp.usearch")
 
@@ -204,6 +208,12 @@ def test_exact_recall(
     found_labels = matches.labels
     for i in range(batch_size):
         assert found_labels[i, 0] == i
+
+    # Match entries aginst themselves
+    index_copy: Index = index.copy()
+    mapping: dict = index.join(index_copy, exact=True)
+    for man, woman in mapping.items():
+        assert man == woman, "Stable marriage failed"
 
 
 @pytest.mark.parametrize("ndim", dimensions)

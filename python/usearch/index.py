@@ -442,8 +442,8 @@ class Index:
         return self._compiled.ndim
 
     @property
-    def metric(self) -> MetricKind:
-        return self._metric_kind
+    def metric(self) -> Union[MetricKind, CompiledMetric]:
+        return self._metric_jit if self._metric_jit else self._metric_kind
 
     @property
     def dtype(self) -> ScalarKind:
@@ -500,6 +500,26 @@ class Index:
 
     def close(self):
         self._compiled.close()
+
+    def copy(self) -> Index:
+        result = Index(
+            ndim=self.ndim,
+            metric=self.metric,
+            dtype=self.dtype,
+            connectivity=self.connectivity,
+            expansion_add=self.expansion_add,
+            expansion_search=self.expansion_search,
+            path=self.path,
+        )
+        result._compiled = self._compiled.copy()
+        return result
+
+    def join(self, other: Index, max_proposals: int = 0, exact: bool = False) -> dict:
+        return self._compiled.join(
+            other=other._compiled,
+            max_proposals=max_proposals,
+            exact=exact,
+        )
 
     @property
     def labels(self) -> np.ndarray:

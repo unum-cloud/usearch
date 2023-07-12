@@ -1214,8 +1214,14 @@ struct copy_config_t {
 };
 
 struct join_config_t {
-    std::size_t max_proposals = 10;
+    /// @brief Controls maximum number of proposals per man during stable marriage.
+    std::size_t max_proposals = 0;
+    /// @brief Hyper-parameter controlling the quality of search.
+    /// Defaults to 16 in FAISS and 10 in hnswlib.
+    /// > It is called `ef` in the paper.
     std::size_t expansion = default_expansion_search();
+    /// @brief Brute-forces exhaustive search over all entries in the index.
+    bool exact = false;
 };
 
 using file_header_t = byte_t[64];
@@ -1362,7 +1368,7 @@ struct dummy_predicate_t {
 };
 
 struct dummy_progress_t {
-    constexpr void operator()(std::size_t /*progress*/, std::size_t /*total*/) const noexcept {}
+    inline void operator()(std::size_t /*progress*/, std::size_t /*total*/) const noexcept {}
 };
 
 struct dummy_executor_t {
@@ -1382,10 +1388,10 @@ struct dummy_executor_t {
 };
 
 struct dummy_label_to_label_mapping_t {
-    struct pseudo_mapping_t {
-        template <typename label_at> pseudo_mapping_t& operator=(label_at const&) noexcept { return *this; }
+    struct member_ref_t {
+        template <typename label_at> member_ref_t& operator=(label_at&&) noexcept { return *this; }
     };
-    template <typename label_at> pseudo_mapping_t operator[](label_at const&) const noexcept { return {}; }
+    template <typename label_at> member_ref_t operator[](label_at&&) const noexcept { return {}; }
 };
 
 /**
@@ -2554,40 +2560,42 @@ class index_gt {
         executor_at&& executor = executor_at{},                      //
         progress_at&& progress = progress_at{}) noexcept {
 
-        if (first.size() == second.size())
-            return join_same_size_( //
-                first, second,
-                config,                                            //
-                std::forward<first_to_second_at>(first_to_second), //
-                std::forward<second_to_first_at>(second_to_first), //
-                std::forward<executor_at>(executor),               //
-                std::forward<progress_at>(progress));
-
-        if (second.size() > first.size())
-            return join( //
-                second, first,
+        if (second.size() < first.size())
+            return join_small_and_big_(                            //
+                second, first,                                     //
                 config,                                            //
                 std::forward<second_to_first_at>(second_to_first), //
                 std::forward<first_to_second_at>(first_to_second), //
                 std::forward<executor_at>(executor),               //
                 std::forward<progress_at>(progress));
-
-        return {};
+        else
+            return join_small_and_big_(                            //
+                first, second,                                     //
+                config,                                            //
+                std::forward<first_to_second_at>(first_to_second), //
+                std::forward<second_to_first_at>(second_to_first), //
+                std::forward<executor_at>(executor),               //
+                std::forward<progress_at>(progress));
     }
 
   private:
-    template <typename label_to_label_mapping_at, typename executor_at, typename progress_at>
-    static join_result_t join_same_size_(           //
+    template <typename first_to_second_at, typename second_to_first_at, typename executor_at, typename progress_at>
+    static join_result_t join_small_and_big_(       //
         index_gt const& men, index_gt const& women, //
         join_config_t config,                       //
-        label_to_label_mapping_at&& man_to_woman,   //
-        label_to_label_mapping_at&& woman_to_man,   //
+        first_to_second_at&& man_to_woman,          //
+        second_to_first_at&& woman_to_man,          //
         executor_at&& executor,                     //
         progress_at&& progress) noexcept {
 
         join_result_t result;
+
+        // Sanity checks and argument validation:
         if (&men == &women)
             return result.failed("Can't join with itself, consider copying");
+        if (config.max_proposals == 0)
+            config.max_proposals = std::log(men.size()) + executor.size();
+        config.max_proposals = (std::min)(men.size(), config.max_proposals);
 
         using proposals_count_t = std::uint16_t;
         using ids_allocator_t = typename allocator_traits_t::template rebind_alloc<id_t>;
@@ -2605,6 +2613,9 @@ class index_gt {
         proposals_count_t* proposal_counts = (proposals_count_t*)alloc.allocate(sizeof(proposals_count_t) * men.size());
         id_t* man_to_woman_ids = (id_t*)alloc.allocate(sizeof(id_t) * men.size());
         id_t* woman_to_man_ids = (id_t*)alloc.allocate(sizeof(id_t) * women.size());
+        if (!proposal_counts || !man_to_woman_ids || !woman_to_man_ids)
+            return result.failed("Can't temporary mappings");
+
         id_t missing_id;
         std::memset((void*)&missing_id, 0xFF, sizeof(id_t));
         std::memset((void*)man_to_woman_ids, 0xFF, sizeof(id_t) * men.size());
@@ -2613,8 +2624,8 @@ class index_gt {
 
         // Define locks, to limit concurrent accesses to `man_to_woman_ids` and `woman_to_man_ids`.
         visits_bitset_t men_locks, women_locks;
-        men_locks.resize(men.size());
-        women_locks.resize(women.size());
+        if (!men_locks.resize(men.size()) || !women_locks.resize(women.size()))
+            return result.failed("Can't allocate locks");
 
         // Accumulate statistics from all the contexts,
         // to have a baseline to compare with, by the time the `join` is finished.
@@ -2632,6 +2643,7 @@ class index_gt {
             context_t& context = women.contexts_[thread_idx];
             search_config_t search_config;
             search_config.expansion = config.expansion;
+            search_config.exact = config.exact;
             search_config.thread = thread_idx;
             id_t free_man_id;
 
@@ -2652,22 +2664,24 @@ class index_gt {
                     ;
 
                 node_t free_man = men.node_with_id_(free_man_id);
-                proposals_count_t& free_man_proposal_count = proposal_counts[free_man_id];
-                if (free_man_proposal_count >= config.max_proposals)
+                proposals_count_t& free_man_proposals = proposal_counts[free_man_id];
+                if (free_man_proposals >= config.max_proposals)
                     continue;
 
                 // Find the closest woman, to whom this man hasn't proposed yet.
-                search_result_t top_preference = women.search( //
-                    free_man.vector_view(), free_man_proposal_count + 1, search_config);
+                free_man_proposals++;
+                search_result_t candidates = women.search(free_man.vector_view(), free_man_proposals, search_config);
+                if (!candidates) {
+                    // TODO:
+                }
 
-                match_t match = top_preference.back();
+                match_t match = candidates.back();
                 member_cref_t woman = match.member;
                 while (women_locks.atomic_set(woman.id))
                     ;
 
                 id_t husband_id = woman_to_man_ids[woman.id];
                 bool woman_is_free = husband_id == missing_id;
-                free_man_proposal_count++;
                 if (woman_is_free) {
                     // Engagement
                     man_to_woman_ids[free_man_id] = woman.id;
@@ -2704,9 +2718,10 @@ class index_gt {
         // Export the IDs into labels:
         std::size_t intersection_size = 0;
         for (std::size_t i = 0; i != men.size(); ++i) {
-            if (man_to_woman_ids[i] != missing_id) {
+            id_t woman_id = man_to_woman_ids[i];
+            if (woman_id != missing_id) {
                 label_t man = men.node_with_id_(i).label();
-                label_t woman = women.node_with_id_(man_to_woman_ids[i]).label();
+                label_t woman = women.node_with_id_(woman_id).label();
                 man_to_woman[man] = woman;
                 woman_to_man[woman] = man;
                 intersection_size++;
@@ -2759,9 +2774,13 @@ class index_gt {
         return node_head_bytes_() + pre_.neighbors_base_bytes + pre_.neighbors_bytes * level + sizeof(scalar_t) * dim;
     }
 
+    using span_bytes_t = span_gt<byte_t>;
     struct node_bytes_split_t {
-        span_gt<byte_t> tape{};
-        span_gt<byte_t> vector{};
+        span_bytes_t tape{};
+        span_bytes_t vector{};
+
+        node_bytes_split_t() {}
+        node_bytes_split_t(span_bytes_t tape, span_bytes_t vector) noexcept : tape(tape), vector(vector) {}
 
         std::size_t memory_usage() const noexcept { return tape.size() + vector.size(); }
         bool colocated() const noexcept { return tape.end() == vector.begin(); }
