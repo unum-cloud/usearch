@@ -18,12 +18,12 @@ from usearch.io import load_matrix
 from usearch.eval import measure_seconds
 
 k = 10
-exact = True
+exact = False
 batch_size = 1024 * 4
-max_elements = 10000
+max_elements = 1000000
 
-a_name = "cc_3M/uform_english_texts"
-b_name = "cc_3M/uform_english_images"
+a_name = "cc_3M/texts"
+b_name = "cc_3M/images"
 
 a_mat = load_matrix(f"datasets/{a_name}.fbin", view=True)
 b_mat = load_matrix(f"datasets/{b_name}.fbin", view=True)
