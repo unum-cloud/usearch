@@ -5,6 +5,7 @@ from __future__ import annotations
 # Python tooling, linters, and static analyzers. It also embeds JIT
 # into the primary `Index` class, connecting USearch with Numba.
 import os
+import math
 from typing import Optional, Union, NamedTuple, List, Iterable
 
 import numpy as np
@@ -140,6 +141,13 @@ class Matches(NamedTuple):
     def recall_first(self, expected: np.ndarray) -> float:
         best_matches = self.labels if not self.is_multiple else self.labels[:, 0]
         return np.sum(best_matches == expected) / len(expected)
+
+    def recall(self, expected: np.ndarray) -> float:
+        assert len(expected) == self.batch_size
+        recall = 0
+        for i in range(self.batch_size):
+            recall += expected[i] in self.labels[i]
+        return recall / len(expected)
 
     def __repr__(self) -> str:
         return (
@@ -347,6 +355,10 @@ class Index:
         count_labels = len(labels) if isinstance(labels, Iterable) else 1
         assert count_labels == count_vectors
 
+        # If logging is requested, and batch size is undefined, set it to grow 1% at a time:
+        if log and batch_size == 0:
+            batch_size = int(math.ceil(count_vectors / 100))
+
         # Split into batches and log progress, if needed
         if batch_size:
             labels = [
@@ -406,6 +418,9 @@ class Index:
         assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
         count_vectors = vectors.shape[0] if vectors.ndim == 2 else 1
 
+        if log and batch_size == 0:
+            batch_size = int(math.ceil(count_vectors / 100))
+
         if batch_size:
             tasks = [
                 vectors[start_row : start_row + batch_size, :]
@@ -434,7 +449,7 @@ class Index:
             return Matches(
                 labels=np.vstack([m.labels for m in tasks_matches]),
                 distances=np.vstack([m.distances for m in tasks_matches]),
-                counts=np.vstack([m.counts for m in tasks_matches]),
+                counts=np.concatenate([m.counts for m in tasks_matches], axis=None),
             )
 
         else:

@@ -47,7 +47,7 @@ def random_vectors(
         return x
 
 
-def recall_members(index: Index, *args, **kwargs) -> float:
+def recall_members(index: Index, **kwargs) -> float:
     """Simplest benchmark for a quality of search, which queries every
     existing member of the index, to make sure approximate search finds
     the point itself.
@@ -59,8 +59,10 @@ def recall_members(index: Index, *args, **kwargs) -> float:
     """
     if len(index) == 0:
         return 0
+    if "k" not in kwargs:
+        kwargs["k"] = 1
 
-    matches: Matches = index.search(index.vectors, 1, *args, **kwargs)
+    matches: Matches = index.search(index.vectors, **kwargs)
     return matches.recall_first(index.labels)
 
 

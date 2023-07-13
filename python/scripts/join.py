@@ -1,76 +1,151 @@
 """
-rm -rf datasets/cc_3M/images.usearch datasets/cc_3M/texts.usearch
+wget -nc https://huggingface.co/datasets/unum-cloud/ann-cc-3m/resolve/main/clip_images.fbin -P datasets/cc_3M/
+wget -nc https://huggingface.co/datasets/unum-cloud/ann-cc-3m/resolve/main/clip_texts.fbin -P datasets/cc_3M/
+wget -nc https://huggingface.co/datasets/unum-cloud/ann-cc-3m/resolve/main/images.fbin -P datasets/cc_3M/
+wget -nc https://huggingface.co/datasets/unum-cloud/ann-cc-3m/resolve/main/texts.fbin -P datasets/cc_3M/
+wget -nc https://huggingface.co/datasets/unum-cloud/ann-cc-3m/resolve/main/uform_english_images.fbin -P datasets/cc_3M/
+wget -nc https://huggingface.co/datasets/unum-cloud/ann-cc-3m/resolve/main/uform_english_texts.fbin -P datasets/cc_3M/
+rm -rf datasets/cc_3M/*.usearch
 python python/scripts/join.py
 """
 from numpy import dot
 from numpy.linalg import norm
+from tqdm import tqdm
+from simsimd import cos_f32x4_neon, to_int
 
-
-from usearch.index import Index, MetricKind
+from usearch.index import Index, MetricKind, CompiledMetric, MetricSignature
 from usearch.io import load_matrix
-from usearch.eval import measure_seconds, recall_members
+from usearch.eval import measure_seconds
 
-a_mat = load_matrix("datasets/cc_3M/texts.fbin", view=True)
-b_mat = load_matrix("datasets/cc_3M/images.fbin", view=True)
+k = 10
+exact = True
+batch_size = 1024 * 4
+max_elements = 10000
+
+a_name = "cc_3M/uform_english_texts"
+b_name = "cc_3M/uform_english_images"
+
+a_mat = load_matrix(f"datasets/{a_name}.fbin", view=True)
+b_mat = load_matrix(f"datasets/{b_name}.fbin", view=True)
+
+a_mat = a_mat[:max_elements]
+b_mat = b_mat[:max_elements]
 
 print(f"Loaded two datasets of shape: {a_mat.shape}, {b_mat.shape}")
+print("--------------------------------------")
+print("---------------Indexing---------------")
+print("--------------------------------------")
+
+metric = CompiledMetric(
+    pointer=to_int(cos_f32x4_neon),
+    kind=MetricKind.Cos,
+    signature=MetricSignature.ArrayArraySize,
+)
 
 a = Index(
     a_mat.shape[1],
-    MetricKind.Cos,
-    path="datasets/cc_3M/texts.usearch",
+    metric=metric,
+    path=f"datasets/{a_name}.f32.usearch",
     dtype="f32",
 )
 b = Index(
     b_mat.shape[1],
-    MetricKind.Cos,
-    path="datasets/cc_3M/images.usearch",
+    metric=metric,
+    path=f"datasets/{b_name}.f32.usearch",
     dtype="f32",
 )
 
-if len(a) == 0:
-    a.add(None, a_mat, log=True, batch_size=1024 * 32)
+if len(a) != a_mat.shape[0]:
+    a.clear()
+    a.add(None, a_mat, log=True, batch_size=batch_size)
     a.save()
 
-if len(b) == 0:
-    b.add(None, b_mat, log=True, batch_size=1024 * 32)
+if len(b) != b_mat.shape[0]:
+    b.clear()
+    b.add(None, b_mat, log=True, batch_size=batch_size)
     b.save()
 
-print(f"Loaded two indexes of size: {len(a):,}, {len(b):,}")
 
-min_elements = min(len(a), len(b))
-mean_similarity = 0.0
-mean_recovered_similarity = 0.0
-
-for i in range(min_elements):
-    a_vec = a_mat[i]
-    b_vec = b_mat[i]
-    cos_similarity = dot(a_vec, b_vec) / (norm(a_vec) * norm(b_vec))
-    mean_similarity += cos_similarity
-
-    a_vec = a[i]
-    b_vec = b[i]
-    cos_similarity = dot(a_vec, b_vec) / (norm(a_vec) * norm(b_vec))
-    mean_recovered_similarity += cos_similarity
-
-
-mean_similarity /= min_elements
-mean_recovered_similarity /= min_elements
 print(
-    f"Average vector similarity is {mean_similarity:.2f} in original dataset, and {mean_recovered_similarity:.2f} in recovered state in index"
+    f"Loaded two indexes of size: {len(a):,} for {a_name} and {len(b):,} for {b_name}"
 )
+min_elements = min(len(a), len(b))
 
-secs, a_self_recall = measure_seconds(lambda: recall_members(a))
-print(f"Self-recall of first index is {a_self_recall:.2f}, computed in {secs:.2f}s")
+run_diagnostics = input("Would you like to run diagnostics? [Y/n]: ")
+if len(run_diagnostics) == 0 or run_diagnostics.lower() == "y":
+    print("--------------------------------------")
+    print("-------------Diagnostics--------------")
+    print("--------------------------------------")
 
-secs, b_self_recall = measure_seconds(lambda: recall_members(b))
-print(f"Self-recall of first index is {b_self_recall:.2f}, computed in {secs:.2f}s")
+    mean_similarity = 0.0
+    mean_recovered_similarity = 0.0
 
-secs, bimapping = measure_seconds(lambda: a.join(b, max_proposals=20))
-intersection_size = len(bimapping)
+    for i in tqdm(range(min_elements), desc="Pairwise Similarity"):
+        a_vec = a_mat[i]
+        b_vec = b_mat[i]
+        cos_similarity = dot(a_vec, b_vec) / (norm(a_vec) * norm(b_vec))
+        mean_similarity += cos_similarity
+
+        a_vec = a[i]
+        b_vec = b[i]
+        cos_similarity = dot(a_vec, b_vec) / (norm(a_vec) * norm(b_vec))
+        mean_recovered_similarity += cos_similarity
+
+    mean_similarity /= min_elements
+    mean_recovered_similarity /= min_elements
+    print(
+        f"Average vector similarity is {mean_similarity:.4f} in original dataset, "
+        f"and {mean_recovered_similarity:.4f} in recovered state in index"
+    )
+
+    dt = measure_seconds
+    args = dict(
+        k=k,
+        batch_size=batch_size,
+        log=True,
+        exact=exact,
+    )
+
+    secs, a_self_recall = dt(lambda: a.search(a.vectors, **args).recall(a.labels))
+    print(
+        "Self-recall @{} of {} index: {:.2f}%, took {:.2f}s".format(
+            k, a_name, a_self_recall * 100, secs
+        )
+    )
+
+    secs, b_self_recall = dt(lambda: b.search(b.vectors, **args).recall(b.labels))
+    print(
+        "Self-recall @{} of {} index: {:.2f}%, took {:.2f}s".format(
+            k, b_name, b_self_recall * 100, secs
+        )
+    )
+
+    secs, ab_recall = dt(lambda: b.search(a.vectors, **args).recall(b.labels))
+    print(
+        "Cross-recall @{} of {} in {}: {:.2f}%, took {:.2f}s".format(
+            k, a_name, b_name, ab_recall * 100, secs
+        )
+    )
+
+    secs, ba_recall = dt(lambda: a.search(b.vectors, **args).recall(a.labels))
+    print(
+        "Cross-recall @{} of {} in {}: {:.2f}%, took {:.2f}s".format(
+            k, b_name, a_name, ba_recall * 100, secs
+        )
+    )
+
+
+print("--------------------------------------")
+print("-----------------Join-----------------")
+print("--------------------------------------")
+
+secs, bimapping = measure_seconds(lambda: a.join(b, max_proposals=100))
+mapping_size = len(bimapping)
 recall = 0
 for i, j in bimapping.items():
     recall += i == j
 
 recall *= 100.0 / min_elements
-print(f"Took {secs:.2f}s to find {intersection_size:,} intersections: {recall:.2f} %")
+print(
+    f"Took {secs:.2f}s to find {mapping_size:,} pairings with {recall:.2f}% being exact"
+)
