@@ -401,13 +401,50 @@ class Index:
         :return: Approximate matches for one or more queries
         :rtype: Matches
         """
-        tuple_ = self._compiled.search(
-            vectors,
-            k,
-            exact=exact,
-            threads=threads,
-        )
-        return Matches(*tuple_)
+
+        assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
+        assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
+        count_vectors = vectors.shape[0] if vectors.ndim == 2 else 1
+
+        if batch_size:
+            tasks = [
+                vectors[start_row : start_row + batch_size, :]
+                for start_row in range(0, count_vectors, batch_size)
+            ]
+            tasks_matches = []
+            name = log if isinstance(log, str) else "Search"
+            pbar = tqdm(
+                tasks,
+                desc=name,
+                total=count_vectors,
+                unit="Vector",
+                disable=log is False,
+            )
+            for vectors in tasks:
+                tuple_ = self._compiled.search(
+                    vectors,
+                    k,
+                    exact=exact,
+                    threads=threads,
+                )
+                tasks_matches.append(Matches(*tuple_))
+                pbar.update(vectors.shape[0])
+
+            pbar.close()
+            return Matches(
+                labels=np.vstack([m.labels for m in tasks_matches]),
+                distances=np.vstack([m.distances for m in tasks_matches]),
+                counts=np.vstack([m.counts for m in tasks_matches]),
+            )
+
+        else:
+            tuple_ = self._compiled.search(
+                vectors,
+                k,
+                exact=exact,
+                threads=threads,
+            )
+            return Matches(*tuple_)
 
     @property
     def specs(self) -> dict:
