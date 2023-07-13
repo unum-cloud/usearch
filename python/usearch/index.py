@@ -11,7 +11,7 @@ from typing import Optional, Union, NamedTuple, List, Iterable
 import numpy as np
 from tqdm import tqdm
 
-from usearch.compiled import Index as _CompiledIndex, IndexMetadata
+from usearch.compiled import Index as _CompiledIndex, IndexMetadata, IndexStats
 from usearch.compiled import SparseIndex as _CompiledSetsIndex
 
 from usearch.compiled import MetricKind, ScalarKind, MetricSignature
@@ -602,3 +602,38 @@ class Index:
         vector = self._compiled.__getitem__(label, get_dtype)
         view_dtype = _to_numpy_dtype(dtype)
         return None if vector is None else vector.view(view_dtype)
+
+    def remove(self, label: int):
+        pass
+
+    @property
+    def max_level(self) -> int:
+        return self._compiled.max_level
+
+    @property
+    def levels_stats(self) -> IndexStats:
+        return self._compiled.levels_stats
+
+    def level_stats(self, level: int) -> IndexStats:
+        return self._compiled.level_stats(level)
+
+    def __repr__(self) -> str:
+        return f"usearch.index.Index({self.dtype} x {self.ndim}, {self.metric}, expansion: {self.expansion_add} & {self.expansion_search}, {len(self)} vectors across {self.max_level+1} levels)"
+
+    def _repr_pretty_(self) -> str:
+        level_stats = [f"--- {i}. {self.level_stats(i)} nodes" for i in self.max_level]
+        return "\n".join(
+            [
+                "usearch.index.Index",
+                "- config" f"-- data type: {self.dtype}",
+                f"-- dimensions: {self.ndim}",
+                f"-- metric: {self.metric}",
+                f"-- expansion on addition:{self.expansion_add} candidates",
+                f"-- expansion on search: {self.expansion_search} candidates",
+                "- state",
+                f"-- size: {self.size} vectors",
+                f"-- memory usage: {self.memory_usage} bytes",
+                f"-- max level: {self.max_level}",
+                *level_stats,
+            ]
+        )

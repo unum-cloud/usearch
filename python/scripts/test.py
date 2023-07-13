@@ -115,6 +115,11 @@ def test_index(
     assert matches[0] == 42
     assert distances[0] == pytest.approx(0, abs=1e-3)
 
+    assert index.max_level >= 0
+    assert index.levels_stats.nodes >= 1
+    assert index.level_stats(0).nodes == 1
+    assert str(index).startswith("usearch.index.Index")
+
     index.save("tmp.usearch")
     index.clear()
     assert len(index) == 0
@@ -160,6 +165,10 @@ def test_index_batch(
     assert matches.labels.shape[0] == matches.distances.shape[0]
     assert matches.counts.shape[0] == batch_size
     assert np.all(np.sort(index.labels) == np.sort(labels))
+
+    assert index.max_level >= 0  # TODO: This should be 1
+    assert index.levels_stats.nodes >= batch_size
+    assert index.level_stats(0).nodes == batch_size
 
     index.save("tmp.usearch")
     index.clear()
