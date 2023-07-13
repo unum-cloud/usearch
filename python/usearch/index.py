@@ -5,12 +5,13 @@ from __future__ import annotations
 # Python tooling, linters, and static analyzers. It also embeds JIT
 # into the primary `Index` class, connecting USearch with Numba.
 import os
+import math
 from typing import Optional, Union, NamedTuple, List, Iterable
 
 import numpy as np
 from tqdm import tqdm
 
-from usearch.compiled import Index as _CompiledIndex, IndexMetadata
+from usearch.compiled import Index as _CompiledIndex, IndexMetadata, IndexStats
 from usearch.compiled import SparseIndex as _CompiledSetsIndex
 
 from usearch.compiled import MetricKind, ScalarKind, MetricSignature
@@ -140,6 +141,13 @@ class Matches(NamedTuple):
     def recall_first(self, expected: np.ndarray) -> float:
         best_matches = self.labels if not self.is_multiple else self.labels[:, 0]
         return np.sum(best_matches == expected) / len(expected)
+
+    def recall(self, expected: np.ndarray) -> float:
+        assert len(expected) == self.batch_size
+        recall = 0
+        for i in range(self.batch_size):
+            recall += expected[i] in self.labels[i]
+        return recall / len(expected)
 
     def __repr__(self) -> str:
         return (
@@ -347,6 +355,10 @@ class Index:
         count_labels = len(labels) if isinstance(labels, Iterable) else 1
         assert count_labels == count_vectors
 
+        # If logging is requested, and batch size is undefined, set it to grow 1% at a time:
+        if log and batch_size == 0:
+            batch_size = int(math.ceil(count_vectors / 100))
+
         # Split into batches and log progress, if needed
         if batch_size:
             labels = [
@@ -401,13 +413,53 @@ class Index:
         :return: Approximate matches for one or more queries
         :rtype: Matches
         """
-        tuple_ = self._compiled.search(
-            vectors,
-            k,
-            exact=exact,
-            threads=threads,
-        )
-        return Matches(*tuple_)
+
+        assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
+        assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
+        count_vectors = vectors.shape[0] if vectors.ndim == 2 else 1
+
+        if log and batch_size == 0:
+            batch_size = int(math.ceil(count_vectors / 100))
+
+        if batch_size:
+            tasks = [
+                vectors[start_row : start_row + batch_size, :]
+                for start_row in range(0, count_vectors, batch_size)
+            ]
+            tasks_matches = []
+            name = log if isinstance(log, str) else "Search"
+            pbar = tqdm(
+                tasks,
+                desc=name,
+                total=count_vectors,
+                unit="Vector",
+                disable=log is False,
+            )
+            for vectors in tasks:
+                tuple_ = self._compiled.search(
+                    vectors,
+                    k,
+                    exact=exact,
+                    threads=threads,
+                )
+                tasks_matches.append(Matches(*tuple_))
+                pbar.update(vectors.shape[0])
+
+            pbar.close()
+            return Matches(
+                labels=np.vstack([m.labels for m in tasks_matches]),
+                distances=np.vstack([m.distances for m in tasks_matches]),
+                counts=np.concatenate([m.counts for m in tasks_matches], axis=None),
+            )
+
+        else:
+            tuple_ = self._compiled.search(
+                vectors,
+                k,
+                exact=exact,
+                threads=threads,
+            )
+            return Matches(*tuple_)
 
     @property
     def specs(self) -> dict:
@@ -550,3 +602,38 @@ class Index:
         vector = self._compiled.__getitem__(label, get_dtype)
         view_dtype = _to_numpy_dtype(dtype)
         return None if vector is None else vector.view(view_dtype)
+
+    def remove(self, label: int):
+        pass
+
+    @property
+    def max_level(self) -> int:
+        return self._compiled.max_level
+
+    @property
+    def levels_stats(self) -> IndexStats:
+        return self._compiled.levels_stats
+
+    def level_stats(self, level: int) -> IndexStats:
+        return self._compiled.level_stats(level)
+
+    def __repr__(self) -> str:
+        return f"usearch.index.Index({self.dtype} x {self.ndim}, {self.metric}, expansion: {self.expansion_add} & {self.expansion_search}, {len(self)} vectors across {self.max_level+1} levels)"
+
+    def _repr_pretty_(self) -> str:
+        level_stats = [f"--- {i}. {self.level_stats(i)} nodes" for i in self.max_level]
+        return "\n".join(
+            [
+                "usearch.index.Index",
+                "- config" f"-- data type: {self.dtype}",
+                f"-- dimensions: {self.ndim}",
+                f"-- metric: {self.metric}",
+                f"-- expansion on addition:{self.expansion_add} candidates",
+                f"-- expansion on search: {self.expansion_search} candidates",
+                "- state",
+                f"-- size: {self.size} vectors",
+                f"-- memory usage: {self.memory_usage} bytes",
+                f"-- max level: {self.max_level}",
+                *level_stats,
+            ]
+        )

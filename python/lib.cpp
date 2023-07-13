@@ -419,6 +419,10 @@ static dense_index_py_t copy_index(dense_index_py_t const& index) {
 template <typename index_at> void save_index(index_at const& index, std::string const& path) { index.save(path.c_str()).error.raise(); }
 template <typename index_at> void load_index(index_at& index, std::string const& path) { index.load(path.c_str()).error.raise(); }
 template <typename index_at> void view_index(index_at& index, std::string const& path) { index.view(path.c_str()).error.raise(); }
+template <typename index_at> void clear_index(index_at& index) { index.clear(); }
+template <typename index_at> std::size_t max_level(index_at const &index) { return index.max_level(); }
+template <typename index_at> typename index_at::stats_t compute_stats(index_at const &index) { return index.stats(); }
+template <typename index_at> typename index_at::stats_t compute_level_stats(index_at const &index, std::size_t level) { return index.stats(level); }
 // clang-format on
 
 template <typename internal_at, typename external_at = internal_at, typename index_at = void>
@@ -684,10 +688,21 @@ PYBIND11_MODULE(compiled, m) {
     i.def("save", &save_index<dense_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
     i.def("load", &load_index<dense_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
     i.def("view", &view_index<dense_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
-    i.def("clear", &dense_index_py_t::clear, py::call_guard<py::gil_scoped_release>());
+    i.def("clear", &clear_index<dense_index_py_t>, py::call_guard<py::gil_scoped_release>());
     i.def("copy", &copy_index, py::call_guard<py::gil_scoped_release>());
     i.def("join", &join_index, py::arg("other"), py::arg("max_proposals") = 0, py::arg("exact") = false,
           py::call_guard<py::gil_scoped_release>());
+
+    using punned_index_stats_t = typename dense_index_py_t::stats_t;
+    auto i_stats = py::class_<punned_index_stats_t>(m, "IndexStats");
+    i_stats.def_readonly("nodes", &punned_index_stats_t::nodes);
+    i_stats.def_readonly("edges", &punned_index_stats_t::edges);
+    i_stats.def_readonly("max_edges", &punned_index_stats_t::max_edges);
+    i_stats.def_readonly("allocated_bytes", &punned_index_stats_t::allocated_bytes);
+
+    i.def_property_readonly("max_level", &max_level<dense_index_py_t>);
+    i.def_property_readonly("levels_stats", &compute_stats<dense_index_py_t>);
+    i.def("level_stats", &compute_level_stats<dense_index_py_t>, py::arg("level"));
 
     auto si = py::class_<sparse_index_py_t>(m, "SparseIndex");
 

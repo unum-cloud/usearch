@@ -117,21 +117,23 @@ OPTIONS
 BigANN benchmark is a good starting point, if you are searching for large collections of high-dimensional vectors.
 Those often come with precomputed ground-truth neighbors, which is handy for recall evaluation.
 
-| Dataset                                 | Scalar Type | Dimensions | Metric |   Size    |
-| :-------------------------------------- | :---------: | :--------: | :----: | :-------: |
-| [Unum UForm Wiki][unum-wiki]            |   float32   |    256     |   IP   |   1 GB    |
-| [Yandex Text-to-Image Sample][unum-t2i] |   float32   |    200     |  Cos   |   1 GB    |
-|                                         |             |            |        |           |
-| [Microsoft SPACEV][spacev]              |    int8     |    100     |   L2   |   93 GB   |
-| [Microsoft Turing-ANNS][turing]         |   float32   |    100     |   L2   |  373 GB   |
-| [Yandex Deep1B][deep]                   |   float32   |     96     |   L2   |  358 GB   |
-| [Yandex Text-to-Image][t2i]             |   float32   |    200     |  Cos   |  750 GB   |
-|                                         |             |            |        |           |
-| [ViT-L/12 LAION][laion]                 |   float32   |    2048    |  Cos   | 2 - 10 TB |
+| Dataset                                    | Scalar Type | Dimensions | Metric |   Size    |
+| :----------------------------------------- | :---------: | :--------: | :----: | :-------: |
+| [Unum UForm Creative Captions][unum-cc-3m] |   float32   |    256     |   IP   |   3 GB    |
+| [Unum UForm Wiki][unum-wiki-1m]            |   float32   |    256     |   IP   |   1 GB    |
+| [Yandex Text-to-Image Sample][unum-t2i]    |   float32   |    200     |  Cos   |   1 GB    |
+|                                            |             |            |        |           |
+| [Microsoft SPACEV][spacev]                 |    int8     |    100     |   L2   |   93 GB   |
+| [Microsoft Turing-ANNS][turing]            |   float32   |    100     |   L2   |  373 GB   |
+| [Yandex Deep1B][deep]                      |   float32   |     96     |   L2   |  358 GB   |
+| [Yandex Text-to-Image][t2i]                |   float32   |    200     |  Cos   |  750 GB   |
+|                                            |             |            |        |           |
+| [ViT-L/12 LAION][laion]                    |   float32   |    2048    |  Cos   | 2 - 10 TB |
 
 Luckily, smaller samples of those datasets are available.
 
-[unum-wiki]: https://huggingface.co/datasets/unum-cloud/ann-wiki-1m
+[unum-cc-3m]: https://huggingface.co/datasets/unum-cloud/ann-cc-3m
+[unum-wiki-1m]: https://huggingface.co/datasets/unum-cloud/ann-wiki-1m
 [unum-t2i]: https://huggingface.co/datasets/unum-cloud/ann-t2i-1m
 [spacev]: https://github.com/microsoft/SPTAG/tree/main/datasets/SPACEV1B
 [turing]: https://learning2hash.github.io/publications/microsoftturinganns1B/

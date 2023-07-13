@@ -203,6 +203,7 @@ class index_punned_dense_gt {
     std::size_t connectivity() const { return typed_->connectivity(); }
     std::size_t size() const { return typed_->size(); }
     std::size_t capacity() const { return typed_->capacity(); }
+    std::size_t max_level() const noexcept { return typed_->max_level(); }
     index_config_t const& config() const { return typed_->config(); }
     index_limits_t const& limits() const { return typed_->limits(); }
     void clear() { return typed_->clear(); }
