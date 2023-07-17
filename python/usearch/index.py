@@ -621,7 +621,9 @@ class Index:
         return f"usearch.index.Index({self.dtype} x {self.ndim}, {self.metric}, expansion: {self.expansion_add} & {self.expansion_search}, {len(self)} vectors across {self.max_level+1} levels)"
 
     def _repr_pretty_(self) -> str:
-        level_stats = [f"--- {i}. {self.level_stats(i)} nodes" for i in self.max_level]
+        level_stats = [
+            f"--- {i}. {self.level_stats(i)} nodes" for i in range(self.max_level)
+        ]
         return "\n".join(
             [
                 "usearch.index.Index",
