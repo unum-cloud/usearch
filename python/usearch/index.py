@@ -327,7 +327,10 @@ class Index:
         :type copy: bool, optional
         :param threads: Optimal number of cores to use, defaults to 0
         :type threads: int, optional
-
+        :param log: Whether to print the progress bar, default to False
+        :type log: Union[str, bool], optional
+        :param batch_size: Number of vectors to process at once, defaults to 0
+        :type batch_size: int, optional
         :return: Inserted label or labels
         :type: Union[int, np.ndarray]
         """
@@ -399,17 +402,21 @@ class Index:
         log: Union[str, bool] = False,
         batch_size: int = 0,
     ) -> Matches:
-        """Performs approximate nearest neighbors search for one or more queries.
+        """
+        Performs approximate nearest neighbors search for one or more queries.
 
         :param vectors: Query vector or vectors.
         :type vectors: Buffer
         :param k: Upper limit on the number of matches to find, defaults to 10
         :type k: int, optional
-
         :param threads: Optimal number of cores to use, defaults to 0
         :type threads: int, optional
         :param exact: Perform exhaustive linear-time exact search, defaults to False
         :type exact: bool, optional
+        :param log: Whether to print the progress bar, default to False
+        :type log: Union[str, bool], optional
+        :param batch_size: Number of vectors to process at once, defaults to 0
+        :type batch_size: int, optional
         :return: Approximate matches for one or more queries
         :rtype: Matches
         """

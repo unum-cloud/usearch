@@ -14,11 +14,14 @@ Overview
    :hidden:
    :caption: �
 
-   c/index
    cpp/index
-   java/index
    python/index
+   java/index
    javascript/index
+   rust/index
+   swift/index
+   c/index
+   golang/index
 
 .. toctree:: 
    :hidden:

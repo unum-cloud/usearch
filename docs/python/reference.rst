@@ -17,6 +17,14 @@ IO
     :members:
     :undoc-members:
 
+==========
+Evaluation
+==========
+
+.. automodule:: usearch.eval
+    :members:
+    :undoc-members:
+
 ======
 Client
 ======
@@ -24,7 +32,6 @@ Client
 .. automodule:: usearch.client
     :members:
     :undoc-members:
-
 
 ======
 Server
