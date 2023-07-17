@@ -1749,7 +1749,7 @@ class index_gt {
         }
     };
 
-    copy_result_t copy(copy_config_t config = {}) const noexcept {
+    copy_result_t copy(copy_config_t /*config*/ = {}) const noexcept {
         copy_result_t result;
         index_gt& other = result.index;
         other = index_gt(config_, metric_, allocator_, point_allocator_);
