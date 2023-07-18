@@ -1,4 +1,4 @@
-#define EXPORT EMSCRIPTEN_KEEPALIVE
+#define USEARCH_EXPORT EMSCRIPTEN_KEEPALIVE
 
 #include <emscripten/emscripten.h>
 
