@@ -1010,7 +1010,7 @@ class usearch_pack_m uint40_t {
 
     inline uint40_t& operator+=(std::size_t n) noexcept {
         unsigned char* n_octets = reinterpret_cast<unsigned char*>(&n);
-        std::uint32_t& n_tail = *reinterpret_cast<std::uint32_t*>(&n);
+        std::uint32_t& n_tail = *reinterpret_cast<std::uint32_t*>(n_octets);
         std::uint32_t& tail = *reinterpret_cast<std::uint32_t*>(octets);
         octets[4] += static_cast<unsigned char>((tail + n_tail) < tail);
         tail += n_tail;
@@ -1749,7 +1749,7 @@ class index_gt {
         }
     };
 
-    copy_result_t copy(copy_config_t config = {}) const noexcept {
+    copy_result_t copy(copy_config_t /*config*/ = {}) const noexcept {
         copy_result_t result;
         index_gt& other = result.index;
         other = index_gt(config_, metric_, allocator_, point_allocator_);
