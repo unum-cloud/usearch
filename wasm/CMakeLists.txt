@@ -1,7 +1,7 @@
 include(emscripten)
 
-set(CMAKE_CXX_COMPILER em++)
 set(CMAKE_C_COMPILER emcc)
+set(CMAKE_CXX_COMPILER em++)
 
 set(USEARCH_PUNNED_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/../c"

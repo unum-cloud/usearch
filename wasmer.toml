@@ -5,4 +5,4 @@ description="Smaller & Faster Single-File Vector Search Engine from Unum"
 
 [[module]]
 name="index"
-source="index.wasm"
+source="build_wasm/index.wasm"

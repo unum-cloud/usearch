@@ -286,7 +286,7 @@ jobs:
     - name: Build USearch WASM by Emscripten
       run: |
         ./emsdk/emsdk activate latest && source ./emsdk/emsdk_env.sh
-        emcmake cmake -B ./build_wasm && make -C ./build_wasm
+        emcmake cmake -DUSEARCH_BUILD_TEST=0 -DUSEARCH_BUILD_BENCHMARK=0 -DUSEARCH_BUILD_WASM=1 -B ./build_wasm && make -C ./build_wasm
 
     - name: Install wasmer cli
       run: |
@@ -296,8 +296,8 @@ jobs:
     - name: Login Wasmer.io
       run: wasmer login --token "${{ secrets.WASMER_TOKEN }}"
     
-    # - name: Publish binary to Wasmer.io
-    #   run: wasmer publish
+    - name: Publish binary to Wasmer.io
+      run: wasmer publish
 
 
   build_docs:
