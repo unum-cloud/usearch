@@ -3,6 +3,7 @@ from time import time_ns
 from typing import Tuple, Any, Callable, Union, Optional, List
 from dataclasses import dataclass, asdict
 from collections import defaultdict
+from math import ceil
 
 import numpy as np
 
@@ -47,7 +48,7 @@ def random_vectors(
         return x
 
 
-def recall_members(index: Index, *args, **kwargs) -> float:
+def recall_members(index: Index, sample: float = 1, **kwargs) -> float:
     """Simplest benchmark for a quality of search, which queries every
     existing member of the index, to make sure approximate search finds
     the point itself.
@@ -59,9 +60,16 @@ def recall_members(index: Index, *args, **kwargs) -> float:
     """
     if len(index) == 0:
         return 0
+    if "k" not in kwargs:
+        kwargs["k"] = 1
 
-    matches: Matches = index.search(index.vectors, 1, *args, **kwargs)
-    return matches.recall_first(index.labels)
+    labels = index.labels
+    if sample != 1:
+        labels = np.random.choice(labels, int(ceil(len(labels) * sample)))
+
+    queries = index.get_vectors(labels, index.dtype)
+    matches: Matches = index.search(queries, **kwargs)
+    return matches.recall_first(labels)
 
 
 def measure_seconds(f: Callable) -> Tuple[float, Any]:

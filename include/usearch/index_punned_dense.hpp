@@ -170,6 +170,7 @@ class index_punned_dense_gt {
     using search_result_t = typename index_t::search_result_t;
     using add_result_t = typename index_t::add_result_t;
     using serialization_result_t = typename index_t::serialization_result_t;
+    using join_result_t = typename index_t::join_result_t;
     using stats_t = typename index_t::stats_t;
 
     index_punned_dense_gt() = default;
@@ -184,12 +185,15 @@ class index_punned_dense_gt {
     void swap(index_punned_dense_gt& other) {
         std::swap(dimensions_, other.dimensions_);
         std::swap(scalar_words_, other.scalar_words_);
+        std::swap(expansion_add_, other.expansion_add_);
+        std::swap(expansion_search_, other.expansion_search_);
         std::swap(casted_vector_bytes_, other.casted_vector_bytes_);
         std::swap(typed_, other.typed_);
         std::swap(cast_buffer_, other.cast_buffer_);
         std::swap(casts_, other.casts_);
         std::swap(root_metric_, other.root_metric_);
         std::swap(available_threads_, other.available_threads_);
+        std::swap(lookup_table_, other.lookup_table_);
     }
 
     static index_config_t optimize(index_config_t config) { return index_t::optimize(config); }
@@ -199,6 +203,7 @@ class index_punned_dense_gt {
     std::size_t connectivity() const { return typed_->connectivity(); }
     std::size_t size() const { return typed_->size(); }
     std::size_t capacity() const { return typed_->capacity(); }
+    std::size_t max_level() const noexcept { return typed_->max_level(); }
     index_config_t const& config() const { return typed_->config(); }
     index_limits_t const& limits() const { return typed_->limits(); }
     void clear() { return typed_->clear(); }
@@ -323,21 +328,74 @@ class index_punned_dense_gt {
             metric_t(metric), make_casts_(accuracy));
     }
 
-    index_punned_dense_gt fork() const {
-        index_punned_dense_gt result;
+    struct copy_result_t {
+        index_punned_dense_gt index;
+        error_t error;
 
-        result.dimensions_ = dimensions_;
-        result.scalar_words_ = scalar_words_;
-        result.casted_vector_bytes_ = casted_vector_bytes_;
-        result.cast_buffer_ = cast_buffer_;
-        result.casts_ = casts_;
+        explicit operator bool() const noexcept { return !error; }
+        copy_result_t failed(error_t message) noexcept {
+            error = std::move(message);
+            return std::move(*this);
+        }
+    };
 
-        result.root_metric_ = root_metric_;
-        index_t* raw = index_allocator_t{}.allocate(1);
-        new (raw) index_t(config(), root_metric_);
-        result.typed_ = raw;
-
+    copy_result_t copy(copy_config_t config = {}) const {
+        copy_result_t result = fork();
+        if (!result)
+            return result;
+        auto typed_result = typed_->copy(config);
+        if (!typed_result)
+            return result.failed(std::move(typed_result.error));
+        *result.index.typed_ = std::move(typed_result.index);
+        result.index.lookup_table_ = lookup_table_;
         return result;
+    }
+
+    copy_result_t fork() const {
+        copy_result_t result;
+        index_punned_dense_gt& other = result.index;
+
+        other.dimensions_ = dimensions_;
+        other.scalar_words_ = scalar_words_;
+        other.expansion_add_ = expansion_add_;
+        other.expansion_search_ = expansion_search_;
+        other.casted_vector_bytes_ = casted_vector_bytes_;
+        other.cast_buffer_ = cast_buffer_;
+        other.casts_ = casts_;
+
+        other.root_metric_ = root_metric_;
+        other.available_threads_ = available_threads_;
+
+        index_t* raw = index_allocator_t{}.allocate(1);
+        if (!raw)
+            return result.failed("Can't allocate the index");
+
+        new (raw) index_t(config(), root_metric_);
+        other.typed_ = raw;
+        return result;
+    }
+
+    template <                                                        //
+        typename first_to_second_at = dummy_label_to_label_mapping_t, //
+        typename second_to_first_at = dummy_label_to_label_mapping_t, //
+        typename executor_at = dummy_executor_t,                      //
+        typename progress_at = dummy_progress_t                       //
+        >
+    static join_result_t join(                                       //
+        index_punned_dense_gt const& first,                          //
+        index_punned_dense_gt const& second,                         //
+        join_config_t config = {},                                   //
+        first_to_second_at&& first_to_second = first_to_second_at{}, //
+        second_to_first_at&& second_to_first = second_to_first_at{}, //
+        executor_at&& executor = executor_at{},                      //
+        progress_at&& progress = progress_at{}) noexcept {
+
+        return index_t::join(                                  //
+            *first.typed_, *second.typed_, config,             //
+            std::forward<first_to_second_at>(first_to_second), //
+            std::forward<second_to_first_at>(second_to_first), //
+            std::forward<executor_at>(executor),               //
+            std::forward<progress_at>(progress));
     }
 
   private:

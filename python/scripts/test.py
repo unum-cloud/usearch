@@ -115,6 +115,11 @@ def test_index(
     assert matches[0] == 42
     assert distances[0] == pytest.approx(0, abs=1e-3)
 
+    assert index.max_level >= 0
+    assert index.levels_stats.nodes >= 1
+    assert index.level_stats(0).nodes == 1
+    assert str(index).startswith("usearch.index.Index")
+
     index.save("tmp.usearch")
     index.clear()
     assert len(index) == 0
@@ -126,6 +131,10 @@ def test_index(
     index = Index.restore("tmp.usearch")
     assert len(index) == 1
     assert len(index[42]) == ndim
+
+    index_copy = index.copy()
+    assert len(index_copy) == 1
+    assert len(index_copy[42]) == ndim
 
     # Cleanup
     os.remove("tmp.usearch")
@@ -156,6 +165,10 @@ def test_index_batch(
     assert matches.labels.shape[0] == matches.distances.shape[0]
     assert matches.counts.shape[0] == batch_size
     assert np.all(np.sort(index.labels) == np.sort(labels))
+
+    assert index.max_level >= 0  # TODO: This should be 1
+    assert index.levels_stats.nodes >= batch_size
+    assert index.level_stats(0).nodes == batch_size
 
     index.save("tmp.usearch")
     index.clear()
@@ -204,6 +217,12 @@ def test_exact_recall(
     found_labels = matches.labels
     for i in range(batch_size):
         assert found_labels[i, 0] == i
+
+    # Match entries aginst themselves
+    index_copy: Index = index.copy()
+    mapping: dict = index.join(index_copy, exact=True)
+    for man, woman in mapping.items():
+        assert man == woman, "Stable marriage failed"
 
 
 @pytest.mark.parametrize("ndim", dimensions)
