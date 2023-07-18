@@ -165,7 +165,7 @@ jobs:
         ./emsdk/emsdk activate latest && source ./emsdk/emsdk_env.sh
         emcmake cmake -B ./build -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} -s TOTAL_MEMORY=64MB" && emmake make -C ./build
     - name: Run tests
-      run: node ./build/wasm/test.js
+      run: node ./build/test.js
 
   build_docker:
     name: Test Docker Image
