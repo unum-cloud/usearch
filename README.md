@@ -267,7 +267,7 @@ encoder = AllChem.GetRDKitFPGenerator()
 fingerprints = np.vstack([encoder.GetFingerprint(x) for x in molecules])
 fingerprints = np.packbits(fingerprints, axis=1)
 
-index = Index(ndim=2048, metric=MetricKind.BitwiseTanimoto)
+index = Index(ndim=2048, metric=MetricKind.Tanimoto)
 labels = np.arange(len(molecules))
 
 index.add(labels, fingerprints)

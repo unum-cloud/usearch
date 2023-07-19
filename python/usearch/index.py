@@ -468,6 +468,12 @@ class Index:
             )
             return Matches(*tuple_)
 
+    def remove(self, label: int, *, compact: bool = False) -> bool:
+        return self._compiled.remove(label, compact=compact)
+
+    def rename(self, label_from: int, label_to: int) -> bool:
+        return self._compiled.rename(label_from, label_to)
+
     @property
     def specs(self) -> dict:
         return {
@@ -487,6 +493,19 @@ class Index:
 
     def __len__(self) -> int:
         return self._compiled.__len__()
+
+    def __delitem__(self, label: int) -> bool:
+        raise self.remove(label)
+
+    def __contains__(self, label: int) -> bool:
+        return self._compiled.__contains__(label)
+
+    def __getitem__(self, label: int) -> np.ndarray:
+        dtype = self.dtype
+        get_dtype = _to_numpy_compatible_dtype(dtype)
+        vector = self._compiled.__getitem__(label, get_dtype)
+        view_dtype = _to_numpy_dtype(dtype)
+        return None if vector is None else vector.view(view_dtype)
 
     @property
     def jit(self) -> bool:
@@ -574,19 +593,50 @@ class Index:
         return result
 
     def join(self, other: Index, max_proposals: int = 0, exact: bool = False) -> dict:
+        """Performs "Semantic Join" or pairwise matching between `self` & `other` index.
+        Is different from `search`, as no collisions are allowed in resulting pairs.
+        Uses the concept of "Stable Marriages" from Combinatorics, famous for the 2012
+        Nobel Prize in Economics.
+
+        :param other: Another index.
+        :type other: Index
+        :param max_proposals: Limit on candidates evaluated per vector, defaults to 0
+        :type max_proposals: int, optional
+        :param exact: Controls if underlying `search` should be exact, defaults to False
+        :type exact: bool, optional
+        :return: Mapping from labels of `self` to labels of `other`
+        :rtype: dict
+        """
         return self._compiled.join(
             other=other._compiled,
             max_proposals=max_proposals,
             exact=exact,
         )
 
+    def get_labels(self, offset: int = 0, limit: int = 0) -> np.ndarray:
+        if limit == 0:
+            limit = 2**63 - 1
+        return self._compiled.get_labels(offset, limit)
+
     @property
     def labels(self) -> np.ndarray:
+        """Retrieves the labels of all vectors present in `self`
+
+        :return: Array of labels
+        :rtype: np.ndarray
+        """
         return self._compiled.labels
 
     def get_vectors(
-        self, labels: np.ndarray, dtype: ScalarKind = ScalarKind.F32
+        self,
+        labels: np.ndarray,
+        dtype: ScalarKind = ScalarKind.F32,
     ) -> np.ndarray:
+        """Retrieves vectors associated with given `labels`
+
+        :return: Matrix of vectors (row-major)
+        :rtype: np.ndarray
+        """
         dtype = _normalize_dtype(dtype, self._metric_kind)
         get_dtype = _to_numpy_compatible_dtype(dtype)
         vectors = np.vstack([self._compiled.__getitem__(l, get_dtype) for l in labels])
@@ -596,25 +646,6 @@ class Index:
     @property
     def vectors(self) -> np.ndarray:
         return self.get_vectors(self.labels, self.dtype)
-
-    def __delitem__(self, label: int):
-        raise NotImplementedError()
-
-    def __contains__(self, label: int) -> bool:
-        return self._compiled.__contains__(label)
-
-    def __getitem__(self, label: int) -> np.ndarray:
-        dtype = self.dtype
-        get_dtype = _to_numpy_compatible_dtype(dtype)
-        vector = self._compiled.__getitem__(label, get_dtype)
-        view_dtype = _to_numpy_dtype(dtype)
-        return None if vector is None else vector.view(view_dtype)
-
-    def remove(self, label: int):
-        return self._compiled.remove(label)
-
-    def rename(self, label_from: int, label_to: int):
-        return self._compiled.rename(label_from, label_to)
 
     @property
     def max_level(self) -> int:
@@ -628,15 +659,24 @@ class Index:
         return self._compiled.level_stats(level)
 
     def __repr__(self) -> str:
-        return f"usearch.index.Index({self.dtype} x {self.ndim}, {self.metric}, expansion: {self.expansion_add} & {self.expansion_search}, {len(self)} vectors across {self.max_level+1} levels)"
+        f = "usearch.Index({} x {}, {}, expansion: {} & {}, {} vectors in {} levels)"
+        return f.format(
+            self.dtype,
+            self.ndim,
+            self.metric,
+            self.expansion_add,
+            self.expansion_search,
+            len(self),
+            self.max_level + 1,
+        )
 
     def _repr_pretty_(self) -> str:
         level_stats = [
-            f"--- {i}. {self.level_stats(i)} nodes" for i in range(self.max_level)
+            f"--- {i}. {self.level_stats(i).nodes} nodes" for i in range(self.max_level)
         ]
         return "\n".join(
             [
-                "usearch.index.Index",
+                "usearch.Index",
                 "- config" f"-- data type: {self.dtype}",
                 f"-- dimensions: {self.ndim}",
                 f"-- metric: {self.metric}",

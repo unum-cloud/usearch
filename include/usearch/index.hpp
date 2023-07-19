@@ -2611,6 +2611,11 @@ class index_gt {
      *  @brief  Adapts the Male-Optimal Stable Marriage algorithm for unequal sets
      *          to perform fast one-to-one matching between two large collections
      *          of vectors, using approximate nearest neighbors search.
+     *
+     *  @param[inout] first_to_second Container to map ::first labels to ::second.
+     *  @param[inout] second_to_first Container to map ::second labels to ::first.
+     *  @param[in] executor Thread-pool to execute the job in parallel.
+     *  @param[in] progress Callback to report the execution progress.
      */
     template <                                                        //
         typename first_to_second_at = dummy_label_to_label_mapping_t, //
@@ -2650,6 +2655,10 @@ class index_gt {
      *          of the graph, while keeping their outgoing links, in case the node
      *          is structurally relevant and has a crucial role in the index.
      *          It won't reclaim the memory.
+     *
+     *  @param[in] allow_member Predicate to mark nodes for isolation.
+     *  @param[in] executor Thread-pool to execute the job in parallel.
+     *  @param[in] progress Callback to report the execution progress.
      */
     template <                                        //
         typename allow_member_at = dummy_predicate_t, //
