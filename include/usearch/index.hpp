@@ -988,8 +988,13 @@ class sorted_buffer_gt {
 class usearch_pack_m uint40_t {
     unsigned char octets[5];
 
+    inline uint40_t& broadcast(unsigned char c) {
+        std::memset(octets, c, 5);
+        return *this;
+    }
+
   public:
-    inline uint40_t() noexcept { std::memset(octets, 0, 5); }
+    inline uint40_t() noexcept { broadcast(0); }
     inline uint40_t(std::uint32_t n) noexcept { std::memcpy(octets, (char*)&n, 4); }
     inline uint40_t(std::uint64_t n) noexcept { std::memcpy(octets, (char*)&n, 5); }
 #if defined(USEARCH_DEFINED_CLANG) && defined(USEARCH_DEFINED_APPLE)
@@ -1037,6 +1042,9 @@ class usearch_pack_m uint40_t {
         *this += 1u;
         return old;
     }
+
+    inline static uint40_t max() noexcept { return uint40_t{}.broadcast(0xFF); }
+    inline static uint40_t min() noexcept { return uint40_t{}.broadcast(0); }
 };
 
 #if defined(USEARCH_DEFINED_WINDOWS)
@@ -1057,23 +1065,38 @@ class ring_gt {
     using value_type = element_t;
 
   private:
-    element_t* elements_;
-    std::size_t capacity_;
-    std::size_t head_;
-    std::size_t tail_;
-    bool empty_;
-    allocator_t allocator_;
+    element_t* elements_{};
+    std::size_t capacity_{};
+    std::size_t head_{};
+    std::size_t tail_{};
+    bool empty_{true};
+    allocator_t allocator_{};
 
   public:
-    explicit ring_gt(allocator_t const& alloc = allocator_t()) noexcept
-        : elements_(nullptr), capacity_(0), head_(0), tail_(0), empty_(true), allocator_(alloc) {}
+    explicit ring_gt(allocator_t const& alloc = allocator_t()) noexcept : allocator_(alloc) {}
 
     ring_gt(ring_gt const&) = delete;
     ring_gt& operator=(ring_gt const&) = delete;
 
+    ring_gt(ring_gt&& other) noexcept { swap(other); }
+    ring_gt& operator=(ring_gt&& other) noexcept {
+        swap(other);
+        return *this;
+    }
+
+    void swap(ring_gt& other) noexcept {
+        std::swap(elements_, other.elements_);
+        std::swap(capacity_, other.capacity_);
+        std::swap(head_, other.head_);
+        std::swap(tail_, other.tail_);
+        std::swap(empty_, other.empty_);
+        std::swap(allocator_, other.allocator_);
+    }
+
     ~ring_gt() noexcept { reset(); }
 
     bool empty() const noexcept { return empty_; }
+    size_t capacity() const noexcept { return capacity_; }
     size_t size() const noexcept {
         if (empty_)
             return 0;
@@ -1081,6 +1104,12 @@ class ring_gt {
             return head_ - tail_;
         else
             return capacity_ - (tail_ - head_);
+    }
+
+    void clear() noexcept {
+        head_ = 0;
+        tail_ = 0;
+        empty_ = true;
     }
 
     void reset() noexcept {
@@ -1093,13 +1122,24 @@ class ring_gt {
         empty_ = true;
     }
 
-    bool resize(std::size_t n) noexcept {
+    bool reserve(std::size_t n) noexcept {
+        if (n < size())
+            return false; // prevent data loss
+        n = (std::max<std::size_t>)(n, 64u);
         element_t* elements = allocator_.allocate(n);
         if (!elements)
             return false;
+
+        std::size_t i = 0;
+        while (try_pop(elements[i]))
+            i++;
+
         reset();
         elements_ = elements;
         capacity_ = n;
+        head_ = i;
+        tail_ = 0;
+        empty_ = (i == 0);
         return true;
     }
 
@@ -1126,6 +1166,8 @@ class ring_gt {
         empty_ = head_ == tail_;
         return true;
     }
+
+    element_t const& operator[](std::size_t i) const noexcept { return elements_[(tail_ + i) % capacity_]; }
 };
 
 /// @brief Number of neighbors per graph node.
@@ -1474,16 +1516,18 @@ class index_gt {
     using vector_view_t = span_gt<scalar_t const>;
     using distance_t = return_type_gt<metric_t, vector_view_t, vector_view_t>;
 
-    struct member_ref_t {
-        misaligned_ref_gt<label_t> label;
-        vector_view_t vector;
-        id_t id;
-    };
-
     struct member_cref_t {
         label_t label;
         vector_view_t vector;
         id_t id;
+    };
+
+    struct member_ref_t {
+        misaligned_ref_gt<label_t> label;
+        vector_view_t vector;
+        id_t id;
+
+        inline operator member_cref_t() const noexcept { return {label, vector, id}; }
     };
 
     template <typename ref_at, typename index_at> class member_iterator_gt {
@@ -1774,6 +1818,9 @@ class index_gt {
     member_iterator_t begin() noexcept { return {this, 0}; }
     member_iterator_t end() noexcept { return {this, size()}; }
 
+    member_cref_t at(std::size_t i) const noexcept { return member_cref_t(node_with_id_(i)); }
+    member_ref_t at(std::size_t i) noexcept { return member_ref_t(node_with_id_(i)); }
+
 #pragma region Adjusting Configuration
 
     /**
@@ -2053,16 +2100,7 @@ class index_gt {
         result.measurements = context.measurements_count;
         result.cycles = context.iteration_cycles;
 
-        // Go down the level, tracking only the closest match
-        id_t closest_id = search_for_one_(entry_id_copy, vector, max_level_copy, target_level, context);
-
-        // From `target_level` down perform proper extensive search
-        for (level_t level = (std::min)(target_level, max_level_copy); level >= 0; --level) {
-            // TODO: Handle out of memory conditions
-            search_to_insert_(closest_id, vector, level, config.expansion, context);
-            closest_id = connect_new_node_(new_id, level, context);
-            reconnect_neighbor_nodes_(new_id, level, context);
-        }
+        connect_node_across_levels_(new_id, vector, entry_id_copy, max_level_copy, target_level, config, context);
 
         // Normalize stats
         result.measurements = context.measurements_count - result.measurements;
@@ -2073,6 +2111,51 @@ class index_gt {
             entry_id_ = new_id;
             max_level_ = target_level;
         }
+        return result;
+    }
+
+    /**
+     *  @brief Update an existing entry, replacing a vector and a label. Thread-safe.
+     *
+     *  @param[in] old_id Existing internal identifier for a node to be replaced.
+     *  @param[in] label External identifier/name/descriptor for the vector.
+     *  @param[in] vector Contiguous range of scalars forming a vector view.
+     *  @param[in] config Configuration options for this specific operation.
+     */
+    add_result_t update(id_t old_id, label_t label, vector_view_t vector, add_config_t config = {}) usearch_noexcept_m {
+
+        usearch_assert_m(!is_immutable(), "Can't add to an immutable index");
+        add_result_t result;
+
+        // Make sure we have enough local memory to perform this request
+        context_t& context = contexts_[config.thread];
+        top_candidates_t& top = context.top_candidates;
+        next_candidates_t& next = context.next_candidates;
+        top.clear();
+        next.clear();
+
+        // The top list needs one more slot than the connectivity of the base level
+        // for the heuristic, that tries to squeeze one more element into saturated list.
+        std::size_t top_limit = (std::max)(base_level_multiple_() * config_.connectivity + 1, config.expansion);
+        if (!top.reserve(top_limit))
+            return result.failed("Out of memory!");
+        if (!next.reserve(config.expansion))
+            return result.failed("Out of memory!");
+
+        node_lock_t new_lock = node_lock_(old_id);
+        node_t node = node_with_id_(old_id);
+
+        // Pull stats
+        result.measurements = context.measurements_count;
+        result.cycles = context.iteration_cycles;
+
+        connect_node_across_levels_(old_id, vector, entry_id_, max_level_, node.level(), config, context);
+        node.label(label);
+
+        // Normalize stats
+        result.measurements = context.measurements_count - result.measurements;
+        result.cycles = context.iteration_cycles - result.cycles;
+
         return result;
     }
 
@@ -2544,6 +2627,40 @@ class index_gt {
                 std::forward<progress_at>(progress));
     }
 
+    /**
+     *  @brief  Scans the whole collection, removing the links leading towards
+     *          banned entries. This essentially isolates some nodes from the rest
+     *          of the graph, while keeping their outgoing links, in case the node
+     *          is structurally relevant and has a crucial role in the index.
+     *          It won't reclaim the memory.
+     */
+    template <                                        //
+        typename allow_member_at = dummy_predicate_t, //
+        typename executor_at = dummy_executor_t,      //
+        typename progress_at = dummy_progress_t       //
+        >
+    void isolate(                               //
+        allow_member_at&& allow_member,         //
+        executor_at&& executor = executor_at{}, //
+        progress_at&& progress = progress_at{}) noexcept {
+
+        // Erase all the incoming links
+        executor.execute_bulk(size(), [&](std::size_t node_idx, std::size_t) {
+            node_t node = node_with_id_(node_idx);
+            for (level_t level = 0; level <= node.level(); ++level) {
+                neighbors_ref_t neighbors = neighbors_(node, level);
+                std::size_t old_size = neighbors.size();
+                neighbors.clear();
+                for (std::size_t i = 0; i != old_size; ++i) {
+                    id_t neighbor_id = neighbors[i];
+                    node_t neighbor = node_with_id_(neighbor_id);
+                    if (allow_member(member_cref_t{neighbor.label(), neighbor.vector_view(), neighbor_id}))
+                        neighbors.push_back(neighbor_id);
+                }
+            }
+        });
+    }
+
   private:
     template <typename first_to_second_at, typename second_to_first_at, typename executor_at, typename progress_at>
     static join_result_t join_small_and_big_(       //
@@ -2571,7 +2688,7 @@ class index_gt {
         // free men will be added/pulled.
         std::mutex free_men_mutex{};
         ring_gt<id_t, ids_allocator_t> free_men;
-        free_men.resize(men.size());
+        free_men.reserve(men.size());
         for (std::size_t i = 0; i != men.size(); ++i)
             free_men.push(static_cast<id_t>(i));
 
@@ -2836,6 +2953,23 @@ class index_gt {
         while (nodes_mutexes_.atomic_set(idx))
             ;
         return {nodes_mutexes_, idx};
+    }
+
+    void connect_node_across_levels_(                           //
+        id_t node_id, vector_view_t vector,                     //
+        id_t entry_id, level_t max_level, level_t target_level, //
+        add_config_t const& config, context_t& context) usearch_noexcept_m {
+
+        // Go down the level, tracking only the closest match
+        id_t closest_id = search_for_one_(entry_id, vector, max_level, target_level, context);
+
+        // From `target_level` down perform proper extensive search
+        for (level_t level = (std::min)(target_level, max_level); level >= 0; --level) {
+            // TODO: Handle out of memory conditions
+            search_to_insert_(closest_id, vector, level, config.expansion, context);
+            closest_id = connect_new_node_(node_id, level, context);
+            reconnect_neighbor_nodes_(node_id, level, context);
+        }
     }
 
     id_t connect_new_node_(id_t new_id, level_t level, context_t& context) usearch_noexcept_m {

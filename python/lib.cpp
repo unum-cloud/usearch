@@ -450,16 +450,17 @@ template <typename index_at> py::object get_member(index_at const& index, label_
         throw std::invalid_argument("Incompatible scalars in the query matrix!");
 }
 
-template <typename index_at> py::array_t<label_t> get_labels(index_at const& index, std::size_t limit) {
+template <typename index_at>
+py::array_t<label_t> get_labels(index_at const& index, std::size_t offset, std::size_t limit) {
     limit = std::min(index.size(), limit);
     py::array_t<label_t> result_py(static_cast<Py_ssize_t>(limit));
     auto result_py1d = result_py.template mutable_unchecked<1>();
-    index.export_labels(&result_py1d(0), limit);
+    index.export_labels(&result_py1d(0), offset, limit);
     return result_py;
 }
 
 template <typename index_at> py::array_t<label_t> get_all_labels(index_at const& index) {
-    return get_labels(index, index.size());
+    return get_labels(index, 0, index.size());
 }
 
 template <typename element_at> bool has_duplicates(element_at const* begin, element_at const* end) {
@@ -666,6 +667,12 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("threads") = 0           //
     );
 
+    i.def(
+        "remove", [](dense_index_py_t& index, label_t label) { index.remove(label).error.raise(); }, py::arg("label"));
+    i.def(
+        "rename", [](dense_index_py_t& index, label_t from, label_t to) { index.rename(from, to).error.raise(); },
+        py::arg("from"), py::arg("to"));
+
     i.def("__len__", &dense_index_py_t::size);
     i.def_property_readonly("size", &dense_index_py_t::size);
     i.def_property_readonly("ndim", &dense_index_py_t::dimensions);
@@ -681,7 +688,8 @@ PYBIND11_MODULE(compiled, m) {
     i.def_property("expansion_search", &dense_index_py_t::expansion_search, &dense_index_py_t::change_expansion_search);
 
     i.def_property_readonly("labels", &get_all_labels<dense_index_py_t>);
-    i.def("get_labels", &get_labels<dense_index_py_t>, py::arg("limit") = std::numeric_limits<std::size_t>::max());
+    i.def("get_labels", &get_labels<dense_index_py_t>, py::arg("offset") = 0,
+          py::arg("limit") = std::numeric_limits<std::size_t>::max());
     i.def("__contains__", &dense_index_py_t::contains);
     i.def("__getitem__", &get_member<dense_index_py_t>, py::arg("label"), py::arg("dtype") = scalar_kind_t::f32_k);
 

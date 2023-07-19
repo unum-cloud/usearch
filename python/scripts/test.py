@@ -120,9 +120,22 @@ def test_index(
     assert index.level_stats(0).nodes == 1
     assert str(index).startswith("usearch.index.Index")
 
+    # Try removals
+    other_vector = random_vectors(count=1, ndim=ndim, dtype=numpy_type).flatten()
+    index.add(43, other_vector)
+    assert len(index) == 2
+    index.remove(43)
+    assert len(index) == 1
+
     index.save("tmp.usearch")
+
+    # Re-populate cleared index
     index.clear()
     assert len(index) == 0
+    index.add(42, vector)
+    assert len(index) == 1
+    matches, distances, count = index.search(vector, 10)
+    assert count == 1
 
     index.load("tmp.usearch")
     assert len(index) == 1

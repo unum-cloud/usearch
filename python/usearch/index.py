@@ -611,7 +611,10 @@ class Index:
         return None if vector is None else vector.view(view_dtype)
 
     def remove(self, label: int):
-        pass
+        return self._compiled.remove(label)
+
+    def rename(self, label_from: int, label_to: int):
+        return self._compiled.rename(label_from, label_to)
 
     @property
     def max_level(self) -> int:

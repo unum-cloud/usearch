@@ -84,17 +84,23 @@ template <typename scalar_at, typename index_at> void test3d_punned(index_at&& i
     using view_t = span_gt<scalar_t const>;
     using span_t = span_gt<scalar_at>;
 
-    scalar_t vec[3] = {10, 20, 15};
+    scalar_t vec42[3] = {10, 20, 15};
+    scalar_t vec43[3] = {19, 22, 11};
 
     index.reserve(10);
-    index.add(42, view_t{&vec[0], 3ul});
+    index.add(42, view_t{&vec42[0], 3ul});
 
     // Reconstruct
-    scalar_t vec_reconstructed[3] = {0, 0, 0};
-    index.get(42, span_t{&vec_reconstructed[0], 3ul});
-    expect(vec_reconstructed[0] == vec[0]);
-    expect(vec_reconstructed[1] == vec[1]);
-    expect(vec_reconstructed[2] == vec[2]);
+    scalar_t vec42_reconstructed[3] = {0, 0, 0};
+    index.get(42, span_t{&vec42_reconstructed[0], 3ul});
+    expect(vec42_reconstructed[0] == vec42[0]);
+    expect(vec42_reconstructed[1] == vec42[1]);
+    expect(vec42_reconstructed[2] == vec42[2]);
+
+    index.add(43, view_t{&vec43[0], 3ul});
+    expect(index.size() == 2);
+    index.remove(43);
+    expect(index.size() == 1);
 }
 
 template <typename index_at> void test_sets(index_at&& index) {
