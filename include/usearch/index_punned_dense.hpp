@@ -281,18 +281,6 @@ class index_punned_dense_gt {
     search_result_t search(f32_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f32); }
     search_result_t search(f64_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f64); }
 
-    search_result_t search_around(label_t hint, b1x8_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_b1x8); }
-    search_result_t search_around(label_t hint, f8_bits_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f8); }
-    search_result_t search_around(label_t hint, f16_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f16); }
-    search_result_t search_around(label_t hint, f32_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f32); }
-    search_result_t search_around(label_t hint, f64_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f64); }
-
-    search_result_t search_around(label_t hint, b1x8_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_b1x8); }
-    search_result_t search_around(label_t hint, f8_bits_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f8); }
-    search_result_t search_around(label_t hint, f16_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f16); }
-    search_result_t search_around(label_t hint, f32_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f32); }
-    search_result_t search_around(label_t hint, f64_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f64); }
-
     search_result_t empty_search_result() const { return search_result_t{*typed_}; }
 
     bool get(label_t label, b1x8_t* vector) const { return get_(label, vector, casts_.to_b1x8); }
@@ -454,32 +442,6 @@ class index_punned_dense_gt {
         return typed_->search({vector_data, vector_bytes}, wanted, config);
     }
 
-    template <typename scalar_at>
-    search_result_t search_around_(                                //
-        label_t hint, scalar_at const* vector, std::size_t wanted, //
-        search_config_t config, cast_t const& cast) const {
-
-        byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
-        std::size_t vector_bytes = dimensions_ * sizeof(scalar_at);
-
-        byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * config.thread;
-        bool casted = cast(vector_data, dimensions_, casted_data);
-        if (casted)
-            vector_data = casted_data, vector_bytes = casted_vector_bytes_;
-
-        return typed_->search_around(static_cast<id_t>(hint), {vector_data, vector_bytes}, wanted, config);
-    }
-
-    void reindex_labels() {
-        shared_lock_t lock(lookup_table_mutex_);
-        lookup_table_.clear();
-        for (std::size_t i = 0; i != typed_->size(); ++i) {
-            member_citerator_t iterator = typed_->cbegin() + i;
-            member_cref_t member = *iterator;
-            lookup_table_[member.label] = static_cast<id_t>(i);
-        }
-    }
-
     id_t lookup_id_(label_t label) const {
         shared_lock_t lock(lookup_table_mutex_);
         return lookup_table_.at(label);
@@ -518,16 +480,6 @@ class index_punned_dense_gt {
         search_config_t search_config;
         search_config.thread = lock.thread_id;
         return search_(vector, wanted, search_config, cast);
-    }
-
-    template <typename scalar_at>
-    search_result_t search_around_(                                //
-        label_t hint, scalar_at const* vector, std::size_t wanted, //
-        cast_t const& cast) const {
-        thread_lock_t lock = thread_lock_();
-        search_config_t search_config;
-        search_config.thread = lock.thread_id;
-        return search_around_(hint, vector, wanted, search_config, cast);
     }
 
     static index_punned_dense_gt make_(                                                 //

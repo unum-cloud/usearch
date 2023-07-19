@@ -2128,40 +2128,6 @@ class index_gt {
         return result;
     }
 
-    template <typename predicate_at = dummy_predicate_t>
-    search_result_t search_around(                          //
-        id_t hint, vector_view_t query, std::size_t wanted, //
-        search_config_t config = {}, predicate_at&& predicate = dummy_predicate_t{}) const noexcept {
-
-        context_t& context = contexts_[config.thread];
-        top_candidates_t& top = context.top_candidates;
-        next_candidates_t& next = context.next_candidates;
-        search_result_t result{*this, top};
-
-        if (!size_)
-            return result;
-
-        std::size_t expansion = (std::max)(config.expansion, wanted);
-        if (!next.reserve(expansion))
-            return result.failed("Out of memory!");
-        if (!top.reserve(expansion))
-            return result.failed("Out of memory!");
-
-        // Go down the level, tracking only the closest match
-        result.measurements = context.measurements_count;
-        result.cycles = context.iteration_cycles;
-
-        search_to_find_in_base_(hint, query, expansion, context, std::forward<predicate_at>(predicate));
-        top.sort_ascending();
-        top.shrink(wanted);
-
-        // Normalize stats
-        result.measurements = context.measurements_count - result.measurements;
-        result.cycles = context.iteration_cycles - result.cycles;
-        result.count = top.size();
-        return result;
-    }
-
 #pragma endregion
 
 #pragma region Metadata

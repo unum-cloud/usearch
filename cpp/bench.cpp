@@ -311,26 +311,6 @@ void search_many( //
     }
 }
 
-template <typename index_at, typename vector_id_at, typename real_at>
-void paginate_many( //
-    index_at& native, std::size_t n, real_at const* vectors, std::size_t dims, std::size_t wanted,
-    vector_id_at const* hints) {
-
-    std::string name = "Paginate " + std::to_string(wanted);
-    running_stats_printer_t printer{n, name.c_str()};
-
-#pragma omp parallel for schedule(static, 32)
-    for (std::size_t i = 0; i < n; ++i) {
-        search_config_t config;
-        config.thread = omp_get_thread_num();
-        vector_view_t vector{vectors + dims * i, dims};
-        native.search_around(hints[i], vector, wanted, config);
-        printer.progress++;
-        if (omp_get_thread_num() == 0)
-            printer.refresh();
-    }
-}
-
 template <typename dataset_at, typename index_at> //
 static void single_shot(dataset_at& dataset, index_at& index, bool construct = true) {
     using label_t = typename index_at::label_t;
@@ -396,14 +376,6 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
     std::printf("Recall Joins %.2f %%\n", recall_join * 100.f / index.size());
     std::printf("Unmatched %.2f %% (%zu items)\n", unmatched_count * 100.f / index.size(), unmatched_count);
     std::printf("Proposals %.2f / man (%zu total)\n", join_attempts * 1.f / index.size(), join_attempts);
-
-    // Paginate
-    std::vector<vector_id_t> hints(dataset.queries_count());
-    for (std::size_t i = 0; i != hints.size(); ++i)
-        hints[i] = dataset.neighborhood(i)[0];
-    paginate_many(index, dataset.queries_count(), dataset.query(0), dataset.dimensions(), 10, hints.data());
-    paginate_many(index, dataset.queries_count(), dataset.query(0), dataset.dimensions(), 100, hints.data());
-    paginate_many(index, dataset.queries_count(), dataset.query(0), dataset.dimensions(), 1000, hints.data());
 
     std::printf("------------\n");
     std::printf("\n");
