@@ -16,13 +16,12 @@ Overview
 
    cpp/index
    python/index
-   javascript/index
    java/index
+   javascript/index
    rust/index
-   c/index
    swift/index
+   c/index
    golang/index
-   wolfram/index
 
 .. toctree:: 
    :hidden:

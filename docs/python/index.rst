@@ -3,7 +3,7 @@ Python SDK
 ==============
 
 
-.. mdinclude:: ../../python/README.md
+.. mdinclude:: ../python/README.md
 
 .. toctree::
    :hidden:

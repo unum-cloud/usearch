@@ -3,4 +3,4 @@ GoLang SDK
 ==============
 
 
-.. mdinclude:: ../../golang/README.md
+.. mdinclude:: ../golang/README.md

@@ -3,7 +3,7 @@ JavaScript SDK
 ==============
 
 
-.. mdinclude:: ../../javascript/README.md
+.. mdinclude:: ../javascript/README.md
 
 .. toctree::
    :hidden:
