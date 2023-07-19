@@ -41,6 +41,13 @@
 #define USEARCH_DEFINED_ARM
 #endif
 
+// Inferring hardware bitness: 32 vs 64
+#if __WORDSIZE == 64
+#define USEARCH_64BIT_ENV
+#else
+#define USEARCH_32BIT_ENV
+#endif
+
 #if !defined(USEARCH_USE_OPENMP)
 #define USEARCH_USE_OPENMP 0
 #endif
@@ -173,19 +180,21 @@ inline std::size_t ceil2(std::size_t v) noexcept {
     v |= v >> 4;
     v |= v >> 8;
     v |= v >> 16;
+#ifdef USEARCH_64BIT_ENV
     v |= v >> 32;
+#endif
     v++;
     return v;
 }
 
 template <typename at> void misaligned_store(void* ptr, at v) noexcept {
-    static_assert(!std::is_reference<at>::value);
+    static_assert(!std::is_reference<at>::value, "Can't store a reference");
     std::memcpy(ptr, &v, sizeof(at));
 }
 
 /// @brief  Simply dereferencing misaligned pointers can be dangerous.
 template <typename at> at misaligned_load(void* ptr) noexcept {
-    static_assert(!std::is_reference<at>::value);
+    static_assert(!std::is_reference<at>::value, "Can't load a reference");
     at v;
     std::memcpy(&v, ptr, sizeof(at));
     return v;
@@ -984,12 +993,19 @@ class sorted_buffer_gt {
 
 /**
  *  @brief Five-byte integer type to address node clouds with over 4B entries.
+ *
+ * @note Avoid usage in 32bit environment
  */
 class usearch_pack_m uint40_t {
     unsigned char octets[5];
 
+    inline uint40_t& broadcast(unsigned char c) {
+        std::memset(octets, c, 5);
+        return *this;
+    }
+
   public:
-    inline uint40_t() noexcept { std::memset(octets, 0, 5); }
+    inline uint40_t() noexcept { broadcast(0); }
     inline uint40_t(std::uint32_t n) noexcept { std::memcpy(octets, (char*)&n, 4); }
     inline uint40_t(std::uint64_t n) noexcept { std::memcpy(octets, (char*)&n, 5); }
 #if defined(USEARCH_DEFINED_CLANG) && defined(USEARCH_DEFINED_APPLE)
@@ -1026,7 +1042,11 @@ class usearch_pack_m uint40_t {
 
     inline operator std::size_t() const noexcept {
         std::size_t result = 0;
-        std::memcpy((char*)&result, octets, 5);
+#ifdef USEARCH_64BIT_ENV
+        std::memcpy((char*)&result + 3, octets, 5);
+#else
+        std::memcpy((char*)&result, octets + 1, 4);
+#endif
         return result;
     }
 
@@ -1037,6 +1057,9 @@ class usearch_pack_m uint40_t {
         *this += 1u;
         return old;
     }
+
+    inline static uint40_t max() noexcept { return uint40_t{}.broadcast(0xFF); }
+    inline static uint40_t min() noexcept { return uint40_t{}.broadcast(0); }
 };
 
 #if defined(USEARCH_DEFINED_WINDOWS)
@@ -1057,23 +1080,38 @@ class ring_gt {
     using value_type = element_t;
 
   private:
-    element_t* elements_;
-    std::size_t capacity_;
-    std::size_t head_;
-    std::size_t tail_;
-    bool empty_;
-    allocator_t allocator_;
+    element_t* elements_{};
+    std::size_t capacity_{};
+    std::size_t head_{};
+    std::size_t tail_{};
+    bool empty_{true};
+    allocator_t allocator_{};
 
   public:
-    explicit ring_gt(allocator_t const& alloc = allocator_t()) noexcept
-        : elements_(nullptr), capacity_(0), head_(0), tail_(0), empty_(true), allocator_(alloc) {}
+    explicit ring_gt(allocator_t const& alloc = allocator_t()) noexcept : allocator_(alloc) {}
 
     ring_gt(ring_gt const&) = delete;
     ring_gt& operator=(ring_gt const&) = delete;
 
+    ring_gt(ring_gt&& other) noexcept { swap(other); }
+    ring_gt& operator=(ring_gt&& other) noexcept {
+        swap(other);
+        return *this;
+    }
+
+    void swap(ring_gt& other) noexcept {
+        std::swap(elements_, other.elements_);
+        std::swap(capacity_, other.capacity_);
+        std::swap(head_, other.head_);
+        std::swap(tail_, other.tail_);
+        std::swap(empty_, other.empty_);
+        std::swap(allocator_, other.allocator_);
+    }
+
     ~ring_gt() noexcept { reset(); }
 
     bool empty() const noexcept { return empty_; }
+    size_t capacity() const noexcept { return capacity_; }
     size_t size() const noexcept {
         if (empty_)
             return 0;
@@ -1081,6 +1119,12 @@ class ring_gt {
             return head_ - tail_;
         else
             return capacity_ - (tail_ - head_);
+    }
+
+    void clear() noexcept {
+        head_ = 0;
+        tail_ = 0;
+        empty_ = true;
     }
 
     void reset() noexcept {
@@ -1093,13 +1137,24 @@ class ring_gt {
         empty_ = true;
     }
 
-    bool resize(std::size_t n) noexcept {
+    bool reserve(std::size_t n) noexcept {
+        if (n < size())
+            return false; // prevent data loss
+        n = (std::max<std::size_t>)(n, 64u);
         element_t* elements = allocator_.allocate(n);
         if (!elements)
             return false;
+
+        std::size_t i = 0;
+        while (try_pop(elements[i]))
+            i++;
+
         reset();
         elements_ = elements;
         capacity_ = n;
+        head_ = i;
+        tail_ = 0;
+        empty_ = (i == 0);
         return true;
     }
 
@@ -1126,6 +1181,8 @@ class ring_gt {
         empty_ = head_ == tail_;
         return true;
     }
+
+    element_t const& operator[](std::size_t i) const noexcept { return elements_[(tail_ + i) % capacity_]; }
 };
 
 /// @brief Number of neighbors per graph node.
@@ -1173,11 +1230,11 @@ struct index_config_t {
 };
 
 struct index_limits_t {
-    std::size_t elements = 0;
+    std::size_t members = 0;
     std::size_t threads_add = std::thread::hardware_concurrency();
     std::size_t threads_search = std::thread::hardware_concurrency();
 
-    index_limits_t(std::size_t n, std::size_t t) noexcept : elements(n), threads_add(t), threads_search(t) {}
+    index_limits_t(std::size_t n, std::size_t t) noexcept : members(n), threads_add(t), threads_search(t) {}
     index_limits_t(std::size_t n = 0) noexcept : index_limits_t(n, std::thread::hardware_concurrency()) {}
     std::size_t threads() const noexcept { return (std::max)(threads_add, threads_search); }
     std::size_t concurrency() const noexcept { return (std::min)(threads_add, threads_search); }
@@ -1457,7 +1514,7 @@ struct dummy_label_to_label_mapping_t {
  *
  */
 template <typename metric_at = ip_gt<float>,            //
-          typename label_at = std::size_t,              //
+          typename label_at = std::int64_t,             //
           typename id_at = std::uint32_t,               //
           typename allocator_at = std::allocator<char>, //
           typename point_allocator_at = allocator_at>   //
@@ -1474,16 +1531,18 @@ class index_gt {
     using vector_view_t = span_gt<scalar_t const>;
     using distance_t = return_type_gt<metric_t, vector_view_t, vector_view_t>;
 
-    struct member_ref_t {
-        misaligned_ref_gt<label_t> label;
-        vector_view_t vector;
-        id_t id;
-    };
-
     struct member_cref_t {
         label_t label;
         vector_view_t vector;
         id_t id;
+    };
+
+    struct member_ref_t {
+        misaligned_ref_gt<label_t> label;
+        vector_view_t vector;
+        id_t id;
+
+        inline operator member_cref_t() const noexcept { return {label, vector, id}; }
     };
 
     template <typename ref_at, typename index_at> class member_iterator_gt {
@@ -1774,6 +1833,9 @@ class index_gt {
     member_iterator_t begin() noexcept { return {this, 0}; }
     member_iterator_t end() noexcept { return {this, size()}; }
 
+    member_cref_t at(std::size_t i) const noexcept { return member_cref_t(node_with_id_(i)); }
+    member_ref_t at(std::size_t i) noexcept { return member_ref_t(node_with_id_(i)); }
+
 #pragma region Adjusting Configuration
 
     /**
@@ -1799,7 +1861,7 @@ class index_gt {
         clear();
 
         if (nodes_)
-            node_allocator_t{}.deallocate(exchange(nodes_, nullptr), limits_.elements);
+            node_allocator_t{}.deallocate(exchange(nodes_, nullptr), limits_.members);
         if (contexts_) {
             for (std::size_t i = 0; i != limits_.threads(); ++i)
                 contexts_[i].~context_t();
@@ -1842,13 +1904,16 @@ class index_gt {
      */
     bool reserve(index_limits_t limits) usearch_noexcept_m {
 
-        usearch_assert_m(limits.elements >= size_, "Can't drop existing values");
+        if (limits.threads_add <= limits_.threads_add          //
+            && limits.threads_search <= limits_.threads_search //
+            && limits.members <= limits_.members)
+            return true;
 
-        if (!nodes_mutexes_.resize(limits.elements))
+        if (!nodes_mutexes_.resize(limits.members))
             return false;
 
         node_allocator_t node_allocator;
-        node_t* new_nodes = node_allocator.allocate(limits.elements);
+        node_t* new_nodes = node_allocator.allocate(limits.members);
         if (!new_nodes)
             return false;
 
@@ -1856,17 +1921,17 @@ class index_gt {
         context_allocator_t context_allocator;
         context_t* new_contexts = context_allocator.allocate(limits_threads);
         if (!new_contexts) {
-            node_allocator.deallocate(new_nodes, limits.elements);
+            node_allocator.deallocate(new_nodes, limits.members);
             return false;
         }
         for (std::size_t i = 0; i != limits_threads; ++i) {
             context_t& context = new_contexts[i];
             new (&context) context_t();
             context.metric = metric_;
-            if (!context.visits.resize(limits.elements)) {
+            if (!context.visits.resize(limits.members)) {
                 for (std::size_t j = 0; j != i; ++j)
                     context.visits.reset();
-                node_allocator.deallocate(new_nodes, limits.elements);
+                node_allocator.deallocate(new_nodes, limits.members);
                 context_allocator.deallocate(new_contexts, limits_threads);
                 return false;
             }
@@ -1886,13 +1951,12 @@ class index_gt {
 
         // Move the nodes info, and deallocate previous buffers.
         if (nodes_)
-            std::memcpy(new_nodes, nodes_, sizeof(node_t) * size()),
-                node_allocator.deallocate(nodes_, limits_.elements);
+            std::memcpy(new_nodes, nodes_, sizeof(node_t) * size()), node_allocator.deallocate(nodes_, limits_.members);
         if (contexts_)
             context_allocator.deallocate(contexts_, limits_.threads());
 
         limits_ = limits;
-        capacity_ = limits.elements;
+        capacity_ = limits.members;
         nodes_ = new_nodes;
         contexts_ = new_contexts;
         return true;
@@ -2053,16 +2117,7 @@ class index_gt {
         result.measurements = context.measurements_count;
         result.cycles = context.iteration_cycles;
 
-        // Go down the level, tracking only the closest match
-        id_t closest_id = search_for_one_(entry_id_copy, vector, max_level_copy, target_level, context);
-
-        // From `target_level` down perform proper extensive search
-        for (level_t level = (std::min)(target_level, max_level_copy); level >= 0; --level) {
-            // TODO: Handle out of memory conditions
-            search_to_insert_(closest_id, vector, level, config.expansion, context);
-            closest_id = connect_new_node_(new_id, level, context);
-            reconnect_neighbor_nodes_(new_id, level, context);
-        }
+        connect_node_across_levels_(new_id, vector, entry_id_copy, max_level_copy, target_level, config, context);
 
         // Normalize stats
         result.measurements = context.measurements_count - result.measurements;
@@ -2073,6 +2128,51 @@ class index_gt {
             entry_id_ = new_id;
             max_level_ = target_level;
         }
+        return result;
+    }
+
+    /**
+     *  @brief Update an existing entry, replacing a vector and a label. Thread-safe.
+     *
+     *  @param[in] old_id Existing internal identifier for a node to be replaced.
+     *  @param[in] label External identifier/name/descriptor for the vector.
+     *  @param[in] vector Contiguous range of scalars forming a vector view.
+     *  @param[in] config Configuration options for this specific operation.
+     */
+    add_result_t update(id_t old_id, label_t label, vector_view_t vector, add_config_t config = {}) usearch_noexcept_m {
+
+        usearch_assert_m(!is_immutable(), "Can't add to an immutable index");
+        add_result_t result;
+
+        // Make sure we have enough local memory to perform this request
+        context_t& context = contexts_[config.thread];
+        top_candidates_t& top = context.top_candidates;
+        next_candidates_t& next = context.next_candidates;
+        top.clear();
+        next.clear();
+
+        // The top list needs one more slot than the connectivity of the base level
+        // for the heuristic, that tries to squeeze one more element into saturated list.
+        std::size_t top_limit = (std::max)(base_level_multiple_() * config_.connectivity + 1, config.expansion);
+        if (!top.reserve(top_limit))
+            return result.failed("Out of memory!");
+        if (!next.reserve(config.expansion))
+            return result.failed("Out of memory!");
+
+        node_lock_t new_lock = node_lock_(old_id);
+        node_t node = node_with_id_(old_id);
+
+        // Pull stats
+        result.measurements = context.measurements_count;
+        result.cycles = context.iteration_cycles;
+
+        connect_node_across_levels_(old_id, vector, entry_id_, max_level_, node.level(), config, context);
+        node.label(label);
+
+        // Normalize stats
+        result.measurements = context.measurements_count - result.measurements;
+        result.cycles = context.iteration_cycles - result.cycles;
+
         return result;
     }
 
@@ -2118,40 +2218,6 @@ class index_gt {
                 return result.failed("Out of memory!");
         }
 
-        top.sort_ascending();
-        top.shrink(wanted);
-
-        // Normalize stats
-        result.measurements = context.measurements_count - result.measurements;
-        result.cycles = context.iteration_cycles - result.cycles;
-        result.count = top.size();
-        return result;
-    }
-
-    template <typename predicate_at = dummy_predicate_t>
-    search_result_t search_around(                          //
-        id_t hint, vector_view_t query, std::size_t wanted, //
-        search_config_t config = {}, predicate_at&& predicate = dummy_predicate_t{}) const noexcept {
-
-        context_t& context = contexts_[config.thread];
-        top_candidates_t& top = context.top_candidates;
-        next_candidates_t& next = context.next_candidates;
-        search_result_t result{*this, top};
-
-        if (!size_)
-            return result;
-
-        std::size_t expansion = (std::max)(config.expansion, wanted);
-        if (!next.reserve(expansion))
-            return result.failed("Out of memory!");
-        if (!top.reserve(expansion))
-            return result.failed("Out of memory!");
-
-        // Go down the level, tracking only the closest match
-        result.measurements = context.measurements_count;
-        result.cycles = context.iteration_cycles;
-
-        search_to_find_in_base_(hint, query, expansion, context, std::forward<predicate_at>(predicate));
         top.sort_ascending();
         top.shrink(wanted);
 
@@ -2222,7 +2288,7 @@ class index_gt {
         }
 
         // Temporary data-structures, proportional to the number of nodes:
-        total += limits_.elements * sizeof(node_t) + allocator_entry_bytes;
+        total += limits_.members * sizeof(node_t) + allocator_entry_bytes;
 
         // Temporary data-structures, proportional to the number of threads:
         total += limits_.threads() * sizeof(context_t) + allocator_entry_bytes * 3;
@@ -2377,7 +2443,7 @@ class index_gt {
             pre_ = precompute_(config_);
 
             index_limits_t limits;
-            limits.elements = state.size;
+            limits.members = state.size;
             if (!reserve(limits)) {
                 std::fclose(file);
                 return result.failed("Out of memory");
@@ -2497,7 +2563,7 @@ class index_gt {
             pre_ = precompute_(config_);
 
             index_limits_t limits;
-            limits.elements = state.size;
+            limits.members = state.size;
             limits.threads_add = 0;
             if (!reserve(limits))
                 return result.failed("Out of memory!");
@@ -2545,6 +2611,11 @@ class index_gt {
      *  @brief  Adapts the Male-Optimal Stable Marriage algorithm for unequal sets
      *          to perform fast one-to-one matching between two large collections
      *          of vectors, using approximate nearest neighbors search.
+     *
+     *  @param[inout] first_to_second Container to map ::first labels to ::second.
+     *  @param[inout] second_to_first Container to map ::second labels to ::first.
+     *  @param[in] executor Thread-pool to execute the job in parallel.
+     *  @param[in] progress Callback to report the execution progress.
      */
     template <                                                        //
         typename first_to_second_at = dummy_label_to_label_mapping_t, //
@@ -2578,6 +2649,44 @@ class index_gt {
                 std::forward<progress_at>(progress));
     }
 
+    /**
+     *  @brief  Scans the whole collection, removing the links leading towards
+     *          banned entries. This essentially isolates some nodes from the rest
+     *          of the graph, while keeping their outgoing links, in case the node
+     *          is structurally relevant and has a crucial role in the index.
+     *          It won't reclaim the memory.
+     *
+     *  @param[in] allow_member Predicate to mark nodes for isolation.
+     *  @param[in] executor Thread-pool to execute the job in parallel.
+     *  @param[in] progress Callback to report the execution progress.
+     */
+    template <                                        //
+        typename allow_member_at = dummy_predicate_t, //
+        typename executor_at = dummy_executor_t,      //
+        typename progress_at = dummy_progress_t       //
+        >
+    void isolate(                               //
+        allow_member_at&& allow_member,         //
+        executor_at&& executor = executor_at{}, //
+        progress_at&& progress = progress_at{}) noexcept {
+
+        // Erase all the incoming links
+        executor.execute_bulk(size(), [&](std::size_t node_idx, std::size_t) {
+            node_t node = node_with_id_(node_idx);
+            for (level_t level = 0; level <= node.level(); ++level) {
+                neighbors_ref_t neighbors = neighbors_(node, level);
+                std::size_t old_size = neighbors.size();
+                neighbors.clear();
+                for (std::size_t i = 0; i != old_size; ++i) {
+                    id_t neighbor_id = neighbors[i];
+                    node_t neighbor = node_with_id_(neighbor_id);
+                    if (allow_member(member_cref_t{neighbor.label(), neighbor.vector_view(), neighbor_id}))
+                        neighbors.push_back(neighbor_id);
+                }
+            }
+        });
+    }
+
   private:
     template <typename first_to_second_at, typename second_to_first_at, typename executor_at, typename progress_at>
     static join_result_t join_small_and_big_(       //
@@ -2605,7 +2714,7 @@ class index_gt {
         // free men will be added/pulled.
         std::mutex free_men_mutex{};
         ring_gt<id_t, ids_allocator_t> free_men;
-        free_men.resize(men.size());
+        free_men.reserve(men.size());
         for (std::size_t i = 0; i != men.size(); ++i)
             free_men.push(static_cast<id_t>(i));
 
@@ -2870,6 +2979,23 @@ class index_gt {
         while (nodes_mutexes_.atomic_set(idx))
             ;
         return {nodes_mutexes_, idx};
+    }
+
+    void connect_node_across_levels_(                           //
+        id_t node_id, vector_view_t vector,                     //
+        id_t entry_id, level_t max_level, level_t target_level, //
+        add_config_t const& config, context_t& context) usearch_noexcept_m {
+
+        // Go down the level, tracking only the closest match
+        id_t closest_id = search_for_one_(entry_id, vector, max_level, target_level, context);
+
+        // From `target_level` down perform proper extensive search
+        for (level_t level = (std::min)(target_level, max_level); level >= 0; --level) {
+            // TODO: Handle out of memory conditions
+            search_to_insert_(closest_id, vector, level, config.expansion, context);
+            closest_id = connect_new_node_(node_id, level, context);
+            reconnect_neighbor_nodes_(node_id, level, context);
+        }
     }
 
     id_t connect_new_node_(id_t new_id, level_t level, context_t& context) usearch_noexcept_m {

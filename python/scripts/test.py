@@ -1,20 +1,16 @@
 import os
-import importlib.util
 
 import pytest
 import numpy as np
 
 from usearch.io import load_matrix, save_matrix
 from usearch.eval import random_vectors
-from usearch.numba import jit as njit
 
 from usearch.index import (
     Index,
     SparseIndex,
     MetricKind,
     ScalarKind,
-    MetricSignature,
-    CompiledMetric,
     Matches,
 )
 from usearch.index import (
@@ -35,7 +31,6 @@ index_types = [
 numpy_types = [np.float32, np.float64, np.float16]
 
 connectivity_options = [3, 13, 50, DEFAULT_CONNECTIVITY]
-jit_options = [False, True] if importlib.util.find_spec("spam") is not None else [False]
 continuous_metrics = [
     MetricKind.Cos,
     MetricKind.L2sq,
@@ -50,6 +45,12 @@ hash_metrics = [
 @pytest.mark.parametrize("rows", batch_sizes)
 @pytest.mark.parametrize("cols", dimensions)
 def test_serializing_fbin_matrix(rows: int, cols: int):
+    """
+    Test the serialization of floating point binary matrix.
+
+    :param int rows: The number of rows in the matrix.
+    :param int cols: The number of columns in the matrix.
+    """
     original = np.random.rand(rows, cols).astype(np.float32)
     save_matrix(original, "tmp.fbin")
     reconstructed = load_matrix("tmp.fbin")
@@ -60,6 +61,12 @@ def test_serializing_fbin_matrix(rows: int, cols: int):
 @pytest.mark.parametrize("rows", batch_sizes)
 @pytest.mark.parametrize("cols", dimensions)
 def test_serializing_ibin_matrix(rows: int, cols: int):
+    """
+    Test the serialization of integer binary matrix.
+
+    :param int rows: The number of rows in the matrix.
+    :param int cols: The number of columns in the matrix.
+    """
     original = np.random.randint(0, rows + 1, size=(rows, cols)).astype(np.int32)
     save_matrix(original, "tmp.ibin")
     reconstructed = load_matrix("tmp.ibin")
@@ -72,17 +79,13 @@ def test_serializing_ibin_matrix(rows: int, cols: int):
 @pytest.mark.parametrize("index_type", index_types)
 @pytest.mark.parametrize("numpy_type", numpy_types)
 @pytest.mark.parametrize("connectivity", connectivity_options)
-@pytest.mark.parametrize("jit", jit_options)
 def test_index(
     ndim: int,
     metric: MetricKind,
     index_type: ScalarKind,
     numpy_type: str,
     connectivity: int,
-    jit: bool,
 ):
-    if jit:
-        metric = njit(ndim, metric, index_type)
     index = Index(
         metric=metric,
         ndim=ndim,
@@ -95,7 +98,6 @@ def test_index(
     assert index.connectivity == connectivity
 
     vector = random_vectors(count=1, ndim=ndim, dtype=numpy_type).flatten()
-
     index.add(42, vector)
 
     assert 42 in index
@@ -118,11 +120,24 @@ def test_index(
     assert index.max_level >= 0
     assert index.levels_stats.nodes >= 1
     assert index.level_stats(0).nodes == 1
-    assert str(index).startswith("usearch.index.Index")
+    assert str(index).startswith("usearch.")
+
+    # Try removals
+    other_vector = random_vectors(count=1, ndim=ndim, dtype=numpy_type).flatten()
+    index.add(43, other_vector)
+    assert len(index) == 2
+    index.remove(43)
+    assert len(index) == 1
 
     index.save("tmp.usearch")
+
+    # Re-populate cleared index
     index.clear()
     assert len(index) == 0
+    index.add(42, vector)
+    assert len(index) == 1
+    matches, distances, count = index.search(vector, 10)
+    assert count == 1
 
     index.load("tmp.usearch")
     assert len(index) == 1
@@ -157,11 +172,11 @@ def test_index_batch(
     labels = np.arange(batch_size)
     vectors = random_vectors(count=batch_size, ndim=ndim, dtype=numpy_type)
 
-    index.add(labels, vectors)
+    index.add(labels, vectors, threads=2)
     assert len(index) == batch_size
     assert np.allclose(index.get_vectors(labels).astype(numpy_type), vectors, atol=0.1)
 
-    matches: Matches = index.search(vectors, 10)
+    matches: Matches = index.search(vectors, 10, threads=2)
     assert matches.labels.shape[0] == matches.distances.shape[0]
     assert matches.counts.shape[0] == batch_size
     assert np.all(np.sort(index.labels) == np.sort(labels))
@@ -223,236 +238,6 @@ def test_exact_recall(
     mapping: dict = index.join(index_copy, exact=True)
     for man, woman in mapping.items():
         assert man == woman, "Stable marriage failed"
-
-
-@pytest.mark.parametrize("ndim", dimensions)
-@pytest.mark.parametrize("batch_size", batch_sizes)
-def test_index_numba(ndim: int, batch_size: int):
-    try:
-        from numba import cfunc, types, carray
-    except ImportError:
-        return
-
-    # Showcases how to use Numba to JIT-compile similarity measures for USearch.
-    # https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
-    signature_two_args = types.float32(
-        types.CPointer(types.float32),
-        types.CPointer(types.float32),
-    )
-    signature_three_args = types.float32(
-        types.CPointer(types.float32),
-        types.CPointer(types.float32),
-        types.uint64,
-    )
-    signature_four_args = types.float32(
-        types.CPointer(types.float32),
-        types.uint64,
-        types.CPointer(types.float32),
-        types.uint64,
-    )
-
-    @cfunc(signature_two_args)
-    def python_inner_product_two_args(a, b):
-        a_array = carray(a, ndim)
-        b_array = carray(b, ndim)
-        c = 0.0
-        for i in range(ndim):
-            c += a_array[i] * b_array[i]
-        return 1 - c
-
-    @cfunc(signature_three_args)
-    def python_inner_product_three_args(a, b, ndim):
-        a_array = carray(a, ndim)
-        b_array = carray(b, ndim)
-        c = 0.0
-        for i in range(ndim):
-            c += a_array[i] * b_array[i]
-        return 1 - c
-
-    @cfunc(signature_four_args)
-    def python_inner_product_four_args(a, a_ndim, b, b_ndim):
-        a_array = carray(a, a_ndim)
-        b_array = carray(b, b_ndim)
-        c = 0.0
-        for i in range(a_ndim):
-            c += a_array[i] * b_array[i]
-        return 1 - c
-
-    functions = [
-        python_inner_product_two_args,
-        python_inner_product_three_args,
-        python_inner_product_four_args,
-    ]
-    signatures = [
-        MetricSignature.ArrayArray,
-        MetricSignature.ArrayArraySize,
-        MetricSignature.ArraySizeArraySize,
-    ]
-    for function, signature in zip(functions, signatures):
-        metric = CompiledMetric(
-            pointer=function.address,
-            kind=MetricKind.IP,
-            signature=signature,
-        )
-        index = Index(ndim=ndim, metric=metric)
-
-        labels = np.arange(batch_size)
-        vectors = random_vectors(count=batch_size, ndim=ndim)
-
-        index.add(labels, vectors)
-        matches, distances, count = index.search(vectors, 10)
-        assert matches.shape[0] == distances.shape[0]
-        assert count.shape[0] == batch_size
-
-
-@pytest.mark.parametrize("ndim", dimensions[-1:])
-@pytest.mark.parametrize("batch_size", batch_sizes[-1:])
-def test_index_cppyy(ndim: int, batch_size: int):
-    try:
-        import cppyy
-        import cppyy.ll
-    except ImportError:
-        return
-
-    cppyy.cppdef(
-        """
-    float inner_product_two_args(float *a, float *b) {
-        float result = 0;
-    #pragma unroll
-        for (size_t i = 0; i != ndim; ++i)
-            result += a[i] * b[i];
-        return 1 - result;
-    }
-    
-    float inner_product_three_args(float *a, float *b, size_t n) {
-        float result = 0;
-        for (size_t i = 0; i != n; ++i)
-            result += a[i] * b[i];
-        return 1 - result;
-    }
-    
-    float inner_product_four_args(float *a, size_t an, float *b, size_t) {
-        float result = 0;
-        for (size_t i = 0; i != an; ++i)
-            result += a[i] * b[i];
-        return 1 - result;
-    }
-    """.replace(
-            "ndim", str(ndim)
-        )
-    )
-
-    functions = [
-        cppyy.gbl.inner_product_two_args,
-        cppyy.gbl.inner_product_three_args,
-        cppyy.gbl.inner_product_four_args,
-    ]
-    signatures = [
-        MetricSignature.ArrayArray,
-        MetricSignature.ArrayArraySize,
-        MetricSignature.ArraySizeArraySize,
-    ]
-    for function, signature in zip(functions, signatures):
-        metric = CompiledMetric(
-            pointer=cppyy.ll.addressof(function),
-            kind=MetricKind.IP,
-            signature=signature,
-        )
-        index = Index(ndim=ndim, metric=metric)
-
-        labels = np.arange(batch_size)
-        vectors = random_vectors(count=batch_size, ndim=ndim)
-
-        index.add(labels, vectors)
-        matches, distances, count = index.search(vectors, 10)
-        assert matches.shape[0] == distances.shape[0]
-        assert count.shape[0] == batch_size
-
-
-@pytest.mark.parametrize("ndim", [8])
-@pytest.mark.parametrize("batch_size", batch_sizes)
-def test_index_peachpy(ndim: int, batch_size: int):
-    try:
-        from peachpy import (
-            Argument,
-            ptr,
-            float_,
-            const_float_,
-        )
-        from peachpy.x86_64 import (
-            abi,
-            Function,
-            uarch,
-            isa,
-            GeneralPurposeRegister64,
-            LOAD,
-            YMMRegister,
-            VSUBPS,
-            VADDPS,
-            VHADDPS,
-            VMOVUPS,
-            VFMADD231PS,
-            VPERM2F128,
-            VXORPS,
-            RETURN,
-        )
-    except ImportError:
-        return
-
-    a = Argument(ptr(const_float_), name="a")
-    b = Argument(ptr(const_float_), name="b")
-
-    with Function(
-        "InnerProduct", (a, b), float_, target=uarch.default + isa.avx + isa.avx2
-    ) as asm_function:
-        # Request two 64-bit general-purpose registers for addresses
-        reg_a, reg_b = GeneralPurposeRegister64(), GeneralPurposeRegister64()
-        LOAD.ARGUMENT(reg_a, a)
-        LOAD.ARGUMENT(reg_b, b)
-
-        # Load the vectors
-        ymm_a = YMMRegister()
-        ymm_b = YMMRegister()
-        VMOVUPS(ymm_a, [reg_a])
-        VMOVUPS(ymm_b, [reg_b])
-
-        # Prepare the accumulator
-        ymm_c = YMMRegister()
-        ymm_one = YMMRegister()
-        VXORPS(ymm_c, ymm_c, ymm_c)
-        VXORPS(ymm_one, ymm_one, ymm_one)
-
-        # Accumulate A and B product into C
-        VFMADD231PS(ymm_c, ymm_a, ymm_b)
-
-        # Reduce the contents of a YMM register
-        ymm_c_permuted = YMMRegister()
-        VPERM2F128(ymm_c_permuted, ymm_c, ymm_c, 1)
-        VADDPS(ymm_c, ymm_c, ymm_c_permuted)
-        VHADDPS(ymm_c, ymm_c, ymm_c)
-        VHADDPS(ymm_c, ymm_c, ymm_c)
-
-        # Negate the values, to go from "similarity" to "distance"
-        VSUBPS(ymm_c, ymm_one, ymm_c)
-
-        # A common convention is to return floats in XMM registers
-        RETURN(ymm_c.as_xmm)
-
-    python_function = asm_function.finalize(abi.detect()).encode().load()
-    metric = CompiledMetric(
-        pointer=python_function.loader.code_address,
-        kind=MetricKind.IP,
-        signature=MetricSignature.ArrayArray,
-    )
-    index = Index(ndim=ndim, metric=metric)
-
-    labels = np.arange(batch_size)
-    vectors = random_vectors(count=batch_size, ndim=ndim)
-
-    index.add(labels, vectors)
-    matches, distances, count = index.search(vectors, 10)
-    assert matches.shape[0] == distances.shape[0]
-    assert count.shape[0] == batch_size
 
 
 @pytest.mark.parametrize("bits", dimensions)

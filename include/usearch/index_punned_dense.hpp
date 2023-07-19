@@ -105,9 +105,31 @@ struct index_punned_dense_metric_t {
     inline result_t operator()(view_t a, view_t b) const { return func_(a, b); }
 };
 
+constexpr std::size_t default_removals_cycle() { return 64; }
+
+template <typename label_at, typename std::enable_if<std::is_integral<label_at>::value>::type* = nullptr>
+label_at default_free_value() {
+    return std::numeric_limits<label_at>::max();
+}
+
+template <typename label_at, typename std::enable_if<std::is_same<label_at, uint40_t>::value>::type* = nullptr>
+uint40_t default_free_value() {
+    return uint40_t::max();
+}
+
+template <                                                        //
+    typename label_at,                                            //
+    typename std::enable_if<!std::is_integral<label_at>::value && //
+                            !std::is_same<label_at, uint40_t>::value>::type* = nullptr>
+label_at default_free_value() {
+    return label_at();
+}
+
 /**
  *  @brief  Oversimplified type-punned index for equidimensional vectors
- *          with automatic down-casting and hardware isa.
+ *          with automatic @b down-casting, hardware-specific @b SIMD metrics,
+ *          and ability to @b remove existing vectors, common in Semantic Caching
+ *          applications.
  */
 template <typename label_at = std::int64_t, typename id_at = std::uint32_t> //
 class index_punned_dense_gt {
@@ -163,8 +185,12 @@ class index_punned_dense_gt {
     using shared_lock_t = std::unique_lock<shared_mutex_t>;
     using unique_lock_t = std::unique_lock<shared_mutex_t>;
 
-    mutable shared_mutex_t lookup_table_mutex_;
-    tsl::robin_map<label_t, id_t> lookup_table_;
+    mutable shared_mutex_t labeled_lookup_mutex_;
+    tsl::robin_map<label_t, id_t> labeled_lookup_;
+
+    mutable std::mutex free_ids_mutex_;
+    ring_gt<id_t> free_ids_;
+    label_t free_label_;
 
   public:
     using search_result_t = typename index_t::search_result_t;
@@ -172,6 +198,29 @@ class index_punned_dense_gt {
     using serialization_result_t = typename index_t::serialization_result_t;
     using join_result_t = typename index_t::join_result_t;
     using stats_t = typename index_t::stats_t;
+    using match_t = typename index_t::match_t;
+
+    struct labeling_result_t {
+        error_t error{};
+        std::size_t completed{};
+
+        explicit operator bool() const noexcept { return !error; }
+        labeling_result_t failed(error_t message) noexcept {
+            error = std::move(message);
+            return std::move(*this);
+        }
+    };
+
+    struct compaction_result_t {
+        error_t error{};
+        std::size_t pruned_edges{};
+
+        explicit operator bool() const noexcept { return !error; }
+        compaction_result_t failed(error_t message) noexcept {
+            error = std::move(message);
+            return std::move(*this);
+        }
+    };
 
     index_punned_dense_gt() = default;
     index_punned_dense_gt(index_punned_dense_gt&& other) { swap(other); }
@@ -193,7 +242,9 @@ class index_punned_dense_gt {
         std::swap(casts_, other.casts_);
         std::swap(root_metric_, other.root_metric_);
         std::swap(available_threads_, other.available_threads_);
-        std::swap(lookup_table_, other.lookup_table_);
+        std::swap(labeled_lookup_, other.labeled_lookup_);
+        std::swap(free_ids_, other.free_ids_);
+        std::swap(free_label_, other.free_label_);
     }
 
     static index_config_t optimize(index_config_t config) { return index_t::optimize(config); }
@@ -201,12 +252,11 @@ class index_punned_dense_gt {
     std::size_t dimensions() const { return dimensions_; }
     std::size_t scalar_words() const { return scalar_words_; }
     std::size_t connectivity() const { return typed_->connectivity(); }
-    std::size_t size() const { return typed_->size(); }
+    std::size_t size() const { return typed_->size() - free_ids_.size(); }
     std::size_t capacity() const { return typed_->capacity(); }
     std::size_t max_level() const noexcept { return typed_->max_level(); }
     index_config_t const& config() const { return typed_->config(); }
     index_limits_t const& limits() const { return typed_->limits(); }
-    void clear() { return typed_->clear(); }
 
     metric_t const& metric() const { return root_metric_; }
     std::size_t expansion_add() const { return expansion_add_; }
@@ -224,20 +274,35 @@ class index_punned_dense_gt {
     stats_t stats() const { return typed_->stats(); }
     stats_t stats(std::size_t level) const { return typed_->stats(level); }
 
-    bool reserve(index_limits_t limits) { return typed_->reserve(limits); }
+    bool reserve(index_limits_t limits) {
+        {
+            unique_lock_t lock(labeled_lookup_mutex_);
+            labeled_lookup_.reserve(limits.members);
+        }
+        return typed_->reserve(limits);
+    }
+
+    void clear() {
+        unique_lock_t lookup_lock(labeled_lookup_mutex_);
+        std::unique_lock<std::mutex> free_lock(free_ids_mutex_);
+        typed_->clear();
+        labeled_lookup_.clear();
+        free_ids_.clear();
+    }
+
     serialization_result_t save(char const* path) const { return typed_->save(path); }
 
     serialization_result_t load(char const* path) {
         serialization_result_t result = typed_->load(path);
         if (result)
-            reindex_labels();
+            reindex_labels_();
         return result;
     }
 
     serialization_result_t view(char const* path) {
         serialization_result_t result = typed_->view(path);
         if (result)
-            reindex_labels();
+            reindex_labels_();
         return result;
     }
 
@@ -246,13 +311,16 @@ class index_punned_dense_gt {
     }
 
     bool contains(label_t label) const {
-        shared_lock_t lock(lookup_table_mutex_);
-        return lookup_table_.contains(label);
+        shared_lock_t lock(labeled_lookup_mutex_);
+        return labeled_lookup_.contains(label);
     }
 
-    void export_labels(label_t* labels, std::size_t limit) const {
-        shared_lock_t lock(lookup_table_mutex_);
-        for (auto it = lookup_table_.begin(); it != lookup_table_.end() && limit; ++it, ++labels, --limit)
+    void export_labels(label_t* labels, std::size_t offset, std::size_t limit) const {
+        shared_lock_t lock(labeled_lookup_mutex_);
+        auto it = labeled_lookup_.begin();
+        offset = (std::min)(offset, labeled_lookup_.size());
+        std::advance(it, offset);
+        for (; it != labeled_lookup_.end() && limit; ++it, ++labels, --limit)
             *labels = it->first;
     }
 
@@ -281,18 +349,6 @@ class index_punned_dense_gt {
     search_result_t search(f32_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f32); }
     search_result_t search(f64_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f64); }
 
-    search_result_t search_around(label_t hint, b1x8_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_b1x8); }
-    search_result_t search_around(label_t hint, f8_bits_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f8); }
-    search_result_t search_around(label_t hint, f16_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f16); }
-    search_result_t search_around(label_t hint, f32_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f32); }
-    search_result_t search_around(label_t hint, f64_t const* vector, std::size_t wanted) const { return search_around_(hint, vector, wanted, casts_.from_f64); }
-
-    search_result_t search_around(label_t hint, b1x8_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_b1x8); }
-    search_result_t search_around(label_t hint, f8_bits_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f8); }
-    search_result_t search_around(label_t hint, f16_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f16); }
-    search_result_t search_around(label_t hint, f32_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f32); }
-    search_result_t search_around(label_t hint, f64_t const* vector, std::size_t wanted, search_config_t config) const { return search_around_(hint, vector, wanted, config, casts_.from_f64); }
-
     search_result_t empty_search_result() const { return search_result_t{*typed_}; }
 
     bool get(label_t label, b1x8_t* vector) const { return get_(label, vector, casts_.to_b1x8); }
@@ -302,30 +358,121 @@ class index_punned_dense_gt {
     bool get(label_t label, f64_t* vector) const { return get_(label, vector, casts_.to_f64); }
     // clang-format on
 
-    static index_punned_dense_gt make(                       //
-        std::size_t dimensions, metric_kind_t metric,        //
-        index_config_t config = {},                          //
-        scalar_kind_t accuracy = scalar_kind_t::f32_k,       //
-        std::size_t expansion_add = default_expansion_add(), //
-        std::size_t expansion_search = default_expansion_search()) {
+    labeling_result_t remove(label_t label) {
+        labeling_result_t result;
 
-        return make_(                                //
-            dimensions, accuracy,                    //
-            config, expansion_add, expansion_search, //
-            make_metric_(metric, dimensions, accuracy), make_casts_(accuracy));
+        unique_lock_t lookup_lock(labeled_lookup_mutex_);
+        auto id_terator = labeled_lookup_.find(label);
+        if (id_terator == labeled_lookup_.end())
+            return result;
+
+        // Grow the removed entries ring, if needed
+        std::unique_lock<std::mutex> free_lock(free_ids_mutex_);
+        if (free_ids_.size() == free_ids_.capacity())
+            if (!free_ids_.reserve((std::max<std::size_t>)(free_ids_.capacity() * 2, 64ul)))
+                return result.failed("Can't allocate memory for a free-list");
+
+        // A removed entry would be:
+        // - present in `free_ids_`
+        // - missing in the `labeled_lookup_`
+        // - marked in the `typed_` index with a `free_label_`
+        id_t id = id_terator->second;
+        free_ids_.push(id);
+        labeled_lookup_.erase(id_terator);
+        typed_->at(id).label = free_label_;
+        result.completed = true;
+
+        return result;
     }
 
-    static index_punned_dense_gt make(                       //
-        std::size_t dimensions, metric_t metric,             //
-        index_config_t config = {},                          //
-        scalar_kind_t accuracy = scalar_kind_t::f32_k,       //
-        std::size_t expansion_add = default_expansion_add(), //
-        std::size_t expansion_search = default_expansion_search()) {
+    template <typename labels_iterator_at>
+    labeling_result_t remove(labels_iterator_at&& labels_begin, labels_iterator_at&& labels_end) {
+
+        labeling_result_t result;
+        unique_lock_t lookup_lock(labeled_lookup_mutex_);
+        std::unique_lock<std::mutex> free_lock(free_ids_mutex_);
+
+        // Grow the removed entries ring, if needed
+        std::size_t count_requests = std::distance(labels_begin, labels_end);
+        if (!free_ids_.reserve(free_ids_.size() + count_requests))
+            return result.failed("Can't allocate memory for a free-list");
+
+        // Remove them one-by-one
+        for (auto label_it = labels_begin; label_it != labels_end; ++label_it) {
+            label_t label = *label_it;
+            auto id_terator = labeled_lookup_.find(label);
+            if (id_terator == labeled_lookup_.end())
+                continue;
+
+            // A removed entry would be:
+            // - present in `free_ids_`
+            // - missing in the `labeled_lookup_`
+            // - marked in the `typed_` index with a `free_label_`
+            id_t id = id_terator->second;
+            free_ids_.push(id);
+            labeled_lookup_.erase(id_terator);
+            typed_->at(id).label = free_label_;
+            result.completed += 1;
+        }
+
+        return result;
+    }
+
+    template <typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
+    compaction_result_t compact(executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
+        compaction_result_t result;
+        std::atomic<std::size_t> pruned_edges;
+        auto disallow = [&](member_cref_t const& member) noexcept {
+            bool freed = member.label == free_label_;
+            pruned_edges += freed;
+            return freed;
+        };
+        typed_->isolate(disallow, std::forward<executor_at>(executor), std::forward<progress_at>(progress));
+        result.pruned_edges = pruned_edges;
+        return result;
+    }
+
+    labeling_result_t rename(label_t from, label_t to) {
+        labeling_result_t result;
+        unique_lock_t lookup_lock(labeled_lookup_mutex_);
+        auto id_terator = labeled_lookup_.find(from);
+        if (id_terator == labeled_lookup_.end())
+            return result;
+
+        id_t id = id_terator->second;
+        labeled_lookup_.erase(id_terator);
+        labeled_lookup_.emplace(to, id);
+        typed_->at(id).label = to;
+        result.completed = true;
+        return result;
+    }
+
+    static index_punned_dense_gt make(                             //
+        std::size_t dimensions, metric_kind_t metric,              //
+        index_config_t config = {},                                //
+        scalar_kind_t accuracy = scalar_kind_t::f32_k,             //
+        std::size_t expansion_add = default_expansion_add(),       //
+        std::size_t expansion_search = default_expansion_search(), //
+        label_t free_label = default_free_value<label_t>()) {
 
         return make_(                                //
             dimensions, accuracy,                    //
             config, expansion_add, expansion_search, //
-            metric_t(metric), make_casts_(accuracy));
+            make_metric_(metric, dimensions, accuracy), make_casts_(accuracy), free_label);
+    }
+
+    static index_punned_dense_gt make(                             //
+        std::size_t dimensions, metric_t metric,                   //
+        index_config_t config = {},                                //
+        scalar_kind_t accuracy = scalar_kind_t::f32_k,             //
+        std::size_t expansion_add = default_expansion_add(),       //
+        std::size_t expansion_search = default_expansion_search(), //
+        label_t free_label = default_free_value<label_t>()) {
+
+        return make_(                                //
+            dimensions, accuracy,                    //
+            config, expansion_add, expansion_search, //
+            metric_t(metric), make_casts_(accuracy), free_label);
     }
 
     struct copy_result_t {
@@ -346,8 +493,13 @@ class index_punned_dense_gt {
         auto typed_result = typed_->copy(config);
         if (!typed_result)
             return result.failed(std::move(typed_result.error));
+        if (!result.index.free_ids_.reserve(free_ids_.size()))
+            return result.failed(std::move(typed_result.error));
+        for (std::size_t i = 0; i != free_ids_.size(); ++i)
+            result.index.free_ids_.push(free_ids_[i]);
+
+        result.index.labeled_lookup_ = labeled_lookup_;
         *result.index.typed_ = std::move(typed_result.index);
-        result.index.lookup_table_ = lookup_table_;
         return result;
     }
 
@@ -430,10 +582,21 @@ class index_punned_dense_gt {
         if (casted)
             vector_data = casted_data, vector_bytes = casted_vector_bytes_, config.store_vector = true;
 
-        add_result_t result = typed_->add(label, {vector_data, vector_bytes}, config);
+        // Check if there are some removed entries, whose nodes we can reuse
+        id_t free_id = default_free_value<id_t>();
         {
-            unique_lock_t lock(lookup_table_mutex_);
-            lookup_table_.emplace(label, result.id);
+            std::unique_lock<std::mutex> lock(free_ids_mutex_);
+            free_ids_.try_pop(free_id);
+        }
+
+        // Perform the insertion or the update
+        add_result_t result =                     //
+            free_id != default_free_value<id_t>() //
+                ? typed_->update(free_id, label, {vector_data, vector_bytes}, config)
+                : typed_->add(label, {vector_data, vector_bytes}, config);
+        {
+            unique_lock_t lock(labeled_lookup_mutex_);
+            labeled_lookup_.emplace(label, result.id);
         }
         return result;
     }
@@ -451,51 +614,51 @@ class index_punned_dense_gt {
         if (casted)
             vector_data = casted_data, vector_bytes = casted_vector_bytes_;
 
-        return typed_->search({vector_data, vector_bytes}, wanted, config);
-    }
-
-    template <typename scalar_at>
-    search_result_t search_around_(                                //
-        label_t hint, scalar_at const* vector, std::size_t wanted, //
-        search_config_t config, cast_t const& cast) const {
-
-        byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
-        std::size_t vector_bytes = dimensions_ * sizeof(scalar_at);
-
-        byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * config.thread;
-        bool casted = cast(vector_data, dimensions_, casted_data);
-        if (casted)
-            vector_data = casted_data, vector_bytes = casted_vector_bytes_;
-
-        return typed_->search_around(static_cast<id_t>(hint), {vector_data, vector_bytes}, wanted, config);
-    }
-
-    void reindex_labels() {
-        shared_lock_t lock(lookup_table_mutex_);
-        lookup_table_.clear();
-        for (std::size_t i = 0; i != typed_->size(); ++i) {
-            member_citerator_t iterator = typed_->cbegin() + i;
-            member_cref_t member = *iterator;
-            lookup_table_[member.label] = static_cast<id_t>(i);
-        }
+        auto allow = [=](match_t const& match) noexcept { return match.member.label != free_label_; };
+        return typed_->search({vector_data, vector_bytes}, wanted, config, allow);
     }
 
     id_t lookup_id_(label_t label) const {
-        shared_lock_t lock(lookup_table_mutex_);
-        return lookup_table_.at(label);
+        shared_lock_t lock(labeled_lookup_mutex_);
+        return labeled_lookup_.at(label);
+    }
+
+    void reindex_labels_() {
+
+        // Estimate number of entries first
+        std::size_t count_total = typed_->size();
+        std::size_t count_removed = 0;
+        for (std::size_t i = 0; i != count_total; ++i) {
+            member_cref_t member = typed_->at(i);
+            count_removed += member.label == free_label_;
+        }
+
+        unique_lock_t lock(labeled_lookup_mutex_);
+        labeled_lookup_.clear();
+        labeled_lookup_.reserve(count_total - count_removed);
+        free_ids_.clear();
+        free_ids_.reserve(count_removed);
+        for (std::size_t i = 0; i != typed_->size(); ++i) {
+            member_cref_t member = typed_->at(i);
+            if (member.label == free_label_)
+                free_ids_.push(static_cast<id_t>(i));
+            else
+                labeled_lookup_.emplace(member.label, static_cast<id_t>(i));
+        }
     }
 
     template <typename scalar_at> bool get_(label_t label, scalar_at* reconstructed, cast_t const& cast) const {
         id_t id;
+        // Find the matching ID
         {
-            shared_lock_t lock(lookup_table_mutex_);
-            auto it = lookup_table_.find(label);
-            if (it == lookup_table_.end())
+            shared_lock_t lock(labeled_lookup_mutex_);
+            auto it = labeled_lookup_.find(label);
+            if (it == labeled_lookup_.end())
                 return false;
             id = it->second;
         }
-        member_citerator_t iterator = typed_->cbegin() + id;
-        member_cref_t member = *iterator;
+        // Export the entry
+        member_cref_t member = typed_->at(id);
         byte_t const* punned_vector = reinterpret_cast<byte_t const*>(member.vector.data());
         bool casted = cast(punned_vector, dimensions_, (byte_t*)reconstructed);
         if (!casted)
@@ -520,20 +683,10 @@ class index_punned_dense_gt {
         return search_(vector, wanted, search_config, cast);
     }
 
-    template <typename scalar_at>
-    search_result_t search_around_(                                //
-        label_t hint, scalar_at const* vector, std::size_t wanted, //
-        cast_t const& cast) const {
-        thread_lock_t lock = thread_lock_();
-        search_config_t search_config;
-        search_config.thread = lock.thread_id;
-        return search_around_(hint, vector, wanted, search_config, cast);
-    }
-
     static index_punned_dense_gt make_(                                                 //
         std::size_t dimensions, scalar_kind_t scalar_kind,                              //
         index_config_t config, std::size_t expansion_add, std::size_t expansion_search, //
-        metric_t metric, casts_t casts) {
+        metric_t metric, casts_t casts, label_t free_label) {
 
         std::size_t hardware_threads = std::thread::hardware_concurrency();
         index_punned_dense_gt result;
@@ -545,6 +698,7 @@ class index_punned_dense_gt {
         result.cast_buffer_.resize(hardware_threads * result.casted_vector_bytes_);
         result.casts_ = casts;
         result.root_metric_ = metric;
+        result.free_label_ = free_label;
 
         // Fill the thread IDs.
         result.available_threads_.resize(hardware_threads);

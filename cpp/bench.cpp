@@ -15,7 +15,9 @@
 
 #define STDERR_FILENO HANDLE(2)
 #else
-#include <execinfo.h>
+#if defined(__linux__)
+#include <execinfo.h> // `backtrace`
+#endif
 #include <fcntl.h>    // `open`
 #include <stdlib.h>   // `getenv`
 #include <sys/mman.h> // `mmap`
@@ -36,7 +38,9 @@
 #include <vector>
 
 #include <clipp.h> // Command Line Interface
-#include <omp.h>   // `omp_set_num_threads()`
+#if USEARCH_USE_OPENMP
+#include <omp.h> // `omp_set_num_threads()`
+#endif
 
 #include <simsimd/simsimd.h>
 
@@ -45,6 +49,7 @@
 using namespace unum::usearch;
 using namespace unum;
 
+using label_t = std::int64_t;
 using vector_id_t = std::uint32_t;
 using vector_view_t = span_gt<float const>;
 
@@ -278,15 +283,19 @@ void index_many(index_at& native, std::size_t n, vector_id_at const* ids, real_a
 
     running_stats_printer_t printer{n, "Indexing"};
 
+#if USEARCH_USE_OPENMP
 #pragma omp parallel for schedule(static, 32)
+#endif
     for (std::size_t i = 0; i < n; ++i) {
         add_config_t config;
+#if USEARCH_USE_OPENMP
         config.thread = omp_get_thread_num();
+#endif
         config.store_vector = true;
         vector_view_t vector{vectors + dims * i, dims};
         native.add(ids[i], vector, config);
         printer.progress++;
-        if (omp_get_thread_num() == 0)
+        if (config.thread == 0)
             printer.refresh();
     }
 }
@@ -299,34 +308,18 @@ void search_many( //
     std::string name = "Search " + std::to_string(wanted);
     running_stats_printer_t printer{n, name.c_str()};
 
+#if USEARCH_USE_OPENMP
 #pragma omp parallel for schedule(static, 32)
+#endif
     for (std::size_t i = 0; i < n; ++i) {
         search_config_t config;
+#if USEARCH_USE_OPENMP
         config.thread = omp_get_thread_num();
+#endif
         vector_view_t vector{vectors + dims * i, dims};
         native.search(vector, wanted, config).dump_to(ids + wanted * i, distances + wanted * i);
         printer.progress++;
-        if (omp_get_thread_num() == 0)
-            printer.refresh();
-    }
-}
-
-template <typename index_at, typename vector_id_at, typename real_at>
-void paginate_many( //
-    index_at& native, std::size_t n, real_at const* vectors, std::size_t dims, std::size_t wanted,
-    vector_id_at const* hints) {
-
-    std::string name = "Paginate " + std::to_string(wanted);
-    running_stats_printer_t printer{n, name.c_str()};
-
-#pragma omp parallel for schedule(static, 32)
-    for (std::size_t i = 0; i < n; ++i) {
-        search_config_t config;
-        config.thread = omp_get_thread_num();
-        vector_view_t vector{vectors + dims * i, dims};
-        native.search_around(hints[i], vector, wanted, config);
-        printer.progress++;
-        if (omp_get_thread_num() == 0)
+        if (config.thread == 0)
             printer.refresh();
     }
 }
@@ -397,14 +390,6 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
     std::printf("Unmatched %.2f %% (%zu items)\n", unmatched_count * 100.f / index.size(), unmatched_count);
     std::printf("Proposals %.2f / man (%zu total)\n", join_attempts * 1.f / index.size(), join_attempts);
 
-    // Paginate
-    std::vector<vector_id_t> hints(dataset.queries_count());
-    for (std::size_t i = 0; i != hints.size(); ++i)
-        hints[i] = dataset.neighborhood(i)[0];
-    paginate_many(index, dataset.queries_count(), dataset.query(0), dataset.dimensions(), 10, hints.data());
-    paginate_many(index, dataset.queries_count(), dataset.query(0), dataset.dimensions(), 100, hints.data());
-    paginate_many(index, dataset.queries_count(), dataset.query(0), dataset.dimensions(), 1000, hints.data());
-
     std::printf("------------\n");
     std::printf("\n");
 }
@@ -416,7 +401,7 @@ void handler(int sig) {
     // get void*'s for all entries on the stack
 #if defined(USEARCH_DEFINED_WINDOWS)
     size = CaptureStackBackTrace(0, 10, array, NULL);
-#else
+#elif defined(USEARCH_DEFINED_LINUX)
     size = backtrace(array, 10);
 #endif // WINDOWS
 
@@ -438,7 +423,7 @@ void handler(int sig) {
         WriteFile(STDERR_FILENO, "\n", 1, &bytes_written, NULL);
     }
     free(symbol);
-#else
+#elif defined(USEARCH_DEFINED_LINUX)
     backtrace_symbols_fd(array, size, STDERR_FILENO);
 #endif // WINDOWS
 
@@ -555,24 +540,24 @@ void run_big_or_small(dataset_at& dataset, args_t const& args, index_config_t co
     if (args.native) {
         if (args.metric_cos) {
             std::printf("-- Metric: Angular\n");
-            run_typed<index_gt<cos_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config, limits);
+            run_typed<index_gt<cos_gt<float>, label_t, neighbor_id_at>>(dataset, args, config, limits);
         } else if (args.metric_l2) {
             std::printf("-- Metric: Euclidean\n");
-            run_typed<index_gt<l2sq_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config, limits);
+            run_typed<index_gt<l2sq_gt<float>, label_t, neighbor_id_at>>(dataset, args, config, limits);
         } else if (args.metric_haversine) {
             std::printf("-- Metric: Haversine\n");
-            run_typed<index_gt<haversine_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config, limits);
+            run_typed<index_gt<haversine_gt<float>, label_t, neighbor_id_at>>(dataset, args, config, limits);
         } else {
             std::printf("-- Metric: Inner Product\n");
-            run_typed<index_gt<ip_gt<float>, std::size_t, neighbor_id_at>>(dataset, args, config, limits);
+            run_typed<index_gt<ip_gt<float>, label_t, neighbor_id_at>>(dataset, args, config, limits);
         }
     } else
-        run_punned<index_punned_dense_gt<std::size_t, neighbor_id_at>>(dataset, args, config, limits);
+        run_punned<index_punned_dense_gt<label_t, neighbor_id_at>>(dataset, args, config, limits);
 }
 
 void report_alternative_setups() {
     using set_member_t = std::uint32_t;
-    using sets_index_t = index_gt<jaccard_gt<set_member_t>, std::size_t, std::uint32_t>;
+    using sets_index_t = index_gt<jaccard_gt<set_member_t>, label_t, std::uint32_t>;
     set_member_t set_a[] = {10, 12, 15};
     set_member_t set_b[] = {11, 12, 15, 16};
     sets_index_t index;
@@ -662,12 +647,14 @@ int main(int argc, char** argv) {
         exit(0);
     }
 
+#if USEARCH_USE_OPENMP
     // Instead of relying on `multithreaded` from "index_punned_dense.hpp" we will use OpenMP
     // to better estimate statistics between tasks batches, without having to recreate
     // the threads.
     omp_set_dynamic(true);
     omp_set_num_threads(args.threads);
     std::printf("- OpenMP threads: %d\n", omp_get_max_threads());
+#endif
 
     std::printf("- Dataset: \n");
     std::printf("-- Base vectors path: %s\n", args.path_vectors.c_str());
@@ -695,7 +682,7 @@ int main(int argc, char** argv) {
     // config.expansion_search = args.expansion_search;
     index_limits_t limits;
     limits.threads_add = limits.threads_search = args.threads;
-    limits.elements = dataset.vectors_count();
+    limits.members = dataset.vectors_count();
 
     std::printf("- Index: \n");
     std::printf("-- Connectivity: %zu\n", config.connectivity);
@@ -703,7 +690,11 @@ int main(int argc, char** argv) {
     // std::printf("-- Expansion @ Search: %zu\n", config.expansion_search);
 
     if (args.big)
+#ifdef USEARCH_64BIT_ENV
         run_big_or_small<uint40_t>(dataset, args, config, limits);
+#else
+        std::printf("Error: Don't use 40 bit identifiers in 32bit environment\n");
+#endif
     else
         run_big_or_small<std::uint32_t>(dataset, args, config, limits);
 

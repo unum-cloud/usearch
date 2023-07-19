@@ -319,15 +319,18 @@ class Index:
         pass `copy=False`, if you can guarantee the lifetime of the
         primary vectors store during the process of construction.
 
-        :param labels: Unique identifier for passed vectors, optional
+        :param labels: Unique identifier(s) for passed vectors, optional
         :type labels: Buffer
-        :param vectors: Collection of vectors.
+        :param vectors: Vector or a row-major matrix
         :type vectors: Buffer
         :param copy: Should the index store a copy of vectors, defaults to True
         :type copy: bool, optional
         :param threads: Optimal number of cores to use, defaults to 0
         :type threads: int, optional
-
+        :param log: Whether to print the progress bar, default to False
+        :type log: Union[str, bool], optional
+        :param batch_size: Number of vectors to process at once, defaults to 0
+        :type batch_size: int, optional
         :return: Inserted label or labels
         :type: Union[int, np.ndarray]
         """
@@ -399,17 +402,21 @@ class Index:
         log: Union[str, bool] = False,
         batch_size: int = 0,
     ) -> Matches:
-        """Performs approximate nearest neighbors search for one or more queries.
+        """
+        Performs approximate nearest neighbors search for one or more queries.
 
         :param vectors: Query vector or vectors.
         :type vectors: Buffer
         :param k: Upper limit on the number of matches to find, defaults to 10
         :type k: int, optional
-
         :param threads: Optimal number of cores to use, defaults to 0
         :type threads: int, optional
         :param exact: Perform exhaustive linear-time exact search, defaults to False
         :type exact: bool, optional
+        :param log: Whether to print the progress bar, default to False
+        :type log: Union[str, bool], optional
+        :param batch_size: Number of vectors to process at once, defaults to 0
+        :type batch_size: int, optional
         :return: Approximate matches for one or more queries
         :rtype: Matches
         """
@@ -461,6 +468,34 @@ class Index:
             )
             return Matches(*tuple_)
 
+    def remove(
+        self,
+        labels: Union[int, Iterable[int]],
+        *,
+        compact: bool = False,
+        threads: int = 0,
+    ) -> Union[bool, int]:
+        """Removes one or move vectors from the index.
+
+        When working with extremely large indexes, you may want to
+        mark some entries deleted, instead of rebuilding a filtered index.
+        In other cases, rebuilding - is the recommended approach.
+
+        :param labels: Unique identifier for passed vectors, optional
+        :type labels: Buffer
+        :param compact: Removes links to removed nodes (expensive), defaults to False
+        :type compact: bool, optional
+        :param threads: Optimal number of cores to use, defaults to 0
+        :type threads: int, optional
+        :return: Number of removed entries
+        :type: Union[bool, int]
+        """
+        return self._compiled.remove(labels, compact=compact, threads=threads)
+
+    def rename(self, label_from: int, label_to: int) -> bool:
+        """Relabel existing entry"""
+        return self._compiled.rename(label_from, label_to)
+
     @property
     def specs(self) -> dict:
         return {
@@ -480,6 +515,19 @@ class Index:
 
     def __len__(self) -> int:
         return self._compiled.__len__()
+
+    def __delitem__(self, label: int) -> bool:
+        raise self.remove(label)
+
+    def __contains__(self, label: int) -> bool:
+        return self._compiled.__contains__(label)
+
+    def __getitem__(self, label: int) -> np.ndarray:
+        dtype = self.dtype
+        get_dtype = _to_numpy_compatible_dtype(dtype)
+        vector = self._compiled.__getitem__(label, get_dtype)
+        view_dtype = _to_numpy_dtype(dtype)
+        return None if vector is None else vector.view(view_dtype)
 
     @property
     def jit(self) -> bool:
@@ -567,19 +615,50 @@ class Index:
         return result
 
     def join(self, other: Index, max_proposals: int = 0, exact: bool = False) -> dict:
+        """Performs "Semantic Join" or pairwise matching between `self` & `other` index.
+        Is different from `search`, as no collisions are allowed in resulting pairs.
+        Uses the concept of "Stable Marriages" from Combinatorics, famous for the 2012
+        Nobel Prize in Economics.
+
+        :param other: Another index.
+        :type other: Index
+        :param max_proposals: Limit on candidates evaluated per vector, defaults to 0
+        :type max_proposals: int, optional
+        :param exact: Controls if underlying `search` should be exact, defaults to False
+        :type exact: bool, optional
+        :return: Mapping from labels of `self` to labels of `other`
+        :rtype: dict
+        """
         return self._compiled.join(
             other=other._compiled,
             max_proposals=max_proposals,
             exact=exact,
         )
 
+    def get_labels(self, offset: int = 0, limit: int = 0) -> np.ndarray:
+        if limit == 0:
+            limit = 2**63 - 1
+        return self._compiled.get_labels(offset, limit)
+
     @property
     def labels(self) -> np.ndarray:
+        """Retrieves the labels of all vectors present in `self`
+
+        :return: Array of labels
+        :rtype: np.ndarray
+        """
         return self._compiled.labels
 
     def get_vectors(
-        self, labels: np.ndarray, dtype: ScalarKind = ScalarKind.F32
+        self,
+        labels: np.ndarray,
+        dtype: ScalarKind = ScalarKind.F32,
     ) -> np.ndarray:
+        """Retrieves vectors associated with given `labels`
+
+        :return: Matrix of vectors (row-major)
+        :rtype: np.ndarray
+        """
         dtype = _normalize_dtype(dtype, self._metric_kind)
         get_dtype = _to_numpy_compatible_dtype(dtype)
         vectors = np.vstack([self._compiled.__getitem__(l, get_dtype) for l in labels])
@@ -589,22 +668,6 @@ class Index:
     @property
     def vectors(self) -> np.ndarray:
         return self.get_vectors(self.labels, self.dtype)
-
-    def __delitem__(self, label: int):
-        raise NotImplementedError()
-
-    def __contains__(self, label: int) -> bool:
-        return self._compiled.__contains__(label)
-
-    def __getitem__(self, label: int) -> np.ndarray:
-        dtype = self.dtype
-        get_dtype = _to_numpy_compatible_dtype(dtype)
-        vector = self._compiled.__getitem__(label, get_dtype)
-        view_dtype = _to_numpy_dtype(dtype)
-        return None if vector is None else vector.view(view_dtype)
-
-    def remove(self, label: int):
-        pass
 
     @property
     def max_level(self) -> int:
@@ -618,15 +681,24 @@ class Index:
         return self._compiled.level_stats(level)
 
     def __repr__(self) -> str:
-        return f"usearch.index.Index({self.dtype} x {self.ndim}, {self.metric}, expansion: {self.expansion_add} & {self.expansion_search}, {len(self)} vectors across {self.max_level+1} levels)"
+        f = "usearch.Index({} x {}, {}, expansion: {} & {}, {} vectors in {} levels)"
+        return f.format(
+            self.dtype,
+            self.ndim,
+            self.metric,
+            self.expansion_add,
+            self.expansion_search,
+            len(self),
+            self.max_level + 1,
+        )
 
     def _repr_pretty_(self) -> str:
         level_stats = [
-            f"--- {i}. {self.level_stats(i)} nodes" for i in range(self.max_level)
+            f"--- {i}. {self.level_stats(i).nodes} nodes" for i in range(self.max_level)
         ]
         return "\n".join(
             [
-                "usearch.index.Index",
+                "usearch.Index",
                 "- config" f"-- data type: {self.dtype}",
                 f"-- dimensions: {self.ndim}",
                 f"-- metric: {self.metric}",

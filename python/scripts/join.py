@@ -5,7 +5,11 @@ wget -nc https://huggingface.co/datasets/unum-cloud/ann-cc-3m/resolve/main/image
 wget -nc https://huggingface.co/datasets/unum-cloud/ann-cc-3m/resolve/main/texts.fbin -P datasets/cc_3M/
 wget -nc https://huggingface.co/datasets/unum-cloud/ann-cc-3m/resolve/main/uform_english_images.fbin -P datasets/cc_3M/
 wget -nc https://huggingface.co/datasets/unum-cloud/ann-cc-3m/resolve/main/uform_english_texts.fbin -P datasets/cc_3M/
-rm -rf datasets/cc_3M/*.usearch
+wget -nc https://huggingface.co/datasets/unum-cloud/ann-cc-3m/resolve/main/clipbigg_images.fbin -P datasets/cc_3M/
+wget -nc https://huggingface.co/datasets/unum-cloud/ann-cc-3m/resolve/main/clipbigg_texts.fbin -P datasets/cc_3M/
+wget -nc https://huggingface.co/datasets/unum-cloud/ann-arxiv-2m/resolve/main/e5base_abstract.fbin -P datasets/arxiv_2M/
+wget -nc https://huggingface.co/datasets/unum-cloud/ann-arxiv-2m/resolve/main/e5base_title.fbin -P datasets/arxiv_2M/
+rm -rf datasets/cc_3M/*.usearch datasets/arxiv_2M/*.usearch
 python python/scripts/join.py
 """
 from numpy import dot
@@ -45,13 +49,13 @@ metric = CompiledMetric(
 a = Index(
     a_mat.shape[1],
     metric=metric,
-    path=f"datasets/{a_name}.f32.usearch",
+    path=f"datasets/{a_name}-{max_elements}.f32.usearch",
     dtype="f32",
 )
 b = Index(
     b_mat.shape[1],
     metric=metric,
-    path=f"datasets/{b_name}.f32.usearch",
+    path=f"datasets/{b_name}-{max_elements}.f32.usearch",
     dtype="f32",
 )
 

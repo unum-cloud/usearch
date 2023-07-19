@@ -35,210 +35,45 @@ Linux • MacOS • Windows • Docker • WebAssembly 🔜
 
 ---
 
-- [x] Industry-leading [performance](#performance).
-- [x] Easily-extendible [single C++11 header][usearch-header] implementation.
-- [x] SIMD-accelerated and [User-defined](#define-custom-metrics) metrics with JIT-compilation.
-- [x] Variable dimensionality vectors - for [obscure use-cases, like GIS and Chess][obscure-use-cases].
-- [x] Bitwise Tanimoto and Sorensen coefficients for Genomics and Chemistry.
-- [x] [Half-precision `f16` and Quarter-precision `f8`](#quantize-on-the-fly) support on any hardware.
-- [x] [View from disk](#view-larger-indexes-from-disk), without loading into RAM.
-- [x] [4B+](#go-beyond-4b-entries) sized space efficient point-clouds with `uint40_t`.
-- [x] [Bring your threads](#bring-your-threads), like OpenMP or C++23 executors.
-- [x] Multiple vectors per label.
-- [ ] Thread-safe `reserve`.
+- [x] Benchmark-topping performance.
+- [x] Simple and extensible [single C++11 header][usearch-header] implementation.
+- [x] SIMD-optimized and [user-defined metrics](#user-defined-functions) with JIT-compilation.
+- [x] Variable dimensionality vectors for unique applications, including GIS and Chess.
+- [x] Advanced bitwise Tanimoto and Sorensen coefficients ideal for Genomics and Chemistry.
+- [x] On-the-fly support for [half-precision `f16` and quarter-precision `f8`](#memory-efficiency-downcasting-and-quantization), compatible with any hardware.
+- [x] [View large indexes from disk](#disk-based-indexes) without loading into RAM.
+- [x] Space-efficient point-clouds with `uint40_t`, accommodating 4B+ size.
+- [x] Optimized for concurrent threading, like OpenMP or C++23 executors with bring your threads.
+- [x] Support for multiple vectors per label.
 - [ ] On-the-fly deletions.
-- [x] USearch + UForm Transformers = [Semantic Search](#ai--vector-search--semantic-search).
-- [x] USearch + RDKit = [Molecule Search](#ai--vector-search--semantic-search).
+- [x] Utilize [USearch and UForm Transformers for Semantic Search](#usearch--ai--multi-modal-semantic-search).
+- [x] Combine [USearch and RDKit for Molecule Search](#usearch--rdkit--molecular-search).
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/index.hpp
 [obscure-use-cases]: https://ashvardanian.com/posts/abusing-vector-search
 
----
+## Comparison with FAISS
+
+FAISS is a widely recognized standard for high-performance vector search engines.
+USearch and FAISS both employ the same HNSW algorithm, but they differ significantly in their design principles.
+USearch is compact and broadly compatible without sacrificing performance, with a primary focus on user-defined metrics and fewer dependencies.
 
 |                    | FAISS                         | USearch                            |
 | :----------------- | :---------------------------- | :--------------------------------- |
-| Implementation     | 84 K [SLOC][sloc] in `faiss/` | 1 K [SLOC][sloc] in `usearch/`     |
+| Implementation     | 84 K [SLOC][sloc] in `faiss/` | 3 K [SLOC][sloc] in `usearch/`     |
 | Supported metrics  | 9 fixed metrics               | Any User-Defined metrics           |
 | Supported ID types | `uint32_t`, `uint64_t`        | `uint32_t`, `uint40_t`, `uint64_t` |
 | Dependencies       | BLAS, OpenMP                  | None                               |
 | Bindings           | SWIG                          | Native                             |
 | Acceleration       | Learned Quantization          | Downcasting                        |
 
-FAISS is the industry standard for a high-performance batteries-included vector search engine.
-Both USearch and FAISS implement the same HNSW algorithm.
-But they differ in a lot of design decisions.
-USearch is designed to be compact and broadly compatible without sacrificing performance.
-
-|              | FAISS, `f32` | USearch, `f32` | USearch, `f16` | USearch, `f8` |
-| :----------- | -----------: | -------------: | -------------: | ------------: |
-| Batch Insert |       16 K/s |         73 K/s |        100 K/s |   **104 K/s** |
-| Batch Search |       82 K/s |        103 K/s |        113 K/s |   **134 K/s** |
-| Bulk Insert  |       76 K/s |        105 K/s |        115 K/s |   **202 K/s** |
-| Bulk Search  |      118 K/s |        174 K/s |        173 K/s |   **304 K/s** |
-| Recall @1    |          99% |          99.2% |          99.1% |     **99.2%** |
-
-> Dataset: 1M vectors sample of the Deep1B dataset.
-> Hardware: `c7g.metal` AWS instance with 64 cores and DDR5 memory.
-> HNSW was configured with identical hyper-parameters:
-> connectivity `M=16`,
-> expansion @ construction `efConstruction=128`,
-> and expansion @ search `ef=64`.
-> Batch size is 256.
-> Both libraries were compiled for the target architecture.
-> Jump to the [Performance Tuning][benchmarking] section to read about the effects of those hyper-parameters.
-
 [sloc]: https://en.wikipedia.org/wiki/Source_lines_of_code
-[benchmarking]: https://github.com/unum-cloud/usearch/blob/main/docs/benchmarks.md
 
-## User-Defined Functions
+Base functionality is identical to FAISS, and the interface must be familiar if you have ever investigated Approximate Nearest Neigbors search:
 
-Most vector-search packages focus on just 2 metrics - "Inner Product distance" and "Euclidean distance".
-That only partially exhausts the list of possible metrics.
-A good example would be the rare [Haversine][haversine] distance, used to compute the distance between geo-spatial coordinates, extending Vector Search into the GIS domain.
-Another example would be designing a custom metric for **composite embeddings** concatenated from multiple AI models in real-world applications. 
-USearch supports that: [Python](#user-defined-functions-in-python) and [C++](#user-defined-functions-in-c) examples.
+```py
+$ pip install usearch numpy
 
-![USearch: Vector Search Approaches](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-approaches-white.png?raw=true)
-
-Unlike older approaches indexing high-dimensional spaces, like KD-Trees and Locality Sensitive Hashing, HNSW doesn't require vectors to be identical in length.
-They only have to be comparable.
-So you can apply it in [obscure][obscure] applications, like searching for similar sets or fuzzy text matching.
-
-[haversine]: https://ashvardanian.com/posts/abusing-vector-search#geo-spatial-indexing
-[obscure]: https://ashvardanian.com/posts/abusing-vector-search
-
-## Memory Efficiency, Downcasting, and Quantization
-
-Training a quantization model and dimension-reduction is a common approach to accelerate vector search.
-Those, however, are only sometimes reliable, can significantly affect the statistical properties of your data, and require regular adjustments if your distribution shifts.
-
-![USearch uint40_t support](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-neighbor-types.png?raw=true)
-
-Instead, we have focused on high-precision arithmetic over low-precision downcasted vectors.
-The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f32_t`, `f16_t`, `f64_t`, and `f8_t` representations, even if the hardware doesn't natively support it.
-Continuing the topic of memory-efficiency, we provide a `uint40_t` to allow collection with over 4B+ vectors without allocating 8 bytes for every neighbor reference in the proximity graph.
-
-## View Larger Indexes from Disk
-
-Modern search systems often suggest using different servers to maximize indexing speed and minimize serving costs.
-Memory-optimized for the first task, and storage-optimized for the second, if the index can be served from external memory, which USearch can.
-
-|          |    To Build     |        To Serve        |
-| :------- | :-------------: | :--------------------: |
-| Instance |  u-24tb1.metal  |     is4gen.8xlarge     |
-| Price    |    ~ $200/h     |        ~$4.5/h         |
-| Memory   | 24 TB RAM + EBS | 192 GB RAM + 30 TB SSD |
-
-There is a 50x difference between the cost of such instances for identical capacity.
-Of course, the latency of external memory access will be higher, but it is in part compensated with an excellent prefetching mechanism.
-
-## Usage
-
-There are two usage patters:
-
-1. Bare-bones with `usearch/index.hpp`, only available in C++.
-2. Full-fat version with it's own threads, mutexes, type-punning, quantization, that is available both in C++ and is wrapped for higher-level bindings.
-
-### C++
-
-#### Installation
-
-To use in a C++ project simply copy the `include/usearch/index.hpp` header into your project.
-Alternatively fetch it with CMake:
-
-```cmake
-FetchContent_Declare(usearch GIT_REPOSITORY https://github.com/unum-cloud/usearch.git)
-FetchContent_MakeAvailable(usearch)
-```
-
-#### Quickstart
-
-Once included, the low-level C++11 interface is as simple as it gets: `reserve()`, `add()`, `search()`, `size()`, `capacity()`, `save()`, `load()`, `view()`.
-This covers 90% of use-cases.
-
-```c++
-using namespace unum::usearch;
-
-index_gt<cos_gt<float>> index;
-float vec[3] = {0.1, 0.3, 0.2};
-
-index.reserve(10);
-index.add(/* label: */ 42, /* vector: */ {&vec[0], 3});
-auto results = index.search(/* query: */ {&vec[0], 3}, 5 /* neighbors */);
-
-for (std::size_t i = 0; i != results.size(); ++i)
-    results[i].member.label, results[i].member.vector, results[i].member.id, results[i].distance;
-```
-
-The `add` is thread-safe for concurrent index construction.
-
-#### Serialization
-
-```c++
-index.save("index.usearch");
-index.load("index.usearch"); // Copying from disk
-index.view("index.usearch"); // Memory-mapping from disk
-```
-
-#### User-Defined Metrics in C++
-
-For advanced users, more compile-time abstractions are available.
-
-```cpp
-template <typename metric_at = ip_gt<float>,            //
-          typename label_at = std::size_t,              // `uint32_t`, `uuid_t`...
-          typename id_at = std::uint32_t,               // `uint40_t`, `uint64_t`...
-          typename scalar_at = float,                   // `double`, `half`, `char`...
-          typename allocator_at = std::allocator<char>> //
-class index_gt;
-```
-
-You may want to use a custom memory allocator or a rare scalar type, but most often, you would start by defining a custom similarity measure.
-The function object should have the following signature to support different-length vectors.
-
-```cpp
-struct custom_metric_t {
-    T operator()(T const* a, T const* b, std::size_t a_length, std::size_t b_length) const;
-};
-```
-
-The following distances are pre-packaged:
-
-- `cos_gt<scalar_t>` for "Cosine" or "Angular" distance.
-- `ip_gt<scalar_t>` for "Inner Product" or "Dot Product" distance.
-- `l2sq_gt<scalar_t>` for the squared "L2" or "Euclidean" distance.
-- `jaccard_gt<scalar_t>` for "Jaccard" distance between two ordered sets of unique elements.
-- `hamming_gt<scalar_t>` for "Hamming" distance, as the number of shared bits in hashes.
-- `tanimoto_gt<scalar_t>` for "Tanimoto" coefficient for bit-strings.
-- `sorensen_gt<scalar_t>` for "Dice-Sorensen" coefficient for bit-strings.
-- `pearson_correlation_gt<scalar_t>` for "Pearson" correlation between probability distributions.
-- `haversine_gt<scalar_t>` for "Haversine" or "Great Circle" distance between coordinates used in GIS applications.
-
-#### Multi-Threading
-
-Most AI, HPC, or Big Data packages use some form of a thread pool.
-Instead of spawning additional threads within USearch, we focus on the thread safety of `add()` function, simplifying resource management.
-
-```cpp
-#pragma omp parallel for
-    for (std::size_t i = 0; i < n; ++i)
-        native.add(label, span_t{vector, dims}, add_config_t { .thread = omp_get_thread_num() });
-```
-
-During initialization, we allocate enough temporary memory for all the cores on the machine.
-On the call, the user can supply the identifier of the current thread, making this library easy to integrate with OpenMP and similar tools.
-
-### Python
-
-#### Installation
-
-```sh
-pip install usearch
-```
-
-#### Quickstart
-
-```python
 import numpy as np
 from usearch.index import Index
 
@@ -246,9 +81,9 @@ index = Index(
     ndim=3, # Define the number of dimensions in input vectors
     metric='cos', # Choose 'l2sq', 'haversine' or other metric, default = 'ip'
     dtype='f32', # Quantize to 'f16' or 'f8' if needed, default = 'f32'
-    connectivity=16, # How frequent should the connections in the graph be, optional
-    expansion_add=128, # Control the recall of indexing, optional
-    expansion_search=64, # Control the quality of search, optional
+    connectivity=16, # Optional: How frequent should the connections in the graph be
+    expansion_add=128, # Optional: Control the recall of indexing
+    expansion_search=64, # Optional: Control the quality of search
 )
 
 vector = np.array([0.2, 0.6, 0.4])
@@ -262,428 +97,105 @@ assert distances[0] <= 0.001
 assert np.allclose(index[42], vector)
 ```
 
-Python bindings are implemented with [`pybind/pybind11`](https://github.com/pybind/pybind11).
-Assuming the presence of Global Interpreter Lock in Python, we spawn threads in the C++ layer on large insertions.
+## User-Defined Functions
 
-#### Serialization
+While most vector search packages concentrate on just a couple of metrics - "Inner Product distance" and "Euclidean distance," USearch extends this list to include any user-defined metrics.
+This flexibility allows you to customize your search for a myriad of applications, from computing geo-spatial coordinates with the rare [Haversine][haversine] distance to creating custom metrics for composite embeddings from multiple AI models.
 
-```py
-index.save('index.usearch')
-index.load('index.usearch') # Copy the whole index into memory
-index.view('index.usearch') # View from disk without loading in memory
-```
+![USearch: Vector Search Approaches](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-approaches-white.png?raw=true)
 
-If you don't know anything about the index except its path, there are two more endpoints to know:
+Unlike older approaches indexing high-dimensional spaces, like KD-Trees and Locality Sensitive Hashing, HNSW doesn't require vectors to be identical in length.
+They only have to be comparable.
+So you can apply it in [obscure][obscure] applications, like searching for similar sets or fuzzy text matching, using [GZip][gzip-similarity] as a distance function.
 
-```py
-Index.metadata('index.usearch') -> IndexMetadata
-Index.restore('index.usearch', view=False) -> Index
-```
+> Read more about [JIT and UDF in USearch Python SDK]().
 
-#### Batch Operations
+[haversine]: https://ashvardanian.com/posts/abusing-vector-search#geo-spatial-indexing
+[obscure]: https://ashvardanian.com/posts/abusing-vector-search
+[gzip-similarity]: https://twitter.com/LukeGessler/status/1679211291292889100?s=20
 
-Adding or querying a batch of entries is identical to adding a single vector.
-The difference would be in the shape of the tensors.
+## Memory Efficiency, Downcasting, and Quantization
 
-```py
-n = 100
-labels = np.arange(n)
-vectors = np.random.uniform(0, 0.3, (n, index.ndim)).astype(np.float32)
+Training a quantization model and dimension-reduction is a common approach to accelerate vector search.
+Those, however, are only sometimes reliable, can significantly affect the statistical properties of your data, and require regular adjustments if your distribution shifts.
 
-index.add(labels, vectors, threads=..., copy=...)
-matches, distances, counts = index.search(vectors, 10, threads=...)
+![USearch uint40_t support](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-neighbor-types.png?raw=true)
 
-assert matches.shape[0] == vectors.shape[0]
-assert counts[0] <= 10
-```
+Instead, we have focused on high-precision arithmetic over low-precision downcasted vectors.
+The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f32_t`, `f16_t`, `f64_t`, and `f8_t` representations, even if the hardware doesn't natively support it.
+Continuing the topic of memory-efficiency, we provide a `uint40_t` to allow collection with over 4B+ vectors without allocating 8 bytes for every neighbor reference in the proximity graph.
 
-You can also override the default `threads` and `copy` arguments in bulk workloads.
-The first controls the number of threads spawned for the task.
-The second controls whether the vector itself will be persisted inside the index.
-If you can preserve the lifetime of the vector somewhere else, you can avoid the copy.
+|              | FAISS, `f32` | USearch, `f32` | USearch, `f16` |     USearch, `f8` |
+| :----------- | -----------: | -------------: | -------------: | ----------------: |
+| Batch Insert |       16 K/s |         73 K/s |        100 K/s | 104 K/s **+550%** |
+| Batch Search |       82 K/s |        103 K/s |        113 K/s |  134 K/s **+63%** |
+| Bulk Insert  |       76 K/s |        105 K/s |        115 K/s | 202 K/s **+165%** |
+| Bulk Search  |      118 K/s |        174 K/s |        173 K/s | 304 K/s **+157%** |
+| Recall @ 10  |          99% |          99.2% |          99.1% |             99.2% |
 
-#### User-Defined Metrics and JIT in Python
+> Dataset: 1M vectors sample of the Deep1B dataset.
+> Hardware: `c7g.metal` AWS instance with 64 cores and DDR5 memory.
+> HNSW was configured with identical hyper-parameters:
+> connectivity `M=16`,
+> expansion @ construction `efConstruction=128`,
+> and expansion @ search `ef=64`.
+> Batch size is 256.
+> Both libraries were compiled for the target architecture.
+> Jump to the [Performance Tuning][benchmarking] section to read about the effects of those hyper-parameters.
 
-##### [Numba][numba]
+[benchmarking]: https://github.com/unum-cloud/usearch/blob/main/docs/benchmarks.md
 
-Assuming the language boundary exists between Python user code and C++ implementation, there are more efficient solutions than passing a Python callable to the engine.
-Luckily, with the help of [Numba][numba], we can JIT compile a function with a matching signature and pass it down to the engine.
+## Disk-based Indexes
 
-```py
-from numba import cfunc, types, carray
-
-ndim = 256
-signature = types.float32(
-    types.CPointer(types.float32),
-    types.CPointer(types.float32))
-
-@cfunc(signature)
-def inner_product(a, b):
-    a_array = carray(a, ndim)
-    b_array = carray(b, ndim)
-    c = 0.0
-    for i in range(ndim):
-        c += a_array[i] * b_array[i]
-    return 1 - c
-
-index = Index(ndim=ndim, metric=CompiledMetric(
-    pointer=inner_product.address,
-    kind=MetricKind.IP,
-    signature=MetricSignature.ArrayArray,
-))
-```
-
-Alternatively, you can avoid pre-defining the number of dimensions, and pass it separately:
+With USearch, you can serve indexes from external memory, enabling you to optimize your server choices for indexing speed and serving costs.
+This can result in **20x costs reduction** on AWS and other public clouds.
 
 ```py
-signature = types.float32(
-    types.CPointer(types.float32),
-    types.CPointer(types.float32),
-    types.uint64)
+index.save("index.usearch")
 
-@cfunc(signature)
-def inner_product(a, b, ndim):
-    a_array = carray(a, ndim)
-    b_array = carray(b, ndim)
-    c = 0.0
-    for i in range(ndim):
-        c += a_array[i] * b_array[i]
-    return 1 - c
+direct_copy = index.copy()
+loaded_copy = index.load("index.usearch")
 
-index = Index(ndim=ndim, metric=CompiledMetric(
-    pointer=inner_product.address,
-    kind=MetricKind.IP,
-    signature=MetricSignature.ArrayArraySize,
-))
+view = Index.restore("index.usearch", view=True)
+
+other_view = Index(ndim=..., metric=CompiledMetric(...))
+other_view.view("index.usearch")
 ```
 
-```sh
-pip install numba
-```
+## Joins
 
-##### [Cppyy][cppyy]
+One of the big questions these days is how will AI change the world of databases and data-management?
+Most databases are still struggling to implement high-quality fuzzy search, and the only kind of joins they know are deterministic.
+A `join` is different from searching for every entry, as it requires a one-to-one mapping, banning collisions among separate search results.
 
-Similarly, you can use Cppyy with Cling to JIT-compile native C or C++ code and pass it to USearch, which may be a good idea, if you want to explicitly request loop-unrolling or other low-level optimizations!
+| Exact Search | Fuzzy Search | Semantic Search ? |
+| :----------: | :----------: | :---------------: |
+|  Exact Join  | Fuzzy Join ? | Semantic Join ??  |
+
+Using USearch one can implement sub-quadratic complexity approximate, fuzzy, and semantic joins.
+This can come handy in any fuzzy-matching tasks, common to Database Management Software.
 
 ```py
-import cppyy
-import cppyy.ll
-
-cppyy.cppdef("""
-float inner_product(float *a, float *b) {
-    float result = 0;
-#pragma unroll
-    for (size_t i = 0; i != ndim; ++i)
-        result += a[i] * b[i];
-    return 1 - result;
-}
-""".replace("ndim", str(ndim)))
-
-function = cppyy.gbl.inner_product
-index = Index(ndim=ndim, metric=CompiledMetric(
-    pointer=cppyy.ll.addressof(function),
-    kind=MetricKind.IP,
-    signature=MetricSignature.ArrayArraySize,
-))
+men = Index(...)
+women = Index(...)
+pairs: dict = men.join(women, max_proposals=0, exact=False)
 ```
 
-```sh
-conda install -c conda-forge cppyy
-```
-
-##### [PeachPy][peachpy]
-
-We have covered JIT-ing Python with Numba and C++ with Cppyy and Cling.
-How about writing Assembly directly?
-That is also possible.
-Below is an example of constructing the "Inner Product" distance for 8-dimensional `f32` vectors for x86 using [PeachPy][peachpy].
-
-```py
-from peachpy import (
-    Argument,
-    ptr,
-    float_,
-    const_float_,
-)
-from peachpy.x86_64 import (
-    abi,
-    Function,
-    uarch,
-    isa,
-    GeneralPurposeRegister64,
-    LOAD,
-    YMMRegister,
-    VSUBPS,
-    VADDPS,
-    VHADDPS,
-    VMOVUPS,
-    VFMADD231PS,
-    VPERM2F128,
-    VXORPS,
-    RETURN,
-)
-
-a = Argument(ptr(const_float_), name="a")
-b = Argument(ptr(const_float_), name="b")
-
-with Function(
-    "inner_product", (a, b), float_, target=uarch.default + isa.avx2
-) as asm_function:
-    
-    # Request two 64-bit general-purpose registers for addresses
-    reg_a, reg_b = GeneralPurposeRegister64(), GeneralPurposeRegister64()
-    LOAD.ARGUMENT(reg_a, a)
-    LOAD.ARGUMENT(reg_b, b)
-
-    # Load the vectors
-    ymm_a = YMMRegister()
-    ymm_b = YMMRegister()
-    VMOVUPS(ymm_a, [reg_a])
-    VMOVUPS(ymm_b, [reg_b])
-
-    # Prepare the accumulator
-    ymm_c = YMMRegister()
-    ymm_one = YMMRegister()
-    VXORPS(ymm_c, ymm_c, ymm_c)
-    VXORPS(ymm_one, ymm_one, ymm_one)
-
-    # Accumulate A and B product into C
-    VFMADD231PS(ymm_c, ymm_a, ymm_b)
-
-    # Reduce the contents of a YMM register
-    ymm_c_permuted = YMMRegister()
-    VPERM2F128(ymm_c_permuted, ymm_c, ymm_c, 1)
-    VADDPS(ymm_c, ymm_c, ymm_c_permuted)
-    VHADDPS(ymm_c, ymm_c, ymm_c)
-    VHADDPS(ymm_c, ymm_c, ymm_c)
-
-    # Negate the values, to go from "similarity" to "distance"
-    VSUBPS(ymm_c, ymm_one, ymm_c)
-
-    # A common convention is to return floats in XMM registers
-    RETURN(ymm_c.as_xmm)
-
-python_function = asm_function.finalize(abi.detect()).encode().load()
-metric = CompiledMetric(
-    pointer=python_function.loader.code_address,
-    kind=MetricKind.IP,
-    signature=MetricSignature.ArrayArray,
-)
-index = Index(ndim=ndim, metric=metric)
-```
-
-[numba]: https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
-[cppyy]: https://cppyy.readthedocs.io/en/latest/
-[peachpy]: https://github.com/Maratyszcza/PeachPy
-
-#### Tooling
-
-To work with `bbin`, `fbin`, `ibin`, `hbin` matrix files USearch provides `load_matrix` and `save_matrix`.
-Such files are standard in k-ANN tasks and represent a binary object with all the scalars, prepended by two 32-bit integers - the number of rows and columns in the matrix.
-
-```py
-from usearch.index import Index
-from usearch.io import load_matrix, save_matrix
-
-vectors = load_matrix('deep1B.fbin')
-index = Index(ndim=vectors.shape[1])
-index.add(labels, vectors)
-```
-
-One may often want to evaluate the quality of the constructed index before running in production.
-The trivial way is to measure `recall@1` on the entries already present in the index.
-
-```py
-from usearch.eval import recall_members
-
-assert recall_members(index, exact=True) == 1
-print(recall_members(index, exact=False))
-```
-
-In case you have some ground-truth data for more than one entry, you compare search results against expected values:
-
-```py
-from usearch.eval import relevance, dcg, ndcg, random_vectors
-
-vectors = random_vectors(index=index)
-matches_approximate = index.search(vectors)
-matches_exact = index.search(vectors, exact=True)
-relevance_scores = relevance(matches_exact, matches_approximate)
-print(dcg(relevance_scores), ndcg(relevance_scores))
-```
-
-### JavaScript
-
-#### Installation
-
-```sh
-npm install usearch
-```
-
-#### Quickstart
-
-```js
-var index = new usearch.Index({ metric: 'cos', connectivity: 16, dimensions: 3 })
-index.add(42, new Float32Array([0.2, 0.6, 0.4]))
-var results = index.search(new Float32Array([0.2, 0.6, 0.4]), 10)
-
-assert.equal(index.size(), 1)
-assert.deepEqual(results.labels, new Uint32Array([42]))
-assert.deepEqual(results.distances, new Float32Array([0]))
-```
-
-#### Serialization
-
-```js
-index.save('index.usearch')
-index.load('index.usearch')
-index.view('index.usearch')
-```
-
-### Rust
-
-#### Installation
-
-```sh
-cargo add usearch
-```
-
-#### Quickstart
-
-```rust
-
-let options = IndexOptions {
-            dimensions: 5,
-            metric: MetricKind::IP,
-            quantization: ScalarKind::F16,
-            connectivity: 0,
-            expansion_add: 0,
-            expansion_search: 0
-        };
-
-let index = new_index(&options).unwrap();
-
-assert!(index.reserve(10).is_ok());
-assert!(index.capacity() >= 10);
-assert!(index.connectivity() != 0);
-assert_eq!(index.dimensions(), 3);
-assert_eq!(index.size(), 0);
-
-let first: [f32; 3] = [0.2, 0.1, 0.2];
-let second: [f32; 3] = [0.2, 0.1, 0.2];
-
-assert!(index.add(42, &first).is_ok());
-assert!(index.add(43, &second).is_ok());
-assert_eq!(index.size(), 2);
-
-// Read back the tags
-let results = index.search(&first, 10).unwrap();
-assert_eq!(results.count, 2);
-```
-
-#### Multi-Threading
-
-```rust
-assert!(index.add_in_thread(42, &first, 0).is_ok());
-assert!(index.add_in_thread(43, &second, 0).is_ok());
-let results = index.search_in_thread(&first, 10, 0).unwrap();
-```
-
-Being a systems-programming language, Rust has better control over memory management and concurrency but lacks function overloading.
-Aside from the `add` and `search`, USearch Rust binding also provides `add_in_thread` and `search_in_thread`, which let users identify the calling thread to use underlying temporary memory more efficiently.
-
-#### Serialization
-
-```rust
-assert!(index.save("index.usearch").is_ok());
-assert!(index.load("index.usearch").is_ok());
-assert!(index.view("index.usearch").is_ok());
-```
-
-#### Metrics
-
-```rust
-assert!(new_l2sq(3, &quant, 0, 0, 0).is_ok());
-assert!(new_cos(3, &quant, 0, 0, 0).is_ok());
-assert!(new_haversine(&quant, 0, 0, 0).is_ok());
-```
-
-### Java
-
-#### Installation
-
-```xml
-<dependency>
-  <groupId>cloud.unum</groupId>
-  <artifactId>usearch</artifactId>
-  <version>0.2.3</version>
-</dependency>
-```
-
-Add that snippet to your `pom.xml` and hit `mvn install`.
-
-#### Quickstart
-
-```java
-Index index = new Index.Config().metric("cos").dimensions(2).build();
-float vec[] = {10, 20};
-index.add(42, vec);
-int[] labels = index.search(vec, 5);
-```
-
-### Swift
-
-#### Installation
-
-```txt
-https://github.com/unum-cloud/usearch
-```
-
-#### Quickstart
-
-```swift
-let index = Index.l2sq(dimensions: 3, connectivity: 8)
-let vectorA: [Float32] = [0.3, 0.5, 1.2]
-let vectorB: [Float32] = [0.4, 0.2, 1.2]
-index.reserve(2)
-index.add(label: 42, vector: vectorA[...])
-index.add(label: 43, vector: vectorB[...])
-
-let results = index.search(vector: vectorA[...], count: 10)
-assert(results.0[0] == 42)
-```
-
-### GoLang
-
-#### Installation
-
-```golang
-import (
-	"github.com/unum-cloud/usearch/golang"
-)
-```
-
-#### Quickstart
-
-```golang
-package main
-
-import (
-	"fmt"
-	"github.com/unum-cloud/usearch/golang"
-)
-
-func main() {
-	conf := usearch.DefaultConfig(128)
-	index := usearch.NewIndex(conf)
-	v := make([]float32, 128)
-	index.Add(42, v)
-	results := index.Search(v, 1)
-}
-```
-
-### Wolfram
-
+> Read more in post: [From Dating to Vector Search - "Stable Marriages" on a Planetary Scale 👩‍❤️‍👨](https://ashvardanian.com/posts/searching-stable-marriages)
+
+## Functionality
+
+By now, core functionality is supported across all bindings.
+Broader functionality is ported per request.
+
+|                         |  C++  | Python | Java  | JavaScript | Rust  | GoLang | Swift |
+| :---------------------- | :---: | :----: | :---: | :--------: | :---: | :----: | :---: |
+| add/search/remove       |   ✅   |   ✅    |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
+| save/load/view          |   ✅   |   ✅    |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
+| join                    |   ✅   |   ✅    |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
+| user-defiend metrics    |   ✅   |   ✅    |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
+| variable-length vectors |   ✅   |   ✅    |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
+| 4B+ capacities          |   ✅   |   ❌    |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 
 ## Application Examples
 
@@ -755,32 +267,13 @@ encoder = AllChem.GetRDKitFPGenerator()
 fingerprints = np.vstack([encoder.GetFingerprint(x) for x in molecules])
 fingerprints = np.packbits(fingerprints, axis=1)
 
-index = Index(ndim=2048, metric=MetricKind.BitwiseTanimoto)
+index = Index(ndim=2048, metric=MetricKind.Tanimoto)
 labels = np.arange(len(molecules))
 
 index.add(labels, fingerprints)
-matches: Matches = index.search(fingerprints, 10)
+matches = index.search(fingerprints, 10)
 ```
 
-Of if you need a bit of our SIMD superpowers - take some Chemsitry-oriented precompiled metrics from [SimSIMD][simsimd].
-
-```python
-import simsimd as sisi
-
-index = Index(
-    ndim=166, # MACCS fingerprints are 166-dimensional
-    metric=CompiledMetric(
-        pointer=sisi.to_int(sisi.tanimoto_maccs_neon), # For Arm Neon
-        signature=MetricSignature.ArrayArray,
-        kind=MetricKind.Tanimoto,
-    ),
-)
-
-index.add(42, np.packbits([1] * 166))
-matches: Matches = index.search(np.packbits([1] * 166))
-```
-
-[simsimd]: https://github.com/ashvardanian/simsimd
 [smiles]: https://en.wikipedia.org/wiki/Simplified_molecular-input_line-entry_system
 [rdkit-fingerprints]: https://www.rdkit.org/docs/RDKit_Book.html#additional-information-about-the-fingerprints
 
@@ -810,7 +303,3 @@ year = {2022}
 month = jun,
 }
 ```
-
----
-
-Check [that](https://github.com/ashvardanian/image-search) and [other](https://github.com/unum-cloud/examples) examples on our corporate GitHub 🤗

@@ -15,6 +15,7 @@
 #include <limits> // `std::numeric_limits`
 #include <thread> // `std::thread`
 
+#define _CRT_SECURE_NO_WARNINGS
 #define PY_SSIZE_T_CLEAN
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
@@ -45,6 +46,7 @@ using distance_t = punned_distance_t;
 using dense_index_t = punned_small_t;
 using dense_add_result_t = typename dense_index_t::add_result_t;
 using dense_search_result_t = typename dense_index_t::search_result_t;
+using dense_labeling_result_t = typename dense_index_t::labeling_result_t;
 
 struct dense_index_py_t : public dense_index_t {
     using native_t = dense_index_t;
@@ -181,8 +183,8 @@ static void add_one_to_index(dense_index_py_t& index, label_t label, py::buffer 
     if (vector_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
-    if (index.size() + 1 >= index.capacity())
-        index.reserve(ceil2(index.size() + 1));
+    if (!index.reserve(ceil2(index.size() + 1)))
+        throw std::invalid_argument("Out of memory!");
 
     add_config_t config;
     config.store_vector = copy;
@@ -224,9 +226,6 @@ static void add_many_to_index(                                      //
     dense_index_py_t& index, py::buffer labels, py::buffer vectors, //
     bool copy, std::size_t threads) {
 
-    if (index.limits().threads_add < threads)
-        throw std::invalid_argument("Can't use that many threads!");
-
     py::buffer_info labels_info = labels.request();
     py::buffer_info vectors_info = vectors.request();
 
@@ -248,8 +247,10 @@ static void add_many_to_index(                                      //
     if (labels_count != vectors_count)
         throw std::invalid_argument("Number of labels and vectors must match!");
 
-    if (index.size() + vectors_count >= index.capacity())
-        index.reserve(ceil2(index.size() + vectors_count));
+    if (!threads)
+        threads = std::thread::hardware_concurrency();
+    if (!index.reserve(index_limits_t(ceil2(index.size() + vectors_count), threads)))
+        throw std::invalid_argument("Out of memory!");
 
     switch (numpy_string_to_kind(vectors_info.format)) {
     case scalar_kind_t::b1x8_k: add_typed_to_index<b1x8_t>(index, labels_info, vectors_info, copy, threads); break;
@@ -316,6 +317,11 @@ static void search_typed(                                   //
 
     Py_ssize_t vectors_count = vectors_info.shape[0];
     char const* vectors_data = reinterpret_cast<char const*>(vectors_info.ptr);
+
+    if (!threads)
+        threads = std::thread::hardware_concurrency();
+    if (!index.reserve(index_limits_t(index.size(), threads)))
+        throw std::invalid_argument("Out of memory!");
 
     executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
         search_config_t config;
@@ -450,16 +456,17 @@ template <typename index_at> py::object get_member(index_at const& index, label_
         throw std::invalid_argument("Incompatible scalars in the query matrix!");
 }
 
-template <typename index_at> py::array_t<label_t> get_labels(index_at const& index, std::size_t limit) {
+template <typename index_at>
+py::array_t<label_t> get_labels(index_at const& index, std::size_t offset, std::size_t limit) {
     limit = std::min(index.size(), limit);
     py::array_t<label_t> result_py(static_cast<Py_ssize_t>(limit));
     auto result_py1d = result_py.template mutable_unchecked<1>();
-    index.export_labels(&result_py1d(0), limit);
+    index.export_labels(&result_py1d(0), offset, limit);
     return result_py;
 }
 
 template <typename index_at> py::array_t<label_t> get_all_labels(index_at const& index) {
-    return get_labels(index, index.size());
+    return get_labels(index, 0, index.size());
 }
 
 template <typename element_at> bool has_duplicates(element_at const* begin, element_at const* end) {
@@ -666,6 +673,48 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("threads") = 0           //
     );
 
+    i.def(
+        "rename",
+        [](dense_index_py_t& index, label_t from, label_t to) -> bool {
+            dense_labeling_result_t result = index.rename(from, to);
+            result.error.raise();
+            return result.completed;
+        },
+        py::arg("from"), py::arg("to"));
+
+    i.def(
+        "remove",
+        [](dense_index_py_t& index, label_t label, bool compact, std::size_t threads) -> bool {
+            dense_labeling_result_t result = index.remove(label);
+            result.error.raise();
+
+            if (!threads)
+                threads = std::thread::hardware_concurrency();
+            if (!index.reserve(index_limits_t(index.size(), threads)))
+                throw std::invalid_argument("Out of memory!");
+
+            index.compact(executor_default_t{threads});
+            return result.completed;
+        },
+        py::arg("label"), py::arg("compact"), py::arg("threads"));
+
+    i.def(
+        "remove",
+        [](dense_index_py_t& index, std::vector<label_t> const& labels, bool compact,
+           std::size_t threads) -> std::size_t {
+            dense_labeling_result_t result = index.remove(labels.begin(), labels.end());
+            result.error.raise();
+
+            if (!threads)
+                threads = std::thread::hardware_concurrency();
+            if (!index.reserve(index_limits_t(index.size(), threads)))
+                throw std::invalid_argument("Out of memory!");
+
+            index.compact(executor_default_t{threads});
+            return result.completed;
+        },
+        py::arg("label"), py::arg("compact"), py::arg("threads"));
+
     i.def("__len__", &dense_index_py_t::size);
     i.def_property_readonly("size", &dense_index_py_t::size);
     i.def_property_readonly("ndim", &dense_index_py_t::dimensions);
@@ -681,7 +730,8 @@ PYBIND11_MODULE(compiled, m) {
     i.def_property("expansion_search", &dense_index_py_t::expansion_search, &dense_index_py_t::change_expansion_search);
 
     i.def_property_readonly("labels", &get_all_labels<dense_index_py_t>);
-    i.def("get_labels", &get_labels<dense_index_py_t>, py::arg("limit") = std::numeric_limits<std::size_t>::max());
+    i.def("get_labels", &get_labels<dense_index_py_t>, py::arg("offset") = 0,
+          py::arg("limit") = std::numeric_limits<std::size_t>::max());
     i.def("__contains__", &dense_index_py_t::contains);
     i.def("__getitem__", &get_member<dense_index_py_t>, py::arg("label"), py::arg("dtype") = scalar_kind_t::f32_k);
 
