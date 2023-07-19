@@ -153,9 +153,7 @@ This can result in **20x costs reduction** on AWS and other public clouds.
 ```py
 index.save("index.usearch")
 
-direct_copy = index.copy()
 loaded_copy = index.load("index.usearch")
-
 view = Index.restore("index.usearch", view=True)
 
 other_view = Index(ndim=..., metric=CompiledMetric(...))
@@ -234,16 +232,19 @@ server.run()
 
 We have pre-processed some commonly used datasets, cleaning the images, producing the vectors, and pre-building the index.
 
-| Dataset                              | Size | Images |          Preprocessed |
-| :----------------------------------- | ---: | -----: | --------------------: |
-| [Unsplash 25K][unsplash-25k-origin]  |    - |   25 K | [HF][unsplash-25k-hf] |
-| [Createve Captions 3M][cc-3m-origin] |    - |    3 M |        [HF][cc-3m-hf] |
+| Dataset                                |            Modalities | Images |                              Download |
+| :------------------------------------- | --------------------: | -----: | ------------------------------------: |
+| [Unsplash 25K][unsplash-25k-origin]    | Images & Descriptions |   25 K | [HuggingFace / Unum][unsplash-25k-hf] |
+| [Conceptual Captions 3M][cc-3m-origin] | Images & Descriptions |    3 M |        [HuggingFace / Unum][cc-3m-hf] |
+| [Arxiv 2M][arxiv-2m-origin]            |    Titles & Abstracts |    2 M |     [HuggingFace / Unum][arxiv-2m-hf] |
 
+[unsplash-25k-origin]: https://github.com/unsplash/datasets
+[cc-3m-origin]: https://huggingface.co/datasets/conceptual_captions
+[arxiv-2m-origin]: https://www.kaggle.com/datasets/Cornell-University/arxiv
 
-[unsplash-25k-origin]: https://unum.cloud
-[cc-3m-origin]: https://unum.cloud
-[unsplash-25k-hf]: https://unum.cloud
-[cc-3m-hf]: https://unum.cloud
+[unsplash-25k-hf]: https://huggingface.co/datasets/unum-cloud/ann-unsplash-25k
+[cc-3m-hf]: https://huggingface.co/datasets/unum-cloud/ann-cc-3m
+[arxiv-2m-hf]: https://huggingface.co/datasets/unum-cloud/ann-arxiv-2m
 
 ### USearch + RDKit = Molecular Search
 
