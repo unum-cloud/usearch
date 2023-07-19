@@ -91,7 +91,7 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
     std::size_t expansion_search = default_expansion_search();
 
     if (params.Has("capacity"))
-        limits.elements = params.Get("capacity").As<Napi::Number>().Uint32Value();
+        limits.members = params.Get("capacity").As<Napi::Number>().Uint32Value();
     if (params.Has("connectivity"))
         config.connectivity = params.Get("connectivity").As<Napi::Number>().Uint32Value();
     if (params.Has("expansion_add"))

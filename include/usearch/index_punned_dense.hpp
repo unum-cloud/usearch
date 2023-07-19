@@ -358,7 +358,7 @@ class index_punned_dense_gt {
         // Grow the removed entries ring, if needed
         std::unique_lock<std::mutex> free_lock(free_ids_mutex_);
         if (free_ids_.size() == free_ids_.capacity())
-            if (!free_ids_.reserve((std::max)(free_ids_.capacity() * 2, 64ul)))
+            if (!free_ids_.reserve((std::max<std::size_t>)(free_ids_.capacity() * 2, 64ul)))
                 return result.failed("Can't allocate memory for a free-list");
 
         // A removed entry would be:

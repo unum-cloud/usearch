@@ -120,7 +120,7 @@ def test_index(
     assert index.max_level >= 0
     assert index.levels_stats.nodes >= 1
     assert index.level_stats(0).nodes == 1
-    assert str(index).startswith("usearch.index.Index")
+    assert str(index).startswith("usearch.")
 
     # Try removals
     other_vector = random_vectors(count=1, ndim=ndim, dtype=numpy_type).flatten()
@@ -172,11 +172,11 @@ def test_index_batch(
     labels = np.arange(batch_size)
     vectors = random_vectors(count=batch_size, ndim=ndim, dtype=numpy_type)
 
-    index.add(labels, vectors)
+    index.add(labels, vectors, threads=2)
     assert len(index) == batch_size
     assert np.allclose(index.get_vectors(labels).astype(numpy_type), vectors, atol=0.1)
 
-    matches: Matches = index.search(vectors, 10)
+    matches: Matches = index.search(vectors, 10, threads=2)
     assert matches.labels.shape[0] == matches.distances.shape[0]
     assert matches.counts.shape[0] == batch_size
     assert np.all(np.sort(index.labels) == np.sort(labels))
