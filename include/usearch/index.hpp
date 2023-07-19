@@ -41,6 +41,13 @@
 #define USEARCH_DEFINED_ARM
 #endif
 
+// Inferring hardware bitness: 32 vs 64
+#if __WORDSIZE == 64
+#define USEARCH_64BIT_ENV
+#else
+#define USEARCH_32BIT_ENV
+#endif
+
 #if !defined(USEARCH_USE_OPENMP)
 #define USEARCH_USE_OPENMP 0
 #endif
@@ -173,7 +180,9 @@ inline std::size_t ceil2(std::size_t v) noexcept {
     v |= v >> 4;
     v |= v >> 8;
     v |= v >> 16;
+#ifdef USEARCH_64BIT_ENV
     v |= v >> 32;
+#endif
     v++;
     return v;
 }
@@ -984,6 +993,8 @@ class sorted_buffer_gt {
 
 /**
  *  @brief Five-byte integer type to address node clouds with over 4B entries.
+ *
+ * @note Avoid usage in 32bit environment
  */
 class usearch_pack_m uint40_t {
     unsigned char octets[5];
@@ -1015,7 +1026,7 @@ class usearch_pack_m uint40_t {
 
     inline uint40_t& operator+=(std::size_t n) noexcept {
         unsigned char* n_octets = reinterpret_cast<unsigned char*>(&n);
-        std::uint32_t& n_tail = *reinterpret_cast<std::uint32_t*>(&n);
+        std::uint32_t& n_tail = *reinterpret_cast<std::uint32_t*>(n_octets);
         std::uint32_t& tail = *reinterpret_cast<std::uint32_t*>(octets);
         octets[4] += static_cast<unsigned char>((tail + n_tail) < tail);
         tail += n_tail;
@@ -1031,7 +1042,11 @@ class usearch_pack_m uint40_t {
 
     inline operator std::size_t() const noexcept {
         std::size_t result = 0;
-        std::memcpy((char*)&result, octets, 5);
+#ifdef USEARCH_64BIT_ENV
+        std::memcpy((char*)&result + 3, octets, 5);
+#else
+        std::memcpy((char*)&result, octets + 1, 4);
+#endif
         return result;
     }
 
@@ -1499,7 +1514,7 @@ struct dummy_label_to_label_mapping_t {
  *
  */
 template <typename metric_at = ip_gt<float>,            //
-          typename label_at = std::size_t,              //
+          typename label_at = std::int64_t,             //
           typename id_at = std::uint32_t,               //
           typename allocator_at = std::allocator<char>, //
           typename point_allocator_at = allocator_at>   //
@@ -1793,7 +1808,7 @@ class index_gt {
         }
     };
 
-    copy_result_t copy(copy_config_t config = {}) const noexcept {
+    copy_result_t copy(copy_config_t /*config*/ = {}) const noexcept {
         copy_result_t result;
         index_gt& other = result.index;
         other = index_gt(config_, metric_, allocator_, point_allocator_);

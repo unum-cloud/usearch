@@ -2,6 +2,10 @@
 
 #include <usearch/index_punned_dense.hpp>
 
+#ifndef USEARCH_EXPORT
+#define USEARCH_EXPORT
+#endif
+
 extern "C" {
 #include "usearch.h"
 }
@@ -88,7 +92,7 @@ index_punned_dense_metric_t udf(metric_kind_t kind, usearch_metric_t raw_ptr) {
 
 extern "C" {
 
-usearch_index_t usearch_init(usearch_init_options_t* options, usearch_error_t* error) {
+USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, usearch_error_t* error) {
 
     assert(options && error);
 
@@ -108,48 +112,48 @@ usearch_index_t usearch_init(usearch_init_options_t* options, usearch_error_t* e
     return result_ptr;
 }
 
-void usearch_free(usearch_index_t index, usearch_error_t*) { delete reinterpret_cast<index_t*>(index); }
+USEARCH_EXPORT void usearch_free(usearch_index_t index, usearch_error_t*) { delete reinterpret_cast<index_t*>(index); }
 
-void usearch_save(usearch_index_t index, char const* path, usearch_error_t* error) {
+USEARCH_EXPORT void usearch_save(usearch_index_t index, char const* path, usearch_error_t* error) {
     serialization_result_t result = reinterpret_cast<index_t*>(index)->save(path);
     if (!result)
         *error = result.error.what();
 }
 
-void usearch_load(usearch_index_t index, char const* path, usearch_error_t* error) {
+USEARCH_EXPORT void usearch_load(usearch_index_t index, char const* path, usearch_error_t* error) {
     serialization_result_t result = reinterpret_cast<index_t*>(index)->load(path);
     if (!result)
         *error = result.error.what();
 }
 
-void usearch_view(usearch_index_t index, char const* path, usearch_error_t* error) {
+USEARCH_EXPORT void usearch_view(usearch_index_t index, char const* path, usearch_error_t* error) {
     serialization_result_t result = reinterpret_cast<index_t*>(index)->view(path);
     if (!result)
         *error = result.error.what();
 }
 
-size_t usearch_size(usearch_index_t index, usearch_error_t*) { //
+USEARCH_EXPORT size_t usearch_size(usearch_index_t index, usearch_error_t*) { //
     return reinterpret_cast<index_t*>(index)->size();
 }
 
-size_t usearch_capacity(usearch_index_t index, usearch_error_t*) {
+USEARCH_EXPORT size_t usearch_capacity(usearch_index_t index, usearch_error_t*) {
     return reinterpret_cast<index_t*>(index)->capacity();
 }
 
-size_t usearch_dimensions(usearch_index_t index, usearch_error_t*) {
+USEARCH_EXPORT size_t usearch_dimensions(usearch_index_t index, usearch_error_t*) {
     return reinterpret_cast<index_t*>(index)->dimensions();
 }
 
-size_t usearch_connectivity(usearch_index_t index, usearch_error_t*) {
+USEARCH_EXPORT size_t usearch_connectivity(usearch_index_t index, usearch_error_t*) {
     return reinterpret_cast<index_t*>(index)->connectivity();
 }
 
-void usearch_reserve(usearch_index_t index, size_t capacity, usearch_error_t*) {
+USEARCH_EXPORT void usearch_reserve(usearch_index_t index, size_t capacity, usearch_error_t*) {
     // TODO: Consider returning the new capacity.
     reinterpret_cast<index_t*>(index)->reserve(capacity);
 }
 
-void usearch_add(                                                                                 //
+USEARCH_EXPORT void usearch_add(                                                                          //
     usearch_index_t index, usearch_label_t label, void const* vector, usearch_scalar_kind_t kind, //
     usearch_error_t* error) {
     add_result_t result = add_(reinterpret_cast<index_t*>(index), label, vector, to_native_scalar(kind));
@@ -157,11 +161,11 @@ void usearch_add(                                                               
         *error = result.error.what();
 }
 
-bool usearch_contains(usearch_index_t index, usearch_label_t label, usearch_error_t*) {
+USEARCH_EXPORT bool usearch_contains(usearch_index_t index, usearch_label_t label, usearch_error_t*) {
     return reinterpret_cast<index_t*>(index)->contains(label);
 }
 
-size_t usearch_search(                                                                           //
+USEARCH_EXPORT size_t usearch_search(                                                                    //
     usearch_index_t index, void const* vector, usearch_scalar_kind_t kind, size_t results_limit, //
     usearch_label_t* found_labels, usearch_distance_t* found_distances, usearch_error_t* error) {
     search_result_t result = search_(reinterpret_cast<index_t*>(index), vector, to_native_scalar(kind), results_limit);
@@ -173,13 +177,13 @@ size_t usearch_search(                                                          
     return result.dump_to(found_labels, found_distances);
 }
 
-bool usearch_get(                                 //
+USEARCH_EXPORT bool usearch_get(                          //
     usearch_index_t index, usearch_label_t label, //
     void* vector, usearch_scalar_kind_t kind, usearch_error_t*) {
     return get_(reinterpret_cast<index_t*>(index), label, vector, to_native_scalar(kind));
 }
 
-void usearch_remove(usearch_index_t, usearch_label_t, usearch_error_t* error) {
+USEARCH_EXPORT void usearch_remove(usearch_index_t, usearch_label_t, usearch_error_t* error) {
     if (error != nullptr)
         *error = "USearch does not support removal of elements yet.";
 }

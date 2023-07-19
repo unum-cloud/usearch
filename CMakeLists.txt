@@ -118,3 +118,7 @@ endif()
 if(${USEARCH_BUILD_WOLFRAM})
     add_subdirectory(wolfram)
 endif()
+
+if(${USEARCH_BUILD_WASM})
+    add_subdirectory(wasm)
+endif()
