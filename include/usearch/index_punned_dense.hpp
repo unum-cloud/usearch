@@ -202,11 +202,21 @@ class index_punned_dense_gt {
 
     struct labeling_result_t {
         error_t error{};
-        bool completed{};
-        id_t id{};
+        std::size_t completed{};
 
         explicit operator bool() const noexcept { return !error; }
         labeling_result_t failed(error_t message) noexcept {
+            error = std::move(message);
+            return std::move(*this);
+        }
+    };
+
+    struct compaction_result_t {
+        error_t error{};
+        std::size_t pruned_edges{};
+
+        explicit operator bool() const noexcept { return !error; }
+        compaction_result_t failed(error_t message) noexcept {
             error = std::move(message);
             return std::move(*this);
         }
@@ -350,6 +360,7 @@ class index_punned_dense_gt {
 
     labeling_result_t remove(label_t label) {
         labeling_result_t result;
+
         unique_lock_t lookup_lock(labeled_lookup_mutex_);
         auto id_terator = labeled_lookup_.find(label);
         if (id_terator == labeled_lookup_.end())
@@ -369,8 +380,55 @@ class index_punned_dense_gt {
         free_ids_.push(id);
         labeled_lookup_.erase(id_terator);
         typed_->at(id).label = free_label_;
-        result.id = id;
         result.completed = true;
+
+        return result;
+    }
+
+    template <typename labels_iterator_at>
+    labeling_result_t remove(labels_iterator_at&& labels_begin, labels_iterator_at&& labels_end) {
+
+        labeling_result_t result;
+        unique_lock_t lookup_lock(labeled_lookup_mutex_);
+        std::unique_lock<std::mutex> free_lock(free_ids_mutex_);
+
+        // Grow the removed entries ring, if needed
+        std::size_t count_requests = std::distance(labels_begin, labels_end);
+        if (!free_ids_.reserve(free_ids_.size() + count_requests))
+            return result.failed("Can't allocate memory for a free-list");
+
+        // Remove them one-by-one
+        for (auto label_it = labels_begin; label_it != labels_end; ++label_it) {
+            label_t label = *label_it;
+            auto id_terator = labeled_lookup_.find(label);
+            if (id_terator == labeled_lookup_.end())
+                continue;
+
+            // A removed entry would be:
+            // - present in `free_ids_`
+            // - missing in the `labeled_lookup_`
+            // - marked in the `typed_` index with a `free_label_`
+            id_t id = id_terator->second;
+            free_ids_.push(id);
+            labeled_lookup_.erase(id_terator);
+            typed_->at(id).label = free_label_;
+            result.completed += 1;
+        }
+
+        return result;
+    }
+
+    template <typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
+    compaction_result_t compact(executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
+        compaction_result_t result;
+        std::atomic<std::size_t> pruned_edges;
+        auto disallow = [&](member_cref_t const& member) noexcept {
+            bool freed = member.label == free_label_;
+            pruned_edges += freed;
+            return freed;
+        };
+        typed_->isolate(disallow, std::forward<executor_at>(executor), std::forward<progress_at>(progress));
+        result.pruned_edges = pruned_edges;
         return result;
     }
 
@@ -385,7 +443,6 @@ class index_punned_dense_gt {
         labeled_lookup_.erase(id_terator);
         labeled_lookup_.emplace(to, id);
         typed_->at(id).label = to;
-        result.id = id;
         result.completed = true;
         return result;
     }

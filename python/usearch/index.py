@@ -319,9 +319,9 @@ class Index:
         pass `copy=False`, if you can guarantee the lifetime of the
         primary vectors store during the process of construction.
 
-        :param labels: Unique identifier for passed vectors, optional
+        :param labels: Unique identifier(s) for passed vectors, optional
         :type labels: Buffer
-        :param vectors: Collection of vectors.
+        :param vectors: Vector or a row-major matrix
         :type vectors: Buffer
         :param copy: Should the index store a copy of vectors, defaults to True
         :type copy: bool, optional
@@ -468,10 +468,32 @@ class Index:
             )
             return Matches(*tuple_)
 
-    def remove(self, label: int, *, compact: bool = False) -> bool:
-        return self._compiled.remove(label, compact=compact)
+    def remove(
+        self,
+        labels: Union[int, Iterable[int]],
+        *,
+        compact: bool = False,
+        threads: int = 0,
+    ) -> Union[bool, int]:
+        """Removes one or move vectors from the index.
+
+        When working with extremely large indexes, you may want to
+        mark some entries deleted, instead of rebuilding a filtered index.
+        In other cases, rebuilding - is the recommended approach.
+
+        :param labels: Unique identifier for passed vectors, optional
+        :type labels: Buffer
+        :param compact: Removes links to removed nodes (expensive), defaults to False
+        :type compact: bool, optional
+        :param threads: Optimal number of cores to use, defaults to 0
+        :type threads: int, optional
+        :return: Number of removed entries
+        :type: Union[bool, int]
+        """
+        return self._compiled.remove(labels, compact=compact, threads=threads)
 
     def rename(self, label_from: int, label_to: int) -> bool:
+        """Relabel existing entry"""
         return self._compiled.rename(label_from, label_to)
 
     @property

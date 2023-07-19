@@ -674,21 +674,46 @@ PYBIND11_MODULE(compiled, m) {
     );
 
     i.def(
-        "remove",
-        [](dense_index_py_t& index, label_t label, bool compact) {
-            dense_labeling_result_t result = index.remove(label);
-            result.error.raise();
-            return result.completed;
-        },
-        py::arg("label"), py::arg("compact") = false);
-    i.def(
         "rename",
-        [](dense_index_py_t& index, label_t from, label_t to) {
+        [](dense_index_py_t& index, label_t from, label_t to) -> bool {
             dense_labeling_result_t result = index.rename(from, to);
             result.error.raise();
             return result.completed;
         },
         py::arg("from"), py::arg("to"));
+
+    i.def(
+        "remove",
+        [](dense_index_py_t& index, label_t label, bool compact, std::size_t threads) -> bool {
+            dense_labeling_result_t result = index.remove(label);
+            result.error.raise();
+
+            if (!threads)
+                threads = std::thread::hardware_concurrency();
+            if (!index.reserve(index_limits_t(index.size(), threads)))
+                throw std::invalid_argument("Out of memory!");
+
+            index.compact(executor_default_t{threads});
+            return result.completed;
+        },
+        py::arg("label"), py::arg("compact"), py::arg("threads"));
+
+    i.def(
+        "remove",
+        [](dense_index_py_t& index, std::vector<label_t> const& labels, bool compact,
+           std::size_t threads) -> std::size_t {
+            dense_labeling_result_t result = index.remove(labels.begin(), labels.end());
+            result.error.raise();
+
+            if (!threads)
+                threads = std::thread::hardware_concurrency();
+            if (!index.reserve(index_limits_t(index.size(), threads)))
+                throw std::invalid_argument("Out of memory!");
+
+            index.compact(executor_default_t{threads});
+            return result.completed;
+        },
+        py::arg("label"), py::arg("compact"), py::arg("threads"));
 
     i.def("__len__", &dense_index_py_t::size);
     i.def_property_readonly("size", &dense_index_py_t::size);
