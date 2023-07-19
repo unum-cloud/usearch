@@ -3,4 +3,4 @@ Rust SDK
 ==============
 
 
-.. mdinclude:: ../rust/README.md
+.. mdinclude:: ../../rust/README.md

@@ -2,8 +2,17 @@
 
 ## Installation
 
+USearch is available both for Node.js backend runtime and WASM frontend runtime.
+For first use the conventional `npm install`:
+
 ```sh
 npm install usearch
+```
+
+For latter:
+
+```sh
+
 ```
 
 ## Quickstart

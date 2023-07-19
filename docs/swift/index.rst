@@ -3,4 +3,4 @@ Swift SDK
 ==============
 
 
-.. mdinclude:: ../swift/README.md
+.. mdinclude:: ../../swift/README.md
