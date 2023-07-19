@@ -15,6 +15,7 @@
 #include <limits> // `std::numeric_limits`
 #include <thread> // `std::thread`
 
+#define _CRT_SECURE_NO_WARNINGS
 #define PY_SSIZE_T_CLEAN
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
@@ -45,6 +46,7 @@ using distance_t = punned_distance_t;
 using dense_index_t = punned_small_t;
 using dense_add_result_t = typename dense_index_t::add_result_t;
 using dense_search_result_t = typename dense_index_t::search_result_t;
+using dense_labeling_result_t = typename dense_index_t::labeling_result_t;
 
 struct dense_index_py_t : public dense_index_t {
     using native_t = dense_index_t;
@@ -672,9 +674,20 @@ PYBIND11_MODULE(compiled, m) {
     );
 
     i.def(
-        "remove", [](dense_index_py_t& index, label_t label) { index.remove(label).error.raise(); }, py::arg("label"));
+        "remove",
+        [](dense_index_py_t& index, label_t label, bool compact) {
+            dense_labeling_result_t result = index.remove(label);
+            result.error.raise();
+            return result.completed;
+        },
+        py::arg("label"), py::arg("compact") = false);
     i.def(
-        "rename", [](dense_index_py_t& index, label_t from, label_t to) { index.rename(from, to).error.raise(); },
+        "rename",
+        [](dense_index_py_t& index, label_t from, label_t to) {
+            dense_labeling_result_t result = index.rename(from, to);
+            result.error.raise();
+            return result.completed;
+        },
         py::arg("from"), py::arg("to"));
 
     i.def("__len__", &dense_index_py_t::size);
