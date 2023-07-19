@@ -179,13 +179,13 @@ inline std::size_t ceil2(std::size_t v) noexcept {
 }
 
 template <typename at> void misaligned_store(void* ptr, at v) noexcept {
-    static_assert(!std::is_reference<at>::value);
+    static_assert(!std::is_reference<at>::value, "Can't store a reference");
     std::memcpy(ptr, &v, sizeof(at));
 }
 
 /// @brief  Simply dereferencing misaligned pointers can be dangerous.
 template <typename at> at misaligned_load(void* ptr) noexcept {
-    static_assert(!std::is_reference<at>::value);
+    static_assert(!std::is_reference<at>::value, "Can't load a reference");
     at v;
     std::memcpy(&v, ptr, sizeof(at));
     return v;
