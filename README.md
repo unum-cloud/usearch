@@ -20,34 +20,35 @@ Vector Search Engine<br/>
 <p align="center">
 Euclidean • Angular • Jaccard • Hamming • Haversine • User-Defined Metrics
 <br/>
-<a href="#c++">C++11</a> •
-<a href="#python">Python</a> •
-<a href="#javascript">JavaScript</a> •
-<a href="#java">Java</a> •
-<a href="#rust">Rust</a> •
-<a href="#objective-c">Objective-C</a> •
-<a href="#swift">Swift</a> •
-<a href="#golang">GoLang</a> •
-<a href="#wolfram">Wolfram</a>
+<a href="https://unum-cloud.github.io/usearch/cpp">C++11</a> •
+<a href="https://unum-cloud.github.io/usearch/python">Python</a> •
+<a href="https://unum-cloud.github.io/usearch/javascript">JavaScript</a> •
+<a href="https://unum-cloud.github.io/usearch/java">Java</a> •
+<a href="https://unum-cloud.github.io/usearch/rust">Rust</a> •
+<a href="https://unum-cloud.github.io/usearch/c">C99</a> •
+<a href="https://unum-cloud.github.io/usearch/objective-c">Objective-C</a> •
+<a href="https://unum-cloud.github.io/usearch/swift">Swift</a> •
+<a href="https://unum-cloud.github.io/usearch/golang">GoLang</a> •
+<a href="https://unum-cloud.github.io/usearch/wolfram">Wolfram</a>
 <br/>
-Linux • MacOS • Windows • Docker • WebAssembly 🔜
+Linux • MacOS • Windows • Docker • WebAssembly
 </p>
 
 ---
 
-- [x] Benchmark-topping performance.
-- [x] Simple and extensible [single C++11 header][usearch-header] implementation.
-- [x] SIMD-optimized and [user-defined metrics](#user-defined-functions) with JIT-compilation.
-- [x] Variable dimensionality vectors for unique applications, including GIS and Chess.
-- [x] Advanced bitwise Tanimoto and Sorensen coefficients ideal for Genomics and Chemistry.
-- [x] On-the-fly support for [half-precision `f16` and quarter-precision `f8`](#memory-efficiency-downcasting-and-quantization), compatible with any hardware.
-- [x] [View large indexes from disk](#disk-based-indexes) without loading into RAM.
-- [x] Space-efficient point-clouds with `uint40_t`, accommodating 4B+ size.
-- [x] Optimized for concurrent threading, like OpenMP or C++23 executors with bring your threads.
-- [x] Support for multiple vectors per label.
-- [ ] On-the-fly deletions.
-- [x] Utilize [USearch and UForm Transformers for Semantic Search](#usearch--ai--multi-modal-semantic-search).
-- [x] Combine [USearch and RDKit for Molecule Search](#usearch--rdkit--molecular-search).
+- ✅ Benchmark-topping performance.
+- ✅ Simple and extensible [single C++11 header][usearch-header] implementation.
+- ✅ SIMD-optimized and [user-defined metrics](#user-defined-functions) with JIT-compilation.
+- ✅ Variable dimensionality vectors for unique applications, including GIS and Chess.
+- ✅ Advanced bitwise Tanimoto and Sorensen coefficients ideal for Genomics and Chemistry.
+- ✅ On-the-fly support for [half-precision `f16` and quarter-precision `f8`](#memory-efficiency-downcasting-and-quantization), compatible with any hardware.
+- ✅ [View large indexes from disk](#disk-based-indexes) without loading into RAM.
+- ✅ Space-efficient point-clouds with `uint40_t`, accommodating 4B+ size.
+- ✅ Optimized for concurrent threading, like OpenMP or C++23 executors with bring your threads.
+- ✅ Support for multiple vectors per label.
+- ✅ On-the-fly deletions.
+- ✅ Utilize [USearch and UForm Transformers for Semantic Search](#usearch--ai--multi-modal-semantic-search).
+- ✅ Combine [USearch and RDKit for Molecule Search](#usearch--rdkit--molecular-search).
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/index.hpp
 [obscure-use-cases]: https://ashvardanian.com/posts/abusing-vector-search
@@ -287,7 +288,7 @@ matches = index.search(fingerprints, 10)
 ## Integrations
 
 - [x] GPT-Cache.
-- [ ] Langchain.
+- [ ] LangChain.
 - [ ] Microsoft Semantic Kernel.
 - [ ] PyTorch.
 
