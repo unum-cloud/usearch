@@ -343,6 +343,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-22.04
+    if: ${{ always() }}
     needs: build_docs
     steps:
       - uses: robinraju/release-downloader@v1.8
@@ -364,6 +365,7 @@ jobs:
   deploy_docs_vercel:
     name: Deploy Vercel
     runs-on: ubuntu-22.04
+    if: ${{ always() }}
     needs: build_docs
     steps:
       - name: Notify Vercel
