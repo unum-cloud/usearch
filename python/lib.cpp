@@ -181,8 +181,8 @@ static void add_one_to_index(dense_index_py_t& index, label_t label, py::buffer 
     if (vector_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
-    if (index.size() + 1 >= index.capacity())
-        index.reserve(ceil2(index.size() + 1));
+    if (!index.reserve(ceil2(index.size() + 1)))
+        throw std::invalid_argument("Out of memory!");
 
     add_config_t config;
     config.store_vector = copy;
@@ -224,9 +224,6 @@ static void add_many_to_index(                                      //
     dense_index_py_t& index, py::buffer labels, py::buffer vectors, //
     bool copy, std::size_t threads) {
 
-    if (index.limits().threads_add < threads)
-        throw std::invalid_argument("Can't use that many threads!");
-
     py::buffer_info labels_info = labels.request();
     py::buffer_info vectors_info = vectors.request();
 
@@ -248,8 +245,10 @@ static void add_many_to_index(                                      //
     if (labels_count != vectors_count)
         throw std::invalid_argument("Number of labels and vectors must match!");
 
-    if (index.size() + vectors_count >= index.capacity())
-        index.reserve(ceil2(index.size() + vectors_count));
+    if (!threads)
+        threads = std::thread::hardware_concurrency();
+    if (!index.reserve(index_limits_t(ceil2(index.size() + vectors_count), threads)))
+        throw std::invalid_argument("Out of memory!");
 
     switch (numpy_string_to_kind(vectors_info.format)) {
     case scalar_kind_t::b1x8_k: add_typed_to_index<b1x8_t>(index, labels_info, vectors_info, copy, threads); break;
@@ -316,6 +315,11 @@ static void search_typed(                                   //
 
     Py_ssize_t vectors_count = vectors_info.shape[0];
     char const* vectors_data = reinterpret_cast<char const*>(vectors_info.ptr);
+
+    if (!threads)
+        threads = std::thread::hardware_concurrency();
+    if (!index.reserve(index_limits_t(index.size(), threads)))
+        throw std::invalid_argument("Out of memory!");
 
     executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
         search_config_t config;

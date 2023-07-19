@@ -682,7 +682,7 @@ int main(int argc, char** argv) {
     // config.expansion_search = args.expansion_search;
     index_limits_t limits;
     limits.threads_add = limits.threads_search = args.threads;
-    limits.elements = dataset.vectors_count();
+    limits.members = dataset.vectors_count();
 
     std::printf("- Index: \n");
     std::printf("-- Connectivity: %zu\n", config.connectivity);

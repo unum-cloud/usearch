@@ -1230,11 +1230,11 @@ struct index_config_t {
 };
 
 struct index_limits_t {
-    std::size_t elements = 0;
+    std::size_t members = 0;
     std::size_t threads_add = std::thread::hardware_concurrency();
     std::size_t threads_search = std::thread::hardware_concurrency();
 
-    index_limits_t(std::size_t n, std::size_t t) noexcept : elements(n), threads_add(t), threads_search(t) {}
+    index_limits_t(std::size_t n, std::size_t t) noexcept : members(n), threads_add(t), threads_search(t) {}
     index_limits_t(std::size_t n = 0) noexcept : index_limits_t(n, std::thread::hardware_concurrency()) {}
     std::size_t threads() const noexcept { return (std::max)(threads_add, threads_search); }
     std::size_t concurrency() const noexcept { return (std::min)(threads_add, threads_search); }
@@ -1861,7 +1861,7 @@ class index_gt {
         clear();
 
         if (nodes_)
-            node_allocator_t{}.deallocate(exchange(nodes_, nullptr), limits_.elements);
+            node_allocator_t{}.deallocate(exchange(nodes_, nullptr), limits_.members);
         if (contexts_) {
             for (std::size_t i = 0; i != limits_.threads(); ++i)
                 contexts_[i].~context_t();
@@ -1904,13 +1904,16 @@ class index_gt {
      */
     bool reserve(index_limits_t limits) usearch_noexcept_m {
 
-        usearch_assert_m(limits.elements >= size_, "Can't drop existing values");
+        if (limits.threads_add <= limits_.threads_add          //
+            && limits.threads_search <= limits_.threads_search //
+            && limits.members <= limits_.members)
+            return true;
 
-        if (!nodes_mutexes_.resize(limits.elements))
+        if (!nodes_mutexes_.resize(limits.members))
             return false;
 
         node_allocator_t node_allocator;
-        node_t* new_nodes = node_allocator.allocate(limits.elements);
+        node_t* new_nodes = node_allocator.allocate(limits.members);
         if (!new_nodes)
             return false;
 
@@ -1918,17 +1921,17 @@ class index_gt {
         context_allocator_t context_allocator;
         context_t* new_contexts = context_allocator.allocate(limits_threads);
         if (!new_contexts) {
-            node_allocator.deallocate(new_nodes, limits.elements);
+            node_allocator.deallocate(new_nodes, limits.members);
             return false;
         }
         for (std::size_t i = 0; i != limits_threads; ++i) {
             context_t& context = new_contexts[i];
             new (&context) context_t();
             context.metric = metric_;
-            if (!context.visits.resize(limits.elements)) {
+            if (!context.visits.resize(limits.members)) {
                 for (std::size_t j = 0; j != i; ++j)
                     context.visits.reset();
-                node_allocator.deallocate(new_nodes, limits.elements);
+                node_allocator.deallocate(new_nodes, limits.members);
                 context_allocator.deallocate(new_contexts, limits_threads);
                 return false;
             }
@@ -1948,13 +1951,12 @@ class index_gt {
 
         // Move the nodes info, and deallocate previous buffers.
         if (nodes_)
-            std::memcpy(new_nodes, nodes_, sizeof(node_t) * size()),
-                node_allocator.deallocate(nodes_, limits_.elements);
+            std::memcpy(new_nodes, nodes_, sizeof(node_t) * size()), node_allocator.deallocate(nodes_, limits_.members);
         if (contexts_)
             context_allocator.deallocate(contexts_, limits_.threads());
 
         limits_ = limits;
-        capacity_ = limits.elements;
+        capacity_ = limits.members;
         nodes_ = new_nodes;
         contexts_ = new_contexts;
         return true;
@@ -2286,7 +2288,7 @@ class index_gt {
         }
 
         // Temporary data-structures, proportional to the number of nodes:
-        total += limits_.elements * sizeof(node_t) + allocator_entry_bytes;
+        total += limits_.members * sizeof(node_t) + allocator_entry_bytes;
 
         // Temporary data-structures, proportional to the number of threads:
         total += limits_.threads() * sizeof(context_t) + allocator_entry_bytes * 3;
@@ -2441,7 +2443,7 @@ class index_gt {
             pre_ = precompute_(config_);
 
             index_limits_t limits;
-            limits.elements = state.size;
+            limits.members = state.size;
             if (!reserve(limits)) {
                 std::fclose(file);
                 return result.failed("Out of memory");
@@ -2561,7 +2563,7 @@ class index_gt {
             pre_ = precompute_(config_);
 
             index_limits_t limits;
-            limits.elements = state.size;
+            limits.members = state.size;
             limits.threads_add = 0;
             if (!reserve(limits))
                 return result.failed("Out of memory!");

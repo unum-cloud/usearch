@@ -267,7 +267,7 @@ class index_punned_dense_gt {
     bool reserve(index_limits_t limits) {
         {
             unique_lock_t lock(labeled_lookup_mutex_);
-            labeled_lookup_.reserve(limits.elements);
+            labeled_lookup_.reserve(limits.members);
         }
         return typed_->reserve(limits);
     }
