@@ -1,12 +1,13 @@
 # Compiling USearch
 
+This document describes the workflow for advanced USearch users and enthusiasts willing to contribute to the project.
 Before building the first time, please pull submodules.
 
 ```sh
 git submodule update --init --recursive
 ```
 
-## C++
+## C++11
 
 Linux:
 
@@ -65,7 +66,7 @@ Benchmarking:
     --cos
 ```
 
-## Python
+## Python 3
 
 Use PyTest to validate the build.
 The `-s` option will disable capturing the logs.
@@ -110,9 +111,24 @@ python python/scripts/bench.py connectivity ...
 
 ## JavaScript
 
+Node.JS:
+
 ```sh
 npm install && node javascript/test.js
 npm publish
+```
+
+WebAssembly:
+
+```sh
+emcmake cmake -B ./build -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} -s TOTAL_MEMORY=64MB" && emmake make -C ./build
+node ./build/test.js
+```
+
+If you don't yet have `emcmake` installed:
+
+```sh
+git clone https://github.com/emscripten-core/emsdk.git && ./emsdk/emsdk install latest && ./emsdk/emsdk activate latest && source ./emsdk/emsdk_env.sh
 ```
 
 ## Rust
@@ -176,9 +192,9 @@ swift build
 swift test -v
 ```
 
-## C
+## C99
 
-### Linux
+Linux:
 
 ```sh
 g++ -shared -fPIC lib.cpp -I ../include/  -I ../fp16/include/ -o libusearch.so
@@ -205,10 +221,10 @@ docker buildx create --use &&
         --push .
 ```
 
----
+## Sub-Modules
 
 Extending metrics in SimSIMD:
 
-```
+```sh
 git push --set-upstream https://github.com/ashvardanian/simsimd.git HEAD:main
 ```
