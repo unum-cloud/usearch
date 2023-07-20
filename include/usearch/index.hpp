@@ -1696,8 +1696,6 @@ class index_gt {
 
         operator vector_view_t() const noexcept { return {vector(), dim()}; }
         vector_view_t vector_view() const noexcept { return {vector(), dim()}; }
-        explicit operator member_ref_t() noexcept { return {{tape_}, vector_view()}; }
-        explicit operator member_cref_t() const noexcept { return {label(), vector_view()}; }
         explicit operator bool() const noexcept { return tape_; }
     };
 
@@ -1841,8 +1839,13 @@ class index_gt {
     member_iterator_t begin() noexcept { return {this, 0}; }
     member_iterator_t end() noexcept { return {this, size()}; }
 
-    member_cref_t at(std::size_t i) const noexcept { return member_cref_t(node_with_id_(i)); }
-    member_ref_t at(std::size_t i) noexcept { return member_ref_t(node_with_id_(i)); }
+    member_ref_t at(std::size_t i) noexcept {
+        return {nodes_[i].label(), nodes_[i].vector_view(), static_cast<id_t>(i)};
+    }
+
+    member_cref_t at(std::size_t i) const noexcept {
+        return {nodes_[i].label(), nodes_[i].vector_view(), static_cast<id_t>(i)};
+    }
 
     dynamic_allocator_t const& dynamic_allocator() const noexcept { return dynamic_allocator_; }
     tape_allocator_t const& tape_allocator() const noexcept { return tape_allocator_; }
@@ -2682,7 +2685,7 @@ class index_gt {
         progress_at&& progress = progress_at{}) noexcept {
 
         // Erase all the incoming links
-        executor.execute_bulk(size(), [&](std::size_t node_idx, std::size_t) {
+        executor.execute_bulk(size(), [&](std::size_t, std::size_t node_idx) {
             node_t node = node_with_id_(node_idx);
             for (level_t level = 0; level <= node.level(); ++level) {
                 neighbors_ref_t neighbors = neighbors_(node, level);
