@@ -1451,9 +1451,32 @@ struct dummy_label_to_label_mapping_t {
     template <typename label_at> member_ref_t operator[](label_at&&) const noexcept { return {}; }
 };
 
+template <typename, typename at> struct has_reset_gt {
+    static_assert(std::integral_constant<at, false>::value, "Second template parameter needs to be of function type.");
+};
+
+template <typename check_at, typename return_at, typename... args_at>
+struct has_reset_gt<check_at, return_at(args_at...)> {
+  private:
+    template <typename at>
+    static constexpr auto check(at*) ->
+        typename std::is_same<decltype(std::declval<at>().reset(std::declval<args_at>()...)), return_at>::type;
+    template <typename> static constexpr std::false_type check(...);
+
+    typedef decltype(check<check_at>(0)) type;
+
+  public:
+    static constexpr bool value = type::value;
+};
+
+/**
+ *  @brief  Checks if a certain class has a member function called `reset`.
+ */
+template <typename at> constexpr bool has_reset() { return has_reset_gt<at, void()>::value; }
+
 /**
  *  @brief  Approximate Nearest Neighbors Search index using the
- *          Hierarchical Navigable Small World graph algorithm.
+ *          Hierarchical Navigable Small World @b (HNSW) graphs algorithm.
  *
  *  @section Features
  *      - Thread-safe for concurrent construction.
@@ -1473,15 +1496,22 @@ struct dummy_label_to_label_mapping_t {
  *      The smallest unsigned integer type to address indexed elements.
  *      Can be a built-in `uint32_t`, `uint64_t`, or our custom `uint40_t`.
  *
- *  @tparam allocator_at
- *      Dynamic memory allocator.
+ *  @tparam dynamic_allocator_at
+ *      Dynamic memory allocator for temporary buffers, visits indicators, and
+ *      priority queues, needed during construction and traversals of graphs.
+ *      The allocated buffers may be uninitialized.
+ *
+ *  @tparam tape_allocator_at
+ *      Potentially different memory allocator for primary allocations of nodes and vectors.
+ *      It would never `deallocate` separate entries, and would only free all the space at once.
+ *      The allocated buffers may be uninitialized.
  *
  *  @section Usage
  *
  *  @subsection Exceptions
  *
  *  None of the methods throw exceptions in the "Release" compilation mode.
- *  It may only `throw` if your memory ::allocator_at or ::metric_at isn't
+ *  It may only `throw` if your memory ::dynamic_allocator_at or ::metric_at isn't
  *  safe to copy.
  *
  *  @section Implementation Details
@@ -1513,18 +1543,18 @@ struct dummy_label_to_label_mapping_t {
  *  vectors. That, however, is solved by `index_punned_dense_gt`, which also adds automatic casting.
  *
  */
-template <typename metric_at = ip_gt<float>,            //
-          typename label_at = std::int64_t,             //
-          typename id_at = std::uint32_t,               //
-          typename allocator_at = std::allocator<char>, //
-          typename point_allocator_at = allocator_at>   //
+template <typename metric_at = ip_gt<float>,                    //
+          typename label_at = std::int64_t,                     //
+          typename id_at = std::uint32_t,                       //
+          typename dynamic_allocator_at = std::allocator<char>, //
+          typename tape_allocator_at = dynamic_allocator_at>    //
 class index_gt {
   public:
     using metric_t = metric_at;
     using label_t = label_at;
     using id_t = id_at;
-    using allocator_t = allocator_at;
-    using point_allocator_t = point_allocator_at;
+    using dynamic_allocator_t = dynamic_allocator_at;
+    using tape_allocator_t = tape_allocator_at;
     static_assert(sizeof(label_t) >= sizeof(id_t), "Having tiny labels doesn't make sense.");
 
     using scalar_t = typename metric_t::scalar_t;
@@ -1601,7 +1631,7 @@ class index_gt {
 
     // STL compatibility:
     using value_type = std::pair<label_t, distance_t>;
-    using allocator_type = allocator_t;
+    using allocator_type = dynamic_allocator_t;
     using size_type = std::size_t;
     using difference_type = std::ptrdiff_t;
     using reference = member_ref_t;
@@ -1618,13 +1648,14 @@ class index_gt {
     using dim_t = std::uint32_t;
     using level_t = std::int32_t;
 
-    using allocator_traits_t = std::allocator_traits<allocator_t>;
-    using byte_t = typename allocator_t::value_type;
-    static_assert(sizeof(byte_t) == 1, "Allocator must allocate separate addressable bytes");
+    using allocator_traits_t = std::allocator_traits<dynamic_allocator_t>;
+    using byte_t = typename dynamic_allocator_t::value_type;
+    static_assert(sizeof(byte_t) == 1, //
+                  "Primary allocator must allocate separate addressable bytes");
 
-    using point_allocator_traits_t = std::allocator_traits<point_allocator_t>;
-    static_assert(sizeof(typename point_allocator_traits_t::value_type) == 1,
-                  "Allocator must allocate separate addressable bytes");
+    using tape_allocator_traits_t = std::allocator_traits<tape_allocator_t>;
+    static_assert(sizeof(typename tape_allocator_traits_t::value_type) == 1, //
+                  "Tape allocator must allocate separate addressable bytes");
 
     /**
      *  @brief  How much larger (number of neighbors per node) will
@@ -1637,7 +1668,7 @@ class index_gt {
      */
     static constexpr std::size_t node_head_bytes_() { return sizeof(label_t) + sizeof(dim_t) + sizeof(level_t); }
 
-    using visits_bitset_t = visits_bitset_gt<allocator_t>;
+    using visits_bitset_t = visits_bitset_gt<dynamic_allocator_t>;
 
     struct precomputed_constants_t {
         double inverse_log_connectivity{};
@@ -1688,8 +1719,6 @@ class index_gt {
 
         operator vector_view_t() const noexcept { return {vector(), dim()}; }
         vector_view_t vector_view() const noexcept { return {vector(), dim()}; }
-        explicit operator member_ref_t() noexcept { return {{tape_}, vector_view()}; }
-        explicit operator member_cref_t() const noexcept { return {label(), vector_view()}; }
         explicit operator bool() const noexcept { return tape_; }
     };
 
@@ -1743,8 +1772,8 @@ class index_gt {
     index_config_t config_{};
     index_limits_t limits_{};
     metric_t metric_{};
-    mutable allocator_t allocator_{};
-    point_allocator_t point_allocator_{};
+    mutable dynamic_allocator_t dynamic_allocator_{};
+    tape_allocator_t tape_allocator_{};
     precomputed_constants_t pre_{};
     viewed_file_t viewed_file_{};
 
@@ -1757,11 +1786,11 @@ class index_gt {
     level_t max_level_{};
     id_t entry_id_{};
 
-    using node_allocator_t = typename allocator_traits_t::template rebind_alloc<node_t>;
+    using nodes_allocator_t = typename allocator_traits_t::template rebind_alloc<node_t>;
     node_t* nodes_{};
     mutable visits_bitset_t nodes_mutexes_{};
 
-    using context_allocator_t = typename allocator_traits_t::template rebind_alloc<context_t>;
+    using contexts_allocator_t = typename allocator_traits_t::template rebind_alloc<context_t>;
     context_t* contexts_{};
 
   public:
@@ -1777,16 +1806,16 @@ class index_gt {
      *  @section Exceptions
      *      Doesn't throw, unless the ::metric's and ::allocators's throw on copy-construction.
      */
-    explicit index_gt(index_config_t config = {}, metric_t metric = {}, allocator_t allocator = {},
-                      point_allocator_t point_allocator = {}) noexcept
-        : config_(config), limits_(0, 0), metric_(metric), allocator_(std::move(allocator)),
-          point_allocator_(std::move(point_allocator)), pre_(precompute_(config)), size_(0u), max_level_(-1),
+    explicit index_gt(index_config_t config = {}, metric_t metric = {}, dynamic_allocator_t allocator = {},
+                      tape_allocator_t tape_allocator = {}) noexcept
+        : config_(config), limits_(0, 0), metric_(metric), dynamic_allocator_(std::move(allocator)),
+          tape_allocator_(std::move(tape_allocator)), pre_(precompute_(config)), size_(0u), max_level_(-1),
           entry_id_(0u), nodes_(nullptr), nodes_mutexes_(), contexts_(nullptr) {}
 
     /**
      *  @brief  Clones the structure with the same hyper-parameters, but without contents.
      */
-    index_gt fork() noexcept { return index_gt{config_, metric_, allocator_}; }
+    index_gt fork() noexcept { return index_gt{config_, metric_, dynamic_allocator_}; }
 
     ~index_gt() noexcept { reset(); }
 
@@ -1811,7 +1840,7 @@ class index_gt {
     copy_result_t copy(copy_config_t /*config*/ = {}) const noexcept {
         copy_result_t result;
         index_gt& other = result.index;
-        other = index_gt(config_, metric_, allocator_, point_allocator_);
+        other = index_gt(config_, metric_, dynamic_allocator_, tape_allocator_);
         if (!other.reserve(limits_))
             return result.failed("Failed to reserve the contexts");
 
@@ -1833,8 +1862,16 @@ class index_gt {
     member_iterator_t begin() noexcept { return {this, 0}; }
     member_iterator_t end() noexcept { return {this, size()}; }
 
-    member_cref_t at(std::size_t i) const noexcept { return member_cref_t(node_with_id_(i)); }
-    member_ref_t at(std::size_t i) noexcept { return member_ref_t(node_with_id_(i)); }
+    member_ref_t at(std::size_t i) noexcept {
+        return {nodes_[i].label(), nodes_[i].vector_view(), static_cast<id_t>(i)};
+    }
+
+    member_cref_t at(std::size_t i) const noexcept {
+        return {nodes_[i].label(), nodes_[i].vector_view(), static_cast<id_t>(i)};
+    }
+
+    dynamic_allocator_t const& dynamic_allocator() const noexcept { return dynamic_allocator_; }
+    tape_allocator_t const& tape_allocator() const noexcept { return tape_allocator_; }
 
 #pragma region Adjusting Configuration
 
@@ -1844,9 +1881,12 @@ class index_gt {
      *          Will keep the number of available threads/contexts the same as it was.
      */
     void clear() noexcept {
-        std::size_t n = size_;
-        for (std::size_t i = 0; i != n; ++i)
-            node_free_(i);
+        if (!has_reset<tape_allocator_t>()) {
+            std::size_t n = size_;
+            for (std::size_t i = 0; i != n; ++i)
+                node_free_(i);
+        } else
+            tape_allocator_.deallocate(nullptr, 0);
         size_ = 0;
         max_level_ = -1;
         entry_id_ = 0u;
@@ -1861,11 +1901,11 @@ class index_gt {
         clear();
 
         if (nodes_)
-            node_allocator_t{}.deallocate(exchange(nodes_, nullptr), limits_.members);
+            nodes_allocator_t{}.deallocate(exchange(nodes_, nullptr), limits_.members);
         if (contexts_) {
             for (std::size_t i = 0; i != limits_.threads(); ++i)
                 contexts_[i].~context_t();
-            context_allocator_t{}.deallocate(exchange(contexts_, nullptr), limits_.threads());
+            contexts_allocator_t{}.deallocate(exchange(contexts_, nullptr), limits_.threads());
         }
         limits_ = index_limits_t{0, 0};
         capacity_ = 0;
@@ -1879,8 +1919,8 @@ class index_gt {
         std::swap(config_, other.config_);
         std::swap(limits_, other.limits_);
         std::swap(metric_, other.metric_);
-        std::swap(allocator_, other.allocator_);
-        std::swap(point_allocator_, other.point_allocator_);
+        std::swap(dynamic_allocator_, other.dynamic_allocator_);
+        std::swap(tape_allocator_, other.tape_allocator_);
         std::swap(pre_, other.pre_);
         std::swap(viewed_file_, other.viewed_file_);
         std::swap(max_level_, other.max_level_);
@@ -1912,13 +1952,13 @@ class index_gt {
         if (!nodes_mutexes_.resize(limits.members))
             return false;
 
-        node_allocator_t node_allocator;
+        nodes_allocator_t node_allocator;
         node_t* new_nodes = node_allocator.allocate(limits.members);
         if (!new_nodes)
             return false;
 
         std::size_t limits_threads = limits.threads();
-        context_allocator_t context_allocator;
+        contexts_allocator_t context_allocator;
         context_t* new_contexts = context_allocator.allocate(limits_threads);
         if (!new_contexts) {
             node_allocator.deallocate(new_nodes, limits.members);
@@ -2408,6 +2448,10 @@ class index_gt {
     template <typename progress_at = dummy_progress_t>
     serialization_result_t load(char const* file_path, progress_at&& progress = {}) noexcept {
 
+        // Remove previously stored objects
+        reset();
+
+        // Start parsing the files
         serialization_result_t result;
         file_header_t state_buffer{};
         std::FILE* file = std::fopen(file_path, "rb");
@@ -2493,6 +2537,11 @@ class index_gt {
      */
     template <typename progress_at = dummy_progress_t>
     serialization_result_t view(char const* file_path, progress_at&& progress = {}) noexcept {
+
+        // Remove previously stored objects
+        reset();
+
+        // Start parsing the files
         serialization_result_t result;
 
 #if defined(USEARCH_DEFINED_WINDOWS)
@@ -2671,7 +2720,7 @@ class index_gt {
         progress_at&& progress = progress_at{}) noexcept {
 
         // Erase all the incoming links
-        executor.execute_bulk(size(), [&](std::size_t node_idx, std::size_t) {
+        executor.execute_bulk(size(), [&](std::size_t, std::size_t node_idx) {
             node_t node = node_with_id_(node_idx);
             for (level_t level = 0; level <= node.level(); ++level) {
                 neighbors_ref_t neighbors = neighbors_(node, level);
@@ -2708,7 +2757,7 @@ class index_gt {
 
         using proposals_count_t = std::uint16_t;
         using ids_allocator_t = typename allocator_traits_t::template rebind_alloc<id_t>;
-        allocator_t& alloc = men.allocator_;
+        dynamic_allocator_t& alloc = men.dynamic_allocator_;
 
         // Create an atomic queue, as a ring structure, from/to which
         // free men will be added/pulled.
@@ -2911,7 +2960,7 @@ class index_gt {
         std::size_t node_bytes = node_bytes_(dims_to_store, level);
         std::size_t non_vector_bytes = node_bytes - vector_bytes;
 
-        byte_t* data = (byte_t*)point_allocator_.allocate(node_bytes);
+        byte_t* data = (byte_t*)tape_allocator_.allocate(node_bytes);
         if (!data)
             return node_bytes_split_t{};
         return {{data, non_vector_bytes}, {data + non_vector_bytes, vector_bytes}};
@@ -2934,7 +2983,7 @@ class index_gt {
 
     node_t node_make_copy_(node_bytes_split_t old_bytes) noexcept {
         if (old_bytes.colocated()) {
-            byte_t* data = (byte_t*)point_allocator_.allocate(old_bytes.memory_usage());
+            byte_t* data = (byte_t*)tape_allocator_.allocate(old_bytes.memory_usage());
             std::memcpy(data, old_bytes.tape.data(), old_bytes.memory_usage());
             return node_t{data, reinterpret_cast<scalar_t*>(data + old_bytes.tape.size())};
         } else {
@@ -2953,7 +3002,7 @@ class index_gt {
 
         node_t& node = nodes_[id];
         std::size_t node_bytes = node_bytes_(node) - node_vector_bytes_(node) * !node_bytes_split_(node).colocated();
-        point_allocator_.deallocate(node.tape(), node_bytes);
+        tape_allocator_.deallocate(node.tape(), node_bytes);
         node = node_t{};
     }
 

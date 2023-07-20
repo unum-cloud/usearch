@@ -687,6 +687,8 @@ PYBIND11_MODULE(compiled, m) {
         [](dense_index_py_t& index, label_t label, bool compact, std::size_t threads) -> bool {
             dense_labeling_result_t result = index.remove(label);
             result.error.raise();
+            if (!compact)
+                return result.completed;
 
             if (!threads)
                 threads = std::thread::hardware_concurrency();
@@ -704,6 +706,8 @@ PYBIND11_MODULE(compiled, m) {
            std::size_t threads) -> std::size_t {
             dense_labeling_result_t result = index.remove(labels.begin(), labels.end());
             result.error.raise();
+            if (!compact)
+                return result.completed;
 
             if (!threads)
                 threads = std::thread::hardware_concurrency();

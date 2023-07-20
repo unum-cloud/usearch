@@ -329,7 +329,7 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
     using label_t = typename index_at::label_t;
     using distance_t = typename index_at::distance_t;
     using join_result_t = typename index_at::join_result_t;
-    constexpr std::size_t missing_label = std::numeric_limits<label_t>::max();
+    constexpr label_t missing_label = std::numeric_limits<label_t>::max();
 
     std::printf("\n");
     std::printf("------------\n");
@@ -383,7 +383,7 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
     // Evaluate join quality
     std::size_t recall_join = 0, unmatched_count = 0;
     for (std::size_t i = 0; i != index.size(); ++i) {
-        recall_join += man_to_woman[i] == i;
+        recall_join += man_to_woman[i] == static_cast<label_t>(i);
         unmatched_count += man_to_woman[i] == missing_label;
     }
     std::printf("Recall Joins %.2f %%\n", recall_join * 100.f / index.size());

@@ -214,6 +214,11 @@ inline std::uint16_t f32_to_f16(float f32) noexcept {
 #endif
 }
 
+/**
+ *  @brief  Numeric type for the IEEE 754 half-precision floating point.
+ *          If hardware support isn't available, falls back to a hardware
+ *          agnostic in-software implementation.
+ */
 class f16_bits_t {
     std::uint16_t uint16_{};
 
@@ -309,15 +314,31 @@ struct uuid_t {
     std::uint8_t octets[16];
 };
 
+/**
+ *  @brief  An STL-based executor or a "thread-pool" for parallel execution.
+ *          Isn't efficient for small batches, as it recreates the threads on every call.
+ */
 class executor_stl_t {
     std::size_t threads_count_{};
 
   public:
+    /**
+     *  @param threads_count The number of threads to be used for parallel execution.
+     */
     executor_stl_t(std::size_t threads_count = 0) noexcept
         : threads_count_(threads_count ? threads_count : std::thread::hardware_concurrency()) {}
 
+    /**
+     *  @return Maximum number of threads available to the executor.
+     */
     std::size_t size() const noexcept { return threads_count_; }
 
+    /**
+     *  @brief Executes tasks in bulk using the specified thread-aware function.
+     *  @param tasks                 The total number of tasks to be executed.
+     *  @param thread_aware_function The thread-aware function to be called for each thread index and task index.
+     *  @throws If an exception occurs during execution of the thread-aware function.
+     */
     template <typename thread_aware_function_at>
     void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
         std::vector<std::thread> threads_pool;
@@ -333,6 +354,11 @@ class executor_stl_t {
             threads_pool[thread_idx].join();
     }
 
+    /**
+     *  @brief Saturates every available thread with the given workload, until they finish.
+     *  @param thread_aware_function The thread-aware function to be called for each thread index.
+     *  @throws If an exception occurs during execution of the thread-aware function.
+     */
     template <typename thread_aware_function_at>
     void execute_bulk(thread_aware_function_at&& thread_aware_function) noexcept(false) {
         std::vector<std::thread> threads_pool;
@@ -345,14 +371,30 @@ class executor_stl_t {
 
 #if USEARCH_USE_OPENMP
 
+/**
+ *  @brief  An OpenMP-based executor or a "thread-pool" for parallel execution.
+ *          Is the preferred implementation, when available, and maximum performance is needed.
+ */
 class executor_openmp_t {
   public:
+    /**
+     *  @param threads_count The number of threads to be used for parallel execution.
+     */
     executor_openmp_t(std::size_t threads_count = 0) noexcept {
         omp_set_num_threads(threads_count ? threads_count : std::thread::hardware_concurrency());
     }
 
+    /**
+     *  @return Maximum number of threads available to the executor.
+     */
     std::size_t size() const noexcept { return omp_get_num_threads(); }
 
+    /**
+     *  @brief Executes tasks in bulk using the specified thread-aware function.
+     *  @param tasks                 The total number of tasks to be executed.
+     *  @param thread_aware_function The thread-aware function to be called for each thread index and task index.
+     *  @throws If an exception occurs during execution of the thread-aware function.
+     */
     template <typename thread_aware_function_at>
     void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
 #pragma omp parallel for schedule(dynamic)
@@ -360,6 +402,11 @@ class executor_openmp_t {
             thread_aware_function(omp_get_thread_num(), i);
     }
 
+    /**
+     *  @brief Saturates every available thread with the given workload, until they finish.
+     *  @param thread_aware_function The thread-aware function to be called for each thread index.
+     *  @throws If an exception occurs during execution of the thread-aware function.
+     */
     template <typename thread_aware_function_at>
     void execute_bulk(thread_aware_function_at&& thread_aware_function) noexcept(false) {
 #pragma omp parallel
@@ -415,18 +462,17 @@ class aligned_allocator_gt {
 
 using aligned_allocator_t = aligned_allocator_gt<>;
 
-#if !defined(USEARCH_DEFINED_WINDOWS)
-
 /**
  *  @brief  Memory-mapping allocator designed for "alloc many, free at once" usage patterns.
- *          Thread-safe.
+ *          Thread-safe, @b except constructors and destructors.
  *
  *  Using this memory allocator won't affect your overall speed much, as that is not the bottleneck.
  *  However, it can drastically improve memory usage especcially for huge indexes of small vectors.
  */
 template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
 
-    static constexpr std::size_t min_size() { return 1024 * 1024 * 4; }
+    static constexpr std::size_t min_capacity() { return 1024 * 1024 * 4; }
+    static constexpr std::size_t capacity_multiplier() { return 2; }
     static constexpr std::size_t head_size() {
         /// Pointer to the the previous arena and the size of the current one.
         return divide_round_up<alignment_ak>(sizeof(byte_t*) + sizeof(std::size_t)) * alignment_ak;
@@ -435,24 +481,8 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
     std::mutex mutex_;
     byte_t* last_arena_ = nullptr;
     std::size_t last_usage_ = head_size();
-    std::size_t last_capacity_ = min_size();
-
-    void reset() noexcept {
-        byte_t* last_arena = last_arena_;
-        while (last_arena) {
-            byte_t* previous_arena;
-            std::memcpy(&previous_arena, last_arena, sizeof(byte_t*));
-            std::size_t current_size;
-            std::memcpy(&current_size, last_arena + sizeof(byte_t*), sizeof(std::size_t));
-            munmap(last_arena, current_size);
-            last_arena = previous_arena;
-        }
-
-        // Clear the references:
-        last_arena_ = nullptr;
-        last_usage_ = head_size();
-        last_capacity_ = min_size();
-    }
+    std::size_t last_capacity_ = min_capacity();
+    std::size_t wasted_space_ = 0;
 
   public:
     using value_type = byte_t;
@@ -462,56 +492,136 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
 
     memory_mapping_allocator_gt() = default;
     memory_mapping_allocator_gt(memory_mapping_allocator_gt&& other) noexcept
-        : last_arena_(other.last_arena_), last_usage_(other.last_usage_), last_capacity_(other.last_capacity_) {}
+        : last_arena_(exchange(other.last_arena_, nullptr)), last_usage_(exchange(other.last_usage_, 0)),
+          last_capacity_(exchange(other.last_capacity_, 0)), wasted_space_(exchange(other.wasted_space_, 0)) {}
+
     memory_mapping_allocator_gt& operator=(memory_mapping_allocator_gt&& other) noexcept {
         std::swap(last_arena_, other.last_arena_);
         std::swap(last_usage_, other.last_usage_);
         std::swap(last_capacity_, other.last_capacity_);
-        return *this;
-    }
-
-    memory_mapping_allocator_gt(memory_mapping_allocator_gt const&) noexcept {}
-    memory_mapping_allocator_gt& operator=(memory_mapping_allocator_gt const&) noexcept {
-        reset();
+        std::swap(wasted_space_, other.wasted_space_);
         return *this;
     }
 
     ~memory_mapping_allocator_gt() noexcept { reset(); }
 
+    /**
+     *  @brief Discards all previously allocated memory buffers.
+     */
+    void reset() noexcept {
+        byte_t* last_arena = last_arena_;
+        while (last_arena) {
+            byte_t* previous_arena;
+            std::memcpy(&previous_arena, last_arena, sizeof(byte_t*));
+            std::size_t current_size;
+            std::memcpy(&current_size, last_arena + sizeof(byte_t*), sizeof(std::size_t));
+#if defined(USEARCH_DEFINED_WINDOWS)
+            ::VirtualFree(last_arena, 0, MEM_RELEASE);
+#else
+            munmap(last_arena, current_size);
+#endif
+            last_arena = previous_arena;
+        }
+
+        // Clear the references:
+        last_arena_ = nullptr;
+        last_usage_ = head_size();
+        last_capacity_ = min_capacity();
+        wasted_space_ = 0;
+    }
+
+    /**
+     *  @brief Copy constructor.
+     *  @note This is a no-op copy constructor since the allocator is not copyable.
+     */
+    memory_mapping_allocator_gt(memory_mapping_allocator_gt const&) noexcept {}
+
+    /**
+     *  @brief Copy assignment operator.
+     *  @note This is a no-op copy assignment operator since the allocator is not copyable.
+     *  @return Reference to the allocator after the assignment.
+     */
+    memory_mapping_allocator_gt& operator=(memory_mapping_allocator_gt const&) noexcept {
+        reset();
+        return *this;
+    }
+
+    /**
+     *  @brief Allocates an @b uninitialized block of memory of the specified size.
+     *  @param count_bytes The number of bytes to allocate.
+     *  @return A pointer to the allocated memory block, or `nullptr` if allocation fails.
+     */
     inline byte_t* allocate(std::size_t count_bytes) noexcept {
-        count_bytes = divide_round_up<alignment_ak>(count_bytes) * alignment_ak;
+        std::size_t extended_bytes = divide_round_up<alignment_ak>(count_bytes) * alignment_ak;
+        // Check if the requested allocation size is absurd
+        if (extended_bytes > min_capacity())
+            return nullptr;
 
         std::unique_lock<std::mutex> lock(mutex_);
-        if (!last_arena_ || (last_usage_ + count_bytes > last_capacity_)) {
-            std::size_t new_capacity = last_capacity_ * 2;
-            int prot = PROT_WRITE | PROT_READ;
-            int flags = MAP_PRIVATE | MAP_ANONYMOUS;
-            byte_t* new_arena = (byte_t*)mmap(NULL, new_capacity, prot, flags, 0, 0);
+        if (!last_arena_ || (last_usage_ + extended_bytes > last_capacity_)) {
+            std::size_t new_cap = last_capacity_ * capacity_multiplier();
+#if defined(USEARCH_DEFINED_WINDOWS)
+            byte_t* new_arena = (byte_t*)(::VirtualAlloc(NULL, new_cap, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+            if (new_arena == nullptr)
+                return nullptr;
+#else
+            byte_t* new_arena = (byte_t*)mmap(NULL, new_cap, PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+            if (!new_arena)
+                return nullptr;
+#endif
             std::memcpy(new_arena, &last_arena_, sizeof(byte_t*));
-            std::memcpy(new_arena + sizeof(byte_t*), &new_capacity, sizeof(std::size_t));
+            std::memcpy(new_arena + sizeof(byte_t*), &new_cap, sizeof(std::size_t));
 
+            wasted_space_ += total_reserved();
             last_arena_ = new_arena;
-            last_capacity_ = new_capacity;
+            last_capacity_ = new_cap;
             last_usage_ = head_size();
         }
 
-        return last_arena_ + exchange(last_usage_, last_usage_ + count_bytes);
+        wasted_space_ += extended_bytes - count_bytes;
+        return last_arena_ + exchange(last_usage_, last_usage_ + extended_bytes);
     }
+
+    /**
+     *  @brief Returns the amount of memory used by the allocator across all arenas.
+     *  @return The amount of space in bytes.
+     */
+    std::size_t total_allocated() const noexcept {
+        if (!last_arena_)
+            return 0;
+        std::size_t total_used = 0;
+        std::size_t last_capacity = last_capacity_;
+        do {
+            total_used += last_capacity;
+            last_capacity /= capacity_multiplier();
+        } while (last_capacity >= min_capacity());
+        return total_used;
+    }
+
+    /**
+     *  @brief Returns the amount of wasted space due to alignment.
+     *  @return The amount of wasted space in bytes.
+     */
+    std::size_t total_wasted() const noexcept { return wasted_space_; }
+
+    /**
+     *  @brief Returns the amount of remaining memory already reserved but not yet used.
+     *  @return The amount of reserved memory in bytes.
+     */
+    std::size_t total_reserved() const noexcept { return last_capacity_ - last_usage_; }
 
     /**
      *  @warning The very first memory de-allocation discards all the arenas!
      */
-    void deallocate(byte_t*, std::size_t) noexcept { reset(); }
+    void deallocate(byte_t* = nullptr, std::size_t = 0) noexcept { reset(); }
 };
 
 using memory_mapping_allocator_t = memory_mapping_allocator_gt<>;
 
-#else
-
-using memory_mapping_allocator_t = aligned_allocator_t;
-
-#endif
-
+/**
+ *  @brief  Utility class used to cast arrays of one scalar type to another,
+ *          avoiding unnecessary conversions.
+ */
 template <typename from_scalar_at, typename to_scalar_at> struct cast_gt {
     inline bool operator()(byte_t const* input, std::size_t dimensions, byte_t* output) const {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);

@@ -2,6 +2,6 @@ API Reference
 ===============
 
 ===============
-usearch
+Index.java
 ===============
 .. doxygenfile:: Index.java
