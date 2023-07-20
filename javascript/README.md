@@ -12,7 +12,7 @@ npm install usearch
 For latter:
 
 ```sh
-
+wasmer install unum/usearch
 ```
 
 ## Quickstart

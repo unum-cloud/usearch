@@ -39,16 +39,15 @@ Linux • MacOS • Windows • Docker • WebAssembly
 - ✅ Benchmark-topping performance.
 - ✅ Simple and extensible [single C++11 header][usearch-header] implementation.
 - ✅ SIMD-optimized and [user-defined metrics](#user-defined-functions) with JIT-compilation.
-- ✅ Variable dimensionality vectors for unique applications, including GIS and Chess.
-- ✅ Advanced bitwise Tanimoto and Sorensen coefficients ideal for Genomics and Chemistry.
-- ✅ On-the-fly support for [half-precision `f16` and quarter-precision `f8`](#memory-efficiency-downcasting-and-quantization), compatible with any hardware.
+- ✅ Variable dimensionality vectors for unique applications, including search over compressed data.
+- ✅ Bitwise Tanimoto and Sorensen coefficients for [Genomics and Chemistry applications](#usearch--rdkit--molecular-search).
+- ✅ Hardware-agmostic `f16` & `f8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
 - ✅ [View large indexes from disk](#disk-based-indexes) without loading into RAM.
 - ✅ Space-efficient point-clouds with `uint40_t`, accommodating 4B+ size.
-- ✅ Optimized for concurrent threading, like OpenMP or C++23 executors with bring your threads.
-- ✅ Support for multiple vectors per label.
+- ✅ Compatible with OpenMP and custom "executors", for fine-grained control over CPU utilization.
+- ✅ Supports multiple vectors per label.
 - ✅ On-the-fly deletions.
-- ✅ Utilize [USearch and UForm Transformers for Semantic Search](#usearch--ai--multi-modal-semantic-search).
-- ✅ Combine [USearch and RDKit for Molecule Search](#usearch--rdkit--molecular-search).
+- ✅ [Semantic Search](#usearch--ai--multi-modal-semantic-search) and [Joins](#joins).
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/index.hpp
 [obscure-use-cases]: https://ashvardanian.com/posts/abusing-vector-search
