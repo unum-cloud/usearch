@@ -462,8 +462,6 @@ class aligned_allocator_gt {
 
 using aligned_allocator_t = aligned_allocator_gt<>;
 
-#if !defined(USEARCH_DEFINED_WINDOWS)
-
 /**
  *  @brief  Memory-mapping allocator designed for "alloc many, free at once" usage patterns.
  *          Thread-safe, @b except constructors and destructors.
@@ -493,7 +491,11 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
             std::memcpy(&previous_arena, last_arena, sizeof(byte_t*));
             std::size_t current_size;
             std::memcpy(&current_size, last_arena + sizeof(byte_t*), sizeof(std::size_t));
+#if defined(USEARCH_DEFINED_WINDOWS)
+            ::VirtualFree(last_arena, 0, MEM_RELEASE);
+#else
             munmap(last_arena, current_size);
+#endif
             last_arena = previous_arena;
         }
 
@@ -554,18 +556,22 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
 
         std::unique_lock<std::mutex> lock(mutex_);
         if (!last_arena_ || (last_usage_ + extended_bytes > last_capacity_)) {
-            std::size_t new_capacity = last_capacity_ * capacity_multiplier();
-            int prot = PROT_WRITE | PROT_READ;
-            int flags = MAP_PRIVATE | MAP_ANONYMOUS;
-            byte_t* new_arena = (byte_t*)mmap(NULL, new_capacity, prot, flags, 0, 0);
+            std::size_t new_cap = last_capacity_ * capacity_multiplier();
+#if defined(USEARCH_DEFINED_WINDOWS)
+            byte_t* new_arena = (byte_t*)(::VirtualAlloc(NULL, new_cap, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+            if (new_arena == nullptr)
+                return nullptr;
+#else
+            byte_t* new_arena = (byte_t*)mmap(NULL, new_cap, PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
             if (!new_arena)
                 return nullptr;
+#endif
             std::memcpy(new_arena, &last_arena_, sizeof(byte_t*));
-            std::memcpy(new_arena + sizeof(byte_t*), &new_capacity, sizeof(std::size_t));
+            std::memcpy(new_arena + sizeof(byte_t*), &new_cap, sizeof(std::size_t));
 
             wasted_space_ += total_reserved();
             last_arena_ = new_arena;
-            last_capacity_ = new_capacity;
+            last_capacity_ = new_cap;
             last_usage_ = head_size();
         }
 
@@ -608,12 +614,6 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
 };
 
 using memory_mapping_allocator_t = memory_mapping_allocator_gt<>;
-
-#else
-
-using memory_mapping_allocator_t = aligned_allocator_t;
-
-#endif
 
 /**
  *  @brief  Utility class used to cast arrays of one scalar type to another,
