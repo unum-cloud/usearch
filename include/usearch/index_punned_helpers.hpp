@@ -466,14 +466,15 @@ using aligned_allocator_t = aligned_allocator_gt<>;
 
 /**
  *  @brief  Memory-mapping allocator designed for "alloc many, free at once" usage patterns.
- *          Thread-safe.
+ *          Thread-safe, @b except constructors and destructors.
  *
  *  Using this memory allocator won't affect your overall speed much, as that is not the bottleneck.
  *  However, it can drastically improve memory usage especcially for huge indexes of small vectors.
  */
 template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
 
-    static constexpr std::size_t min_size() { return 1024 * 1024 * 4; }
+    static constexpr std::size_t min_capacity() { return 1024 * 1024 * 4; }
+    static constexpr std::size_t capacity_multiplier() { return 2; }
     static constexpr std::size_t head_size() {
         /// Pointer to the the previous arena and the size of the current one.
         return divide_round_up<alignment_ak>(sizeof(byte_t*) + sizeof(std::size_t)) * alignment_ak;
@@ -482,7 +483,8 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
     std::mutex mutex_;
     byte_t* last_arena_ = nullptr;
     std::size_t last_usage_ = head_size();
-    std::size_t last_capacity_ = min_size();
+    std::size_t last_capacity_ = min_capacity();
+    std::size_t wasted_space_ = 0;
 
     void reset() noexcept {
         byte_t* last_arena = last_arena_;
@@ -498,7 +500,8 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
         // Clear the references:
         last_arena_ = nullptr;
         last_usage_ = head_size();
-        last_capacity_ = min_size();
+        last_capacity_ = min_capacity();
+        wasted_space_ = 0;
     }
 
   public:
@@ -509,41 +512,94 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
 
     memory_mapping_allocator_gt() = default;
     memory_mapping_allocator_gt(memory_mapping_allocator_gt&& other) noexcept
-        : last_arena_(other.last_arena_), last_usage_(other.last_usage_), last_capacity_(other.last_capacity_) {}
+        : last_arena_(exchange(other.last_arena_, nullptr)), last_usage_(exchange(other.last_usage_, 0)),
+          last_capacity_(exchange(other.last_capacity_, 0)), wasted_space_(exchange(other.wasted_space_, 0)) {}
+
     memory_mapping_allocator_gt& operator=(memory_mapping_allocator_gt&& other) noexcept {
         std::swap(last_arena_, other.last_arena_);
         std::swap(last_usage_, other.last_usage_);
         std::swap(last_capacity_, other.last_capacity_);
-        return *this;
-    }
-
-    memory_mapping_allocator_gt(memory_mapping_allocator_gt const&) noexcept {}
-    memory_mapping_allocator_gt& operator=(memory_mapping_allocator_gt const&) noexcept {
-        reset();
+        std::swap(wasted_space_, other.wasted_space_);
         return *this;
     }
 
     ~memory_mapping_allocator_gt() noexcept { reset(); }
 
+    /**
+     *  @brief Copy constructor.
+     *  @note This is a no-op copy constructor since the allocator is not copyable.
+     */
+    memory_mapping_allocator_gt(memory_mapping_allocator_gt const&) noexcept {}
+
+    /**
+     *  @brief Copy assignment operator.
+     *  @note This is a no-op copy assignment operator since the allocator is not copyable.
+     *  @return Reference to the allocator after the assignment.
+     */
+    memory_mapping_allocator_gt& operator=(memory_mapping_allocator_gt const&) noexcept {
+        reset();
+        return *this;
+    }
+
+    /**
+     *  @brief Allocates an @b uninitialized block of memory of the specified size.
+     *  @param count_bytes The number of bytes to allocate.
+     *  @return A pointer to the allocated memory block, or `nullptr` if allocation fails.
+     */
     inline byte_t* allocate(std::size_t count_bytes) noexcept {
-        count_bytes = divide_round_up<alignment_ak>(count_bytes) * alignment_ak;
+        std::size_t extended_bytes = divide_round_up<alignment_ak>(count_bytes) * alignment_ak;
+        // Check if the requested allocation size is absurd
+        if (extended_bytes > min_capacity())
+            return nullptr;
 
         std::unique_lock<std::mutex> lock(mutex_);
-        if (!last_arena_ || (last_usage_ + count_bytes > last_capacity_)) {
-            std::size_t new_capacity = last_capacity_ * 2;
+        if (!last_arena_ || (last_usage_ + extended_bytes > last_capacity_)) {
+            std::size_t new_capacity = last_capacity_ * capacity_multiplier();
             int prot = PROT_WRITE | PROT_READ;
             int flags = MAP_PRIVATE | MAP_ANONYMOUS;
             byte_t* new_arena = (byte_t*)mmap(NULL, new_capacity, prot, flags, 0, 0);
+            if (!new_arena)
+                return nullptr;
             std::memcpy(new_arena, &last_arena_, sizeof(byte_t*));
             std::memcpy(new_arena + sizeof(byte_t*), &new_capacity, sizeof(std::size_t));
 
+            wasted_space_ += total_reserved();
             last_arena_ = new_arena;
             last_capacity_ = new_capacity;
             last_usage_ = head_size();
         }
 
-        return last_arena_ + exchange(last_usage_, last_usage_ + count_bytes);
+        wasted_space_ += extended_bytes - count_bytes;
+        return last_arena_ + exchange(last_usage_, last_usage_ + extended_bytes);
     }
+
+    /**
+     *  @brief Returns the amount of memory used by the allocator across all arenas.
+     *  @return The amount of space in bytes.
+     */
+    std::size_t total_allocated() const noexcept {
+        if (!last_arena_)
+            return 0;
+        std::size_t total_used = 0;
+        std::size_t last_capacity = last_capacity_;
+        do {
+            total_used += last_capacity;
+            last_capacity /= capacity_multiplier();
+        } while (last_capacity >= min_capacity());
+        return total_used;
+    }
+
+    /**
+     *  @brief Returns the amount of wasted space due to alignment.
+     *  @return The amount of wasted space in bytes.
+     */
+    std::size_t total_wasted() const noexcept { return wasted_space_; }
+
+    /**
+     *  @brief Returns the amount of remaining memory already reserved but not yet used.
+     *  @return The amount of reserved memory in bytes.
+     */
+    std::size_t total_reserved() const noexcept { return last_capacity_ - last_usage_; }
 
     /**
      *  @warning The very first memory de-allocation discards all the arenas!
@@ -559,6 +615,10 @@ using memory_mapping_allocator_t = aligned_allocator_t;
 
 #endif
 
+/**
+ *  @brief  Utility class used to cast arrays of one scalar type to another,
+ *          avoiding unnecessary conversions.
+ */
 template <typename from_scalar_at, typename to_scalar_at> struct cast_gt {
     inline bool operator()(byte_t const* input, std::size_t dimensions, byte_t* output) const {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);

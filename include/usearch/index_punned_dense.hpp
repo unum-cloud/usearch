@@ -285,7 +285,12 @@ class index_punned_dense_gt {
 
     stats_t stats() const { return typed_->stats(); }
     stats_t stats(std::size_t level) const { return typed_->stats(level); }
-    std::size_t memory_usage() const { return typed_->memory_usage(0); }
+
+    std::size_t memory_usage() const {
+        return typed_->memory_usage(0) +                 //
+               typed_->tape_allocator().total_wasted() + //
+               typed_->tape_allocator().total_reserved();
+    }
 
     // clang-format off
     add_result_t add(label_t label, b1x8_t const* vector) { return add_(label, vector, casts_.from_b1x8); }
@@ -399,9 +404,9 @@ class index_punned_dense_gt {
      *  @brief Removes an entry with the specified label from the index.
      *  @param[in] label The label of the entry to remove.
      *  @return The ::labeling_result_t indicating the result of the removal operation.
-     *         If the removal was successful, `result.completed` will be `true`.
-     *         If the label was not found in the index, `result.completed` will be `false`.
-     *         If an error occurred during the removal operation, `result.error` will contain an error message.
+     *          If the removal was successful, `result.completed` will be `true`.
+     *          If the label was not found in the index, `result.completed` will be `false`.
+     *          If an error occurred during the removal operation, `result.error` will contain an error message.
      */
     labeling_result_t remove(label_t label) {
         labeling_result_t result;
@@ -435,8 +440,8 @@ class index_punned_dense_gt {
      *  @param[in] labels_begin The beginning of the labels range.
      *  @param[in] labels_end The ending of the labels range.
      *  @return The ::labeling_result_t indicating the result of the removal operation.
-     *         `result.completed` will contain the number of labels that were successfully removed.
-     *         `result.error` will contain an error message if an error occurred during the removal operation.
+     *          `result.completed` will contain the number of labels that were successfully removed.
+     *          `result.error` will contain an error message if an error occurred during the removal operation.
      */
     template <typename labels_iterator_at>
     labeling_result_t remove(labels_iterator_at&& labels_begin, labels_iterator_at&& labels_end) {
