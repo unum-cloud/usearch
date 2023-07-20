@@ -1451,6 +1451,29 @@ struct dummy_label_to_label_mapping_t {
     template <typename label_at> member_ref_t operator[](label_at&&) const noexcept { return {}; }
 };
 
+template <typename, typename at> struct has_reset_gt {
+    static_assert(std::integral_constant<at, false>::value, "Second template parameter needs to be of function type.");
+};
+
+template <typename check_at, typename return_at, typename... args_at>
+struct has_reset_gt<check_at, return_at(args_at...)> {
+  private:
+    template <typename at>
+    static constexpr auto check(at*) ->
+        typename std::is_same<decltype(std::declval<at>().reset(std::declval<args_at>()...)), return_at>::type;
+    template <typename> static constexpr std::false_type check(...);
+
+    typedef decltype(check<check_at>(0)) type;
+
+  public:
+    static constexpr bool value = type::value;
+};
+
+/**
+ *  @brief  Checks if a certain class has a member function called `reset`.
+ */
+template <typename at> constexpr bool has_reset() { return has_reset_gt<at, void()>::value; }
+
 /**
  *  @brief  Approximate Nearest Neighbors Search index using the
  *          Hierarchical Navigable Small World @b (HNSW) graphs algorithm.
@@ -1858,9 +1881,12 @@ class index_gt {
      *          Will keep the number of available threads/contexts the same as it was.
      */
     void clear() noexcept {
-        std::size_t n = size_;
-        for (std::size_t i = 0; i != n; ++i)
-            node_free_(i);
+        if (!has_reset<tape_allocator_t>()) {
+            std::size_t n = size_;
+            for (std::size_t i = 0; i != n; ++i)
+                node_free_(i);
+        } else
+            tape_allocator_.deallocate(nullptr, 0);
         size_ = 0;
         max_level_ = -1;
         entry_id_ = 0u;
@@ -2422,6 +2448,10 @@ class index_gt {
     template <typename progress_at = dummy_progress_t>
     serialization_result_t load(char const* file_path, progress_at&& progress = {}) noexcept {
 
+        // Remove previously stored objects
+        reset();
+
+        // Start parsing the files
         serialization_result_t result;
         file_header_t state_buffer{};
         std::FILE* file = std::fopen(file_path, "rb");
@@ -2507,6 +2537,11 @@ class index_gt {
      */
     template <typename progress_at = dummy_progress_t>
     serialization_result_t view(char const* file_path, progress_at&& progress = {}) noexcept {
+
+        // Remove previously stored objects
+        reset();
+
+        // Start parsing the files
         serialization_result_t result;
 
 #if defined(USEARCH_DEFINED_WINDOWS)

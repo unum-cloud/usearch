@@ -484,6 +484,30 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
     std::size_t last_capacity_ = min_capacity();
     std::size_t wasted_space_ = 0;
 
+  public:
+    using value_type = byte_t;
+    using size_type = std::size_t;
+    using pointer = byte_t*;
+    using const_pointer = byte_t const*;
+
+    memory_mapping_allocator_gt() = default;
+    memory_mapping_allocator_gt(memory_mapping_allocator_gt&& other) noexcept
+        : last_arena_(exchange(other.last_arena_, nullptr)), last_usage_(exchange(other.last_usage_, 0)),
+          last_capacity_(exchange(other.last_capacity_, 0)), wasted_space_(exchange(other.wasted_space_, 0)) {}
+
+    memory_mapping_allocator_gt& operator=(memory_mapping_allocator_gt&& other) noexcept {
+        std::swap(last_arena_, other.last_arena_);
+        std::swap(last_usage_, other.last_usage_);
+        std::swap(last_capacity_, other.last_capacity_);
+        std::swap(wasted_space_, other.wasted_space_);
+        return *this;
+    }
+
+    ~memory_mapping_allocator_gt() noexcept { reset(); }
+
+    /**
+     *  @brief Discards all previously allocated memory buffers.
+     */
     void reset() noexcept {
         byte_t* last_arena = last_arena_;
         while (last_arena) {
@@ -505,27 +529,6 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
         last_capacity_ = min_capacity();
         wasted_space_ = 0;
     }
-
-  public:
-    using value_type = byte_t;
-    using size_type = std::size_t;
-    using pointer = byte_t*;
-    using const_pointer = byte_t const*;
-
-    memory_mapping_allocator_gt() = default;
-    memory_mapping_allocator_gt(memory_mapping_allocator_gt&& other) noexcept
-        : last_arena_(exchange(other.last_arena_, nullptr)), last_usage_(exchange(other.last_usage_, 0)),
-          last_capacity_(exchange(other.last_capacity_, 0)), wasted_space_(exchange(other.wasted_space_, 0)) {}
-
-    memory_mapping_allocator_gt& operator=(memory_mapping_allocator_gt&& other) noexcept {
-        std::swap(last_arena_, other.last_arena_);
-        std::swap(last_usage_, other.last_usage_);
-        std::swap(last_capacity_, other.last_capacity_);
-        std::swap(wasted_space_, other.wasted_space_);
-        return *this;
-    }
-
-    ~memory_mapping_allocator_gt() noexcept { reset(); }
 
     /**
      *  @brief Copy constructor.
@@ -610,7 +613,7 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
     /**
      *  @warning The very first memory de-allocation discards all the arenas!
      */
-    void deallocate(byte_t*, std::size_t) noexcept { reset(); }
+    void deallocate(byte_t* = nullptr, std::size_t = 0) noexcept { reset(); }
 };
 
 using memory_mapping_allocator_t = memory_mapping_allocator_gt<>;

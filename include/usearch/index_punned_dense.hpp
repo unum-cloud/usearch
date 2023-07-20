@@ -201,13 +201,52 @@ class index_punned_dense_gt {
     using match_t = typename index_t::match_t;
 
     index_punned_dense_gt() = default;
-    index_punned_dense_gt(index_punned_dense_gt&& other) { swap(other); }
+    index_punned_dense_gt(index_punned_dense_gt&& other)
+        : dimensions_(std::move(other.dimensions_)),                   //
+          scalar_words_(std::move(other.scalar_words_)),               //
+          expansion_add_(std::move(other.expansion_add_)),             //
+          expansion_search_(std::move(other.expansion_search_)),       //
+          typed_(exchange(other.typed_, nullptr)),                     //
+          casted_vector_bytes_(std::move(other.casted_vector_bytes_)), //
+          cast_buffer_(std::move(other.cast_buffer_)),                 //
+          casts_(std::move(other.casts_)),                             //
+          root_metric_(std::move(other.root_metric_)),                 //
+          available_threads_(std::move(other.available_threads_)),     //
+          labeled_lookup_(std::move(other.labeled_lookup_)),           //
+          free_ids_(std::move(other.free_ids_)),                       //
+          free_label_(std::move(other.free_label_)) {}                 //
+
     index_punned_dense_gt& operator=(index_punned_dense_gt&& other) {
         swap(other);
         return *this;
     }
 
-    ~index_punned_dense_gt() { index_allocator_t{}.deallocate(typed_, 1); }
+    /**
+     *  @brief Swaps the contents of this index with another index.
+     *  @param other The other index to swap with.
+     */
+    void swap(index_punned_dense_gt& other) {
+        std::swap(dimensions_, other.dimensions_);
+        std::swap(scalar_words_, other.scalar_words_);
+        std::swap(expansion_add_, other.expansion_add_);
+        std::swap(expansion_search_, other.expansion_search_);
+        std::swap(typed_, other.typed_);
+        std::swap(casted_vector_bytes_, other.casted_vector_bytes_);
+        std::swap(cast_buffer_, other.cast_buffer_);
+        std::swap(casts_, other.casts_);
+        std::swap(root_metric_, other.root_metric_);
+        std::swap(available_threads_, other.available_threads_);
+        std::swap(labeled_lookup_, other.labeled_lookup_);
+        std::swap(free_ids_, other.free_ids_);
+        std::swap(free_label_, other.free_label_);
+    }
+
+    ~index_punned_dense_gt() {
+        if (typed_)
+            typed_->~index_t();
+        index_allocator_t{}.deallocate(typed_, 1);
+        typed_ = nullptr;
+    }
 
     static index_config_t optimize(index_config_t config) { return index_t::optimize(config); }
 
@@ -606,26 +645,6 @@ class index_punned_dense_gt {
         new (raw) index_t(config(), root_metric_);
         other.typed_ = raw;
         return result;
-    }
-
-    /**
-     *  @brief Swaps the contents of this index with another index.
-     *  @param other The other index to swap with.
-     */
-    void swap(index_punned_dense_gt& other) {
-        std::swap(dimensions_, other.dimensions_);
-        std::swap(scalar_words_, other.scalar_words_);
-        std::swap(expansion_add_, other.expansion_add_);
-        std::swap(expansion_search_, other.expansion_search_);
-        std::swap(casted_vector_bytes_, other.casted_vector_bytes_);
-        std::swap(typed_, other.typed_);
-        std::swap(cast_buffer_, other.cast_buffer_);
-        std::swap(casts_, other.casts_);
-        std::swap(root_metric_, other.root_metric_);
-        std::swap(available_threads_, other.available_threads_);
-        std::swap(labeled_lookup_, other.labeled_lookup_);
-        std::swap(free_ids_, other.free_ids_);
-        std::swap(free_label_, other.free_label_);
     }
 
     struct compaction_result_t {

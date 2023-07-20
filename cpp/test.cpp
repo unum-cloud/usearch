@@ -67,7 +67,8 @@ template <typename scalar_at, typename index_at> void test3d(index_at&& index) {
     expect(std::abs(matched_distances[0]) < 0.01);
 
     // Search again over mapped index
-    index_metadata("tmp.usearch");
+    file_head_result_t head = index_metadata("tmp.usearch");
+    expect(head.size == 3);
     index.view("tmp.usearch");
     matched_count = index.search(view_t{&vec[0], 3ul}, 5).dump_to(matched_labels, matched_distances);
     expect(matched_count == 3);
@@ -144,6 +145,8 @@ int main(int, char**) {
     static_assert(!std::is_same<index_gt<ip_gt<>>::value_type, std::true_type>());
     static_assert(!std::is_same<index_gt<cos_gt<>>::value_type, std::true_type>());
     static_assert(!std::is_same<index_gt<l2sq_gt<>>::value_type, std::true_type>());
+
+    static_assert(has_reset<memory_mapping_allocator_t>());
     // static_assert(!std::is_same<index_gt<hamming_gt<>>::value_type, std::true_type>());
     // static_assert(!std::is_same<index_gt<tanimoto_gt<>>::value_type, std::true_type>());
     // static_assert(!std::is_same<index_gt<sorensen_gt<>>::value_type, std::true_type>());

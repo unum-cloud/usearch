@@ -50,6 +50,12 @@ cppcheck --enable=all --suppress=cstyleCast --suppress=unusedFunction \
     include/index_punned_helpers.hpp
 ```
 
+Testing:
+
+```sh
+cmake -DCMAKE_CXX_COMPILER=gcc-12 -DCMAKE_CXX_COMPILER=g++-12 -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make -C ./build_debug && ./build_debug/test
+```
+
 Benchmarking:
 
 ```sh
