@@ -200,28 +200,6 @@ class index_punned_dense_gt {
     using stats_t = typename index_t::stats_t;
     using match_t = typename index_t::match_t;
 
-    struct labeling_result_t {
-        error_t error{};
-        std::size_t completed{};
-
-        explicit operator bool() const noexcept { return !error; }
-        labeling_result_t failed(error_t message) noexcept {
-            error = std::move(message);
-            return std::move(*this);
-        }
-    };
-
-    struct compaction_result_t {
-        error_t error{};
-        std::size_t pruned_edges{};
-
-        explicit operator bool() const noexcept { return !error; }
-        compaction_result_t failed(error_t message) noexcept {
-            error = std::move(message);
-            return std::move(*this);
-        }
-    };
-
     index_punned_dense_gt() = default;
     index_punned_dense_gt(index_punned_dense_gt&& other) { swap(other); }
     index_punned_dense_gt& operator=(index_punned_dense_gt&& other) {
@@ -231,23 +209,57 @@ class index_punned_dense_gt {
 
     ~index_punned_dense_gt() { index_allocator_t{}.deallocate(typed_, 1); }
 
-    void swap(index_punned_dense_gt& other) {
-        std::swap(dimensions_, other.dimensions_);
-        std::swap(scalar_words_, other.scalar_words_);
-        std::swap(expansion_add_, other.expansion_add_);
-        std::swap(expansion_search_, other.expansion_search_);
-        std::swap(casted_vector_bytes_, other.casted_vector_bytes_);
-        std::swap(typed_, other.typed_);
-        std::swap(cast_buffer_, other.cast_buffer_);
-        std::swap(casts_, other.casts_);
-        std::swap(root_metric_, other.root_metric_);
-        std::swap(available_threads_, other.available_threads_);
-        std::swap(labeled_lookup_, other.labeled_lookup_);
-        std::swap(free_ids_, other.free_ids_);
-        std::swap(free_label_, other.free_label_);
+    static index_config_t optimize(index_config_t config) { return index_t::optimize(config); }
+
+    /**
+     *  @brief Constructs an instance of ::index_punned_dense_gt.
+     *  @param[in] dimensions The of dimensions per vector.
+     *  @param[in] metric One of the default supported metric @b kinds for distance measurements.
+     *  @param[in] config The index configuration (optional).
+     *  @param[in] accuracy The scalar kind used for internal representations (optional).
+     *  @param[in] expansion_add The expansion factor for adding vectors (optional).
+     *  @param[in] expansion_search The expansion factor for searching vectors (optional).
+     *  @param[in] free_label The label used for freed vectors (optional).
+     *  @return An instance of ::index_punned_dense_gt.
+     */
+    static index_punned_dense_gt make(                             //
+        std::size_t dimensions, metric_kind_t metric,              //
+        index_config_t config = {},                                //
+        scalar_kind_t accuracy = scalar_kind_t::f32_k,             //
+        std::size_t expansion_add = default_expansion_add(),       //
+        std::size_t expansion_search = default_expansion_search(), //
+        label_t free_label = default_free_value<label_t>()) {
+
+        return make_(                                //
+            dimensions, accuracy,                    //
+            config, expansion_add, expansion_search, //
+            make_metric_(metric, dimensions, accuracy), make_casts_(accuracy), free_label);
     }
 
-    static index_config_t optimize(index_config_t config) { return index_t::optimize(config); }
+    /**
+     *  @brief Constructs an instance of ::index_punned_dense_gt.
+     *  @param[in] dimensions The of dimensions per vector.
+     *  @param[in] metric The @b ad-hoc metric wrapped for third-party distance measures.
+     *  @param[in] config The index configuration (optional).
+     *  @param[in] accuracy The scalar kind used for internal representations (optional).
+     *  @param[in] expansion_add The expansion factor for adding vectors (optional).
+     *  @param[in] expansion_search The expansion factor for searching vectors (optional).
+     *  @param[in] free_label The label used for freed vectors (optional).
+     *  @return An instance of ::index_punned_dense_gt.
+     */
+    static index_punned_dense_gt make(                             //
+        std::size_t dimensions, metric_t metric,                   //
+        index_config_t config = {},                                //
+        scalar_kind_t accuracy = scalar_kind_t::f32_k,             //
+        std::size_t expansion_add = default_expansion_add(),       //
+        std::size_t expansion_search = default_expansion_search(), //
+        label_t free_label = default_free_value<label_t>()) {
+
+        return make_(                                //
+            dimensions, accuracy,                    //
+            config, expansion_add, expansion_search, //
+            metric_t(metric), make_casts_(accuracy), free_label);
+    }
 
     std::size_t dimensions() const { return dimensions_; }
     std::size_t scalar_words() const { return scalar_words_; }
@@ -273,56 +285,7 @@ class index_punned_dense_gt {
 
     stats_t stats() const { return typed_->stats(); }
     stats_t stats(std::size_t level) const { return typed_->stats(level); }
-
-    bool reserve(index_limits_t limits) {
-        {
-            unique_lock_t lock(labeled_lookup_mutex_);
-            labeled_lookup_.reserve(limits.members);
-        }
-        return typed_->reserve(limits);
-    }
-
-    void clear() {
-        unique_lock_t lookup_lock(labeled_lookup_mutex_);
-        std::unique_lock<std::mutex> free_lock(free_ids_mutex_);
-        typed_->clear();
-        labeled_lookup_.clear();
-        free_ids_.clear();
-    }
-
-    serialization_result_t save(char const* path) const { return typed_->save(path); }
-
-    serialization_result_t load(char const* path) {
-        serialization_result_t result = typed_->load(path);
-        if (result)
-            reindex_labels_();
-        return result;
-    }
-
-    serialization_result_t view(char const* path) {
-        serialization_result_t result = typed_->view(path);
-        if (result)
-            reindex_labels_();
-        return result;
-    }
-
-    std::size_t memory_usage(std::size_t allocator_entry_bytes = default_allocator_entry_bytes()) const {
-        return typed_->memory_usage(allocator_entry_bytes);
-    }
-
-    bool contains(label_t label) const {
-        shared_lock_t lock(labeled_lookup_mutex_);
-        return labeled_lookup_.contains(label);
-    }
-
-    void export_labels(label_t* labels, std::size_t offset, std::size_t limit) const {
-        shared_lock_t lock(labeled_lookup_mutex_);
-        auto it = labeled_lookup_.begin();
-        offset = (std::min)(offset, labeled_lookup_.size());
-        std::advance(it, offset);
-        for (; it != labeled_lookup_.end() && limit; ++it, ++labels, --limit)
-            *labels = it->first;
-    }
+    std::size_t memory_usage() const { return typed_->memory_usage(0); }
 
     // clang-format off
     add_result_t add(label_t label, b1x8_t const* vector) { return add_(label, vector, casts_.from_b1x8); }
@@ -349,8 +312,6 @@ class index_punned_dense_gt {
     search_result_t search(f32_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f32); }
     search_result_t search(f64_t const* vector, std::size_t wanted, search_config_t config) const { return search_(vector, wanted, config, casts_.from_f64); }
 
-    search_result_t empty_search_result() const { return search_result_t{*typed_}; }
-
     bool get(label_t label, b1x8_t* vector) const { return get_(label, vector, casts_.to_b1x8); }
     bool get(label_t label, f8_bits_t* vector) const { return get_(label, vector, casts_.to_f8); }
     bool get(label_t label, f16_t* vector) const { return get_(label, vector, casts_.to_f16); }
@@ -358,6 +319,90 @@ class index_punned_dense_gt {
     bool get(label_t label, f64_t* vector) const { return get_(label, vector, casts_.to_f64); }
     // clang-format on
 
+    search_result_t empty_search_result() const { return search_result_t{*typed_}; }
+
+    /**
+     *  @brief Reserves memory for the index and the labeled lookup.
+     *  @return `true` if the memory reservation was successful, `false` otherwise.
+     */
+    bool reserve(index_limits_t limits) {
+        {
+            unique_lock_t lock(labeled_lookup_mutex_);
+            labeled_lookup_.reserve(limits.members);
+        }
+        return typed_->reserve(limits);
+    }
+
+    /**
+     *  @brief Clears the whole index, reclaiming the memory.
+     */
+    void clear() {
+        unique_lock_t lookup_lock(labeled_lookup_mutex_);
+        std::unique_lock<std::mutex> free_lock(free_ids_mutex_);
+        typed_->clear();
+        labeled_lookup_.clear();
+        free_ids_.clear();
+    }
+
+    /**
+     *  @brief Saves the index to a file.
+     *  @param[in] path The path to the file.
+     *  @return Outcome descriptor explictly convertable to boolean.
+     */
+    serialization_result_t save(char const* path) const { return typed_->save(path); }
+
+    /**
+     *  @brief Parses the index from file to RAM.
+     *  @param[in] path The path to the file.
+     *  @return Outcome descriptor explictly convertable to boolean.
+     */
+    serialization_result_t load(char const* path) {
+        serialization_result_t result = typed_->load(path);
+        if (result)
+            reindex_labels_();
+        return result;
+    }
+
+    /**
+     *  @brief Parses the index from file, without loading it into RAM.
+     *  @param[in] path The path to the file.
+     *  @return Outcome descriptor explictly convertable to boolean.
+     */
+    serialization_result_t view(char const* path) {
+        serialization_result_t result = typed_->view(path);
+        if (result)
+            reindex_labels_();
+        return result;
+    }
+
+    /**
+     *  @brief Checks if a vector with specidied label is present.
+     *  @return `true` if the label is present in the index, `false` otherwise.
+     */
+    bool contains(label_t label) const {
+        shared_lock_t lock(labeled_lookup_mutex_);
+        return labeled_lookup_.contains(label);
+    }
+
+    struct labeling_result_t {
+        error_t error{};
+        std::size_t completed{};
+
+        explicit operator bool() const noexcept { return !error; }
+        labeling_result_t failed(error_t message) noexcept {
+            error = std::move(message);
+            return std::move(*this);
+        }
+    };
+
+    /**
+     *  @brief Removes an entry with the specified label from the index.
+     *  @param[in] label The label of the entry to remove.
+     *  @return The ::labeling_result_t indicating the result of the removal operation.
+     *         If the removal was successful, `result.completed` will be `true`.
+     *         If the label was not found in the index, `result.completed` will be `false`.
+     *         If an error occurred during the removal operation, `result.error` will contain an error message.
+     */
     labeling_result_t remove(label_t label) {
         labeling_result_t result;
 
@@ -385,6 +430,14 @@ class index_punned_dense_gt {
         return result;
     }
 
+    /**
+     *  @brief Removes multiple entries with the specified labels from the index.
+     *  @param[in] labels_begin The beginning of the labels range.
+     *  @param[in] labels_end The ending of the labels range.
+     *  @return The ::labeling_result_t indicating the result of the removal operation.
+     *         `result.completed` will contain the number of labels that were successfully removed.
+     *         `result.error` will contain an error message if an error occurred during the removal operation.
+     */
     template <typename labels_iterator_at>
     labeling_result_t remove(labels_iterator_at&& labels_begin, labels_iterator_at&& labels_end) {
 
@@ -418,20 +471,14 @@ class index_punned_dense_gt {
         return result;
     }
 
-    template <typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
-    compaction_result_t compact(executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
-        compaction_result_t result;
-        std::atomic<std::size_t> pruned_edges;
-        auto disallow = [&](member_cref_t const& member) noexcept {
-            bool freed = member.label == free_label_;
-            pruned_edges += freed;
-            return freed;
-        };
-        typed_->isolate(disallow, std::forward<executor_at>(executor), std::forward<progress_at>(progress));
-        result.pruned_edges = pruned_edges;
-        return result;
-    }
-
+    /**
+     *  @brief Renames an entry with the specified label to a new label.
+     *  @param[in] from The current label of the entry to rename.
+     *  @param[in] to The new label to assign to the entry.
+     *  @return The ::labeling_result_t indicating the result of the rename operation.
+     *          If the rename was successful, `result.completed` will be `true`.
+     *          If the entry with the current label was not found, `result.completed` will be `false`.
+     */
     labeling_result_t rename(label_t from, label_t to) {
         labeling_result_t result;
         unique_lock_t lookup_lock(labeled_lookup_mutex_);
@@ -447,32 +494,52 @@ class index_punned_dense_gt {
         return result;
     }
 
-    static index_punned_dense_gt make(                             //
-        std::size_t dimensions, metric_kind_t metric,              //
-        index_config_t config = {},                                //
-        scalar_kind_t accuracy = scalar_kind_t::f32_k,             //
-        std::size_t expansion_add = default_expansion_add(),       //
-        std::size_t expansion_search = default_expansion_search(), //
-        label_t free_label = default_free_value<label_t>()) {
-
-        return make_(                                //
-            dimensions, accuracy,                    //
-            config, expansion_add, expansion_search, //
-            make_metric_(metric, dimensions, accuracy), make_casts_(accuracy), free_label);
+    /**
+     *  @brief Exports a range of labels for the vectors present in the index.
+     *  @param[out] labels Pointer to the array where the labels will be exported.
+     *  @param[in] offset The number of labels to skip. Useful for pagination.
+     *  @param[in] limit The maximum number of labels to export, that can fit in ::labels.
+     */
+    void export_labels(label_t* labels, std::size_t offset, std::size_t limit) const {
+        shared_lock_t lock(labeled_lookup_mutex_);
+        auto it = labeled_lookup_.begin();
+        offset = (std::min)(offset, labeled_lookup_.size());
+        std::advance(it, offset);
+        for (; it != labeled_lookup_.end() && limit; ++it, ++labels, --limit)
+            *labels = it->first;
     }
 
-    static index_punned_dense_gt make(                             //
-        std::size_t dimensions, metric_t metric,                   //
-        index_config_t config = {},                                //
-        scalar_kind_t accuracy = scalar_kind_t::f32_k,             //
-        std::size_t expansion_add = default_expansion_add(),       //
-        std::size_t expansion_search = default_expansion_search(), //
-        label_t free_label = default_free_value<label_t>()) {
+    /**
+     *  @brief  Adapts the Male-Optimal Stable Marriage algorithm for unequal sets
+     *          to perform fast one-to-one matching between two large collections
+     *          of vectors, using approximate nearest neighbors search.
+     *
+     *  @param[inout] first_to_second Container to map ::first labels to ::second.
+     *  @param[inout] second_to_first Container to map ::second labels to ::first.
+     *  @param[in] executor Thread-pool to execute the job in parallel.
+     *  @param[in] progress Callback to report the execution progress.
+     */
+    template <                                                        //
+        typename first_to_second_at = dummy_label_to_label_mapping_t, //
+        typename second_to_first_at = dummy_label_to_label_mapping_t, //
+        typename executor_at = dummy_executor_t,                      //
+        typename progress_at = dummy_progress_t                       //
+        >
+    static join_result_t join(                                       //
+        index_punned_dense_gt const& first,                          //
+        index_punned_dense_gt const& second,                         //
+        join_config_t config = {},                                   //
+        first_to_second_at&& first_to_second = first_to_second_at{}, //
+        second_to_first_at&& second_to_first = second_to_first_at{}, //
+        executor_at&& executor = executor_at{},                      //
+        progress_at&& progress = progress_at{}) noexcept {
 
-        return make_(                                //
-            dimensions, accuracy,                    //
-            config, expansion_add, expansion_search, //
-            metric_t(metric), make_casts_(accuracy), free_label);
+        return index_t::join(                                  //
+            *first.typed_, *second.typed_, config,             //
+            std::forward<first_to_second_at>(first_to_second), //
+            std::forward<second_to_first_at>(second_to_first), //
+            std::forward<executor_at>(executor),               //
+            std::forward<progress_at>(progress));
     }
 
     struct copy_result_t {
@@ -486,6 +553,11 @@ class index_punned_dense_gt {
         }
     };
 
+    /**
+     *  @brief Copies the ::index_punned_dense_gt @b with all the data in it.
+     *  @param config The copy configuration (optional).
+     *  @return A copy of the ::index_punned_dense_gt instance.
+     */
     copy_result_t copy(copy_config_t config = {}) const {
         copy_result_t result = fork();
         if (!result)
@@ -503,6 +575,10 @@ class index_punned_dense_gt {
         return result;
     }
 
+    /**
+     *  @brief Copies the ::index_punned_dense_gt model @b without any data.
+     *  @return A similarly configured ::index_punned_dense_gt instance.
+     */
     copy_result_t fork() const {
         copy_result_t result;
         index_punned_dense_gt& other = result.index;
@@ -527,27 +603,57 @@ class index_punned_dense_gt {
         return result;
     }
 
-    template <                                                        //
-        typename first_to_second_at = dummy_label_to_label_mapping_t, //
-        typename second_to_first_at = dummy_label_to_label_mapping_t, //
-        typename executor_at = dummy_executor_t,                      //
-        typename progress_at = dummy_progress_t                       //
-        >
-    static join_result_t join(                                       //
-        index_punned_dense_gt const& first,                          //
-        index_punned_dense_gt const& second,                         //
-        join_config_t config = {},                                   //
-        first_to_second_at&& first_to_second = first_to_second_at{}, //
-        second_to_first_at&& second_to_first = second_to_first_at{}, //
-        executor_at&& executor = executor_at{},                      //
-        progress_at&& progress = progress_at{}) noexcept {
+    /**
+     *  @brief Swaps the contents of this index with another index.
+     *  @param other The other index to swap with.
+     */
+    void swap(index_punned_dense_gt& other) {
+        std::swap(dimensions_, other.dimensions_);
+        std::swap(scalar_words_, other.scalar_words_);
+        std::swap(expansion_add_, other.expansion_add_);
+        std::swap(expansion_search_, other.expansion_search_);
+        std::swap(casted_vector_bytes_, other.casted_vector_bytes_);
+        std::swap(typed_, other.typed_);
+        std::swap(cast_buffer_, other.cast_buffer_);
+        std::swap(casts_, other.casts_);
+        std::swap(root_metric_, other.root_metric_);
+        std::swap(available_threads_, other.available_threads_);
+        std::swap(labeled_lookup_, other.labeled_lookup_);
+        std::swap(free_ids_, other.free_ids_);
+        std::swap(free_label_, other.free_label_);
+    }
 
-        return index_t::join(                                  //
-            *first.typed_, *second.typed_, config,             //
-            std::forward<first_to_second_at>(first_to_second), //
-            std::forward<second_to_first_at>(second_to_first), //
-            std::forward<executor_at>(executor),               //
-            std::forward<progress_at>(progress));
+    struct compaction_result_t {
+        error_t error{};
+        std::size_t pruned_edges{};
+
+        explicit operator bool() const noexcept { return !error; }
+        compaction_result_t failed(error_t message) noexcept {
+            error = std::move(message);
+            return std::move(*this);
+        }
+    };
+
+    /**
+     *  @brief Performs compaction on the index, pruning links to removed entries.
+     *  @param executor The executor parallel processing. Default ::dummy_executor_t single-threaded.
+     *  @param progress The progress tracker instance to use. Default ::dummy_progress_t reports nothing.
+     *  @return The ::compaction_result_t indicating the result of the compaction operation.
+     *          `result.pruned_edges` will contain the number of edges that were removed.
+     *          `result.error` will contain an error message if an error occurred during the compaction operation.
+     */
+    template <typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
+    compaction_result_t compact(executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
+        compaction_result_t result;
+        std::atomic<std::size_t> pruned_edges;
+        auto disallow = [&](member_cref_t const& member) noexcept {
+            bool freed = member.label == free_label_;
+            pruned_edges += freed;
+            return freed;
+        };
+        typed_->isolate(disallow, std::forward<executor_at>(executor), std::forward<progress_at>(progress));
+        result.pruned_edges = pruned_edges;
+        return result;
     }
 
   private:

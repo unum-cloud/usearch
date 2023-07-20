@@ -214,6 +214,11 @@ inline std::uint16_t f32_to_f16(float f32) noexcept {
 #endif
 }
 
+/**
+ *  @brief  Numeric type for the IEEE 754 half-precision floating point.
+ *          If hardware support isn't available, falls back to a hardware
+ *          agnostic in-software implementation.
+ */
 class f16_bits_t {
     std::uint16_t uint16_{};
 
@@ -309,15 +314,31 @@ struct uuid_t {
     std::uint8_t octets[16];
 };
 
+/**
+ *  @brief  An STL-based executor or a "thread-pool" for parallel execution.
+ *          Isn't efficient for small batches, as it recreates the threads on every call.
+ */
 class executor_stl_t {
     std::size_t threads_count_{};
 
   public:
+    /**
+     *  @param threads_count The number of threads to be used for parallel execution.
+     */
     executor_stl_t(std::size_t threads_count = 0) noexcept
         : threads_count_(threads_count ? threads_count : std::thread::hardware_concurrency()) {}
 
+    /**
+     *  @return Maximum number of threads available to the executor.
+     */
     std::size_t size() const noexcept { return threads_count_; }
 
+    /**
+     *  @brief Executes tasks in bulk using the specified thread-aware function.
+     *  @param tasks                 The total number of tasks to be executed.
+     *  @param thread_aware_function The thread-aware function to be called for each thread index and task index.
+     *  @throws If an exception occurs during execution of the thread-aware function.
+     */
     template <typename thread_aware_function_at>
     void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
         std::vector<std::thread> threads_pool;
@@ -333,6 +354,11 @@ class executor_stl_t {
             threads_pool[thread_idx].join();
     }
 
+    /**
+     *  @brief Saturates every available thread with the given workload, until they finish.
+     *  @param thread_aware_function The thread-aware function to be called for each thread index.
+     *  @throws If an exception occurs during execution of the thread-aware function.
+     */
     template <typename thread_aware_function_at>
     void execute_bulk(thread_aware_function_at&& thread_aware_function) noexcept(false) {
         std::vector<std::thread> threads_pool;
@@ -345,14 +371,30 @@ class executor_stl_t {
 
 #if USEARCH_USE_OPENMP
 
+/**
+ *  @brief  An OpenMP-based executor or a "thread-pool" for parallel execution.
+ *          Is the preferred implementation, when available, and maximum performance is needed.
+ */
 class executor_openmp_t {
   public:
+    /**
+     *  @param threads_count The number of threads to be used for parallel execution.
+     */
     executor_openmp_t(std::size_t threads_count = 0) noexcept {
         omp_set_num_threads(threads_count ? threads_count : std::thread::hardware_concurrency());
     }
 
+    /**
+     *  @return Maximum number of threads available to the executor.
+     */
     std::size_t size() const noexcept { return omp_get_num_threads(); }
 
+    /**
+     *  @brief Executes tasks in bulk using the specified thread-aware function.
+     *  @param tasks                 The total number of tasks to be executed.
+     *  @param thread_aware_function The thread-aware function to be called for each thread index and task index.
+     *  @throws If an exception occurs during execution of the thread-aware function.
+     */
     template <typename thread_aware_function_at>
     void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
 #pragma omp parallel for schedule(dynamic)
@@ -360,6 +402,11 @@ class executor_openmp_t {
             thread_aware_function(omp_get_thread_num(), i);
     }
 
+    /**
+     *  @brief Saturates every available thread with the given workload, until they finish.
+     *  @param thread_aware_function The thread-aware function to be called for each thread index.
+     *  @throws If an exception occurs during execution of the thread-aware function.
+     */
     template <typename thread_aware_function_at>
     void execute_bulk(thread_aware_function_at&& thread_aware_function) noexcept(false) {
 #pragma omp parallel
