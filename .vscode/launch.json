@@ -13,7 +13,7 @@
             "environment": [
                 {
                     "name": "ASAN_OPTIONS",
-                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1"
+                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1:abort_on_error=1"
                 }
             ],
             "stopAtEntry": false,
