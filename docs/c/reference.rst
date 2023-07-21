@@ -1,7 +1,7 @@
 API Reference
 ===============
 
-===============
-usearch
-===============
+==================
+usearch/usearch.h
+==================
 .. doxygenfile:: usearch.h

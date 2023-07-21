@@ -203,7 +203,7 @@ swift test -v
 Linux:
 
 ```sh
-g++ -shared -fPIC lib.cpp -I ../include/  -I ../fp16/include/ -o libusearch.so
+g++ -std=c++11 -shared -fPIC c/lib.cpp -I ./include/  -I ./fp16/include/ -I ./robin-map/include/ -o libusearch.so
 ```
 
 ## Docker
