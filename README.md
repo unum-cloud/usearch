@@ -38,7 +38,7 @@ Linux • MacOS • Windows • Docker • WebAssembly
 
 - ✅ Benchmark-topping performance.
 - ✅ Simple and extensible [single C++11 header][usearch-header] implementation.
-- ✅ SIMD-optimized and [user-defined metrics](#user-defined-functions) with JIT-compilation.
+- ✅ SIMD-optimized and [user-defined metrics](#user-defined-functions) with JIT compilation.
 - ✅ Variable dimensionality vectors for unique applications, including search over compressed data.
 - ✅ Bitwise Tanimoto and Sorensen coefficients for [Genomics and Chemistry applications](#usearch--rdkit--molecular-search).
 - ✅ Hardware-agmostic `f16` & `f8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
@@ -69,7 +69,7 @@ USearch is compact and broadly compatible without sacrificing performance, with 
 
 [sloc]: https://en.wikipedia.org/wiki/Source_lines_of_code
 
-Base functionality is identical to FAISS, and the interface must be familiar if you have ever investigated Approximate Nearest Neigbors search:
+Base functionality is identical to FAISS, and the interface must be familiar if you have ever investigated Approximate Nearest Neighbors search:
 
 ```py
 $ pip install usearch numpy
@@ -100,7 +100,7 @@ assert np.allclose(index[42], vector)
 ## User-Defined Functions
 
 While most vector search packages concentrate on just a couple of metrics - "Inner Product distance" and "Euclidean distance," USearch extends this list to include any user-defined metrics.
-This flexibility allows you to customize your search for a myriad of applications, from computing geo-spatial coordinates with the rare [Haversine][haversine] distance to creating custom metrics for composite embeddings from multiple AI models.
+This flexibility allows you to customize your search for a myriad of applications, from computing geospatial coordinates with the rare [Haversine][haversine] distance to creating custom metrics for composite embeddings from multiple AI models.
 
 ![USearch: Vector Search Approaches](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-approaches-white.png?raw=true)
 
@@ -123,7 +123,7 @@ Those, however, are only sometimes reliable, can significantly affect the statis
 
 Instead, we have focused on high-precision arithmetic over low-precision downcasted vectors.
 The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f32_t`, `f16_t`, `f64_t`, and `f8_t` representations, even if the hardware doesn't natively support it.
-Continuing the topic of memory-efficiency, we provide a `uint40_t` to allow collection with over 4B+ vectors without allocating 8 bytes for every neighbor reference in the proximity graph.
+Continuing the topic of memory efficiency, we provide a `uint40_t` to allow collection with over 4B+ vectors without allocating 8 bytes for every neighbor reference in the proximity graph.
 
 |              | FAISS, `f32` | USearch, `f32` | USearch, `f16` |     USearch, `f8` |
 | :----------- | -----------: | -------------: | -------------: | ----------------: |
@@ -148,7 +148,7 @@ Continuing the topic of memory-efficiency, we provide a `uint40_t` to allow coll
 ## Disk-based Indexes
 
 With USearch, you can serve indexes from external memory, enabling you to optimize your server choices for indexing speed and serving costs.
-This can result in **20x costs reduction** on AWS and other public clouds.
+This can result in **20x cost reduction** on AWS and other public clouds.
 
 ```py
 index.save("index.usearch")
@@ -162,7 +162,7 @@ other_view.view("index.usearch")
 
 ## Joins
 
-One of the big questions these days is how will AI change the world of databases and data-management?
+One of the big questions these days is how will AI change the world of databases and data management.
 Most databases are still struggling to implement high-quality fuzzy search, and the only kind of joins they know are deterministic.
 A `join` is different from searching for every entry, as it requires a one-to-one mapping, banning collisions among separate search results.
 
@@ -171,7 +171,7 @@ A `join` is different from searching for every entry, as it requires a one-to-on
 |  Exact Join  | Fuzzy Join ? | Semantic Join ??  |
 
 Using USearch one can implement sub-quadratic complexity approximate, fuzzy, and semantic joins.
-This can come handy in any fuzzy-matching tasks, common to Database Management Software.
+This can come in handy in any fuzzy-matching tasks, common to Database Management Software.
 
 ```py
 men = Index(...)
@@ -183,17 +183,17 @@ pairs: dict = men.join(women, max_proposals=0, exact=False)
 
 ## Functionality
 
-By now, core functionality is supported across all bindings.
+By now, the core functionality is supported across all bindings.
 Broader functionality is ported per request.
 
-|                         |  C++  | Python | Java  | JavaScript | Rust  | GoLang | Swift |
-| :---------------------- | :---: | :----: | :---: | :--------: | :---: | :----: | :---: |
-| add/search/remove       |   ✅   |   ✅    |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
-| save/load/view          |   ✅   |   ✅    |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
-| join                    |   ✅   |   ✅    |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
-| user-defiend metrics    |   ✅   |   ✅    |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
-| variable-length vectors |   ✅   |   ✅    |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
-| 4B+ capacities          |   ✅   |   ❌    |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
+|                         | C++ 11 | Python 3 | C 99  | Java  | JavaScript | Rust  | GoLang | Swift |
+| :---------------------- | :----: | :------: | :---: | :---: | :--------: | :---: | :----: | :---: |
+| Add, search             |   ✅    |    ✅     |   ✅   |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
+| Save, load, view        |   ✅    |    ✅     |   ✅   |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
+| Join                    |   ✅    |    ✅     |   ✅   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
+| User-defined metrics    |   ✅    |    ✅     |   ✅   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
+| Variable-length vectors |   ✅    |    ✅     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
+| 4B+ capacities          |   ✅    |    ❌     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 
 ## Application Examples
 
@@ -230,7 +230,7 @@ def search(query: str) -> np.ndarray:
 server.run()
 ```
 
-We have pre-processed some commonly used datasets, cleaning the images, producing the vectors, and pre-building the index.
+We have pre-processed some commonly used datasets, cleaned the images, produced the vectors, and pre-built the index.
 
 | Dataset                                |            Modalities | Images |                              Download |
 | :------------------------------------- | --------------------: | -----: | ------------------------------------: |
@@ -250,10 +250,10 @@ We have pre-processed some commonly used datasets, cleaning the images, producin
 
 Comparing molecule graphs and searching for similar structures is expensive and slow.
 It can be seen as a special case of the NP-Complete Subgraph Isomorphism problem.
-Luckily, domain-specific approximate methods exists.
+Luckily, domain-specific approximate methods exist.
 The one commonly used in Chemistry, is to generate structures from [SMILES][smiles], and later hash them into binary fingerprints.
-The later are searchable with bitwise similarity metrics, like the Tanimoto coefficient.
-Below is na example using the RDKit package.
+The latter are searchable with bitwise similarity metrics, like the Tanimoto coefficient.
+Below is an example using the RDKit package.
 
 ```python
 from usearch.index import Index, MetricKind
@@ -278,11 +278,6 @@ matches = index.search(fingerprints, 10)
 [smiles]: https://en.wikipedia.org/wiki/Simplified_molecular-input_line-entry_system
 [rdkit-fingerprints]: https://www.rdkit.org/docs/RDKit_Book.html#additional-information-about-the-fingerprints
 
-## TODO
-
-- JavaScript: Allow calling from "worker threads".
-- Rust: Allow passing a custom thread ID.
-- C# .NET bindings.
 
 ## Integrations
 

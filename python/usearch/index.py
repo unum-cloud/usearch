@@ -151,9 +151,11 @@ class Matches(NamedTuple):
 
     def __repr__(self) -> str:
         return (
-            f"usearch.Matches({self.total_matches})"
+            "usearch.Matches({})".format(self.total_matches)
             if self.is_multiple
-            else f"usearch.Matches({self.total_matches} across {self.batch_size} queries)"
+            else "usearch.Matches({} across {} queries)".format(
+                self.total_matches, self.batch_size
+            )
         )
 
 
@@ -675,9 +677,31 @@ class Index:
 
     @property
     def levels_stats(self) -> IndexStats:
+        """Get the accumulated statistics for the entire multi-level graph.
+
+        :return: Statistics for the entire multi-level graph.
+        :rtype: IndexStats
+
+        Statistics:
+            - ``nodes`` (int): The number of nodes in that level.
+            - ``edges`` (int): The number of edges in that level.
+            - ``max_edges`` (int): The maximum possible number of edges in that level.
+            - ``allocated_bytes`` (int): The amount of allocated memory for that level.
+        """
         return self._compiled.levels_stats
 
     def level_stats(self, level: int) -> IndexStats:
+        """Get statistics for one level of the index - one graph.
+
+        :return: Statistics for one level of the index - one graph.
+        :rtype: IndexStats
+
+        Statistics:
+            - ``nodes`` (int): The number of nodes in that level.
+            - ``edges`` (int): The number of edges in that level.
+            - ``max_edges`` (int): The maximum possible number of edges in that level.
+            - ``allocated_bytes`` (int): The amount of allocated memory for that level.
+        """
         return self._compiled.level_stats(level)
 
     def __repr__(self) -> str:
