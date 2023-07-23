@@ -1,6 +1,6 @@
 /**
  *  @file javascript.cpp
- *  @author Ashot Vardanian
+ *  @author Ash Vardanian
  *  @brief JavaScript bindings for Unum USearch.
  *  @date 2023-04-26
  *

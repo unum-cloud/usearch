@@ -1,6 +1,6 @@
 /**
  *  @file python.cpp
- *  @author Ashot Vardanian
+ *  @author Ash Vardanian
  *  @brief Python bindings for Unum USearch.
  *  @date 2023-04-26
  *

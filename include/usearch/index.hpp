@@ -1,6 +1,6 @@
 /**
  *  @file index.hpp
- *  @author Ashot Vardanian
+ *  @author Ash Vardanian
  *  @brief Single-header Vector Search.
  *  @date 2023-04-26
  *

@@ -2,7 +2,7 @@
 //  Index+Sugar.swift
 //
 //
-//  Created by Ashot Vardanian on 5/11/23.
+//  Created by Ash Vardanian on 5/11/23.
 //
 
 @available(iOS 13, macOS 10.15, tvOS 13.0, watchOS 6.0, *)
