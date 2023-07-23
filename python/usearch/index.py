@@ -280,6 +280,8 @@ class Index:
 
     @staticmethod
     def restore(path: os.PathLike, view: bool = False) -> Index:
+        if not os.path.exists(path):
+            return None
         meta = Index.metadata(path)
         bits_per_scalar = {
             ScalarKind.F8: 8,
@@ -352,11 +354,11 @@ class Index:
             else:
                 labels = start_id
         else:
-            if isinstance(labels, np.ndarray):
+            if isinstance(labels, Iterable):
                 if not is_multiple:
                     labels = int(labels[0])
                 else:
-                    labels = labels.astype(Label)
+                    labels = np.array(labels).astype(Label)
         count_labels = len(labels) if isinstance(labels, Iterable) else 1
         assert count_labels == count_vectors
 
