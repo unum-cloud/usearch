@@ -23,12 +23,12 @@ index = Index(
 
 vector = np.array([0.2, 0.6, 0.4])
 index.add(42, vector)
-matches, distances, count = index.search(vector, 10)
+matches: Matches = index.search(vector, 10)
 
 assert len(index) == 1
-assert count == 1
-assert matches[0] == 42
-assert distances[0] <= 0.001
+assert len(matches) == 1
+assert matches[0].label == 42
+assert matches[0].distance <= 0.001
 assert np.allclose(index[42], vector)
 ```
 
@@ -61,10 +61,10 @@ labels = np.arange(n)
 vectors = np.random.uniform(0, 0.3, (n, index.ndim)).astype(np.float32)
 
 index.add(labels, vectors, threads=..., copy=...)
-matches, distances, counts = index.search(vectors, 10, threads=...)
+matches: BatchMatches = index.search(vectors, 10, threads=...)
 
-assert matches.shape[0] == vectors.shape[0]
-assert counts[0] <= 10
+assert len(matches) == vectors.shape[0]
+assert len(matches[0]) <= 10
 ```
 
 You can also override the default `threads` and `copy` arguments in bulk workloads.

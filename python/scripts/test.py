@@ -109,13 +109,12 @@ def test_index(
     if numpy_type != np.byte:
         assert np.allclose(index[42], vector, atol=0.1)
 
-    matches, distances, count = index.search(vector, 10)
+    matches = index.search(vector, 10)
     assert len(index) == 1
-    assert len(matches) == count
-    assert len(distances) == count
-    assert count == 1
-    assert matches[0] == 42
-    assert distances[0] == pytest.approx(0, abs=1e-3)
+    assert len(matches.labels) == len(matches.distances)
+    assert len(matches.labels) == 1
+    assert matches[0].label == 42
+    assert matches[0].distance == pytest.approx(0, abs=1e-3)
 
     assert index.max_level >= 0
     assert index.levels_stats.nodes >= 1
@@ -136,8 +135,8 @@ def test_index(
     assert len(index) == 0
     index.add(42, vector)
     assert len(index) == 1
-    matches, distances, count = index.search(vector, 10)
-    assert count == 1
+    matches = index.search(vector, 10)
+    assert len(matches) == 1
 
     index.load("tmp.usearch")
     assert len(index) == 1

@@ -271,18 +271,21 @@ static py::tuple search_one_in_index(dense_index_py_t& index, py::buffer vector,
     if (vector_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
-    py::array_t<label_t> labels_py(static_cast<Py_ssize_t>(wanted));
-    py::array_t<distance_t> distances_py(static_cast<Py_ssize_t>(wanted));
+    constexpr Py_ssize_t vectors_count = 1;
+    py::array_t<label_t> labels_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
+    py::array_t<distance_t> distances_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
+    py::array_t<Py_ssize_t> counts_py(vectors_count);
     std::size_t count{};
-    auto labels_py1d = labels_py.template mutable_unchecked<1>();
-    auto distances_py1d = distances_py.template mutable_unchecked<1>();
+    auto labels_py2d = labels_py.template mutable_unchecked<2>();
+    auto distances_py2d = distances_py.template mutable_unchecked<2>();
+    auto counts_py1d = counts_py.template mutable_unchecked<1>();
 
     search_config_t config;
     config.exact = exact;
 
     auto raise_and_dump = [&](dense_search_result_t result) {
         result.error.raise();
-        count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
+        count = result.dump_to(&labels_py2d(0, 0), &distances_py2d(0, 0));
     };
 
     switch (numpy_string_to_kind(vector_info.format)) {
@@ -295,13 +298,14 @@ static py::tuple search_one_in_index(dense_index_py_t& index, py::buffer vector,
         throw std::invalid_argument("Incompatible scalars in the query vector: " + vector_info.format);
     }
 
-    labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(count)});
-    distances_py.resize(py_shape_t{static_cast<Py_ssize_t>(count)});
+    labels_py.resize(py_shape_t{vectors_count, static_cast<Py_ssize_t>(count)});
+    distances_py.resize(py_shape_t{vectors_count, static_cast<Py_ssize_t>(count)});
+    counts_py1d[0] = static_cast<Py_ssize_t>(count);
 
     py::tuple results(3);
     results[0] = labels_py;
     results[1] = distances_py;
-    results[2] = static_cast<Py_ssize_t>(count);
+    results[2] = counts_py;
     return results;
 }
 

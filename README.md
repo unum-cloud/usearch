@@ -88,12 +88,12 @@ index = Index(
 
 vector = np.array([0.2, 0.6, 0.4])
 index.add(42, vector)
-matches, distances, count = index.search(vector, 10)
+matches: Matches = index.search(vector, 10)
 
 assert len(index) == 1
-assert count == 1
-assert matches[0] == 42
-assert distances[0] <= 0.001
+assert len(matches) == 1
+assert matches[0].label == 42
+assert matches[0].distance <= 0.001
 assert np.allclose(index[42], vector)
 ```
 

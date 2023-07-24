@@ -102,47 +102,57 @@ def _normalize_metric(metric):
     return metric
 
 
+class Match(NamedTuple):
+    label: int
+    distance: float
+
+
 class Matches(NamedTuple):
     labels: np.ndarray
     distances: np.ndarray
-    counts: Union[np.ndarray, int]
 
-    @property
-    def is_multiple(self) -> bool:
-        return isinstance(self.counts, np.ndarray)
+    def __len__(self) -> int:
+        return len(self.labels)
 
-    @property
-    def batch_size(self) -> int:
-        return len(self.counts) if isinstance(self.counts, np.ndarray) else 1
+    def __getitem__(self, index: int) -> Match:
+        return Match(
+            label=self.labels[index],
+            distance=self.distances[index],
+        )
 
-    @property
-    def total_matches(self) -> int:
-        return np.sum(self.counts)
+    def to_list(self) -> List[tuple]:
+        return [(int(l), float(d)) for l, d in zip(self.labels, self.distances)]
 
-    def to_list(self, row: Optional[int] = None) -> Union[List[dict], List[List[dict]]]:
-        if not self.is_multiple:
-            assert row is None, "Exporting a single sequence is only for batch requests"
-            labels = self.labels
-            distances = self.distances
+    def __repr__(self) -> str:
+        return f"usearch.Matches({len(self)})"
 
-        elif row is None:
-            return [self.to_list(i) for i in range(self.batch_size)]
 
-        else:
-            count = self.counts[row]
-            labels = self.labels[row, :count]
-            distances = self.distances[row, :count]
+class BatchMatches(NamedTuple):
+    labels: np.ndarray
+    distances: np.ndarray
+    counts: np.ndarray
 
-        return [
-            {"label": int(label), "distance": float(distance)}
-            for label, distance in zip(labels, distances)
-        ]
+    def __len__(self) -> int:
+        return len(self.counts)
+
+    def __getitem__(self, index: int) -> Matches:
+        return Matches(
+            labels=self.labels[index, : self.counts[index]],
+            distances=self.distances[index, : self.counts[index]],
+        )
+
+    def to_list(self) -> List[List[tuple]]:
+        lists = [self.__getitem__(row) for row in range(self.__len__())]
+        return [item for sublist in lists for item in sublist]
 
     def recall_first(self, expected: np.ndarray) -> float:
-        best_matches = self.labels if not self.is_multiple else self.labels[:, 0]
-        return np.sum(best_matches == expected) / len(expected)
+        """Measures recall [0, 1] as of `Matches` that contain the corresponding
+        `expected` entry as the first result."""
+        return np.sum(self.labels[:, 0] == expected) / len(expected)
 
     def recall(self, expected: np.ndarray) -> float:
+        """Measures recall [0, 1] as of `Matches` that contain the corresponding
+        `expected` entry anywhere among results."""
         assert len(expected) == self.batch_size
         recall = 0
         for i in range(self.batch_size):
@@ -150,13 +160,7 @@ class Matches(NamedTuple):
         return recall / len(expected)
 
     def __repr__(self) -> str:
-        return (
-            "usearch.Matches({})".format(self.total_matches)
-            if self.is_multiple
-            else "usearch.Matches({} across {} queries)".format(
-                self.total_matches, self.batch_size
-            )
-        )
+        return f"usearch.BatchMatches({np.sum(self.counts)} across {len(self)} queries)"
 
 
 class CompiledMetric(NamedTuple):
@@ -382,7 +386,7 @@ class Index:
                 tasks,
                 desc=name,
                 total=count_vectors,
-                unit="Vector",
+                unit="vector",
                 disable=log is False,
             )
             for labels, vectors in tasks:
@@ -405,7 +409,7 @@ class Index:
         exact: bool = False,
         log: Union[str, bool] = False,
         batch_size: int = 0,
-    ) -> Matches:
+    ) -> Union[Matches, BatchMatches]:
         """
         Performs approximate nearest neighbors search for one or more queries.
 
@@ -422,12 +426,15 @@ class Index:
         :param batch_size: Number of vectors to process at once, defaults to 0
         :type batch_size: int, optional
         :return: Approximate matches for one or more queries
-        :rtype: Matches
+        :rtype: Union[Matches, BatchMatches]
         """
 
         assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
         assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
         count_vectors = vectors.shape[0] if vectors.ndim == 2 else 1
+
+        def distil_batch(batch_matches: BatchMatches) -> Union[BatchMatches, Matches]:
+            return batch_matches if vectors.ndim == 2 else batch_matches[0]
 
         if log and batch_size == 0:
             batch_size = int(math.ceil(count_vectors / 100))
@@ -443,7 +450,7 @@ class Index:
                 tasks,
                 desc=name,
                 total=count_vectors,
-                unit="Vector",
+                unit="vector",
                 disable=log is False,
             )
             for vectors in tasks:
@@ -453,14 +460,16 @@ class Index:
                     exact=exact,
                     threads=threads,
                 )
-                tasks_matches.append(Matches(*tuple_))
+                tasks_matches.append(BatchMatches(*tuple_))
                 pbar.update(vectors.shape[0])
 
             pbar.close()
-            return Matches(
-                labels=np.vstack([m.labels for m in tasks_matches]),
-                distances=np.vstack([m.distances for m in tasks_matches]),
-                counts=np.concatenate([m.counts for m in tasks_matches], axis=None),
+            return distil_batch(
+                BatchMatches(
+                    labels=np.vstack([m.labels for m in tasks_matches]),
+                    distances=np.vstack([m.distances for m in tasks_matches]),
+                    counts=np.concatenate([m.counts for m in tasks_matches], axis=None),
+                )
             )
 
         else:
@@ -470,7 +479,7 @@ class Index:
                 exact=exact,
                 threads=threads,
             )
-            return Matches(*tuple_)
+            return distil_batch(BatchMatches(*tuple_))
 
     def remove(
         self,
