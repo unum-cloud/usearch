@@ -122,18 +122,18 @@ template <typename index_at> void test_sets(index_at&& index) {
     expect(index.size() == 3);
 }
 
-template <typename index_at> void test_sets_moved() {
+template <typename index_at> void test_sets_moved(index_config_t const& config) {
     {
-        index_at index;
+        index_at index{config};
         test_sets(index);
     }
     {
-        index_at index;
+        index_at index{config};
         index.reserve(1);
         test_sets(index_at(std::move(index)));
     }
     {
-        index_at index;
+        index_at index{config};
         index.reserve(1);
         index_at index_moved = std::move(index);
         test_sets(index_moved);
@@ -155,26 +155,32 @@ int main(int, char**) {
     // static_assert(!std::is_same<index_gt<haversine_gt<>>::value_type, std::true_type>());
 
     using big_point_id_t = std::int64_t;
-    test3d<float>(index_gt<cos_gt<float>, big_point_id_t, std::uint32_t>{});
-    test3d<float>(index_gt<l2sq_gt<float>, big_point_id_t, std::uint32_t>{});
 
-    test3d<double>(index_gt<cos_gt<double>, big_point_id_t, std::uint32_t>{});
-    test3d<double>(index_gt<l2sq_gt<double>, big_point_id_t, std::uint32_t>{});
+    index_config_t config1;
+    index_config_t config2;
+    config1.vector_alignment = 4;
+    config2.vector_alignment = 8;
 
-    test3d<float>(punned_small_t::make(3, metric_kind_t::cos_k));
-    test3d<float>(punned_small_t::make(3, metric_kind_t::l2sq_k));
+    test3d<float>(index_gt<cos_gt<float>, big_point_id_t, std::uint32_t>{config1});
+    test3d<float>(index_gt<l2sq_gt<float>, big_point_id_t, std::uint32_t>{config1});
 
-    test3d<double>(punned_small_t::make(3, metric_kind_t::cos_k));
-    test3d<double>(punned_small_t::make(3, metric_kind_t::l2sq_k));
+    test3d<double>(index_gt<cos_gt<double>, big_point_id_t, std::uint32_t>{config2});
+    test3d<double>(index_gt<l2sq_gt<double>, big_point_id_t, std::uint32_t>{config2});
 
-    test3d_punned<float>(punned_small_t::make(3, metric_kind_t::cos_k));
-    test3d_punned<float>(punned_small_t::make(3, metric_kind_t::l2sq_k));
+    test3d<float>(punned_small_t::make(3, metric_kind_t::cos_k, config1));
+    test3d<float>(punned_small_t::make(3, metric_kind_t::l2sq_k, config1));
 
-    test_sets(index_gt<jaccard_gt<std::int32_t, float>, big_point_id_t, std::uint32_t>{});
-    test_sets(index_gt<jaccard_gt<std::int64_t, float>, big_point_id_t, std::uint32_t>{});
+    test3d<double>(punned_small_t::make(3, metric_kind_t::cos_k, config1));
+    test3d<double>(punned_small_t::make(3, metric_kind_t::l2sq_k, config1));
 
-    test_sets_moved<index_gt<jaccard_gt<std::int32_t, float>, big_point_id_t, std::uint32_t>>();
-    test_sets_moved<index_gt<jaccard_gt<std::int64_t, float>, big_point_id_t, std::uint32_t>>();
+    test3d_punned<float>(punned_small_t::make(3, metric_kind_t::cos_k, config1));
+    test3d_punned<float>(punned_small_t::make(3, metric_kind_t::l2sq_k, config1));
+
+    test_sets(index_gt<jaccard_gt<std::int32_t, float>, big_point_id_t, std::uint32_t>{config1});
+    test_sets(index_gt<jaccard_gt<std::int64_t, float>, big_point_id_t, std::uint32_t>{config1});
+
+    test_sets_moved<index_gt<jaccard_gt<std::int32_t, float>, big_point_id_t, std::uint32_t>>(config1);
+    test_sets_moved<index_gt<jaccard_gt<std::int64_t, float>, big_point_id_t, std::uint32_t>>(config1);
 
     return 0;
 }
