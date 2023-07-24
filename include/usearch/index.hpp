@@ -2956,28 +2956,23 @@ class index_gt {
     struct node_bytes_split_t {
         span_bytes_t tape{};
         span_bytes_t vector{};
-        std::size_t continuous_buffer_bytes; // Indicates the buffer size where `tape` and `vector` are stored.
-                                             // If zero, it means both are stored in different buffers
 
         node_bytes_split_t() {}
-        node_bytes_split_t(span_bytes_t tape, span_bytes_t vector, std::size_t continuous_buffer_bytes = 0) noexcept
-            : tape(tape), vector(vector), continuous_buffer_bytes(continuous_buffer_bytes) {}
+        node_bytes_split_t(span_bytes_t tape, span_bytes_t vector) noexcept : tape(tape), vector(vector) {}
 
-        std::size_t memory_usage() const noexcept {
-            return continuous_buffer_bytes ? continuous_buffer_bytes : tape.size() + vector.size();
+        std::size_t memory_usage(std::size_t vector_alignment) const noexcept {
+            return tape.size() + vector.size() + (colocated(vector_alignment) ? vector_alignment : 0);
         }
-        bool colocated() const noexcept { return continuous_buffer_bytes != 0; }
+        bool colocated(std::size_t vector_alignment) const noexcept {
+            return std::size_t(vector.begin() - tape.end()) <= vector_alignment;
+        }
         operator node_t() const noexcept { return node_t{tape.begin(), reinterpret_cast<scalar_t*>(vector.begin())}; }
         explicit operator bool() const noexcept { return tape.begin() != nullptr; }
     };
 
     inline node_bytes_split_t node_bytes_split_(node_t node) const noexcept {
         std::size_t bytes_in_tape = node_head_bytes_() + node_neighbors_bytes_(node.level());
-        std::size_t vector_bytes = node_vector_bytes_(node);
-        bool colocated =
-            std::size_t((byte_t*)node.vector() - (node.tape() + bytes_in_tape)) <= config_.vector_alignment;
-        std::size_t continuous_buffer_bytes = colocated ? bytes_in_tape + vector_bytes + config_.vector_alignment : 0;
-        return {{node.tape(), bytes_in_tape}, {(byte_t*)node.vector(), vector_bytes}, continuous_buffer_bytes};
+        return {{node.tape(), bytes_in_tape}, {(byte_t*)node.vector(), node_vector_bytes_(node.dim())}};
     }
 
     inline std::size_t node_neighbors_bytes_(node_t node) const noexcept { return node_neighbors_bytes_(node.level()); }
@@ -3002,7 +2997,7 @@ class index_gt {
         byte_t* vector = data + tape_bytes;
         vector += bool(vector_bytes) * (config_.vector_alignment - ((uintptr_t)vector % config_.vector_alignment));
 
-        return {{data, tape_bytes}, {vector, vector_bytes}, node_bytes};
+        return {{data, tape_bytes}, {vector, vector_bytes}};
     }
 
     node_t node_make_(label_t label, vector_view_t vector, level_t level, bool store_vector) noexcept {
@@ -3021,10 +3016,11 @@ class index_gt {
     }
 
     node_t node_make_copy_(node_bytes_split_t old_bytes) noexcept {
-        if (old_bytes.colocated()) {
-            byte_t* data = (byte_t*)tape_allocator_.allocate(old_bytes.memory_usage());
+        if (old_bytes.colocated(config_.vector_alignment)) {
+            std::size_t node_bytes = old_bytes.memory_usage(config_.vector_alignment);
+            byte_t* data = (byte_t*)tape_allocator_.allocate(node_bytes);
             byte_t* vector = data + std::size_t(old_bytes.vector.begin() - old_bytes.tape.begin());
-            std::memcpy(data, old_bytes.tape.data(), old_bytes.memory_usage());
+            std::memcpy(data, old_bytes.tape.data(), node_bytes);
             return node_t{data, reinterpret_cast<scalar_t*>(vector)};
         } else {
             node_t old_node = old_bytes;
@@ -3042,8 +3038,8 @@ class index_gt {
 
         node_t& node = nodes_[id];
         node_bytes_split_t node_bytes = node_bytes_split_(node);
-        if (node_bytes.colocated())
-            tape_allocator_.deallocate(node.tape(), node_bytes.memory_usage());
+        if (node_bytes.colocated(config_.vector_alignment))
+            tape_allocator_.deallocate(node.tape(), node_bytes.memory_usage(config_.vector_alignment));
         else
             tape_allocator_.deallocate(node.tape(), node_bytes.tape.size());
         node = node_t{};
