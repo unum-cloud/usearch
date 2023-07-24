@@ -2423,13 +2423,19 @@ class index_gt {
         if (result.error)
             return result;
 
-        // Serialize nodes one by one
+        // Serialize node headers first
         for (std::size_t i = 0; i != state.size; ++i) {
             node_t node = node_with_id_(i);
-            // Dump neighbors and vectors, as vectors may be in a disjoint location
             write_chunk(node.tape(), node_head_bytes_() + node_neighbors_bytes_(node));
             if (result.error)
                 return result;
+        }
+
+        // Then, serialize vectors into aligned address
+        std::size_t offset = std::ftell(file);
+        std::fseek(file, config_.vector_alignment - offset % config_.vector_alignment, SEEK_CUR);
+        for (std::size_t i = 0; i != state.size; ++i) {
+            node_t node = node_with_id_(i);
             write_chunk(node.vector(), node_vector_bytes_(node));
             if (result.error)
                 return result;
@@ -2497,9 +2503,8 @@ class index_gt {
             entry_id_ = static_cast<id_t>(state.entry_idx);
         }
 
-        // Load nodes one by one
-        std::size_t const size = size_;
-        for (std::size_t i = 0; i != size; ++i) {
+        // Load node headers first
+        for (std::size_t i = 0; i != size_; ++i) {
             label_t label;
             dim_t dim;
             level_t level;
@@ -2520,11 +2525,17 @@ class index_gt {
             read_chunk(node.tape() + node_head_bytes_(), node_neighbors_bytes_(level));
             if (result.error)
                 return result;
-            read_chunk(node.vector(), node_vector_bytes_(dim));
+            nodes_[i] = node;
+        }
+
+        // Then, load vectors from aligned address
+        std::size_t offset = std::ftell(file);
+        std::fseek(file, config_.vector_alignment - offset % config_.vector_alignment, SEEK_CUR);
+        for (std::size_t i = 0; i != size_; ++i) {
+            read_chunk(nodes_[i].vector(), node_vector_bytes_(nodes_[i].dim()));
             if (result.error)
                 return result;
-            nodes_[i] = node;
-            progress(i, size);
+            progress(i, size_);
         }
 
         std::fclose(file);
@@ -2624,19 +2635,22 @@ class index_gt {
             entry_id_ = static_cast<id_t>(state.entry_idx);
         }
 
-        // Locate every node packed into file
+        // First, locate every node headers packed into file
         std::size_t progress_bytes = sizeof(file_header_t);
-        std::size_t const size = size_;
-        for (std::size_t i = 0; i != size; ++i) {
+        for (std::size_t i = 0; i != size_; ++i) {
             byte_t* tape = (byte_t*)(file + progress_bytes);
-            dim_t dim = misaligned_load<dim_t>(tape + sizeof(label_t));
             level_t level = misaligned_load<level_t>(tape + sizeof(label_t) + sizeof(dim_t));
 
-            std::size_t node_neighbors_bytes = node_neighbors_bytes_(level);
-            std::size_t node_vector_bytes = node_vector_bytes_(dim);
-            nodes_[i] = node_t{tape, (scalar_t*)(tape + node_head_bytes_() + node_neighbors_bytes)};
-            progress_bytes += node_head_bytes_() + node_neighbors_bytes + node_vector_bytes;
-            progress(i, size);
+            nodes_[i] = node_t{tape, nullptr};
+            progress_bytes += node_head_bytes_() + node_neighbors_bytes_(level);
+        }
+
+        // Then, locate every vector packed into file. Note, vectors are serialized in aligned address
+        progress_bytes += config_.vector_alignment - progress_bytes % config_.vector_alignment;
+        for (std::size_t i = 0; i != size_; ++i) {
+            nodes_[i] = node_t{nodes_[i].tape(), (scalar_t*)(file + progress_bytes)};
+            progress_bytes += node_vector_bytes_(nodes_[i].dim());
+            progress(i, size_);
         }
 
         return {};
