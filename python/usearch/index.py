@@ -102,6 +102,7 @@ def _normalize_metric(metric):
 
     return metric
 
+
 @dataclass
 class Match:
     label: int
@@ -353,27 +354,22 @@ class Index:
         """
         assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
         assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
-        count_vectors = vectors.shape[0] if vectors.ndim == 2 else 1
-        is_multiple = count_vectors > 1
-        if not is_multiple:
-            vectors = vectors.flatten()
+        if vectors.ndim == 1:
+            vectors = vectors.reshape(1, len(vectors))
 
-        # Validate of generate teh labels
+        # Validate or generate the labels
+        count_vectors = vectors.shape[0]
         generate_labels = labels is None
         if generate_labels:
             start_id = len(self._compiled)
-            if is_multiple:
-                labels = np.arange(start_id, start_id + count_vectors, dtype=Label)
-            else:
-                labels = start_id
+            labels = np.arange(start_id, start_id + count_vectors, dtype=Label)
         else:
-            if isinstance(labels, Iterable):
-                if not is_multiple:
-                    labels = int(labels[0])
-                else:
-                    labels = np.array(labels).astype(Label)
-        count_labels = len(labels) if isinstance(labels, Iterable) else 1
-        assert count_labels == count_vectors
+            if not isinstance(labels, Iterable):
+                assert count_vectors == 1, "Each vector must have a label"
+                labels = [labels]
+            labels = np.array(labels).astype(Label)
+
+        assert len(labels) == count_vectors
 
         # If logging is requested, and batch size is undefined, set it to grow 1% at a time:
         if log and batch_size == 0:
@@ -440,10 +436,12 @@ class Index:
 
         assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
         assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
-        count_vectors = vectors.shape[0] if vectors.ndim == 2 else 1
+        if vectors.ndim == 1:
+            vectors = vectors.reshape(1, len(vectors))
+        count_vectors = vectors.shape[0]
 
         def distil_batch(batch_matches: BatchMatches) -> Union[BatchMatches, Matches]:
-            return batch_matches if vectors.ndim == 2 else batch_matches[0]
+            return batch_matches[0] if count_vectors == 1 else batch_matches
 
         if log and batch_size == 0:
             batch_size = int(math.ceil(count_vectors / 100))

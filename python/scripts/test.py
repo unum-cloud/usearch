@@ -11,7 +11,9 @@ from usearch.index import (
     SparseIndex,
     MetricKind,
     ScalarKind,
+    Match,
     Matches,
+    BatchMatches,
 )
 from usearch.index import (
     DEFAULT_CONNECTIVITY,
@@ -177,9 +179,9 @@ def test_index_batch(
     assert len(index) == batch_size
     assert np.allclose(index.get_vectors(labels).astype(numpy_type), vectors, atol=0.1)
 
-    matches: Matches = index.search(vectors, 10, threads=2)
+    matches: BatchMatches = index.search(vectors, 10, threads=2)
     assert matches.labels.shape[0] == matches.distances.shape[0]
-    assert matches.counts.shape[0] == batch_size
+    assert len(matches) == batch_size
     assert np.all(np.sort(index.labels) == np.sort(labels))
 
     if batch_size > 1:
@@ -232,10 +234,11 @@ def test_exact_recall(
         assert found_labels[0] == i
 
     # Search the whole batch
-    matches: Matches = index.search(vectors, 10, exact=True)
-    found_labels = matches.labels
-    for i in range(batch_size):
-        assert found_labels[i, 0] == i
+    if batch_size > 1:
+        matches: BatchMatches = index.search(vectors, 10, exact=True)
+        found_labels = matches.labels
+        for i in range(batch_size):
+            assert found_labels[i, 0] == i
 
     # Match entries aginst themselves
     index_copy: Index = index.copy()

@@ -172,34 +172,6 @@ scalar_kind_t numpy_string_to_kind(std::string const& name) {
         return scalar_kind_t::unknown_k;
 }
 
-static void add_one_to_index(dense_index_py_t& index, label_t label, py::buffer vector, bool copy, std::size_t) {
-
-    py::buffer_info vector_info = vector.request();
-    if (vector_info.ndim != 1)
-        throw std::invalid_argument("Expects a vector, not a higher-rank tensor!");
-
-    Py_ssize_t vector_dimensions = vector_info.shape[0];
-    char const* vector_data = reinterpret_cast<char const*>(vector_info.ptr);
-    if (vector_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
-        throw std::invalid_argument("The number of vector dimensions doesn't match!");
-
-    if (!index.reserve(ceil2(index.size() + 1)))
-        throw std::invalid_argument("Out of memory!");
-
-    add_config_t config;
-    config.store_vector = copy;
-
-    switch (numpy_string_to_kind(vector_info.format)) {
-    case scalar_kind_t::b1x8_k: index.add(label, (b1x8_t const*)(vector_data), config).error.raise(); break;
-    case scalar_kind_t::f8_k: index.add(label, (f8_bits_t const*)(vector_data), config).error.raise(); break;
-    case scalar_kind_t::f16_k: index.add(label, (f16_t const*)(vector_data), config).error.raise(); break;
-    case scalar_kind_t::f32_k: index.add(label, (f32_t const*)(vector_data), config).error.raise(); break;
-    case scalar_kind_t::f64_k: index.add(label, (f64_t const*)(vector_data), config).error.raise(); break;
-    case scalar_kind_t::unknown_k:
-        throw std::invalid_argument("Incompatible scalars in the vector: " + vector_info.format);
-    }
-}
-
 template <typename scalar_at>
 static void add_typed_to_index(                                              //
     dense_index_py_t& index,                                                 //
@@ -263,52 +235,6 @@ static void add_many_to_index(                                      //
     }
 }
 
-static py::tuple search_one_in_index(dense_index_py_t& index, py::buffer vector, std::size_t wanted, bool exact) {
-
-    py::buffer_info vector_info = vector.request();
-    Py_ssize_t vector_dimensions = vector_info.shape[0];
-    char const* vector_data = reinterpret_cast<char const*>(vector_info.ptr);
-    if (vector_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
-        throw std::invalid_argument("The number of vector dimensions doesn't match!");
-
-    constexpr Py_ssize_t vectors_count = 1;
-    py::array_t<label_t> labels_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
-    py::array_t<distance_t> distances_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
-    py::array_t<Py_ssize_t> counts_py(vectors_count);
-    std::size_t count{};
-    auto labels_py2d = labels_py.template mutable_unchecked<2>();
-    auto distances_py2d = distances_py.template mutable_unchecked<2>();
-    auto counts_py1d = counts_py.template mutable_unchecked<1>();
-
-    search_config_t config;
-    config.exact = exact;
-
-    auto raise_and_dump = [&](dense_search_result_t result) {
-        result.error.raise();
-        count = result.dump_to(&labels_py2d(0, 0), &distances_py2d(0, 0));
-    };
-
-    switch (numpy_string_to_kind(vector_info.format)) {
-    case scalar_kind_t::b1x8_k: raise_and_dump(index.search((b1x8_t const*)(vector_data), wanted, config)); break;
-    case scalar_kind_t::f8_k: raise_and_dump(index.search((f8_bits_t const*)(vector_data), wanted, config)); break;
-    case scalar_kind_t::f16_k: raise_and_dump(index.search((f16_t const*)(vector_data), wanted, config)); break;
-    case scalar_kind_t::f32_k: raise_and_dump(index.search((f32_t const*)(vector_data), wanted, config)); break;
-    case scalar_kind_t::f64_k: raise_and_dump(index.search((f64_t const*)(vector_data), wanted, config)); break;
-    case scalar_kind_t::unknown_k:
-        throw std::invalid_argument("Incompatible scalars in the query vector: " + vector_info.format);
-    }
-
-    labels_py.resize(py_shape_t{vectors_count, static_cast<Py_ssize_t>(count)});
-    distances_py.resize(py_shape_t{vectors_count, static_cast<Py_ssize_t>(count)});
-    counts_py1d[0] = static_cast<Py_ssize_t>(count);
-
-    py::tuple results(3);
-    results[0] = labels_py;
-    results[1] = distances_py;
-    results[2] = counts_py;
-    return results;
-}
-
 template <typename scalar_at>
 static void search_typed(                                   //
     dense_index_py_t& index, py::buffer_info& vectors_info, //
@@ -360,8 +286,6 @@ static py::tuple search_many_in_index( //
         throw std::invalid_argument("Can't use that many threads!");
 
     py::buffer_info vectors_info = vectors.request();
-    if (vectors_info.ndim == 1)
-        return search_one_in_index(index, vectors, wanted, exact);
     if (vectors_info.ndim != 2)
         throw std::invalid_argument("Expects a matrix of vectors to add!");
 
@@ -658,15 +582,6 @@ PYBIND11_MODULE(compiled, m) {
         py::kw_only(),             //
         py::arg("copy") = true,    //
         py::arg("threads") = 0     //
-    );
-
-    i.def(                        //
-        "add", &add_one_to_index, //
-        py::arg("label"),         //
-        py::arg("vector"),        //
-        py::kw_only(),            //
-        py::arg("copy") = true,   //
-        py::arg("threads") = 0    //
     );
 
     i.def(                               //
