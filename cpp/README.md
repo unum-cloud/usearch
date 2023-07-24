@@ -1,4 +1,4 @@
-# USearch C++ Inteface
+# USearch for C++
 
 ## Installation
 

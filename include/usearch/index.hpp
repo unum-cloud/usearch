@@ -2968,6 +2968,7 @@ class index_gt {
         }
         bool colocated() const noexcept { return continuous_buffer_bytes != 0; }
         operator node_t() const noexcept { return node_t{tape.begin(), reinterpret_cast<scalar_t*>(vector.begin())}; }
+        explicit operator bool() const noexcept { return tape.begin() != nullptr; }
     };
 
     inline node_bytes_split_t node_bytes_split_(node_t node) const noexcept {
@@ -3005,7 +3006,9 @@ class index_gt {
     }
 
     node_t node_make_(label_t label, vector_view_t vector, level_t level, bool store_vector) noexcept {
-        node_bytes_split_t node_bytes = node_malloc_(vector.size() * store_vector, level);
+        node_bytes_split_t node_bytes = node_malloc_(static_cast<dim_t>(vector.size() * store_vector), level);
+        if (!node_bytes)
+            return {};
         std::memset(node_bytes.tape.data(), 0, node_bytes.tape.size());
         if (store_vector)
             std::memcpy(node_bytes.vector.data(), vector.data(), node_bytes.vector.size());

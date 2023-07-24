@@ -144,7 +144,7 @@ class index_punned_dense_gt {
     /// @brief Schema: input buffer, bytes in input buffer, output buffer.
     using cast_t = std::function<bool(byte_t const*, std::size_t, byte_t*)>;
     /// @brief Punned index.
-    using index_t = index_gt<metric_t, label_t, id_t, aligned_allocator_t, memory_mapping_allocator_t>;
+    using index_t = index_gt<metric_t, label_t, id_t, aligned_allocator_t, memory_mapping_allocator_gt<64>>;
     using index_allocator_t = aligned_allocator_gt<index_t, 64>;
 
     using member_iterator_t = typename index_t::member_iterator_t;
@@ -705,10 +705,10 @@ class index_punned_dense_gt {
     template <typename scalar_at>
     add_result_t add_(label_t label, scalar_at const* vector, add_config_t config, cast_t const& cast) {
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
-        std::size_t vector_bytes = dimensions_ * sizeof(scalar_at);
+        std::size_t vector_bytes = scalar_words_ * sizeof(scalar_at);
 
         byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * config.thread;
-        bool casted = cast(vector_data, dimensions_, casted_data);
+        bool casted = cast(vector_data, scalar_words_, casted_data);
         if (casted)
             vector_data = casted_data, vector_bytes = casted_vector_bytes_, config.store_vector = true;
 
@@ -737,10 +737,10 @@ class index_punned_dense_gt {
         search_config_t config, cast_t const& cast) const {
 
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
-        std::size_t vector_bytes = dimensions_ * sizeof(scalar_at);
+        std::size_t vector_bytes = scalar_words_ * sizeof(scalar_at);
 
         byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * config.thread;
-        bool casted = cast(vector_data, dimensions_, casted_data);
+        bool casted = cast(vector_data, scalar_words_, casted_data);
         if (casted)
             vector_data = casted_data, vector_bytes = casted_vector_bytes_;
 
@@ -790,7 +790,7 @@ class index_punned_dense_gt {
         // Export the entry
         member_cref_t member = typed_->at(id);
         byte_t const* punned_vector = reinterpret_cast<byte_t const*>(member.vector.data());
-        bool casted = cast(punned_vector, dimensions_, (byte_t*)reconstructed);
+        bool casted = cast(punned_vector, scalar_words_, (byte_t*)reconstructed);
         if (!casted)
             std::memcpy(reconstructed, punned_vector, casted_vector_bytes_);
         return true;

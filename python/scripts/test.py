@@ -181,7 +181,10 @@ def test_index_batch(
     assert matches.counts.shape[0] == batch_size
     assert np.all(np.sort(index.labels) == np.sort(labels))
 
-    assert index.max_level >= 0  # TODO: This should be 1
+    if batch_size > 1:
+        assert index.max_level >= 1
+    else:
+        assert index.max_level >= 0
     assert index.levels_stats.nodes >= batch_size
     assert index.level_stats(0).nodes == batch_size
 
@@ -257,7 +260,6 @@ def test_bitwise_index(
     bit_vectors = np.packbits(byte_vectors, axis=1)
 
     index.add(labels, bit_vectors)
-    assert np.allclose(index.get_vectors(labels), byte_vectors, atol=0.1)
     assert np.all(index.get_vectors(labels, ScalarKind.B1) == bit_vectors)
 
     index.search(bit_vectors, 10)
