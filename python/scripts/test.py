@@ -100,22 +100,24 @@ def test_index(
     vector = random_vectors(count=1, ndim=ndim, dtype=numpy_type).flatten()
     index.add(42, vector)
 
-    assert 42 in index
-    assert 42 in index.labels
-    assert 43 not in index
-    assert index[42] is not None
-    assert index[43] is None
+    assert len(index) == 1, "Size after addition"
+    assert 42 in index, "Presense in the index"
+    assert 42 in index.labels, "Presence among labels"
+    assert 43 not in index, "Presense in the index, false positive"
+    assert index[42] is not None, "Vector recovery"
+    assert index[43] is None, "Vector recovery, false positive"
     assert len(index[42]) == ndim
     if numpy_type != np.byte:
         assert np.allclose(index[42], vector, atol=0.1)
 
     matches = index.search(vector, 10)
-    assert len(index) == 1
-    assert len(matches.labels) == len(matches.distances)
-    assert len(matches.labels) == 1
+    assert len(matches.labels) == 1, "Number of matches"
+    assert len(matches.labels) == len(matches.distances), "Symmetric match subarrays"
+    assert len({match.label for match in matches}) == 1, "Iteration over matches"
     assert matches[0].label == 42
     assert matches[0].distance == pytest.approx(0, abs=1e-3)
 
+    # Validating the index structure and metadata:
     assert index.max_level >= 0
     assert index.levels_stats.nodes >= 1
     assert index.level_stats(0).nodes == 1
