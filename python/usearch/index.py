@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import math
 from typing import Optional, Union, NamedTuple, List, Iterable
+from dataclasses import dataclass
 
 import numpy as np
 from tqdm import tqdm
@@ -101,13 +102,14 @@ def _normalize_metric(metric):
 
     return metric
 
-
-class Match(NamedTuple):
+@dataclass
+class Match:
     label: int
     distance: float
 
 
-class Matches(NamedTuple):
+@dataclass
+class Matches:
     labels: np.ndarray
     distances: np.ndarray
 
@@ -115,10 +117,13 @@ class Matches(NamedTuple):
         return len(self.labels)
 
     def __getitem__(self, index: int) -> Match:
-        return Match(
-            label=self.labels[index],
-            distance=self.distances[index],
-        )
+        if isinstance(index, int) and index < len(self):
+            return Match(
+                label=self.labels[index],
+                distance=self.distances[index],
+            )
+        else:
+            raise IndexError(f"`index` must be an integer under {len(self)}")
 
     def to_list(self) -> List[tuple]:
         return [(int(l), float(d)) for l, d in zip(self.labels, self.distances)]
@@ -127,7 +132,8 @@ class Matches(NamedTuple):
         return f"usearch.Matches({len(self)})"
 
 
-class BatchMatches(NamedTuple):
+@dataclass
+class BatchMatches:
     labels: np.ndarray
     distances: np.ndarray
     counts: np.ndarray
@@ -136,10 +142,13 @@ class BatchMatches(NamedTuple):
         return len(self.counts)
 
     def __getitem__(self, index: int) -> Matches:
-        return Matches(
-            labels=self.labels[index, : self.counts[index]],
-            distances=self.distances[index, : self.counts[index]],
-        )
+        if isinstance(index, int) and index < len(self):
+            return Matches(
+                labels=self.labels[index, : self.counts[index]],
+                distances=self.distances[index, : self.counts[index]],
+            )
+        else:
+            raise IndexError(f"`index` must be an integer under {len(self)}")
 
     def to_list(self) -> List[List[tuple]]:
         lists = [self.__getitem__(row) for row in range(self.__len__())]
