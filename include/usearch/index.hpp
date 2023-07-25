@@ -1391,7 +1391,26 @@ struct file_head_result_t {
     }
 };
 
+using node_offsets_buffer_t = byte_t[16];
+
+/**
+ *  @brief  Serialized binary representations of the offsets of a index node.
+ *
+ *  It uses: 8 bytes for node head offset, and 8 bytes for vector offset.
+ */
+struct node_offsets_t {
+
+    using offset_t = std::uint64_t;
+
+    misaligned_ref_gt<offset_t> head;
+    misaligned_ref_gt<offset_t> vector;
+
+    node_offsets_t(byte_t* ptr) noexcept
+        : head(exchange(ptr, ptr + sizeof(offset_t))), vector(exchange(ptr, ptr + sizeof(offset_t))) {}
+};
+
 static_assert(sizeof(file_header_t) == 64, "File header should be exactly 64 bytes");
+static_assert(sizeof(node_offsets_buffer_t) == 16, "Node offsets should be exactly 8 bytes");
 
 /// @brief  C++17 and newer version deprecate the `std::result_of`
 template <typename metric_at, typename... args_at>
@@ -2423,7 +2442,31 @@ class index_gt {
         if (result.error)
             return result;
 
-        // Serialize node headers first
+        // Calculate total node sizes
+        typename node_offsets_t::offset_t total_node_bytes = 0;
+        for (std::size_t i = 0; i != state.size; ++i) {
+            node_t node = node_with_id_(i);
+            total_node_bytes += node_head_bytes_() + node_neighbors_bytes_(node);
+        }
+
+        // Firstly, serialize node offsets
+        node_offsets_buffer_t offsets_buffer{};
+        node_offsets_t offsets{offsets_buffer};
+        typename node_offsets_t::offset_t head_offset = state.size * sizeof(node_offsets_buffer_t);
+        typename node_offsets_t::offset_t vector_offset = head_offset + total_node_bytes;
+        for (std::size_t i = 0; i != state.size; ++i) {
+            offsets.head = head_offset;
+            offsets.vector = vector_offset;
+            write_chunk(&offsets_buffer[0], sizeof(node_offsets_buffer_t));
+            if (result.error)
+                return result;
+
+            node_t node = node_with_id_(i);
+            head_offset += node_head_bytes_() + node_neighbors_bytes_(node);
+            vector_offset += node_vector_bytes_(node);
+        }
+
+        // Then, serialize node headers
         for (std::size_t i = 0; i != state.size; ++i) {
             node_t node = node_with_id_(i);
             write_chunk(node.tape(), node_head_bytes_() + node_neighbors_bytes_(node));
@@ -2431,7 +2474,7 @@ class index_gt {
                 return result;
         }
 
-        // Then, serialize vectors into aligned address
+        // Finally, serialize vectors into aligned address
         std::size_t offset = std::ftell(file);
         std::fseek(file, config_.vector_alignment - offset % config_.vector_alignment, SEEK_CUR);
         for (std::size_t i = 0; i != state.size; ++i) {
@@ -2502,6 +2545,9 @@ class index_gt {
             max_level_ = static_cast<level_t>(state.max_level);
             entry_id_ = static_cast<id_t>(state.entry_idx);
         }
+
+        // TODO: Skip offsets for now, it may used in the feature for parallel loading.
+        std::fseek(file, size_ * sizeof(node_offsets_buffer_t), SEEK_CUR);
 
         // Load node headers first
         for (std::size_t i = 0; i != size_; ++i) {
@@ -2635,8 +2681,10 @@ class index_gt {
             entry_id_ = static_cast<id_t>(state.entry_idx);
         }
 
-        // First, locate every node headers packed into file
-        std::size_t progress_bytes = sizeof(file_header_t);
+        // TODO: Skip offsets for now, it may used in the feature for parallel loading.
+        std::size_t progress_bytes = sizeof(file_header_t) + size_ * sizeof(node_offsets_buffer_t);
+
+        // First, locate every node headers packed into files
         for (std::size_t i = 0; i != size_; ++i) {
             byte_t* tape = (byte_t*)(file + progress_bytes);
             level_t level = misaligned_load<level_t>(tape + sizeof(label_t) + sizeof(dim_t));
