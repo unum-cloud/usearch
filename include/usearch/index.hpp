@@ -2704,14 +2704,12 @@ class index_gt {
         std::atomic<std::uint64_t> done_tasks{0};
         file_offset_t base_offset = sizeof(file_header_t);
         file_offset_t nodes_base_offset = base_offset + size_ * sizeof(node_offsets_buffer_t);
-        auto task = [&](std::size_t thread_idx, std::size_t task_idx) {
+        auto task = [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
             node_offsets_t offsets{file + base_offset + task_idx * sizeof(node_offsets_buffer_t)};
             byte_t* tape = file + nodes_base_offset + offsets.head;
             byte_t* vector = file + nodes_base_offset + offsets.vector;
             nodes_[task_idx] = node_t{tape, (scalar_t*)vector};
-            ++done_tasks;
-            if (thread_idx == 0)
-                progress(done_tasks, size_);
+            progress(++done_tasks, size_);
         };
         executor.execute_bulk(size_, task);
 
