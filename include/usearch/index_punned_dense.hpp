@@ -704,6 +704,10 @@ class index_punned_dense_gt {
 
     template <typename scalar_at>
     add_result_t add_(label_t label, scalar_at const* vector, add_config_t config, cast_t const& cast) {
+
+        if (contains(label))
+            return add_result_t{}.failed("Duplicate labels not allowed in high-level wrappers");
+
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
         std::size_t vector_bytes = scalar_words_ * sizeof(scalar_at);
 
