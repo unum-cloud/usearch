@@ -2083,6 +2083,27 @@ class index_gt {
             node_t node = index_.node_with_id_(candidate.id);
             return {member_cref_t{node.label(), node.vector_view(), candidate.id}, candidate.distance};
         }
+        inline std::size_t merge_into(              //
+            label_t* labels, distance_t* distances, //
+            std::size_t old_count, std::size_t max_count) const noexcept {
+
+            std::size_t merged_count = old_count;
+            for (std::size_t i = 0; i != count; ++i) {
+                match_t result = operator[](i);
+                auto merged_end = distances + merged_count;
+                auto offset = std::lower_bound(distances, merged_end, result.distance) - distances;
+                if (offset == max_count)
+                    continue;
+
+                std::size_t count_worse = merged_count - offset - (max_count == merged_count);
+                std::memmove(labels + offset + 1, labels + offset, count_worse * sizeof(label_t));
+                std::memmove(distances + offset + 1, distances + offset, count_worse * sizeof(distance_t));
+                labels[merged_count] = result.member.label;
+                distances[merged_count] = result.distance;
+                merged_count += 1;
+            }
+            return merged_count;
+        }
         inline std::size_t dump_to(label_t* labels, distance_t* distances) const noexcept {
             for (std::size_t i = 0; i != count; ++i) {
                 match_t result = operator[](i);

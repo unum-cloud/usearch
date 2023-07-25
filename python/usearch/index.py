@@ -12,9 +12,11 @@ from dataclasses import dataclass
 import numpy as np
 from tqdm import tqdm
 
-from usearch.compiled import Index as _CompiledIndex, IndexMetadata, IndexStats
+from usearch.compiled import Index as _CompiledIndex
+from usearch.compiled import Indexes as _CompiledIndexes
 from usearch.compiled import SparseIndex as _CompiledSetsIndex
 
+from usearch.compiled import IndexMetadata, IndexStats
 from usearch.compiled import MetricKind, ScalarKind, MetricSignature
 from usearch.compiled import (
     DEFAULT_CONNECTIVITY,
@@ -101,6 +103,136 @@ def _normalize_metric(metric):
         return _normalize[metric.lower()]
 
     return metric
+
+
+def _search_in_compiled(
+    *,
+    compiled: Union[_CompiledIndex, _CompiledIndexes],
+    vectors: np.ndarray,
+    k: int,
+    threads: int,
+    exact: bool,
+    log: Union[str, bool],
+    batch_size: int,
+) -> Union[Matches, BatchMatches]:
+    #
+    assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
+    assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
+    if vectors.ndim == 1:
+        vectors = vectors.reshape(1, len(vectors))
+    count_vectors = vectors.shape[0]
+
+    def distil_batch(batch_matches: BatchMatches) -> Union[BatchMatches, Matches]:
+        return batch_matches[0] if count_vectors == 1 else batch_matches
+
+    if log and batch_size == 0:
+        batch_size = int(math.ceil(count_vectors / 100))
+
+    if batch_size:
+        tasks = [
+            vectors[start_row : start_row + batch_size, :]
+            for start_row in range(0, count_vectors, batch_size)
+        ]
+        tasks_matches = []
+        name = log if isinstance(log, str) else "Search"
+        pbar = tqdm(
+            tasks,
+            desc=name,
+            total=count_vectors,
+            unit="vector",
+            disable=log is False,
+        )
+        for vectors in tasks:
+            tuple_ = compiled.search(
+                vectors,
+                k,
+                exact=exact,
+                threads=threads,
+            )
+            tasks_matches.append(BatchMatches(*tuple_))
+            pbar.update(vectors.shape[0])
+
+        pbar.close()
+        return distil_batch(
+            BatchMatches(
+                labels=np.vstack([m.labels for m in tasks_matches]),
+                distances=np.vstack([m.distances for m in tasks_matches]),
+                counts=np.concatenate([m.counts for m in tasks_matches], axis=None),
+            )
+        )
+
+    else:
+        tuple_ = compiled.search(
+            vectors,
+            k,
+            exact=exact,
+            threads=threads,
+        )
+        return distil_batch(BatchMatches(*tuple_))
+
+
+def _add_to_compiled(
+    *,
+    compiled,
+    labels,
+    vectors,
+    copy: bool,
+    threads: int,
+    log: Union[str, bool],
+    batch_size: int,
+) -> Union[int, np.ndarray]:
+    assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
+    assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
+    if vectors.ndim == 1:
+        vectors = vectors.reshape(1, len(vectors))
+
+    # Validate or generate the labels
+    count_vectors = vectors.shape[0]
+    generate_labels = labels is None
+    if generate_labels:
+        start_id = len(compiled)
+        labels = np.arange(start_id, start_id + count_vectors, dtype=Label)
+    else:
+        if not isinstance(labels, Iterable):
+            assert count_vectors == 1, "Each vector must have a label"
+            labels = [labels]
+        labels = np.array(labels).astype(Label)
+
+    assert len(labels) == count_vectors
+
+    # If logging is requested, and batch size is undefined, set it to grow 1% at a time:
+    if log and batch_size == 0:
+        batch_size = int(math.ceil(count_vectors / 100))
+
+    # Split into batches and log progress, if needed
+    if batch_size:
+        labels = [
+            labels[start_row : start_row + batch_size]
+            for start_row in range(0, count_vectors, batch_size)
+        ]
+        vectors = [
+            vectors[start_row : start_row + batch_size, :]
+            for start_row in range(0, count_vectors, batch_size)
+        ]
+        tasks = zip(labels, vectors)
+        name = log if isinstance(log, str) else "Add"
+        pbar = tqdm(
+            tasks,
+            desc=name,
+            total=count_vectors,
+            unit="vector",
+            disable=log is False,
+        )
+        for labels, vectors in tasks:
+            compiled.add(labels, vectors, copy=copy, threads=threads)
+            pbar.update(len(labels))
+
+        pbar.close()
+
+    else:
+        compiled.add(labels, vectors, copy=copy, threads=threads)
+
+    return labels
 
 
 @dataclass
@@ -352,58 +484,15 @@ class Index:
         :return: Inserted label or labels
         :type: Union[int, np.ndarray]
         """
-        assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
-        assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
-        if vectors.ndim == 1:
-            vectors = vectors.reshape(1, len(vectors))
-
-        # Validate or generate the labels
-        count_vectors = vectors.shape[0]
-        generate_labels = labels is None
-        if generate_labels:
-            start_id = len(self._compiled)
-            labels = np.arange(start_id, start_id + count_vectors, dtype=Label)
-        else:
-            if not isinstance(labels, Iterable):
-                assert count_vectors == 1, "Each vector must have a label"
-                labels = [labels]
-            labels = np.array(labels).astype(Label)
-
-        assert len(labels) == count_vectors
-
-        # If logging is requested, and batch size is undefined, set it to grow 1% at a time:
-        if log and batch_size == 0:
-            batch_size = int(math.ceil(count_vectors / 100))
-
-        # Split into batches and log progress, if needed
-        if batch_size:
-            labels = [
-                labels[start_row : start_row + batch_size]
-                for start_row in range(0, count_vectors, batch_size)
-            ]
-            vectors = [
-                vectors[start_row : start_row + batch_size, :]
-                for start_row in range(0, count_vectors, batch_size)
-            ]
-            tasks = zip(labels, vectors)
-            name = log if isinstance(log, str) else "Add"
-            pbar = tqdm(
-                tasks,
-                desc=name,
-                total=count_vectors,
-                unit="vector",
-                disable=log is False,
-            )
-            for labels, vectors in tasks:
-                self._compiled.add(labels, vectors, copy=copy, threads=threads)
-                pbar.update(len(labels))
-
-            pbar.close()
-
-        else:
-            self._compiled.add(labels, vectors, copy=copy, threads=threads)
-
-        return labels
+        return _add_to_compiled(
+            compiled=self._compiled,
+            labels=labels,
+            vectors=vectors,
+            copy=copy,
+            threads=threads,
+            log=log,
+            batch_size=batch_size,
+        )
 
     def search(
         self,
@@ -434,59 +523,15 @@ class Index:
         :rtype: Union[Matches, BatchMatches]
         """
 
-        assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
-        assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
-        if vectors.ndim == 1:
-            vectors = vectors.reshape(1, len(vectors))
-        count_vectors = vectors.shape[0]
-
-        def distil_batch(batch_matches: BatchMatches) -> Union[BatchMatches, Matches]:
-            return batch_matches[0] if count_vectors == 1 else batch_matches
-
-        if log and batch_size == 0:
-            batch_size = int(math.ceil(count_vectors / 100))
-
-        if batch_size:
-            tasks = [
-                vectors[start_row : start_row + batch_size, :]
-                for start_row in range(0, count_vectors, batch_size)
-            ]
-            tasks_matches = []
-            name = log if isinstance(log, str) else "Search"
-            pbar = tqdm(
-                tasks,
-                desc=name,
-                total=count_vectors,
-                unit="vector",
-                disable=log is False,
-            )
-            for vectors in tasks:
-                tuple_ = self._compiled.search(
-                    vectors,
-                    k,
-                    exact=exact,
-                    threads=threads,
-                )
-                tasks_matches.append(BatchMatches(*tuple_))
-                pbar.update(vectors.shape[0])
-
-            pbar.close()
-            return distil_batch(
-                BatchMatches(
-                    labels=np.vstack([m.labels for m in tasks_matches]),
-                    distances=np.vstack([m.distances for m in tasks_matches]),
-                    counts=np.concatenate([m.counts for m in tasks_matches], axis=None),
-                )
-            )
-
-        else:
-            tuple_ = self._compiled.search(
-                vectors,
-                k,
-                exact=exact,
-                threads=threads,
-            )
-            return distil_batch(BatchMatches(*tuple_))
+        return _search_in_compiled(
+            compiled=self._compiled,
+            vectors=vectors,
+            k=k,
+            exact=exact,
+            threads=threads,
+            log=log,
+            batch_size=batch_size,
+        )
 
     def remove(
         self,
@@ -752,4 +797,32 @@ class Index:
                 f"-- max level: {self.max_level}",
                 *level_stats,
             ]
+        )
+
+
+class Indexes:
+    def __init__(self, indexes: Iterable[Index]) -> None:
+        self._compiled = _CompiledIndexes()
+        for index in indexes:
+            self._compiled.add(index._compiled)
+
+    def add(self, index: Index):
+        self._compiled.add(index._compiled)
+
+    def search(
+        self,
+        vectors,
+        k: int = 10,
+        *,
+        threads: int = 0,
+        exact: bool = False,
+    ):
+        return _search_in_compiled(
+            compiled=self._compiled,
+            vectors=vectors,
+            k=k,
+            exact=exact,
+            threads=threads,
+            log=False,
+            batch_size=None,
         )

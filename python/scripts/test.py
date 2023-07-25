@@ -8,6 +8,7 @@ from usearch.eval import random_vectors
 
 from usearch.index import (
     Index,
+    Indexes,
     SparseIndex,
     MetricKind,
     ScalarKind,
@@ -245,6 +246,20 @@ def test_exact_recall(
     mapping: dict = index.join(index_copy, exact=True)
     for man, woman in mapping.items():
         assert man == woman, "Stable marriage failed"
+
+
+def test_indexes():
+    ndim = 10
+    index_a = Index(ndim=ndim)
+    index_b = Index(ndim=ndim)
+
+    vectors = random_vectors(count=3, ndim=ndim)
+    index_a.add(42, vectors[0])
+    index_b.add(43, vectors[1])
+
+    indexes = Indexes([index_a, index_b])
+    matches = indexes.search(vectors[2], 10)
+    assert len(matches) == 2
 
 
 @pytest.mark.parametrize("bits", dimensions)
