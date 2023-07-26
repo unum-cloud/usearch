@@ -103,12 +103,31 @@ def _normalize_metric(metric):
 
 
 class Matches(NamedTuple):
+    """A class whose instances store information of retrieved vectors.
+
+    :param labels: An array containing the labels of the nearest neighbor vectors
+    :type labels: np.ndarray
+
+    :param distances: An array containing the distances to the nearest neighbor vectors
+    :type distances: np.ndarray
+
+    :param counts: The number of matches found for each query vector. It can be either an integer (for a single query) 
+                  or an array (for multiple queries)
+    :type counts: Union[np.ndarray, int]
+    """
+   
     labels: np.ndarray
     distances: np.ndarray
     counts: Union[np.ndarray, int]
 
     @property
     def is_multiple(self) -> bool:
+        """Returns True if the Matches instance contains results from multiple queries.
+
+        :return: Indicator of multiple queries
+        :rtype: bool
+        """
+
         return isinstance(self.counts, np.ndarray)
 
     @property
@@ -117,9 +136,25 @@ class Matches(NamedTuple):
 
     @property
     def total_matches(self) -> int:
+        """Returns the total number of matches across all queries.
+
+        :return: The total number of matches
+        :rtype: int
+        """
+
         return np.sum(self.counts)
 
     def to_list(self, row: Optional[int] = None) -> Union[List[dict], List[List[dict]]]:
+        """Converts the Matches instance to a list of dictionaries containing label and distance information.
+                     - If it's a single query (not multiple), row should be None, and it exports the results for that query.
+                     - If it's a multiple-query result, it returns a list of dictionaries for each query.
+        
+        :param row: The index of query for which converting is required
+        :type row: Optional[int]
+        :return: Converted matches information
+        :rtype: Union[List[dict], List[List[dict]]]
+        """
+
         if not self.is_multiple:
             assert row is None, "Exporting a single sequence is only for batch requests"
             labels = self.labels
@@ -139,10 +174,25 @@ class Matches(NamedTuple):
         ]
 
     def recall_first(self, expected: np.ndarray) -> float:
+        """Calculates the percentage of expected labels found among the first nearest neighbors.
+
+        :param expected: An array containing the expected labels for each query
+        :type expected: np.ndarray
+        :return: Recall@1
+        :rtype: float
+        """
+
         best_matches = self.labels if not self.is_multiple else self.labels[:, 0]
         return np.sum(best_matches == expected) / len(expected)
 
     def recall(self, expected: np.ndarray) -> float:
+        """Calculates the percentage of expected labels found among all nearest neighbors.
+
+        :param expected: An array containing the expected labels for each query
+        :return: Recall
+        :rtype: float
+        """
+
         assert len(expected) == self.batch_size
         recall = 0
         for i in range(self.batch_size):
