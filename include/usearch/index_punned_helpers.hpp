@@ -45,6 +45,72 @@
 namespace unum {
 namespace usearch {
 
+using f64_t = double;
+using f32_t = float;
+enum b1x8_t : unsigned char {};
+
+enum class metric_kind_t : std::uint8_t {
+    unknown_k = 0,
+    // Classics:
+    ip_k = 'i',
+    cos_k = 'c',
+    l2sq_k = 'e',
+
+    // Custom:
+    pearson_k = 'p',
+    haversine_k = 'h',
+
+    // Sets:
+    jaccard_k = 'j',
+    hamming_k = 'b',
+    tanimoto_k = 't',
+    sorensen_k = 's',
+};
+
+enum class scalar_kind_t : std::uint8_t {
+    unknown_k = 0,
+    // Custom:
+    b1x8_k,
+    u40_k,
+    uuid_k,
+    // Common:
+    f64_k,
+    f32_k,
+    f16_k,
+    f8_k,
+    // Common Integral:
+    u64_k,
+    u32_k,
+    u16_k,
+    u8_k,
+    i64_k,
+    i32_k,
+    i16_k,
+    i8_k,
+};
+
+enum class isa_t {
+    auto_k,
+    neon_k,
+    sve_k,
+    avx2_k,
+    avx512_k,
+};
+
+template <typename scalar_at> scalar_kind_t common_scalar_kind() noexcept {
+    if (std::is_same<scalar_at, f32_t>())
+        return scalar_kind_t::f32_k;
+    if (std::is_same<scalar_at, f64_t>())
+        return scalar_kind_t::f64_k;
+    if (std::is_same<scalar_at, b1x8_t>())
+        return scalar_kind_t::b1x8_k;
+    return scalar_kind_t::unknown_k;
+}
+
+template <typename at> at angle_to_radians(at angle) noexcept { return angle * at(3.14159265358979323846) / at(180); }
+
+template <typename at> at square(at value) noexcept { return value * value; }
+
 template <typename at, typename compare_at> inline at clamp(at v, at lo, at hi, compare_at comp) noexcept {
     return comp(v, lo) ? lo : comp(hi, v) ? hi : v;
 }
@@ -56,14 +122,6 @@ inline bool str_equals(char const* begin, std::size_t len, char const* other_beg
     std::size_t other_len = std::strlen(other_begin);
     return len == other_len && std::strncmp(begin, other_begin, len) == 0;
 }
-
-enum class isa_t {
-    auto_k,
-    neon_k,
-    sve_k,
-    avx2_k,
-    avx512_k,
-};
 
 inline char const* isa_name(isa_t isa) noexcept {
     switch (isa) {
@@ -669,6 +727,308 @@ template <typename to_scalar_at> struct cast_gt<b1x8_t, to_scalar_at> {
         for (std::size_t i = 0; i != dimensions; ++i)
             typed_output[i] = bool(typed_input[i / CHAR_BIT] & (128 >> (i & (CHAR_BIT - 1))));
         return true;
+    }
+};
+
+/**
+ *  @brief  Inner (Dot) Product distance.
+ */
+template <typename scalar_at = float, typename result_at = scalar_at> struct ip_gt {
+    using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
+    using result_t = result_at;
+    using result_type = result_t;
+
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::ip_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
+    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
+
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
+        result_type ab{};
+#if USEARCH_USE_OPENMP
+#pragma omp simd reduction(+ : ab)
+#elif defined(USEARCH_DEFINED_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_DEFINED_GCC)
+#pragma GCC ivdep
+#endif
+        for (std::size_t i = 0; i != dim; ++i)
+            ab += result_t(a[i]) * result_t(b[i]);
+        return 1 - ab;
+    }
+};
+
+/**
+ *  @brief  Cosine (Angular) distance.
+ *          Identical to the Inner Product of normalized vectors.
+ *          Unless you are running on an tiny embedded platform, this metric
+ *          is recommended over `::ip_gt` for low-precision scalars.
+ */
+template <typename scalar_at = float, typename result_at = scalar_at> struct cos_gt {
+    using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
+    using result_t = result_at;
+    using result_type = result_t;
+
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::cos_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
+    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
+
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
+        result_t ab{}, a2{}, b2{};
+#if USEARCH_USE_OPENMP
+#pragma omp simd reduction(+ : ab, a2, b2)
+#elif defined(USEARCH_DEFINED_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_DEFINED_GCC)
+#pragma GCC ivdep
+#endif
+        for (std::size_t i = 0; i != dim; ++i)
+            ab += result_t(a[i]) * result_t(b[i]), //
+                a2 += square<result_t>(a[i]),      //
+                b2 += square<result_t>(b[i]);
+        return (ab != 0) ? (1 - ab / (std::sqrt(a2) * std::sqrt(b2))) : 1;
+    }
+};
+
+/**
+ *  @brief  Squared Euclidean (L2) distance.
+ *          Square root is avoided at the end, as it won't affect the ordering.
+ */
+template <typename scalar_at = float, typename result_at = scalar_at> struct l2sq_gt {
+    using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
+    using result_t = result_at;
+    using result_type = result_t;
+
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::l2sq_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
+    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
+
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
+        result_t ab_deltas_sq{};
+#if USEARCH_USE_OPENMP
+#pragma omp simd reduction(+ : ab_deltas_sq)
+#elif defined(USEARCH_DEFINED_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_DEFINED_GCC)
+#pragma GCC ivdep
+#endif
+        for (std::size_t i = 0; i != dim; ++i)
+            ab_deltas_sq += square(result_t(a[i]) - result_t(b[i]));
+        return ab_deltas_sq;
+    }
+};
+
+/**
+ *  @brief  Hamming distance computes the number of differing bits in
+ *          two arrays of integers. An example would be a textual document,
+ *          tokenized and hashed into a fixed-capacity bitset.
+ */
+template <typename scalar_at = std::uint64_t, typename result_at = std::size_t> struct hamming_gt {
+    using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
+    using result_t = result_at;
+    using result_type = result_t;
+    static_assert( //
+        std::is_unsigned<scalar_t>::value ||
+            (std::is_enum<scalar_t>::value && std::is_unsigned<typename std::underlying_type<scalar_t>::type>::value),
+        "Hamming distance requires unsigned integral words");
+
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::hamming_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
+    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
+
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
+        constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
+        result_t matches{};
+#if USEARCH_USE_OPENMP
+#pragma omp simd reduction(+ : matches)
+#elif defined(USEARCH_DEFINED_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_DEFINED_GCC)
+#pragma GCC ivdep
+#endif
+        for (std::size_t i = 0; i != words; ++i)
+            matches += std::bitset<bits_per_word_k>(a[i] ^ b[i]).count();
+        return matches;
+    }
+};
+
+/**
+ *  @brief  Tanimoto distance is the intersection over bitwise union.
+ *          Often used in chemistry and biology to compare molecular fingerprints.
+ */
+template <typename scalar_at = std::uint64_t, typename result_at = float> struct tanimoto_gt {
+    using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
+    using result_t = result_at;
+    using result_type = result_t;
+    static_assert( //
+        std::is_unsigned<scalar_t>::value ||
+            (std::is_enum<scalar_t>::value && std::is_unsigned<typename std::underlying_type<scalar_t>::type>::value),
+        "Tanimoto distance requires unsigned integral words");
+    static_assert(std::is_floating_point<result_t>::value, "Tanimoto distance will be a fraction");
+
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::tanimoto_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
+    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
+
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
+        constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
+        result_t and_count{};
+        result_t or_count{};
+#if USEARCH_USE_OPENMP
+#pragma omp simd reduction(+ : and_count, or_count)
+#elif defined(USEARCH_DEFINED_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_DEFINED_GCC)
+#pragma GCC ivdep
+#endif
+        for (std::size_t i = 0; i != words; ++i)
+            and_count += std::bitset<bits_per_word_k>(a[i] & b[i]).count(),
+                or_count += std::bitset<bits_per_word_k>(a[i] | b[i]).count();
+        return 1 - result_t(and_count) / or_count;
+    }
+};
+
+/**
+ *  @brief  Sorensen-Dice or F1 distance is the intersection over bitwise union.
+ *          Often used in chemistry and biology to compare molecular fingerprints.
+ */
+template <typename scalar_at = std::uint64_t, typename result_at = float> struct sorensen_gt {
+    using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
+    using result_t = result_at;
+    using result_type = result_t;
+    static_assert( //
+        std::is_unsigned<scalar_t>::value ||
+            (std::is_enum<scalar_t>::value && std::is_unsigned<typename std::underlying_type<scalar_t>::type>::value),
+        "Sorensen-Dice distance requires unsigned integral words");
+    static_assert(std::is_floating_point<result_t>::value, "Sorensen-Dice distance will be a fraction");
+
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::sorensen_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
+    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
+
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
+        constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
+        result_t and_count{};
+        result_t any_count{};
+#if USEARCH_USE_OPENMP
+#pragma omp simd reduction(+ : and_count, any_count)
+#elif defined(USEARCH_DEFINED_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_DEFINED_GCC)
+#pragma GCC ivdep
+#endif
+        for (std::size_t i = 0; i != words; ++i)
+            and_count += std::bitset<bits_per_word_k>(a[i] & b[i]).count(),
+                any_count += std::bitset<bits_per_word_k>(a[i]).count() + std::bitset<bits_per_word_k>(b[i]).count();
+        return 1 - 2 * result_t(and_count) / any_count;
+    }
+};
+
+/**
+ *  @brief  Counts the number of matching elements in two unique sorted sets.
+ *          Can be used to compute the similarity between two textual documents
+ *          using the IDs of tokens present in them.
+ *          Similar to `tanimoto_gt` for dense representations.
+ */
+template <typename scalar_at = std::int32_t, typename result_at = float> struct jaccard_gt {
+    using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
+    using result_t = result_at;
+    using result_type = result_t;
+    static_assert(!std::is_floating_point<scalar_t>::value, "Jaccard distance requires integral scalars");
+
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::jaccard_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
+    inline result_t operator()(view_t a, view_t b) const noexcept {
+        return operator()(a.data(), b.data(), a.size(), b.size());
+    }
+
+    inline result_t operator()( //
+        scalar_t const* a, scalar_t const* b, std::size_t a_length, std::size_t b_length) const noexcept {
+        result_t intersection{};
+        std::size_t i{};
+        std::size_t j{};
+        while (i != a_length && j != b_length) {
+            intersection += a[i] == b[j];
+            i += a[i] < b[j];
+            j += a[i] >= b[j];
+        }
+        return 1 - intersection / (a_length + b_length - intersection);
+    }
+};
+
+/**
+ *  @brief  Counts the number of matching elements in two unique sorted sets.
+ *          Can be used to compute the similarity between two textual documents
+ *          using the IDs of tokens present in them.
+ */
+template <typename scalar_at = float, typename result_at = float> struct pearson_correlation_gt {
+    using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
+    using result_t = result_at;
+    using result_type = result_t;
+
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::pearson_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
+    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
+
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
+        result_t a_sum{}, b_sum{}, ab_sum{};
+        result_t a_sq_sum{}, b_sq_sum{};
+#if USEARCH_USE_OPENMP
+#pragma omp simd reduction(+ : a_sum, b_sum, ab_sum, a_sq_sum, b_sq_sum)
+#elif defined(USEARCH_DEFINED_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_DEFINED_GCC)
+#pragma GCC ivdep
+#endif
+        for (std::size_t i = 0; i != dim; ++i) {
+            a_sum += result_t(a[i]);
+            b_sum += result_t(b[i]);
+            ab_sum += result_t(a[i]) * result_t(b[i]);
+            a_sq_sum += result_t(a[i]) * result_t(a[i]);
+            b_sq_sum += result_t(b[i]) * result_t(b[i]);
+        }
+        result_t denom = std::sqrt((dim * a_sq_sum - a_sum * a_sum) * (dim * b_sq_sum - b_sum * b_sum));
+        result_t corr = (dim * ab_sum - a_sum * b_sum) / denom;
+        return -corr;
+    }
+};
+
+/**
+ *  @brief  Haversine distance for the shortest distance between two nodes on
+ *          the surface of a 3D sphere, defined with latitude and longitude.
+ */
+template <typename scalar_at = float, typename result_at = scalar_at> struct haversine_gt {
+    using scalar_t = scalar_at;
+    using view_t = span_gt<scalar_t const>;
+    using result_t = result_at;
+    using result_type = result_t;
+    static_assert(!std::is_integral<scalar_t>::value, "Latitude and longitude must be floating-node");
+
+    inline metric_kind_t kind() const noexcept { return metric_kind_t::haversine_k; }
+    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
+
+    inline result_t operator()(scalar_t const* a, scalar_t const* b) const noexcept {
+        result_t lat_a = a[0], lon_a = a[1];
+        result_t lat_b = b[0], lon_b = b[1];
+
+        result_t lat_delta = angle_to_radians<result_t>(lat_b - lat_a);
+        result_t lon_delta = angle_to_radians<result_t>(lon_b - lon_a);
+
+        result_t converted_lat_a = angle_to_radians<result_t>(lat_a);
+        result_t converted_lat_b = angle_to_radians<result_t>(lat_b);
+
+        result_t x = //
+            square(std::sin(lat_delta / 2.f)) +
+            std::cos(converted_lat_a) * std::cos(converted_lat_b) * square(std::sin(lon_delta / 2.f));
+
+        return std::atan2(std::sqrt(x), std::sqrt(1.f - x));
     }
 };
 

@@ -44,7 +44,7 @@
 
 #include <simsimd/simsimd.h>
 
-#include <usearch/index_punned_dense.hpp>
+#include <usearch/index_dense.hpp>
 
 using namespace unum::usearch;
 using namespace unum;
@@ -552,7 +552,7 @@ void run_big_or_small(dataset_at& dataset, args_t const& args, index_config_t co
             run_typed<index_gt<ip_gt<float>, label_t, neighbor_id_at>>(dataset, args, config, limits);
         }
     } else
-        run_punned<index_punned_dense_gt<label_t, neighbor_id_at>>(dataset, args, config, limits);
+        run_punned<index_dense_gt<label_t, neighbor_id_at>>(dataset, args, config, limits);
 }
 
 void report_alternative_setups() {
@@ -648,7 +648,7 @@ int main(int argc, char** argv) {
     }
 
 #if USEARCH_USE_OPENMP
-    // Instead of relying on `multithreaded` from "index_punned_dense.hpp" we will use OpenMP
+    // Instead of relying on `multithreaded` from "index_dense.hpp" we will use OpenMP
     // to better estimate statistics between tasks batches, without having to recreate
     // the threads.
     omp_set_dynamic(true);

@@ -140,20 +140,28 @@ def test_index(
     assert len(index) == 0
     index.add(42, vector)
     assert len(index) == 1
-    matches = index.search(vector, 10)
+    matches: Matches = index.search(vector, 10)
     assert len(matches) == 1
+
+    index_copy = index.copy()
+    assert len(index_copy) == 1
+    assert len(index_copy[42]) == ndim
+    matches_copy: Matches = index_copy.search(vector, 10)
+    assert np.all(matches_copy.labels == matches.labels)
 
     index.load("tmp.usearch")
     assert len(index) == 1
     assert len(index[42]) == ndim
 
-    index = Index.restore("tmp.usearch")
+    matches_loaded: Matches = index.search(vector, 10)
+    assert np.all(matches_loaded.labels == matches.labels)
+
+    index = Index.restore("tmp.usearch", view=True)
     assert len(index) == 1
     assert len(index[42]) == ndim
 
-    index_copy = index.copy()
-    assert len(index_copy) == 1
-    assert len(index_copy[42]) == ndim
+    matches_viewed: Matches = index.search(vector, 10)
+    assert np.all(matches_viewed.labels == matches.labels)
 
     # Cleanup
     os.remove("tmp.usearch")
@@ -200,9 +208,19 @@ def test_index_batch(
     assert len(index) == batch_size
     assert len(index[0]) == ndim
 
-    index = Index.restore("tmp.usearch")
+    if batch_size > 1:
+        matches_loaded: BatchMatches = index.search(vectors, 10, threads=2)
+        for idx in range(len(matches_loaded)):
+            assert np.all(matches_loaded[idx].labels == matches[idx].labels)
+
+    index = Index.restore("tmp.usearch", view=True)
     assert len(index) == batch_size
     assert len(index[0]) == ndim
+
+    if batch_size > 1:
+        matches_viewed: BatchMatches = index.search(vectors, 10, threads=2)
+        for idx in range(len(matches_viewed)):
+            assert np.all(matches_viewed[idx].labels == matches[idx].labels)
 
     # Cleanup
     os.remove("tmp.usearch")
@@ -292,3 +310,7 @@ def test_sets_index(connectivity: int):
     index.add(11, np.array([11, 12, 15, 16], dtype=np.uint32))
     results = index.search(np.array([12, 15], dtype=np.uint32), 10)
     assert list(results) == [10, 11]
+
+
+if __name__ == "__main__":
+    pytest.main(args=["python/scripts/test.py", "-s", "-x", "-v"])

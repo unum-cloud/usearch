@@ -153,6 +153,9 @@
     "python.testing.pytestArgs": [
         "python"
     ],
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingImports": "none"
+    },
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true
 }

@@ -1,9 +1,9 @@
 #include "WolframLibrary.h"
-#include <usearch/index_punned_dense.hpp>
+#include <usearch/index_dense.hpp>
 
 using namespace unum::usearch;
 
-using metric_t = index_punned_dense_metric_t;
+using metric_t = index_dense_metric_t;
 using distance_t = punned_distance_t;
 using index_t = punned_small_t;
 using vector_view_t = span_gt<float>;

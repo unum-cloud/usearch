@@ -45,7 +45,7 @@ Linux • MacOS • Windows • Docker • WebAssembly
 - ✅ [View large indexes from disk](#disk-based-indexes) without loading into RAM.
 - ✅ Space-efficient point-clouds with `uint40_t`, accommodating 4B+ size.
 - ✅ Compatible with OpenMP and custom "executors", for fine-grained control over CPU utilization.
-- ✅ On-the-fly deletions.
+- ✅ Heterogeneous lookups, renaming/relabeleing, and on-the-fly deletions.
 - ✅ [Semantic Search](#usearch--ai--multi-modal-semantic-search) and [Joins](#joins).
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/index.hpp

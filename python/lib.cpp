@@ -21,7 +21,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include <usearch/index_punned_dense.hpp>
+#include <usearch/index_dense.hpp>
 
 using namespace unum::usearch;
 using namespace unum;
@@ -41,7 +41,7 @@ namespace py = pybind11;
 using py_shape_t = py::array::ShapeContainer;
 using label_t = typename punned_small_t::label_t;
 using id_t = typename punned_small_t::id_t;
-using metric_t = index_punned_dense_metric_t;
+using metric_t = index_dense_metric_t;
 using distance_t = punned_distance_t;
 using dense_index_t = punned_small_t;
 using dense_add_result_t = typename dense_index_t::add_result_t;

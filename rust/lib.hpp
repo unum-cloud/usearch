@@ -3,14 +3,14 @@
 
 #include <memory> // `std::shared_ptr`
 
-#include <usearch/index_punned_dense.hpp>
+#include <usearch/index_dense.hpp>
 
 struct Matches;
 struct IndexOptions;
 
 class Index {
   public:
-    using metric_t = unum::usearch::index_punned_dense_metric_t;
+    using metric_t = unum::usearch::index_dense_metric_t;
     using distance_t = unum::usearch::punned_distance_t;
     using index_t = unum::usearch::punned_small_t;
     using add_result_t = typename index_t::add_result_t;

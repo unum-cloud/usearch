@@ -10,7 +10,7 @@
 #include <usearch/index.hpp>
 #include <usearch/index_punned_helpers.hpp>
 
-#include <tsl/robin_map.h>
+#include <tsl/robin_set.h>
 
 namespace unum {
 namespace usearch {
@@ -63,7 +63,7 @@ struct l2sq_f8_t {
     }
 };
 
-struct index_punned_dense_metric_t {
+struct index_dense_metric_t {
     using scalar_t = byte_t;
     using result_t = punned_distance_t;
     using view_t = punned_vector_view_t;
@@ -74,14 +74,13 @@ struct index_punned_dense_metric_t {
     scalar_kind_t scalar_kind_ = scalar_kind_t::unknown_k;
     isa_t isa_ = isa_t::auto_k;
 
-    index_punned_dense_metric_t() = default;
+    index_dense_metric_t() = default;
 
     template <typename typed_at, typename scalar_at = typename typed_at::scalar_t>
-    index_punned_dense_metric_t(typed_at typed)
-        : index_punned_dense_metric_t(typed.kind(), isa_t::auto_k, scalar_at{}, typed) {}
+    index_dense_metric_t(typed_at typed) : index_dense_metric_t(typed.kind(), isa_t::auto_k, scalar_at{}, typed) {}
 
     template <typename typed_at, typename scalar_at>
-    index_punned_dense_metric_t(metric_kind_t kind, isa_t isa, scalar_at, typed_at metric) {
+    index_dense_metric_t(metric_kind_t kind, isa_t isa, scalar_at, typed_at metric) {
         using scalar_t = scalar_at;
         using typed_view_t = span_gt<scalar_t const>;
         func_ = [=](view_t a, view_t b) -> result_t {
@@ -126,25 +125,93 @@ label_at default_free_value() {
 }
 
 /**
+ *  @brief  The "magic" sequence helps infer the type of the file.
+ *          USearch indexes start with the "usearch" string.
+ */
+constexpr char const* default_magic() { return "usearch"; }
+
+using index_dense_head_buffer_t = byte_t[64];
+
+static_assert(sizeof(index_dense_head_buffer_t) == 64, "File header should be exactly 64 bytes");
+
+/**
+ *  @brief  Serialized binary representations of the USearch index start with metadata.
+ *          Metadata is parsed into a `index_dense_head_t`, containing the USearch package version,
+ *          and the properties of the index.
+ *
+ *  It uses: 13 bytes for file versioning, 22 bytes for structural information = 35 bytes.
+ *  The following 24 bytes contain binary size of the graph, of the vectors, and the checksum,
+ *  leaving 5 bytes at the end vacant.
+ */
+struct index_dense_head_t {
+
+    // Versioning:
+    using magic_t = char[7];
+    using version_t = std::uint16_t;
+
+    // Versioning: 7 + 2 * 3 = 13 bytes
+    char const* magic;
+    misaligned_ref_gt<version_t> version_major;
+    misaligned_ref_gt<version_t> version_minor;
+    misaligned_ref_gt<version_t> version_patch;
+
+    // Structural: 4 * 3 bytes
+    misaligned_ref_gt<metric_kind_t> type_metric;
+    misaligned_ref_gt<scalar_kind_t> type_scalar;
+    misaligned_ref_gt<scalar_kind_t> type_label;
+    misaligned_ref_gt<scalar_kind_t> type_id;
+
+    index_dense_head_t(byte_t* ptr) noexcept
+        : magic((char const*)exchange(ptr, ptr + sizeof(magic_t))), //
+          version_major(exchange(ptr, ptr + sizeof(version_t))),    //
+          version_minor(exchange(ptr, ptr + sizeof(version_t))),    //
+          version_patch(exchange(ptr, ptr + sizeof(version_t))),    //
+          type_metric(exchange(ptr, ptr + sizeof(metric_kind_t))),  //
+          type_scalar(exchange(ptr, ptr + sizeof(scalar_kind_t))),  //
+          type_label(exchange(ptr, ptr + sizeof(scalar_kind_t))),   //
+          type_id(exchange(ptr, ptr + sizeof(scalar_kind_t))) {}
+};
+
+struct index_dense_head_result_t {
+
+    index_dense_head_buffer_t buffer;
+    index_dense_head_t head;
+    error_t error;
+
+    explicit operator bool() const noexcept { return !error; }
+    index_dense_head_result_t failed(error_t message) noexcept {
+        error = std::move(message);
+        return std::move(*this);
+    }
+};
+
+struct index_dense_serialization_config_t {
+    bool copy_vectors = true;
+    bool use_32_bit_dimensions = true;
+};
+
+/**
  *  @brief  Oversimplified type-punned index for equidimensional vectors
  *          with automatic @b down-casting, hardware-specific @b SIMD metrics,
  *          and ability to @b remove existing vectors, common in Semantic Caching
  *          applications.
  */
-template <typename label_at = std::int64_t, typename id_at = std::uint32_t> //
-class index_punned_dense_gt {
+template <typename label_at = default_label_t, typename internal_id_at = default_internal_id_t> //
+class index_dense_gt {
   public:
     using label_t = label_at;
-    using id_t = id_at;
+    using internal_id_t = internal_id_at;
     using distance_t = punned_distance_t;
     /// @brief Punned metric object.
-    using metric_t = index_punned_dense_metric_t;
+    using metric_t = index_dense_metric_t;
 
   private:
     /// @brief Schema: input buffer, bytes in input buffer, output buffer.
     using cast_t = std::function<bool(byte_t const*, std::size_t, byte_t*)>;
     /// @brief Punned index.
-    using index_t = index_gt<metric_t, label_t, id_t, aligned_allocator_t, memory_mapping_allocator_gt<64>>;
+    using index_t = index_gt<             //
+        metric_t, label_t, internal_id_t, //
+        aligned_allocator_gt<byte_t, 64>, memory_mapping_allocator_gt<64>>;
     using index_allocator_t = aligned_allocator_gt<index_t, 64>;
 
     using member_iterator_t = typename index_t::member_iterator_t;
@@ -176,20 +243,43 @@ class index_punned_dense_gt {
         cast_t to_f64;
     } casts_;
 
+    /// @brief An instance of a potentially statefull `metric_t` used to initialize copies and forks.
     metric_t root_metric_;
 
+    /// @brief Allocator for the copied vectors, aligned to widest double-precision scalars.
+    memory_mapping_allocator_gt<8> vectors_allocator_;
+
+    /// @brief For every managed `internal_id_t` stores a pointer to the allocated vector copy.
+    mutable std::vector<byte_t*> vectors_lookup_;
+
+    /// @brief Originally forms and array of integers [0, threads], marking all
     mutable std::vector<std::size_t> available_threads_;
+
+    /// @brief Mutex, controlling concurrent access to `available_threads_`.
     mutable std::mutex available_threads_mutex_;
 
     using shared_mutex_t = std::mutex; // TODO: Find an OS-compatible solution
     using shared_lock_t = std::unique_lock<shared_mutex_t>;
     using unique_lock_t = std::unique_lock<shared_mutex_t>;
 
-    mutable shared_mutex_t labeled_lookup_mutex_;
-    tsl::robin_map<label_t, id_t> labeled_lookup_;
+    struct lookup_key_t {
+        label_t label;
+        internal_id_t id;
+    };
 
+    /// @brief Multi-Map from labels to IDs, and allocated vectors.
+    tsl::robin_set<lookup_key_t> labeled_lookup_;
+
+    /// @brief Mutex, controlling concurrent access to `labeled_lookup_`.
+    mutable shared_mutex_t labeled_lookup_mutex_;
+
+    /// @brief Ring-shaped queue of deleted entries, to be reused on future insertions.
+    ring_gt<internal_id_t> free_ids_;
+
+    /// @brief Mutex, controlling concurrent access to `free_ids_`.
     mutable std::mutex free_ids_mutex_;
-    ring_gt<id_t> free_ids_;
+
+    /// @brief A constant for the reserved label value, used to mark deleted entries.
     label_t free_label_;
 
   public:
@@ -200,8 +290,8 @@ class index_punned_dense_gt {
     using stats_t = typename index_t::stats_t;
     using match_t = typename index_t::match_t;
 
-    index_punned_dense_gt() = default;
-    index_punned_dense_gt(index_punned_dense_gt&& other)
+    index_dense_gt() = default;
+    index_dense_gt(index_dense_gt&& other)
         : dimensions_(std::move(other.dimensions_)),                   //
           scalar_words_(std::move(other.scalar_words_)),               //
           expansion_add_(std::move(other.expansion_add_)),             //
@@ -216,7 +306,7 @@ class index_punned_dense_gt {
           free_ids_(std::move(other.free_ids_)),                       //
           free_label_(std::move(other.free_label_)) {}                 //
 
-    index_punned_dense_gt& operator=(index_punned_dense_gt&& other) {
+    index_dense_gt& operator=(index_dense_gt&& other) {
         swap(other);
         return *this;
     }
@@ -225,7 +315,7 @@ class index_punned_dense_gt {
      *  @brief Swaps the contents of this index with another index.
      *  @param other The other index to swap with.
      */
-    void swap(index_punned_dense_gt& other) {
+    void swap(index_dense_gt& other) {
         std::swap(dimensions_, other.dimensions_);
         std::swap(scalar_words_, other.scalar_words_);
         std::swap(expansion_add_, other.expansion_add_);
@@ -241,7 +331,7 @@ class index_punned_dense_gt {
         std::swap(free_label_, other.free_label_);
     }
 
-    ~index_punned_dense_gt() {
+    ~index_dense_gt() {
         if (typed_)
             typed_->~index_t();
         index_allocator_t{}.deallocate(typed_, 1);
@@ -251,7 +341,7 @@ class index_punned_dense_gt {
     static index_config_t optimize(index_config_t config) { return index_t::optimize(config); }
 
     /**
-     *  @brief Constructs an instance of ::index_punned_dense_gt.
+     *  @brief Constructs an instance of ::index_dense_gt.
      *  @param[in] dimensions The of dimensions per vector.
      *  @param[in] metric One of the default supported metric @b kinds for distance measurements.
      *  @param[in] config The index configuration (optional).
@@ -259,9 +349,9 @@ class index_punned_dense_gt {
      *  @param[in] expansion_add The expansion factor for adding vectors (optional).
      *  @param[in] expansion_search The expansion factor for searching vectors (optional).
      *  @param[in] free_label The label used for freed vectors (optional).
-     *  @return An instance of ::index_punned_dense_gt.
+     *  @return An instance of ::index_dense_gt.
      */
-    static index_punned_dense_gt make(                             //
+    static index_dense_gt make(                                    //
         std::size_t dimensions, metric_kind_t metric,              //
         index_config_t config = {},                                //
         scalar_kind_t accuracy = scalar_kind_t::f32_k,             //
@@ -276,7 +366,7 @@ class index_punned_dense_gt {
     }
 
     /**
-     *  @brief Constructs an instance of ::index_punned_dense_gt.
+     *  @brief Constructs an instance of ::index_dense_gt.
      *  @param[in] dimensions The of dimensions per vector.
      *  @param[in] metric The @b ad-hoc metric wrapped for third-party distance measures.
      *  @param[in] config The index configuration (optional).
@@ -284,9 +374,9 @@ class index_punned_dense_gt {
      *  @param[in] expansion_add The expansion factor for adding vectors (optional).
      *  @param[in] expansion_search The expansion factor for searching vectors (optional).
      *  @param[in] free_label The label used for freed vectors (optional).
-     *  @return An instance of ::index_punned_dense_gt.
+     *  @return An instance of ::index_dense_gt.
      */
-    static index_punned_dense_gt make(                             //
+    static index_dense_gt make(                                    //
         std::size_t dimensions, metric_t metric,                   //
         index_config_t config = {},                                //
         scalar_kind_t accuracy = scalar_kind_t::f32_k,             //
@@ -326,9 +416,10 @@ class index_punned_dense_gt {
     stats_t stats(std::size_t level) const { return typed_->stats(level); }
 
     std::size_t memory_usage() const {
-        return typed_->memory_usage(0) +                 //
-               typed_->tape_allocator().total_wasted() + //
-               typed_->tape_allocator().total_reserved();
+        return typed_->memory_usage(0) +                   //
+               typed_->tape_allocator().total_wasted() +   //
+               typed_->tape_allocator().total_reserved() + //
+               vectors_allocator_.total_allocated();
     }
 
     // clang-format off
@@ -373,6 +464,7 @@ class index_punned_dense_gt {
         {
             unique_lock_t lock(labeled_lookup_mutex_);
             labeled_lookup_.reserve(limits.members);
+            vectors_lookup_.reserve(limits.members);
         }
         return typed_->reserve(limits);
     }
@@ -382,25 +474,87 @@ class index_punned_dense_gt {
      */
     void clear() {
         unique_lock_t lookup_lock(labeled_lookup_mutex_);
+
         std::unique_lock<std::mutex> free_lock(free_ids_mutex_);
         typed_->clear();
         labeled_lookup_.clear();
+        vectors_lookup_.clear();
         free_ids_.clear();
     }
 
     /**
      *  @brief Saves the index to a file.
      *  @param[in] path The path to the file.
+     *  @param[in] config Configuration parameters for exports.
      *  @return Outcome descriptor explictly convertable to boolean.
      */
-    serialization_result_t save(char const* path) const { return typed_->save(path); }
+    serialization_result_t save(output_file_t file, index_dense_serialization_config_t config = {}) const {
+
+        serialization_result_t result = file.open_if_not();
+        if (!result)
+            return result;
+
+        // We may not want to put the vectors into the same file
+        if (config.copy_vectors) {
+            // Save the matrix size
+            if (config.use_32_bit_dimensions) {
+                std::uint32_t dimensions[2];
+                dimensions[0] = static_cast<std::uint32_t>(typed_->size());
+                dimensions[1] = static_cast<std::uint32_t>(scalar_words_);
+                result = file.write(&dimensions, sizeof(dimensions));
+                if (!result)
+                    return result;
+            } else {
+                std::uint64_t dimensions[2];
+                dimensions[0] = static_cast<std::uint64_t>(typed_->size());
+                dimensions[1] = static_cast<std::uint64_t>(scalar_words_);
+                result = file.write(&dimensions, sizeof(dimensions));
+                if (!result)
+                    return result;
+            }
+
+            // Dump the vectors one after another
+            for (std::size_t i = 0; i != typed_->size(); ++i) {
+                byte_t* vector = vectors_lookup_[i];
+                result = file.write(vector, casted_vector_bytes_);
+                if (!result)
+                    return result;
+            }
+        }
+
+        // Augment metadata
+        {
+            index_dense_head_buffer_t buffer;
+            std::memset(buffer, 0, sizeof(buffer));
+            index_dense_head_t head{buffer};
+            std::memcpy(head.magic, default_magic(), std::strlen(default_magic()));
+
+            // Describe software version
+            head.version_major = USEARCH_VERSION_MAJOR;
+            head.version_minor = USEARCH_VERSION_MINOR;
+            head.version_patch = USEARCH_VERSION_PATCH;
+
+            // Describes types used
+            head.type_metric = metric_.kind();
+            head.type_scalar = metric_.scalar_kind();
+            head.type_label = scalar_kind<label_t>();
+            head.type_id = scalar_kind<internal_id_t>();
+            result = file.write(&buffer, sizeof(buffer));
+            if (!result)
+                return result;
+        }
+
+        // Save the actual proximity graph:
+        return typed_->save(std::move(file));
+    }
 
     /**
      *  @brief Parses the index from file to RAM.
      *  @param[in] path The path to the file.
+     *  @param[in] config Configuration parameters for imports.
      *  @return Outcome descriptor explictly convertable to boolean.
      */
-    serialization_result_t load(char const* path) {
+    serialization_result_t load(input_file_t file, index_dense_serialization_config_t config = {}) {
         serialization_result_t result = typed_->load(path);
         if (result)
             reindex_labels_();
@@ -424,6 +578,15 @@ class index_punned_dense_gt {
      *  @return `true` if the label is present in the index, `false` otherwise.
      */
     bool contains(label_t label) const {
+        shared_lock_t lock(labeled_lookup_mutex_);
+        return labeled_lookup_.contains(label);
+    }
+
+    /**
+     *  @brief Checks if a vector with specidied label is present.
+     *  @return `true` if the label is present in the index, `false` otherwise.
+     */
+    bool count(label_t label) const {
         shared_lock_t lock(labeled_lookup_mutex_);
         return labeled_lookup_.contains(label);
     }
@@ -465,7 +628,7 @@ class index_punned_dense_gt {
         // - present in `free_ids_`
         // - missing in the `labeled_lookup_`
         // - marked in the `typed_` index with a `free_label_`
-        id_t id = id_terator->second;
+        internal_id_t id = id_terator->second;
         free_ids_.push(id);
         labeled_lookup_.erase(id_terator);
         typed_->at(id).label = free_label_;
@@ -505,7 +668,7 @@ class index_punned_dense_gt {
             // - present in `free_ids_`
             // - missing in the `labeled_lookup_`
             // - marked in the `typed_` index with a `free_label_`
-            id_t id = id_terator->second;
+            internal_id_t id = id_terator->second;
             free_ids_.push(id);
             labeled_lookup_.erase(id_terator);
             typed_->at(id).label = free_label_;
@@ -530,7 +693,7 @@ class index_punned_dense_gt {
         if (id_terator == labeled_lookup_.end())
             return result;
 
-        id_t id = id_terator->second;
+        internal_id_t id = id_terator->second;
         labeled_lookup_.erase(id_terator);
         labeled_lookup_.emplace(to, id);
         typed_->at(id).label = to;
@@ -553,41 +716,8 @@ class index_punned_dense_gt {
             *labels = it->first;
     }
 
-    /**
-     *  @brief  Adapts the Male-Optimal Stable Marriage algorithm for unequal sets
-     *          to perform fast one-to-one matching between two large collections
-     *          of vectors, using approximate nearest neighbors search.
-     *
-     *  @param[inout] first_to_second Container to map ::first labels to ::second.
-     *  @param[inout] second_to_first Container to map ::second labels to ::first.
-     *  @param[in] executor Thread-pool to execute the job in parallel.
-     *  @param[in] progress Callback to report the execution progress.
-     */
-    template <                                                        //
-        typename first_to_second_at = dummy_label_to_label_mapping_t, //
-        typename second_to_first_at = dummy_label_to_label_mapping_t, //
-        typename executor_at = dummy_executor_t,                      //
-        typename progress_at = dummy_progress_t                       //
-        >
-    static join_result_t join(                                       //
-        index_punned_dense_gt const& first,                          //
-        index_punned_dense_gt const& second,                         //
-        join_config_t config = {},                                   //
-        first_to_second_at&& first_to_second = first_to_second_at{}, //
-        second_to_first_at&& second_to_first = second_to_first_at{}, //
-        executor_at&& executor = executor_at{},                      //
-        progress_at&& progress = progress_at{}) noexcept {
-
-        return index_t::join(                                  //
-            *first.typed_, *second.typed_, config,             //
-            std::forward<first_to_second_at>(first_to_second), //
-            std::forward<second_to_first_at>(second_to_first), //
-            std::forward<executor_at>(executor),               //
-            std::forward<progress_at>(progress));
-    }
-
     struct copy_result_t {
-        index_punned_dense_gt index;
+        index_dense_gt index;
         error_t error;
 
         explicit operator bool() const noexcept { return !error; }
@@ -598,9 +728,9 @@ class index_punned_dense_gt {
     };
 
     /**
-     *  @brief Copies the ::index_punned_dense_gt @b with all the data in it.
+     *  @brief Copies the ::index_dense_gt @b with all the data in it.
      *  @param config The copy configuration (optional).
-     *  @return A copy of the ::index_punned_dense_gt instance.
+     *  @return A copy of the ::index_dense_gt instance.
      */
     copy_result_t copy(copy_config_t config = {}) const {
         copy_result_t result = fork();
@@ -620,12 +750,12 @@ class index_punned_dense_gt {
     }
 
     /**
-     *  @brief Copies the ::index_punned_dense_gt model @b without any data.
-     *  @return A similarly configured ::index_punned_dense_gt instance.
+     *  @brief Copies the ::index_dense_gt model @b without any data.
+     *  @return A similarly configured ::index_dense_gt instance.
      */
     copy_result_t fork() const {
         copy_result_t result;
-        index_punned_dense_gt& other = result.index;
+        index_dense_gt& other = result.index;
 
         other.dimensions_ = dimensions_;
         other.scalar_words_ = scalar_words_;
@@ -682,7 +812,7 @@ class index_punned_dense_gt {
 
   private:
     struct thread_lock_t {
-        index_punned_dense_gt const& parent;
+        index_dense_gt const& parent;
         std::size_t thread_id;
 
         ~thread_lock_t() { parent.thread_unlock_(thread_id); }
@@ -717,15 +847,15 @@ class index_punned_dense_gt {
             vector_data = casted_data, vector_bytes = casted_vector_bytes_, config.store_vector = true;
 
         // Check if there are some removed entries, whose nodes we can reuse
-        id_t free_id = default_free_value<id_t>();
+        internal_id_t free_id = default_free_value<internal_id_t>();
         {
             std::unique_lock<std::mutex> lock(free_ids_mutex_);
             free_ids_.try_pop(free_id);
         }
 
         // Perform the insertion or the update
-        add_result_t result =                     //
-            free_id != default_free_value<id_t>() //
+        add_result_t result =                              //
+            free_id != default_free_value<internal_id_t>() //
                 ? typed_->update(free_id, label, {vector_data, vector_bytes}, config)
                 : typed_->add(label, {vector_data, vector_bytes}, config);
         {
@@ -752,7 +882,7 @@ class index_punned_dense_gt {
         return typed_->search({vector_data, vector_bytes}, wanted, config, allow);
     }
 
-    id_t lookup_id_(label_t label) const {
+    internal_id_t lookup_id_(label_t label) const {
         shared_lock_t lock(labeled_lookup_mutex_);
         return labeled_lookup_.at(label);
     }
@@ -775,14 +905,14 @@ class index_punned_dense_gt {
         for (std::size_t i = 0; i != typed_->size(); ++i) {
             member_cref_t member = typed_->at(i);
             if (member.label == free_label_)
-                free_ids_.push(static_cast<id_t>(i));
+                free_ids_.push(static_cast<internal_id_t>(i));
             else
-                labeled_lookup_.emplace(member.label, static_cast<id_t>(i));
+                labeled_lookup_.emplace(member.label, static_cast<internal_id_t>(i));
         }
     }
 
     template <typename scalar_at> bool get_(label_t label, scalar_at* reconstructed, cast_t const& cast) const {
-        id_t id;
+        internal_id_t id;
         // Find the matching ID
         {
             shared_lock_t lock(labeled_lookup_mutex_);
@@ -817,13 +947,13 @@ class index_punned_dense_gt {
         return search_(vector, wanted, search_config, cast);
     }
 
-    static index_punned_dense_gt make_(                                                 //
+    static index_dense_gt make_(                                                        //
         std::size_t dimensions, scalar_kind_t scalar_kind,                              //
         index_config_t config, std::size_t expansion_add, std::size_t expansion_search, //
         metric_t metric, casts_t casts, label_t free_label) {
 
         std::size_t hardware_threads = std::thread::hardware_concurrency();
-        index_punned_dense_gt result;
+        index_dense_gt result;
         result.dimensions_ = dimensions;
         result.scalar_words_ = count_scalar_words_(dimensions, scalar_kind);
         result.expansion_add_ = expansion_add;
@@ -998,8 +1128,8 @@ class index_punned_dense_gt {
     }
 };
 
-using punned_small_t = index_punned_dense_gt<std::uint64_t, std::uint32_t>;
-using punned_big_t = index_punned_dense_gt<uuid_t, uint40_t>;
+using punned_small_t = index_dense_gt<std::uint64_t, std::uint32_t>;
+using punned_big_t = index_dense_gt<uuid_t, uint40_t>;
 
 } // namespace usearch
 } // namespace unum

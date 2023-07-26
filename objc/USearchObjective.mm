@@ -2,13 +2,13 @@
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
-#import <usearch/index_punned_dense.hpp>
+#import <usearch/index_dense.hpp>
 #pragma clang diagnostic pop
 
 using namespace unum::usearch;
 using namespace unum;
 
-using metric_t = index_punned_dense_metric_t;
+using metric_t = index_dense_metric_t;
 using distance_t = punned_distance_t;
 using index_t = punned_small_t;
 using add_result_t = typename index_t::add_result_t;

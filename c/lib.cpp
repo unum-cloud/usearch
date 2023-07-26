@@ -1,6 +1,6 @@
 #include <cassert>
 
-#include <usearch/index_punned_dense.hpp>
+#include <usearch/index_dense.hpp>
 
 #ifndef USEARCH_EXPORT
 #define USEARCH_EXPORT
@@ -15,7 +15,7 @@ using namespace unum;
 
 using label_t = usearch_label_t;
 using distance_t = usearch_distance_t;
-using index_t = index_punned_dense_gt<label_t>;
+using index_t = index_dense_gt<label_t>;
 using add_result_t = index_t::add_result_t;
 using search_result_t = index_t::search_result_t;
 using labeling_result_t = index_t::labeling_result_t;
@@ -82,8 +82,8 @@ search_result_t search_(index_t* index, void const* vector, scalar_kind_t kind, 
     }
 }
 
-index_punned_dense_metric_t udf(metric_kind_t kind, usearch_metric_t raw_ptr) {
-    index_punned_dense_metric_t result;
+index_dense_metric_t udf(metric_kind_t kind, usearch_metric_t raw_ptr) {
+    index_dense_metric_t result;
     result.kind_ = kind;
     result.func_ = [raw_ptr](punned_vector_view_t a, punned_vector_view_t b) -> distance_t {
         return raw_ptr((void const*)a.data(), (void const*)b.data());
