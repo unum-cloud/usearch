@@ -1,11 +1,16 @@
+import os
 import struct
+import typing
 
 import numpy as np
 
 
 def load_matrix(
-    filename: str, start_row: int = 0, count_rows: int = None, view: bool = False
-) -> np.ndarray:
+    filename: str,
+    start_row: int = 0,
+    count_rows: int = None,
+    view: bool = False,
+) -> typing.Optional[np.ndarray]:
     """Read *.ibin, *.bbib, *.hbin, *.fbin, *.dbin files with matrices.
 
     :param filename: path to the matrix file
@@ -36,6 +41,9 @@ def load_matrix(
     else:
         raise Exception("Unknown file type")
 
+    if not os.path.exists(filename):
+        return None
+
     with open(filename, "rb") as f:
         rows, cols = np.fromfile(f, count=2, dtype=np.int32)
         rows = (rows - start_row) if count_rows is None else count_rows
@@ -43,11 +51,18 @@ def load_matrix(
 
         if view:
             return np.memmap(
-                f, dtype=dtype, mode="r", offset=8 + row_offset, shape=(rows, cols)
+                f,
+                dtype=dtype,
+                mode="r",
+                offset=8 + row_offset,
+                shape=(rows, cols),
             )
         else:
             return np.fromfile(
-                f, count=rows * cols, dtype=dtype, offset=row_offset
+                f,
+                count=rows * cols,
+                dtype=dtype,
+                offset=row_offset,
             ).reshape(rows, cols)
 
 

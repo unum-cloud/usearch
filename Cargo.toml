@@ -1,7 +1,7 @@
 [package]
 name = "usearch"
 version = "0.22.3"
-authors = ["Ashot Vardanian <1983160+ashvardanian@users.noreply.github.com>"]
+authors = ["Ash Vardanian <1983160+ashvardanian@users.noreply.github.com>"]
 description = "Smaller & Faster Single-File Vector Search Engine from Unum"
 edition = "2021"
 license = "Apache-2.0"

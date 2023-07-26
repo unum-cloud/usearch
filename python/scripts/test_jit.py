@@ -89,9 +89,8 @@ def test_index_numba(ndim: int, batch_size: int):
         vectors = random_vectors(count=batch_size, ndim=ndim)
 
         index.add(labels, vectors)
-        matches, distances, count = index.search(vectors, 10)
-        assert matches.shape[0] == distances.shape[0]
-        assert count.shape[0] == batch_size
+        matches = index.search(vectors, 10)
+        assert len(matches) == batch_size
 
 
 @pytest.mark.parametrize("ndim", dimensions[-1:])
@@ -153,9 +152,8 @@ def test_index_cppyy(ndim: int, batch_size: int):
         vectors = random_vectors(count=batch_size, ndim=ndim)
 
         index.add(labels, vectors)
-        matches, distances, count = index.search(vectors, 10)
-        assert matches.shape[0] == distances.shape[0]
-        assert count.shape[0] == batch_size
+        matches = index.search(vectors, 10)
+        assert len(matches) == batch_size
 
 
 @pytest.mark.parametrize("ndim", [8])

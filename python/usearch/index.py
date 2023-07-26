@@ -7,13 +7,16 @@ from __future__ import annotations
 import os
 import math
 from typing import Optional, Union, NamedTuple, List, Iterable
+from dataclasses import dataclass
 
 import numpy as np
 from tqdm import tqdm
 
-from usearch.compiled import Index as _CompiledIndex, IndexMetadata, IndexStats
+from usearch.compiled import Index as _CompiledIndex
+from usearch.compiled import Indexes as _CompiledIndexes
 from usearch.compiled import SparseIndex as _CompiledSetsIndex
 
+from usearch.compiled import IndexMetadata, IndexStats
 from usearch.compiled import MetricKind, ScalarKind, MetricSignature
 from usearch.compiled import (
     DEFAULT_CONNECTIVITY,
@@ -102,47 +105,196 @@ def _normalize_metric(metric):
     return metric
 
 
-class Matches(NamedTuple):
+def _search_in_compiled(
+    *,
+    compiled: Union[_CompiledIndex, _CompiledIndexes],
+    vectors: np.ndarray,
+    k: int,
+    threads: int,
+    exact: bool,
+    log: Union[str, bool],
+    batch_size: int,
+) -> Union[Matches, BatchMatches]:
+    #
+    assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
+    assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
+    if vectors.ndim == 1:
+        vectors = vectors.reshape(1, len(vectors))
+    count_vectors = vectors.shape[0]
+
+    def distil_batch(batch_matches: BatchMatches) -> Union[BatchMatches, Matches]:
+        return batch_matches[0] if count_vectors == 1 else batch_matches
+
+    if log and batch_size == 0:
+        batch_size = int(math.ceil(count_vectors / 100))
+
+    if batch_size:
+        tasks = [
+            vectors[start_row : start_row + batch_size, :]
+            for start_row in range(0, count_vectors, batch_size)
+        ]
+        tasks_matches = []
+        name = log if isinstance(log, str) else "Search"
+        pbar = tqdm(
+            tasks,
+            desc=name,
+            total=count_vectors,
+            unit="vector",
+            disable=log is False,
+        )
+        for vectors in tasks:
+            tuple_ = compiled.search(
+                vectors,
+                k,
+                exact=exact,
+                threads=threads,
+            )
+            tasks_matches.append(BatchMatches(*tuple_))
+            pbar.update(vectors.shape[0])
+
+        pbar.close()
+        return distil_batch(
+            BatchMatches(
+                labels=np.vstack([m.labels for m in tasks_matches]),
+                distances=np.vstack([m.distances for m in tasks_matches]),
+                counts=np.concatenate([m.counts for m in tasks_matches], axis=None),
+            )
+        )
+
+    else:
+        tuple_ = compiled.search(
+            vectors,
+            k,
+            exact=exact,
+            threads=threads,
+        )
+        return distil_batch(BatchMatches(*tuple_))
+
+
+def _add_to_compiled(
+    *,
+    compiled,
+    labels,
+    vectors,
+    copy: bool,
+    threads: int,
+    log: Union[str, bool],
+    batch_size: int,
+) -> Union[int, np.ndarray]:
+    assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
+    assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
+    if vectors.ndim == 1:
+        vectors = vectors.reshape(1, len(vectors))
+
+    # Validate or generate the labels
+    count_vectors = vectors.shape[0]
+    generate_labels = labels is None
+    if generate_labels:
+        start_id = len(compiled)
+        labels = np.arange(start_id, start_id + count_vectors, dtype=Label)
+    else:
+        if not isinstance(labels, Iterable):
+            assert count_vectors == 1, "Each vector must have a label"
+            labels = [labels]
+        labels = np.array(labels).astype(Label)
+
+    assert len(labels) == count_vectors
+
+    # If logging is requested, and batch size is undefined, set it to grow 1% at a time:
+    if log and batch_size == 0:
+        batch_size = int(math.ceil(count_vectors / 100))
+
+    # Split into batches and log progress, if needed
+    if batch_size:
+        labels = [
+            labels[start_row : start_row + batch_size]
+            for start_row in range(0, count_vectors, batch_size)
+        ]
+        vectors = [
+            vectors[start_row : start_row + batch_size, :]
+            for start_row in range(0, count_vectors, batch_size)
+        ]
+        tasks = zip(labels, vectors)
+        name = log if isinstance(log, str) else "Add"
+        pbar = tqdm(
+            tasks,
+            desc=name,
+            total=count_vectors,
+            unit="vector",
+            disable=log is False,
+        )
+        for labels, vectors in tasks:
+            compiled.add(labels, vectors, copy=copy, threads=threads)
+            pbar.update(len(labels))
+
+        pbar.close()
+
+    else:
+        compiled.add(labels, vectors, copy=copy, threads=threads)
+
+    return labels
+
+
+@dataclass
+class Match:
+    label: int
+    distance: float
+
+
+@dataclass
+class Matches:
     labels: np.ndarray
     distances: np.ndarray
-    counts: Union[np.ndarray, int]
 
-    @property
-    def is_multiple(self) -> bool:
-        return isinstance(self.counts, np.ndarray)
+    def __len__(self) -> int:
+        return len(self.labels)
 
-    @property
-    def batch_size(self) -> int:
-        return len(self.counts) if isinstance(self.counts, np.ndarray) else 1
-
-    @property
-    def total_matches(self) -> int:
-        return np.sum(self.counts)
-
-    def to_list(self, row: Optional[int] = None) -> Union[List[dict], List[List[dict]]]:
-        if not self.is_multiple:
-            assert row is None, "Exporting a single sequence is only for batch requests"
-            labels = self.labels
-            distances = self.distances
-
-        elif row is None:
-            return [self.to_list(i) for i in range(self.batch_size)]
-
+    def __getitem__(self, index: int) -> Match:
+        if isinstance(index, int) and index < len(self):
+            return Match(
+                label=self.labels[index],
+                distance=self.distances[index],
+            )
         else:
-            count = self.counts[row]
-            labels = self.labels[row, :count]
-            distances = self.distances[row, :count]
+            raise IndexError(f"`index` must be an integer under {len(self)}")
 
-        return [
-            {"label": int(label), "distance": float(distance)}
-            for label, distance in zip(labels, distances)
-        ]
+    def to_list(self) -> List[tuple]:
+        return [(int(l), float(d)) for l, d in zip(self.labels, self.distances)]
+
+    def __repr__(self) -> str:
+        return f"usearch.Matches({len(self)})"
+
+
+@dataclass
+class BatchMatches:
+    labels: np.ndarray
+    distances: np.ndarray
+    counts: np.ndarray
+
+    def __len__(self) -> int:
+        return len(self.counts)
+
+    def __getitem__(self, index: int) -> Matches:
+        if isinstance(index, int) and index < len(self):
+            return Matches(
+                labels=self.labels[index, : self.counts[index]],
+                distances=self.distances[index, : self.counts[index]],
+            )
+        else:
+            raise IndexError(f"`index` must be an integer under {len(self)}")
+
+    def to_list(self) -> List[List[tuple]]:
+        lists = [self.__getitem__(row) for row in range(self.__len__())]
+        return [item for sublist in lists for item in sublist]
 
     def recall_first(self, expected: np.ndarray) -> float:
-        best_matches = self.labels if not self.is_multiple else self.labels[:, 0]
-        return np.sum(best_matches == expected) / len(expected)
+        """Measures recall [0, 1] as of `Matches` that contain the corresponding
+        `expected` entry as the first result."""
+        return np.sum(self.labels[:, 0] == expected) / len(expected)
 
     def recall(self, expected: np.ndarray) -> float:
+        """Measures recall [0, 1] as of `Matches` that contain the corresponding
+        `expected` entry anywhere among results."""
         assert len(expected) == self.batch_size
         recall = 0
         for i in range(self.batch_size):
@@ -150,11 +302,7 @@ class Matches(NamedTuple):
         return recall / len(expected)
 
     def __repr__(self) -> str:
-        return (
-            f"usearch.Matches({self.total_matches})"
-            if self.is_multiple
-            else f"usearch.Matches({self.total_matches} across {self.batch_size} queries)"
-        )
+        return f"usearch.BatchMatches({np.sum(self.counts)} across {len(self)} queries)"
 
 
 class CompiledMetric(NamedTuple):
@@ -278,6 +426,8 @@ class Index:
 
     @staticmethod
     def restore(path: os.PathLike, view: bool = False) -> Index:
+        if not os.path.exists(path):
+            return None
         meta = Index.metadata(path)
         bits_per_scalar = {
             ScalarKind.F8: 8,
@@ -334,63 +484,15 @@ class Index:
         :return: Inserted label or labels
         :type: Union[int, np.ndarray]
         """
-        assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
-        assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
-        count_vectors = vectors.shape[0] if vectors.ndim == 2 else 1
-        is_multiple = count_vectors > 1
-        if not is_multiple:
-            vectors = vectors.flatten()
-
-        # Validate of generate teh labels
-        generate_labels = labels is None
-        if generate_labels:
-            start_id = len(self._compiled)
-            if is_multiple:
-                labels = np.arange(start_id, start_id + count_vectors, dtype=Label)
-            else:
-                labels = start_id
-        else:
-            if isinstance(labels, np.ndarray):
-                if not is_multiple:
-                    labels = int(labels[0])
-                else:
-                    labels = labels.astype(Label)
-        count_labels = len(labels) if isinstance(labels, Iterable) else 1
-        assert count_labels == count_vectors
-
-        # If logging is requested, and batch size is undefined, set it to grow 1% at a time:
-        if log and batch_size == 0:
-            batch_size = int(math.ceil(count_vectors / 100))
-
-        # Split into batches and log progress, if needed
-        if batch_size:
-            labels = [
-                labels[start_row : start_row + batch_size]
-                for start_row in range(0, count_vectors, batch_size)
-            ]
-            vectors = [
-                vectors[start_row : start_row + batch_size, :]
-                for start_row in range(0, count_vectors, batch_size)
-            ]
-            tasks = zip(labels, vectors)
-            name = log if isinstance(log, str) else "Add"
-            pbar = tqdm(
-                tasks,
-                desc=name,
-                total=count_vectors,
-                unit="Vector",
-                disable=log is False,
-            )
-            for labels, vectors in tasks:
-                self._compiled.add(labels, vectors, copy=copy, threads=threads)
-                pbar.update(len(labels))
-
-            pbar.close()
-
-        else:
-            self._compiled.add(labels, vectors, copy=copy, threads=threads)
-
-        return labels
+        return _add_to_compiled(
+            compiled=self._compiled,
+            labels=labels,
+            vectors=vectors,
+            copy=copy,
+            threads=threads,
+            log=log,
+            batch_size=batch_size,
+        )
 
     def search(
         self,
@@ -401,7 +503,7 @@ class Index:
         exact: bool = False,
         log: Union[str, bool] = False,
         batch_size: int = 0,
-    ) -> Matches:
+    ) -> Union[Matches, BatchMatches]:
         """
         Performs approximate nearest neighbors search for one or more queries.
 
@@ -418,55 +520,18 @@ class Index:
         :param batch_size: Number of vectors to process at once, defaults to 0
         :type batch_size: int, optional
         :return: Approximate matches for one or more queries
-        :rtype: Matches
+        :rtype: Union[Matches, BatchMatches]
         """
 
-        assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
-        assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
-        count_vectors = vectors.shape[0] if vectors.ndim == 2 else 1
-
-        if log and batch_size == 0:
-            batch_size = int(math.ceil(count_vectors / 100))
-
-        if batch_size:
-            tasks = [
-                vectors[start_row : start_row + batch_size, :]
-                for start_row in range(0, count_vectors, batch_size)
-            ]
-            tasks_matches = []
-            name = log if isinstance(log, str) else "Search"
-            pbar = tqdm(
-                tasks,
-                desc=name,
-                total=count_vectors,
-                unit="Vector",
-                disable=log is False,
-            )
-            for vectors in tasks:
-                tuple_ = self._compiled.search(
-                    vectors,
-                    k,
-                    exact=exact,
-                    threads=threads,
-                )
-                tasks_matches.append(Matches(*tuple_))
-                pbar.update(vectors.shape[0])
-
-            pbar.close()
-            return Matches(
-                labels=np.vstack([m.labels for m in tasks_matches]),
-                distances=np.vstack([m.distances for m in tasks_matches]),
-                counts=np.concatenate([m.counts for m in tasks_matches], axis=None),
-            )
-
-        else:
-            tuple_ = self._compiled.search(
-                vectors,
-                k,
-                exact=exact,
-                threads=threads,
-            )
-            return Matches(*tuple_)
+        return _search_in_compiled(
+            compiled=self._compiled,
+            vectors=vectors,
+            k=k,
+            exact=exact,
+            threads=threads,
+            log=log,
+            batch_size=batch_size,
+        )
 
     def remove(
         self,
@@ -675,9 +740,31 @@ class Index:
 
     @property
     def levels_stats(self) -> IndexStats:
+        """Get the accumulated statistics for the entire multi-level graph.
+
+        :return: Statistics for the entire multi-level graph.
+        :rtype: IndexStats
+
+        Statistics:
+            - ``nodes`` (int): The number of nodes in that level.
+            - ``edges`` (int): The number of edges in that level.
+            - ``max_edges`` (int): The maximum possible number of edges in that level.
+            - ``allocated_bytes`` (int): The amount of allocated memory for that level.
+        """
         return self._compiled.levels_stats
 
     def level_stats(self, level: int) -> IndexStats:
+        """Get statistics for one level of the index - one graph.
+
+        :return: Statistics for one level of the index - one graph.
+        :rtype: IndexStats
+
+        Statistics:
+            - ``nodes`` (int): The number of nodes in that level.
+            - ``edges`` (int): The number of edges in that level.
+            - ``max_edges`` (int): The maximum possible number of edges in that level.
+            - ``allocated_bytes`` (int): The amount of allocated memory for that level.
+        """
         return self._compiled.level_stats(level)
 
     def __repr__(self) -> str:
@@ -710,4 +797,32 @@ class Index:
                 f"-- max level: {self.max_level}",
                 *level_stats,
             ]
+        )
+
+
+class Indexes:
+    def __init__(self, indexes: Iterable[Index]) -> None:
+        self._compiled = _CompiledIndexes()
+        for index in indexes:
+            self._compiled.add(index._compiled)
+
+    def add(self, index: Index):
+        self._compiled.add(index._compiled)
+
+    def search(
+        self,
+        vectors,
+        k: int = 10,
+        *,
+        threads: int = 0,
+        exact: bool = False,
+    ):
+        return _search_in_compiled(
+            compiled=self._compiled,
+            vectors=vectors,
+            k=k,
+            exact=exact,
+            threads=threads,
+            log=False,
+            batch_size=None,
         )

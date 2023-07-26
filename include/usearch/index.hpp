@@ -1,6 +1,6 @@
 /**
  *  @file index.hpp
- *  @author Ashot Vardanian
+ *  @author Ash Vardanian
  *  @brief Single-header Vector Search.
  *  @date 2023-04-26
  *
@@ -1391,7 +1391,26 @@ struct file_head_result_t {
     }
 };
 
+using node_offsets_buffer_t = byte_t[16];
+
+/**
+ *  @brief  Serialized binary representations of the offsets of a index node.
+ *
+ *  It uses: 8 bytes for node head offset, and 8 bytes for vector offset.
+ */
+struct node_offsets_t {
+
+    using offset_t = std::uint64_t;
+
+    misaligned_ref_gt<offset_t> head;
+    misaligned_ref_gt<offset_t> vector;
+
+    node_offsets_t(byte_t* ptr) noexcept
+        : head(exchange(ptr, ptr + sizeof(offset_t))), vector(exchange(ptr, ptr + sizeof(offset_t))) {}
+};
+
 static_assert(sizeof(file_header_t) == 64, "File header should be exactly 64 bytes");
+static_assert(sizeof(node_offsets_buffer_t) == 16, "Node offsets should be exactly 8 bytes");
 
 /// @brief  C++17 and newer version deprecate the `std::result_of`
 template <typename metric_at, typename... args_at>
@@ -2083,6 +2102,27 @@ class index_gt {
             node_t node = index_.node_with_id_(candidate.id);
             return {member_cref_t{node.label(), node.vector_view(), candidate.id}, candidate.distance};
         }
+        inline std::size_t merge_into(              //
+            label_t* labels, distance_t* distances, //
+            std::size_t old_count, std::size_t max_count) const noexcept {
+
+            std::size_t merged_count = old_count;
+            for (std::size_t i = 0; i != count; ++i) {
+                match_t result = operator[](i);
+                auto merged_end = distances + merged_count;
+                auto offset = std::lower_bound(distances, merged_end, result.distance) - distances;
+                if (offset == max_count)
+                    continue;
+
+                std::size_t count_worse = merged_count - offset - (max_count == merged_count);
+                std::memmove(labels + offset + 1, labels + offset, count_worse * sizeof(label_t));
+                std::memmove(distances + offset + 1, distances + offset, count_worse * sizeof(distance_t));
+                labels[merged_count] = result.member.label;
+                distances[merged_count] = result.distance;
+                merged_count += 1;
+            }
+            return merged_count;
+        }
         inline std::size_t dump_to(label_t* labels, distance_t* distances) const noexcept {
             for (std::size_t i = 0; i != count; ++i) {
                 match_t result = operator[](i);
@@ -2335,7 +2375,9 @@ class index_gt {
         return total;
     }
 
-    std::size_t memory_usage_per_node(dim_t dim, level_t level) const noexcept { return node_bytes_(dim, level); }
+    std::size_t memory_usage_per_node(dim_t dim, level_t level) const noexcept {
+        return node_capacity_bytes_(dim, level);
+    }
 
     void change_metric(metric_t const& m) noexcept {
         metric_ = m;
@@ -2364,6 +2406,8 @@ class index_gt {
      */
     template <typename progress_at = dummy_progress_t>
     serialization_result_t save(char const* file_path, progress_at&& progress = {}) const noexcept {
+
+        using file_offset_t = typename node_offsets_t::offset_t;
 
         // Make sure we have right to write to that file
         serialization_result_t result;
@@ -2421,16 +2465,47 @@ class index_gt {
         if (result.error)
             return result;
 
-        // Serialize nodes one by one
+        // Calculate total node sizes
+        file_offset_t total_node_bytes = 0;
         for (std::size_t i = 0; i != state.size; ++i) {
             node_t node = node_with_id_(i);
-            std::size_t node_bytes = node_bytes_(node);
-            std::size_t node_vector_bytes = node_vector_bytes_(node);
-            // Dump neighbors and vectors, as vectors may be in a disjoint location
-            write_chunk(node.tape(), node_bytes - node_vector_bytes);
+            total_node_bytes += node_head_bytes_() + node_neighbors_bytes_(node);
+        }
+
+        // Firstly, calculate and serialize node offsets
+        node_offsets_buffer_t offsets_buffer{};
+        node_offsets_t offsets{offsets_buffer};
+        file_offset_t head_offset = 0;
+        // Align vectors offset
+        file_offset_t vectors_base_offset =
+            sizeof(file_header_t) + size_ * sizeof(node_offsets_buffer_t) + total_node_bytes;
+        file_offset_t vectors_offset_shift = config_.vector_alignment - vectors_base_offset % config_.vector_alignment;
+        file_offset_t vector_offset = total_node_bytes + vectors_offset_shift;
+        for (std::size_t i = 0; i != state.size; ++i) {
+            offsets.head = head_offset;
+            offsets.vector = vector_offset;
+            write_chunk(&offsets_buffer[0], sizeof(node_offsets_buffer_t));
             if (result.error)
                 return result;
-            write_chunk(node.vector(), node_vector_bytes);
+
+            node_t node = node_with_id_(i);
+            head_offset += node_head_bytes_() + node_neighbors_bytes_(node);
+            vector_offset += node_vector_bytes_(node);
+        }
+
+        // Then, serialize node headers
+        for (std::size_t i = 0; i != state.size; ++i) {
+            node_t node = node_with_id_(i);
+            write_chunk(node.tape(), node_head_bytes_() + node_neighbors_bytes_(node));
+            if (result.error)
+                return result;
+        }
+
+        // Finally, serialize vectors into aligned address
+        std::fseek(file, vectors_offset_shift, SEEK_CUR);
+        for (std::size_t i = 0; i != state.size; ++i) {
+            node_t node = node_with_id_(i);
+            write_chunk(node.vector(), node_vector_bytes_(node));
             if (result.error)
                 return result;
             progress(i, state.size);
@@ -2447,6 +2522,8 @@ class index_gt {
      */
     template <typename progress_at = dummy_progress_t>
     serialization_result_t load(char const* file_path, progress_at&& progress = {}) noexcept {
+
+        using file_offset_t = typename node_offsets_t::offset_t;
 
         // Remove previously stored objects
         reset();
@@ -2497,9 +2574,11 @@ class index_gt {
             entry_id_ = static_cast<id_t>(state.entry_idx);
         }
 
-        // Load nodes one by one
-        std::size_t const size = size_;
-        for (std::size_t i = 0; i != size; ++i) {
+        // TODO: Skip offsets for now, it may used in the feature for parallel loading.
+        std::fseek(file, size_ * sizeof(node_offsets_buffer_t), SEEK_CUR);
+
+        // Load node headers first
+        for (std::size_t i = 0; i != size_; ++i) {
             label_t label;
             dim_t dim;
             level_t level;
@@ -2513,16 +2592,24 @@ class index_gt {
             if (result.error)
                 return result;
 
-            std::size_t node_bytes = node_bytes_(dim, level);
             node_t node = node_malloc_(dim, level);
             node.label(label);
             node.dim(dim);
             node.level(level);
-            read_chunk(node.tape() + node_head_bytes_(), node_bytes - node_head_bytes_());
+            read_chunk(node.tape() + node_head_bytes_(), node_neighbors_bytes_(level));
             if (result.error)
                 return result;
             nodes_[i] = node;
-            progress(i, size);
+        }
+
+        // Then, load vectors from aligned address
+        file_offset_t offset = std::ftell(file);
+        std::fseek(file, config_.vector_alignment - offset % config_.vector_alignment, SEEK_CUR);
+        for (std::size_t i = 0; i != size_; ++i) {
+            read_chunk(nodes_[i].vector(), node_vector_bytes_(nodes_[i].dim()));
+            if (result.error)
+                return result;
+            progress(i, size_);
         }
 
         std::fclose(file);
@@ -2534,9 +2621,21 @@ class index_gt {
      *  @brief  Memory-maps the serialized binary index representation from disk,
      *          @b without copying the vectors and neighbors lists into RAM.
      *          Available on Linux, MacOS, but @b not on Windows.
+     *
+     *  @param[in] file_path File where the index is saved.
+     *  @param[in] executor Thread-pool to execute the job in parallel.
+     *  @param[in] progress Callback to report the execution progress.
      */
-    template <typename progress_at = dummy_progress_t>
-    serialization_result_t view(char const* file_path, progress_at&& progress = {}) noexcept {
+    template <                                   //
+        typename executor_at = dummy_executor_t, //
+        typename progress_at = dummy_progress_t  //
+        >
+    serialization_result_t view(                //
+        char const* file_path,                  //
+        executor_at&& executor = executor_at{}, //
+        progress_at&& progress = {}) noexcept {
+
+        using file_offset_t = typename node_offsets_t::offset_t;
 
         // Remove previously stored objects
         reset();
@@ -2551,7 +2650,7 @@ class index_gt {
         if (file_handle == INVALID_HANDLE_VALUE)
             return result.failed("Opening file failed!");
 
-        size_t file_length = GetFileSize(file_handle, 0);
+        file_offset_t file_length = GetFileSize(file_handle, 0);
         HANDLE mapping_handle = CreateFileMapping(file_handle, 0, PAGE_READONLY, 0, 0, 0);
         if (mapping_handle == 0) {
             CloseHandle(file_handle);
@@ -2622,20 +2721,18 @@ class index_gt {
             entry_id_ = static_cast<id_t>(state.entry_idx);
         }
 
-        // Locate every node packed into file
-        std::size_t progress_bytes = sizeof(file_header_t);
-        std::size_t const size = size_;
-        for (std::size_t i = 0; i != size; ++i) {
-            byte_t* tape = (byte_t*)(file + progress_bytes);
-            dim_t dim = misaligned_load<dim_t>(tape + sizeof(label_t));
-            level_t level = misaligned_load<level_t>(tape + sizeof(label_t) + sizeof(dim_t));
-
-            std::size_t node_bytes = node_bytes_(dim, level);
-            std::size_t node_vector_bytes = dim * sizeof(scalar_t);
-            nodes_[i] = node_t{tape, (scalar_t*)(tape + node_bytes - node_vector_bytes)};
-            progress_bytes += node_bytes;
-            progress(i, size);
-        }
+        // Concurrently locate all nodes and vectors
+        std::atomic<std::uint64_t> done_tasks{0};
+        file_offset_t base_offset = sizeof(file_header_t);
+        file_offset_t nodes_base_offset = base_offset + size_ * sizeof(node_offsets_buffer_t);
+        auto task = [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
+            node_offsets_t offsets{file + base_offset + task_idx * sizeof(node_offsets_buffer_t)};
+            byte_t* tape = file + nodes_base_offset + offsets.head;
+            byte_t* vector = file + nodes_base_offset + offsets.vector;
+            nodes_[task_idx] = node_t{tape, (scalar_t*)vector};
+            progress(++done_tasks, size_);
+        };
+        executor.execute_bulk(size_, task);
 
         return {};
     }
@@ -2927,9 +3024,13 @@ class index_gt {
         return pre;
     }
 
-    inline std::size_t node_bytes_(node_t node) const noexcept { return node_bytes_(node.dim(), node.level()); }
-    inline std::size_t node_bytes_(dim_t dim, level_t level) const noexcept {
-        return node_head_bytes_() + pre_.neighbors_base_bytes + pre_.neighbors_bytes * level + sizeof(scalar_t) * dim;
+    inline std::size_t node_bytes_(node_t node) const noexcept {
+        return node_head_bytes_() + node_neighbors_bytes_(node.level()) + node_vector_bytes_(node.dim());
+    }
+    inline std::size_t node_capacity_bytes_(dim_t dim, level_t level) const noexcept {
+        std::size_t vector_space_bytes = node_vector_bytes_(dim);
+        vector_space_bytes += bool(vector_space_bytes) * config_.vector_alignment; // Extra space for alignment
+        return node_head_bytes_() + node_neighbors_bytes_(level) + vector_space_bytes;
     }
 
     using span_bytes_t = span_gt<byte_t>;
@@ -2940,40 +3041,54 @@ class index_gt {
         node_bytes_split_t() {}
         node_bytes_split_t(span_bytes_t tape, span_bytes_t vector) noexcept : tape(tape), vector(vector) {}
 
-        std::size_t memory_usage() const noexcept { return tape.size() + vector.size(); }
-        bool colocated() const noexcept { return tape.end() == vector.begin(); }
+        std::size_t memory_usage(std::size_t vector_alignment) const noexcept {
+            return tape.size() + vector.size() + (colocated(vector_alignment) ? vector_alignment : 0);
+        }
+        bool colocated(std::size_t vector_alignment) const noexcept {
+            return std::size_t(vector.begin() - tape.end()) <= vector_alignment;
+        }
         operator node_t() const noexcept { return node_t{tape.begin(), reinterpret_cast<scalar_t*>(vector.begin())}; }
+        explicit operator bool() const noexcept { return tape.begin() != nullptr; }
     };
 
     inline node_bytes_split_t node_bytes_split_(node_t node) const noexcept {
-        std::size_t levels_bytes = pre_.neighbors_base_bytes + pre_.neighbors_bytes * node.level();
-        std::size_t bytes_in_tape = node_head_bytes_() + levels_bytes;
-        return {{node.tape(), bytes_in_tape}, {(byte_t*)node.vector(), node_vector_bytes_(node)}};
+        std::size_t bytes_in_tape = node_head_bytes_() + node_neighbors_bytes_(node.level());
+        return {{node.tape(), bytes_in_tape}, {(byte_t*)node.vector(), node_vector_bytes_(node.dim())}};
     }
 
-    inline std::size_t node_vector_bytes_(dim_t dim) const noexcept { return dim * sizeof(scalar_t); }
+    inline std::size_t node_neighbors_bytes_(node_t node) const noexcept { return node_neighbors_bytes_(node.level()); }
+    inline std::size_t node_neighbors_bytes_(level_t level) const noexcept {
+        return pre_.neighbors_base_bytes + pre_.neighbors_bytes * level;
+    }
+
     inline std::size_t node_vector_bytes_(node_t node) const noexcept { return node_vector_bytes_(node.dim()); }
+    inline std::size_t node_vector_bytes_(dim_t dim) const noexcept { return dim * sizeof(scalar_t); }
 
     node_bytes_split_t node_malloc_(dim_t dims_to_store, level_t level) noexcept {
 
+        std::size_t node_bytes = node_capacity_bytes_(dims_to_store, level);
         std::size_t vector_bytes = node_vector_bytes_(dims_to_store);
-        std::size_t node_bytes = node_bytes_(dims_to_store, level);
-        std::size_t non_vector_bytes = node_bytes - vector_bytes;
+        std::size_t tape_bytes = node_bytes - vector_bytes - bool(vector_bytes) * config_.vector_alignment;
 
         byte_t* data = (byte_t*)tape_allocator_.allocate(node_bytes);
         if (!data)
             return node_bytes_split_t{};
-        return {{data, non_vector_bytes}, {data + non_vector_bytes, vector_bytes}};
+
+        // Place vector on the memory regarding to alignment
+        byte_t* vector = data + tape_bytes;
+        vector += bool(vector_bytes) * (config_.vector_alignment - ((uintptr_t)vector % config_.vector_alignment));
+
+        return {{data, tape_bytes}, {vector, vector_bytes}};
     }
 
     node_t node_make_(label_t label, vector_view_t vector, level_t level, bool store_vector) noexcept {
-        node_bytes_split_t node_bytes = node_malloc_(vector.size() * store_vector, level);
-        if (store_vector) {
-            std::memset(node_bytes.tape.data(), 0, node_bytes.tape.size());
+        node_bytes_split_t node_bytes = node_malloc_(static_cast<dim_t>(vector.size() * store_vector), level);
+        if (!node_bytes)
+            return {};
+        std::memset(node_bytes.tape.data(), 0, node_bytes.tape.size());
+        if (store_vector)
             std::memcpy(node_bytes.vector.data(), vector.data(), node_bytes.vector.size());
-        } else {
-            std::memset(node_bytes.tape.data(), 0, node_bytes.memory_usage());
-        }
+
         node_t node = node_bytes;
         node.label(label);
         node.dim(static_cast<dim_t>(vector.size()));
@@ -2982,10 +3097,12 @@ class index_gt {
     }
 
     node_t node_make_copy_(node_bytes_split_t old_bytes) noexcept {
-        if (old_bytes.colocated()) {
-            byte_t* data = (byte_t*)tape_allocator_.allocate(old_bytes.memory_usage());
-            std::memcpy(data, old_bytes.tape.data(), old_bytes.memory_usage());
-            return node_t{data, reinterpret_cast<scalar_t*>(data + old_bytes.tape.size())};
+        if (old_bytes.colocated(config_.vector_alignment)) {
+            std::size_t node_bytes = old_bytes.memory_usage(config_.vector_alignment);
+            byte_t* data = (byte_t*)tape_allocator_.allocate(node_bytes);
+            byte_t* vector = data + std::size_t(old_bytes.vector.begin() - old_bytes.tape.begin());
+            std::memcpy(data, old_bytes.tape.data(), node_bytes);
+            return node_t{data, reinterpret_cast<scalar_t*>(vector)};
         } else {
             node_t old_node = old_bytes;
             node_bytes_split_t node_bytes = node_malloc_(old_node.vector_view().size(), old_node.level());
@@ -3001,8 +3118,11 @@ class index_gt {
             return;
 
         node_t& node = nodes_[id];
-        std::size_t node_bytes = node_bytes_(node) - node_vector_bytes_(node) * !node_bytes_split_(node).colocated();
-        tape_allocator_.deallocate(node.tape(), node_bytes);
+        node_bytes_split_t node_bytes = node_bytes_split_(node);
+        if (node_bytes.colocated(config_.vector_alignment))
+            tape_allocator_.deallocate(node.tape(), node_bytes.memory_usage(config_.vector_alignment));
+        else
+            tape_allocator_.deallocate(node.tape(), node_bytes.tape.size());
         node = node_t{};
     }
 

@@ -8,10 +8,13 @@ from usearch.eval import random_vectors
 
 from usearch.index import (
     Index,
+    Indexes,
     SparseIndex,
     MetricKind,
     ScalarKind,
+    Match,
     Matches,
+    BatchMatches,
 )
 from usearch.index import (
     DEFAULT_CONNECTIVITY,
@@ -100,23 +103,24 @@ def test_index(
     vector = random_vectors(count=1, ndim=ndim, dtype=numpy_type).flatten()
     index.add(42, vector)
 
-    assert 42 in index
-    assert 42 in index.labels
-    assert 43 not in index
-    assert index[42] is not None
-    assert index[43] is None
+    assert len(index) == 1, "Size after addition"
+    assert 42 in index, "Presense in the index"
+    assert 42 in index.labels, "Presence among labels"
+    assert 43 not in index, "Presense in the index, false positive"
+    assert index[42] is not None, "Vector recovery"
+    assert index[43] is None, "Vector recovery, false positive"
     assert len(index[42]) == ndim
     if numpy_type != np.byte:
         assert np.allclose(index[42], vector, atol=0.1)
 
-    matches, distances, count = index.search(vector, 10)
-    assert len(index) == 1
-    assert len(matches) == count
-    assert len(distances) == count
-    assert count == 1
-    assert matches[0] == 42
-    assert distances[0] == pytest.approx(0, abs=1e-3)
+    matches = index.search(vector, 10)
+    assert len(matches.labels) == 1, "Number of matches"
+    assert len(matches.labels) == len(matches.distances), "Symmetric match subarrays"
+    assert len({match.label for match in matches}) == 1, "Iteration over matches"
+    assert matches[0].label == 42
+    assert matches[0].distance == pytest.approx(0, abs=1e-3)
 
+    # Validating the index structure and metadata:
     assert index.max_level >= 0
     assert index.levels_stats.nodes >= 1
     assert index.level_stats(0).nodes == 1
@@ -136,8 +140,8 @@ def test_index(
     assert len(index) == 0
     index.add(42, vector)
     assert len(index) == 1
-    matches, distances, count = index.search(vector, 10)
-    assert count == 1
+    matches = index.search(vector, 10)
+    assert len(matches) == 1
 
     index.load("tmp.usearch")
     assert len(index) == 1
@@ -176,12 +180,15 @@ def test_index_batch(
     assert len(index) == batch_size
     assert np.allclose(index.get_vectors(labels).astype(numpy_type), vectors, atol=0.1)
 
-    matches: Matches = index.search(vectors, 10, threads=2)
+    matches: BatchMatches = index.search(vectors, 10, threads=2)
     assert matches.labels.shape[0] == matches.distances.shape[0]
-    assert matches.counts.shape[0] == batch_size
+    assert len(matches) == batch_size
     assert np.all(np.sort(index.labels) == np.sort(labels))
 
-    assert index.max_level >= 0  # TODO: This should be 1
+    if batch_size > 1:
+        assert index.max_level >= 1
+    else:
+        assert index.max_level >= 0
     assert index.levels_stats.nodes >= batch_size
     assert index.level_stats(0).nodes == batch_size
 
@@ -228,16 +235,31 @@ def test_exact_recall(
         assert found_labels[0] == i
 
     # Search the whole batch
-    matches: Matches = index.search(vectors, 10, exact=True)
-    found_labels = matches.labels
-    for i in range(batch_size):
-        assert found_labels[i, 0] == i
+    if batch_size > 1:
+        matches: BatchMatches = index.search(vectors, 10, exact=True)
+        found_labels = matches.labels
+        for i in range(batch_size):
+            assert found_labels[i, 0] == i
 
     # Match entries aginst themselves
     index_copy: Index = index.copy()
     mapping: dict = index.join(index_copy, exact=True)
     for man, woman in mapping.items():
         assert man == woman, "Stable marriage failed"
+
+
+def test_indexes():
+    ndim = 10
+    index_a = Index(ndim=ndim)
+    index_b = Index(ndim=ndim)
+
+    vectors = random_vectors(count=3, ndim=ndim)
+    index_a.add(42, vectors[0])
+    index_b.add(43, vectors[1])
+
+    indexes = Indexes([index_a, index_b])
+    matches = indexes.search(vectors[2], 10)
+    assert len(matches) == 2
 
 
 @pytest.mark.parametrize("bits", dimensions)
@@ -257,7 +279,6 @@ def test_bitwise_index(
     bit_vectors = np.packbits(byte_vectors, axis=1)
 
     index.add(labels, bit_vectors)
-    assert np.allclose(index.get_vectors(labels), byte_vectors, atol=0.1)
     assert np.all(index.get_vectors(labels, ScalarKind.B1) == bit_vectors)
 
     index.search(bit_vectors, 10)

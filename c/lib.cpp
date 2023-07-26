@@ -18,6 +18,7 @@ using distance_t = usearch_distance_t;
 using index_t = index_punned_dense_gt<label_t>;
 using add_result_t = index_t::add_result_t;
 using search_result_t = index_t::search_result_t;
+using labeling_result_t = index_t::labeling_result_t;
 using serialization_result_t = index_t::serialization_result_t;
 using vector_view_t = span_gt<float>;
 
@@ -153,7 +154,7 @@ USEARCH_EXPORT void usearch_reserve(usearch_index_t index, size_t capacity, usea
     reinterpret_cast<index_t*>(index)->reserve(capacity);
 }
 
-USEARCH_EXPORT void usearch_add(                                                                          //
+USEARCH_EXPORT void usearch_add(                                                                  //
     usearch_index_t index, usearch_label_t label, void const* vector, usearch_scalar_kind_t kind, //
     usearch_error_t* error) {
     add_result_t result = add_(reinterpret_cast<index_t*>(index), label, vector, to_native_scalar(kind));
@@ -165,7 +166,7 @@ USEARCH_EXPORT bool usearch_contains(usearch_index_t index, usearch_label_t labe
     return reinterpret_cast<index_t*>(index)->contains(label);
 }
 
-USEARCH_EXPORT size_t usearch_search(                                                                    //
+USEARCH_EXPORT size_t usearch_search(                                                            //
     usearch_index_t index, void const* vector, usearch_scalar_kind_t kind, size_t results_limit, //
     usearch_label_t* found_labels, usearch_distance_t* found_distances, usearch_error_t* error) {
     search_result_t result = search_(reinterpret_cast<index_t*>(index), vector, to_native_scalar(kind), results_limit);
@@ -177,14 +178,16 @@ USEARCH_EXPORT size_t usearch_search(                                           
     return result.dump_to(found_labels, found_distances);
 }
 
-USEARCH_EXPORT bool usearch_get(                          //
+USEARCH_EXPORT bool usearch_get(                  //
     usearch_index_t index, usearch_label_t label, //
     void* vector, usearch_scalar_kind_t kind, usearch_error_t*) {
     return get_(reinterpret_cast<index_t*>(index), label, vector, to_native_scalar(kind));
 }
 
-USEARCH_EXPORT void usearch_remove(usearch_index_t, usearch_label_t, usearch_error_t* error) {
-    if (error != nullptr)
-        *error = "USearch does not support removal of elements yet.";
+USEARCH_EXPORT bool usearch_remove(usearch_index_t index, usearch_label_t label, usearch_error_t* error) {
+    labeling_result_t result = reinterpret_cast<index_t*>(index)->remove(label);
+    if (!result)
+        *error = result.error.what();
+    return result.completed;
 }
 }

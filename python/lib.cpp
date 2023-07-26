@@ -1,6 +1,6 @@
 /**
  *  @file python.cpp
- *  @author Ashot Vardanian
+ *  @author Ash Vardanian
  *  @brief Python bindings for Unum USearch.
  *  @date 2023-04-26
  *
@@ -57,6 +57,26 @@ struct dense_index_py_t : public dense_index_t {
     using native_t::size;
 
     dense_index_py_t(native_t&& base) : native_t(std::move(base)) {}
+};
+
+struct dense_indexes_py_t {
+    std::vector<std::shared_ptr<dense_index_py_t>> shards_;
+
+    void add(std::shared_ptr<dense_index_py_t> shard) { shards_.push_back(shard); }
+    std::size_t scalar_words() const noexcept { return shards_.empty() ? 0 : shards_[0]->scalar_words(); }
+    index_limits_t limits() const noexcept { return {size(), std::numeric_limits<std::size_t>::max()}; }
+
+    std::size_t size() const noexcept {
+        std::size_t result = 0;
+        for (auto const& shard : shards_)
+            result += shard->size();
+        return result;
+    }
+
+    void reserve(index_limits_t) {
+        for (auto const& shard : shards_)
+            shard->reserve({shard->size(), 1});
+    }
 };
 
 using set_member_t = std::uint32_t;
@@ -172,34 +192,6 @@ scalar_kind_t numpy_string_to_kind(std::string const& name) {
         return scalar_kind_t::unknown_k;
 }
 
-static void add_one_to_index(dense_index_py_t& index, label_t label, py::buffer vector, bool copy, std::size_t) {
-
-    py::buffer_info vector_info = vector.request();
-    if (vector_info.ndim != 1)
-        throw std::invalid_argument("Expects a vector, not a higher-rank tensor!");
-
-    Py_ssize_t vector_dimensions = vector_info.shape[0];
-    char const* vector_data = reinterpret_cast<char const*>(vector_info.ptr);
-    if (vector_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
-        throw std::invalid_argument("The number of vector dimensions doesn't match!");
-
-    if (!index.reserve(ceil2(index.size() + 1)))
-        throw std::invalid_argument("Out of memory!");
-
-    add_config_t config;
-    config.store_vector = copy;
-
-    switch (numpy_string_to_kind(vector_info.format)) {
-    case scalar_kind_t::b1x8_k: index.add(label, (b1x8_t const*)(vector_data), config).error.raise(); break;
-    case scalar_kind_t::f8_k: index.add(label, (f8_bits_t const*)(vector_data), config).error.raise(); break;
-    case scalar_kind_t::f16_k: index.add(label, (f16_t const*)(vector_data), config).error.raise(); break;
-    case scalar_kind_t::f32_k: index.add(label, (f32_t const*)(vector_data), config).error.raise(); break;
-    case scalar_kind_t::f64_k: index.add(label, (f64_t const*)(vector_data), config).error.raise(); break;
-    case scalar_kind_t::unknown_k:
-        throw std::invalid_argument("Incompatible scalars in the vector: " + vector_info.format);
-    }
-}
-
 template <typename scalar_at>
 static void add_typed_to_index(                                              //
     dense_index_py_t& index,                                                 //
@@ -222,8 +214,9 @@ static void add_typed_to_index(                                              //
     });
 }
 
-static void add_many_to_index(                                      //
-    dense_index_py_t& index, py::buffer labels, py::buffer vectors, //
+template <typename index_at>
+static void add_many_to_index(                              //
+    index_at& index, py::buffer labels, py::buffer vectors, //
     bool copy, std::size_t threads) {
 
     py::buffer_info labels_info = labels.request();
@@ -263,48 +256,6 @@ static void add_many_to_index(                                      //
     }
 }
 
-static py::tuple search_one_in_index(dense_index_py_t& index, py::buffer vector, std::size_t wanted, bool exact) {
-
-    py::buffer_info vector_info = vector.request();
-    Py_ssize_t vector_dimensions = vector_info.shape[0];
-    char const* vector_data = reinterpret_cast<char const*>(vector_info.ptr);
-    if (vector_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
-        throw std::invalid_argument("The number of vector dimensions doesn't match!");
-
-    py::array_t<label_t> labels_py(static_cast<Py_ssize_t>(wanted));
-    py::array_t<distance_t> distances_py(static_cast<Py_ssize_t>(wanted));
-    std::size_t count{};
-    auto labels_py1d = labels_py.template mutable_unchecked<1>();
-    auto distances_py1d = distances_py.template mutable_unchecked<1>();
-
-    search_config_t config;
-    config.exact = exact;
-
-    auto raise_and_dump = [&](dense_search_result_t result) {
-        result.error.raise();
-        count = result.dump_to(&labels_py1d(0), &distances_py1d(0));
-    };
-
-    switch (numpy_string_to_kind(vector_info.format)) {
-    case scalar_kind_t::b1x8_k: raise_and_dump(index.search((b1x8_t const*)(vector_data), wanted, config)); break;
-    case scalar_kind_t::f8_k: raise_and_dump(index.search((f8_bits_t const*)(vector_data), wanted, config)); break;
-    case scalar_kind_t::f16_k: raise_and_dump(index.search((f16_t const*)(vector_data), wanted, config)); break;
-    case scalar_kind_t::f32_k: raise_and_dump(index.search((f32_t const*)(vector_data), wanted, config)); break;
-    case scalar_kind_t::f64_k: raise_and_dump(index.search((f64_t const*)(vector_data), wanted, config)); break;
-    case scalar_kind_t::unknown_k:
-        throw std::invalid_argument("Incompatible scalars in the query vector: " + vector_info.format);
-    }
-
-    labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(count)});
-    distances_py.resize(py_shape_t{static_cast<Py_ssize_t>(count)});
-
-    py::tuple results(3);
-    results[0] = labels_py;
-    results[1] = distances_py;
-    results[2] = static_cast<Py_ssize_t>(count);
-    return results;
-}
-
 template <typename scalar_at>
 static void search_typed(                                   //
     dense_index_py_t& index, py::buffer_info& vectors_info, //
@@ -337,6 +288,49 @@ static void search_typed(                                   //
     });
 }
 
+template <typename scalar_at>
+static void search_typed(                                             //
+    dense_indexes_py_t const& indexes, py::buffer_info& vectors_info, //
+    std::size_t wanted, bool exact, std::size_t threads,              //
+    py::array_t<label_t>& labels_py, py::array_t<distance_t>& distances_py, py::array_t<Py_ssize_t>& counts_py) {
+
+    auto labels_py2d = labels_py.template mutable_unchecked<2>();
+    auto distances_py2d = distances_py.template mutable_unchecked<2>();
+    auto counts_py1d = counts_py.template mutable_unchecked<1>();
+
+    Py_ssize_t vectors_count = vectors_info.shape[0];
+    char const* vectors_data = reinterpret_cast<char const*>(vectors_info.ptr);
+    for (std::size_t vector_idx = 0; vector_idx != static_cast<std::size_t>(vectors_count); ++vector_idx)
+        counts_py1d(vector_idx) = 0;
+
+    if (!threads)
+        threads = std::thread::hardware_concurrency();
+
+    std::vector<std::mutex> vectors_mutexes(static_cast<std::size_t>(vectors_count));
+    executor_default_t{threads}.execute_bulk(indexes.size(), [&](std::size_t, std::size_t task_idx) {
+        dense_index_py_t const& index = *indexes.shards_[task_idx].get();
+
+        search_config_t config;
+        config.thread = 0;
+        config.exact = exact;
+        for (std::size_t vector_idx = 0; vector_idx != static_cast<std::size_t>(vectors_count); ++vector_idx) {
+            scalar_at const* vector = (scalar_at const*)(vectors_data + vector_idx * vectors_info.strides[0]);
+            dense_search_result_t result = index.search(vector, wanted, config);
+            result.error.raise();
+            {
+                std::unique_lock<std::mutex> lock(vectors_mutexes[vector_idx]);
+                counts_py1d(vector_idx) = static_cast<Py_ssize_t>(result.merge_into( //
+                    &labels_py2d(vector_idx, 0),                                     //
+                    &distances_py2d(vector_idx, 0),                                  //
+                    static_cast<std::size_t>(counts_py1d(vector_idx)),               //
+                    wanted));
+            }
+            if (PyErr_CheckSignals() != 0)
+                throw py::error_already_set();
+        }
+    });
+}
+
 /**
  *  @param vectors Matrix of vectors to search for.
  *  @param wanted Number of matches per request.
@@ -346,8 +340,9 @@ static void search_typed(                                   //
  *      2. matrix of distances,
  *      3. array with match counts.
  */
+template <typename index_at>
 static py::tuple search_many_in_index( //
-    dense_index_py_t& index, py::buffer vectors, std::size_t wanted, bool exact, std::size_t threads) {
+    index_at& index, py::buffer vectors, std::size_t wanted, bool exact, std::size_t threads) {
 
     if (wanted == 0)
         return py::tuple(3);
@@ -356,8 +351,6 @@ static py::tuple search_many_in_index( //
         throw std::invalid_argument("Can't use that many threads!");
 
     py::buffer_info vectors_info = vectors.request();
-    if (vectors_info.ndim == 1)
-        return search_one_in_index(index, vectors, wanted, exact);
     if (vectors_info.ndim != 2)
         throw std::invalid_argument("Expects a matrix of vectors to add!");
 
@@ -632,7 +625,7 @@ PYBIND11_MODULE(compiled, m) {
     h.def_readonly("bytes_for_vectors", &file_head_result_t::bytes_for_vectors);
     h.def_readonly("bytes_checksum", &file_head_result_t::bytes_checksum);
 
-    auto i = py::class_<dense_index_py_t>(m, "Index");
+    auto i = py::class_<dense_index_py_t, std::shared_ptr<dense_index_py_t>>(m, "Index");
 
     i.def(py::init(&make_index),                                           //
           py::kw_only(),                                                   //
@@ -647,30 +640,21 @@ PYBIND11_MODULE(compiled, m) {
           py::arg("tune") = false                                          //
     );
 
-    i.def(                         //
-        "add", &add_many_to_index, //
-        py::arg("labels"),         //
-        py::arg("vectors"),        //
-        py::kw_only(),             //
-        py::arg("copy") = true,    //
-        py::arg("threads") = 0     //
+    i.def(                                           //
+        "add", &add_many_to_index<dense_index_py_t>, //
+        py::arg("labels"),                           //
+        py::arg("vectors"),                          //
+        py::kw_only(),                               //
+        py::arg("copy") = true,                      //
+        py::arg("threads") = 0                       //
     );
 
-    i.def(                        //
-        "add", &add_one_to_index, //
-        py::arg("label"),         //
-        py::arg("vector"),        //
-        py::kw_only(),            //
-        py::arg("copy") = true,   //
-        py::arg("threads") = 0    //
-    );
-
-    i.def(                               //
-        "search", &search_many_in_index, //
-        py::arg("query"),                //
-        py::arg("count") = 10,           //
-        py::arg("exact") = false,        //
-        py::arg("threads") = 0           //
+    i.def(                                                 //
+        "search", &search_many_in_index<dense_index_py_t>, //
+        py::arg("query"),                                  //
+        py::arg("count") = 10,                             //
+        py::arg("exact") = false,                          //
+        py::arg("threads") = 0                             //
     );
 
     i.def(
@@ -757,6 +741,17 @@ PYBIND11_MODULE(compiled, m) {
     i.def_property_readonly("max_level", &max_level<dense_index_py_t>);
     i.def_property_readonly("levels_stats", &compute_stats<dense_index_py_t>);
     i.def("level_stats", &compute_level_stats<dense_index_py_t>, py::arg("level"));
+
+    auto is = py::class_<dense_indexes_py_t>(m, "Indexes");
+    is.def(py::init());
+    is.def("add", &dense_indexes_py_t::add);
+    is.def(                                                  //
+        "search", &search_many_in_index<dense_indexes_py_t>, //
+        py::arg("query"),                                    //
+        py::arg("count") = 10,                               //
+        py::arg("exact") = false,                            //
+        py::arg("threads") = 0                               //
+    );
 
     auto si = py::class_<sparse_index_py_t>(m, "SparseIndex");
 
