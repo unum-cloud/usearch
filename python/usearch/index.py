@@ -92,7 +92,7 @@ def _normalize_metric(metric):
             "ip": MetricKind.IP,
             "l2_sq": MetricKind.L2sq,
             "haversine": MetricKind.Haversine,
-            "perason": MetricKind.Pearson,
+            "pearson": MetricKind.Pearson,
             "hamming": MetricKind.Hamming,
             "tanimoto": MetricKind.Tanimoto,
             "sorensen": MetricKind.Sorensen,
