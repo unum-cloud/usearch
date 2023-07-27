@@ -27,7 +27,7 @@ matches: Matches = index.search(vector, 10)
 
 assert len(index) == 1
 assert len(matches) == 1
-assert matches[0].label == 42
+assert matches[0].key == 42
 assert matches[0].distance <= 0.001
 assert np.allclose(index[42], vector)
 ```
@@ -57,10 +57,10 @@ The difference would be in the shape of the tensors.
 
 ```py
 n = 100
-labels = np.arange(n)
+keys = np.arange(n)
 vectors = np.random.uniform(0, 0.3, (n, index.ndim)).astype(np.float32)
 
-index.add(labels, vectors, threads=..., copy=...)
+index.add(keys, vectors, threads=..., copy=...)
 matches: BatchMatches = index.search(vectors, 10, threads=...)
 
 assert len(matches) == vectors.shape[0]
@@ -257,7 +257,7 @@ from usearch.io import load_matrix, save_matrix
 
 vectors = load_matrix('deep1B.fbin')
 index = Index(ndim=vectors.shape[1])
-index.add(labels, vectors)
+index.add(keys, vectors)
 ```
 
 One may often want to evaluate the quality of the constructed index before running in production.

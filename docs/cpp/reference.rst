@@ -7,9 +7,9 @@ usearch/index.hpp
 .. doxygenfile:: index.hpp
 
 =================================
-usearch/index_punned_helpers.hpp
+usearch/index_plugins.hpp
 =================================
-.. doxygenfile:: index_punned_helpers.hpp
+.. doxygenfile:: index_plugins.hpp
 
 =================================
 usearch/index_dense.hpp

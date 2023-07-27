@@ -14,9 +14,9 @@ from tqdm import tqdm
 
 from usearch.compiled import Index as _CompiledIndex
 from usearch.compiled import Indexes as _CompiledIndexes
-from usearch.compiled import SparseIndex as _CompiledSetsIndex
+from usearch.compiled import IndexStats as _CompiledIndexStats
 
-from usearch.compiled import IndexMetadata, IndexStats
+from usearch.compiled import index_metadata
 from usearch.compiled import MetricKind, ScalarKind, MetricSignature
 from usearch.compiled import (
     DEFAULT_CONNECTIVITY,
@@ -33,9 +33,7 @@ MetricKindBitwise = (
     MetricKind.Sorensen,
 )
 
-SparseIndex = _CompiledSetsIndex
-
-Label = np.uint64
+Key = np.uint64
 
 
 def _normalize_dtype(dtype, metric: MetricKind = MetricKind.IP) -> ScalarKind:
@@ -155,7 +153,7 @@ def _search_in_compiled(
         pbar.close()
         return distil_batch(
             BatchMatches(
-                labels=np.vstack([m.labels for m in tasks_matches]),
+                keys=np.vstack([m.keys for m in tasks_matches]),
                 distances=np.vstack([m.distances for m in tasks_matches]),
                 counts=np.concatenate([m.counts for m in tasks_matches], axis=None),
             )
@@ -174,7 +172,7 @@ def _search_in_compiled(
 def _add_to_compiled(
     *,
     compiled,
-    labels,
+    keys,
     vectors,
     copy: bool,
     threads: int,
@@ -186,19 +184,19 @@ def _add_to_compiled(
     if vectors.ndim == 1:
         vectors = vectors.reshape(1, len(vectors))
 
-    # Validate or generate the labels
+    # Validate or generate the keys
     count_vectors = vectors.shape[0]
-    generate_labels = labels is None
+    generate_labels = keys is None
     if generate_labels:
         start_id = len(compiled)
-        labels = np.arange(start_id, start_id + count_vectors, dtype=Label)
+        keys = np.arange(start_id, start_id + count_vectors, dtype=Key)
     else:
-        if not isinstance(labels, Iterable):
-            assert count_vectors == 1, "Each vector must have a label"
-            labels = [labels]
-        labels = np.array(labels).astype(Label)
+        if not isinstance(keys, Iterable):
+            assert count_vectors == 1, "Each vector must have a key"
+            keys = [keys]
+        keys = np.array(keys).astype(Key)
 
-    assert len(labels) == count_vectors
+    assert len(keys) == count_vectors
 
     # If logging is requested, and batch size is undefined, set it to grow 1% at a time:
     if log and batch_size == 0:
@@ -206,15 +204,15 @@ def _add_to_compiled(
 
     # Split into batches and log progress, if needed
     if batch_size:
-        labels = [
-            labels[start_row : start_row + batch_size]
+        keys = [
+            keys[start_row : start_row + batch_size]
             for start_row in range(0, count_vectors, batch_size)
         ]
         vectors = [
             vectors[start_row : start_row + batch_size, :]
             for start_row in range(0, count_vectors, batch_size)
         ]
-        tasks = zip(labels, vectors)
+        tasks = zip(keys, vectors)
         name = log if isinstance(log, str) else "Add"
         pbar = tqdm(
             tasks,
@@ -223,43 +221,43 @@ def _add_to_compiled(
             unit="vector",
             disable=log is False,
         )
-        for labels, vectors in tasks:
-            compiled.add(labels, vectors, copy=copy, threads=threads)
-            pbar.update(len(labels))
+        for keys, vectors in tasks:
+            compiled.add(keys, vectors, copy=copy, threads=threads)
+            pbar.update(len(keys))
 
         pbar.close()
 
     else:
-        compiled.add(labels, vectors, copy=copy, threads=threads)
+        compiled.add(keys, vectors, copy=copy, threads=threads)
 
-    return labels
+    return keys
 
 
 @dataclass
 class Match:
-    label: int
+    key: int
     distance: float
 
 
 @dataclass
 class Matches:
-    labels: np.ndarray
+    keys: np.ndarray
     distances: np.ndarray
 
     def __len__(self) -> int:
-        return len(self.labels)
+        return len(self.keys)
 
     def __getitem__(self, index: int) -> Match:
         if isinstance(index, int) and index < len(self):
             return Match(
-                label=self.labels[index],
+                key=self.keys[index],
                 distance=self.distances[index],
             )
         else:
             raise IndexError(f"`index` must be an integer under {len(self)}")
 
     def to_list(self) -> List[tuple]:
-        return [(int(l), float(d)) for l, d in zip(self.labels, self.distances)]
+        return [(int(l), float(d)) for l, d in zip(self.keys, self.distances)]
 
     def __repr__(self) -> str:
         return f"usearch.Matches({len(self)})"
@@ -267,7 +265,7 @@ class Matches:
 
 @dataclass
 class BatchMatches:
-    labels: np.ndarray
+    keys: np.ndarray
     distances: np.ndarray
     counts: np.ndarray
 
@@ -277,7 +275,7 @@ class BatchMatches:
     def __getitem__(self, index: int) -> Matches:
         if isinstance(index, int) and index < len(self):
             return Matches(
-                labels=self.labels[index, : self.counts[index]],
+                keys=self.keys[index, : self.counts[index]],
                 distances=self.distances[index, : self.counts[index]],
             )
         else:
@@ -290,7 +288,7 @@ class BatchMatches:
     def recall_first(self, expected: np.ndarray) -> float:
         """Measures recall [0, 1] as of `Matches` that contain the corresponding
         `expected` entry as the first result."""
-        return np.sum(self.labels[:, 0] == expected) / len(expected)
+        return np.sum(self.keys[:, 0] == expected) / len(expected)
 
     def recall(self, expected: np.ndarray) -> float:
         """Measures recall [0, 1] as of `Matches` that contain the corresponding
@@ -298,7 +296,7 @@ class BatchMatches:
         assert len(expected) == self.batch_size
         recall = 0
         for i in range(self.batch_size):
-            recall += expected[i] in self.labels[i]
+            recall += expected[i] in self.keys[i]
         return recall / len(expected)
 
     def __repr__(self) -> str:
@@ -314,7 +312,7 @@ class CompiledMetric(NamedTuple):
 class Index:
     """Fast JIT-compiled vector-search index for dense equi-dimensional embeddings.
 
-    Vector labels must be integers.
+    Vector keys must be integers.
     Vectors must have the same number of dimensions within the index.
     Supports Inner Product, Cosine Distance, Ln measures
     like the Euclidean metric, as well as automatic downcasting
@@ -329,7 +327,6 @@ class Index:
         connectivity: int = DEFAULT_CONNECTIVITY,
         expansion_add: int = DEFAULT_EXPANSION_ADD,
         expansion_search: int = DEFAULT_EXPANSION_SEARCH,
-        tune: bool = False,
         path: Optional[os.PathLike] = None,
         view: bool = False,
     ) -> None:
@@ -404,13 +401,12 @@ class Index:
         self._compiled = _CompiledIndex(
             ndim=ndim,
             dtype=dtype,
-            metric=self._metric_kind,
+            metric_kind=self._metric_kind,
             metric_pointer=self._metric_pointer,
             metric_signature=self._metric_signature,
             connectivity=connectivity,
             expansion_add=expansion_add,
             expansion_search=expansion_search,
-            tune=tune,
         )
 
         self.path = path
@@ -421,33 +417,34 @@ class Index:
                 self._compiled.load(path)
 
     @staticmethod
-    def metadata(path: os.PathLike) -> IndexMetadata:
-        return IndexMetadata(path)
+    def metadata(path: os.PathLike) -> dict:
+        return index_metadata(path)
 
     @staticmethod
     def restore(path: os.PathLike, view: bool = False) -> Index:
         if not os.path.exists(path):
             return None
         meta = Index.metadata(path)
+        scalar_kind: ScalarKind = meta["kind_scalar"]
         bits_per_scalar = {
             ScalarKind.F8: 8,
             ScalarKind.F16: 16,
             ScalarKind.F32: 32,
             ScalarKind.F64: 64,
             ScalarKind.B1: 1,
-        }[meta.scalar_kind]
-        ndim = meta.bytes_for_vectors * 8 // meta.size // bits_per_scalar
+        }[scalar_kind]
+        ndim = meta["bytes_per_vector"] * 8 // bits_per_scalar
         return Index(
             ndim=ndim,
-            connectivity=meta.connectivity,
-            metric=meta.metric,
+            dtype=scalar_kind,
+            metric=meta["kind_metric"],
             path=path,
             view=view,
         )
 
     def add(
         self,
-        labels,
+        keys,
         vectors,
         *,
         copy: bool = True,
@@ -457,20 +454,20 @@ class Index:
     ) -> Union[int, np.ndarray]:
         """Inserts one or move vectors into the index.
 
-        For maximal performance the `labels` and `vectors`
+        For maximal performance the `keys` and `vectors`
         should conform to the Python's "buffer protocol" spec.
 
         To index a single entry:
-            labels: int, vectors: np.ndarray.
+            keys: int, vectors: np.ndarray.
         To index many entries:
-            labels: np.ndarray, vectors: np.ndarray.
+            keys: np.ndarray, vectors: np.ndarray.
 
         When working with extremely large indexes, you may want to
         pass `copy=False`, if you can guarantee the lifetime of the
         primary vectors store during the process of construction.
 
-        :param labels: Unique identifier(s) for passed vectors, optional
-        :type labels: Buffer
+        :param keys: Unique identifier(s) for passed vectors, optional
+        :type keys: Buffer
         :param vectors: Vector or a row-major matrix
         :type vectors: Buffer
         :param copy: Should the index store a copy of vectors, defaults to True
@@ -481,12 +478,12 @@ class Index:
         :type log: Union[str, bool], optional
         :param batch_size: Number of vectors to process at once, defaults to 0
         :type batch_size: int, optional
-        :return: Inserted label or labels
+        :return: Inserted key or keys
         :type: Union[int, np.ndarray]
         """
         return _add_to_compiled(
             compiled=self._compiled,
-            labels=labels,
+            keys=keys,
             vectors=vectors,
             copy=copy,
             threads=threads,
@@ -535,7 +532,7 @@ class Index:
 
     def remove(
         self,
-        labels: Union[int, Iterable[int]],
+        keys: Union[int, Iterable[int]],
         *,
         compact: bool = False,
         threads: int = 0,
@@ -546,8 +543,8 @@ class Index:
         mark some entries deleted, instead of rebuilding a filtered index.
         In other cases, rebuilding - is the recommended approach.
 
-        :param labels: Unique identifier for passed vectors, optional
-        :type labels: Buffer
+        :param keys: Unique identifier for passed vectors, optional
+        :type keys: Buffer
         :param compact: Removes links to removed nodes (expensive), defaults to False
         :type compact: bool, optional
         :param threads: Optimal number of cores to use, defaults to 0
@@ -555,7 +552,7 @@ class Index:
         :return: Number of removed entries
         :type: Union[bool, int]
         """
-        return self._compiled.remove(labels, compact=compact, threads=threads)
+        return self._compiled.remove(keys, compact=compact, threads=threads)
 
     def rename(self, label_from: int, label_to: int) -> bool:
         """Relabel existing entry"""
@@ -581,16 +578,16 @@ class Index:
     def __len__(self) -> int:
         return self._compiled.__len__()
 
-    def __delitem__(self, label: int) -> bool:
-        raise self.remove(label)
+    def __delitem__(self, key: int) -> bool:
+        raise self.remove(key)
 
-    def __contains__(self, label: int) -> bool:
-        return self._compiled.__contains__(label)
+    def __contains__(self, key: int) -> bool:
+        return self._compiled.__contains__(key)
 
-    def __getitem__(self, label: int) -> np.ndarray:
+    def __getitem__(self, key: int) -> np.ndarray:
         dtype = self.dtype
         get_dtype = _to_numpy_compatible_dtype(dtype)
-        vector = self._compiled.__getitem__(label, get_dtype)
+        vector = self._compiled.__getitem__(key, get_dtype)
         view_dtype = _to_numpy_dtype(dtype)
         return None if vector is None else vector.view(view_dtype)
 
@@ -691,7 +688,7 @@ class Index:
         :type max_proposals: int, optional
         :param exact: Controls if underlying `search` should be exact, defaults to False
         :type exact: bool, optional
-        :return: Mapping from labels of `self` to labels of `other`
+        :return: Mapping from keys of `self` to keys of `other`
         :rtype: dict
         """
         return self._compiled.join(
@@ -706,44 +703,44 @@ class Index:
         return self._compiled.get_labels(offset, limit)
 
     @property
-    def labels(self) -> np.ndarray:
-        """Retrieves the labels of all vectors present in `self`
+    def keys(self) -> np.ndarray:
+        """Retrieves the keys of all vectors present in `self`
 
-        :return: Array of labels
+        :return: Array of keys
         :rtype: np.ndarray
         """
-        return self._compiled.labels
+        return self._compiled.keys
 
     def get_vectors(
         self,
-        labels: np.ndarray,
+        keys: np.ndarray,
         dtype: ScalarKind = ScalarKind.F32,
     ) -> np.ndarray:
-        """Retrieves vectors associated with given `labels`
+        """Retrieves vectors associated with given `keys`
 
         :return: Matrix of vectors (row-major)
         :rtype: np.ndarray
         """
         dtype = _normalize_dtype(dtype, self._metric_kind)
         get_dtype = _to_numpy_compatible_dtype(dtype)
-        vectors = np.vstack([self._compiled.__getitem__(l, get_dtype) for l in labels])
+        vectors = np.vstack([self._compiled.__getitem__(l, get_dtype) for l in keys])
         view_dtype = _to_numpy_dtype(dtype)
         return vectors.view(view_dtype)
 
     @property
     def vectors(self) -> np.ndarray:
-        return self.get_vectors(self.labels, self.dtype)
+        return self.get_vectors(self.keys, self.dtype)
 
     @property
     def max_level(self) -> int:
         return self._compiled.max_level
 
     @property
-    def levels_stats(self) -> IndexStats:
+    def levels_stats(self) -> _CompiledIndexStats:
         """Get the accumulated statistics for the entire multi-level graph.
 
         :return: Statistics for the entire multi-level graph.
-        :rtype: IndexStats
+        :rtype: _CompiledIndexStats
 
         Statistics:
             - ``nodes`` (int): The number of nodes in that level.
@@ -753,11 +750,11 @@ class Index:
         """
         return self._compiled.levels_stats
 
-    def level_stats(self, level: int) -> IndexStats:
+    def level_stats(self, level: int) -> _CompiledIndexStats:
         """Get statistics for one level of the index - one graph.
 
         :return: Statistics for one level of the index - one graph.
-        :rtype: IndexStats
+        :rtype: _CompiledIndexStats
 
         Statistics:
             - ``nodes`` (int): The number of nodes in that level.

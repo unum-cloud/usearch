@@ -3,15 +3,13 @@
 
 using namespace unum::usearch;
 
-using metric_t = index_dense_metric_t;
-using distance_t = punned_distance_t;
-using index_t = punned_small_t;
+using distance_t = distance_punned_t;
+using index_t = index_dense_t;
 using vector_view_t = span_gt<float>;
 
 using add_result_t = typename index_t::add_result_t;
 using search_result_t = typename index_t::search_result_t;
-using label_t = typename index_t::label_t;
-using id_t = typename index_t::id_t;
+using key_t = typename index_t::key_t;
 
 EXTERN_C DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) { return LIBRARY_NO_ERROR; }
 EXTERN_C DLLEXPORT void WolframLibrary_uninitialize(WolframLibraryData libData) { return; }
@@ -119,12 +117,12 @@ EXTERN_C DLLEXPORT int IndexAdd(WolframLibraryData libData, mint Argc, MArgument
     index_t* c_ptr = (index_t*)MArgument_getUTF8String(Args[0]);
     float* vector_data = nullptr;
     try {
-        int label = MArgument_getInteger(Args[1]);
+        int key = MArgument_getInteger(Args[1]);
         MTensor tens = MArgument_getMTensor(Args[2]);
         std::size_t len = libData->MTensor_getFlattenedLength(tens);
         vector_data = (float*)libData->MTensor_getRealData(tens);
         vector_view_t vector_span = vector_view_t{vector_data, len};
-        c_ptr->add(label, vector_span);
+        c_ptr->add(key, vector_span);
     } catch (...) {
         return LIBRARY_FUNCTION_ERROR;
     }

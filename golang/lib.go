@@ -189,11 +189,11 @@ func (ind *Index) Reserve(capacity int) error {
 	return err
 }
 
-func (ind *Index) Add(label int, vec []float32) error {
+func (ind *Index) Add(key int, vec []float32) error {
 	if ind.opaque_handle == nil {
 		panic("index not initialized")
 	}
-	errStr := C.usearch_add(unsafe.Pointer(ind.opaque_handle), (C.int)(label), (*C.float)(&vec[0]))
+	errStr := C.usearch_add(unsafe.Pointer(ind.opaque_handle), (C.int)(key), (*C.float)(&vec[0]))
 	var err error
 	if errStr != nil {
 		err = errors.New(C.GoString(errStr))

@@ -25,7 +25,7 @@ typedef NS_ENUM(NSUInteger, USearchMetric) {
     USearchMetricSorensen
 };
 
-typedef UInt64 USearchLabel;
+typedef UInt64 USearchKey;
 
 API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
 @interface USearchIndex : NSObject
@@ -60,61 +60,61 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
  * @brief Adds a labeled vector to the index.
  * @param vector Single-precision vector.
  */
-- (void)addSingle:(USearchLabel)label
-           vector:(Float32 const *_Nonnull)vector NS_SWIFT_NAME(addSingle(label:vector:));
+- (void)addSingle:(USearchKey)key
+           vector:(Float32 const *_Nonnull)vector NS_SWIFT_NAME(addSingle(key:vector:));
 
 /**
  * @brief Approximate nearest neighbors search.
  * @param vector Single-precision query vector.
  * @param count Upper limit on the number of matches to retrieve.
- * @param labels Optional output buffer for labels of approximate neighbors.
+ * @param keys Optional output buffer for keys of approximate neighbors.
  * @param distances Optional output buffer for (increasing) distances to approximate neighbors.
- * @return Number of matches exported to `labels` and `distances`.
+ * @return Number of matches exported to `keys` and `distances`.
  */
 - (UInt32)searchSingle:(Float32 const *_Nonnull)vector
                  count:(UInt32)count
-                labels:(USearchLabel *_Nullable)labels
-             distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(searchSingle(vector:count:labels:distances:));
+                keys:(USearchKey *_Nullable)keys
+             distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(searchSingle(vector:count:keys:distances:));
 
 /**
  * @brief Adds a labeled vector to the index.
  * @param vector Double-precision vector.
  */
-- (void)addDouble:(USearchLabel)label
-           vector:(Float64 const *_Nonnull)vector NS_SWIFT_NAME(addDouble(label:vector:));
+- (void)addDouble:(USearchKey)key
+           vector:(Float64 const *_Nonnull)vector NS_SWIFT_NAME(addDouble(key:vector:));
 
 /**
  * @brief Approximate nearest neighbors search.
  * @param vector Double-precision query vector.
  * @param count Upper limit on the number of matches to retrieve.
- * @param labels Optional output buffer for labels of approximate neighbors.
+ * @param keys Optional output buffer for keys of approximate neighbors.
  * @param distances Optional output buffer for (increasing) distances to approximate neighbors.
- * @return Number of matches exported to `labels` and `distances`.
+ * @return Number of matches exported to `keys` and `distances`.
  */
 - (UInt32)searchDouble:(Float64 const *_Nonnull)vector
                  count:(UInt32)count
-                labels:(USearchLabel *_Nullable)labels
-             distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(searchDouble(vector:count:labels:distances:));
+                keys:(USearchKey *_Nullable)keys
+             distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(searchDouble(vector:count:keys:distances:));
 
 /**
  * @brief Adds a labeled vector to the index.
  * @param vector Half-precision vector.
  */
-- (void)addHalf:(USearchLabel)label
-         vector:(void const *_Nonnull)vector NS_SWIFT_NAME(addHalf(label:vector:));
+- (void)addHalf:(USearchKey)key
+         vector:(void const *_Nonnull)vector NS_SWIFT_NAME(addHalf(key:vector:));
 
 /**
  * @brief Approximate nearest neighbors search.
  * @param vector Half-precision query vector.
  * @param count Upper limit on the number of matches to retrieve.
- * @param labels Optional output buffer for labels of approximate neighbors.
+ * @param keys Optional output buffer for keys of approximate neighbors.
  * @param distances Optional output buffer for (increasing) distances to approximate neighbors.
- * @return Number of matches exported to `labels` and `distances`.
+ * @return Number of matches exported to `keys` and `distances`.
  */
 - (UInt32)searchHalf:(void const *_Nonnull)vector
                count:(UInt32)count
-              labels:(USearchLabel *_Nullable)labels
-           distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(searchHalf(vector:count:labels:distances:));
+              keys:(USearchKey *_Nullable)keys
+           distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(searchHalf(vector:count:keys:distances:));
 
 /**
  * @brief Saves pre-constructed index to disk.

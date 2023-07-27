@@ -49,8 +49,8 @@ public class Index {
     c_reserve(c_ptr, capacity);
   }
 
-  public void add(int label, float vector[]) {
-    c_add(c_ptr, label, vector);
+  public void add(int key, float vector[]) {
+    c_add(c_ptr, key, vector);
   }
 
   public int[] search(float vector[], long count) {
@@ -154,7 +154,7 @@ public class Index {
 
   private static native void c_reserve(long ptr, long capacity);
 
-  private static native void c_add(long ptr, int label, float vector[]);
+  private static native void c_add(long ptr, int key, float vector[]);
 
   private static native int[] c_search(long ptr, float vector[], long count);
 

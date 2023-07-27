@@ -47,7 +47,7 @@ Linting:
 cppcheck --enable=all --suppress=cstyleCast --suppress=unusedFunction \
     include/usearch/index.hpp \
     include/index_dense.hpp \
-    include/index_punned_helpers.hpp
+    include/index_plugins.hpp
 ```
 
 Testing:

@@ -11,7 +11,7 @@ index.add(16, new Float32Array([10, 25]))
 assert.equal(index.size(), 2)
 
 var results = index.search(new Float32Array([13, 14]), 2)
-assert.deepEqual(results.labels, new BigUint64Array([15n, 16n]))
+assert.deepEqual(results.keys, new BigUint64Array([15n, 16n]))
 assert.deepEqual(results.distances, new Float32Array([45, 130]))
 
 console.log('JavaScript tests passed!')

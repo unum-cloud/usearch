@@ -13,14 +13,15 @@ extern "C" {
 using namespace unum::usearch;
 using namespace unum;
 
-using label_t = usearch_label_t;
-using distance_t = usearch_distance_t;
-using index_t = index_dense_gt<label_t>;
-using add_result_t = index_t::add_result_t;
-using search_result_t = index_t::search_result_t;
-using labeling_result_t = index_t::labeling_result_t;
-using serialization_result_t = index_t::serialization_result_t;
+using index_t = index_dense_t;
+using key_t = typename index_t::key_t;
+using distance_t = typename index_t::distance_t;
+using add_result_t = typename index_t::add_result_t;
+using search_result_t = typename index_t::search_result_t;
+using labeling_result_t = typename index_t::labeling_result_t;
 using vector_view_t = span_gt<float>;
+
+static_assert(std::is_same<usearch_key_t, key_t>::value, "Type mismatch between C and C++");
 
 // helper functions that are not part of the C ABI
 metric_kind_t to_native_metric(usearch_metric_kind_t kind) {
@@ -49,25 +50,25 @@ scalar_kind_t to_native_scalar(usearch_scalar_kind_t kind) {
     }
 }
 
-add_result_t add_(index_t* index, usearch_label_t label, void const* vector, scalar_kind_t kind) {
+add_result_t add_(index_t* index, usearch_key_t key, void const* vector, scalar_kind_t kind) {
     switch (kind) {
-    case scalar_kind_t::f32_k: return index->add(label, (f32_t const*)vector);
-    case scalar_kind_t::f64_k: return index->add(label, (f64_t const*)vector);
-    case scalar_kind_t::f16_k: return index->add(label, (f16_t const*)vector);
-    case scalar_kind_t::f8_k: return index->add(label, (f8_bits_t const*)vector);
-    case scalar_kind_t::b1x8_k: return index->add(label, (b1x8_t const*)vector);
+    case scalar_kind_t::f32_k: return index->add(key, (f32_t const*)vector);
+    case scalar_kind_t::f64_k: return index->add(key, (f64_t const*)vector);
+    case scalar_kind_t::f16_k: return index->add(key, (f16_t const*)vector);
+    case scalar_kind_t::f8_k: return index->add(key, (f8_bits_t const*)vector);
+    case scalar_kind_t::b1x8_k: return index->add(key, (b1x8_t const*)vector);
     default: return add_result_t{}.failed("Unknown scalar kind!");
     }
 }
 
-bool get_(index_t* index, label_t label, void* vector, scalar_kind_t kind) {
+bool get_(index_t* index, key_t key, void* vector, scalar_kind_t kind) {
     switch (kind) {
-    case scalar_kind_t::f32_k: return index->get(label, (f32_t*)vector);
-    case scalar_kind_t::f64_k: return index->get(label, (f64_t*)vector);
-    case scalar_kind_t::f16_k: return index->get(label, (f16_t*)vector);
-    case scalar_kind_t::f8_k: return index->get(label, (f8_bits_t*)vector);
-    case scalar_kind_t::b1x8_k: return index->get(label, (b1x8_t*)vector);
-    default: return index->empty_search_result().failed("Unknown scalar kind!");
+    case scalar_kind_t::f32_k: return index->get(key, (f32_t*)vector);
+    case scalar_kind_t::f64_k: return index->get(key, (f64_t*)vector);
+    case scalar_kind_t::f16_k: return index->get(key, (f16_t*)vector);
+    case scalar_kind_t::f8_k: return index->get(key, (f8_bits_t*)vector);
+    case scalar_kind_t::b1x8_k: return index->get(key, (b1x8_t*)vector);
+    default: return search_result_t().failed("Unknown scalar kind!");
     }
 }
 
@@ -78,14 +79,14 @@ search_result_t search_(index_t* index, void const* vector, scalar_kind_t kind, 
     case scalar_kind_t::f16_k: return index->search((f16_t const*)vector, n);
     case scalar_kind_t::f8_k: return index->search((f8_bits_t const*)vector, n);
     case scalar_kind_t::b1x8_k: return index->search((b1x8_t const*)vector, n);
-    default: return index->empty_search_result().failed("Unknown scalar kind!");
+    default: return search_result_t().failed("Unknown scalar kind!");
     }
 }
 
-index_dense_metric_t udf(metric_kind_t kind, usearch_metric_t raw_ptr) {
-    index_dense_metric_t result;
+metric_punned_t udf(metric_kind_t kind, usearch_metric_t raw_ptr) {
+    metric_punned_t result;
     result.kind_ = kind;
-    result.func_ = [raw_ptr](punned_vector_view_t a, punned_vector_view_t b) -> distance_t {
+    result.func_ = [raw_ptr](span_punned_t a, span_punned_t b) -> distance_t {
         return raw_ptr((void const*)a.data(), (void const*)b.data());
     };
     return result;
@@ -154,21 +155,21 @@ USEARCH_EXPORT void usearch_reserve(usearch_index_t index, size_t capacity, usea
     reinterpret_cast<index_t*>(index)->reserve(capacity);
 }
 
-USEARCH_EXPORT void usearch_add(                                                                  //
-    usearch_index_t index, usearch_label_t label, void const* vector, usearch_scalar_kind_t kind, //
+USEARCH_EXPORT void usearch_add(                                                              //
+    usearch_index_t index, usearch_key_t key, void const* vector, usearch_scalar_kind_t kind, //
     usearch_error_t* error) {
-    add_result_t result = add_(reinterpret_cast<index_t*>(index), label, vector, to_native_scalar(kind));
+    add_result_t result = add_(reinterpret_cast<index_t*>(index), key, vector, to_native_scalar(kind));
     if (!result)
         *error = result.error.what();
 }
 
-USEARCH_EXPORT bool usearch_contains(usearch_index_t index, usearch_label_t label, usearch_error_t*) {
-    return reinterpret_cast<index_t*>(index)->contains(label);
+USEARCH_EXPORT bool usearch_contains(usearch_index_t index, usearch_key_t key, usearch_error_t*) {
+    return reinterpret_cast<index_t*>(index)->contains(key);
 }
 
 USEARCH_EXPORT size_t usearch_search(                                                            //
     usearch_index_t index, void const* vector, usearch_scalar_kind_t kind, size_t results_limit, //
-    usearch_label_t* found_labels, usearch_distance_t* found_distances, usearch_error_t* error) {
+    usearch_key_t* found_labels, usearch_distance_t* found_distances, usearch_error_t* error) {
     search_result_t result = search_(reinterpret_cast<index_t*>(index), vector, to_native_scalar(kind), results_limit);
     if (!result) {
         *error = result.error.what();
@@ -178,14 +179,14 @@ USEARCH_EXPORT size_t usearch_search(                                           
     return result.dump_to(found_labels, found_distances);
 }
 
-USEARCH_EXPORT bool usearch_get(                  //
-    usearch_index_t index, usearch_label_t label, //
+USEARCH_EXPORT bool usearch_get(              //
+    usearch_index_t index, usearch_key_t key, //
     void* vector, usearch_scalar_kind_t kind, usearch_error_t*) {
-    return get_(reinterpret_cast<index_t*>(index), label, vector, to_native_scalar(kind));
+    return get_(reinterpret_cast<index_t*>(index), key, vector, to_native_scalar(kind));
 }
 
-USEARCH_EXPORT bool usearch_remove(usearch_index_t index, usearch_label_t label, usearch_error_t* error) {
-    labeling_result_t result = reinterpret_cast<index_t*>(index)->remove(label);
+USEARCH_EXPORT bool usearch_remove(usearch_index_t index, usearch_key_t key, usearch_error_t* error) {
+    labeling_result_t result = reinterpret_cast<index_t*>(index)->remove(key);
     if (!result)
         *error = result.error.what();
     return result.completed;

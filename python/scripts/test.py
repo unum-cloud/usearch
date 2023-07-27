@@ -9,7 +9,6 @@ from usearch.eval import random_vectors
 from usearch.index import (
     Index,
     Indexes,
-    SparseIndex,
     MetricKind,
     ScalarKind,
     Match,
@@ -105,7 +104,7 @@ def test_index(
 
     assert len(index) == 1, "Size after addition"
     assert 42 in index, "Presense in the index"
-    assert 42 in index.labels, "Presence among labels"
+    assert 42 in index.keys, "Presence among keys"
     assert 43 not in index, "Presense in the index, false positive"
     assert index[42] is not None, "Vector recovery"
     assert index[43] is None, "Vector recovery, false positive"
@@ -114,10 +113,10 @@ def test_index(
         assert np.allclose(index[42], vector, atol=0.1)
 
     matches = index.search(vector, 10)
-    assert len(matches.labels) == 1, "Number of matches"
-    assert len(matches.labels) == len(matches.distances), "Symmetric match subarrays"
-    assert len({match.label for match in matches}) == 1, "Iteration over matches"
-    assert matches[0].label == 42
+    assert len(matches.keys) == 1, "Number of matches"
+    assert len(matches.keys) == len(matches.distances), "Symmetric match subarrays"
+    assert len({match.key for match in matches}) == 1, "Iteration over matches"
+    assert matches[0].key == 42
     assert matches[0].distance == pytest.approx(0, abs=1e-3)
 
     # Validating the index structure and metadata:
@@ -147,21 +146,21 @@ def test_index(
     assert len(index_copy) == 1
     assert len(index_copy[42]) == ndim
     matches_copy: Matches = index_copy.search(vector, 10)
-    assert np.all(matches_copy.labels == matches.labels)
+    assert np.all(matches_copy.keys == matches.keys)
 
     index.load("tmp.usearch")
     assert len(index) == 1
     assert len(index[42]) == ndim
 
     matches_loaded: Matches = index.search(vector, 10)
-    assert np.all(matches_loaded.labels == matches.labels)
+    assert np.all(matches_loaded.keys == matches.keys)
 
     index = Index.restore("tmp.usearch", view=True)
     assert len(index) == 1
     assert len(index[42]) == ndim
 
     matches_viewed: Matches = index.search(vector, 10)
-    assert np.all(matches_viewed.labels == matches.labels)
+    assert np.all(matches_viewed.keys == matches.keys)
 
     # Cleanup
     os.remove("tmp.usearch")
@@ -181,17 +180,17 @@ def test_index_batch(
 ):
     index = Index(ndim=ndim, metric=metric, dtype=index_type)
 
-    labels = np.arange(batch_size)
+    keys = np.arange(batch_size)
     vectors = random_vectors(count=batch_size, ndim=ndim, dtype=numpy_type)
 
-    index.add(labels, vectors, threads=2)
+    index.add(keys, vectors, threads=2)
     assert len(index) == batch_size
-    assert np.allclose(index.get_vectors(labels).astype(numpy_type), vectors, atol=0.1)
+    assert np.allclose(index.get_vectors(keys).astype(numpy_type), vectors, atol=0.1)
 
     matches: BatchMatches = index.search(vectors, 10, threads=2)
-    assert matches.labels.shape[0] == matches.distances.shape[0]
+    assert matches.keys.shape[0] == matches.distances.shape[0]
     assert len(matches) == batch_size
-    assert np.all(np.sort(index.labels) == np.sort(labels))
+    assert np.all(np.sort(index.keys) == np.sort(keys))
 
     if batch_size > 1:
         assert index.max_level >= 1
@@ -211,7 +210,7 @@ def test_index_batch(
     if batch_size > 1:
         matches_loaded: BatchMatches = index.search(vectors, 10, threads=2)
         for idx in range(len(matches_loaded)):
-            assert np.all(matches_loaded[idx].labels == matches[idx].labels)
+            assert np.all(matches_loaded[idx].keys == matches[idx].keys)
 
     index = Index.restore("tmp.usearch", view=True)
     assert len(index) == batch_size
@@ -220,7 +219,7 @@ def test_index_batch(
     if batch_size > 1:
         matches_viewed: BatchMatches = index.search(vectors, 10, threads=2)
         for idx in range(len(matches_viewed)):
-            assert np.all(matches_viewed[idx].labels == matches[idx].labels)
+            assert np.all(matches_viewed[idx].keys == matches[idx].keys)
 
     # Cleanup
     os.remove("tmp.usearch")
@@ -242,20 +241,20 @@ def test_exact_recall(
     vectors = np.zeros((batch_size, ndim), dtype=numpy_type)
     for i in range(batch_size):
         vectors[i, i] = 1
-    labels = np.arange(batch_size)
-    index.add(labels, vectors)
+    keys = np.arange(batch_size)
+    index.add(keys, vectors)
     assert len(index) == batch_size
 
     # Search one at a time
     for i in range(batch_size):
         matches: Matches = index.search(vectors[i], 10, exact=True)
-        found_labels = matches.labels
+        found_labels = matches.keys
         assert found_labels[0] == i
 
     # Search the whole batch
     if batch_size > 1:
         matches: BatchMatches = index.search(vectors, 10, exact=True)
-        found_labels = matches.labels
+        found_labels = matches.keys
         for i in range(batch_size):
             assert found_labels[i, 0] == i
 
@@ -292,24 +291,16 @@ def test_bitwise_index(
 ):
     index = Index(ndim=bits, metric=metric, connectivity=connectivity)
 
-    labels = np.arange(batch_size)
+    print(bits, metric, connectivity, batch_size)
+
+    keys = np.arange(batch_size)
     byte_vectors = np.random.randint(2, size=(batch_size, bits))
     bit_vectors = np.packbits(byte_vectors, axis=1)
 
-    index.add(labels, bit_vectors)
-    assert np.all(index.get_vectors(labels, ScalarKind.B1) == bit_vectors)
+    index.add(keys, bit_vectors)
+    assert np.all(index.get_vectors(keys, ScalarKind.B1) == bit_vectors)
 
     index.search(bit_vectors, 10)
-
-
-@pytest.mark.parametrize("connectivity", connectivity_options)
-@pytest.mark.skipif(os.name == "nt", reason="Spurious behaviour on windows")
-def test_sets_index(connectivity: int):
-    index = SparseIndex(connectivity=connectivity)
-    index.add(10, np.array([10, 12, 15], dtype=np.uint32))
-    index.add(11, np.array([11, 12, 15, 16], dtype=np.uint32))
-    results = index.search(np.array([12, 15], dtype=np.uint32), 10)
-    assert list(results) == [10, 11]
 
 
 if __name__ == "__main__":

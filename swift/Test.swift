@@ -16,8 +16,8 @@ class Test: XCTestCase {
         let vectorA: [Float32] = [0.3, 0.5, 1.2, 1.4]
         let vectorB: [Float32] = [0.4, 0.2, 1.2, 1.1]
         index.reserve(2)
-        index.add(label: 42, vector: vectorA[...])
-        index.add(label: 43, vector: vectorB[...])
+        index.add(key: 42, vector: vectorA[...])
+        index.add(key: 43, vector: vectorB[...])
         
         let results = index.search(vector: vectorA[...], count: 10)
         assert(results.0[0] == 42)

@@ -8,14 +8,11 @@
 using namespace unum::usearch;
 using namespace unum;
 
-using metric_t = index_dense_metric_t;
-using distance_t = punned_distance_t;
-using index_t = punned_small_t;
+using distance_t = distance_punned_t;
+using index_t = index_dense_t;
 using add_result_t = typename index_t::add_result_t;
 using search_result_t = typename index_t::search_result_t;
-using serialization_result_t = typename index_t::serialization_result_t;
-using label_t = typename index_t::label_t;
-using id_t = typename index_t::id_t;
+using key_t = typename index_t::key_t;
 using shared_index_t = std::shared_ptr<index_t>;
 
 metric_kind_t to_native_metric(USearchMetric m) {
@@ -124,9 +121,9 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
     return [[USearchIndex alloc] initWithIndex:ptr];
 }
 
-- (void)addSingle:(USearchLabel)label
+- (void)addSingle:(USearchKey)key
            vector:(Float32 const *_Nonnull)vector {
-    add_result_t result = _native->add(label, vector);
+    add_result_t result = _native->add(key, vector);
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't add to index"
@@ -137,7 +134,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
 - (UInt32)searchSingle:(Float32 const *_Nonnull)vector
                  count:(UInt32)wanted
-                labels:(USearchLabel *_Nullable)labels
+                keys:(USearchKey *_Nullable)keys
              distances:(Float32 *_Nullable)distances {
     search_result_t result = _native->search(vector, static_cast<std::size_t>(wanted));
 
@@ -147,13 +144,13 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
                                      userInfo:nil];
     }
 
-    std::size_t found = result.dump_to(labels, distances);
+    std::size_t found = result.dump_to(keys, distances);
     return static_cast<UInt32>(found);
 }
 
-- (void)addDouble:(USearchLabel)label
+- (void)addDouble:(USearchKey)key
            vector:(Float64 const *_Nonnull)vector {
-    add_result_t result = _native->add(label, (f64_t const *)vector);
+    add_result_t result = _native->add(key, (f64_t const *)vector);
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't add to index"
@@ -164,7 +161,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
 - (UInt32)searchDouble:(Float64 const *_Nonnull)vector
                  count:(UInt32)wanted
-                labels:(USearchLabel *_Nullable)labels
+                keys:(USearchKey *_Nullable)keys
              distances:(Float32 *_Nullable)distances {
     search_result_t result = _native->search((f64_t const *)vector, static_cast<std::size_t>(wanted));
 
@@ -174,13 +171,13 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
                                      userInfo:nil];
     }
 
-    std::size_t found = result.dump_to(labels, distances);
+    std::size_t found = result.dump_to(keys, distances);
     return static_cast<UInt32>(found);
 }
 
-- (void)addHalf:(USearchLabel)label
+- (void)addHalf:(USearchKey)key
          vector:(void const *_Nonnull)vector {
-    add_result_t result = _native->add(label, (f16_t const *)vector);
+    add_result_t result = _native->add(key, (f16_t const *)vector);
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't add to index"
@@ -191,7 +188,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
 - (UInt32)searchHalf:(void const *_Nonnull)vector
                count:(UInt32)wanted
-              labels:(USearchLabel *_Nullable)labels
+              keys:(USearchKey *_Nullable)keys
            distances:(Float32 *_Nullable)distances {
     search_result_t result = _native->search((f16_t const *)vector, static_cast<std::size_t>(wanted));
 
@@ -201,7 +198,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
                                      userInfo:nil];
     }
 
-    std::size_t found = result.dump_to(labels, distances);
+    std::size_t found = result.dump_to(keys, distances);
     return static_cast<UInt32>(found);
 }
 

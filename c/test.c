@@ -107,8 +107,8 @@ void test_add_vector(size_t vectors_count, size_t vector_dimension, float const*
 
     // Add vectors
     for (size_t i = 0; i < vectors_count; ++i) {
-        usearch_label_t label = i;
-        usearch_add(idx, label, data + i * vector_dimension, usearch_scalar_f32_k, &error);
+        usearch_key_t key = i;
+        usearch_add(idx, key, data + i * vector_dimension, usearch_scalar_f32_k, &error);
         ASSERT(!error, error);
     }
 
@@ -117,10 +117,10 @@ void test_add_vector(size_t vectors_count, size_t vector_dimension, float const*
 
     // Check vectors in the index
     for (size_t i = 0; i < vectors_count; ++i) {
-        usearch_label_t label = i;
-        ASSERT(usearch_contains(idx, label, &error), error);
+        usearch_key_t key = i;
+        ASSERT(usearch_contains(idx, key, &error), error);
     }
-    ASSERT(!usearch_contains(idx, -1, &error), error); // Non existing label
+    ASSERT(!usearch_contains(idx, -1, &error), error); // Non existing key
 
     usearch_free(idx, &error);
     printf("Test: Add Vector - PASSED\n");
@@ -137,21 +137,21 @@ void test_find_vector(size_t vectors_count, size_t vector_dimension, float const
 
     // Create result buffers
     int results_count = 10;
-    usearch_label_t* labels = (usearch_label_t*)malloc(results_count * sizeof(usearch_label_t));
+    usearch_key_t* keys = (usearch_key_t*)malloc(results_count * sizeof(usearch_key_t));
     float* distances = (float*)malloc(results_count * sizeof(float));
-    ASSERT(labels && distances, "Failed to allocate memory");
+    ASSERT(keys && distances, "Failed to allocate memory");
 
     // Add vectors
     for (size_t i = 0; i < vectors_count; ++i) {
-        usearch_label_t label = i;
-        usearch_add(idx, label, data + i * vector_dimension, usearch_scalar_f32_k, &error);
+        usearch_key_t key = i;
+        usearch_add(idx, key, data + i * vector_dimension, usearch_scalar_f32_k, &error);
         ASSERT(!error, error);
     }
 
     // Find the vectors
     for (size_t i = 0; i < vectors_count; i++) {
         const void *query_vector = data + i * vector_dimension;
-        size_t found_count = usearch_search(idx, query_vector, usearch_scalar_f32_k, results_count, labels, distances, &error);
+        size_t found_count = usearch_search(idx, query_vector, usearch_scalar_f32_k, results_count, keys, distances, &error);
         ASSERT(!error, error);
         ASSERT(found_count = results_count, "Vector is missing");
     }
@@ -171,15 +171,15 @@ void test_remove_vector(size_t vectors_count, size_t vector_dimension, float con
 
     // Add vectors
     for (size_t i = 0; i < vectors_count; ++i) {
-        usearch_label_t label = i;
-        usearch_add(idx, label, data + i * vector_dimension, usearch_scalar_f32_k, &error);
+        usearch_key_t key = i;
+        usearch_add(idx, key, data + i * vector_dimension, usearch_scalar_f32_k, &error);
         ASSERT(!error, error);
     }
 
     // Remove the vectors
     for (size_t i = 0; i < vectors_count; i++) {
-        usearch_label_t label = i;
-        usearch_remove(idx, label, &error);
+        usearch_key_t key = i;
+        usearch_remove(idx, key, &error);
         ASSERT(error, "Currently, Remove is not supported");
     }
 
@@ -198,8 +198,8 @@ void test_save_load(size_t vectors_count, size_t vector_dimension, float const* 
 
     // Add vectors
     for (size_t i = 0; i < vectors_count; ++i) {
-        usearch_label_t label = i;
-        usearch_add(idx, label, data + i * vector_dimension, usearch_scalar_f32_k, &error);
+        usearch_key_t key = i;
+        usearch_add(idx, key, data + i * vector_dimension, usearch_scalar_f32_k, &error);
         ASSERT(!error, error);
     }
 
@@ -224,8 +224,8 @@ void test_save_load(size_t vectors_count, size_t vector_dimension, float const* 
 
     // Check vectors in the index
     for (size_t i = 0; i < vectors_count; ++i) {
-        usearch_label_t label = i;
-        ASSERT(usearch_contains(idx, label, &error), error);
+        usearch_key_t key = i;
+        ASSERT(usearch_contains(idx, key, &error), error);
     }
 
     usearch_free(idx, &error);
@@ -243,8 +243,8 @@ void test_view(size_t vectors_count, size_t vector_dimension, float const* data)
 
     // Add vectors
     for (size_t i = 0; i < vectors_count; ++i) {
-        usearch_label_t label = i;
-        usearch_add(idx, label, data + i * vector_dimension, usearch_scalar_f32_k, &error);
+        usearch_key_t key = i;
+        usearch_add(idx, key, data + i * vector_dimension, usearch_scalar_f32_k, &error);
         ASSERT(!error, error);
     }
 

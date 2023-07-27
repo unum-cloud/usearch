@@ -23,7 +23,7 @@ public class IndexTest {
         // Index index = new Index.Config().metric("cos").dimensions(2).build();
         // float vec[] = {10, 20};
         // index.add(42, vec);
-        // int[] labels = index.search(vec, 5);
+        // int[] keys = index.search(vec, 5);
 
         System.out.println("Java Tests Passed!");
     }

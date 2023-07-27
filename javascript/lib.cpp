@@ -20,13 +20,11 @@
 using namespace unum::usearch;
 using namespace unum;
 
-using metric_t = index_dense_metric_t;
-using distance_t = punned_distance_t;
-using index_t = punned_small_t;
+using distance_t = distance_punned_t;
+using index_t = index_dense_t;
 using add_result_t = typename index_t::add_result_t;
 using search_result_t = typename index_t::search_result_t;
-using label_t = typename index_t::label_t;
-using id_t = typename index_t::id_t;
+using key_t = typename index_t::key_t;
 
 class Index : public Napi::ObjectWrap<Index> {
   public:
@@ -192,12 +190,12 @@ void Index::View(Napi::CallbackInfo const& ctx) {
 void Index::Add(Napi::CallbackInfo const& ctx) {
     Napi::Env env = ctx.Env();
     if (ctx.Length() < 2 || !ctx[0].IsNumber() || !ctx[1].IsTypedArray())
-        return Napi::TypeError::New(env, "Expects an integral label and a float vector").ThrowAsJavaScriptException();
+        return Napi::TypeError::New(env, "Expects an integral key and a float vector").ThrowAsJavaScriptException();
 
     Napi::Number label_js = ctx[0].As<Napi::Number>();
     Napi::Float32Array vector_js = ctx[1].As<Napi::Float32Array>();
 
-    label_t label = label_js.Uint32Value();
+    key_t key = label_js.Uint32Value();
     float const* vector = vector_js.Data();
     std::size_t dimensions = static_cast<std::size_t>(vector_js.ElementLength());
     if (dimensions != native_->dimensions())
@@ -207,7 +205,7 @@ void Index::Add(Napi::CallbackInfo const& ctx) {
         native_->reserve(ceil2(native_->size() + 1));
 
     try {
-        native_->add(label, vector);
+        native_->add(key, vector);
     } catch (std::bad_alloc const&) {
         Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
     } catch (...) {
@@ -234,12 +232,12 @@ Napi::Value Index::Search(Napi::CallbackInfo const& ctx) {
         return {};
     }
 
-    Napi::TypedArrayOf<label_t> matches_js = Napi::TypedArrayOf<label_t>::New(env, wanted);
+    Napi::TypedArrayOf<key_t> matches_js = Napi::TypedArrayOf<key_t>::New(env, wanted);
     Napi::Float32Array distances_js = Napi::Float32Array::New(env, wanted);
     try {
         std::size_t count = native_->search(vector, wanted).dump_to(matches_js.Data(), distances_js.Data());
         Napi::Object result_js = Napi::Object::New(env);
-        result_js.Set("labels", matches_js);
+        result_js.Set("keys", matches_js);
         result_js.Set("distances", distances_js);
         result_js.Set("count", Napi::Number::New(env, count));
         return result_js;

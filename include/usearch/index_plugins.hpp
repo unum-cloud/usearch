@@ -45,9 +45,40 @@
 namespace unum {
 namespace usearch {
 
+using u40_t = uint40_t;
+enum b1x8_t : unsigned char {};
+
+struct uuid_t {
+    std::uint8_t octets[16];
+};
+
+class f8_bits_t;
+class f16_bits_t;
+
+#if USEARCH_USE_NATIVE_F16
+#if defined(USEARCH_DEFINED_ARM)
+using f16_native_t = __fp16;
+#else
+using f16_native_t = _Float16;
+#endif
+using f16_t = f16_native_t;
+#else
+using f16_native_t = void;
+using f16_t = f16_bits_t;
+#endif
+
 using f64_t = double;
 using f32_t = float;
-enum b1x8_t : unsigned char {};
+
+using u64_t = std::uint64_t;
+using u32_t = std::uint32_t;
+using u16_t = std::uint16_t;
+using u8_t = std::uint8_t;
+
+using i64_t = std::int64_t;
+using i32_t = std::int32_t;
+using i16_t = std::int16_t;
+using i8_t = std::int8_t;
 
 enum class metric_kind_t : std::uint8_t {
     unknown_k = 0,
@@ -89,7 +120,7 @@ enum class scalar_kind_t : std::uint8_t {
     i8_k,
 };
 
-enum class isa_t {
+enum class isa_kind_t {
     auto_k,
     neon_k,
     sve_k,
@@ -97,13 +128,43 @@ enum class isa_t {
     avx512_k,
 };
 
-template <typename scalar_at> scalar_kind_t common_scalar_kind() noexcept {
-    if (std::is_same<scalar_at, f32_t>())
-        return scalar_kind_t::f32_k;
-    if (std::is_same<scalar_at, f64_t>())
-        return scalar_kind_t::f64_k;
+enum class prefetching_kind_t {
+    none_k,
+    cpu_k,
+    io_uring_k,
+};
+
+template <typename scalar_at> scalar_kind_t scalar_kind() noexcept {
     if (std::is_same<scalar_at, b1x8_t>())
         return scalar_kind_t::b1x8_k;
+    if (std::is_same<scalar_at, uint40_t>())
+        return scalar_kind_t::u40_k;
+    if (std::is_same<scalar_at, uuid_t>())
+        return scalar_kind_t::uuid_k;
+    if (std::is_same<scalar_at, f64_t>())
+        return scalar_kind_t::f64_k;
+    if (std::is_same<scalar_at, f32_t>())
+        return scalar_kind_t::f32_k;
+    if (std::is_same<scalar_at, f16_t>())
+        return scalar_kind_t::f16_k;
+    if (std::is_same<scalar_at, f8_bits_t>())
+        return scalar_kind_t::f8_k;
+    if (std::is_same<scalar_at, u64_t>())
+        return scalar_kind_t::u64_k;
+    if (std::is_same<scalar_at, u32_t>())
+        return scalar_kind_t::u32_k;
+    if (std::is_same<scalar_at, u16_t>())
+        return scalar_kind_t::u16_k;
+    if (std::is_same<scalar_at, u8_t>())
+        return scalar_kind_t::u8_k;
+    if (std::is_same<scalar_at, i64_t>())
+        return scalar_kind_t::i64_k;
+    if (std::is_same<scalar_at, i32_t>())
+        return scalar_kind_t::i32_k;
+    if (std::is_same<scalar_at, i16_t>())
+        return scalar_kind_t::i16_k;
+    if (std::is_same<scalar_at, i8_t>())
+        return scalar_kind_t::i8_k;
     return scalar_kind_t::unknown_k;
 }
 
@@ -123,53 +184,64 @@ inline bool str_equals(char const* begin, std::size_t len, char const* other_beg
     return len == other_len && std::strncmp(begin, other_begin, len) == 0;
 }
 
-inline char const* isa_name(isa_t isa) noexcept {
-    switch (isa) {
-    case isa_t::auto_k: return "auto";
-    case isa_t::neon_k: return "neon";
-    case isa_t::sve_k: return "sve";
-    case isa_t::avx2_k: return "avx2";
-    case isa_t::avx512_k: return "avx512";
+inline char const* isa_name(isa_kind_t isa_kind) noexcept {
+    switch (isa_kind) {
+    case isa_kind_t::auto_k: return "auto";
+    case isa_kind_t::neon_k: return "neon";
+    case isa_kind_t::sve_k: return "sve";
+    case isa_kind_t::avx2_k: return "avx2";
+    case isa_kind_t::avx512_k: return "avx512";
     default: return "";
     }
 }
 
-inline bool hardware_supports(isa_t isa) noexcept {
+inline bool hardware_supports(isa_kind_t isa_kind) noexcept {
 #if defined(USEARCH_DEFINED_ARM) && defined(USEARCH_DEFINED_LINUX)
     unsigned long capabilities = getauxval(AT_HWCAP);
-    switch (isa) {
-    case isa_t::neon_k: return true; // Must be supported on 64-bit Arm
-    case isa_t::sve_k: return capabilities & HWCAP_SVE;
+    switch (isa_kind) {
+    case isa_kind_t::neon_k: return true; // Must be supported on 64-bit Arm
+    case isa_kind_t::sve_k: return capabilities & HWCAP_SVE;
     default: return false;
     }
 #endif
 
 #if defined(USEARCH_DEFINED_X86) && defined(USEARCH_DEFINED_GCC)
     __builtin_cpu_init();
-    switch (isa) {
-    case isa_t::avx2_k: return __builtin_cpu_supports("avx2");
-    case isa_t::avx512_k: return __builtin_cpu_supports("avx512f");
+    switch (isa_kind) {
+    case isa_kind_t::avx2_k: return __builtin_cpu_supports("avx2");
+    case isa_kind_t::avx512_k: return __builtin_cpu_supports("avx512f");
     default: return false;
     }
 #endif
 
-    (void)isa;
+    (void)isa_kind;
     return false;
 }
 
-inline std::size_t bytes_per_scalar(scalar_kind_t accuracy) noexcept {
-    switch (accuracy) {
-    case scalar_kind_t::f32_k: return 4;
-    case scalar_kind_t::f16_k: return 2;
-    case scalar_kind_t::f64_k: return 8;
-    case scalar_kind_t::f8_k: return 1;
+inline std::size_t bits_per_scalar(scalar_kind_t scalar_kind) noexcept {
+    switch (scalar_kind) {
+    case scalar_kind_t::f64_k: return 64;
+    case scalar_kind_t::f32_k: return 32;
+    case scalar_kind_t::f16_k: return 16;
+    case scalar_kind_t::f8_k: return 8;
     case scalar_kind_t::b1x8_k: return 1;
     default: return 0;
     }
 }
 
-inline char const* scalar_kind_name(scalar_kind_t accuracy) noexcept {
-    switch (accuracy) {
+inline std::size_t bits_per_scalar_word(scalar_kind_t scalar_kind) noexcept {
+    switch (scalar_kind) {
+    case scalar_kind_t::f64_k: return 64;
+    case scalar_kind_t::f32_k: return 32;
+    case scalar_kind_t::f16_k: return 16;
+    case scalar_kind_t::f8_k: return 8;
+    case scalar_kind_t::b1x8_k: return 8;
+    default: return 0;
+    }
+}
+
+inline char const* scalar_kind_name(scalar_kind_t scalar_kind) noexcept {
+    switch (scalar_kind) {
     case scalar_kind_t::f32_k: return "f32";
     case scalar_kind_t::f16_k: return "f16";
     case scalar_kind_t::f64_k: return "f64";
@@ -232,24 +304,6 @@ inline expected_gt<metric_kind_t> metric_from_name(char const* name, std::size_t
             "Unknown distance, choose: l2sq, ip, cos, haversine, jaccard, pearson, hamming, tanimoto, sorensen");
     return parsed;
 }
-
-using punned_distance_t = float;
-using punned_vector_view_t = span_gt<byte_t const>;
-
-class f8_bits_t;
-class f16_bits_t;
-
-#if USEARCH_USE_NATIVE_F16
-#if defined(USEARCH_DEFINED_ARM)
-using f16_native_t = __fp16;
-#else
-using f16_native_t = _Float16;
-#endif
-using f16_t = f16_native_t;
-#else
-using f16_native_t = void;
-using f16_t = f16_bits_t;
-#endif
 
 inline float f16_to_f32(std::uint16_t u16) noexcept {
 #if USEARCH_USE_NATIVE_F16
@@ -367,10 +421,6 @@ class f8_bits_t {
 };
 
 inline f16_bits_t::f16_bits_t(f8_bits_t v) noexcept : f16_bits_t(float(v)) {}
-
-struct uuid_t {
-    std::uint8_t octets[16];
-};
 
 /**
  *  @brief  An STL-based executor or a "thread-pool" for parallel execution.
@@ -522,7 +572,7 @@ using aligned_allocator_t = aligned_allocator_gt<>;
 
 /**
  *  @brief  Memory-mapping allocator designed for "alloc many, free at once" usage patterns.
- *          Thread-safe, @b except constructors and destructors.
+ *          @b Thread-safe, @b except constructors and destructors.
  *
  *  Using this memory allocator won't affect your overall speed much, as that is not the bottleneck.
  *  However, it can drastically improve memory usage especcially for huge indexes of small vectors.
@@ -681,11 +731,11 @@ using memory_mapping_allocator_t = memory_mapping_allocator_gt<>;
  *          avoiding unnecessary conversions.
  */
 template <typename from_scalar_at, typename to_scalar_at> struct cast_gt {
-    inline bool operator()(byte_t const* input, std::size_t dimensions, byte_t* output) const {
+    inline bool operator()(byte_t const* input, std::size_t dim, byte_t* output) const {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
         to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
         auto converter = [](from_scalar_at from) { return to_scalar_at(from); };
-        std::transform(typed_input, typed_input + dimensions, typed_output, converter);
+        std::transform(typed_input, typed_input + dim, typed_output, converter);
         return true;
     }
 };
@@ -711,20 +761,20 @@ template <> struct cast_gt<b1x8_t, b1x8_t> {
 };
 
 template <typename from_scalar_at> struct cast_gt<from_scalar_at, b1x8_t> {
-    inline bool operator()(byte_t const* input, std::size_t dimensions, byte_t* output) const {
+    inline bool operator()(byte_t const* input, std::size_t dim, byte_t* output) const {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
         unsigned char* typed_output = reinterpret_cast<unsigned char*>(output);
-        for (std::size_t i = 0; i != dimensions; ++i)
+        for (std::size_t i = 0; i != dim; ++i)
             typed_output[i / CHAR_BIT] |= bool(typed_input[i]) ? (128 >> (i & (CHAR_BIT - 1))) : 0;
         return true;
     }
 };
 
 template <typename to_scalar_at> struct cast_gt<b1x8_t, to_scalar_at> {
-    inline bool operator()(byte_t const* input, std::size_t dimensions, byte_t* output) const {
+    inline bool operator()(byte_t const* input, std::size_t dim, byte_t* output) const {
         unsigned char const* typed_input = reinterpret_cast<unsigned char const*>(input);
         to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
-        for (std::size_t i = 0; i != dimensions; ++i)
+        for (std::size_t i = 0; i != dim; ++i)
             typed_output[i] = bool(typed_input[i / CHAR_BIT] & (128 >> (i & (CHAR_BIT - 1))));
         return true;
     }
@@ -733,18 +783,12 @@ template <typename to_scalar_at> struct cast_gt<b1x8_t, to_scalar_at> {
 /**
  *  @brief  Inner (Dot) Product distance.
  */
-template <typename scalar_at = float, typename result_at = scalar_at> struct ip_gt {
+template <typename scalar_at = float, typename result_at = scalar_at> struct metric_ip_gt {
     using scalar_t = scalar_at;
-    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
-    using result_type = result_t;
-
-    inline metric_kind_t kind() const noexcept { return metric_kind_t::ip_k; }
-    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
-    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
-        result_type ab{};
+        result_t ab{};
 #if USEARCH_USE_OPENMP
 #pragma omp simd reduction(+ : ab)
 #elif defined(USEARCH_DEFINED_CLANG)
@@ -762,17 +806,11 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct ip_
  *  @brief  Cosine (Angular) distance.
  *          Identical to the Inner Product of normalized vectors.
  *          Unless you are running on an tiny embedded platform, this metric
- *          is recommended over `::ip_gt` for low-precision scalars.
+ *          is recommended over `::metric_ip_gt` for low-precision scalars.
  */
-template <typename scalar_at = float, typename result_at = scalar_at> struct cos_gt {
+template <typename scalar_at = float, typename result_at = scalar_at> struct metric_cos_gt {
     using scalar_t = scalar_at;
-    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
-    using result_type = result_t;
-
-    inline metric_kind_t kind() const noexcept { return metric_kind_t::cos_k; }
-    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
-    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
         result_t ab{}, a2{}, b2{};
@@ -787,7 +825,12 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct cos
             ab += result_t(a[i]) * result_t(b[i]), //
                 a2 += square<result_t>(a[i]),      //
                 b2 += square<result_t>(b[i]);
-        return (ab != 0) ? (1 - ab / (std::sqrt(a2) * std::sqrt(b2))) : 1;
+
+        result_t result_if_zero[2][2];
+        result_if_zero[0][0] = 1 - ab / (std::sqrt(a2) * std::sqrt(b2));
+        result_if_zero[0][1] = result_if_zero[1][0] = 1;
+        result_if_zero[1][1] = 0;
+        return result_if_zero[a2 == 0][b2 == 0];
     }
 };
 
@@ -795,15 +838,9 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct cos
  *  @brief  Squared Euclidean (L2) distance.
  *          Square root is avoided at the end, as it won't affect the ordering.
  */
-template <typename scalar_at = float, typename result_at = scalar_at> struct l2sq_gt {
+template <typename scalar_at = float, typename result_at = scalar_at> struct metric_l2sq_gt {
     using scalar_t = scalar_at;
-    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
-    using result_type = result_t;
-
-    inline metric_kind_t kind() const noexcept { return metric_kind_t::l2sq_k; }
-    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
-    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
         result_t ab_deltas_sq{};
@@ -825,19 +862,13 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct l2s
  *          two arrays of integers. An example would be a textual document,
  *          tokenized and hashed into a fixed-capacity bitset.
  */
-template <typename scalar_at = std::uint64_t, typename result_at = std::size_t> struct hamming_gt {
+template <typename scalar_at = std::uint64_t, typename result_at = std::size_t> struct metric_hamming_gt {
     using scalar_t = scalar_at;
-    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
-    using result_type = result_t;
     static_assert( //
         std::is_unsigned<scalar_t>::value ||
             (std::is_enum<scalar_t>::value && std::is_unsigned<typename std::underlying_type<scalar_t>::type>::value),
         "Hamming distance requires unsigned integral words");
-
-    inline metric_kind_t kind() const noexcept { return metric_kind_t::hamming_k; }
-    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
-    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
         constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
@@ -859,20 +890,14 @@ template <typename scalar_at = std::uint64_t, typename result_at = std::size_t> 
  *  @brief  Tanimoto distance is the intersection over bitwise union.
  *          Often used in chemistry and biology to compare molecular fingerprints.
  */
-template <typename scalar_at = std::uint64_t, typename result_at = float> struct tanimoto_gt {
+template <typename scalar_at = std::uint64_t, typename result_at = float> struct metric_tanimoto_gt {
     using scalar_t = scalar_at;
-    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
-    using result_type = result_t;
     static_assert( //
         std::is_unsigned<scalar_t>::value ||
             (std::is_enum<scalar_t>::value && std::is_unsigned<typename std::underlying_type<scalar_t>::type>::value),
         "Tanimoto distance requires unsigned integral words");
     static_assert(std::is_floating_point<result_t>::value, "Tanimoto distance will be a fraction");
-
-    inline metric_kind_t kind() const noexcept { return metric_kind_t::tanimoto_k; }
-    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
-    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
         constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
@@ -896,20 +921,14 @@ template <typename scalar_at = std::uint64_t, typename result_at = float> struct
  *  @brief  Sorensen-Dice or F1 distance is the intersection over bitwise union.
  *          Often used in chemistry and biology to compare molecular fingerprints.
  */
-template <typename scalar_at = std::uint64_t, typename result_at = float> struct sorensen_gt {
+template <typename scalar_at = std::uint64_t, typename result_at = float> struct metric_sorensen_gt {
     using scalar_t = scalar_at;
-    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
-    using result_type = result_t;
     static_assert( //
         std::is_unsigned<scalar_t>::value ||
             (std::is_enum<scalar_t>::value && std::is_unsigned<typename std::underlying_type<scalar_t>::type>::value),
         "Sorensen-Dice distance requires unsigned integral words");
     static_assert(std::is_floating_point<result_t>::value, "Sorensen-Dice distance will be a fraction");
-
-    inline metric_kind_t kind() const noexcept { return metric_kind_t::sorensen_k; }
-    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
-    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
         constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
@@ -933,20 +952,12 @@ template <typename scalar_at = std::uint64_t, typename result_at = float> struct
  *  @brief  Counts the number of matching elements in two unique sorted sets.
  *          Can be used to compute the similarity between two textual documents
  *          using the IDs of tokens present in them.
- *          Similar to `tanimoto_gt` for dense representations.
+ *          Similar to `metric_tanimoto_gt` for dense representations.
  */
-template <typename scalar_at = std::int32_t, typename result_at = float> struct jaccard_gt {
+template <typename scalar_at = std::int32_t, typename result_at = float> struct metric_jaccard_gt {
     using scalar_t = scalar_at;
-    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
-    using result_type = result_t;
     static_assert(!std::is_floating_point<scalar_t>::value, "Jaccard distance requires integral scalars");
-
-    inline metric_kind_t kind() const noexcept { return metric_kind_t::jaccard_k; }
-    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
-    inline result_t operator()(view_t a, view_t b) const noexcept {
-        return operator()(a.data(), b.data(), a.size(), b.size());
-    }
 
     inline result_t operator()( //
         scalar_t const* a, scalar_t const* b, std::size_t a_length, std::size_t b_length) const noexcept {
@@ -963,19 +974,11 @@ template <typename scalar_at = std::int32_t, typename result_at = float> struct 
 };
 
 /**
- *  @brief  Counts the number of matching elements in two unique sorted sets.
- *          Can be used to compute the similarity between two textual documents
- *          using the IDs of tokens present in them.
+ *  @brief  Measures Pearson Correlation between two sequences.
  */
-template <typename scalar_at = float, typename result_at = float> struct pearson_correlation_gt {
+template <typename scalar_at = float, typename result_at = float> struct metric_pearson_gt {
     using scalar_t = scalar_at;
-    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
-    using result_type = result_t;
-
-    inline metric_kind_t kind() const noexcept { return metric_kind_t::pearson_k; }
-    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
-    inline result_t operator()(view_t a, view_t b) const noexcept { return operator()(a.data(), b.data(), a.size()); }
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
         result_t a_sum{}, b_sum{}, ab_sum{};
@@ -1000,21 +1003,59 @@ template <typename scalar_at = float, typename result_at = float> struct pearson
     }
 };
 
+struct cos_f8_t {
+    using scalar_t = f8_bits_t;
+    using result_t = f32_t;
+
+    inline result_t operator()(f8_bits_t const* a, f8_bits_t const* b, std::size_t dim) const noexcept {
+        std::int32_t ab{}, a2{}, b2{};
+#if USEARCH_USE_OPENMP
+#pragma omp simd reduction(+ : ab, a2, b2)
+#elif defined(USEARCH_DEFINED_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_DEFINED_GCC)
+#pragma GCC ivdep
+#endif
+        for (std::size_t i = 0; i != dim; i++) {
+            std::int16_t ai{a[i]};
+            std::int16_t bi{b[i]};
+            ab += ai * bi;
+            a2 += square(ai);
+            b2 += square(bi);
+        }
+        return (ab != 0) ? (1.f - ab / (std::sqrt(a2) * std::sqrt(b2))) : 0;
+    }
+};
+
+struct l2sq_f8_t {
+    using scalar_t = f8_bits_t;
+    using result_t = f32_t;
+
+    inline result_t operator()(f8_bits_t const* a, f8_bits_t const* b, std::size_t dim) const noexcept {
+        std::int32_t ab_deltas_sq{};
+#if USEARCH_USE_OPENMP
+#pragma omp simd reduction(+ : ab_deltas_sq)
+#elif defined(USEARCH_DEFINED_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_DEFINED_GCC)
+#pragma GCC ivdep
+#endif
+        for (std::size_t i = 0; i != dim; i++)
+            ab_deltas_sq += square(std::int16_t(a[i]) - std::int16_t(b[i]));
+        return ab_deltas_sq;
+    }
+};
+
 /**
  *  @brief  Haversine distance for the shortest distance between two nodes on
  *          the surface of a 3D sphere, defined with latitude and longitude.
  */
-template <typename scalar_at = float, typename result_at = scalar_at> struct haversine_gt {
+template <typename scalar_at = float, typename result_at = scalar_at> struct metric_haversine_gt {
     using scalar_t = scalar_at;
-    using view_t = span_gt<scalar_t const>;
     using result_t = result_at;
-    using result_type = result_t;
     static_assert(!std::is_integral<scalar_t>::value, "Latitude and longitude must be floating-node");
 
-    inline metric_kind_t kind() const noexcept { return metric_kind_t::haversine_k; }
-    inline scalar_kind_t scalar_kind() const noexcept { return common_scalar_kind<scalar_t>(); }
-
-    inline result_t operator()(scalar_t const* a, scalar_t const* b) const noexcept {
+    inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t = 2) const noexcept {
         result_t lat_a = a[0], lon_a = a[1];
         result_t lat_b = b[0], lon_b = b[1];
 
@@ -1030,6 +1071,164 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct hav
 
         return std::atan2(std::sqrt(x), std::sqrt(1.f - x));
     }
+};
+
+using distance_punned_t = float;
+using span_punned_t = span_gt<byte_t const>;
+
+/**
+ *  @brief  Type-punned metric class, that can wrap an existing STL `std::function`.
+ *          Additional annotation is useful for
+ */
+class metric_punned_t {
+  public:
+    using scalar_t = byte_t;
+    using result_t = distance_punned_t;
+    using stl_function_t = std::function<float(byte_t const*, byte_t const*)>;
+
+    stl_function_t stl_function;
+    std::size_t bytes_per_vector = 0;
+    metric_kind_t metric_kind = metric_kind_t::unknown_k;
+    scalar_kind_t scalar_kind = scalar_kind_t::unknown_k;
+    isa_kind_t isa_kind = isa_kind_t::auto_k;
+
+    /**
+     *  @brief  Computes the distance between two vectors of fixed length.
+     *  ! The only relevant function in the object. Everything else is just dynamic dispatch.
+     */
+    inline result_t operator()(byte_t const* a, byte_t const* b) const noexcept { return stl_function(a, b); }
+
+    inline metric_punned_t() = default;
+    inline metric_punned_t(metric_punned_t const&) = default;
+    inline metric_punned_t& operator=(metric_punned_t const&) = default;
+
+    inline metric_punned_t(stl_function_t stl_function, std::size_t bytes_per_vector = 0,
+                           metric_kind_t metric_kind = metric_kind_t::unknown_k,
+                           scalar_kind_t scalar_kind = scalar_kind_t::unknown_k,
+                           isa_kind_t isa_kind = isa_kind_t::auto_k)
+        : stl_function(stl_function), bytes_per_vector(bytes_per_vector), metric_kind(metric_kind),
+          scalar_kind(scalar_kind), isa_kind(isa_kind) {}
+
+    inline metric_punned_t(std::size_t bytes_per_vector, metric_kind_t metric_kind = metric_kind_t::cos_k,
+                           scalar_kind_t scalar_kind = scalar_kind_t::f32_k) {
+        *this = make_(bytes_per_vector, metric_kind, scalar_kind);
+    }
+
+    std::size_t dimensions_upper_bound() const noexcept {
+        return bytes_per_vector * CHAR_BIT / bits_per_scalar(scalar_kind);
+    }
+
+  private:
+    static metric_punned_t make_(std::size_t bytes_per_vector, metric_kind_t metric_kind, scalar_kind_t scalar_kind) {
+
+        switch (metric_kind) {
+        case metric_kind_t::ip_k: return ip_metric_(bytes_per_vector, scalar_kind);
+        case metric_kind_t::cos_k: return cos_metric_(bytes_per_vector, scalar_kind);
+        case metric_kind_t::l2sq_k: return l2sq_metric_(bytes_per_vector, scalar_kind);
+        case metric_kind_t::pearson_k: return pearson_metric_(bytes_per_vector, scalar_kind);
+        case metric_kind_t::haversine_k: return haversine_metric_(scalar_kind);
+
+        case metric_kind_t::hamming_k:
+            return {to_stl_<metric_hamming_gt<b1x8_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::hamming_k,
+                    scalar_kind_t::b1x8_k, isa_kind_t::auto_k};
+
+        case metric_kind_t::jaccard_k: // Equivalent to Tanimoto
+        case metric_kind_t::tanimoto_k:
+            return {to_stl_<metric_tanimoto_gt<b1x8_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::tanimoto_k,
+                    scalar_kind_t::b1x8_k, isa_kind_t::auto_k};
+
+        case metric_kind_t::sorensen_k:
+            return {to_stl_<metric_sorensen_gt<b1x8_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::sorensen_k,
+                    scalar_kind_t::b1x8_k, isa_kind_t::auto_k};
+
+        default: return {};
+        }
+    }
+
+    template <typename typed_at> static stl_function_t to_stl_(std::size_t bytes) {
+        using scalar_t = typename typed_at::scalar_t;
+        return [=](byte_t const* a, byte_t const* b) -> result_t {
+            std::size_t dim = bytes / sizeof(scalar_t);
+            return typed_at{}((scalar_t const*)a, (scalar_t const*)b, dim);
+        };
+    }
+
+    // clang-format off
+    static metric_punned_t ip_metric_f32_(std::size_t bytes_per_vector) {
+        #if USEARCH_USE_SIMSIMD
+        if (hardware_supports(isa_kind_t::sve_k)) return {[=](f32_t const* a, f32_t const* b) { return simsimd_dot_f32sve(a, b, bytes_per_vector / 4); }, bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f32_k, isa_kind_t::sve_k};
+        if (hardware_supports(isa_kind_t::neon_k) && bytes_per_vector % 16 == 0) return {[=](f32_t const* a, f32_t const* b) { return simsimd_dot_f32x4neon(a, b, bytes_per_vector / 4); }, bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f32_k, isa_kind_t::neon_k};
+        if (hardware_supports(isa_kind_t::avx2_k) && bytes_per_vector % 16 == 0) return {[=](f32_t const* a, f32_t const* b) { return simsimd_dot_f32x4avx2(a, b, bytes_per_vector / 4); }, bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f32_k, isa_kind_t::avx2_k};
+        #endif
+        return {to_stl_<metric_ip_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
+    }
+
+    static metric_punned_t cos_metric_f16_(std::size_t bytes_per_vector) {
+        #if USEARCH_USE_SIMSIMD
+        if (hardware_supports(isa_kind_t::avx512_k) && bytes_per_vector % 32 == 0) return {[=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_cos_f16x16avx512(a, b, bytes_per_vector / 2); }, bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::avx512_k};
+        if (hardware_supports(isa_kind_t::neon_k) && bytes_per_vector % 8 == 0) return {[=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_cos_f16x4neon(a, b, bytes_per_vector / 2); }, bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::neon_k};
+        #endif
+        return {to_stl_<metric_cos_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
+    }
+
+    static metric_punned_t cos_metric_f8_(std::size_t bytes_per_vector) {
+        #if USEARCH_USE_SIMSIMD
+        if (hardware_supports(isa_kind_t::neon_k) && bytes_per_vector % 16 == 0) return {[=](int8_t const* a, int8_t const* b) { return simsimd_cos_i8x16neon(a, b, bytes_per_vector); }, bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f8_k, isa_kind_t::neon_k};
+        #endif
+        return {to_stl_<cos_f8_t>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f8_k, isa_kind_t::auto_k};
+    }
+
+    static metric_punned_t ip_metric_(std::size_t bytes_per_vector, scalar_kind_t scalar_kind) {        
+        switch (scalar_kind) { // The two most common numeric types for the most common metric have optimized versions
+        case scalar_kind_t::f32_k: return ip_metric_f32_(bytes_per_vector);
+        case scalar_kind_t::f16_k: return cos_metric_f16_(bytes_per_vector); // Dot-product accumulates error, Cosine-distance normalizes it
+        case scalar_kind_t::f8_k:  return cos_metric_f8_(bytes_per_vector);
+        case scalar_kind_t::f64_k: return {to_stl_<metric_ip_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
+        default: return {};
+        }
+    }
+
+    static metric_punned_t l2sq_metric_(std::size_t bytes_per_vector, scalar_kind_t scalar_kind) {
+        switch (scalar_kind) {
+        case scalar_kind_t::f8_k: return {to_stl_<l2sq_f8_t>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f8_k, isa_kind_t::auto_k};
+        case scalar_kind_t::f16_k: return {to_stl_<metric_l2sq_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
+        case scalar_kind_t::f32_k: return {to_stl_<metric_l2sq_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
+        case scalar_kind_t::f64_k: return {to_stl_<metric_l2sq_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
+        default: return {};
+        }
+    }
+
+    static metric_punned_t cos_metric_(std::size_t bytes_per_vector, scalar_kind_t scalar_kind) {
+        switch (scalar_kind) {
+        case scalar_kind_t::f8_k: return cos_metric_f8_(bytes_per_vector);
+        case scalar_kind_t::f16_k: return cos_metric_f16_(bytes_per_vector);
+        case scalar_kind_t::f32_k: return {to_stl_<metric_cos_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
+        case scalar_kind_t::f64_k: return {to_stl_<metric_cos_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
+        default: return {};
+        }
+    }
+
+    static metric_punned_t haversine_metric_(scalar_kind_t scalar_kind) {
+        std::size_t bytes_per_vector = 2u * bits_per_scalar(scalar_kind) / CHAR_BIT;
+        switch (scalar_kind) {
+        case scalar_kind_t::f8_k: return {to_stl_<metric_haversine_gt<f8_bits_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::haversine_k, scalar_kind_t::f8_k, isa_kind_t::auto_k};
+        case scalar_kind_t::f16_k: return {to_stl_<metric_haversine_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::haversine_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
+        case scalar_kind_t::f32_k: return {to_stl_<metric_haversine_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::haversine_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
+        case scalar_kind_t::f64_k: return {to_stl_<metric_haversine_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::haversine_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
+        default: return {};
+        }
+    }
+
+    static metric_punned_t pearson_metric_(std::size_t bytes_per_vector, scalar_kind_t scalar_kind) {
+        switch (scalar_kind) {
+        case scalar_kind_t::f8_k: return {to_stl_<metric_pearson_gt<f8_bits_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::f8_k, isa_kind_t::auto_k};
+        case scalar_kind_t::f16_k: return {to_stl_<metric_pearson_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
+        case scalar_kind_t::f32_k: return {to_stl_<metric_pearson_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
+        case scalar_kind_t::f64_k: return {to_stl_<metric_pearson_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
+        default: return {};
+        }
+    }
+    // clang-format on
 };
 
 } // namespace usearch

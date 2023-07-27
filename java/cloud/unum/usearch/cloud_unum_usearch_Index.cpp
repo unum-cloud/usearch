@@ -9,15 +9,12 @@
 using namespace unum::usearch;
 using namespace unum;
 
-using metric_t = index_dense_metric_t;
-using distance_t = punned_distance_t;
-using index_t = punned_small_t;
+using distance_t = distance_punned_t;
+using index_t = index_dense_t;
 
 using add_result_t = typename index_t::add_result_t;
 using search_result_t = typename index_t::search_result_t;
-using serialization_result_t = typename index_t::serialization_result_t;
-using label_t = typename index_t::label_t;
-using id_t = typename index_t::id_t;
+using key_t = typename index_t::key_t;
 using vector_view_t = unum::usearch::span_gt<float>;
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
@@ -124,13 +121,13 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1reserve(JNIEnv* env, jcl
 }
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add( //
-    JNIEnv* env, jclass, jlong c_ptr, jint label, jfloatArray vector) {
+    JNIEnv* env, jclass, jlong c_ptr, jint key, jfloatArray vector) {
 
     jfloat* vector_data = (*env).GetFloatArrayElements(vector, 0);
     jsize vector_dims = (*env).GetArrayLength(vector);
     vector_view_t vector_span = vector_view_t{vector_data, static_cast<std::size_t>(vector_dims)};
 
-    if (!reinterpret_cast<index_t*>(c_ptr)->add(static_cast<label_t>(label), vector_span)) {
+    if (!reinterpret_cast<index_t*>(c_ptr)->add(static_cast<key_t>(key), vector_span)) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
             (*env).ThrowNew(jc, "Failed to insert a new point in vector index!");
@@ -155,7 +152,7 @@ JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search( //
     vector_view_t vector_span = vector_view_t{vector_data, static_cast<std::size_t>(vector_dims)};
     search_result_t result = reinterpret_cast<index_t*>(c_ptr)->search(vector_span, static_cast<std::size_t>(wanted));
     if (result) {
-        std::size_t found = result.dump_to(reinterpret_cast<label_t*>(matches_data), NULL);
+        std::size_t found = result.dump_to(reinterpret_cast<key_t*>(matches_data), NULL);
         (*env).SetIntArrayRegion(matches, 0, found, matches_data);
     } else {
         jclass jc = (*env).FindClass("java/lang/Error");

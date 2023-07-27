@@ -91,7 +91,7 @@ matches: Matches = index.search(vector, 10)
 
 assert len(index) == 1
 assert len(matches) == 1
-assert matches[0].label == 42
+assert matches[0].key == 42
 assert matches[0].distance <= 0.001
 assert np.allclose(index[42], vector)
 ```
@@ -214,17 +214,17 @@ model = uform.get_model('unum-cloud/uform-vl-multilingual')
 index = usearch.index.Index(ndim=256)
 
 @server
-def add(label: int, photo: pil.Image.Image):
+def add(key: int, photo: pil.Image.Image):
     image = model.preprocess_image(photo)
     vector = model.encode_image(image).detach().numpy()
-    index.add(label, vector.flatten(), copy=True)
+    index.add(key, vector.flatten(), copy=True)
 
 @server
 def search(query: str) -> np.ndarray:
     tokens = model.preprocess_text(query)
     vector = model.encode_text(tokens).detach().numpy()
     matches = index.search(vector.flatten(), 3)
-    return matches.labels
+    return matches.keys
 
 server.run()
 ```
@@ -268,9 +268,9 @@ fingerprints = np.vstack([encoder.GetFingerprint(x) for x in molecules])
 fingerprints = np.packbits(fingerprints, axis=1)
 
 index = Index(ndim=2048, metric=MetricKind.Tanimoto)
-labels = np.arange(len(molecules))
+keys = np.arange(len(molecules))
 
-index.add(labels, fingerprints)
+index.add(keys, fingerprints)
 matches = index.search(fingerprints, 10)
 ```
 
