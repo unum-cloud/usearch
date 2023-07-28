@@ -46,8 +46,8 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
  * @param metric The distance function to compare the dis-similarity of vectors.
  * @param dimensions The number of dimensions planned for this index.
  * @param connectivity Number of connections per node in the proximity graph.
- * Higher connectivity improves accuracy, increases memory usage, and reduces construction speed.
- * @param quantization Accuracy of internal vector representations. Lower accuracy means higher speed.
+ * Higher connectivity improves quantization, increases memory usage, and reduces construction speed.
+ * @param quantization Quantization of internal vector representations. Lower quantization means higher speed.
  */
 + (instancetype)make:(USearchMetric)metric dimensions:(UInt32)dimensions connectivity:(UInt32)connectivity quantization:(USearchScalar)quantization NS_SWIFT_NAME(make(metric:dimensions:connectivity:quantization:));
 
@@ -73,7 +73,7 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
  */
 - (UInt32)searchSingle:(Float32 const *_Nonnull)vector
                  count:(UInt32)count
-                keys:(USearchKey *_Nullable)keys
+                  keys:(USearchKey *_Nullable)keys
              distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(searchSingle(vector:count:keys:distances:));
 
 /**
@@ -93,7 +93,7 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
  */
 - (UInt32)searchDouble:(Float64 const *_Nonnull)vector
                  count:(UInt32)count
-                keys:(USearchKey *_Nullable)keys
+                  keys:(USearchKey *_Nullable)keys
              distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(searchDouble(vector:count:keys:distances:));
 
 /**
@@ -113,8 +113,18 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
  */
 - (UInt32)searchHalf:(void const *_Nonnull)vector
                count:(UInt32)count
-              keys:(USearchKey *_Nullable)keys
+                keys:(USearchKey *_Nullable)keys
            distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(searchHalf(vector:count:keys:distances:));
+
+
+- (Boolean)contains:(USearchKey)key NS_SWIFT_NAME(contains(key:));
+
+- (UInt32)count:(USearchKey)key NS_SWIFT_NAME(count(key:));
+
+- (void)remove:(USearchKey)key NS_SWIFT_NAME(remove(key:));
+
+- (void)rename:(USearchKey)key to:(USearchKey)key NS_SWIFT_NAME(rename(from:to:));
+
 
 /**
  * @brief Saves pre-constructed index to disk.

@@ -15,3 +15,4 @@ target_link_libraries(usearchWFM WSTP::STATIC_LIBRARY)
 
 # Set the output name of the library to be compatible with Wolfram Language
 set_target_properties(usearchWFM PROPERTIES PREFIX "" OUTPUT_NAME "usearchWFM")
+set_target_properties(usearchWFM PROPERTIES CXX_STANDARD 11)

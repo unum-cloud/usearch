@@ -60,10 +60,10 @@ struct index_dense_head_t {
     misaligned_ref_gt<scalar_kind_t> kind_key;
     misaligned_ref_gt<scalar_kind_t> kind_compressed_slot;
 
-    // Populational: 8 * 2 = 16 bytes
+    // Populational: 8 * 3 = 24 bytes
     misaligned_ref_gt<std::uint64_t> count_present;
     misaligned_ref_gt<std::uint64_t> count_deleted;
-    misaligned_ref_gt<std::uint64_t> bytes_per_vector;
+    misaligned_ref_gt<std::uint64_t> dimensions;
 
     index_dense_head_t(byte_t* ptr) noexcept
         : magic((char const*)exchange(ptr, ptr + sizeof(magic_t))), //
@@ -76,7 +76,7 @@ struct index_dense_head_t {
           kind_compressed_slot(exchange(ptr, ptr + sizeof(scalar_kind_t))),
           count_present(exchange(ptr, ptr + sizeof(std::uint64_t))),
           count_deleted(exchange(ptr, ptr + sizeof(std::uint64_t))),
-          bytes_per_vector(exchange(ptr, ptr + sizeof(std::uint64_t))) {}
+          dimensions(exchange(ptr, ptr + sizeof(std::uint64_t))) {}
 };
 
 struct index_dense_head_result_t {
@@ -95,22 +95,37 @@ struct index_dense_head_result_t {
 struct index_dense_config_t : public index_config_t {
     std::size_t expansion_add = default_expansion_add();
     std::size_t expansion_search = default_expansion_search();
-    std::size_t max_threads = 0;
-    bool include_vectors = true;
+    bool exclude_vectors = false;
     bool allow_key_collisions = false;
+
+    index_dense_config_t(index_config_t base) noexcept : index_config_t(base) {}
+
+    index_dense_config_t(                                  //
+        std::size_t connectivity = default_connectivity(), //
+        std::size_t expansion_add = default_expansion_add(),
+        std::size_t expansion_search = default_expansion_search()) noexcept
+        : index_config_t(connectivity), //
+          expansion_add(expansion_add ? expansion_add : default_expansion_add()),
+          expansion_search(expansion_search ? expansion_search : default_expansion_search()) {}
 };
 
 struct index_dense_serialization_config_t {
-    bool include_vectors = true;
-    bool use_32_bit_dimensions = true;
+    bool exclude_vectors = false;
+    bool use_64_bit_dimensions = false;
 };
 
 struct index_dense_add_config_t : public index_add_config_t {
     bool force_vector_copy = false;
+
+    index_dense_add_config_t() = default;
+    index_dense_add_config_t(index_add_config_t base) noexcept : index_add_config_t(base) {}
 };
 
 struct index_dense_copy_config_t : public index_copy_config_t {
     bool force_vector_copy = true;
+
+    index_dense_copy_config_t() = default;
+    index_dense_copy_config_t(index_copy_config_t base) noexcept : index_copy_config_t(base) {}
 };
 
 /**
@@ -168,11 +183,7 @@ class index_dense_gt {
         inline distance_t f(byte_t const* a, byte_t const* b) const noexcept { return index_->metric_(a, b); }
     };
 
-    std::size_t expansion_add_ = 0;
-    std::size_t expansion_search_ = 0;
-    bool copy_vectors_ = true;
-    bool allow_key_collisions_ = false;
-
+    index_dense_config_t config_;
     index_t* typed_ = nullptr;
 
     std::size_t casted_vector_bytes_ = 0;
@@ -253,10 +264,7 @@ class index_dense_gt {
 
     index_dense_gt() = default;
     index_dense_gt(index_dense_gt&& other)
-        : expansion_add_(std::move(other.expansion_add_)),               //
-          expansion_search_(std::move(other.expansion_search_)),         //
-          copy_vectors_(std::move(other.copy_vectors_)),                 //
-          allow_key_collisions_(std::move(other.allow_key_collisions_)), //
+        : config_(std::move(other.config_)),
 
           typed_(exchange(other.typed_, nullptr)),                     //
           casted_vector_bytes_(std::move(other.casted_vector_bytes_)), //
@@ -282,10 +290,7 @@ class index_dense_gt {
      *  @param other The other index to swap with.
      */
     void swap(index_dense_gt& other) {
-        std::swap(expansion_add_, other.expansion_add_);
-        std::swap(expansion_search_, other.expansion_search_);
-        std::swap(copy_vectors_, other.copy_vectors_);
-        std::swap(allow_key_collisions_, other.allow_key_collisions_);
+        std::swap(config_, other.config_);
 
         std::swap(typed_, other.typed_);
         std::swap(casted_vector_bytes_, other.casted_vector_bytes_);
@@ -313,25 +318,20 @@ class index_dense_gt {
      *  @brief Constructs an instance of ::index_dense_gt.
      *  @param[in] metric One of the provided or an @b ad-hoc metric, type-punned.
      *  @param[in] config The index configuration (optional).
-     *  @param[in] expansion_add The expansion factor for adding vectors (optional).
-     *  @param[in] expansion_search The expansion factor for searching vectors (optional).
      *  @param[in] free_label The key used for freed vectors (optional).
      *  @return An instance of ::index_dense_gt.
      */
-    static index_dense_gt make(                                    //
-        metric_t metric,                                           //
-        index_config_t config = {},                                //
-        std::size_t expansion_add = default_expansion_add(),       //
-        std::size_t expansion_search = default_expansion_search(), //
+    static index_dense_gt make(           //
+        metric_t metric,                  //
+        index_dense_config_t config = {}, //
         key_t free_label = default_free_value<key_t>()) {
 
-        scalar_kind_t scalar_kind = metric.scalar_kind;
+        scalar_kind_t scalar_kind = metric.scalar_kind();
         std::size_t hardware_threads = std::thread::hardware_concurrency();
 
         index_dense_gt result;
-        result.expansion_add_ = expansion_add;
-        result.expansion_search_ = expansion_search;
-        result.casted_vector_bytes_ = metric.bytes_per_vector;
+        result.config_ = config;
+        result.casted_vector_bytes_ = metric.bytes_per_vector();
         result.cast_buffer_.resize(hardware_threads * result.casted_vector_bytes_);
         result.casts_ = make_casts_(scalar_kind);
         result.metric_ = metric;
@@ -352,23 +352,21 @@ class index_dense_gt {
     std::size_t size() const { return typed_->size() - free_ids_.size(); }
     std::size_t capacity() const { return typed_->capacity(); }
     std::size_t max_level() const noexcept { return typed_->max_level(); }
-    index_config_t const& config() const { return typed_->config(); }
+    index_dense_config_t const& config() const { return config_; }
     index_limits_t const& limits() const { return typed_->limits(); }
+
+    // The metric and its properties
     metric_t const& metric() const { return metric_; }
-    scalar_kind_t scalar_kind() const noexcept { return metric_.scalar_kind; }
-    std::size_t bytes_per_vector() const noexcept { return metric_.bytes_per_vector; }
+    scalar_kind_t scalar_kind() const noexcept { return metric_.scalar_kind(); }
+    std::size_t bytes_per_vector() const noexcept { return metric_.bytes_per_vector(); }
+    std::size_t scalar_words() const noexcept { return metric_.scalar_words(); }
+    std::size_t dimensions() const noexcept { return metric_.dimensions(); }
 
-    std::size_t scalar_words() const noexcept {
-        return bytes_per_vector() * CHAR_BIT / bits_per_scalar_word(scalar_kind());
-    }
-    std::size_t dimensions_upper_bound() const noexcept {
-        return bytes_per_vector() * CHAR_BIT / bits_per_scalar(scalar_kind());
-    }
-
-    std::size_t expansion_add() const { return expansion_add_; }
-    std::size_t expansion_search() const { return expansion_search_; }
-    void change_expansion_add(std::size_t n) { expansion_add_ = n; }
-    void change_expansion_search(std::size_t n) { expansion_search_ = n; }
+    // Fetching and changing search critereas:
+    std::size_t expansion_add() const { return config_.expansion_add; }
+    std::size_t expansion_search() const { return config_.expansion_search; }
+    void change_expansion_add(std::size_t n) { config_.expansion_add = n; }
+    void change_expansion_search(std::size_t n) { config_.expansion_search = n; }
 
     member_citerator_t cbegin() const { return typed_->cbegin(); }
     member_citerator_t cend() const { return typed_->cend(); }
@@ -381,10 +379,11 @@ class index_dense_gt {
     stats_t stats(std::size_t level) const { return typed_->stats(level); }
 
     std::size_t memory_usage() const {
-        return typed_->memory_usage(0) +                   //
-               typed_->tape_allocator().total_wasted() +   //
-               typed_->tape_allocator().total_reserved() + //
-               vectors_allocator_.total_allocated();
+        return                                          //
+            typed_->memory_usage(0) +                   //
+            typed_->tape_allocator().total_wasted() +   //
+            typed_->tape_allocator().total_reserved() + //
+            vectors_allocator_.total_allocated();
     }
 
     // clang-format off
@@ -394,11 +393,11 @@ class index_dense_gt {
     add_result_t add(key_t key, f32_t const* vector) { return add_(key, vector, casts_.from_f32); }
     add_result_t add(key_t key, f64_t const* vector) { return add_(key, vector, casts_.from_f64); }
 
-    add_result_t add(key_t key, b1x8_t const* vector, index_add_config_t config) { return add_(key, vector, config, casts_.from_b1x8); }
-    add_result_t add(key_t key, f8_bits_t const* vector, index_add_config_t config) { return add_(key, vector, config, casts_.from_f8); }
-    add_result_t add(key_t key, f16_t const* vector, index_add_config_t config) { return add_(key, vector, config, casts_.from_f16); }
-    add_result_t add(key_t key, f32_t const* vector, index_add_config_t config) { return add_(key, vector, config, casts_.from_f32); }
-    add_result_t add(key_t key, f64_t const* vector, index_add_config_t config) { return add_(key, vector, config, casts_.from_f64); }
+    add_result_t add(key_t key, b1x8_t const* vector, index_dense_add_config_t config) { return add_(key, vector, config, casts_.from_b1x8); }
+    add_result_t add(key_t key, f8_bits_t const* vector, index_dense_add_config_t config) { return add_(key, vector, config, casts_.from_f8); }
+    add_result_t add(key_t key, f16_t const* vector, index_dense_add_config_t config) { return add_(key, vector, config, casts_.from_f16); }
+    add_result_t add(key_t key, f32_t const* vector, index_dense_add_config_t config) { return add_(key, vector, config, casts_.from_f32); }
+    add_result_t add(key_t key, f64_t const* vector, index_dense_add_config_t config) { return add_(key, vector, config, casts_.from_f64); }
 
     search_result_t search(b1x8_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_b1x8); }
     search_result_t search(f8_bits_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f8); }
@@ -462,12 +461,12 @@ class index_dense_gt {
         std::uint64_t bytes_per_vector = 0;
 
         // We may not want to put the vectors into the same file
-        if (config.include_vectors) {
+        if (!config.exclude_vectors) {
             // Save the matrix size
-            if (config.use_32_bit_dimensions) {
+            if (!config.use_64_bit_dimensions) {
                 std::uint32_t dimensions[2];
                 dimensions[0] = static_cast<std::uint32_t>(typed_->size());
-                dimensions[1] = static_cast<std::uint32_t>(metric_.bytes_per_vector);
+                dimensions[1] = static_cast<std::uint32_t>(metric_.bytes_per_vector());
                 result = file.write(&dimensions, sizeof(dimensions));
                 if (!result)
                     return result;
@@ -476,7 +475,7 @@ class index_dense_gt {
             } else {
                 std::uint64_t dimensions[2];
                 dimensions[0] = static_cast<std::uint64_t>(typed_->size());
-                dimensions[1] = static_cast<std::uint64_t>(metric_.bytes_per_vector);
+                dimensions[1] = static_cast<std::uint64_t>(metric_.bytes_per_vector());
                 result = file.write(&dimensions, sizeof(dimensions));
                 if (!result)
                     return result;
@@ -507,14 +506,14 @@ class index_dense_gt {
             head.version_patch = static_cast<version_t>(USEARCH_VERSION_PATCH);
 
             // Describes types used
-            head.kind_metric = metric_.metric_kind;
-            head.kind_scalar = metric_.scalar_kind;
+            head.kind_metric = metric_.metric_kind();
+            head.kind_scalar = metric_.scalar_kind();
             head.kind_key = unum::usearch::scalar_kind<key_t>();
             head.kind_compressed_slot = unum::usearch::scalar_kind<compressed_slot_t>();
 
             head.count_present = size();
             head.count_deleted = typed_->size() - size();
-            head.bytes_per_vector = bytes_per_vector;
+            head.dimensions = dimensions();
 
             result = file.write(&buffer, sizeof(buffer));
             if (!result)
@@ -541,9 +540,9 @@ class index_dense_gt {
         std::uint64_t bytes_per_vector = 0;
 
         // We may not want to load the vectors from the same file, or allow attaching them afterwards
-        if (config.include_vectors) {
+        if (!config.exclude_vectors) {
             // Save the matrix size
-            if (config.use_32_bit_dimensions) {
+            if (!config.use_64_bit_dimensions) {
                 std::uint32_t dimensions[2];
                 result = file.read(&dimensions, sizeof(dimensions));
                 if (!result)
@@ -591,8 +590,7 @@ class index_dense_gt {
             if (head.kind_compressed_slot != unum::usearch::scalar_kind<compressed_slot_t>())
                 return result.failed("Slot type doesn't match, consider rebuilding");
 
-            bytes_per_vector = head.bytes_per_vector;
-            metric_ = metric_t(bytes_per_vector, head.kind_metric, head.kind_scalar);
+            metric_ = metric_t(head.dimensions, head.kind_metric, head.kind_scalar);
         }
 
         // Pull the actual proximity graph
@@ -623,9 +621,9 @@ class index_dense_gt {
         span_punned_t vectors_buffer;
 
         // We may not want to fetch the vectors from the same file, or allow attaching them afterwards
-        if (config.include_vectors) {
+        if (!config.exclude_vectors) {
             // Save the matrix size
-            if (config.use_32_bit_dimensions) {
+            if (!config.use_64_bit_dimensions) {
                 std::uint32_t dimensions[2];
                 if (file.size() - offset < sizeof(dimensions))
                     return result.failed("File is corrupted and lacks matrix dimensions");
@@ -668,8 +666,7 @@ class index_dense_gt {
             if (head.kind_compressed_slot != unum::usearch::scalar_kind<compressed_slot_t>())
                 return result.failed("Slot type doesn't match, consider rebuilding");
 
-            bytes_per_vector = head.bytes_per_vector;
-            metric_ = metric_t(bytes_per_vector, head.kind_metric, head.kind_scalar);
+            metric_ = metric_t(head.dimensions, head.kind_metric, head.kind_scalar);
             offset += sizeof(buffer);
         }
 
@@ -682,7 +679,7 @@ class index_dense_gt {
 
         // Address the vectors
         vectors_lookup_.resize(count_vectors);
-        if (config.include_vectors)
+        if (!config.exclude_vectors)
             for (std::uint64_t slot = 0; slot != count_vectors; ++slot)
                 vectors_lookup_[slot] = (byte_t*)vectors_buffer.data() + bytes_per_vector * slot;
 
@@ -705,7 +702,7 @@ class index_dense_gt {
      */
     bool count(key_t key) const {
         shared_lock_t lock(slot_lookup_mutex_);
-        return slot_lookup_.contains(key);
+        return slot_lookup_.count(key);
     }
 
     struct labeling_result_t {
@@ -860,27 +857,27 @@ class index_dense_gt {
             return result.failed(std::move(typed_result.error));
 
         // Export the free (removed) slot numbers
-        index_dense_gt& other = result.index;
-        if (!other.free_ids_.reserve(free_ids_.size()))
+        index_dense_gt& copy = result.index;
+        if (!copy.free_ids_.reserve(free_ids_.size()))
             return result.failed(std::move(typed_result.error));
         for (std::size_t i = 0; i != free_ids_.size(); ++i)
-            other.free_ids_.push(free_ids_[i]);
+            copy.free_ids_.push(free_ids_[i]);
 
         // Allocate buffers and move the vectors themselves
-        if (!config.force_vector_copy && !other.copy_vectors_)
-            other.vectors_lookup_ = vectors_lookup_;
+        if (!config.force_vector_copy && copy.config_.exclude_vectors)
+            copy.vectors_lookup_ = vectors_lookup_;
         else {
-            other.vectors_lookup_.resize(vectors_lookup_.size());
+            copy.vectors_lookup_.resize(vectors_lookup_.size());
             for (std::size_t slot = 0; slot != vectors_lookup_.size(); ++slot)
-                other.vectors_lookup_[slot] = other.vectors_allocator_.allocate(casted_vector_bytes_);
-            if (std::count(other.vectors_lookup_.begin(), other.vectors_lookup_.end(), nullptr))
+                copy.vectors_lookup_[slot] = copy.vectors_allocator_.allocate(casted_vector_bytes_);
+            if (std::count(copy.vectors_lookup_.begin(), copy.vectors_lookup_.end(), nullptr))
                 return result.failed("Out of memory!");
             for (std::size_t slot = 0; slot != vectors_lookup_.size(); ++slot)
-                std::memcpy(other.vectors_lookup_[slot], vectors_lookup_[slot], casted_vector_bytes_);
+                std::memcpy(copy.vectors_lookup_[slot], vectors_lookup_[slot], casted_vector_bytes_);
         }
 
-        other.slot_lookup_ = slot_lookup_;
-        *other.typed_ = std::move(typed_result.index);
+        copy.slot_lookup_ = slot_lookup_;
+        *copy.typed_ = std::move(typed_result.index);
         return result;
     }
 
@@ -892,11 +889,7 @@ class index_dense_gt {
         copy_result_t result;
         index_dense_gt& other = result.index;
 
-        other.expansion_add_ = expansion_add_;
-        other.expansion_search_ = expansion_search_;
-        other.copy_vectors_ = copy_vectors_;
-        other.allow_key_collisions_ = allow_key_collisions_;
-
+        other.config_ = config_;
         other.casted_vector_bytes_ = casted_vector_bytes_;
         other.cast_buffer_ = cast_buffer_;
         other.casts_ = casts_;
@@ -972,17 +965,17 @@ class index_dense_gt {
     }
 
     template <typename scalar_at>
-    add_result_t add_(key_t key, scalar_at const* vector, index_add_config_t config, cast_t const& cast) {
+    add_result_t add_(key_t key, scalar_at const* vector, index_dense_add_config_t config, cast_t const& cast) {
 
-        if (contains(key))
+        if (!config_.allow_key_collisions && contains(key))
             return add_result_t{}.failed("Duplicate keys not allowed in high-level wrappers");
 
         // Cast the vector, if needed for compaatibility with `metric_`
-        bool copy_vector = copy_vectors_;
+        bool copy_vector = !config_.exclude_vectors || config.force_vector_copy;
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
         {
             byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * config.thread;
-            bool casted = cast(vector_data, metric_.dimensions_upper_bound(), casted_data);
+            bool casted = cast(vector_data, dimensions(), casted_data);
             if (casted)
                 vector_data = casted_data, copy_vector = true;
         }
@@ -1022,7 +1015,7 @@ class index_dense_gt {
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
         {
             byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * config.thread;
-            bool casted = cast(vector_data, metric_.dimensions_upper_bound(), casted_data);
+            bool casted = cast(vector_data, dimensions(), casted_data);
             if (casted)
                 vector_data = casted_data;
         }
@@ -1074,7 +1067,7 @@ class index_dense_gt {
         }
         // Export the entry
         byte_t const* punned_vector = reinterpret_cast<byte_t const*>(vectors_lookup_[slot]);
-        bool casted = cast(punned_vector, metric_.dimensions_upper_bound(), (byte_t*)reconstructed);
+        bool casted = cast(punned_vector, dimensions(), (byte_t*)reconstructed);
         if (!casted)
             std::memcpy(reconstructed, punned_vector, casted_vector_bytes_);
         return true;
@@ -1082,8 +1075,9 @@ class index_dense_gt {
 
     template <typename scalar_at> add_result_t add_(key_t key, scalar_at const* vector, cast_t const& cast) {
         thread_lock_t lock = thread_lock_();
-        index_add_config_t add_config;
+        index_dense_add_config_t add_config;
         add_config.thread = lock.thread_id;
+        add_config.expansion = config_.expansion_add;
         return add_(key, vector, add_config, cast);
     }
 
@@ -1094,6 +1088,7 @@ class index_dense_gt {
         thread_lock_t lock = thread_lock_();
         index_search_config_t search_config;
         search_config.thread = lock.thread_id;
+        search_config.expansion = config_.expansion_search;
         return search_(vector, wanted, search_config, cast);
     }
 
@@ -1158,8 +1153,8 @@ struct index_dense_metadata_result_t {
 };
 
 /**
- *  @brief  Extracts metadata from pre-constructed index on disk, without loading it
- *          or mapping the whole binary file.
+ *  @brief  Extracts metadata from pre-constructed index on disk,
+ *          without loading it or mapping the whole binary file.
  */
 inline index_dense_metadata_result_t index_metadata(char const* file_path) noexcept {
 
@@ -1174,7 +1169,7 @@ inline index_dense_metadata_result_t index_metadata(char const* file_path) noexc
         return result.failed(std::strerror(errno));
 
     // Check if the file immeditely starts with the index, instead of vectors
-    result.config.include_vectors = false;
+    result.config.exclude_vectors = true;
     if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
         return result;
 
@@ -1200,8 +1195,8 @@ inline index_dense_metadata_result_t index_metadata(char const* file_path) noexc
         if (!read)
             return result.failed(std::strerror(errno));
 
-        result.config.include_vectors = true;
-        result.config.use_32_bit_dimensions = true;
+        result.config.exclude_vectors = false;
+        result.config.use_64_bit_dimensions = false;
         if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
             return result;
     }
@@ -1215,8 +1210,8 @@ inline index_dense_metadata_result_t index_metadata(char const* file_path) noexc
             return result.failed(std::strerror(errno));
 
         // Check if it starts with 64-bit
-        result.config.include_vectors = true;
-        result.config.use_32_bit_dimensions = false;
+        result.config.exclude_vectors = false;
+        result.config.use_64_bit_dimensions = true;
         if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
             return result;
     }

@@ -9,11 +9,12 @@ using namespace unum::usearch;
 using namespace unum;
 
 using distance_t = distance_punned_t;
-using index_t = index_dense_t;
-using add_result_t = typename index_t::add_result_t;
-using search_result_t = typename index_t::search_result_t;
-using key_t = typename index_t::key_t;
-using shared_index_t = std::shared_ptr<index_t>;
+using add_result_t = typename index_dense_t::add_result_t;
+using labeling_result_t = typename index_dense_t::labeling_result_t;
+using search_result_t = typename index_dense_t::search_result_t;
+using shared_index_dense_t = std::shared_ptr<index_dense_t>;
+
+static_assert(std::is_same<USearchKey, index_dense_t::key_t>::value, "Type mismatch between Objective-C and C++");
 
 metric_kind_t to_native_metric(USearchMetric m) {
     switch (m) {
@@ -70,15 +71,15 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
 @interface USearchIndex ()
 
-@property (readonly) shared_index_t native;
+@property (readonly) shared_index_dense_t native;
 
-- (instancetype)initWithIndex:(shared_index_t)native;
+- (instancetype)initWithIndex:(shared_index_dense_t)native;
 
 @end
 
 @implementation USearchIndex
 
-- (instancetype)initWithIndex:(shared_index_t)native {
+- (instancetype)initWithIndex:(shared_index_dense_t)native {
     self = [super init];
     _native = native;
     return self;
@@ -112,12 +113,12 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
     return static_cast<UInt32>(_native->expansion_search());
 }
 
-+ (instancetype)make:(USearchMetric)metric dimensions:(UInt32)dimensions connectivity:(UInt32)connectivity quantization:(USearchScalar)quantization {
++ (instancetype)make:(USearchMetric)metricKind dimensions:(UInt32)dimensions connectivity:(UInt32)connectivity quantization:(USearchScalar)quantization {
     std::size_t dims = static_cast<std::size_t>(dimensions);
-    index_config_t config;
 
-    config.connectivity = static_cast<std::size_t>(connectivity);
-    shared_index_t ptr = std::make_shared<index_t>(index_t::make(dims, to_native_metric(metric), config, to_native_scalar(quantization)));
+    index_config_t config(static_cast<std::size_t>(connectivity));
+    metric_punned_t metric(dims, to_native_metric(metricKind), to_native_scalar(quantization));
+    shared_index_dense_t ptr = std::make_shared<index_dense_t>(index_dense_t::make(metric, config));
     return [[USearchIndex alloc] initWithIndex:ptr];
 }
 
@@ -134,7 +135,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
 - (UInt32)searchSingle:(Float32 const *_Nonnull)vector
                  count:(UInt32)wanted
-                keys:(USearchKey *_Nullable)keys
+                  keys:(USearchKey *_Nullable)keys
              distances:(Float32 *_Nullable)distances {
     search_result_t result = _native->search(vector, static_cast<std::size_t>(wanted));
 
@@ -161,7 +162,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
 - (UInt32)searchDouble:(Float64 const *_Nonnull)vector
                  count:(UInt32)wanted
-                keys:(USearchKey *_Nullable)keys
+                  keys:(USearchKey *_Nullable)keys
              distances:(Float32 *_Nullable)distances {
     search_result_t result = _native->search((f64_t const *)vector, static_cast<std::size_t>(wanted));
 
@@ -188,7 +189,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
 - (UInt32)searchHalf:(void const *_Nonnull)vector
                count:(UInt32)wanted
-              keys:(USearchKey *_Nullable)keys
+                keys:(USearchKey *_Nullable)keys
            distances:(Float32 *_Nullable)distances {
     search_result_t result = _native->search((f16_t const *)vector, static_cast<std::size_t>(wanted));
 
@@ -208,6 +209,34 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
 - (void)reserve:(UInt32)count {
     _native->reserve(static_cast<std::size_t>(count));
+}
+
+- (Boolean)contains:(USearchKey)key {
+    return _native->contains(key);
+}
+
+- (UInt32)count:(USearchKey)key {
+    return _native->count(key);
+}
+
+- (void)remove:(USearchKey)key {
+    labeling_result_t result = _native->remove(key);
+
+    if (!result) {
+        @throw [NSException exceptionWithName:@"Can't remove an entry"
+                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                     userInfo:nil];
+    }
+}
+
+- (void)rename:(USearchKey)key to:(USearchKey)to {
+    labeling_result_t result = _native->rename(key, to);
+
+    if (!result) {
+        @throw [NSException exceptionWithName:@"Can't rename the entry"
+                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                     userInfo:nil];
+    }
 }
 
 - (void)save:(NSString *)path {

@@ -39,7 +39,7 @@ The main columns are:
 | `f32` x256 |      16      |   64   |   32   |   128'644    |     228'422     |         97.2% |
 | `f32` x256 |      16      |  256   |  128   |    39'981    |     69'065      |         99.2% |
 
-### Different vectors "accuracy"
+### Different vectors "quantization"
 
 | Vectors      | Connectivity | EF @ A | EF @ S | **Add**, QPS | **Search**, QPS | **Recall @1** |
 | :----------- | :----------: | :----: | :----: | :----------: | :-------------: | ------------: |
@@ -48,8 +48,8 @@ The main columns are:
 | `f16` x256 ✳️ |      16      |  128   |   64   |    71'454    |     132'673     |         98.4% |
 | `f8` x256    |      16      |  128   |   64   |   115'923    |     274'653     |         98.9% |
 
-As seen on the chart, for `f16` accuracy, performance may differ depending on native hardware support for that numeric type.
-Also worth noting, 8-bit quantization results in almost no accuracy loss and may perform better than `f16`.
+As seen on the chart, for `f16` quantization, performance may differ depending on native hardware support for that numeric type.
+Also worth noting, 8-bit quantization results in almost no quantization loss and may perform better than `f16`.
 
 ## Utilities
 

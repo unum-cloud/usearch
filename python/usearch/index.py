@@ -425,18 +425,9 @@ class Index:
         if not os.path.exists(path):
             return None
         meta = Index.metadata(path)
-        scalar_kind: ScalarKind = meta["kind_scalar"]
-        bits_per_scalar = {
-            ScalarKind.F8: 8,
-            ScalarKind.F16: 16,
-            ScalarKind.F32: 32,
-            ScalarKind.F64: 64,
-            ScalarKind.B1: 1,
-        }[scalar_kind]
-        ndim = meta["bytes_per_vector"] * 8 // bits_per_scalar
         return Index(
-            ndim=ndim,
-            dtype=scalar_kind,
+            ndim=meta["dimensions"],
+            dtype=meta["kind_scalar"],
             metric=meta["kind_metric"],
             path=path,
             view=view,

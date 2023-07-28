@@ -11,7 +11,7 @@ extern "C" {
 #include <stdint.h>  // `size_t`
 
 USEARCH_EXPORT typedef void* usearch_index_t;
-USEARCH_EXPORT typedef uint32_t usearch_key_t;
+USEARCH_EXPORT typedef uint64_t usearch_key_t;
 USEARCH_EXPORT typedef float usearch_distance_t;
 USEARCH_EXPORT typedef char const* usearch_error_t;
 
@@ -126,7 +126,7 @@ USEARCH_EXPORT void usearch_reserve(usearch_index_t, size_t capacity, usearch_er
  *  @param vector_kind The scalar type used in the vector data.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
-USEARCH_EXPORT void usearch_add(            //
+USEARCH_EXPORT void usearch_add(        //
     usearch_index_t, usearch_key_t key, //
     void const* vector, usearch_scalar_kind_t vector_kind, usearch_error_t* error);
 
@@ -154,7 +154,7 @@ USEARCH_EXPORT size_t usearch_search(                                           
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  *  @return `true` if the vector is successfully retrieved, `false` if the vector is not found.
  */
-USEARCH_EXPORT bool usearch_get(            //
+USEARCH_EXPORT bool usearch_get(        //
     usearch_index_t, usearch_key_t key, //
     void* vector, usearch_scalar_kind_t vector_kind, usearch_error_t* error);
 

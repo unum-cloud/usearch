@@ -9,45 +9,39 @@
 using namespace unum::usearch;
 using namespace unum;
 
-using distance_t = distance_punned_t;
-using index_t = index_dense_t;
-
-using add_result_t = typename index_t::add_result_t;
-using search_result_t = typename index_t::search_result_t;
-using key_t = typename index_t::key_t;
-using vector_view_t = unum::usearch::span_gt<float>;
+using float_span_t = unum::usearch::span_gt<float>;
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
     JNIEnv* env, jclass,                                         //
-    jstring metric, jstring accuracy,                            //
+    jstring metric, jstring quantization,                        //
     jlong dimensions, jlong capacity, jlong connectivity,        //
     jlong expansion_add, jlong expansion_search) {
 
     jlong result{};
     char const* metric_cstr{};
-    char const* accuracy_cstr{};
+    char const* quantization_cstr{};
     try {
 
-        index_config_t config;
-        config.connectivity = static_cast<std::size_t>(connectivity);
+        std::size_t connectivity = static_cast<std::size_t>(connectivity);
         std::size_t expansion_add = static_cast<std::size_t>(expansion_add);
         std::size_t expansion_search = static_cast<std::size_t>(expansion_search);
 
         metric_cstr = (*env).GetStringUTFChars(metric, 0);
         std::size_t metric_length = (*env).GetStringUTFLength(metric);
-        accuracy_cstr = (*env).GetStringUTFChars(accuracy, 0);
-        std::size_t accuracy_length = (*env).GetStringUTFLength(accuracy);
+        quantization_cstr = (*env).GetStringUTFChars(quantization, 0);
+        std::size_t quantization_length = (*env).GetStringUTFLength(quantization);
 
-        scalar_kind_t accuracy = scalar_kind_from_name(accuracy_cstr, accuracy_length);
         metric_kind_t metric_kind = metric_from_name(metric_cstr, metric_length);
-        index_t index = index_t::make( //
-            static_cast<std::size_t>(dimensions), metric_kind, config, accuracy, expansion_add, expansion_search);
+        scalar_kind_t quantization = scalar_kind_from_name(quantization_cstr, quantization_length);
+        index_dense_config_t config(connectivity, expansion_add, expansion_search);
+        metric_punned_t metric(static_cast<std::size_t>(dimensions), metric_kind, quantization);
+        index_dense_t index = index_dense_t::make(metric, config);
         if (!index.reserve(static_cast<std::size_t>(capacity))) {
             jclass jc = (*env).FindClass("java/lang/Error");
             if (jc)
                 (*env).ThrowNew(jc, "Failed to reserve desired capacity!");
         } else {
-            index_t* result_ptr = new index_t(std::move(index));
+            index_dense_t* result_ptr = new index_dense_t(std::move(index));
             std::memcpy(&result, &result_ptr, sizeof(jlong));
         }
 
@@ -58,13 +52,13 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
     }
 
     (*env).ReleaseStringUTFChars(metric, metric_cstr);
-    (*env).ReleaseStringUTFChars(accuracy, accuracy_cstr);
+    (*env).ReleaseStringUTFChars(quantization, quantization_cstr);
     return result;
 }
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1save(JNIEnv* env, jclass, jlong c_ptr, jstring path) {
     char const* path_cstr = (*env).GetStringUTFChars(path, 0);
-    if (!reinterpret_cast<index_t*>(c_ptr)->save(path_cstr)) {
+    if (!reinterpret_cast<index_dense_t*>(c_ptr)->save(path_cstr)) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
             (*env).ThrowNew(jc, "Failed to dump vector index to path!");
@@ -74,7 +68,7 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1save(JNIEnv* env, jclass
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1load(JNIEnv* env, jclass, jlong c_ptr, jstring path) {
     char const* path_cstr = (*env).GetStringUTFChars(path, 0);
-    if (!reinterpret_cast<index_t*>(c_ptr)->load(path_cstr)) {
+    if (!reinterpret_cast<index_dense_t*>(c_ptr)->load(path_cstr)) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
             (*env).ThrowNew(jc, "Failed to load vector index from path!");
@@ -84,7 +78,7 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1load(JNIEnv* env, jclass
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1view(JNIEnv* env, jclass, jlong c_ptr, jstring path) {
     char const* path_cstr = (*env).GetStringUTFChars(path, 0);
-    if (!reinterpret_cast<index_t*>(c_ptr)->view(path_cstr)) {
+    if (!reinterpret_cast<index_dense_t*>(c_ptr)->view(path_cstr)) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
             (*env).ThrowNew(jc, "Failed to view vector index from path!");
@@ -93,27 +87,27 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1view(JNIEnv* env, jclass
 }
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1destroy(JNIEnv*, jclass, jlong c_ptr) {
-    delete reinterpret_cast<index_t*>(c_ptr);
+    delete reinterpret_cast<index_dense_t*>(c_ptr);
 }
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1size(JNIEnv*, jclass, jlong c_ptr) {
-    return reinterpret_cast<index_t*>(c_ptr)->size();
+    return reinterpret_cast<index_dense_t*>(c_ptr)->size();
 }
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1connectivity(JNIEnv*, jclass, jlong c_ptr) {
-    return reinterpret_cast<index_t*>(c_ptr)->connectivity();
+    return reinterpret_cast<index_dense_t*>(c_ptr)->connectivity();
 }
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1dimensions(JNIEnv*, jclass, jlong c_ptr) {
-    return reinterpret_cast<index_t*>(c_ptr)->dimensions();
+    return reinterpret_cast<index_dense_t*>(c_ptr)->dimensions();
 }
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1capacity(JNIEnv*, jclass, jlong c_ptr) {
-    return reinterpret_cast<index_t*>(c_ptr)->capacity();
+    return reinterpret_cast<index_dense_t*>(c_ptr)->capacity();
 }
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1reserve(JNIEnv* env, jclass, jlong c_ptr, jlong capacity) {
-    if (!reinterpret_cast<index_t*>(c_ptr)->reserve(static_cast<std::size_t>(capacity))) {
+    if (!reinterpret_cast<index_dense_t*>(c_ptr)->reserve(static_cast<std::size_t>(capacity))) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
             (*env).ThrowNew(jc, "Failed to grow vector index!");
@@ -125,9 +119,10 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add( //
 
     jfloat* vector_data = (*env).GetFloatArrayElements(vector, 0);
     jsize vector_dims = (*env).GetArrayLength(vector);
-    vector_view_t vector_span = vector_view_t{vector_data, static_cast<std::size_t>(vector_dims)};
+    float_span_t vector_span = float_span_t{vector_data, static_cast<std::size_t>(vector_dims)};
 
-    if (!reinterpret_cast<index_t*>(c_ptr)->add(static_cast<key_t>(key), vector_span)) {
+    using key_t = typename index_dense_t::key_t;
+    if (!reinterpret_cast<index_dense_t*>(c_ptr)->add(static_cast<key_t>(key), vector_span)) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
             (*env).ThrowNew(jc, "Failed to insert a new point in vector index!");
@@ -149,8 +144,13 @@ JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search( //
 
     jfloat* vector_data = (*env).GetFloatArrayElements(vector, 0);
     jsize vector_dims = (*env).GetArrayLength(vector);
-    vector_view_t vector_span = vector_view_t{vector_data, static_cast<std::size_t>(vector_dims)};
-    search_result_t result = reinterpret_cast<index_t*>(c_ptr)->search(vector_span, static_cast<std::size_t>(wanted));
+    float_span_t vector_span = float_span_t{vector_data, static_cast<std::size_t>(vector_dims)};
+
+    using key_t = typename index_dense_t::key_t;
+    using search_result_t = typename index_dense_t::search_result_t;
+
+    search_result_t result =
+        reinterpret_cast<index_dense_t*>(c_ptr)->search(vector_span, static_cast<std::size_t>(wanted));
     if (result) {
         std::size_t found = result.dump_to(reinterpret_cast<key_t*>(matches_data), NULL);
         (*env).SetIntArrayRegion(matches, 0, found, matches_data);

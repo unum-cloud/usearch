@@ -237,6 +237,7 @@ def test_exact_recall(
 ):
     ndim: int = batch_size
     index = Index(ndim=ndim, metric=metric, dtype=index_type)
+    assert index.ndim == ndim
 
     vectors = np.zeros((batch_size, ndim), dtype=numpy_type)
     for i in range(batch_size):
@@ -290,8 +291,6 @@ def test_bitwise_index(
     batch_size: int,
 ):
     index = Index(ndim=bits, metric=metric, connectivity=connectivity)
-
-    print(bits, metric, connectivity, batch_size)
 
     keys = np.arange(batch_size)
     byte_vectors = np.random.randint(2, size=(batch_size, bits))

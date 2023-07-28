@@ -1,6 +1,6 @@
 /**
  *  @brief A benchmark for the construction speed of the USearch index
- *  and the resulting accuracy (recall) of the Approximate Nearest Neighbors
+ *  and the resulting quantization (recall) of the Approximate Nearest Neighbors
  *  Search queries.
  */
 
@@ -483,7 +483,7 @@ struct args_t {
         return metric_kind_t::ip_k;
     }
 
-    scalar_kind_t accuracy() const noexcept {
+    scalar_kind_t quantization() const noexcept {
         if (quantize_f16)
             return scalar_kind_t::f16_k;
         if (quantize_f8)
@@ -497,13 +497,13 @@ struct args_t {
 template <typename index_at, typename dataset_at> //
 void run_punned(dataset_at& dataset, args_t const& args, index_config_t config, index_limits_t limits) {
 
-    scalar_kind_t accuracy = args.accuracy();
-    std::printf("-- Accuracy: %s\n", scalar_kind_name(accuracy));
+    scalar_kind_t quantization = args.quantization();
+    std::printf("-- Quantization: %s\n", scalar_kind_name(quantization));
 
     metric_kind_t kind = args.metric();
     std::printf("-- Metric: %s\n", metric_kind_name(kind));
 
-    index_at index = index_at::make(dataset.dimensions(), kind, config, accuracy);
+    index_at index = index_at::make(dataset.dimensions(), kind, config, quantization);
     index.reserve(limits);
     std::printf("-- Hardware acceleration: %s\n", isa_name(index.metric().isa_));
     std::printf("Will benchmark in-memory\n");

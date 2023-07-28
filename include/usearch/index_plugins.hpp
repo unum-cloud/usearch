@@ -450,15 +450,21 @@ class executor_stl_t {
     template <typename thread_aware_function_at>
     void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
         std::vector<std::thread> threads_pool;
-        std::size_t tasks_per_thread = (tasks / threads_count_) + ((tasks % threads_count_) != 0);
-        for (std::size_t thread_idx = 0; thread_idx != threads_count_; ++thread_idx) {
-            threads_pool.emplace_back([=]() {
-                for (std::size_t task_idx = thread_idx * tasks_per_thread;
-                     task_idx < (std::min)(tasks, thread_idx * tasks_per_thread + tasks_per_thread); ++task_idx)
-                    thread_aware_function(thread_idx, task_idx);
-            });
+        std::size_t sub_threads = threads_count_ - 1;
+        std::size_t tasks_per_thread = tasks;
+        if (sub_threads) {
+            tasks_per_thread = (tasks / sub_threads) + ((tasks % sub_threads) != 0);
+            for (std::size_t thread_idx = 1; thread_idx < (sub_threads + 1); ++thread_idx) {
+                threads_pool.emplace_back([=]() {
+                    for (std::size_t task_idx = thread_idx * tasks_per_thread;
+                         task_idx < (std::min)(tasks, thread_idx * tasks_per_thread + tasks_per_thread); ++task_idx)
+                        thread_aware_function(thread_idx, task_idx);
+                });
+            }
         }
-        for (std::size_t thread_idx = 0; thread_idx != threads_count_; ++thread_idx)
+        for (std::size_t task_idx = 0; task_idx < (std::min)(tasks, tasks_per_thread); ++task_idx)
+            thread_aware_function(0, task_idx);
+        for (std::size_t thread_idx = 0; thread_idx != sub_threads; ++thread_idx)
             threads_pool[thread_idx].join();
     }
 
@@ -469,6 +475,8 @@ class executor_stl_t {
      */
     template <typename thread_aware_function_at>
     void execute_bulk(thread_aware_function_at&& thread_aware_function) noexcept(false) {
+        if (threads_count_ == 1)
+            return thread_aware_function(0);
         std::vector<std::thread> threads_pool;
         for (std::size_t thread_idx = 0; thread_idx != threads_count_; ++thread_idx)
             threads_pool.emplace_back([=]() { thread_aware_function(thread_idx); });
@@ -716,7 +724,7 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
      *  @brief Returns the amount of remaining memory already reserved but not yet used.
      *  @return The amount of reserved memory in bytes.
      */
-    std::size_t total_reserved() const noexcept { return last_capacity_ - last_usage_; }
+    std::size_t total_reserved() const noexcept { return last_arena_ ? last_capacity_ - last_usage_ : 0; }
 
     /**
      *  @warning The very first memory de-allocation discards all the arenas!
@@ -1086,36 +1094,49 @@ class metric_punned_t {
     using result_t = distance_punned_t;
     using stl_function_t = std::function<float(byte_t const*, byte_t const*)>;
 
-    stl_function_t stl_function;
-    std::size_t bytes_per_vector = 0;
-    metric_kind_t metric_kind = metric_kind_t::unknown_k;
-    scalar_kind_t scalar_kind = scalar_kind_t::unknown_k;
-    isa_kind_t isa_kind = isa_kind_t::auto_k;
+  private:
+    stl_function_t stl_function_;
+    std::size_t dimensions_ = 0;
+    metric_kind_t metric_kind_ = metric_kind_t::unknown_k;
+    scalar_kind_t scalar_kind_ = scalar_kind_t::unknown_k;
+    isa_kind_t isa_kind_ = isa_kind_t::auto_k;
 
+  public:
     /**
      *  @brief  Computes the distance between two vectors of fixed length.
      *  ! The only relevant function in the object. Everything else is just dynamic dispatch.
      */
-    inline result_t operator()(byte_t const* a, byte_t const* b) const noexcept { return stl_function(a, b); }
+    inline result_t operator()(byte_t const* a, byte_t const* b) const noexcept { return stl_function_(a, b); }
 
     inline metric_punned_t() = default;
     inline metric_punned_t(metric_punned_t const&) = default;
     inline metric_punned_t& operator=(metric_punned_t const&) = default;
 
-    inline metric_punned_t(stl_function_t stl_function, std::size_t bytes_per_vector = 0,
-                           metric_kind_t metric_kind = metric_kind_t::unknown_k,
-                           scalar_kind_t scalar_kind = scalar_kind_t::unknown_k,
-                           isa_kind_t isa_kind = isa_kind_t::auto_k)
-        : stl_function(stl_function), bytes_per_vector(bytes_per_vector), metric_kind(metric_kind),
-          scalar_kind(scalar_kind), isa_kind(isa_kind) {}
+    inline metric_punned_t( //
+        stl_function_t stl_function, std::size_t dimensions = 0, metric_kind_t metric_kind = metric_kind_t::unknown_k,
+        scalar_kind_t scalar_kind = scalar_kind_t::unknown_k, isa_kind_t isa_kind = isa_kind_t::auto_k)
+        : stl_function_(stl_function), dimensions_(dimensions), metric_kind_(metric_kind), scalar_kind_(scalar_kind),
+          isa_kind_(isa_kind) {}
 
-    inline metric_punned_t(std::size_t bytes_per_vector, metric_kind_t metric_kind = metric_kind_t::cos_k,
-                           scalar_kind_t scalar_kind = scalar_kind_t::f32_k) {
+    inline metric_punned_t( //
+        std::size_t dimensions, metric_kind_t metric_kind = metric_kind_t::cos_k,
+        scalar_kind_t scalar_kind = scalar_kind_t::f32_k) {
+        std::size_t bytes_per_vector = divide_round_up<CHAR_BIT>(dimensions * bits_per_scalar(scalar_kind));
         *this = make_(bytes_per_vector, metric_kind, scalar_kind);
+        dimensions_ = dimensions;
     }
 
-    std::size_t dimensions_upper_bound() const noexcept {
-        return bytes_per_vector * CHAR_BIT / bits_per_scalar(scalar_kind);
+    std::size_t dimensions() const noexcept { return dimensions_; }
+    metric_kind_t metric_kind() const noexcept { return metric_kind_; }
+    scalar_kind_t scalar_kind() const noexcept { return scalar_kind_; }
+    isa_kind_t isa_kind() const noexcept { return isa_kind_; }
+
+    inline std::size_t bytes_per_vector() const noexcept {
+        return divide_round_up<CHAR_BIT>(dimensions_ * bits_per_scalar(scalar_kind_));
+    }
+
+    inline std::size_t scalar_words() const noexcept {
+        return divide_round_up(dimensions_ * bits_per_scalar(scalar_kind_), bits_per_scalar_word(scalar_kind_));
     }
 
   private:
@@ -1148,8 +1169,7 @@ class metric_punned_t {
     template <typename typed_at> static stl_function_t to_stl_(std::size_t bytes) {
         using scalar_t = typename typed_at::scalar_t;
         return [=](byte_t const* a, byte_t const* b) -> result_t {
-            std::size_t dim = bytes / sizeof(scalar_t);
-            return typed_at{}((scalar_t const*)a, (scalar_t const*)b, dim);
+            return typed_at{}((scalar_t const*)a, (scalar_t const*)b, bytes / sizeof(scalar_t));
         };
     }
 

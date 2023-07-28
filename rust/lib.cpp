@@ -13,6 +13,7 @@ Index::Index(std::unique_ptr<index_t> index) : index_(std::move(index)) {}
 void Index::add_in_thread(key_t key, rust::Slice<float const> vector, size_t thread) const {
     index_add_config_t config;
     config.thread = thread;
+    config.expansion = index_->expansion_add();
     index_->add(key, vector.data(), config).error.raise();
 }
 
@@ -24,6 +25,7 @@ Matches Index::search_in_thread(rust::Slice<float const> vector, size_t count, s
         matches.keys.push_back(0), matches.distances.push_back(0);
     index_search_config_t config;
     config.thread = thread;
+    config.expansion = index_->expansion_search();
     search_result_t result = index_->search(vector.data(), count, config);
     result.error.raise();
     matches.count = result.dump_to(matches.keys.data(), matches.distances.data());
@@ -59,19 +61,13 @@ void Index::save(rust::Str path) const { index_->save(std::string(path).c_str())
 void Index::load(rust::Str path) const { index_->load(std::string(path).c_str()); }
 void Index::view(rust::Str path) const { index_->view(std::string(path).c_str()); }
 
-scalar_kind_t accuracy(rust::Str quant) { return scalar_kind_from_name(quant.data(), quant.size()); }
+scalar_kind_t quantization(rust::Str quant) { return scalar_kind_from_name(quant.data(), quant.size()); }
 
 std::unique_ptr<Index> wrap(index_t&& index) {
     std::unique_ptr<index_t> punned_ptr;
     punned_ptr.reset(new index_t(std::move(index)));
     std::unique_ptr<Index> result;
     result.reset(new Index(std::move(punned_ptr)));
-    return result;
-}
-
-index_config_t config(size_t connectivity) {
-    index_config_t result;
-    result.connectivity = connectivity ? connectivity : default_connectivity();
     return result;
 }
 
@@ -101,7 +97,9 @@ scalar_kind_t rust_to_cpp_scalar(ScalarKind value) {
 }
 
 std::unique_ptr<Index> new_index(IndexOptions const& options) {
-    return wrap(index_t::make(options.dimensions, rust_to_cpp_metric(options.metric), config(options.connectivity),
-                              rust_to_cpp_scalar(options.quantization), options.expansion_add,
-                              options.expansion_search));
+    metric_kind_t metric_kind = rust_to_cpp_metric(options.metric);
+    scalar_kind_t scalar_kind = rust_to_cpp_scalar(options.quantization);
+    metric_punned_t metric(options.dimensions, metric_kind, scalar_kind);
+    index_dense_config_t config(options.connectivity, options.expansion_add, options.expansion_search);
+    return wrap(index_t::make(metric, config));
 }

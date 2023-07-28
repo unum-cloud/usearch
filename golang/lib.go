@@ -38,16 +38,16 @@ func (m DistMetric) String() string {
 	}
 }
 
-type Accuracy int8
+type Quantization int8
 
 const (
-	f32 Accuracy = iota
+	f32 Quantization = iota
 	f16
 	f64
 	f8
 )
 
-func (a Accuracy) String() string {
+func (a Quantization) String() string {
 	switch a {
 	case f16:
 		return "f16"
@@ -58,12 +58,12 @@ func (a Accuracy) String() string {
 	case f8:
 		return "f8"
 	default:
-		panic("unknown accuracy")
+		panic("unknown quantization")
 	}
 }
 
 type IndexConfig struct {
-	Accuracy        Accuracy
+	Quantization        Quantization
 	Metric          DistMetric
 	VecDimension    int
 	InitCapacity    int
@@ -98,16 +98,16 @@ func (ind *Index) init() {
 	metric_str := C.CString(conf.Metric.String())
 	defer C.free(unsafe.Pointer(metric_str))
 	metric_len := C.int(len(conf.Metric.String()))
-	accuracy_str := C.CString(conf.Accuracy.String())
-	defer C.free(unsafe.Pointer(accuracy_str))
-	accuracy_len := C.int(len(conf.Accuracy.String()))
+	quantization_str := C.CString(conf.Quantization.String())
+	defer C.free(unsafe.Pointer(quantization_str))
+	quantization_len := C.int(len(conf.Quantization.String()))
 	dimensions := C.int(conf.VecDimension)
 	capacity := C.int(conf.InitCapacity)
 	connectivity := C.int(conf.Connectivity)
 	expansion_add := C.int(conf.ExpansionAdd)
 	expansion_search := C.int(conf.ExpansionSearch)
 	ptr := C.usearch_new(metric_str, metric_len,
-		accuracy_str, accuracy_len,
+		quantization_str, quantization_len,
 		dimensions, capacity, connectivity,
 		expansion_add, expansion_search)
 

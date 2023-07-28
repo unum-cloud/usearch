@@ -16,10 +16,10 @@ EXTERN_C DLLEXPORT void WolframLibrary_uninitialize(WolframLibraryData libData) 
 
 EXTERN_C DLLEXPORT int IndexCreate(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
     index_config_t config;
-    char* accuracy_cstr = nullptr;
+    char* quantization_cstr = nullptr;
     char* metric_cstr = nullptr;
     try {
-        accuracy_cstr = MArgument_getUTF8String(Args[1]);
+        quantization_cstr = MArgument_getUTF8String(Args[1]);
         metric_cstr = MArgument_getUTF8String(Args[0]);
         std::size_t dimensions = static_cast<std::size_t>(MArgument_getInteger(Args[2]));
         std::size_t capacity = static_cast<std::size_t>(MArgument_getInteger(Args[3]));
@@ -27,9 +27,9 @@ EXTERN_C DLLEXPORT int IndexCreate(WolframLibraryData libData, mint Argc, MArgum
         config.expansion_add = static_cast<std::size_t>(MArgument_getInteger(Args[5]));
         config.expansion_search = static_cast<std::size_t>(MArgument_getInteger(Args[6]));
 
-        scalar_kind_t accuracy = scalar_kind_from_name(accuracy_cstr, std::strlen(accuracy_cstr));
+        scalar_kind_t quantization = scalar_kind_from_name(quantization_cstr, std::strlen(quantization_cstr));
         metric_kind_t metric_kind = metric_from_name(metric_cstr, std::strlen(metric_cstr));
-        index_t index = make_punned<index_t>(metric_kind, dimensions, accuracy, config);
+        index_t index = make_punned<index_t>(metric_kind, dimensions, quantization, config);
         index.reserve(capacity);
 
         index_t* result_ptr = new index_t(std::move(index));
@@ -39,7 +39,7 @@ EXTERN_C DLLEXPORT int IndexCreate(WolframLibraryData libData, mint Argc, MArgum
         return LIBRARY_FUNCTION_ERROR;
     }
 
-    libData->UTF8String_disown(accuracy_cstr);
+    libData->UTF8String_disown(quantization_cstr);
     libData->UTF8String_disown(metric_cstr);
     return LIBRARY_NO_ERROR;
 }

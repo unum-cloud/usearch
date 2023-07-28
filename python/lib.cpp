@@ -43,20 +43,20 @@ using py_shape_t = py::array::ShapeContainer;
 #define key_t typename index_dense_t::key_t
 using metric_t = metric_punned_t;
 using distance_t = distance_punned_t;
-using dense_index_t = index_dense_t;
-using dense_add_result_t = typename dense_index_t::add_result_t;
-using dense_search_result_t = typename dense_index_t::search_result_t;
-using dense_labeling_result_t = typename dense_index_t::labeling_result_t;
 
-struct dense_index_py_t : public dense_index_t {
-    using native_t = dense_index_t;
+using dense_add_result_t = typename index_dense_t::add_result_t;
+using dense_search_result_t = typename index_dense_t::search_result_t;
+using dense_labeling_result_t = typename index_dense_t::labeling_result_t;
+
+struct dense_index_py_t : public index_dense_t {
+    using native_t = index_dense_t;
     using native_t::add;
     using native_t::capacity;
     using native_t::reserve;
     using native_t::search;
     using native_t::size;
 
-    dense_index_py_t(native_t&& base) : native_t(std::move(base)) {}
+    dense_index_py_t(native_t&& base) : index_dense_t(std::move(base)) {}
 };
 
 struct dense_indexes_py_t {
@@ -80,68 +80,51 @@ struct dense_indexes_py_t {
     }
 };
 
-using set_member_t = std::uint32_t;
-using set_view_t = span_gt<set_member_t const>;
-using sparse_index_t = index_gt<metric_jaccard_gt<set_member_t>, key_t, id_t>;
-
-struct sparse_index_py_t : public sparse_index_t {
-    using native_t = sparse_index_t;
-    using native_t::add;
-    using native_t::capacity;
-    using native_t::reserve;
-    using native_t::search;
-    using native_t::size;
-
-    sparse_index_py_t(native_t&& base) : native_t(std::move(base)) {}
-};
-
 template <typename scalar_at>
 metric_t typed_udf(                                                                  //
     metric_kind_t kind, metric_signature_t signature, std::uintptr_t metric_uintptr, //
-    scalar_kind_t scalar_kind, std::size_t bytes_per_vector) {
+    scalar_kind_t scalar_kind, std::size_t dimensions) {
     //
-    std::size_t scalar_words = divide_round_up(bytes_per_vector * CHAR_BIT, bits_per_scalar_word(scalar_kind));
-    metric_t result;
-    result.metric_kind = kind;
-    result.scalar_kind = scalar_kind;
+    using stl_function_t = metric_t::stl_function_t;
+    stl_function_t stl_function;
+    std::size_t scalar_words =
+        divide_round_up(dimensions * bits_per_scalar(scalar_kind), bits_per_scalar_word(scalar_kind));
     switch (signature) {
     case metric_signature_t::array_array_k:
-        result.stl_function = [metric_uintptr, scalar_words](byte_t const* a, byte_t const* b) -> distance_t {
+        stl_function = [metric_uintptr](byte_t const* a, byte_t const* b) -> distance_t {
             using metric_raw_t = distance_punned_t (*)(scalar_at const*, scalar_at const*);
             metric_raw_t metric_ptr = reinterpret_cast<metric_raw_t>(metric_uintptr);
             return metric_ptr((scalar_at const*)a, (scalar_at const*)b);
         };
         break;
     case metric_signature_t::array_array_size_k:
-        result.stl_function = [metric_uintptr, scalar_words](byte_t const* a, byte_t const* b) -> distance_t {
+        stl_function = [metric_uintptr, scalar_words](byte_t const* a, byte_t const* b) -> distance_t {
             using metric_raw_t = distance_punned_t (*)(scalar_at const*, scalar_at const*, size_t);
             metric_raw_t metric_ptr = reinterpret_cast<metric_raw_t>(metric_uintptr);
             return metric_ptr((scalar_at const*)a, (scalar_at const*)b, scalar_words);
         };
         break;
     case metric_signature_t::array_size_array_size_k:
-        result.stl_function = [metric_uintptr, scalar_words](byte_t const* a, byte_t const* b) -> distance_t {
+        stl_function = [metric_uintptr, scalar_words](byte_t const* a, byte_t const* b) -> distance_t {
             using metric_raw_t = distance_punned_t (*)(scalar_at const*, size_t, scalar_at const*, size_t);
             metric_raw_t metric_ptr = reinterpret_cast<metric_raw_t>(metric_uintptr);
             return metric_ptr((scalar_at const*)a, scalar_words, (scalar_at const*)b, scalar_words);
         };
         break;
     }
-    return result;
+    return metric_t(stl_function, dimensions, kind, scalar_kind);
 }
 
 metric_t udf(metric_kind_t kind, metric_signature_t signature, std::uintptr_t metric_uintptr, //
-             scalar_kind_t scalar_kind, std::size_t bytes_per_vector) {
-    // clang-format off
+             scalar_kind_t scalar_kind, std::size_t dimensions) {
     switch (scalar_kind) {
-    case scalar_kind_t::b1x8_k: return typed_udf<b1x8_t>(kind, signature, metric_uintptr, scalar_kind, bytes_per_vector);
-    case scalar_kind_t::f8_k: return typed_udf<f8_bits_t>(kind, signature, metric_uintptr, scalar_kind, bytes_per_vector);
-    case scalar_kind_t::f16_k: return typed_udf<f16_t>(kind, signature, metric_uintptr, scalar_kind, bytes_per_vector);
-    case scalar_kind_t::f32_k: return typed_udf<f32_t>(kind, signature, metric_uintptr, scalar_kind, bytes_per_vector);
-    case scalar_kind_t::f64_k: return typed_udf<f64_t>(kind, signature, metric_uintptr, scalar_kind, bytes_per_vector);
+    case scalar_kind_t::b1x8_k: return typed_udf<b1x8_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
+    case scalar_kind_t::f8_k: return typed_udf<f8_bits_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
+    case scalar_kind_t::f16_k: return typed_udf<f16_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
+    case scalar_kind_t::f32_k: return typed_udf<f32_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
+    case scalar_kind_t::f64_k: return typed_udf<f64_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
     default: return {};
     }
-    // clang-format on
 }
 
 static dense_index_py_t make_index(      //
@@ -154,31 +137,13 @@ static dense_index_py_t make_index(      //
     metric_signature_t metric_signature, //
     std::uintptr_t metric_uintptr) {
 
-    index_config_t config;
-    config.connectivity = connectivity;
-
-    std::size_t bytes_per_vector = divide_round_up<CHAR_BIT>(dimensions * bits_per_scalar(scalar_kind));
-
-    if (metric_uintptr)
-        return dense_index_t::make(udf(metric_kind, metric_signature, metric_uintptr, scalar_kind, bytes_per_vector), //
-                                   config, expansion_add, expansion_search);
-    else
-        return dense_index_t::make(metric_t(bytes_per_vector, metric_kind, scalar_kind), //
-                                   config, expansion_add, expansion_search);
+    index_dense_config_t config(connectivity, expansion_add, expansion_search);
+    metric_t metric =  //
+        metric_uintptr //
+            ? udf(metric_kind, metric_signature, metric_uintptr, scalar_kind, dimensions)
+            : metric_t(dimensions, metric_kind, scalar_kind);
+    return index_dense_t::make(metric, config);
 }
-
-#if 0
-static std::unique_ptr<sparse_index_py_t> make_sparse_index( //
-    std::size_t connectivity,                                //
-    std::size_t expansion_add,                               //
-    std::size_t expansion_search                             //
-) {
-    index_config_t config;
-    config.connectivity = connectivity;
-
-    return std::unique_ptr<sparse_index_py_t>(new sparse_index_py_t(sparse_index_t(config)));
-}
-#endif
 
 scalar_kind_t numpy_string_to_kind(std::string const& name) {
     // https://docs.python.org/3/library/struct.html#format-characters
@@ -411,8 +376,7 @@ static dense_index_py_t copy_index(dense_index_py_t const& index) {
 
     using copy_result_t = typename dense_index_py_t::copy_result_t;
     index_copy_config_t config;
-
-    copy_result_t result = index.copy();
+    copy_result_t result = index.copy(config);
     result.error.raise();
     return std::move(result.index);
 }
@@ -476,97 +440,6 @@ template <typename element_at> bool has_duplicates(element_at const* begin, elem
     return false;
 }
 
-void validate_set(py::array_t<set_member_t> const& set) {
-    if (set.ndim() != 1)
-        throw std::invalid_argument("Set can't be multi-dimensional!");
-    if (set.strides(0) != sizeof(set_member_t))
-        throw std::invalid_argument("Set can't be strided!");
-    auto proxy = set.unchecked<1>();
-    set_member_t const* begin = &proxy(0);
-    set_member_t const* end = begin + proxy.size();
-    if (!std::is_sorted(begin, end))
-        throw std::invalid_argument("Set must be sorted!");
-    if (has_duplicates(begin, end))
-        throw std::invalid_argument("Set must be deduplicated!");
-}
-#if 0
-
-inline std::size_t hash_ror64(std::size_t v, int r) noexcept { return (v >> r) | (v << (64 - r)); }
-
-inline std::size_t hash(std::size_t v) noexcept {
-    v ^= hash_ror64(v, 25) ^ hash_ror64(v, 50);
-    v *= 0xA24BAED4963EE407UL;
-    v ^= hash_ror64(v, 24) ^ hash_ror64(v, 49);
-    v *= 0x9FB21C651E98DF25UL;
-    return v ^ v >> 28;
-}
-
-template <typename scalar_at>
-void hash_typed_row(                                                             //
-    byte_t const* scalars, std::size_t scalar_stride, std::size_t scalars_count, //
-    b1x8_t* hashes, std::size_t bits) noexcept {
-
-    std::size_t words = divide_round_up<8>(bits);
-    for (std::size_t i = 0; i != scalars_count; ++i) {
-        scalar_at scalar;
-        std::memcpy(&scalar, scalars + i * scalar_stride, sizeof(scalar_at));
-        std::size_t scalar_hash = hash(scalar);
-        hashes[scalar_hash & (words - 1)] |= std::uint8_t(1) << (scalar_hash % 8);
-    }
-}
-
-template <typename scalar_at>
-py::array_t<bits_numpy_word_t> hash_typed_buffer(py::buffer_info const& info, std::size_t bits) {
-    byte_t const* data = reinterpret_cast<byte_t const*>(info.ptr);
-    Py_ssize_t elements_per_row = info.shape[0];
-    Py_ssize_t elements_stride = info.strides[0];
-    Py_ssize_t words_per_row = divide_round_up<std::size_t>(bits, 8);
-
-    if (info.ndim == 2) {
-        Py_ssize_t rows_count = info.shape[1];
-        Py_ssize_t rows_stride = info.strides[1];
-        auto hashes_shape = py_shape_t{rows_count, words_per_row};
-        auto hashes_py = py::array_t<bits_numpy_word_t>(hashes_shape);
-        auto hashes_proxy = hashes_py.template mutable_unchecked<2>();
-
-        for (Py_ssize_t i = 0; i != rows_count; ++i)
-            hash_typed_row(                                                                                 //
-                data + i * rows_stride, hashes_proxy.stride(1), static_cast<std::size_t>(elements_per_row), //
-                &hashes_proxy(i, 0), bits);
-
-        return hashes_py;
-    } else {
-        auto hashes_shape = py_shape_t{words_per_row};
-        auto hashes_py = py::array_t<bits_numpy_word_t>(hashes_shape);
-        auto hashes_proxy = hashes_py.template mutable_unchecked<1>();
-
-        hash_typed_row(                                                               //
-            data, hashes_info.strides[0], static_cast<std::size_t>(elements_per_row), //
-            &hashes_proxy(0), bits);
-
-        return hashes_py;
-    }
-}
-
-py::array_t<bits_numpy_word_t> hash_buffer(py::buffer vector, std::size_t bits) {
-    if (std::bitset<64>(bits).count() == 1)
-        throw std::invalid_argument("Number of bits must be a power of two!");
-    py::buffer_info info = vector.request();
-    if (info.ndim > 2)
-        throw std::invalid_argument("Only one or two-dimensional arrays are supported!");
-
-    // https://docs.python.org/3/library/struct.html#format-characters
-    if (info.format == "h" || info.format == "H")
-        return hash_typed_buffer<std::uint16_t>(info, bits);
-    else if (info.format == "i" || info.format == "I" || info.format == "l" || info.format == "L")
-        return hash_typed_buffer<std::uint32_t>(info, bits);
-    else if (info.format == "q" || info.format == "Q" || info.format == "n" || info.format == "N")
-        return hash_typed_buffer<std::uint64_t>(info, bits);
-    else
-        throw std::invalid_argument("Array elements must be 16, 32, or 64 bit hashable integers!");
-}
-#endif
-
 PYBIND11_MODULE(compiled, m) {
     m.doc() = "Smaller & Faster Single-File Vector Search Engine from Unum";
 
@@ -619,8 +492,8 @@ PYBIND11_MODULE(compiled, m) {
         index_dense_head_t const& head = meta.head;
 
         py::dict result;
-        result["matrix_included"] = meta.config.include_vectors;
-        result["matrix_uses_32_bit_dimensions"] = meta.config.use_32_bit_dimensions;
+        result["matrix_included"] = !meta.config.exclude_vectors;
+        result["matrix_uses_64_bit_dimensions"] = meta.config.use_64_bit_dimensions;
 
         result["version"] = std::to_string(head.version_major) + "." + //
                             std::to_string(head.version_minor) + "." + //
@@ -633,7 +506,7 @@ PYBIND11_MODULE(compiled, m) {
 
         result["count_present"] = std::uint64_t(head.count_present);
         result["count_deleted"] = std::uint64_t(head.count_deleted);
-        result["bytes_per_vector"] = std::uint64_t(head.bytes_per_vector);
+        result["dimensions"] = std::uint64_t(head.dimensions);
 
         return result;
     });
@@ -718,8 +591,8 @@ PYBIND11_MODULE(compiled, m) {
     i.def_property_readonly("size", &dense_index_py_t::size);
     i.def_property_readonly("connectivity", &dense_index_py_t::connectivity);
     i.def_property_readonly("capacity", &dense_index_py_t::capacity);
-    i.def_property_readonly(
-        "ndim", [](dense_index_py_t const& index) -> std::size_t { return index.metric().dimensions_upper_bound(); });
+    i.def_property_readonly("ndim",
+                            [](dense_index_py_t const& index) -> std::size_t { return index.metric().dimensions(); });
     i.def_property_readonly( //
         "dtype", [](dense_index_py_t const& index) -> scalar_kind_t { return index.scalar_kind(); });
     i.def_property_readonly( //
@@ -764,63 +637,4 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("exact") = false,                            //
         py::arg("threads") = 0                               //
     );
-
-#if 0
-    auto si = py::class_<sparse_index_py_t>(m, "SparseIndex");
-
-    si.def(                                                      //
-        py::init(&make_sparse_index),                            //
-        py::kw_only(),                                           //
-        py::arg("connectivity") = default_connectivity(),        //
-        py::arg("expansion_add") = default_expansion_add(),      //
-        py::arg("expansion_search") = default_expansion_search() //
-    );
-
-    si.def( //
-        "add",
-        [](sparse_index_py_t& index, key_t key, py::array_t<set_member_t> set, bool force_copy) {
-            validate_set(set);
-            if (index.size() + 1 >= index.capacity())
-                index.reserve(ceil2(index.size() + 1));
-            auto proxy = set.unchecked<1>();
-            auto view = set_view_t{&proxy(0), static_cast<std::size_t>(proxy.shape(0))};
-
-            index_dense_add_config_t config;
-            config.force_vector_copy = force_copy;
-            index.add(key, view, config).error.raise();
-        },                     //
-        py::arg("key"),        //
-        py::arg("set"),        //
-        py::kw_only(),         //
-        py::arg("copy") = true //
-    );
-
-    si.def( //
-        "search",
-        [](sparse_index_py_t& index, py::array_t<set_member_t> set, std::size_t count) -> py::array_t<key_t> {
-            validate_set(set);
-            auto proxy = set.unchecked<1>();
-            auto view = set_view_t{&proxy(0), static_cast<std::size_t>(proxy.shape(0))};
-            auto labels_py = py::array_t<key_t>(py_shape_t{static_cast<Py_ssize_t>(count)});
-            auto labels_proxy = labels_py.template mutable_unchecked<1>();
-            auto result = index.search(view, count);
-            result.error.raise();
-            auto found = result.dump_to(&labels_proxy(0));
-            labels_py.resize(py_shape_t{static_cast<Py_ssize_t>(found)});
-            return labels_py;
-        },
-        py::arg("set"),       //
-        py::arg("count") = 10 //
-    );
-
-    si.def("__len__", &sparse_index_py_t::size);
-    si.def_property_readonly("size", &sparse_index_py_t::size);
-    si.def_property_readonly("connectivity", &sparse_index_py_t::connectivity);
-    si.def_property_readonly("capacity", &sparse_index_py_t::capacity);
-
-    si.def("save", &save_index<sparse_index_py_t>, py::arg("path"));
-    si.def("load", &load_index<sparse_index_py_t>, py::arg("path"));
-    si.def("view", &view_index<sparse_index_py_t>, py::arg("path"));
-    si.def("clear", &sparse_index_py_t::clear);
-#endif
 }

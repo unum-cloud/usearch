@@ -16,12 +16,12 @@ public class Index {
 
   private long c_ptr = 0;
 
-  public Index(String metric, String accuracy, //
+  public Index(String metric, String quantization, //
       long dimensions, long capacity, long connectivity, //
       long expansion_add, long expansion_search) {
     c_ptr = c_create(
         metric,
-        accuracy,
+        quantization,
         dimensions,
         capacity,
         connectivity,
@@ -71,7 +71,7 @@ public class Index {
 
   public static class Config {
     private String _metric = "ip";
-    private String _accuracy = "f32";
+    private String _quantization = "f32";
     private long _dimensions = 0;
     private long _capacity = 0;
     private long _connectivity = 0;
@@ -84,7 +84,7 @@ public class Index {
     public Index build() {
       return new Index(
           _metric,
-          _accuracy,
+          _quantization,
           _dimensions,
           _capacity,
           _connectivity,
@@ -97,8 +97,8 @@ public class Index {
       return this;
     }
 
-    public Config accuracy(String _accuracy) {
-      this._accuracy = _accuracy;
+    public Config quantization(String _quantization) {
+      this._quantization = _quantization;
       return this;
     }
 
@@ -138,7 +138,7 @@ public class Index {
   }
 
   private static native long c_create(//
-      String metric, String accuracy, //
+      String metric, String quantization, //
       long dimensions, long capacity, long connectivity, //
       long expansion_add, long expansion_search);
 

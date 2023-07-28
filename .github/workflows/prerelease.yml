@@ -17,8 +17,8 @@ permissions:
 
 jobs:
 
-  build_test:
-    name: Test USearch
+  test_cpp:
+    name: Test C++
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3

@@ -44,7 +44,7 @@ cmake -B ./build_release \
 Linting:
 
 ```sh
-cppcheck --enable=all --suppress=cstyleCast --suppress=unusedFunction \
+cppcheck --enable=all --force --suppress=cstyleCast --suppress=unusedFunction \
     include/usearch/index.hpp \
     include/index_dense.hpp \
     include/index_plugins.hpp
