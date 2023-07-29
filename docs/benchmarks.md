@@ -56,7 +56,7 @@ Also worth noting, 8-bit quantization results in almost no quantization loss and
 Within this repository you will find two commonly used utilities:
 
 - `cpp/bench.cpp` the produces the `bench` binary for broad USearch benchmarks.
-- `python/bench.py` for simple benchmarks against FAISS.
+- `python/bench.py` and `python/bench.ipynb` for interactive charts against FAISS.
 
 To achieve best highest results we suggest compiling locally for the target architecture.
 
@@ -111,6 +111,27 @@ OPTIONS
         --haversine Choose Haversine metric
         -h, --help  Print this help information on this tool and exit
 ```
+
+Here is an example of running the C++ benchmark:
+
+```sh
+./build_release/bench \
+    --vectors datasets/wiki_1M/base.1M.fbin \
+    --queries datasets/wiki_1M/query.public.100K.fbin \
+    --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin
+
+./build_release/bench \
+    --vectors datasets/t2i_1B/base.1B.fbin \
+    --queries datasets/t2i_1B/query.public.100K.fbin \
+    --neighbors datasets/t2i_1B/groundtruth.public.100K.ibin \
+    --output datasets/t2i_1B/index.usearch \
+    --cos
+```
+
+
+> Optional parameters include `connectivity`, `expansion_add`, `expansion_search`.
+
+For Python, jut open the Jupyter Notebook and start playing around.
 
 ## Datasets
 
