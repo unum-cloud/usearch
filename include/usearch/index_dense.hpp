@@ -640,7 +640,7 @@ class index_dense_gt {
                 bytes_per_vector = dimensions[1];
                 offset += sizeof(dimensions);
             }
-            vectors_buffer = {file.data() + offset, count_vectors * bytes_per_vector};
+            vectors_buffer = {file.data() + offset, static_cast<std::size_t>(count_vectors * bytes_per_vector)};
             offset += vectors_buffer.size();
         }
 

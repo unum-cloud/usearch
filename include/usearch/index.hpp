@@ -711,7 +711,10 @@ class usearch_pack_m uint40_t {
   public:
     inline uint40_t() noexcept { broadcast(0); }
     inline uint40_t(std::uint32_t n) noexcept { std::memcpy(&octets[1], &n, 4); }
+
+#ifdef USEARCH_64BIT_ENV
     inline uint40_t(std::uint64_t n) noexcept { std::memcpy(octets, &n, 5); }
+#endif
 
     uint40_t(uint40_t&&) = default;
     uint40_t(uint40_t const&) = default;
@@ -1987,7 +1990,7 @@ class index_gt {
         std::size_t new_slot = nodes_count_.fetch_add(1);
         nodes_[new_slot] = node;
         result.new_size = new_slot + 1;
-        result.slot = static_cast<compressed_slot_t>(new_slot);
+        result.slot = new_slot;
         callback(at(new_slot));
         node_lock_t new_lock = node_lock_(new_slot);
 
@@ -2520,8 +2523,8 @@ class index_gt {
     }
 
     template <typename metric_at>
-    std::size_t connect_new_node_(std::size_t new_slot, level_t level, context_t& context,
-                                  metric_at&& metric) usearch_noexcept_m {
+    std::size_t connect_new_node_( //
+        std::size_t new_slot, level_t level, context_t& context, metric_at&& metric) usearch_noexcept_m {
 
         node_t new_node = node_at_(new_slot);
         top_candidates_t& top = context.top_candidates;
@@ -2543,8 +2546,9 @@ class index_gt {
     }
 
     template <typename value_at, typename metric_at>
-    void reconnect_neighbor_nodes_(std::size_t new_slot, value_at&& value, level_t level, context_t& context,
-                                   metric_at&& metric) usearch_noexcept_m {
+    void reconnect_neighbor_nodes_( //
+        std::size_t new_slot, value_at&& value, level_t level, context_t& context,
+        metric_at&& metric) usearch_noexcept_m {
 
         node_t new_node = node_at_(new_slot);
         top_candidates_t& top = context.top_candidates;
@@ -2564,7 +2568,7 @@ class index_gt {
             // If `new_slot` is already present in the neighboring connections of `close_slot`
             // then no need to modify any connections or run the heuristics.
             if (close_header.size() < connectivity_max) {
-                close_header.push_back(new_slot);
+                close_header.push_back(static_cast<compressed_slot_t>(new_slot));
                 continue;
             }
 
@@ -2624,8 +2628,8 @@ class index_gt {
      *  @return `true` if procedure succeeded, `false` if run out of memory.
      */
     template <typename value_at, typename metric_at>
-    bool search_to_insert_(                                                 //
-        compressed_slot_t start_slot, value_at&& query, metric_at&& metric, //
+    bool search_to_insert_(                                           //
+        std::size_t start_slot, value_at&& query, metric_at&& metric, //
         level_t level, std::size_t top_limit, context_t& context) noexcept {
 
         visits_bitset_t& visits = context.visits;
