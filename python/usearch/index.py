@@ -417,14 +417,16 @@ class Index:
                 self._compiled.load(path)
 
     @staticmethod
-    def metadata(path: os.PathLike) -> dict:
+    def metadata(path: os.PathLike) -> Optional[dict]:
+        if not os.path.exists(path):
+            return None
         return index_metadata(path)
 
     @staticmethod
-    def restore(path: os.PathLike, view: bool = False) -> Index:
-        if not os.path.exists(path):
-            return None
+    def restore(path: os.PathLike, view: bool = False) -> Optional[Index]:
         meta = Index.metadata(path)
+        if not meta:
+            return None
         return Index(
             ndim=meta["dimensions"],
             dtype=meta["kind_scalar"],

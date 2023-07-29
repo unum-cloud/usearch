@@ -42,10 +42,13 @@
 #endif
 
 // Inferring hardware bitness: 32 vs 64
-#if __WORDSIZE == 64
+// https://stackoverflow.com/a/5273354
+#if INTPTR_MAX == INT64_MAX
 #define USEARCH_64BIT_ENV
-#else
+#elif INTPTR_MAX == INT32_MAX
 #define USEARCH_32BIT_ENV
+#else
+#error Unknown pointer size or missing size macros!
 #endif
 
 #if !defined(USEARCH_USE_OPENMP)
