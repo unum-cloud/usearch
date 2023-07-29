@@ -38,7 +38,7 @@ def bench_speed(
             expansion_add=expansion_add,
             expansion_search=expansion_search,
             connectivity=connectivity,
-            path="USearch" + ["", "+JIT"][jit] + ":" + dtype,
+            path="USearch" + ["", "+JIT"][jit] + ":" + str(dtype),
         )
 
         # Skip the cases, where JIT-ing is impossible
