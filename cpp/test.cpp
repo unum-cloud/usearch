@@ -164,7 +164,7 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     // Type-punned:
     for (std::size_t connectivity : {3, 13, 50}) {
         using index_t = index_dense_gt<key_t, slot_t>;
-        metric_punned_t metric(dimensions * sizeof(scalar_at), metric_kind_t::cos_k, scalar_kind<scalar_at>());
+        metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
         index_config_t config(connectivity);
         index_t index = index_t::make(metric, config);
         test_cosine<true>(index, matrix);
