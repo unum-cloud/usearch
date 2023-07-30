@@ -1062,9 +1062,8 @@ class output_file_t {
     }
     serialization_result_t open_if_not() noexcept {
         serialization_result_t result;
-        if (file_)
-            return result;
-        file_ = std::fopen(path_, "wb");
+        if (!file_)
+            file_ = std::fopen(path_, "wb");
         if (!file_)
             return result.failed(std::strerror(errno));
         return result;
@@ -1072,10 +1071,8 @@ class output_file_t {
     serialization_result_t write(void* begin, std::size_t length) noexcept {
         serialization_result_t result;
         std::size_t written = std::fwrite(begin, length, 1, file_);
-        if (!written) {
-            std::fclose(file_);
+        if (!written)
             result.failed(std::strerror(errno));
-        }
         return result;
     }
     void close() noexcept {
@@ -1085,7 +1082,7 @@ class output_file_t {
 };
 
 /**
- *  @brief  Smart-pointer wrapping the LibC @b `FILE` for binary file @b inputs.
+ *  @brief  Smart-pointer wrapping the LibC @b `FILE` for binary files @b inputs.
  *
  * This class raises no exceptions and corresponds errors through `serialization_result_t`.
  * The class automatically closes the file when the object is destroyed.
@@ -1107,9 +1104,8 @@ class input_file_t {
 
     serialization_result_t open_if_not() noexcept {
         serialization_result_t result;
-        if (file_)
-            return result;
-        file_ = std::fopen(path_, "rb");
+        if (!file_)
+            file_ = std::fopen(path_, "rb");
         if (!file_)
             return result.failed(std::strerror(errno));
         return result;
@@ -1117,15 +1113,23 @@ class input_file_t {
     serialization_result_t read(void* begin, std::size_t length) noexcept {
         serialization_result_t result;
         std::size_t read = std::fread(begin, length, 1, file_);
-        if (!read) {
-            std::fclose(file_);
-            result.failed(std::strerror(errno));
-        }
+        if (!read)
+            result.failed(std::feof(file_) ? "End of file reached!" : std::strerror(errno));
         return result;
     }
     void close() noexcept {
         if (file_)
             std::fclose(exchange(file_, nullptr));
+    }
+
+    bool seek_to(std::size_t progress) noexcept { return std::fseek(file_, progress, SEEK_SET) == 0; }
+    bool seek_to_end(std::size_t progress) noexcept { return std::fseek(file_, 0L, SEEK_END) == 0; }
+    bool infer_progress(std::size_t& progress) noexcept {
+        long int result = std::ftell(file_);
+        if (result == -1L)
+            return false;
+        progress = static_cast<std::size_t>(result);
+        return true;
     }
 };
 
@@ -1707,9 +1711,10 @@ class index_gt {
 #pragma region Adjusting Configuration
 
     /**
-     *  @brief  Erases all the vectors from the index.
-     *          Will change `size()` to zero, but will keep the same `capacity()`.
-     *          Will keep the number of available threads/contexts the same as it was.
+     *  @brief Erases all the vectors from the index.
+     *
+     *  Will change `size()` to zero, but will keep the same `capacity()`.
+     *  Will keep the number of available threads/contexts the same as it was.
      */
     void clear() noexcept {
         if (!has_reset<tape_allocator_t>()) {
@@ -1724,9 +1729,11 @@ class index_gt {
     }
 
     /**
-     *  @brief  Erases all the vectors from the index, also deallocating the registry.
-     *          Will change both `size()` and `capacity()` to zero.
-     *          Will deallocate all threads/contexts.
+     *  @brief Erases all members from index, closing files, and returning RAM to OS.
+     *
+     *  Will change both `size()` and `capacity()` to zero.
+     *  Will deallocate all threads/contexts.
+     *  If the index is memory-mapped - releases the mapping and the descriptor.
      */
     void reset() noexcept {
         clear();

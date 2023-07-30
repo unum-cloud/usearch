@@ -168,7 +168,7 @@ def test_index(
     assert np.all(matches_viewed.keys == matches.keys)
 
     # Cleanup
-    index.close()
+    index.reset()
     os.remove(temporary_usearch_filename)
 
     # Try opening a missing file
@@ -244,7 +244,7 @@ def test_index_batch(
             assert np.all(matches_viewed[idx].keys == matches[idx].keys)
 
     # Cleanup
-    index.close()
+    index.reset()
     os.remove(temporary_usearch_filename)
 
 

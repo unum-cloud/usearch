@@ -324,9 +324,9 @@ class Index:
         ndim: int = 0,
         metric: Union[str, MetricKind, CompiledMetric] = MetricKind.IP,
         dtype: Optional[Union[str, ScalarKind]] = None,
-        connectivity: int = DEFAULT_CONNECTIVITY,
-        expansion_add: int = DEFAULT_EXPANSION_ADD,
-        expansion_search: int = DEFAULT_EXPANSION_SEARCH,
+        connectivity: Optional[int] = None,
+        expansion_add: Optional[int] = None,
+        expansion_search: Optional[int] = None,
         path: Optional[os.PathLike] = None,
         view: bool = False,
     ) -> None:
@@ -334,7 +334,7 @@ class Index:
 
         :param ndim: Number of vector dimensions
         :type ndim: int
-            Required for some metrics, optional for others.
+            Required for some metrics, pre-set for others.
             Haversine, for example, only applies to 2-dimensional latitude/longitude
             coordinates. Angular (Cos) and Euclidean (L2sq), obviously, apply to
             vectors with arbitrary number of dimensions.
@@ -371,14 +371,22 @@ class Index:
             nearest neighbors. The original paper calls it "ef".
             Can be changed afterwards, as the `.expansion_search`.
 
-        :param tune: Automatically adjusts hyper-parameters, defaults to False
-        :type tune: bool, optional
-
         :param path: Where to store the index, defaults to None
         :type path: Optional[os.PathLike], optional
         :param view: Are we simply viewing an immutable index, defaults to False
         :type view: bool, optional
         """
+
+        if connectivity is None:
+            connectivity = DEFAULT_CONNECTIVITY
+        if expansion_add is None:
+            expansion_add = DEFAULT_EXPANSION_ADD
+        if expansion_search is None:
+            expansion_search = DEFAULT_EXPANSION_SEARCH
+
+        assert isinstance(connectivity, int), "Expects integer `connectivity`"
+        assert isinstance(expansion_add, int), "Expects integer `expansion_add`"
+        assert isinstance(expansion_search, int), "Expects integer `expansion_search`"
 
         metric = _normalize_metric(metric)
         if isinstance(metric, MetricKind):
@@ -654,10 +662,12 @@ class Index:
         self._compiled.view(path)
 
     def clear(self):
+        """Erases all the vectors from the index, preserving the space for future insertions."""
         self._compiled.clear()
 
-    def close(self):
-        self._compiled.close()
+    def reset(self):
+        """Erases all members from index, closing files, and returning RAM to OS."""
+        self._compiled.reset()
 
     def copy(self) -> Index:
         result = Index(

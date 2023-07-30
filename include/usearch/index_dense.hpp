@@ -133,6 +133,16 @@ struct index_dense_copy_config_t : public index_copy_config_t {
  *          with automatic @b down-casting, hardware-specific @b SIMD metrics,
  *          and ability to @b remove existing vectors, common in Semantic Caching
  *          applications.
+ *
+ *  @section Serialization
+ *
+ *  The serialized binary form of `index_dense_gt` is made up of three parts:
+ *      1. Binary matrix, aka the `.bbin` part,
+ *      2. Metadata about used metrics, number of used vs free slots,
+ *      3. The HNSW index in a binary form.
+ *  The first (1.) generally starts with 2 integers - number of rows (vectors) and @b single-byte columns.
+ *  The second (2.) starts with @b "usearch"-magic-string, used to infer the file type on open.
+ *  The third (3.) is implemented by the underlying `index_gt` class.
  */
 template <typename key_at = default_key_t, typename compressed_slot_at = default_slot_t> //
 class index_dense_gt {
@@ -256,7 +266,7 @@ class index_dense_gt {
     mutable std::mutex free_ids_mutex_;
 
     /// @brief A constant for the reserved key value, used to mark deleted entries.
-    key_t free_label_ = 0;
+    key_t free_label_ = default_free_value<key_t>();
 
   public:
     using search_result_t = typename index_t::search_result_t;
@@ -434,7 +444,10 @@ class index_dense_gt {
     }
 
     /**
-     *  @brief Clears the whole index, reclaiming the memory.
+     *  @brief Erases all the vectors from the index.
+     *
+     *  Will change `size()` to zero, but will keep the same `capacity()`.
+     *  Will keep the number of available threads/contexts the same as it was.
      */
     void clear() {
         unique_lock_t lookup_lock(slot_lookup_mutex_);
@@ -445,6 +458,26 @@ class index_dense_gt {
         vectors_lookup_.clear();
         free_ids_.clear();
         vectors_allocator_.reset();
+    }
+
+    /**
+     *  @brief Erases all members from index, closing files, and returning RAM to OS.
+     *
+     *  Will change both `size()` and `capacity()` to zero.
+     *  Will deallocate all threads/contexts.
+     *  If the index is memory-mapped - releases the mapping and the descriptor.
+     */
+    void reset() {
+        unique_lock_t lookup_lock(slot_lookup_mutex_);
+
+        std::unique_lock<std::mutex> free_lock(free_ids_mutex_);
+        std::unique_lock<std::mutex> available_threads_lock(available_threads_mutex_);
+        typed_->reset();
+        slot_lookup_.clear();
+        vectors_lookup_.clear();
+        free_ids_.clear();
+        vectors_allocator_.reset();
+        available_threads_.clear();
     }
 
     /**
@@ -459,8 +492,8 @@ class index_dense_gt {
         if (!result)
             return result;
 
-        std::uint64_t count_vectors = 0;
-        std::uint64_t bytes_per_vector = 0;
+        std::uint64_t matrix_rows = 0;
+        std::uint64_t matrix_cols = 0;
 
         // We may not want to put the vectors into the same file
         if (!config.exclude_vectors) {
@@ -472,8 +505,8 @@ class index_dense_gt {
                 result = file.write(&dimensions, sizeof(dimensions));
                 if (!result)
                     return result;
-                count_vectors = dimensions[0];
-                bytes_per_vector = dimensions[1];
+                matrix_rows = dimensions[0];
+                matrix_cols = dimensions[1];
             } else {
                 std::uint64_t dimensions[2];
                 dimensions[0] = static_cast<std::uint64_t>(typed_->size());
@@ -481,14 +514,14 @@ class index_dense_gt {
                 result = file.write(&dimensions, sizeof(dimensions));
                 if (!result)
                     return result;
-                count_vectors = dimensions[0];
-                bytes_per_vector = dimensions[1];
+                matrix_rows = dimensions[0];
+                matrix_cols = dimensions[1];
             }
 
             // Dump the vectors one after another
-            for (std::uint64_t i = 0; i != count_vectors; ++i) {
+            for (std::uint64_t i = 0; i != matrix_rows; ++i) {
                 byte_t* vector = vectors_lookup_[i];
-                result = file.write(vector, bytes_per_vector);
+                result = file.write(vector, matrix_cols);
                 if (!result)
                     return result;
             }
@@ -538,8 +571,8 @@ class index_dense_gt {
         if (!result)
             return result;
 
-        std::uint64_t count_vectors = 0;
-        std::uint64_t bytes_per_vector = 0;
+        std::uint64_t matrix_rows = 0;
+        std::uint64_t matrix_cols = 0;
 
         // We may not want to load the vectors from the same file, or allow attaching them afterwards
         if (!config.exclude_vectors) {
@@ -549,22 +582,21 @@ class index_dense_gt {
                 result = file.read(&dimensions, sizeof(dimensions));
                 if (!result)
                     return result;
-                count_vectors = dimensions[0];
-                bytes_per_vector = dimensions[1];
+                matrix_rows = dimensions[0];
+                matrix_cols = dimensions[1];
             } else {
                 std::uint64_t dimensions[2];
                 result = file.read(&dimensions, sizeof(dimensions));
                 if (!result)
                     return result;
-                count_vectors = dimensions[0];
-                bytes_per_vector = dimensions[1];
+                matrix_rows = dimensions[0];
+                matrix_cols = dimensions[1];
             }
-
             // Load the vectors one after another
-            vectors_lookup_.resize(count_vectors);
-            for (std::uint64_t slot = 0; slot != count_vectors; ++slot) {
-                byte_t* vector = vectors_allocator_.allocate(bytes_per_vector);
-                result = file.read(vector, bytes_per_vector);
+            vectors_lookup_.resize(matrix_rows);
+            for (std::uint64_t slot = 0; slot != matrix_rows; ++slot) {
+                byte_t* vector = vectors_allocator_.allocate(matrix_cols);
+                result = file.read(vector, matrix_cols);
                 if (!result)
                     return result;
                 vectors_lookup_[slot] = vector;
@@ -599,7 +631,7 @@ class index_dense_gt {
         result = typed_->load(std::move(file));
         if (!result)
             return result;
-        if (typed_->size() != static_cast<std::size_t>(count_vectors))
+        if (typed_->size() != static_cast<std::size_t>(matrix_rows))
             return result.failed("Index size and the number of vectors doesn't match");
 
         reindex_labels_();
@@ -618,8 +650,8 @@ class index_dense_gt {
         if (!result)
             return result;
 
-        std::uint64_t count_vectors = 0;
-        std::uint64_t bytes_per_vector = 0;
+        std::uint64_t matrix_rows = 0;
+        std::uint64_t matrix_cols = 0;
         span_punned_t vectors_buffer;
 
         // We may not want to fetch the vectors from the same file, or allow attaching them afterwards
@@ -630,19 +662,19 @@ class index_dense_gt {
                 if (file.size() - offset < sizeof(dimensions))
                     return result.failed("File is corrupted and lacks matrix dimensions");
                 std::memcpy(&dimensions, file.data() + offset, sizeof(dimensions));
-                count_vectors = dimensions[0];
-                bytes_per_vector = dimensions[1];
+                matrix_rows = dimensions[0];
+                matrix_cols = dimensions[1];
                 offset += sizeof(dimensions);
             } else {
                 std::uint64_t dimensions[2];
                 if (file.size() - offset < sizeof(dimensions))
                     return result.failed("File is corrupted and lacks matrix dimensions");
                 std::memcpy(&dimensions, file.data() + offset, sizeof(dimensions));
-                count_vectors = dimensions[0];
-                bytes_per_vector = dimensions[1];
+                matrix_rows = dimensions[0];
+                matrix_cols = dimensions[1];
                 offset += sizeof(dimensions);
             }
-            vectors_buffer = {file.data() + offset, static_cast<std::size_t>(count_vectors * bytes_per_vector)};
+            vectors_buffer = {file.data() + offset, static_cast<std::size_t>(matrix_rows * matrix_cols)};
             offset += vectors_buffer.size();
         }
 
@@ -676,14 +708,14 @@ class index_dense_gt {
         result = typed_->view(std::move(file), offset);
         if (!result)
             return result;
-        if (typed_->size() != static_cast<std::size_t>(count_vectors))
+        if (typed_->size() != static_cast<std::size_t>(matrix_rows))
             return result.failed("Index size and the number of vectors doesn't match");
 
         // Address the vectors
-        vectors_lookup_.resize(count_vectors);
+        vectors_lookup_.resize(matrix_rows);
         if (!config.exclude_vectors)
-            for (std::uint64_t slot = 0; slot != count_vectors; ++slot)
-                vectors_lookup_[slot] = (byte_t*)vectors_buffer.data() + bytes_per_vector * slot;
+            for (std::uint64_t slot = 0; slot != matrix_rows; ++slot)
+                vectors_lookup_[slot] = (byte_t*)vectors_buffer.data() + matrix_cols * slot;
 
         reindex_labels_();
         return result;
