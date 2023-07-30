@@ -450,11 +450,10 @@ class executor_stl_t {
     template <typename thread_aware_function_at>
     void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
         std::vector<std::thread> threads_pool;
-        std::size_t sub_threads = threads_count_ - 1;
         std::size_t tasks_per_thread = tasks;
-        if (sub_threads) {
-            tasks_per_thread = (tasks / sub_threads) + ((tasks % sub_threads) != 0);
-            for (std::size_t thread_idx = 1; thread_idx < (sub_threads + 1); ++thread_idx) {
+        if (threads_count_ > 1) {
+            tasks_per_thread = (tasks / threads_count_) + ((tasks % threads_count_) != 0);
+            for (std::size_t thread_idx = 1; thread_idx < threads_count_; ++thread_idx) {
                 threads_pool.emplace_back([=]() {
                     for (std::size_t task_idx = thread_idx * tasks_per_thread;
                          task_idx < (std::min)(tasks, thread_idx * tasks_per_thread + tasks_per_thread); ++task_idx)
@@ -464,8 +463,8 @@ class executor_stl_t {
         }
         for (std::size_t task_idx = 0; task_idx < (std::min)(tasks, tasks_per_thread); ++task_idx)
             thread_aware_function(0, task_idx);
-        for (std::size_t thread_idx = 0; thread_idx != sub_threads; ++thread_idx)
-            threads_pool[thread_idx].join();
+        for (std::thread& thread : threads_pool)
+            thread.join();
     }
 
     /**
@@ -478,10 +477,11 @@ class executor_stl_t {
         if (threads_count_ == 1)
             return thread_aware_function(0);
         std::vector<std::thread> threads_pool;
-        for (std::size_t thread_idx = 0; thread_idx != threads_count_; ++thread_idx)
+        for (std::size_t thread_idx = 1; thread_idx < threads_count_; ++thread_idx)
             threads_pool.emplace_back([=]() { thread_aware_function(thread_idx); });
-        for (std::size_t thread_idx = 0; thread_idx != threads_count_; ++thread_idx)
-            threads_pool[thread_idx].join();
+        thread_aware_function(0);
+        for (std::thread& thread : threads_pool)
+            thread.join();
     }
 };
 
