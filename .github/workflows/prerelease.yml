@@ -163,7 +163,7 @@ jobs:
     - name: Build USearch by Emscripten
       run: |
         ./emsdk/emsdk activate latest && source ./emsdk/emsdk_env.sh
-        emcmake cmake -B ./build -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} -s TOTAL_MEMORY=64MB" && emmake make -C ./build
+        emcmake cmake -DUSEARCH_BUILD_BENCHMARK=0 -DUSEARCH_BUILD_WASM=1 -B ./build -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} -s TOTAL_MEMORY=64MB" && emmake make -C ./build
     - name: Run tests
       run: node ./build/test.js
 
