@@ -21,6 +21,11 @@ from usearch.index import (
     DEFAULT_EXPANSION_SEARCH,
 )
 
+# When running the tests concurrently in different VMs, one can get access violation errors.
+# To avoid that, we embed the OS name into the temporary files name.
+# https://github.com/unum-cloud/usearch/actions/runs/5705359698/job/15459945738
+temporary_filename = f"tmp-{os.name}"
+temporary_usearch_filename = temporary_filename + ".usearch"
 
 dimensions = [3, 97, 256]
 batch_sizes = [1, 77]
@@ -54,10 +59,10 @@ def test_serializing_fbin_matrix(rows: int, cols: int):
     :param int cols: The number of columns in the matrix.
     """
     original = np.random.rand(rows, cols).astype(np.float32)
-    save_matrix(original, "tmp.fbin")
-    reconstructed = load_matrix("tmp.fbin")
+    save_matrix(original, temporary_filename + ".fbin")
+    reconstructed = load_matrix(temporary_filename + ".fbin")
     assert np.allclose(original, reconstructed)
-    os.remove("tmp.fbin")
+    os.remove(temporary_filename + ".fbin")
 
 
 @pytest.mark.parametrize("rows", batch_sizes)
@@ -70,10 +75,10 @@ def test_serializing_ibin_matrix(rows: int, cols: int):
     :param int cols: The number of columns in the matrix.
     """
     original = np.random.randint(0, rows + 1, size=(rows, cols)).astype(np.int32)
-    save_matrix(original, "tmp.ibin")
-    reconstructed = load_matrix("tmp.ibin")
+    save_matrix(original, temporary_filename + ".ibin")
+    reconstructed = load_matrix(temporary_filename + ".ibin")
     assert np.allclose(original, reconstructed)
-    os.remove("tmp.ibin")
+    os.remove(temporary_filename + ".ibin")
 
 
 @pytest.mark.parametrize("ndim", dimensions)
@@ -132,7 +137,7 @@ def test_index(
     index.remove(43)
     assert len(index) == 1
 
-    index.save("tmp.usearch")
+    index.save(temporary_usearch_filename)
 
     # Re-populate cleared index
     index.clear()
@@ -148,14 +153,14 @@ def test_index(
     matches_copy: Matches = index_copy.search(vector, 10)
     assert np.all(matches_copy.keys == matches.keys)
 
-    index.load("tmp.usearch")
+    index.load(temporary_usearch_filename)
     assert len(index) == 1
     assert len(index[42]) == ndim
 
     matches_loaded: Matches = index.search(vector, 10)
     assert np.all(matches_loaded.keys == matches.keys)
 
-    index = Index.restore("tmp.usearch", view=True)
+    index = Index.restore(temporary_usearch_filename, view=True)
     assert len(index) == 1
     assert len(index[42]) == ndim
 
@@ -163,22 +168,24 @@ def test_index(
     assert np.all(matches_viewed.keys == matches.keys)
 
     # Cleanup
-    os.remove("tmp.usearch")
+    index.close()
+    os.remove(temporary_usearch_filename)
 
     # Try opening a missing file
-    meta = Index.metadata("tmp.usearch")
+    meta = Index.metadata(temporary_usearch_filename)
     assert meta is None
-    index = Index.restore("tmp.usearch")
+    index = Index.restore(temporary_usearch_filename)
     assert index is None
 
     # Try openning a corrupt file
-    with open("tmp.usearch", "w") as file:
+    with open(temporary_usearch_filename, "w") as file:
         file.write("Some random string")
-    meta = Index.metadata("tmp.usearch")
+    meta = Index.metadata(temporary_usearch_filename)
     assert meta is None
-    index = Index.restore("tmp.usearch")
+    index = Index.restore(temporary_usearch_filename)
+
     assert index is None
-    os.remove("tmp.usearch")
+    os.remove(temporary_usearch_filename)
 
 
 @pytest.mark.parametrize("ndim", dimensions)
@@ -214,11 +221,11 @@ def test_index_batch(
     assert index.levels_stats.nodes >= batch_size
     assert index.level_stats(0).nodes == batch_size
 
-    index.save("tmp.usearch")
+    index.save(temporary_usearch_filename)
     index.clear()
     assert len(index) == 0
 
-    index.load("tmp.usearch")
+    index.load(temporary_usearch_filename)
     assert len(index) == batch_size
     assert len(index[0]) == ndim
 
@@ -227,7 +234,7 @@ def test_index_batch(
         for idx in range(len(matches_loaded)):
             assert np.all(matches_loaded[idx].keys == matches[idx].keys)
 
-    index = Index.restore("tmp.usearch", view=True)
+    index = Index.restore(temporary_usearch_filename, view=True)
     assert len(index) == batch_size
     assert len(index[0]) == ndim
 
@@ -237,7 +244,8 @@ def test_index_batch(
             assert np.all(matches_viewed[idx].keys == matches[idx].keys)
 
     # Cleanup
-    os.remove("tmp.usearch")
+    index.close()
+    os.remove(temporary_usearch_filename)
 
 
 @pytest.mark.parametrize("metric", [MetricKind.L2sq])
