@@ -44,32 +44,16 @@ cmake -B ./build_release \
 Linting:
 
 ```sh
-cppcheck --enable=all --suppress=cstyleCast --suppress=unusedFunction \
+cppcheck --enable=all --force --suppress=cstyleCast --suppress=unusedFunction \
     include/usearch/index.hpp \
-    include/index_punned_dense.hpp \
-    include/index_punned_helpers.hpp
+    include/index_dense.hpp \
+    include/index_plugins.hpp
 ```
 
 Testing:
 
 ```sh
 cmake -DCMAKE_CXX_COMPILER=gcc-12 -DCMAKE_CXX_COMPILER=g++-12 -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make -C ./build_debug && ./build_debug/test
-```
-
-Benchmarking:
-
-```sh
-./build_release/bench \
-    --vectors datasets/wiki_1M/base.1M.fbin \
-    --queries datasets/wiki_1M/query.public.100K.fbin \
-    --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin
-
-./build_release/bench \
-    --vectors datasets/t2i_1B/base.1B.fbin \
-    --queries datasets/t2i_1B/query.public.100K.fbin \
-    --neighbors datasets/t2i_1B/groundtruth.public.100K.ibin \
-    --output datasets/t2i_1B/index.usearch \
-    --cos
 ```
 
 ## Python 3
@@ -94,25 +78,6 @@ Testing wheel builds locally:
 ```sh
 pip install cibuildwheel
 cibuildwheel --platform linux
-```
-
-Benchmarking:
-
-```sh
-pip install faiss-cpu
-python python/scripts/bench.py speed \
-    --vectors datasets/wiki_1M/base.1M.fbin \
-    --queries datasets/wiki_1M/query.public.100K.fbin \
-    --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin
-```
-
-> Optional parameters include `connectivity`, `expansion_add`, `expansion_search`.
-
-Checking the effect of different embedding dimensions on construction speed:
-
-```sh
-python python/scripts/bench.py dimensions ...
-python python/scripts/bench.py connectivity ...
 ```
 
 ## JavaScript

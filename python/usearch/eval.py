@@ -8,7 +8,7 @@ from math import ceil
 import numpy as np
 
 from usearch.io import load_matrix
-from usearch.index import Index, Matches, MetricKind, MetricKindBitwise, Label
+from usearch.index import Index, Matches, MetricKind, MetricKindBitwise, Key
 
 
 def random_vectors(
@@ -63,13 +63,13 @@ def recall_members(index: Index, sample: float = 1, **kwargs) -> float:
     if "k" not in kwargs:
         kwargs["k"] = 1
 
-    labels = index.labels
+    keys = index.keys
     if sample != 1:
-        labels = np.random.choice(labels, int(ceil(len(labels) * sample)))
+        keys = np.random.choice(keys, int(ceil(len(keys) * sample)))
 
-    queries = index.get_vectors(labels, index.dtype)
+    queries = index.get_vectors(keys, index.dtype)
     matches: Matches = index.search(queries, **kwargs)
-    return matches.recall_first(labels)
+    return matches.recall_first(keys)
 
 
 def measure_seconds(f: Callable) -> Tuple[float, Any]:
@@ -131,9 +131,9 @@ def relevance(
 ) -> np.ndarray:
     """Calculate relevance scores. Binary relevance scores
 
-    :param expected: ground-truth labels
+    :param expected: ground-truth keys
     :type expected: np.ndarray
-    :param predicted: predicted labels
+    :param predicted: predicted keys
     :type predicted: np.ndarray
     """
     expected = expected[:k]
@@ -143,7 +143,7 @@ def relevance(
 
 @dataclass
 class Dataset:
-    labels: np.ndarray
+    keys: np.ndarray
     vectors: np.ndarray
     queries: np.ndarray
     neighbors: np.ndarray
@@ -189,7 +189,7 @@ class Dataset:
                 else d.vectors.shape[0]
             )
             d.vectors = d.vectors[:count, :]
-            d.labels = np.arange(count, dtype=Label)
+            d.keys = np.arange(count, dtype=Key)
 
             if queries is not None:
                 d.queries = load_matrix(queries)
@@ -202,7 +202,7 @@ class Dataset:
                     d.neighbors = d.neighbors[:, :k]
             else:
                 assert k is None, "Cant ovveride `k`, will retrieve one neighbor"
-                d.neighbors = np.reshape(d.labels, (count, 1))
+                d.neighbors = np.reshape(d.keys, (count, 1))
 
         else:
             assert ndim is not None
@@ -211,8 +211,8 @@ class Dataset:
 
             d.vectors = random_vectors(count=count, ndim=ndim)
             d.queries = d.vectors
-            d.labels = np.arange(count, dtype=Label)
-            d.neighbors = np.reshape(d.labels, (count, 1))
+            d.keys = np.arange(count, dtype=Key)
+            d.neighbors = np.reshape(d.keys, (count, 1))
 
         return d
 
@@ -276,13 +276,13 @@ class TaskResult:
 
 @dataclass
 class AddTask:
-    labels: np.ndarray
+    keys: np.ndarray
     vectors: np.ndarray
 
     def __call__(self, index: Index) -> TaskResult:
         batch_size: int = self.vectors.shape[0]
         old_size: int = len(index)
-        dt, _ = measure_seconds(lambda: index.add(self.labels, self.vectors))
+        dt, _ = measure_seconds(lambda: index.add(self.keys, self.vectors))
 
         assert len(index) == old_size + batch_size
         return TaskResult(
@@ -299,11 +299,11 @@ class AddTask:
         return self.vectors.shape[0]
 
     def inplace_shuffle(self):
-        """Rorders the `vectors` and `labels`. Often used for robustness benchmarks."""
+        """Rorders the `vectors` and `keys`. Often used for robustness benchmarks."""
 
         new_order = np.arange(self.count)
         np.random.shuffle(new_order)
-        self.labels = self.labels[new_order]
+        self.keys = self.keys[new_order]
         self.vectors = self.vectors[new_order, :]
 
     def slices(self, batch_size: int) -> List[AddTask]:
@@ -311,7 +311,7 @@ class AddTask:
 
         return [
             AddTask(
-                labels=self.labels[start_row : start_row + batch_size],
+                keys=self.keys[start_row : start_row + batch_size],
                 vectors=self.vectors[start_row : start_row + batch_size, :],
             )
             for start_row in range(0, self.count, batch_size)
@@ -334,7 +334,7 @@ class AddTask:
 
         return [
             AddTask(
-                labels=self.labels[rows],
+                keys=self.keys[rows],
                 vectors=self.vectors[rows, :],
             )
             for rows in partitioning.values()
@@ -379,7 +379,7 @@ class Evaluation:
         dataset: Dataset, batch_size: int = 0, clusters: int = 1
     ) -> Evaluation:
         tasks = []
-        add = AddTask(vectors=dataset.vectors, labels=dataset.labels)
+        add = AddTask(vectors=dataset.vectors, keys=dataset.keys)
         search = SearchTask(queries=dataset.queries, neighbors=dataset.neighbors)
 
         if batch_size:

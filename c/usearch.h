@@ -11,7 +11,7 @@ extern "C" {
 #include <stdint.h>  // `size_t`
 
 USEARCH_EXPORT typedef void* usearch_index_t;
-USEARCH_EXPORT typedef uint32_t usearch_label_t;
+USEARCH_EXPORT typedef uint64_t usearch_key_t;
 USEARCH_EXPORT typedef float usearch_distance_t;
 USEARCH_EXPORT typedef char const* usearch_error_t;
 
@@ -120,23 +120,23 @@ USEARCH_EXPORT size_t usearch_connectivity(usearch_index_t, usearch_error_t* err
 USEARCH_EXPORT void usearch_reserve(usearch_index_t, size_t capacity, usearch_error_t* error);
 
 /**
- *  @brief Adds a vector with a label to the index.
- *  @param label The label associated with the vector.
+ *  @brief Adds a vector with a key to the index.
+ *  @param key The key associated with the vector.
  *  @param vector Pointer to the vector data.
  *  @param vector_kind The scalar type used in the vector data.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
-USEARCH_EXPORT void usearch_add(            //
-    usearch_index_t, usearch_label_t label, //
+USEARCH_EXPORT void usearch_add(        //
+    usearch_index_t, usearch_key_t key, //
     void const* vector, usearch_scalar_kind_t vector_kind, usearch_error_t* error);
 
 /**
- *  @brief Checks if the index contains a vector with a specific label.
- *  @param label The label to be checked.
+ *  @brief Checks if the index contains a vector with a specific key.
+ *  @param key The key to be checked.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
- *  @return `true` if the index contains the vector with the given label, `false` otherwise.
+ *  @return `true` if the index contains the vector with the given key, `false` otherwise.
  */
-USEARCH_EXPORT bool usearch_contains(usearch_index_t, usearch_label_t, usearch_error_t* error);
+USEARCH_EXPORT bool usearch_contains(usearch_index_t, usearch_key_t, usearch_error_t* error);
 
 /**
  *  @brief Performs k-Approximate Nearest Neighbors Search.
@@ -144,27 +144,27 @@ USEARCH_EXPORT bool usearch_contains(usearch_index_t, usearch_label_t, usearch_e
  */
 USEARCH_EXPORT size_t usearch_search(                                                                  //
     usearch_index_t, void const* query_vector, usearch_scalar_kind_t query_kind, size_t results_limit, //
-    usearch_label_t* found_labels, usearch_distance_t* found_distances, usearch_error_t* error);
+    usearch_key_t* found_labels, usearch_distance_t* found_distances, usearch_error_t* error);
 
 /**
- *  @brief Retrieves the vector associated with the given label from the index.
- *  @param label The label of the vector to retrieve.
+ *  @brief Retrieves the vector associated with the given key from the index.
+ *  @param key The key of the vector to retrieve.
  *  @param[out] vector Pointer to the memory where the vector data will be copied.
  *  @param vector_kind The scalar type used in the vector data.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  *  @return `true` if the vector is successfully retrieved, `false` if the vector is not found.
  */
-USEARCH_EXPORT bool usearch_get(            //
-    usearch_index_t, usearch_label_t label, //
+USEARCH_EXPORT bool usearch_get(        //
+    usearch_index_t, usearch_key_t key, //
     void* vector, usearch_scalar_kind_t vector_kind, usearch_error_t* error);
 
 /**
- *  @brief Removes the vector associated with the given label from the index.
- *  @param label The label of the vector to be removed.
+ *  @brief Removes the vector associated with the given key from the index.
+ *  @param key The key of the vector to be removed.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  *  @return `true` if the vector is successfully removed, `false` if the vector is not found.
  */
-USEARCH_EXPORT bool usearch_remove(usearch_index_t, usearch_label_t label, usearch_error_t* error);
+USEARCH_EXPORT bool usearch_remove(usearch_index_t, usearch_key_t key, usearch_error_t* error);
 
 #ifdef __cplusplus
 }

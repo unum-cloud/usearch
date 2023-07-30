@@ -23,7 +23,7 @@ index.add(42, new Float32Array([0.2, 0.6, 0.4]))
 var results = index.search(new Float32Array([0.2, 0.6, 0.4]), 10)
 
 assert.equal(index.size(), 1)
-assert.deepEqual(results.labels, new BigUint64Array([42n]))
+assert.deepEqual(results.keys, new BigUint64Array([42n]))
 assert.deepEqual(results.distances, new Float32Array([0]))
 ```
 

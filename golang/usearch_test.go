@@ -59,7 +59,7 @@ func TestUsearch(t *testing.T) {
 		t.Fatalf("expected 1 result, got %d", len(res))
 	}
 	if res[0] != 42 {
-		t.Fatalf("expected closest vector label to be 42, got %d", res[0])
+		t.Fatalf("expected closest vector key to be 42, got %d", res[0])
 	}
 
 	res = ind.Search(vec_close, 2)
@@ -67,7 +67,7 @@ func TestUsearch(t *testing.T) {
 		t.Fatalf("expected 2 results, got %d", len(res))
 	}
 	if !(res[0] == 42 && res[1] == 43) {
-		t.Fatalf("expected closest vector labels to be 42, 43, got %d, %d", res[0], res[1])
+		t.Fatalf("expected closest vector keys to be 42, 43, got %d, %d", res[0], res[1])
 	}
 
 	Assure(ind.Reserve(102))

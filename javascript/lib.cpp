@@ -15,18 +15,10 @@
 #include <napi.h>
 #include <node_api.h>
 
-#include <usearch/index_punned_dense.hpp>
+#include <usearch/index_dense.hpp>
 
 using namespace unum::usearch;
 using namespace unum;
-
-using metric_t = index_punned_dense_metric_t;
-using distance_t = punned_distance_t;
-using index_t = punned_small_t;
-using add_result_t = typename index_t::add_result_t;
-using search_result_t = typename index_t::search_result_t;
-using label_t = typename index_t::label_t;
-using id_t = typename index_t::id_t;
 
 class Index : public Napi::ObjectWrap<Index> {
   public:
@@ -46,7 +38,7 @@ class Index : public Napi::ObjectWrap<Index> {
     void Add(Napi::CallbackInfo const& ctx);
     Napi::Value Search(Napi::CallbackInfo const& ctx);
 
-    std::unique_ptr<index_t> native_;
+    std::unique_ptr<index_dense_t> native_;
 };
 
 Napi::Object Index::Init(Napi::Env env, Napi::Object exports) {
@@ -85,29 +77,29 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
     Napi::Object params = ctx[0].As<Napi::Object>();
     std::size_t dimensions = params.Has("dimensions") ? params.Get("dimensions").As<Napi::Number>().Uint32Value() : 0;
 
-    index_config_t config;
     index_limits_t limits;
+    std::size_t connectivity = default_connectivity();
     std::size_t expansion_add = default_expansion_add();
     std::size_t expansion_search = default_expansion_search();
 
     if (params.Has("capacity"))
         limits.members = params.Get("capacity").As<Napi::Number>().Uint32Value();
     if (params.Has("connectivity"))
-        config.connectivity = params.Get("connectivity").As<Napi::Number>().Uint32Value();
+        connectivity = params.Get("connectivity").As<Napi::Number>().Uint32Value();
     if (params.Has("expansion_add"))
         expansion_add = params.Get("expansion_add").As<Napi::Number>().Uint32Value();
     if (params.Has("expansion_search"))
         expansion_search = params.Get("expansion_search").As<Napi::Number>().Uint32Value();
 
-    scalar_kind_t accuracy = scalar_kind_t::f32_k;
-    if (params.Has("accuracy")) {
-        std::string accuracy_str = params.Get("accuracy").As<Napi::String>().Utf8Value();
-        expected_gt<scalar_kind_t> expected = scalar_kind_from_name(accuracy_str.c_str(), accuracy_str.size());
+    scalar_kind_t quantization = scalar_kind_t::f32_k;
+    if (params.Has("quantization")) {
+        std::string quantization_str = params.Get("quantization").As<Napi::String>().Utf8Value();
+        expected_gt<scalar_kind_t> expected = scalar_kind_from_name(quantization_str.c_str(), quantization_str.size());
         if (!expected) {
             Napi::TypeError::New(env, expected.error.what()).ThrowAsJavaScriptException();
             return;
         }
-        accuracy = *expected;
+        quantization = *expected;
     }
 
     // By default we use the Inner Product similarity
@@ -122,8 +114,9 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
         metric_kind = *expected;
     }
 
-    native_.reset(
-        new index_t(index_t::make(dimensions, metric_kind, config, accuracy, expansion_add, expansion_search)));
+    metric_punned_t metric(dimensions, metric_kind, quantization);
+    index_dense_config_t config(connectivity, expansion_add, expansion_search);
+    native_.reset(new index_dense_t(index_dense_t::make(metric, config)));
     native_->reserve(limits);
 }
 
@@ -192,12 +185,13 @@ void Index::View(Napi::CallbackInfo const& ctx) {
 void Index::Add(Napi::CallbackInfo const& ctx) {
     Napi::Env env = ctx.Env();
     if (ctx.Length() < 2 || !ctx[0].IsNumber() || !ctx[1].IsTypedArray())
-        return Napi::TypeError::New(env, "Expects an integral label and a float vector").ThrowAsJavaScriptException();
+        return Napi::TypeError::New(env, "Expects an integral key and a float vector").ThrowAsJavaScriptException();
 
     Napi::Number label_js = ctx[0].As<Napi::Number>();
     Napi::Float32Array vector_js = ctx[1].As<Napi::Float32Array>();
 
-    label_t label = label_js.Uint32Value();
+    using key_t = typename index_dense_t::key_t;
+    key_t key = label_js.Uint32Value();
     float const* vector = vector_js.Data();
     std::size_t dimensions = static_cast<std::size_t>(vector_js.ElementLength());
     if (dimensions != native_->dimensions())
@@ -207,7 +201,7 @@ void Index::Add(Napi::CallbackInfo const& ctx) {
         native_->reserve(ceil2(native_->size() + 1));
 
     try {
-        native_->add(label, vector);
+        native_->add(key, vector);
     } catch (std::bad_alloc const&) {
         Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
     } catch (...) {
@@ -234,12 +228,13 @@ Napi::Value Index::Search(Napi::CallbackInfo const& ctx) {
         return {};
     }
 
-    Napi::TypedArrayOf<label_t> matches_js = Napi::TypedArrayOf<label_t>::New(env, wanted);
+    using key_t = typename index_dense_t::key_t;
+    Napi::TypedArrayOf<key_t> matches_js = Napi::TypedArrayOf<key_t>::New(env, wanted);
     Napi::Float32Array distances_js = Napi::Float32Array::New(env, wanted);
     try {
         std::size_t count = native_->search(vector, wanted).dump_to(matches_js.Data(), distances_js.Data());
         Napi::Object result_js = Napi::Object::New(env);
-        result_js.Set("labels", matches_js);
+        result_js.Set("keys", matches_js);
         result_js.Set("distances", distances_js);
         result_js.Set("count", Napi::Number::New(env, count));
         return result_js;

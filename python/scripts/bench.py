@@ -5,7 +5,7 @@ from dataclasses import asdict
 import numpy as np
 import pandas as pd
 
-from usearch.index import Index, Label, MetricKind, ScalarKind
+from usearch.index import Index, Key, MetricKind, ScalarKind
 from usearch.numba import jit as njit
 from usearch.eval import Evaluation, AddTask
 from usearch.index import (
@@ -38,7 +38,7 @@ def bench_speed(
             expansion_add=expansion_add,
             expansion_search=expansion_search,
             connectivity=connectivity,
-            path="USearch" + ["", "+JIT"][jit] + ":" + dtype,
+            path="USearch" + ["", "+JIT"][jit] + ":" + str(dtype),
         )
 
         # Skip the cases, where JIT-ing is impossible
@@ -115,7 +115,7 @@ def bench_params(
     results = []
     for connectivity, ndim in itertools.product(connectivities, dimensions):
         task = AddTask(
-            labels=np.arange(count, dtype=Label),
+            keys=np.arange(count, dtype=Key),
             vectors=np.random.rand(count, ndim).astype(np.float32),
         )
         index = Index(
