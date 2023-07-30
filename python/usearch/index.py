@@ -703,10 +703,10 @@ class Index:
             exact=exact,
         )
 
-    def get_labels(self, offset: int = 0, limit: int = 0) -> np.ndarray:
+    def get_keys(self, offset: int = 0, limit: int = 0) -> np.ndarray:
         if limit == 0:
             limit = 2**63 - 1
-        return self._compiled.get_labels(offset, limit)
+        return self._compiled.get_keys(offset, limit)
 
     @property
     def keys(self) -> np.ndarray:
@@ -804,13 +804,23 @@ class Index:
 
 
 class Indexes:
-    def __init__(self, indexes: Iterable[Index]) -> None:
+    def __init__(
+        self,
+        indexes: Iterable[Index] = [],
+        paths: Iterable[os.PathLike] = [],
+        view: bool = False,
+        threads: int = 0,
+    ) -> None:
         self._compiled = _CompiledIndexes()
         for index in indexes:
             self._compiled.add(index._compiled)
+        self._compiled.add_paths(paths, view=view, threads=threads)
 
     def add(self, index: Index):
         self._compiled.add(index._compiled)
+
+    def __len__(self) -> int:
+        return self._compiled.__len__()
 
     def search(
         self,

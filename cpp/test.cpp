@@ -83,7 +83,7 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     }
 
     // Try batch requests
-    executor_default_t executor{1};
+    executor_default_t executor;
     index.reserve({vectors.size(), executor.size()});
     executor.execute_bulk(vectors.size() - 3, [&](std::size_t thread, std::size_t task) {
         index_add_config_t config;
@@ -155,6 +155,7 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
 
     // Template:
     for (std::size_t connectivity : {3, 13, 50}) {
+        std::printf("- templates with connectivity %zu \n", connectivity);
         metric_t metric{&matrix, dimensions};
         index_config_t config(connectivity);
         index_typed_t index_typed(config);
@@ -163,6 +164,7 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
 
     // Type-punned:
     for (std::size_t connectivity : {3, 13, 50}) {
+        std::printf("- punned with connectivity %zu \n", connectivity);
         using index_t = index_dense_gt<key_t, slot_t>;
         metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
         index_config_t config(connectivity);
@@ -235,7 +237,9 @@ int main(int, char**) {
 
     for (std::size_t collection_size : {10, 500})
         for (std::size_t dimensions : {97, 256}) {
+            std::printf("Indexing %zu vectors with cos: <float, std::int64_t, std::uint32_t> \n", collection_size);
             test_cosine<float, std::int64_t, std::uint32_t>(collection_size, dimensions);
+            std::printf("Indexing %zu vectors with cos: <float, std::int64_t, uint40_t> \n", collection_size);
             test_cosine<float, std::int64_t, uint40_t>(collection_size, dimensions);
         }
 

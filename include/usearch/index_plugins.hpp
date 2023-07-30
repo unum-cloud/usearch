@@ -514,8 +514,9 @@ class executor_openmp_t {
     template <typename thread_aware_function_at>
     void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
 #pragma omp parallel for schedule(dynamic)
-        for (std::size_t i = 0; i != tasks; ++i)
+        for (std::size_t i = 0; i != tasks; ++i) {
             thread_aware_function(omp_get_thread_num(), i);
+        }
     }
 
     /**
@@ -629,12 +630,12 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
         while (last_arena) {
             byte_t* previous_arena;
             std::memcpy(&previous_arena, last_arena, sizeof(byte_t*));
-            std::size_t current_size;
-            std::memcpy(&current_size, last_arena + sizeof(byte_t*), sizeof(std::size_t));
+            std::size_t last_cap;
+            std::memcpy(&last_cap, last_arena + sizeof(byte_t*), sizeof(std::size_t));
 #if defined(USEARCH_DEFINED_WINDOWS)
             ::VirtualFree(last_arena, 0, MEM_RELEASE);
 #else
-            munmap(last_arena, current_size);
+            munmap(last_arena, last_cap);
 #endif
             last_arena = previous_arena;
         }

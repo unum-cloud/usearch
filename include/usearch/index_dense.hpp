@@ -128,6 +128,100 @@ struct index_dense_copy_config_t : public index_copy_config_t {
     index_dense_copy_config_t(index_copy_config_t base) noexcept : index_copy_config_t(base) {}
 };
 
+struct index_dense_metadata_result_t {
+    index_dense_serialization_config_t config;
+    index_dense_head_buffer_t head_buffer;
+    index_dense_head_t head;
+    error_t error;
+
+    explicit operator bool() const noexcept { return !error; }
+    index_dense_metadata_result_t failed(error_t message) noexcept {
+        error = std::move(message);
+        return std::move(*this);
+    }
+
+    index_dense_metadata_result_t() noexcept : config(), head_buffer(), head(head_buffer), error() {}
+
+    index_dense_metadata_result_t(index_dense_metadata_result_t&& other) noexcept
+        : config(), head_buffer(), head(head_buffer), error(std::move(other.error)) {
+        std::memcpy(&config, &other.config, sizeof(other.config));
+        std::memcpy(&head_buffer, &other.head_buffer, sizeof(other.head_buffer));
+    }
+
+    index_dense_metadata_result_t& operator=(index_dense_metadata_result_t&& other) noexcept {
+        std::memcpy(&config, &other.config, sizeof(other.config));
+        std::memcpy(&head_buffer, &other.head_buffer, sizeof(other.head_buffer));
+        error = std::move(other.error);
+        return *this;
+    }
+};
+
+/**
+ *  @brief  Extracts metadata from pre-constructed index on disk,
+ *          without loading it or mapping the whole binary file.
+ */
+inline index_dense_metadata_result_t index_dense_metadata(char const* file_path) noexcept {
+    index_dense_metadata_result_t result;
+    std::unique_ptr<std::FILE, int (*)(std::FILE*)> file(std::fopen(file_path, "rb"), &std::fclose);
+    if (!file)
+        return result.failed(std::strerror(errno));
+
+    // Read the header
+    std::size_t read = std::fread(result.head_buffer, sizeof(index_dense_head_buffer_t), 1, file.get());
+    if (!read)
+        return result.failed(std::feof(file.get()) ? "End of file reached!" : std::strerror(errno));
+
+    // Check if the file immeditely starts with the index, instead of vectors
+    result.config.exclude_vectors = true;
+    if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
+        return result;
+
+    if (std::fseek(file.get(), 0L, SEEK_END) != 0)
+        return result.failed("Can't infer file size");
+
+    // Check if it starts with 32-bit
+    std::size_t const file_size = std::ftell(file.get());
+
+    std::uint32_t dimensions_u32[2]{0};
+    std::memcpy(dimensions_u32, result.head_buffer, sizeof(dimensions_u32));
+    std::size_t offset_if_u32 = std::size_t(dimensions_u32[0]) * dimensions_u32[1] + sizeof(dimensions_u32);
+
+    std::uint64_t dimensions_u64[2]{0};
+    std::memcpy(dimensions_u64, result.head_buffer, sizeof(dimensions_u64));
+    std::size_t offset_if_u64 = std::size_t(dimensions_u64[0]) * dimensions_u64[1] + sizeof(dimensions_u64);
+
+    // Check if it starts with 32-bit
+    if (offset_if_u32 + sizeof(index_dense_head_buffer_t) < file_size) {
+        if (std::fseek(file.get(), offset_if_u32, SEEK_SET) != 0)
+            return result.failed(std::strerror(errno));
+        read = std::fread(result.head_buffer, sizeof(index_dense_head_buffer_t), 1, file.get());
+        if (!read)
+            return result.failed(std::feof(file.get()) ? "End of file reached!" : std::strerror(errno));
+
+        result.config.exclude_vectors = false;
+        result.config.use_64_bit_dimensions = false;
+        if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
+            return result;
+    }
+
+    // Check if it starts with 64-bit
+    if (offset_if_u64 + sizeof(index_dense_head_buffer_t) < file_size) {
+        if (std::fseek(file.get(), offset_if_u64, SEEK_SET) != 0)
+            return result.failed(std::strerror(errno));
+        read = std::fread(result.head_buffer, sizeof(index_dense_head_buffer_t), 1, file.get());
+        if (!read)
+            return result.failed(std::feof(file.get()) ? "End of file reached!" : std::strerror(errno));
+
+        // Check if it starts with 64-bit
+        result.config.exclude_vectors = false;
+        result.config.use_64_bit_dimensions = true;
+        if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
+            return result;
+    }
+
+    return result.failed("Not a dense USearch index!");
+}
+
 /**
  *  @brief  Oversimplified type-punned index for equidimensional vectors
  *          with automatic @b down-casting, hardware-specific @b SIMD metrics,
@@ -198,7 +292,6 @@ class index_dense_gt {
     index_dense_config_t config_;
     index_t* typed_ = nullptr;
 
-    std::size_t casted_vector_bytes_ = 0;
     mutable std::vector<byte_t> cast_buffer_;
     struct casts_t {
         cast_t from_b1x8;
@@ -278,11 +371,10 @@ class index_dense_gt {
     index_dense_gt(index_dense_gt&& other)
         : config_(std::move(other.config_)),
 
-          typed_(exchange(other.typed_, nullptr)),                     //
-          casted_vector_bytes_(std::move(other.casted_vector_bytes_)), //
-          cast_buffer_(std::move(other.cast_buffer_)),                 //
-          casts_(std::move(other.casts_)),                             //
-          metric_(std::move(other.metric_)),                           //
+          typed_(exchange(other.typed_, nullptr)),     //
+          cast_buffer_(std::move(other.cast_buffer_)), //
+          casts_(std::move(other.casts_)),             //
+          metric_(std::move(other.metric_)),           //
 
           vectors_allocator_(std::move(other.vectors_allocator_)), //
           vectors_lookup_(std::move(other.vectors_lookup_)),       //
@@ -305,7 +397,6 @@ class index_dense_gt {
         std::swap(config_, other.config_);
 
         std::swap(typed_, other.typed_);
-        std::swap(casted_vector_bytes_, other.casted_vector_bytes_);
         std::swap(cast_buffer_, other.cast_buffer_);
         std::swap(casts_, other.casts_);
         std::swap(metric_, other.metric_);
@@ -343,8 +434,7 @@ class index_dense_gt {
 
         index_dense_gt result;
         result.config_ = config;
-        result.casted_vector_bytes_ = metric.bytes_per_vector();
-        result.cast_buffer_.resize(hardware_threads * result.casted_vector_bytes_);
+        result.cast_buffer_.resize(hardware_threads * metric.bytes_per_vector());
         result.casts_ = make_casts_(scalar_kind);
         result.metric_ = metric;
         result.free_label_ = free_label;
@@ -360,6 +450,22 @@ class index_dense_gt {
         return result;
     }
 
+    static index_dense_gt make(char const* path, bool view = false) {
+        index_dense_metadata_result_t meta = index_dense_metadata(path);
+        if (!meta)
+            return {};
+        metric_punned_t metric(meta.head.dimensions, meta.head.kind_metric, meta.head.kind_scalar);
+        index_dense_gt result = make(metric);
+        if (!result)
+            return result;
+        if (view)
+            result.view(path);
+        else
+            result.load(path);
+        return result;
+    }
+
+    explicit operator bool() const { return typed_; }
     std::size_t connectivity() const { return typed_->connectivity(); }
     std::size_t size() const { return typed_->size() - free_ids_.size(); }
     std::size_t capacity() const { return typed_->capacity(); }
@@ -856,7 +962,7 @@ class index_dense_gt {
      *  @param[in] offset The number of keys to skip. Useful for pagination.
      *  @param[in] limit The maximum number of keys to export, that can fit in ::keys.
      */
-    void export_labels(key_t* keys, std::size_t offset, std::size_t limit) const {
+    void export_keys(key_t* keys, std::size_t offset, std::size_t limit) const {
         shared_lock_t lock(slot_lookup_mutex_);
         auto it = slot_lookup_.begin();
         offset = (std::min)(offset, slot_lookup_.size());
@@ -903,11 +1009,11 @@ class index_dense_gt {
         else {
             copy.vectors_lookup_.resize(vectors_lookup_.size());
             for (std::size_t slot = 0; slot != vectors_lookup_.size(); ++slot)
-                copy.vectors_lookup_[slot] = copy.vectors_allocator_.allocate(casted_vector_bytes_);
+                copy.vectors_lookup_[slot] = copy.vectors_allocator_.allocate(copy.metric_.bytes_per_vector());
             if (std::count(copy.vectors_lookup_.begin(), copy.vectors_lookup_.end(), nullptr))
                 return result.failed("Out of memory!");
             for (std::size_t slot = 0; slot != vectors_lookup_.size(); ++slot)
-                std::memcpy(copy.vectors_lookup_[slot], vectors_lookup_[slot], casted_vector_bytes_);
+                std::memcpy(copy.vectors_lookup_[slot], vectors_lookup_[slot], metric_.bytes_per_vector());
         }
 
         copy.slot_lookup_ = slot_lookup_;
@@ -924,7 +1030,6 @@ class index_dense_gt {
         index_dense_gt& other = result.index;
 
         other.config_ = config_;
-        other.casted_vector_bytes_ = casted_vector_bytes_;
         other.cast_buffer_ = cast_buffer_;
         other.casts_ = casts_;
 
@@ -1041,7 +1146,7 @@ class index_dense_gt {
         bool copy_vector = !config_.exclude_vectors || config.force_vector_copy;
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
         {
-            byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * config.thread;
+            byte_t* casted_data = cast_buffer_.data() + metric_.bytes_per_vector() * config.thread;
             bool casted = cast(vector_data, dimensions(), casted_data);
             if (casted)
                 vector_data = casted_data, copy_vector = true;
@@ -1060,9 +1165,14 @@ class index_dense_gt {
             unique_lock_t slot_lock(slot_lookup_mutex_);
             slot_lookup_.insert({key, static_cast<compressed_slot_t>(member.slot)});
             if (copy_vector) {
-                if (!reuse_node)
-                    vectors_lookup_[member.slot] = vectors_allocator_.allocate(casted_vector_bytes_);
-                std::memcpy(vectors_lookup_[member.slot], vector_data, casted_vector_bytes_);
+                if (!reuse_node) {
+                    // std::size_t result_size = metric_.bytes_per_vector();
+                    // byte_t* result = vectors_allocator_.allocate(result_size);
+                    // std::printf("alloc %zu size %zu dims %zu \n", (std::size_t)result, result_size,
+                    //             metric_.dimensions());
+                    vectors_lookup_[member.slot] = vectors_allocator_.allocate(metric_.bytes_per_vector());
+                }
+                std::memcpy(vectors_lookup_[member.slot], vector_data, metric_.bytes_per_vector());
             } else
                 vectors_lookup_[member.slot] = (byte_t*)vector_data;
         };
@@ -1081,7 +1191,7 @@ class index_dense_gt {
         // Cast the vector, if needed for compaatibility with `metric_`
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
         {
-            byte_t* casted_data = cast_buffer_.data() + casted_vector_bytes_ * config.thread;
+            byte_t* casted_data = cast_buffer_.data() + metric_.bytes_per_vector() * config.thread;
             bool casted = cast(vector_data, dimensions(), casted_data);
             if (casted)
                 vector_data = casted_data;
@@ -1136,7 +1246,7 @@ class index_dense_gt {
         byte_t const* punned_vector = reinterpret_cast<byte_t const*>(vectors_lookup_[slot]);
         bool casted = cast(punned_vector, dimensions(), (byte_t*)reconstructed);
         if (!casted)
-            std::memcpy(reconstructed, punned_vector, casted_vector_bytes_);
+            std::memcpy(reconstructed, punned_vector, metric_.bytes_per_vector());
         return true;
     }
 
@@ -1191,100 +1301,6 @@ class index_dense_gt {
 
 using index_dense_t = index_dense_gt<>;
 using index_dense_big_t = index_dense_gt<uuid_t, uint40_t>;
-
-struct index_dense_metadata_result_t {
-    index_dense_serialization_config_t config;
-    index_dense_head_buffer_t head_buffer;
-    index_dense_head_t head;
-    error_t error;
-
-    explicit operator bool() const noexcept { return !error; }
-    index_dense_metadata_result_t failed(error_t message) noexcept {
-        error = std::move(message);
-        return std::move(*this);
-    }
-
-    index_dense_metadata_result_t() noexcept : config(), head_buffer(), head(head_buffer), error() {}
-
-    index_dense_metadata_result_t(index_dense_metadata_result_t&& other) noexcept
-        : config(), head_buffer(), head(head_buffer), error(std::move(other.error)) {
-        std::memcpy(&config, &other.config, sizeof(other.config));
-        std::memcpy(&head_buffer, &other.head_buffer, sizeof(other.head_buffer));
-    }
-
-    index_dense_metadata_result_t& operator=(index_dense_metadata_result_t&& other) noexcept {
-        std::memcpy(&config, &other.config, sizeof(other.config));
-        std::memcpy(&head_buffer, &other.head_buffer, sizeof(other.head_buffer));
-        error = std::move(other.error);
-        return *this;
-    }
-};
-
-/**
- *  @brief  Extracts metadata from pre-constructed index on disk,
- *          without loading it or mapping the whole binary file.
- */
-inline index_dense_metadata_result_t index_dense_metadata(char const* file_path) noexcept {
-    index_dense_metadata_result_t result;
-    std::unique_ptr<std::FILE, int (*)(std::FILE*)> file(std::fopen(file_path, "rb"), &std::fclose);
-    if (!file)
-        return result.failed(std::strerror(errno));
-
-    // Read the header
-    std::size_t read = std::fread(result.head_buffer, sizeof(index_dense_head_buffer_t), 1, file.get());
-    if (!read)
-        return result.failed(std::feof(file.get()) ? "End of file reached!" : std::strerror(errno));
-
-    // Check if the file immeditely starts with the index, instead of vectors
-    result.config.exclude_vectors = true;
-    if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
-        return result;
-
-    if (std::fseek(file.get(), 0L, SEEK_END) != 0)
-        return result.failed("Can't infer file size");
-
-    // Check if it starts with 32-bit
-    std::size_t const file_size = std::ftell(file.get());
-
-    std::uint32_t dimensions_u32[2]{0};
-    std::memcpy(dimensions_u32, result.head_buffer, sizeof(dimensions_u32));
-    std::size_t offset_if_u32 = std::size_t(dimensions_u32[0]) * dimensions_u32[1] + sizeof(dimensions_u32);
-
-    std::uint64_t dimensions_u64[2]{0};
-    std::memcpy(dimensions_u64, result.head_buffer, sizeof(dimensions_u64));
-    std::size_t offset_if_u64 = std::size_t(dimensions_u64[0]) * dimensions_u64[1] + sizeof(dimensions_u64);
-
-    // Check if it starts with 32-bit
-    if (offset_if_u32 + sizeof(index_dense_head_buffer_t) < file_size) {
-        if (std::fseek(file.get(), offset_if_u32, SEEK_SET) != 0)
-            return result.failed(std::strerror(errno));
-        read = std::fread(result.head_buffer, sizeof(index_dense_head_buffer_t), 1, file.get());
-        if (!read)
-            return result.failed(std::feof(file.get()) ? "End of file reached!" : std::strerror(errno));
-
-        result.config.exclude_vectors = false;
-        result.config.use_64_bit_dimensions = false;
-        if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
-            return result;
-    }
-
-    // Check if it starts with 64-bit
-    if (offset_if_u64 + sizeof(index_dense_head_buffer_t) < file_size) {
-        if (std::fseek(file.get(), offset_if_u64, SEEK_SET) != 0)
-            return result.failed(std::strerror(errno));
-        read = std::fread(result.head_buffer, sizeof(index_dense_head_buffer_t), 1, file.get());
-        if (!read)
-            return result.failed(std::feof(file.get()) ? "End of file reached!" : std::strerror(errno));
-
-        // Check if it starts with 64-bit
-        result.config.exclude_vectors = false;
-        result.config.use_64_bit_dimensions = true;
-        if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
-            return result;
-    }
-
-    return result.failed("Not a dense USearch index!");
-}
 
 /**
  *  @brief  Adapts the Male-Optimal Stable Marriage algorithm for unequal sets

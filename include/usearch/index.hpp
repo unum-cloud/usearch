@@ -14,6 +14,7 @@
 #define USEARCH_VERSION_PATCH 0
 
 // Inferring C++ version
+// https://stackoverflow.com/a/61552074
 #if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
 #define USEARCH_DEFINED_CPP17
 #endif
@@ -167,6 +168,22 @@ template <typename at, typename other_at = at> at exchange(at& obj, other_at&& n
     return old_value;
 }
 
+/// @brief  The `std::destroy_at` alternative for C++11.
+template <typename at, typename sfinae_at = at>
+typename std::enable_if<std::is_pod<sfinae_at>::value>::type destroy_at(at*) {}
+template <typename at, typename sfinae_at = at>
+typename std::enable_if<!std::is_pod<sfinae_at>::value>::type destroy_at(at* obj) {
+    obj->~sfinae_at();
+}
+
+/// @brief  The `std::construct_at` alternative for C++11.
+template <typename at, typename sfinae_at = at>
+typename std::enable_if<std::is_pod<sfinae_at>::value>::type construct_at(at*) {}
+template <typename at, typename sfinae_at = at>
+typename std::enable_if<!std::is_pod<sfinae_at>::value>::type construct_at(at* obj) {
+    new (obj) at();
+}
+
 /**
  *  @brief  A reference to a misaligned memory location with a specific type.
  *          It is needed to avoid Undefiend Behavior when dereferencing addresses
@@ -247,20 +264,51 @@ template <typename scalar_at> class span_gt {
     operator scalar_at*() const noexcept { return data(); }
 };
 
+/**
+ *  @brief  Similar to `std::vector`, but doesn't support dyanmic resizing.
+ *          On the bright side, this can't throw exceptions.
+ */
 template <typename scalar_at, typename allocator_at> class buffer_gt {
     scalar_at* data_;
     std::size_t size_;
 
   public:
     buffer_gt() noexcept : data_(nullptr), size_(0u) {}
-    buffer_gt(std::size_t size) noexcept : data_(allocator_at{}.allocate(size)), size_(data_ ? size : 0u) {}
-    ~buffer_gt() noexcept { allocator_at{}.deallocate(data_, size_); }
+    buffer_gt(std::size_t size) noexcept : data_(allocator_at{}.allocate(size)), size_(data_ ? size : 0u) {
+        if (!std::is_trivially_default_constructible<scalar_at>::value)
+            for (std::size_t i = 0; i != size_; ++i)
+                construct_at(data_ + i);
+    }
+    ~buffer_gt() noexcept {
+        if (!std::is_trivially_destructible<scalar_at>::value)
+            for (std::size_t i = 0; i != size_; ++i)
+                destroy_at(data_ + i);
+        allocator_at{}.deallocate(data_, size_);
+        data_ = nullptr;
+        size_ = 0;
+    }
     scalar_at* data() const noexcept { return data_; }
     std::size_t size() const noexcept { return size_; }
     scalar_at* begin() const noexcept { return data_; }
     scalar_at* end() const noexcept { return data_ + size_; }
     operator scalar_at*() const noexcept { return data(); }
     scalar_at& operator[](std::size_t i) noexcept { return data_[i]; }
+    scalar_at const& operator[](std::size_t i) const noexcept { return data_[i]; }
+    explicit operator bool() const noexcept { return data_; }
+    scalar_at* release() noexcept {
+        size_ = 0;
+        return exchange(data_, nullptr);
+    }
+
+    buffer_gt(buffer_gt const&) = delete;
+    buffer_gt& operator=(buffer_gt const&) = delete;
+
+    buffer_gt(buffer_gt&& other) noexcept : data_(exchange(other.data_, nullptr)), size_(exchange(other.size_, 0)) {}
+    buffer_gt& operator=(buffer_gt&& other) noexcept {
+        std::swap(data_, other.data_);
+        std::swap(size_, other.size_);
+        return *this;
+    }
 };
 
 /**
@@ -286,9 +334,12 @@ class error_t {
 
 #if defined(__cpp_exceptions) || defined(__EXCEPTIONS)
     ~error_t() noexcept(false) {
-        if (message_)
-            if (!std::uncaught_exception())
-                raise();
+#if defined(USEARCH_DEFINED_CPP17)
+        if (message_ && std::uncaught_exceptions() == 0)
+#else
+        if (message_ && std::uncaught_exception() == 0)
+#endif
+            raise();
     }
     void raise() noexcept(false) {
         if (message_)
@@ -343,6 +394,7 @@ template <typename allocator_at = std::allocator<byte_t>> class visits_bitset_gt
 
     static constexpr std::size_t bits_per_slot() { return sizeof(compressed_slot_t) * CHAR_BIT; }
     static constexpr compressed_slot_t bits_mask() { return sizeof(compressed_slot_t) * CHAR_BIT - 1; }
+    static constexpr std::size_t slots(std::size_t bits) { return divide_round_up<bits_per_slot()>(bits); }
 
     compressed_slot_t* slots_{};
     /// @brief Number of slots.
@@ -351,6 +403,8 @@ template <typename allocator_at = std::allocator<byte_t>> class visits_bitset_gt
   public:
     visits_bitset_gt() noexcept {}
     ~visits_bitset_gt() noexcept { reset(); }
+
+    explicit operator bool() const noexcept { return slots_; }
     void clear() noexcept { std::memset(slots_, 0, count_ * sizeof(compressed_slot_t)); }
 
     void reset() noexcept {
@@ -360,25 +414,10 @@ template <typename allocator_at = std::allocator<byte_t>> class visits_bitset_gt
         count_ = 0;
     }
 
-    /**
-     *  @brief  Resizes the bitset to accomodate a given number of @b bits.
-     *  @return False, if memory allocation error was encounted. True, otherwise.
-     */
-    bool resize(std::size_t capacity) noexcept {
-
-        std::size_t count = divide_round_up<bits_per_slot()>(capacity);
-        if (count <= count_)
-            return true;
-
-        compressed_slot_t* slots = (compressed_slot_t*)allocator_t{}.allocate(count * sizeof(compressed_slot_t));
-        if (!slots)
-            return false;
-
-        reset();
-        count_ = count;
-        slots_ = slots;
+    visits_bitset_gt(std::size_t capacity) noexcept
+        : slots_((compressed_slot_t*)allocator_t{}.allocate(slots(capacity) * sizeof(compressed_slot_t))),
+          count_(slots_ ? slots(capacity) : 0u) {
         clear();
-        return true;
     }
 
     visits_bitset_gt(visits_bitset_gt&& other) noexcept {
@@ -454,20 +493,20 @@ class max_heap_gt {
 
   private:
     element_t* elements_;
-    std::size_t nodes_count_;
-    std::size_t nodes_capacity_;
+    std::size_t size_;
+    std::size_t capacity_;
 
   public:
-    max_heap_gt() noexcept : elements_(nullptr), nodes_count_(0), nodes_capacity_(0) {}
+    max_heap_gt() noexcept : elements_(nullptr), size_(0), capacity_(0) {}
 
     max_heap_gt(max_heap_gt&& other) noexcept
-        : elements_(exchange(other.elements_, nullptr)), nodes_count_(exchange(other.nodes_count_, 0)),
-          nodes_capacity_(exchange(other.nodes_capacity_, 0)) {}
+        : elements_(exchange(other.elements_, nullptr)), size_(exchange(other.size_, 0)),
+          capacity_(exchange(other.capacity_, 0)) {}
 
     max_heap_gt& operator=(max_heap_gt&& other) noexcept {
         std::swap(elements_, other.elements_);
-        std::swap(nodes_count_, other.nodes_count_);
-        std::swap(nodes_capacity_, other.nodes_capacity_);
+        std::swap(size_, other.size_);
+        std::swap(capacity_, other.capacity_);
         return *this;
     }
 
@@ -478,42 +517,42 @@ class max_heap_gt {
 
     void reset() noexcept {
         if (elements_)
-            allocator_t{}.deallocate(elements_, nodes_capacity_);
+            allocator_t{}.deallocate(elements_, capacity_);
         elements_ = nullptr;
-        nodes_capacity_ = 0;
-        nodes_count_ = 0;
+        capacity_ = 0;
+        size_ = 0;
     }
 
-    inline bool empty() const noexcept { return !nodes_count_; }
-    inline std::size_t size() const noexcept { return nodes_count_; }
-    inline std::size_t capacity() const noexcept { return nodes_capacity_; }
+    inline bool empty() const noexcept { return !size_; }
+    inline std::size_t size() const noexcept { return size_; }
+    inline std::size_t capacity() const noexcept { return capacity_; }
     /// @brief  Selects the largest element in the heap.
     /// @return Reference to the stored element.
     inline element_t const& top() const noexcept { return elements_[0]; }
-    inline void clear() noexcept { nodes_count_ = 0; }
+    inline void clear() noexcept { size_ = 0; }
 
     bool reserve(std::size_t new_capacity) noexcept {
-        if (new_capacity < nodes_capacity_)
+        if (new_capacity < capacity_)
             return true;
 
         new_capacity = ceil2(new_capacity);
-        new_capacity = (std::max<std::size_t>)(new_capacity, (std::max<std::size_t>)(nodes_capacity_ * 2u, 16u));
+        new_capacity = (std::max<std::size_t>)(new_capacity, (std::max<std::size_t>)(capacity_ * 2u, 16u));
         auto allocator = allocator_t{};
         auto new_elements = allocator.allocate(new_capacity);
         if (!new_elements)
             return false;
 
         if (elements_) {
-            std::memcpy(new_elements, elements_, nodes_count_ * sizeof(element_t));
-            allocator.deallocate(elements_, nodes_capacity_);
+            std::memcpy(new_elements, elements_, size_ * sizeof(element_t));
+            allocator.deallocate(elements_, capacity_);
         }
         elements_ = new_elements;
-        nodes_capacity_ = new_capacity;
+        capacity_ = new_capacity;
         return new_elements;
     }
 
     bool insert(element_t&& element) noexcept {
-        if (!reserve(nodes_count_ + 1))
+        if (!reserve(size_ + 1))
             return false;
 
         insert_reserved(std::move(element));
@@ -521,23 +560,23 @@ class max_heap_gt {
     }
 
     inline void insert_reserved(element_t&& element) noexcept {
-        new (&elements_[nodes_count_]) element_t(element);
-        nodes_count_++;
-        shift_up(nodes_count_ - 1);
+        new (&elements_[size_]) element_t(element);
+        size_++;
+        shift_up(size_ - 1);
     }
 
     inline element_t pop() noexcept {
         element_t result = top();
-        std::swap(elements_[0], elements_[nodes_count_ - 1]);
-        nodes_count_--;
-        elements_[nodes_count_].~element_t();
+        std::swap(elements_[0], elements_[size_ - 1]);
+        size_--;
+        elements_[size_].~element_t();
         shift_down(0);
         return result;
     }
 
     /** @brief Invalidates the "max-heap" property, transforming into ascending range. */
-    inline void sort_ascending() noexcept { std::sort_heap(elements_, elements_ + nodes_count_, &less); }
-    inline void shrink(std::size_t n) noexcept { nodes_count_ = (std::min<std::size_t>)(n, nodes_count_); }
+    inline void sort_ascending() noexcept { std::sort_heap(elements_, elements_ + size_, &less); }
+    inline void shrink(std::size_t n) noexcept { size_ = (std::min<std::size_t>)(n, size_); }
 
     inline element_t* data() noexcept { return elements_; }
     inline element_t const* data() const noexcept { return elements_; }
@@ -557,11 +596,11 @@ class max_heap_gt {
         std::size_t max_idx = i;
 
         std::size_t left = left_child_idx(i);
-        if (left < nodes_count_ && less(elements_[max_idx], elements_[left]))
+        if (left < size_ && less(elements_[max_idx], elements_[left]))
             max_idx = left;
 
         std::size_t right = right_child_idx(i);
-        if (right < nodes_count_ && less(elements_[max_idx], elements_[right]))
+        if (right < size_ && less(elements_[max_idx], elements_[right]))
             max_idx = right;
 
         if (i != max_idx) {
@@ -592,20 +631,20 @@ class sorted_buffer_gt {
 
   private:
     element_t* elements_;
-    std::size_t nodes_count_;
-    std::size_t nodes_capacity_;
+    std::size_t size_;
+    std::size_t capacity_;
 
   public:
-    sorted_buffer_gt() noexcept : elements_(nullptr), nodes_count_(0), nodes_capacity_(0) {}
+    sorted_buffer_gt() noexcept : elements_(nullptr), size_(0), capacity_(0) {}
 
     sorted_buffer_gt(sorted_buffer_gt&& other) noexcept
-        : elements_(exchange(other.elements_, nullptr)), nodes_count_(exchange(other.nodes_count_, 0)),
-          nodes_capacity_(exchange(other.nodes_capacity_, 0)) {}
+        : elements_(exchange(other.elements_, nullptr)), size_(exchange(other.size_, 0)),
+          capacity_(exchange(other.capacity_, 0)) {}
 
     sorted_buffer_gt& operator=(sorted_buffer_gt&& other) noexcept {
         std::swap(elements_, other.elements_);
-        std::swap(nodes_count_, other.nodes_count_);
-        std::swap(nodes_capacity_, other.nodes_capacity_);
+        std::swap(size_, other.size_);
+        std::swap(capacity_, other.capacity_);
         return *this;
     }
 
@@ -616,76 +655,74 @@ class sorted_buffer_gt {
 
     void reset() noexcept {
         if (elements_)
-            allocator_t{}.deallocate(elements_, nodes_capacity_);
+            allocator_t{}.deallocate(elements_, capacity_);
         elements_ = nullptr;
-        nodes_capacity_ = 0;
-        nodes_count_ = 0;
+        capacity_ = 0;
+        size_ = 0;
     }
 
-    inline bool empty() const noexcept { return !nodes_count_; }
-    inline std::size_t size() const noexcept { return nodes_count_; }
-    inline std::size_t capacity() const noexcept { return nodes_capacity_; }
-    inline element_t const& top() const noexcept { return elements_[nodes_count_ - 1]; }
-    inline void clear() noexcept { nodes_count_ = 0; }
+    inline bool empty() const noexcept { return !size_; }
+    inline std::size_t size() const noexcept { return size_; }
+    inline std::size_t capacity() const noexcept { return capacity_; }
+    inline element_t const& top() const noexcept { return elements_[size_ - 1]; }
+    inline void clear() noexcept { size_ = 0; }
 
     bool reserve(std::size_t new_capacity) noexcept {
-        if (new_capacity < nodes_capacity_)
+        if (new_capacity < capacity_)
             return true;
 
         new_capacity = ceil2(new_capacity);
-        new_capacity = (std::max<std::size_t>)(new_capacity, (std::max<std::size_t>)(nodes_capacity_ * 2u, 16u));
+        new_capacity = (std::max<std::size_t>)(new_capacity, (std::max<std::size_t>)(capacity_ * 2u, 16u));
         auto allocator = allocator_t{};
         auto new_elements = allocator.allocate(new_capacity);
         if (!new_elements)
             return false;
 
-        if (nodes_count_)
-            std::memcpy(new_elements, elements_, nodes_count_ * sizeof(element_t));
+        if (size_)
+            std::memcpy(new_elements, elements_, size_ * sizeof(element_t));
         if (elements_)
-            allocator.deallocate(elements_, nodes_capacity_);
+            allocator.deallocate(elements_, capacity_);
 
         elements_ = new_elements;
-        nodes_capacity_ = new_capacity;
+        capacity_ = new_capacity;
         return true;
     }
 
     inline void insert_reserved(element_t&& element) noexcept {
-        std::size_t slot =
-            nodes_count_ ? std::lower_bound(elements_, elements_ + nodes_count_, element, &less) - elements_ : 0;
-        std::size_t to_move = nodes_count_ - slot;
-        element_t* source = elements_ + nodes_count_ - 1;
+        std::size_t slot = size_ ? std::lower_bound(elements_, elements_ + size_, element, &less) - elements_ : 0;
+        std::size_t to_move = size_ - slot;
+        element_t* source = elements_ + size_ - 1;
         for (; to_move; --to_move, --source)
             source[1] = source[0];
         elements_[slot] = element;
-        nodes_count_++;
+        size_++;
     }
 
     /**
      *  @return `true` if the entry was added, `false` if it wasn't relevant enough.
      */
     inline bool insert(element_t&& element, std::size_t limit) noexcept {
-        std::size_t slot =
-            nodes_count_ ? std::lower_bound(elements_, elements_ + nodes_count_, element, &less) - elements_ : 0;
+        std::size_t slot = size_ ? std::lower_bound(elements_, elements_ + size_, element, &less) - elements_ : 0;
         if (slot == limit)
             return false;
-        std::size_t to_move = nodes_count_ - slot - (nodes_count_ == limit);
-        element_t* source = elements_ + nodes_count_ - 1 - (nodes_count_ == limit);
+        std::size_t to_move = size_ - slot - (size_ == limit);
+        element_t* source = elements_ + size_ - 1 - (size_ == limit);
         for (; to_move; --to_move, --source)
             source[1] = source[0];
         elements_[slot] = element;
-        nodes_count_ += nodes_count_ != limit;
+        size_ += size_ != limit;
         return true;
     }
 
     inline element_t pop() noexcept {
-        nodes_count_--;
-        element_t result = elements_[nodes_count_];
-        elements_[nodes_count_].~element_t();
+        size_--;
+        element_t result = elements_[size_];
+        elements_[size_].~element_t();
         return result;
     }
 
     void sort_ascending() noexcept {}
-    inline void shrink(std::size_t n) noexcept { nodes_count_ = (std::min<std::size_t>)(n, nodes_count_); }
+    inline void shrink(std::size_t n) noexcept { size_ = (std::min<std::size_t>)(n, size_); }
 
     inline element_t* data() noexcept { return elements_; }
     inline element_t const* data() const noexcept { return elements_; }
@@ -770,7 +807,7 @@ class ring_gt {
 
   private:
     element_t* elements_{};
-    std::size_t nodes_capacity_{};
+    std::size_t capacity_{};
     std::size_t head_{};
     std::size_t tail_{};
     bool empty_{true};
@@ -790,7 +827,7 @@ class ring_gt {
 
     void swap(ring_gt& other) noexcept {
         std::swap(elements_, other.elements_);
-        std::swap(nodes_capacity_, other.nodes_capacity_);
+        std::swap(capacity_, other.capacity_);
         std::swap(head_, other.head_);
         std::swap(tail_, other.tail_);
         std::swap(empty_, other.empty_);
@@ -800,14 +837,14 @@ class ring_gt {
     ~ring_gt() noexcept { reset(); }
 
     bool empty() const noexcept { return empty_; }
-    size_t capacity() const noexcept { return nodes_capacity_; }
+    size_t capacity() const noexcept { return capacity_; }
     size_t size() const noexcept {
         if (empty_)
             return 0;
         else if (head_ >= tail_)
             return head_ - tail_;
         else
-            return nodes_capacity_ - (tail_ - head_);
+            return capacity_ - (tail_ - head_);
     }
 
     void clear() noexcept {
@@ -818,9 +855,9 @@ class ring_gt {
 
     void reset() noexcept {
         if (elements_)
-            allocator_.deallocate(elements_, nodes_capacity_);
+            allocator_.deallocate(elements_, capacity_);
         elements_ = nullptr;
-        nodes_capacity_ = 0;
+        capacity_ = 0;
         head_ = 0;
         tail_ = 0;
         empty_ = true;
@@ -840,7 +877,7 @@ class ring_gt {
 
         reset();
         elements_ = elements;
-        nodes_capacity_ = n;
+        capacity_ = n;
         head_ = i;
         tail_ = 0;
         empty_ = (i == 0);
@@ -849,7 +886,7 @@ class ring_gt {
 
     void push(element_t const& value) noexcept {
         elements_[head_] = value;
-        head_ = (head_ + 1) % nodes_capacity_;
+        head_ = (head_ + 1) % capacity_;
         empty_ = false;
     }
 
@@ -866,12 +903,12 @@ class ring_gt {
             return false;
 
         value = std::move(elements_[tail_]);
-        tail_ = (tail_ + 1) % nodes_capacity_;
+        tail_ = (tail_ + 1) % capacity_;
         empty_ = head_ == tail_;
         return true;
     }
 
-    element_t const& operator[](std::size_t i) const noexcept { return elements_[(tail_ + i) % nodes_capacity_]; }
+    element_t const& operator[](std::size_t i) const noexcept { return elements_[(tail_ + i) % capacity_]; }
 };
 
 /// @brief Number of neighbors per graph node.
@@ -1123,7 +1160,7 @@ class input_file_t {
     }
 
     bool seek_to(std::size_t progress) noexcept { return std::fseek(file_, progress, SEEK_SET) == 0; }
-    bool seek_to_end(std::size_t progress) noexcept { return std::fseek(file_, 0L, SEEK_END) == 0; }
+    bool seek_to_end() noexcept { return std::fseek(file_, 0L, SEEK_END) == 0; }
     bool infer_progress(std::size_t& progress) noexcept {
         long int result = std::ftell(file_);
         if (result == -1L)
@@ -1523,6 +1560,9 @@ class index_gt {
         void level(level_t v) noexcept { return misaligned_store<level_t>(tape_ + sizeof(key_t), v); }
     };
 
+    static_assert(std::is_trivially_copy_constructible<node_t>::value, "Nodes must be light!");
+    static_assert(std::is_trivially_destructible<node_t>::value, "Nodes must be light!");
+
     /**
      *  @brief  A slice of the node's tape, containing a the list of neighbors
      *          for a node in a single graph level. It's pre-allocated to fit
@@ -1620,7 +1660,7 @@ class index_gt {
     using nodes_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<node_t>;
 
     /// @brief  C-style array of `node_t` smart-pointers.
-    node_t* nodes_{};
+    buffer_gt<node_t, nodes_allocator_t> nodes_{};
 
     /// @brief  Mutex, that limits concurrent access to `nodes_`.
     mutable visits_bitset_t nodes_mutexes_{};
@@ -1628,7 +1668,7 @@ class index_gt {
     using contexts_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<context_t>;
 
     /// @brief  Array of thread-specific buffers for temporary data.
-    context_t* contexts_{};
+    mutable buffer_gt<context_t, contexts_allocator_t> contexts_{};
 
   public:
     std::size_t connectivity() const noexcept { return config_.connectivity; }
@@ -1648,7 +1688,7 @@ class index_gt {
         tape_allocator_t tape_allocator = {}) noexcept
         : config_(config), limits_(0, 0), dynamic_allocator_(std::move(dynamic_allocator)),
           tape_allocator_(std::move(tape_allocator)), pre_(precompute_(config)), nodes_count_(0u), max_level_(-1),
-          entry_slot_(0u), nodes_(nullptr), nodes_mutexes_(), contexts_(nullptr) {}
+          entry_slot_(0u), nodes_(), nodes_mutexes_(), contexts_() {}
 
     /**
      *  @brief  Clones the structure with the same hyper-parameters, but without contents.
@@ -1738,16 +1778,13 @@ class index_gt {
     void reset() noexcept {
         clear();
 
-        if (nodes_)
-            nodes_allocator_t{}.deallocate(exchange(nodes_, nullptr), limits_.members);
-        if (contexts_) {
-            for (std::size_t i = 0; i != limits_.threads(); ++i)
-                contexts_[i].~context_t();
-            contexts_allocator_t{}.deallocate(exchange(contexts_, nullptr), limits_.threads());
-        }
+        nodes_ = {};
+        contexts_ = {};
+        nodes_mutexes_ = {};
         limits_ = index_limits_t{0, 0};
         nodes_capacity_ = 0;
         viewed_file_ = memory_mapped_file_t{};
+        tape_allocator_ = {};
     }
 
     /**
@@ -1786,56 +1823,27 @@ class index_gt {
             && limits.members <= limits_.members)
             return true;
 
-        if (!nodes_mutexes_.resize(limits.members))
+        visits_bitset_t new_mutexes(limits.members);
+        buffer_gt<node_t, nodes_allocator_t> new_nodes(limits.members);
+        buffer_gt<context_t, contexts_allocator_t> new_contexts(limits.threads());
+        if (!new_nodes || !new_contexts || !new_mutexes)
             return false;
 
-        nodes_allocator_t node_allocator;
-        node_t* new_nodes = node_allocator.allocate(limits.members);
-        if (!new_nodes)
-            return false;
-
-        std::size_t limits_threads = limits.threads();
-        contexts_allocator_t context_allocator;
-        context_t* new_contexts = context_allocator.allocate(limits_threads);
-        if (!new_contexts) {
-            node_allocator.deallocate(new_nodes, limits.members);
-            return false;
-        }
-        for (std::size_t thread = 0; thread != limits_threads; ++thread) {
-            context_t& context = new_contexts[thread];
-            new (&context) context_t();
-            if (!context.visits.resize(limits.members)) {
-                // Discard previous allocations before quitting
-                for (std::size_t allocated_thread = 0; allocated_thread != thread; ++allocated_thread)
-                    new_contexts[allocated_thread].visits.reset();
-                node_allocator.deallocate(new_nodes, limits.members);
-                context_allocator.deallocate(new_contexts, limits_threads);
+        for (context_t& context : new_contexts) {
+            context.visits = visits_bitset_t(limits.members);
+            if (!context.visits)
                 return false;
-            }
-        }
-
-        // We have passed all the require memory allocations.
-        // The remaining code can't fail. Let's just reuse some of our existing buffers.
-        for (std::size_t thread = 0; thread != (std::min)(limits_.threads(), limits.threads()); ++thread) {
-            context_t& old_context = contexts_[thread];
-            context_t& context = new_contexts[thread];
-            std::swap(old_context.top_candidates, context.top_candidates);
-            std::swap(old_context.next_candidates, context.next_candidates);
-            std::swap(old_context.iteration_cycles, context.iteration_cycles);
-            std::swap(old_context.measurements_count, context.measurements_count);
-            old_context.visits.reset();
         }
 
         // Move the nodes info, and deallocate previous buffers.
         if (nodes_)
-            std::memcpy(new_nodes, nodes_, sizeof(node_t) * size()), node_allocator.deallocate(nodes_, limits_.members);
-        if (contexts_)
-            context_allocator.deallocate(contexts_, limits_.threads());
+            std::memcpy(new_nodes.data(), nodes_.data(), sizeof(node_t) * size());
 
         limits_ = limits;
         nodes_capacity_ = limits.members;
-        nodes_ = new_nodes;
-        contexts_ = new_contexts;
+        nodes_ = std::move(new_nodes);
+        contexts_ = std::move(new_contexts);
+        nodes_mutexes_ = std::move(new_mutexes);
         return true;
     }
 
@@ -1921,9 +1929,9 @@ class index_gt {
                 std::size_t count_worse = merged_count - offset - (max_count == merged_count);
                 std::memmove(keys + offset + 1, keys + offset, count_worse * sizeof(key_t));
                 std::memmove(distances + offset + 1, distances + offset, count_worse * sizeof(distance_t));
-                keys[merged_count] = result.member.key;
-                distances[merged_count] = result.distance;
-                merged_count += 1;
+                keys[offset] = result.member.key;
+                distances[offset] = result.distance;
+                merged_count = (std::min)(merged_count + 1u, max_count);
             }
             return merged_count;
         }
@@ -2298,7 +2306,8 @@ class index_gt {
             return result;
 
         // Allocate some dynamic memory to read all the levels
-        level_t* levels = (level_t*)dynamic_allocator_.allocate(header.size * sizeof(level_t));
+        using levels_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<level_t>;
+        buffer_gt<level_t, levels_allocator_t> levels(header.size);
         if (!levels)
             return result.failed("Out of memory");
         result = file.read(levels, header.size * sizeof(level_t));
@@ -2891,7 +2900,6 @@ static join_result_t join(               //
 
     using distance_t = typename men_at::distance_t;
     using dynamic_allocator_traits_t = typename men_at::dynamic_allocator_traits_t;
-    using dynamic_allocator_t = typename men_at::dynamic_allocator_t;
     using man_key_t = typename men_at::key_t;
     using woman_key_t = typename women_at::key_t;
 
@@ -2899,8 +2907,6 @@ static join_result_t join(               //
     using compressed_slot_t = typename women_at::compressed_slot_t;
     using compressed_slot_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<compressed_slot_t>;
     using proposals_count_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<proposals_count_t>;
-
-    dynamic_allocator_t const& alloc = men.dynamic_allocator();
 
     // Create an atomic queue, as a ring structure, from/to which
     // free men will be added/pulled.
@@ -2924,8 +2930,8 @@ static join_result_t join(               //
     std::memset(proposal_counts.data(), 0, sizeof(proposals_count_t) * men.size());
 
     // Define locks, to limit concurrent accesses to `man_to_woman_slots` and `woman_to_man_slots`.
-    visits_bitset_t men_locks, women_locks;
-    if (!men_locks.resize(men.size()) || !women_locks.resize(women.size()))
+    visits_bitset_t men_locks(men.size()), women_locks(women.size());
+    if (!men_locks || !women_locks)
         return result.failed("Can't allocate locks");
 
     std::atomic<std::size_t> rounds{0};
