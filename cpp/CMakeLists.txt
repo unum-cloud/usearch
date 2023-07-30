@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.1)
 option(USEARCH_USE_OPENMP "Use OpenMP for a thread pool" OFF)
 option(USEARCH_USE_SIMSIMD "Use SimSIMD hardware-accelerated metrics" OFF)
 option(USEARCH_USE_JEMALLOC "Use JeMalloc for faster memory allocations" OFF)
+option(USEARCH_LOOKUP_LABEL "Compile with label lookup and removal tests" OFF)
 
 # Make "Release" by default
 if(NOT CMAKE_BUILD_TYPE)
@@ -83,6 +84,9 @@ if(${USEARCH_BUILD_TEST})
     target_link_libraries(test PRIVATE Threads::Threads)
     target_include_directories(test PRIVATE ${USEARCH_PUNNED_INCLUDE_DIRS})
     set_target_properties(test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+    if (${USEARCH_LOOKUP_LABEL})
+        target_compile_definitions(test PRIVATE USEARCH_LOOKUP_LABEL=1)
+    endif()
 
     if(${CMAKE_VERSION} VERSION_EQUAL 3.13 OR ${CMAKE_VERSION} VERSION_GREATER 3.13)
         include(CTest)

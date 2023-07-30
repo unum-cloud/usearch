@@ -92,16 +92,20 @@ template <typename scalar_at, typename index_at> void test3d_punned(index_at&& i
     index.add(42, view_t{&vec42[0], 3ul});
 
     // Reconstruct
+#if USEARCH_LOOKUP_LABEL
     scalar_t vec42_reconstructed[3] = {0, 0, 0};
     index.get(42, span_t{&vec42_reconstructed[0], 3ul});
     expect(vec42_reconstructed[0] == vec42[0]);
     expect(vec42_reconstructed[1] == vec42[1]);
     expect(vec42_reconstructed[2] == vec42[2]);
+#endif
 
     index.add(43, view_t{&vec43[0], 3ul});
     expect(index.size() == 2);
+#if USEARCH_LOOKUP_LABEL
     index.remove(43);
     expect(index.size() == 1);
+#endif
 }
 
 template <typename index_at> void test_sets(index_at&& index) {
