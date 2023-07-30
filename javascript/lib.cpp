@@ -187,11 +187,11 @@ void Index::Add(Napi::CallbackInfo const& ctx) {
     if (ctx.Length() < 2 || !ctx[0].IsNumber() || !ctx[1].IsTypedArray())
         return Napi::TypeError::New(env, "Expects an integral key and a float vector").ThrowAsJavaScriptException();
 
-    Napi::Number label_js = ctx[0].As<Napi::Number>();
+    Napi::Number key_js = ctx[0].As<Napi::Number>();
     Napi::Float32Array vector_js = ctx[1].As<Napi::Float32Array>();
 
     using key_t = typename index_dense_t::key_t;
-    key_t key = label_js.Uint32Value();
+    key_t key = key_js.Uint32Value();
     float const* vector = vector_js.Data();
     std::size_t dimensions = static_cast<std::size_t>(vector_js.ElementLength());
     if (dimensions != native_->dimensions())
