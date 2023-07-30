@@ -49,9 +49,8 @@
 using namespace unum::usearch;
 using namespace unum;
 
-using key_t = std::int64_t;
 using compressed_slot_t = std::uint32_t;
-using vector_view_t = span_gt<float const>;
+using float_span_t = span_gt<float const>;
 
 template <typename element_at>
 std::size_t offset_of(element_at const* begin, element_at const* end, element_at v) noexcept {
@@ -279,7 +278,7 @@ struct running_stats_printer_t {
 };
 
 template <typename index_at, typename vector_id_at, typename real_at>
-void index_many(index_at& native, std::size_t n, vector_id_at const* ids, real_at const* vectors, std::size_t dims) {
+void index_many(index_at& index, std::size_t n, vector_id_at const* ids, real_at const* vectors, std::size_t dims) {
 
     running_stats_printer_t printer{n, "Indexing"};
 
@@ -291,9 +290,8 @@ void index_many(index_at& native, std::size_t n, vector_id_at const* ids, real_a
 #if USEARCH_USE_OPENMP
         config.thread = omp_get_thread_num();
 #endif
-        config.store_vector = true;
-        vector_view_t vector{vectors + dims * i, dims};
-        native.add(ids[i], vector, config);
+        float_span_t vector{vectors + dims * i, dims};
+        index.add(ids[i], vector, config);
         printer.progress++;
         if (config.thread == 0)
             printer.refresh();
@@ -302,7 +300,7 @@ void index_many(index_at& native, std::size_t n, vector_id_at const* ids, real_a
 
 template <typename index_at, typename vector_id_at, typename real_at>
 void search_many( //
-    index_at& native, std::size_t n, real_at const* vectors, std::size_t dims, std::size_t wanted, vector_id_at* ids,
+    index_at& index, std::size_t n, real_at const* vectors, std::size_t dims, std::size_t wanted, vector_id_at* ids,
     real_at* distances) {
 
     std::string name = "Search " + std::to_string(wanted);
@@ -316,8 +314,8 @@ void search_many( //
 #if USEARCH_USE_OPENMP
         config.thread = omp_get_thread_num();
 #endif
-        vector_view_t vector{vectors + dims * i, dims};
-        native.search(vector, wanted, config).dump_to(ids + wanted * i, distances + wanted * i);
+        float_span_t vector{vectors + dims * i, dims};
+        index.search(vector, wanted, config).dump_to(ids + wanted * i, distances + wanted * i);
         printer.progress++;
         if (config.thread == 0)
             printer.refresh();
@@ -326,22 +324,20 @@ void search_many( //
 
 template <typename dataset_at, typename index_at> //
 static void single_shot(dataset_at& dataset, index_at& index, bool construct = true) {
-    using key_t = typename index_at::key_t;
     using distance_t = typename index_at::distance_t;
-    using join_result_t = typename index_at::join_result_t;
-    constexpr key_t missing_label = std::numeric_limits<key_t>::max();
+    constexpr default_key_t missing_key = std::numeric_limits<default_key_t>::max();
 
     std::printf("\n");
     std::printf("------------\n");
     if (construct) {
         // Perform insertions, evaluate speed
-        std::vector<key_t> ids(dataset.vectors_count());
+        std::vector<default_key_t> ids(dataset.vectors_count());
         std::iota(ids.begin(), ids.end(), 0);
         index_many(index, dataset.vectors_count(), ids.data(), dataset.vector(0), dataset.dimensions());
     }
 
     // Perform search, evaluate speed
-    std::vector<key_t> found_neighbors(dataset.queries_count() * dataset.neighborhood_size());
+    std::vector<default_key_t> found_neighbors(dataset.queries_count() * dataset.neighborhood_size());
     std::vector<distance_t> found_distances(dataset.queries_count() * dataset.neighborhood_size());
     search_many(index, dataset.queries_count(), dataset.query(0), dataset.dimensions(), dataset.neighborhood_size(),
                 found_neighbors.data(), found_distances.data());
@@ -352,27 +348,27 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
         auto expected = dataset.neighborhood(i);
         auto received = found_neighbors.data() + i * dataset.neighborhood_size();
         recall_at_1 += expected[0] == received[0];
-        recall_full += contains(received, received + dataset.neighborhood_size(), key_t{expected[0]});
+        recall_full += contains(received, received + dataset.neighborhood_size(), default_key_t{expected[0]});
     }
 
     std::printf("Recall@1 %.2f %%\n", recall_at_1 * 100.f / dataset.queries_count());
     std::printf("Recall %.2f %%\n", recall_full * 100.f / dataset.queries_count());
 
     // Perform joins
-    std::vector<key_t> man_to_woman(dataset.vectors_count());
-    std::vector<key_t> woman_to_man(dataset.vectors_count());
+    std::vector<default_key_t> man_to_woman(dataset.vectors_count());
+    std::vector<default_key_t> woman_to_man(dataset.vectors_count());
     std::size_t join_attempts = 0;
     {
         index_at& men = index;
         index_at women = index.copy().index;
-        std::fill(man_to_woman.begin(), man_to_woman.end(), missing_label);
-        std::fill(woman_to_man.begin(), woman_to_man.end(), missing_label);
+        std::fill(man_to_woman.begin(), man_to_woman.end(), missing_key);
+        std::fill(woman_to_man.begin(), woman_to_man.end(), missing_key);
         {
             executor_default_t executor(index.limits().threads());
             running_stats_printer_t printer{1, "Join"};
-            join_result_t result = index_at::join(          //
+            join_result_t result = join(                          //
                 men, women, index_join_config_t{executor.size()}, //
-                man_to_woman.data(), woman_to_man.data(),   //
+                man_to_woman.data(), woman_to_man.data(),         //
                 executor, [&](std::size_t progress, std::size_t total) {
                     if (progress % 1000 == 0)
                         printer.print(progress, total);
@@ -383,8 +379,8 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
     // Evaluate join quality
     std::size_t recall_join = 0, unmatched_count = 0;
     for (std::size_t i = 0; i != index.size(); ++i) {
-        recall_join += man_to_woman[i] == static_cast<key_t>(i);
-        unmatched_count += man_to_woman[i] == missing_label;
+        recall_join += man_to_woman[i] == static_cast<default_key_t>(i);
+        unmatched_count += man_to_woman[i] == missing_key;
     }
     std::printf("Recall Joins %.2f %%\n", recall_join * 100.f / index.size());
     std::printf("Unmatched %.2f %% (%zu items)\n", unmatched_count * 100.f / index.size(), unmatched_count);
@@ -453,7 +449,6 @@ struct args_t {
     bool help = false;
 
     bool big = false;
-    bool native = false;
 
     bool quantize_f16 = false;
     bool quantize_f8 = false;
@@ -503,9 +498,10 @@ void run_punned(dataset_at& dataset, args_t const& args, index_config_t config, 
     metric_kind_t kind = args.metric();
     std::printf("-- Metric: %s\n", metric_kind_name(kind));
 
-    index_at index = index_at::make(dataset.dimensions(), kind, config, quantization);
+    metric_punned_t metric(dataset.dimensions(), kind, quantization);
+    index_at index = index_at::make(metric, config);
     index.reserve(limits);
-    std::printf("-- Hardware acceleration: %s\n", isa_name(index.metric().isa_));
+    std::printf("-- Hardware acceleration: %s\n", isa_name(index.metric().isa_kind()));
     std::printf("Will benchmark in-memory\n");
 
     single_shot(dataset, index, true);
@@ -535,74 +531,6 @@ void run_typed(dataset_at& dataset, args_t const& args, index_config_t config, i
     single_shot(dataset, index_view, false);
 }
 
-template <typename neighbor_id_at, typename dataset_at> //
-void run_big_or_small(dataset_at& dataset, args_t const& args, index_config_t config, index_limits_t limits) {
-    if (args.native) {
-        if (args.metric_cos) {
-            std::printf("-- Metric: Angular\n");
-            run_typed<index_gt<metric_cos_gt<float>, key_t, neighbor_id_at>>(dataset, args, config, limits);
-        } else if (args.metric_l2) {
-            std::printf("-- Metric: Euclidean\n");
-            run_typed<index_gt<metric_l2sq_gt<float>, key_t, neighbor_id_at>>(dataset, args, config, limits);
-        } else if (args.metric_haversine) {
-            std::printf("-- Metric: Haversine\n");
-            run_typed<index_gt<metric_haversine_gt<float>, key_t, neighbor_id_at>>(dataset, args, config, limits);
-        } else {
-            std::printf("-- Metric: Inner Product\n");
-            run_typed<index_gt<metric_ip_gt<float>, key_t, neighbor_id_at>>(dataset, args, config, limits);
-        }
-    } else
-        run_punned<index_dense_gt<key_t, neighbor_id_at>>(dataset, args, config, limits);
-}
-
-void report_alternative_setups() {
-    using set_member_t = std::uint32_t;
-    using sets_index_t = index_gt<metric_jaccard_gt<set_member_t>, key_t, std::uint32_t>;
-    set_member_t set_a[] = {10, 12, 15};
-    set_member_t set_b[] = {11, 12, 15, 16};
-    sets_index_t index;
-    index.reserve(100);
-    index.add(10, span_gt<set_member_t const>{&set_a[0], 3});
-    index.add(11, span_gt<set_member_t const>{&set_b[0], 4});
-    exit(0);
-}
-
-void report_expected_losses(persisted_dataset_gt<float, compressed_slot_t> const& dataset) {
-
-    auto vec1 = dataset.vector(0);
-    auto vec2 = dataset.query(0);
-    std::vector<f16_t> vec1f16(dataset.dimensions());
-    std::vector<f16_t> vec2f16(dataset.dimensions());
-    std::transform(vec1, vec1 + dataset.dimensions(), vec1f16.data(), [](float v) { return v; });
-    std::transform(vec2, vec2 + dataset.dimensions(), vec2f16.data(), [](float v) { return v; });
-    std::vector<f8_bits_t> vec1f8(dataset.dimensions());
-    std::vector<f8_bits_t> vec2f8(dataset.dimensions());
-    std::transform(vec1, vec1 + dataset.dimensions(), vec1f8.data(), [](float v) { return v; });
-    std::transform(vec2, vec2 + dataset.dimensions(), vec2f8.data(), [](float v) { return v; });
-
-#if 0
-    auto ip_default = metric_ip_gt<float>{}(vec1, vec2, dataset.dimensions());
-    auto ip_f16 = metric_ip_gt<f16_t, float>{}(vec1f16.data(), vec2f16.data(), dataset.dimensions());
-    auto ip_f8 = metric_ip_gt<f8_bits_t, float>{}(vec1f8.data(), vec2f8.data(), dataset.dimensions());
-
-#if defined(__AVX512F__)
-    auto ip_f16avx512 = 1.f - simsimd_dot_f16x16avx512((simsimd_f16_t const*)vec1f16.data(),
-                                                       (simsimd_f16_t const*)vec2f16.data(), dataset.dimensions());
-#endif
-#if defined(__ARM_FEATURE_SVE)
-    auto ip_sve = 1.f - simsimd_dot_f32sve(vec1, vec2, dataset.dimensions());
-    auto ip_f16sve = 1.f - simsimd_dot_f16sve((simsimd_f16_t const*)vec1f16.data(),
-                                              (simsimd_f16_t const*)vec2f16.data(), dataset.dimensions());
-#endif
-#if defined(__ARM_NEON)
-    auto ip_neon = 1.f - simsimd_dot_f32x4neon(vec1, vec2, dataset.dimensions());
-    auto ip_f16neon = 1.f - simsimd_dot_f16x8neon((simsimd_f16_t const*)vec1f16.data(),
-                                                  (simsimd_f16_t const*)vec2f16.data(), dataset.dimensions());
-#endif
-    exit(0);
-#endif
-}
-
 int main(int argc, char** argv) {
 
     // Print backtrace if something goes wrong.
@@ -624,7 +552,6 @@ int main(int argc, char** argv) {
         (option("--rows-skip") & value("integer", args.vectors_to_skip)).doc("Number of vectors to skip"),
         (option("--rows-take") & value("integer", args.vectors_to_take)).doc("Number of vectors to take"),
         ( //
-            option("--native").set(args.native).doc("Use raw templates instead of type-punned classes") |
             option("-f16", "--f16quant").set(args.quantize_f16).doc("Enable `f16_t` quantization") |
             option("-f8", "--f8quant").set(args.quantize_f8).doc("Enable `f8_t` quantization") |
             option("-b1", "--b1quant").set(args.quantize_b1).doc("Enable `b1x8_t` quantization")),
@@ -676,27 +603,24 @@ int main(int argc, char** argv) {
     // report_alternative_setups();
     // report_expected_losses(dataset);
 
-    index_config_t config;
-    config.connectivity = args.connectivity;
-    // config.expansion_add = args.expansion_add;
-    // config.expansion_search = args.expansion_search;
+    index_dense_config_t config(args.connectivity, args.expansion_add, args.expansion_search);
     index_limits_t limits;
     limits.threads_add = limits.threads_search = args.threads;
     limits.members = dataset.vectors_count();
 
     std::printf("- Index: \n");
     std::printf("-- Connectivity: %zu\n", config.connectivity);
-    // std::printf("-- Expansion @ Add: %zu\n", config.expansion_add);
-    // std::printf("-- Expansion @ Search: %zu\n", config.expansion_search);
+    std::printf("-- Expansion @ Add: %zu\n", config.expansion_add);
+    std::printf("-- Expansion @ Search: %zu\n", config.expansion_search);
 
     if (args.big)
 #ifdef USEARCH_64BIT_ENV
-        run_big_or_small<uint40_t>(dataset, args, config, limits);
+        run_punned<index_dense_gt<default_key_t, uint40_t>>(dataset, args, config, limits);
 #else
         std::printf("Error: Don't use 40 bit identifiers in 32bit environment\n");
 #endif
     else
-        run_big_or_small<std::uint32_t>(dataset, args, config, limits);
+        run_punned<index_dense_gt<default_key_t, std::uint32_t>>(dataset, args, config, limits);
 
     return 0;
 }

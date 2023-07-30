@@ -165,6 +165,21 @@ def test_index(
     # Cleanup
     os.remove("tmp.usearch")
 
+    # Try opening a missing file
+    meta = Index.metadata("tmp.usearch")
+    assert meta is None
+    index = Index.restore("tmp.usearch")
+    assert index is None
+
+    # Try openning a corrupt file
+    with open("tmp.usearch", "w") as file:
+        file.write("Some random string")
+    meta = Index.metadata("tmp.usearch")
+    assert meta is None
+    index = Index.restore("tmp.usearch")
+    assert index is None
+    os.remove("tmp.usearch")
+
 
 @pytest.mark.parametrize("ndim", dimensions)
 @pytest.mark.parametrize("metric", continuous_metrics)

@@ -12,6 +12,7 @@
  *
  *  @copyright Copyright (c) 2023
  */
+#define __cpp_exceptions 1
 #include <limits> // `std::numeric_limits`
 #include <thread> // `std::thread`
 
@@ -486,8 +487,8 @@ PYBIND11_MODULE(compiled, m) {
         .value("I16", scalar_kind_t::i16_k)
         .value("I8", scalar_kind_t::i8_k);
 
-    m.def("index_metadata", [](std::string const& path) -> py::dict {
-        index_dense_metadata_result_t meta = index_metadata(path.c_str());
+    m.def("index_dense_metadata", [](std::string const& path) -> py::dict {
+        index_dense_metadata_result_t meta = index_dense_metadata(path.c_str());
         meta.error.raise();
         index_dense_head_t const& head = meta.head;
 

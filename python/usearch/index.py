@@ -16,7 +16,7 @@ from usearch.compiled import Index as _CompiledIndex
 from usearch.compiled import Indexes as _CompiledIndexes
 from usearch.compiled import IndexStats as _CompiledIndexStats
 
-from usearch.compiled import index_metadata
+from usearch.compiled import index_dense_metadata
 from usearch.compiled import MetricKind, ScalarKind, MetricSignature
 from usearch.compiled import (
     DEFAULT_CONNECTIVITY,
@@ -420,7 +420,10 @@ class Index:
     def metadata(path: os.PathLike) -> Optional[dict]:
         if not os.path.exists(path):
             return None
-        return index_metadata(path)
+        try:
+            return index_dense_metadata(path)
+        except Exception:
+            return None
 
     @staticmethod
     def restore(path: os.PathLike, view: bool = False) -> Optional[Index]:

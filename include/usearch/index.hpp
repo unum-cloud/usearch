@@ -284,7 +284,7 @@ class error_t {
     explicit operator bool() const noexcept { return message_ != nullptr; }
     char const* what() const noexcept { return message_; }
 
-#if defined(__cpp_exceptions) && (1 == __cpp_exceptions)
+#if defined(__cpp_exceptions) || defined(__EXCEPTIONS)
     ~error_t() noexcept(false) {
         if (message_)
             if (!std::uncaught_exception())
@@ -1263,11 +1263,11 @@ struct index_serialized_header_t {
     std::uint64_t entry_slot = 0;
 };
 
-using default_label_t = std::uint64_t;
+using default_key_t = std::uint64_t;
 using default_slot_t = std::uint32_t;
 using default_distance_t = float;
 
-template <typename key_at = default_label_t> struct member_gt {
+template <typename key_at = default_key_t> struct member_gt {
     key_at key;
     std::size_t slot;
 };
@@ -1275,7 +1275,7 @@ template <typename key_at = default_label_t> struct member_gt {
 template <typename key_at> inline std::size_t get_slot(member_gt<key_at> const& m) noexcept { return m.slot; }
 template <typename key_at> inline key_at get_key(member_gt<key_at> const& m) noexcept { return m.key; }
 
-template <typename key_at = default_label_t> struct member_cref_gt {
+template <typename key_at = default_key_t> struct member_cref_gt {
     misaligned_ref_gt<key_at const> key;
     std::size_t slot;
 };
@@ -1283,7 +1283,7 @@ template <typename key_at = default_label_t> struct member_cref_gt {
 template <typename key_at> inline std::size_t get_slot(member_cref_gt<key_at> const& m) noexcept { return m.slot; }
 template <typename key_at> inline key_at get_key(member_cref_gt<key_at> const& m) noexcept { return m.key; }
 
-template <typename key_at = default_label_t> struct member_ref_gt {
+template <typename key_at = default_key_t> struct member_ref_gt {
     misaligned_ref_gt<key_at> key;
     std::size_t slot;
 
@@ -1374,7 +1374,7 @@ template <typename key_at> inline key_at get_key(member_ref_gt<key_at> const& m)
  *
  */
 template <typename distance_at = default_distance_t,              //
-          typename key_at = default_label_t,                      //
+          typename key_at = default_key_t,                        //
           typename compressed_slot_at = default_slot_t,           //
           typename dynamic_allocator_at = std::allocator<byte_t>, //
           typename tape_allocator_at = dynamic_allocator_at>      //
@@ -2644,8 +2644,8 @@ class index_gt {
         top.clear();
 
         distance_t radius = context.measure(query, citerator_at(start_slot), metric);
-        next.insert_reserved({-radius, start_slot});
-        top.insert_reserved({radius, start_slot});
+        next.insert_reserved({-radius, static_cast<compressed_slot_t>(start_slot)});
+        top.insert_reserved({radius, static_cast<compressed_slot_t>(start_slot)});
         visits.set(start_slot);
 
         while (!next.empty()) {
@@ -2836,7 +2836,8 @@ template < //
     typename women_at,        //
     typename men_values_at,   //
     typename women_values_at, //
-    typename metric_at,       //
+    typename men_metric_at,   //
+    typename women_metric_at, //
 
     typename man_to_woman_at = dummy_label_to_label_mapping_t, //
     typename woman_to_man_at = dummy_label_to_label_mapping_t, //
@@ -2848,7 +2849,8 @@ static join_result_t join(               //
     women_at const& women,               //
     men_values_at const& men_values,     //
     women_values_at const& women_values, //
-    metric_at&& metric,                  //
+    men_metric_at&& men_metric,          //
+    women_metric_at&& women_metric,      //
 
     index_join_config_t config = {},                    //
     man_to_woman_at&& man_to_woman = man_to_woman_at{}, //
@@ -2857,10 +2859,12 @@ static join_result_t join(               //
     progress_at&& progress = progress_at{}) noexcept {
 
     if (women.size() < men.size())
-        return unum::usearch::join(                      //
-            women, men,                                  //
-            women_values, men_values,                    //
-            std::forward<metric_at>(metric), config,     //
+        return unum::usearch::join(                                                               //
+            women, men,                                                                           //
+            women_values, men_values,                                                             //
+            std::forward<women_metric_at>(women_metric), std::forward<men_metric_at>(men_metric), //
+
+            config,                                      //
             std::forward<woman_to_man_at>(woman_to_man), //
             std::forward<man_to_woman_at>(man_to_woman), //
             std::forward<executor_at>(executor),         //
@@ -2878,7 +2882,7 @@ static join_result_t join(               //
     using proposals_count_t = std::uint16_t;
     config.max_proposals = (std::min)(men.size(), config.max_proposals);
 
-    using distance_t = typename metric_at::result_t;
+    using distance_t = typename men_at::distance_t;
     using dynamic_allocator_traits_t = typename men_at::dynamic_allocator_traits_t;
     using dynamic_allocator_t = typename men_at::dynamic_allocator_t;
     using man_key_t = typename men_at::key_t;
@@ -2889,12 +2893,12 @@ static join_result_t join(               //
     using compressed_slot_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<compressed_slot_t>;
     using proposals_count_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<proposals_count_t>;
 
-    dynamic_allocator_t& alloc = men.dynamic_allocator();
+    dynamic_allocator_t const& alloc = men.dynamic_allocator();
 
     // Create an atomic queue, as a ring structure, from/to which
     // free men will be added/pulled.
     std::mutex free_men_mutex{};
-    ring_gt<compressed_slot_allocator_t, compressed_slot_allocator_t> free_men;
+    ring_gt<compressed_slot_t, compressed_slot_allocator_t> free_men;
     free_men.reserve(men.size());
     for (std::size_t i = 0; i != men.size(); ++i)
         free_men.push(static_cast<compressed_slot_t>(i));
@@ -2952,7 +2956,7 @@ static join_result_t join(               //
 
             // Find the closest woman, to whom this man hasn't proposed yet.
             ++free_man_proposals;
-            auto candidates = women.search(men_values[free_man_slot], free_man_proposals, metric, search_config);
+            auto candidates = women.search(men_values[free_man_slot], free_man_proposals, women_metric, search_config);
             cycles += candidates.cycles;
             measurements += candidates.measurements;
             if (!candidates) {
@@ -2972,7 +2976,7 @@ static join_result_t join(               //
                 woman_to_man_slots[woman.slot] = free_man_slot;
                 engagements++;
             } else {
-                distance_t distance_from_husband = metric(women_values[woman.slot], men_values[husband_slot]);
+                distance_t distance_from_husband = women_metric(women_values[woman.slot], men_values[husband_slot]);
                 distance_t distance_from_candidate = match.distance;
                 if (distance_from_husband > distance_from_candidate) {
                     // Break-up
@@ -3004,8 +3008,8 @@ static join_result_t join(               //
     for (std::size_t man_slot = 0; man_slot != men.size(); ++man_slot) {
         compressed_slot_t woman_slot = man_to_woman_slots[man_slot];
         if (woman_slot != missing_slot) {
-            man_key_t man = men.at(man_slot).key();
-            woman_key_t woman = women.at(woman_slot).key();
+            man_key_t man = men.at(man_slot).key;
+            woman_key_t woman = women.at(woman_slot).key;
             man_to_woman[man] = woman;
             woman_to_man[woman] = man;
             intersection_size++;

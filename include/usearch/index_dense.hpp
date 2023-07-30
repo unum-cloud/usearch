@@ -134,7 +134,7 @@ struct index_dense_copy_config_t : public index_copy_config_t {
  *          and ability to @b remove existing vectors, common in Semantic Caching
  *          applications.
  */
-template <typename key_at = default_label_t, typename compressed_slot_at = default_slot_t> //
+template <typename key_at = default_key_t, typename compressed_slot_at = default_slot_t> //
 class index_dense_gt {
   public:
     using key_t = key_at;
@@ -177,6 +177,8 @@ class index_dense_gt {
         inline distance_t operator()(member_citerator_t a, member_citerator_t b) const noexcept {
             return f(v(a), v(b));
         }
+
+        inline distance_t operator()(byte_t const* a, byte_t const* b) const noexcept { return f(a, b); }
 
         inline byte_t const* v(member_cref_t m) const noexcept { return index_->vectors_lookup_[get_slot(m)]; }
         inline byte_t const* v(member_citerator_t m) const noexcept { return index_->vectors_lookup_[get_slot(m)]; }
@@ -942,6 +944,39 @@ class index_dense_gt {
         return result;
     }
 
+    template <                                                     //
+        typename man_to_woman_at = dummy_label_to_label_mapping_t, //
+        typename woman_to_man_at = dummy_label_to_label_mapping_t, //
+        typename executor_at = dummy_executor_t,                   //
+        typename progress_at = dummy_progress_t                    //
+        >
+    join_result_t join(                                     //
+        index_dense_gt const& women,                        //
+        index_join_config_t config = {},                    //
+        man_to_woman_at&& man_to_woman = man_to_woman_at{}, //
+        woman_to_man_at&& woman_to_man = woman_to_man_at{}, //
+        executor_at&& executor = executor_at{},             //
+        progress_at&& progress = progress_at{}) const {
+
+        class lookup_proxy_t {
+            index_dense_gt const* index_;
+
+          public:
+            lookup_proxy_t(index_dense_gt const& index) noexcept : index_(&index) {}
+            byte_t const* operator[](compressed_slot_t slot) const noexcept { return index_->vectors_lookup_[slot]; }
+        };
+        index_dense_gt const& men = *this;
+        return unum::usearch::join(                      //
+            *men.typed_, *women.typed_,                  //
+            lookup_proxy_t{men}, lookup_proxy_t{women},  //
+            metric_proxy_t{men}, metric_proxy_t{women},  //
+            config,                                      //
+            std::forward<man_to_woman_at>(man_to_woman), //
+            std::forward<woman_to_man_at>(woman_to_man), //
+            std::forward<executor_at>(executor),         //
+            std::forward<progress_at>(progress));
+    }
+
   private:
     struct thread_lock_t {
         index_dense_gt const& parent;
@@ -1137,17 +1172,18 @@ struct index_dense_metadata_result_t {
         return std::move(*this);
     }
 
-    index_dense_metadata_result_t() noexcept : config(), head_buffer(), head(head_buffer) {}
+    index_dense_metadata_result_t() noexcept : config(), head_buffer(), head(head_buffer), error() {}
 
-    index_dense_metadata_result_t(index_dense_metadata_result_t const& other) noexcept
-        : config(), head_buffer(), head(head_buffer) {
+    index_dense_metadata_result_t(index_dense_metadata_result_t&& other) noexcept
+        : config(), head_buffer(), head(head_buffer), error(std::move(other.error)) {
         std::memcpy(&config, &other.config, sizeof(other.config));
         std::memcpy(&head_buffer, &other.head_buffer, sizeof(other.head_buffer));
     }
 
-    index_dense_metadata_result_t& operator=(index_dense_metadata_result_t const& other) noexcept {
+    index_dense_metadata_result_t& operator=(index_dense_metadata_result_t&& other) noexcept {
         std::memcpy(&config, &other.config, sizeof(other.config));
         std::memcpy(&head_buffer, &other.head_buffer, sizeof(other.head_buffer));
+        error = std::move(other.error);
         return *this;
     }
 };
@@ -1156,8 +1192,7 @@ struct index_dense_metadata_result_t {
  *  @brief  Extracts metadata from pre-constructed index on disk,
  *          without loading it or mapping the whole binary file.
  */
-inline index_dense_metadata_result_t index_metadata(char const* file_path) noexcept {
-
+inline index_dense_metadata_result_t index_dense_metadata(char const* file_path) noexcept {
     index_dense_metadata_result_t result;
     std::unique_ptr<std::FILE, int (*)(std::FILE*)> file(std::fopen(file_path, "rb"), &std::fclose);
     if (!file)
@@ -1166,7 +1201,7 @@ inline index_dense_metadata_result_t index_metadata(char const* file_path) noexc
     // Read the header
     std::size_t read = std::fread(result.head_buffer, sizeof(index_dense_head_buffer_t), 1, file.get());
     if (!read)
-        return result.failed(std::strerror(errno));
+        return result.failed(std::feof(file.get()) ? "End of file reached!" : std::strerror(errno));
 
     // Check if the file immeditely starts with the index, instead of vectors
     result.config.exclude_vectors = true;
@@ -1193,7 +1228,7 @@ inline index_dense_metadata_result_t index_metadata(char const* file_path) noexc
             return result.failed(std::strerror(errno));
         read = std::fread(result.head_buffer, sizeof(index_dense_head_buffer_t), 1, file.get());
         if (!read)
-            return result.failed(std::strerror(errno));
+            return result.failed(std::feof(file.get()) ? "End of file reached!" : std::strerror(errno));
 
         result.config.exclude_vectors = false;
         result.config.use_64_bit_dimensions = false;
@@ -1207,7 +1242,7 @@ inline index_dense_metadata_result_t index_metadata(char const* file_path) noexc
             return result.failed(std::strerror(errno));
         read = std::fread(result.head_buffer, sizeof(index_dense_head_buffer_t), 1, file.get());
         if (!read)
-            return result.failed(std::strerror(errno));
+            return result.failed(std::feof(file.get()) ? "End of file reached!" : std::strerror(errno));
 
         // Check if it starts with 64-bit
         result.config.exclude_vectors = false;
@@ -1217,6 +1252,46 @@ inline index_dense_metadata_result_t index_metadata(char const* file_path) noexc
     }
 
     return result.failed("Not a dense USearch index!");
+}
+
+/**
+ *  @brief  Adapts the Male-Optimal Stable Marriage algorithm for unequal sets
+ *          to perform fast one-to-one matching between two large collections
+ *          of vectors, using approximate nearest neighbors search.
+ *
+ *  @param[inout] man_to_woman Container to map ::first keys to ::second.
+ *  @param[inout] woman_to_man Container to map ::second keys to ::first.
+ *  @param[in] executor Thread-pool to execute the job in parallel.
+ *  @param[in] progress Callback to report the execution progress.
+ */
+template < //
+
+    typename men_label_at,   //
+    typename women_label_at, //
+    typename men_slot_at,    //
+    typename women_slot_at,  //
+
+    typename man_to_woman_at = dummy_label_to_label_mapping_t, //
+    typename woman_to_man_at = dummy_label_to_label_mapping_t, //
+    typename executor_at = dummy_executor_t,                   //
+    typename progress_at = dummy_progress_t                    //
+    >
+static join_result_t join(                                      //
+    index_dense_gt<men_label_at, men_slot_at> const& men,       //
+    index_dense_gt<women_label_at, women_slot_at> const& women, //
+
+    index_join_config_t config = {},                    //
+    man_to_woman_at&& man_to_woman = man_to_woman_at{}, //
+    woman_to_man_at&& woman_to_man = woman_to_man_at{}, //
+    executor_at&& executor = executor_at{},             //
+    progress_at&& progress = progress_at{}) noexcept {
+
+    return men.join(                                 //
+        women, config,                               //
+        std::forward<woman_to_man_at>(woman_to_man), //
+        std::forward<man_to_woman_at>(man_to_woman), //
+        std::forward<executor_at>(executor),         //
+        std::forward<progress_at>(progress));
 }
 
 } // namespace usearch
