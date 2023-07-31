@@ -201,6 +201,7 @@ class index_punned_dense_gt {
     using join_result_t = typename index_t::join_result_t;
     using stats_t = typename index_t::stats_t;
     using match_t = typename index_t::match_t;
+    using node_retriever_t = typename index_t::node_retriever_t;
 
     index_punned_dense_gt() = default;
     index_punned_dense_gt(index_punned_dense_gt&& other)
@@ -339,6 +340,7 @@ class index_punned_dense_gt {
 
     stats_t stats() const { return typed_->stats(); }
     stats_t stats(std::size_t level) const { return typed_->stats(level); }
+    precomputed_constants_t metadata() const { return typed_->metadata(); }
 
     std::size_t memory_usage() const {
         return typed_->memory_usage(0) +                 //
@@ -350,7 +352,7 @@ class index_punned_dense_gt {
     add_result_t add(label_t label, b1x8_t const* vector) { return add_(label, vector, casts_.from_b1x8); }
     add_result_t add(label_t label, f8_bits_t const* vector) { return add_(label, vector, casts_.from_f8); }
     add_result_t add(label_t label, f16_t const* vector) { return add_(label, vector, casts_.from_f16); }
-    add_result_t add(label_t label, f32_t const* vector) { return add_(label, vector, casts_.from_f32); }
+    add_result_t add(label_t label, f32_t const* vector, int32_t level = -1, byte_t *tape = nullptr) { return add_(label, vector, casts_.from_f32, level, tape); }
     add_result_t add(label_t label, f64_t const* vector) { return add_(label, vector, casts_.from_f64); }
 
     add_result_t add(label_t label, b1x8_t const* vector, add_config_t config) { return add_(label, vector, config, casts_.from_b1x8); }
@@ -442,6 +444,33 @@ class index_punned_dense_gt {
             reindex_labels_();
 #endif
         return result;
+    }
+
+    serialization_result_t view_mem(char* memory) {
+        serialization_result_t result = typed_->view_mem(memory);
+#if USEARCH_LOOKUP_LABEL
+        if (result)
+            reindex_labels_();
+#endif
+        return result;
+    }
+
+    serialization_result_t view_mem_lazy(char* memory) {
+        serialization_result_t result;
+#if USEARCH_LOOKUP_LABEL
+        return result.failed("Usearch does not support label lookup and member removals for external memory indexes.");
+#endif
+        result = typed_->view_mem_lazy(memory);
+        return std::move(result);
+    }
+
+    serialization_result_t update_header(char* headerp) {
+        serialization_result_t result = typed_->update_header(headerp);
+        return result;
+    }
+
+    void set_node_retriever(node_retriever_t node_retriever, node_retriever_t node_retriever_mut) {
+        typed_->set_node_retriever(node_retriever, node_retriever_mut);
     }
 
 #if USEARCH_LOOKUP_LABEL
@@ -581,6 +610,12 @@ class index_punned_dense_gt {
             *labels = it->first;
     }
 #endif
+    int32_t newnode_level() {
+        thread_lock_t lock = thread_lock_();
+        add_config_t add_config;
+        add_config.thread = lock.thread_id;
+        return typed_->choose_random_level(add_config);
+    }
 
     /**
      *  @brief  Adapts the Male-Optimal Stable Marriage algorithm for unequal sets
@@ -736,7 +771,8 @@ class index_punned_dense_gt {
     }
 
     template <typename scalar_at>
-    add_result_t add_(label_t label, scalar_at const* vector, add_config_t config, cast_t const& cast) {
+    add_result_t add_(label_t label, scalar_at const* vector, add_config_t config, cast_t const& cast,
+                      int32_t level = -1, byte_t* tape = nullptr) {
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
         std::size_t vector_bytes = dimensions_ * sizeof(scalar_at);
 
@@ -758,7 +794,7 @@ class index_punned_dense_gt {
         add_result_t result =                     //
             free_id != default_free_value<id_t>() //
                 ? typed_->update(free_id, label, {vector_data, vector_bytes}, config)
-                : typed_->add(label, {vector_data, vector_bytes}, config);
+                : typed_->add(label, {vector_data, vector_bytes}, config, level, tape);
 #if USEARCH_LOOKUP_LABEL
         {
             unique_lock_t lock(labeled_lookup_mutex_);
@@ -841,11 +877,13 @@ class index_punned_dense_gt {
     }
 #endif
 
-    template <typename scalar_at> add_result_t add_(label_t label, scalar_at const* vector, cast_t const& cast) {
+    template <typename scalar_at>
+    add_result_t add_(label_t label, scalar_at const* vector, cast_t const& cast, int32_t level = -1,
+                      byte_t* tape = nullptr) {
         thread_lock_t lock = thread_lock_();
         add_config_t add_config;
         add_config.thread = lock.thread_id;
-        return add_(label, vector, add_config, cast);
+        return add_(label, vector, add_config, cast, level, tape);
     }
 
     template <typename scalar_at>

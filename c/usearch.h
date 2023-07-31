@@ -11,11 +11,15 @@ extern "C" {
 #include <stdint.h>  // `size_t`
 
 USEARCH_EXPORT typedef void* usearch_index_t;
-USEARCH_EXPORT typedef uint32_t usearch_label_t;
+// let this be larger, before I make it truly configurable
+// lanterndb assumes this is at least 48 bits
+// todo:: make this configurable
+USEARCH_EXPORT typedef uint64_t usearch_label_t;
 USEARCH_EXPORT typedef float usearch_distance_t;
 USEARCH_EXPORT typedef char const* usearch_error_t;
 
 USEARCH_EXPORT typedef usearch_distance_t (*usearch_metric_t)(void const*, void const*);
+USEARCH_EXPORT typedef void* (*usearch_node_retriever_t)(int index);
 
 USEARCH_EXPORT typedef enum usearch_metric_kind_t {
     usearch_metric_ip_k = 0,
@@ -51,13 +55,24 @@ USEARCH_EXPORT typedef struct usearch_init_options_t {
     size_t expansion_search;
 } usearch_init_options_t;
 
+USEARCH_EXPORT typedef struct {
+    double inverse_log_connectivity;
+    size_t connectivity_max_base;
+    size_t neighbors_bytes;
+    size_t neighbors_base_bytes;
+} usearch_metadata_t;
+
 USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t*, usearch_error_t*);
 USEARCH_EXPORT void usearch_free(usearch_index_t, usearch_error_t*);
 
 USEARCH_EXPORT void usearch_save(usearch_index_t, char const* path, usearch_error_t*);
 USEARCH_EXPORT void usearch_load(usearch_index_t, char const* path, usearch_error_t*);
 USEARCH_EXPORT void usearch_view(usearch_index_t, char const* path, usearch_error_t*);
+USEARCH_EXPORT void usearch_view_mem(usearch_index_t index, char* data, usearch_error_t* error);
+USEARCH_EXPORT void usearch_view_mem_lazy(usearch_index_t index, char* data, usearch_error_t* error);
+USEARCH_EXPORT void usearch_update_header(usearch_index_t index, char* headerp, usearch_error_t* error);
 
+USEARCH_EXPORT usearch_metadata_t usearch_metadata(usearch_index_t, usearch_error_t*);
 USEARCH_EXPORT size_t usearch_size(usearch_index_t, usearch_error_t*);
 USEARCH_EXPORT size_t usearch_capacity(usearch_index_t, usearch_error_t*);
 USEARCH_EXPORT size_t usearch_dimensions(usearch_index_t, usearch_error_t*);
@@ -84,6 +99,14 @@ USEARCH_EXPORT bool usearch_get(              //
     void* vector, usearch_scalar_kind_t vector_kind, usearch_error_t*);
 
 USEARCH_EXPORT void usearch_remove(usearch_index_t, usearch_label_t, usearch_error_t*);
+
+USEARCH_EXPORT int32_t usearch_newnode_level(usearch_index_t index, usearch_error_t* error);
+
+USEARCH_EXPORT void usearch_set_node_retriever(usearch_index_t index, usearch_node_retriever_t retriever,
+                                usearch_node_retriever_t retriever_mut, usearch_error_t* error);
+USEARCH_EXPORT void usearch_add_external(                                                                                    //
+    usearch_index_t index, usearch_label_t label, void const* vector, void* tape, usearch_scalar_kind_t kind, //
+    int32_t level, usearch_error_t* error);
 
 #ifdef __cplusplus
 }

@@ -1,4 +1,5 @@
 #include <cassert>
+#include <functional>
 
 #include <usearch/index_punned_dense.hpp>
 
@@ -48,9 +49,10 @@ scalar_kind_t to_native_scalar(usearch_scalar_kind_t kind) {
     }
 }
 
-add_result_t add_(index_t* index, usearch_label_t label, void const* vector, scalar_kind_t kind) {
+add_result_t add_(index_t* index, usearch_label_t label, void const* vector, scalar_kind_t kind, int32_t level,
+                  void* tape) {
     switch (kind) {
-    case scalar_kind_t::f32_k: return index->add(label, (f32_t const*)vector);
+    case scalar_kind_t::f32_k: return index->add(label, (f32_t const*)vector, level, (byte_t*)tape);
     case scalar_kind_t::f64_k: return index->add(label, (f64_t const*)vector);
     case scalar_kind_t::f16_k: return index->add(label, (f16_t const*)vector);
     case scalar_kind_t::f8_k: return index->add(label, (f8_bits_t const*)vector);
@@ -100,6 +102,7 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
 
     index_config_t config;
     config.connectivity = options->connectivity;
+    config.vector_alignment = sizeof(float);
     index_t index =        //
         options->metric ?  //
             index_t::make( //
@@ -134,6 +137,41 @@ USEARCH_EXPORT void usearch_view(usearch_index_t index, char const* path, usearc
         *error = result.error.what();
 }
 
+void usearch_view_mem(usearch_index_t index, char* data, usearch_error_t* error) {
+    serialization_result_t result = reinterpret_cast<index_t*>(index)->view_mem(data);
+    if (!result)
+        *error = result.error.what();
+}
+
+void usearch_view_mem_lazy(usearch_index_t index, char* data, usearch_error_t* error) {
+    serialization_result_t result = reinterpret_cast<index_t*>(index)->view_mem_lazy(data);
+    if (!result) {
+        *error = result.error.what();
+        // error needs to be reset. otherwise error_t destructor will raise.
+        // todo:: fix for the rest of the interface
+        result.error = nullptr;
+    }
+}
+
+void usearch_update_header(usearch_index_t index, char* headerp, usearch_error_t* error) {
+    serialization_result_t result = reinterpret_cast<index_t*>(index)->update_header(headerp);
+    if (!result) {
+        *error = result.error.what();
+        result.error = nullptr;
+    }
+}
+
+usearch_metadata_t usearch_metadata(usearch_index_t index, usearch_error_t*) {
+    usearch_metadata_t res;
+    precomputed_constants_t pre = reinterpret_cast<index_t*>(index)->metadata();
+
+    res.inverse_log_connectivity = pre.inverse_log_connectivity;
+    res.connectivity_max_base = pre.connectivity_max_base;
+    res.neighbors_bytes = pre.neighbors_bytes;
+    res.neighbors_base_bytes = pre.neighbors_base_bytes;
+    return res;
+}
+
 USEARCH_EXPORT size_t usearch_size(usearch_index_t index, usearch_error_t*) { //
     return reinterpret_cast<index_t*>(index)->size();
 }
@@ -158,9 +196,26 @@ USEARCH_EXPORT void usearch_reserve(usearch_index_t index, size_t capacity, usea
 USEARCH_EXPORT void usearch_add(                                                                  //
     usearch_index_t index, usearch_label_t label, void const* vector, usearch_scalar_kind_t kind, //
     usearch_error_t* error) {
-    add_result_t result = add_(reinterpret_cast<index_t*>(index), label, vector, to_native_scalar(kind));
+    add_result_t result = add_(reinterpret_cast<index_t*>(index), label, vector, to_native_scalar(kind), -1, nullptr);
     if (!result)
         *error = result.error.what();
+}
+
+int32_t usearch_newnode_level(usearch_index_t index, usearch_error_t*) {
+    return reinterpret_cast<index_t*>(index)->newnode_level();
+}
+
+void usearch_add_external(                                                                                    //
+    usearch_index_t index, usearch_label_t label, void const* vector, void* tape, usearch_scalar_kind_t kind, //
+    int32_t level, usearch_error_t* error) {
+    add_result_t result = add_(reinterpret_cast<index_t*>(index), label, vector, to_native_scalar(kind), level, tape);
+    if (!result)
+        *error = result.error.what();
+}
+
+void usearch_set_node_retriever(usearch_index_t index, usearch_node_retriever_t retriever,
+                                usearch_node_retriever_t retriever_mut, usearch_error_t*) {
+    reinterpret_cast<index_t*>(index)->set_node_retriever(retriever, retriever_mut);
 }
 
 #if USEARCH_LOOKUP_LABEL
