@@ -63,6 +63,10 @@ vectors = np.random.uniform(0, 0.3, (n, index.ndim)).astype(np.float32)
 index.add(keys, vectors, threads=..., copy=...)
 matches: BatchMatches = index.search(vectors, 10, threads=...)
 
+first_query_matches: Matches = matches[0]
+assert matches[0].key == 0
+assert matches[0].distance <= 0.001
+
 assert len(matches) == vectors.shape[0]
 assert len(matches[0]) <= 10
 ```
