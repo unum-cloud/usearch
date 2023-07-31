@@ -235,12 +235,17 @@ def _add_to_compiled(
 
 @dataclass
 class Match:
+    """This class contains information about retrieved vector."""
+
     key: int
     distance: float
 
 
 @dataclass
 class Matches:
+    """This class contains information about multiple retrieved vectors for single query,
+    i.e it is a set of `Match` instances."""
+
     keys: np.ndarray
     distances: np.ndarray
 
@@ -257,6 +262,10 @@ class Matches:
             raise IndexError(f"`index` must be an integer under {len(self)}")
 
     def to_list(self) -> List[tuple]:
+        """
+        Convert matches to the list of tuples which contain matches' indices and distances to them.
+        """
+
         return [(int(l), float(d)) for l, d in zip(self.keys, self.distances)]
 
     def __repr__(self) -> str:
@@ -265,6 +274,9 @@ class Matches:
 
 @dataclass
 class BatchMatches:
+    """This class contains information about multiple retrieved vectors for multiple queries,
+    i.e it is a set of `Matches` instances."""
+
     keys: np.ndarray
     distances: np.ndarray
     counts: np.ndarray
@@ -282,8 +294,9 @@ class BatchMatches:
             raise IndexError(f"`index` must be an integer under {len(self)}")
 
     def to_list(self) -> List[List[tuple]]:
-        lists = [self.__getitem__(row) for row in range(self.__len__())]
-        return [item for sublist in lists for item in sublist]
+        """Convert the result for each query to the list of tuples with information about its matches."""
+        list_of_matches = [self.__getitem__(row) for row in range(self.__len__())]
+        return [match.to_list() for matches in list_of_matches for match in matches]
 
     def recall_first(self, expected: np.ndarray) -> float:
         """Measures recall [0, 1] as of `Matches` that contain the corresponding
