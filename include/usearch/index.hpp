@@ -2093,13 +2093,18 @@ class index_gt {
         node_lock_t new_lock = node_lock_(old_slot);
         node_t node = node_at_(old_slot);
 
+        level_t node_level = node.level();
+        span_bytes_t node_bytes = node_bytes_(node);
+        std::memset(node_bytes.data(), 0, node_bytes.size());
+        node.level(node_level);
+
         // Pull stats
         result.measurements = context.measurements_count;
         result.cycles = context.iteration_cycles;
 
-        connect_node_across_levels_(               //
-            old_slot, value, metric,               //
-            entry_slot_, max_level_, node.level(), //
+        connect_node_across_levels_(             //
+            old_slot, value, metric,             //
+            entry_slot_, max_level_, node_level, //
             config, context);
         node.key(key);
 
@@ -2535,7 +2540,7 @@ class index_gt {
         // From `target_level` down perform proper extensive search
         for (level_t level = (std::min)(target_level, max_level); level >= 0; --level) {
             // TODO: Handle out of memory conditions
-            search_to_insert_(closest_slot, value, metric, level, config.expansion, context);
+            search_to_insert_(closest_slot, node_slot, value, metric, level, config.expansion, context);
             closest_slot = connect_new_node_(node_slot, level, context, metric);
             reconnect_neighbor_nodes_(node_slot, value, level, context, metric);
         }
@@ -2576,6 +2581,8 @@ class index_gt {
         // Reverse links from the neighbors:
         std::size_t const connectivity_max = level ? config_.connectivity : config_.connectivity_base;
         for (compressed_slot_t close_slot : new_neighbors) {
+            if (close_slot == new_slot)
+                continue;
             node_lock_t close_lock = node_lock_(close_slot);
             node_t close_node = node_at_(close_slot);
 
@@ -2647,8 +2654,8 @@ class index_gt {
      *  @return `true` if procedure succeeded, `false` if run out of memory.
      */
     template <typename value_at, typename metric_at>
-    bool search_to_insert_(                                           //
-        std::size_t start_slot, value_at&& query, metric_at&& metric, //
+    bool search_to_insert_(                                                                 //
+        std::size_t start_slot, std::size_t new_slot, value_at&& query, metric_at&& metric, //
         level_t level, std::size_t top_limit, context_t& context) noexcept {
 
         visits_bitset_t& visits = context.visits;
@@ -2674,6 +2681,8 @@ class index_gt {
             context.iteration_cycles++;
 
             compressed_slot_t candidate_slot = candidacy.slot;
+            if (new_slot == candidate_slot)
+                continue;
             node_t candidate_ref = node_at_(candidate_slot);
             node_lock_t candidate_lock = node_lock_(candidate_slot);
             neighbors_ref_t candidate_neighbors = neighbors_(candidate_ref, level);

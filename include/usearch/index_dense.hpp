@@ -1165,13 +1165,8 @@ class index_dense_gt {
             unique_lock_t slot_lock(slot_lookup_mutex_);
             slot_lookup_.insert({key, static_cast<compressed_slot_t>(member.slot)});
             if (copy_vector) {
-                if (!reuse_node) {
-                    // std::size_t result_size = metric_.bytes_per_vector();
-                    // byte_t* result = vectors_allocator_.allocate(result_size);
-                    // std::printf("alloc %zu size %zu dims %zu \n", (std::size_t)result, result_size,
-                    //             metric_.dimensions());
+                if (!reuse_node)
                     vectors_lookup_[member.slot] = vectors_allocator_.allocate(metric_.bytes_per_vector());
-                }
                 std::memcpy(vectors_lookup_[member.slot], vector_data, metric_.bytes_per_vector());
             } else
                 vectors_lookup_[member.slot] = (byte_t*)vector_data;

@@ -68,6 +68,16 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     expect((count == 3));
     expect((index.stats(0).nodes == 3));
 
+    // Try removals and replacements
+    if constexpr (punned_ak) {
+        using labeling_result_t = typename index_t::labeling_result_t;
+        labeling_result_t result = index.remove(key_third);
+        expect(bool(result));
+        expect(index.size() == 2);
+        index.add(key_third, vector_third, args...);
+        expect(index.size() == 3);
+    }
+
     // Search again over reconstructed index
     index.save("tmp.usearch");
     index.load("tmp.usearch");

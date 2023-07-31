@@ -137,6 +137,12 @@ def test_index(
     index.remove(43)
     assert len(index) == 1
 
+    # Try insreting back
+    index.add(43, other_vector)
+    assert len(index) == 2
+    index.remove(43)
+    assert len(index) == 1
+
     index.save(temporary_usearch_filename)
 
     # Re-populate cleared index
