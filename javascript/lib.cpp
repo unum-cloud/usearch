@@ -184,36 +184,61 @@ void Index::View(Napi::CallbackInfo const& ctx) {
 
 void Index::Add(Napi::CallbackInfo const& ctx) {
     Napi::Env env = ctx.Env();
-    if (ctx.Length() < 2 || !ctx[0].IsNumber() || !ctx[1].IsTypedArray())
-        return Napi::TypeError::New(env, "Expects an integral key and a float vector").ThrowAsJavaScriptException();
 
-    Napi::Number key_js = ctx[0].As<Napi::Number>();
-    Napi::Float32Array vector_js = ctx[1].As<Napi::Float32Array>();
+    if (ctx.Length() < 2)
+        return Napi::TypeError::New(env, "Expects at least two arguments").ThrowAsJavaScriptException();
 
     using key_t = typename index_dense_t::key_t;
-    key_t key = key_js.Uint32Value();
-    float const* vector = vector_js.Data();
-    std::size_t dimensions = static_cast<std::size_t>(vector_js.ElementLength());
-    if (dimensions != native_->dimensions())
-        return Napi::TypeError::New(env, "Wrong number of dimensions").ThrowAsJavaScriptException();
+    std::size_t index_dimensions = native_->dimensions();
 
-    if (native_->size() + 1 >= native_->capacity())
-        native_->reserve(ceil2(native_->size() + 1));
+    auto add = [&](Napi::Number key_js, Napi::Float32Array vector_js) {
+        key_t key = key_js.Uint32Value();
+        float const* vector = vector_js.Data();
+        std::size_t dimensions = static_cast<std::size_t>(vector_js.ElementLength());
 
-    try {
-        native_->add(key, vector);
-    } catch (std::bad_alloc const&) {
-        Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
-    } catch (...) {
-        Napi::TypeError::New(env, "Insertion failed").ThrowAsJavaScriptException();
-    }
+        if (dimensions != index_dimensions)
+            return Napi::TypeError::New(env, "Wrong number of dimensions").ThrowAsJavaScriptException();
+
+        try {
+            native_->add(key, vector);
+        } catch (std::bad_alloc const&) {
+            return Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
+        } catch (...) {
+            return Napi::TypeError::New(env, "Insertion failed").ThrowAsJavaScriptException();
+        }
+    };
+
+    if (ctx[0].IsArray() && ctx[1].IsArray()) {
+        Napi::Array keys_js = ctx[0].As<Napi::Array>();
+        Napi::Array vectors_js = ctx[1].As<Napi::Array>();
+        auto length = keys_js.Length();
+
+        if (length != vectors_js.Length())
+            return Napi::TypeError::New(env, "The number of keys must match the number of vectors")
+                .ThrowAsJavaScriptException();
+
+        if (native_->size() + length >= native_->capacity())
+            native_->reserve(ceil2(native_->size() + length));
+
+        for (std::size_t i = 0; i < length; i++) {
+            Napi::Value key_js = keys_js[i];
+            Napi::Value vector_js = vectors_js[i];
+            add(key_js.As<Napi::Number>(), vector_js.As<Napi::Float32Array>());
+        }
+
+    } else if (ctx[0].IsNumber() && ctx[1].IsTypedArray()) {
+        if (native_->size() + 1 >= native_->capacity())
+            native_->reserve(ceil2(native_->size() + 1));
+        add(ctx[0].As<Napi::Number>(), ctx[1].As<Napi::Float32Array>());
+    } else
+        return Napi::TypeError::New(env, "Invalid argument type, expects integral key(s) and float vector(s)")
+            .ThrowAsJavaScriptException();
 }
 
 Napi::Value Index::Search(Napi::CallbackInfo const& ctx) {
     Napi::Env env = ctx.Env();
     if (ctx.Length() < 2 || !ctx[0].IsTypedArray() || !ctx[1].IsNumber()) {
-        Napi::TypeError::New(env, "Expects a float vector and the number of wanted results")
-            .ThrowAsJavaScriptException();
+        Napi::TypeError::New(env, "Expects a  and the number of wanted results").ThrowAsJavaScriptException();
         return {};
     }
 
