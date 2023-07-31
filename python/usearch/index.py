@@ -660,19 +660,19 @@ class Index:
         path = path if path else self.path
         if path is None:
             raise Exception("Define `path` argument")
-        self._compiled.save(path)
+        self._compiled.save(os.fspath(path))
 
     def load(self, path: Optional[os.PathLike] = None):
         path = path if path else self.path
         if path is None:
             raise Exception("Define `path` argument")
-        self._compiled.load(path)
+        self._compiled.load(os.fspath(path))
 
     def view(self, path: Optional[os.PathLike] = None):
         path = path if path else self.path
         if path is None:
             raise Exception("Define `path` argument")
-        self._compiled.view(path)
+        self._compiled.view(os.fspath(path))
 
     def clear(self):
         """Erases all the vectors from the index, preserving the space for future insertions."""
