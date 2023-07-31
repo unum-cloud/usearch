@@ -14,6 +14,7 @@
         "node": "~10 >=10.20 || >=12.17"
     },
     "dependencies": {
+        "@types/node": "^20.4.5",
         "bindings": "~1.2.1",
         "node-addon-api": "^3.0.0"
     },
@@ -24,6 +25,7 @@
         "@semantic-release/exec": "^6.0.3",
         "@semantic-release/git": "^10.0.1",
         "conventional-changelog-eslint": "^3.0.9",
-        "semantic-release": "^21.0.7"
+        "semantic-release": "^21.0.7",
+        "typescript": "^5.1.6"
     }
 }

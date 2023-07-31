@@ -70,10 +70,10 @@ export class Index {
     /** 
      * Add n vectors of dimension d to the index.
      * 
-     * @param {BigUint64Array} keys Input identifiers for every vector.
-     * @param {Float32Array} mat Input matrix, matrix of size n * d.
+     * @param {number | number[]} keys Input identifiers for every vector.
+     * @param {Float32Array | Float32Array[]} mat Input matrix, matrix of size n * d.
      */
-    add(keys: BigUint64Array, mat: Float32Array): void;
+    add(keys: number | number[], mat: Float32Array | Float32Array[]): void;
 
     /** 
      * Query n vectors of dimension d to the index. Return at most k vectors for each. 
