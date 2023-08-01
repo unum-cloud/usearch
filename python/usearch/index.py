@@ -249,6 +249,9 @@ class Matches:
     keys: np.ndarray
     distances: np.ndarray
 
+    lookups: int
+    measurements: int
+
     def __len__(self) -> int:
         return len(self.keys)
 
@@ -281,6 +284,9 @@ class BatchMatches:
     distances: np.ndarray
     counts: np.ndarray
 
+    lookups: int
+    measurements: int
+
     def __len__(self) -> int:
         return len(self.counts)
 
@@ -289,6 +295,8 @@ class BatchMatches:
             return Matches(
                 keys=self.keys[index, : self.counts[index]],
                 distances=self.distances[index, : self.counts[index]],
+                lookups=self.lookups // len(self),
+                measurements=self.measurements // len(self),
             )
         else:
             raise IndexError(f"`index` must be an integer under {len(self)}")

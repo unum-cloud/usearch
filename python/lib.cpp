@@ -244,7 +244,8 @@ template <typename scalar_at>
 static void search_typed(                                   //
     dense_index_py_t& index, py::buffer_info& vectors_info, //
     std::size_t wanted, bool exact, std::size_t threads,    //
-    py::array_t<key_t>& keys_py, py::array_t<distance_t>& distances_py, py::array_t<Py_ssize_t>& counts_py) {
+    py::array_t<key_t>& keys_py, py::array_t<distance_t>& distances_py, py::array_t<Py_ssize_t>& counts_py,
+    std::atomic<std::size_t>& stats_lookups, std::atomic<std::size_t>& stats_measurements) {
 
     auto keys_py2d = keys_py.template mutable_unchecked<2>();
     auto distances_py2d = distances_py.template mutable_unchecked<2>();
@@ -267,6 +268,9 @@ static void search_typed(                                   //
         result.error.raise();
         counts_py1d(task_idx) =
             static_cast<Py_ssize_t>(result.dump_to(&keys_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
+
+        stats_lookups += result.lookups;
+        stats_measurements += result.measurements;
         if (PyErr_CheckSignals() != 0)
             throw py::error_already_set();
     });
@@ -276,7 +280,8 @@ template <typename scalar_at>
 static void search_typed(                                       //
     dense_indexes_py_t& indexes, py::buffer_info& vectors_info, //
     std::size_t wanted, bool exact, std::size_t threads,        //
-    py::array_t<key_t>& keys_py, py::array_t<distance_t>& distances_py, py::array_t<Py_ssize_t>& counts_py) {
+    py::array_t<key_t>& keys_py, py::array_t<distance_t>& distances_py, py::array_t<Py_ssize_t>& counts_py,
+    std::atomic<std::size_t>& stats_lookups, std::atomic<std::size_t>& stats_measurements) {
 
     auto keys_py2d = keys_py.template mutable_unchecked<2>();
     auto distances_py2d = distances_py.template mutable_unchecked<2>();
@@ -317,6 +322,9 @@ static void search_typed(                                       //
                     static_cast<std::size_t>(counts_py1d(vector_idx)),               //
                     wanted));
             }
+
+            stats_lookups += result.lookups;
+            stats_measurements += result.measurements;
             if (PyErr_CheckSignals() != 0)
                 throw py::error_already_set();
         }
@@ -351,23 +359,29 @@ static py::tuple search_many_in_index( //
     if (vectors_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
-    py::array_t<key_t> ls({vectors_count, static_cast<Py_ssize_t>(wanted)});
-    py::array_t<distance_t> ds({vectors_count, static_cast<Py_ssize_t>(wanted)});
-    py::array_t<Py_ssize_t> cs(vectors_count);
+    py::array_t<key_t> keys_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
+    py::array_t<distance_t> distances_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
+    py::array_t<Py_ssize_t> counts_py(vectors_count);
+    std::atomic<std::size_t> stats_lookups(0);
+    std::atomic<std::size_t> stats_measurements(0);
 
+    // clang-format off
     switch (numpy_string_to_kind(vectors_info.format)) {
-    case scalar_kind_t::b1x8_k: search_typed<b1x8_t>(index, vectors_info, wanted, exact, threads, ls, ds, cs); break;
-    case scalar_kind_t::f8_k: search_typed<f8_bits_t>(index, vectors_info, wanted, exact, threads, ls, ds, cs); break;
-    case scalar_kind_t::f16_k: search_typed<f16_t>(index, vectors_info, wanted, exact, threads, ls, ds, cs); break;
-    case scalar_kind_t::f32_k: search_typed<f32_t>(index, vectors_info, wanted, exact, threads, ls, ds, cs); break;
-    case scalar_kind_t::f64_k: search_typed<f64_t>(index, vectors_info, wanted, exact, threads, ls, ds, cs); break;
+    case scalar_kind_t::b1x8_k: search_typed<b1x8_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_lookups, stats_measurements); break;
+    case scalar_kind_t::f8_k: search_typed<f8_bits_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_lookups, stats_measurements); break;
+    case scalar_kind_t::f16_k: search_typed<f16_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_lookups, stats_measurements); break;
+    case scalar_kind_t::f32_k: search_typed<f32_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_lookups, stats_measurements); break;
+    case scalar_kind_t::f64_k: search_typed<f64_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_lookups, stats_measurements); break;
     default: throw std::invalid_argument("Incompatible scalars in the query matrix: " + vectors_info.format);
     }
+    // clang-format on
 
-    py::tuple results(3);
-    results[0] = ls;
-    results[1] = ds;
-    results[2] = cs;
+    py::tuple results(5);
+    results[0] = keys_py;
+    results[1] = distances_py;
+    results[2] = counts_py;
+    results[3] = stats_lookups.load();
+    results[4] = stats_measurements.load();
     return results;
 }
 

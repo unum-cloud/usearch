@@ -1854,7 +1854,7 @@ class index_gt {
     struct add_result_t {
         error_t error{};
         std::size_t new_size{};
-        std::size_t cycles{};
+        std::size_t lookups{};
         std::size_t measurements{};
         std::size_t slot{};
 
@@ -1881,8 +1881,11 @@ class index_gt {
             : nodes_(index.nodes_), top_(&top) {}
 
       public:
+        /** @brief  Number of search results found. */
         std::size_t count{};
-        std::size_t cycles{};
+        /** @brief  Number of graph nodes traversed. */
+        std::size_t lookups{};
+        /** @brief  Number of times the distances were computed. */
         std::size_t measurements{};
         error_t error{};
 
@@ -2021,7 +2024,7 @@ class index_gt {
 
         // Pull stats
         result.measurements = context.measurements_count;
-        result.cycles = context.iteration_cycles;
+        result.lookups = context.iteration_cycles;
 
         connect_node_across_levels_(                      //
             new_slot, value, metric,                      //
@@ -2030,7 +2033,7 @@ class index_gt {
 
         // Normalize stats
         result.measurements = context.measurements_count - result.measurements;
-        result.cycles = context.iteration_cycles - result.cycles;
+        result.lookups = context.iteration_cycles - result.lookups;
 
         // Updating the entry point if needed
         if (target_level > max_level_copy) {
@@ -2100,7 +2103,7 @@ class index_gt {
 
         // Pull stats
         result.measurements = context.measurements_count;
-        result.cycles = context.iteration_cycles;
+        result.lookups = context.iteration_cycles;
 
         connect_node_across_levels_(             //
             old_slot, value, metric,             //
@@ -2110,7 +2113,7 @@ class index_gt {
 
         // Normalize stats
         result.measurements = context.measurements_count - result.measurements;
-        result.cycles = context.iteration_cycles - result.cycles;
+        result.lookups = context.iteration_cycles - result.lookups;
         result.slot = old_slot;
 
         callback(at(old_slot));
@@ -2139,7 +2142,7 @@ class index_gt {
 
         // Go down the level, tracking only the closest match
         result.measurements = context.measurements_count;
-        result.cycles = context.iteration_cycles;
+        result.lookups = context.iteration_cycles;
 
         if (config.exact) {
             if (!top.reserve(wanted))
@@ -2165,7 +2168,7 @@ class index_gt {
 
         // Normalize stats
         result.measurements = context.measurements_count - result.measurements;
-        result.cycles = context.iteration_cycles - result.cycles;
+        result.lookups = context.iteration_cycles - result.lookups;
         result.count = top.size();
         return result;
     }
@@ -2835,7 +2838,7 @@ struct join_result_t {
     error_t error{};
     std::size_t intersection_size{};
     std::size_t engagements{};
-    std::size_t cycles{};
+    std::size_t lookups{};
     std::size_t measurements{};
 
     explicit operator bool() const noexcept { return !error; }
@@ -2946,7 +2949,7 @@ static join_result_t join(               //
     std::atomic<std::size_t> rounds{0};
     std::atomic<std::size_t> engagements{0};
     std::atomic<std::size_t> measurements{0};
-    std::atomic<std::size_t> cycles{0};
+    std::atomic<std::size_t> lookups{0};
 
     // Concurrently process all the men
     executor.execute_bulk([&](std::size_t thread_idx) {
@@ -2979,7 +2982,7 @@ static join_result_t join(               //
             // Find the closest woman, to whom this man hasn't proposed yet.
             ++free_man_proposals;
             auto candidates = women.search(men_values[free_man_slot], free_man_proposals, women_metric, search_config);
-            cycles += candidates.cycles;
+            lookups += candidates.lookups;
             measurements += candidates.measurements;
             if (!candidates) {
                 // TODO:
@@ -3042,7 +3045,7 @@ static join_result_t join(               //
     result.engagements = engagements;
     result.intersection_size = intersection_size;
     result.measurements = measurements;
-    result.cycles = cycles;
+    result.lookups = lookups;
     return result;
 }
 
