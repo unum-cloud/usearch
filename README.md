@@ -41,11 +41,11 @@ Linux • MacOS • Windows • Docker • WebAssembly
 - ✅ SIMD-optimized and [user-defined metrics](#user-defined-functions) with JIT compilation.
 - ✅ Variable dimensionality vectors for unique applications, including search over compressed data.
 - ✅ Bitwise Tanimoto and Sorensen coefficients for [Genomics and Chemistry applications](#usearch--rdkit--molecular-search).
-- ✅ Hardware-agmostic `f16` & `f8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
+- ✅ Hardware-agnostic `f16` & `f8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
 - ✅ [View large indexes from disk](#disk-based-indexes) without loading into RAM.
 - ✅ Space-efficient point-clouds with `uint40_t`, accommodating 4B+ size.
 - ✅ Compatible with OpenMP and custom "executors", for fine-grained control over CPU utilization.
-- ✅ Heterogeneous lookups, renaming/relabeleing, and on-the-fly deletions.
+- ✅ Heterogeneous lookups, renaming/relabeling, and on-the-fly deletions.
 - ✅ [Semantic Search](#usearch--ai--multi-modal-semantic-search) and [Joins](#joins).
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/index.hpp
@@ -99,7 +99,7 @@ assert np.allclose(index[42], vector)
 ## User-Defined Functions
 
 While most vector search packages concentrate on just a couple of metrics - "Inner Product distance" and "Euclidean distance," USearch extends this list to include any user-defined metrics.
-This flexibility allows you to customize your search for a myriad of applications, from computing geospatial coordinates with the rare [Haversine][haversine] distance to creating custom metrics for composite embeddings from multiple AI models.
+This flexibility allows you to customize your search for a myriad of applications, from computing geo-spatial coordinates with the rare [Haversine][haversine] distance to creating custom metrics for composite embeddings from multiple AI models.
 
 ![USearch: Vector Search Approaches](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-approaches-white.png?raw=true)
 
@@ -107,7 +107,7 @@ Unlike older approaches indexing high-dimensional spaces, like KD-Trees and Loca
 They only have to be comparable.
 So you can apply it in [obscure][obscure] applications, like searching for similar sets or fuzzy text matching, using [GZip][gzip-similarity] as a distance function.
 
-> Read more about [JIT and UDF in USearch Python SDK]().
+> Read more about [JIT and UDF in USearch Python SDK](https://unum-cloud.github.io/usearch/python#user-defined-metrics-and-jit-in-python).
 
 [haversine]: https://ashvardanian.com/posts/abusing-vector-search#geo-spatial-indexing
 [obscure]: https://ashvardanian.com/posts/abusing-vector-search
@@ -283,7 +283,7 @@ matches = index.search(fingerprints, 10)
 - [x] GPT-Cache.
 - [ ] LangChain.
 - [ ] Microsoft Semantic Kernel.
-- [ ] PyTorch.
+- [ ] ClickHouse.
 
 ## Citations
 
