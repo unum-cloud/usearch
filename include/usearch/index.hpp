@@ -1977,8 +1977,9 @@ class index_gt {
         key_t key, value_at&& value, metric_at&& metric, //
         index_add_config_t config = {}, callback_at&& callback = callback_at{}) usearch_noexcept_m {
 
-        usearch_assert_m(!is_immutable(), "Can't add to an immutable index");
         add_result_t result;
+        if (is_immutable())
+            return result.failed("Can't add to an immutable index");
 
         // Make sure we have enough local memory to perform this request
         context_t& context = contexts_[config.thread];
@@ -2001,14 +2002,24 @@ class index_gt {
         level_t max_level_copy = max_level_;      // Copy under lock
         std::size_t entry_idx_copy = entry_slot_; // Copy under lock
         level_t target_level = choose_random_level_(context.level_generator);
-        if (target_level <= max_level_copy)
-            new_level_lock.unlock();
+
+        // Make sure we are not overflowing
+        std::size_t capacity = nodes_capacity_.load();
+        std::size_t new_slot = nodes_count_.fetch_add(1);
+        if (new_slot >= capacity) {
+            nodes_count_.fetch_sub(1);
+            return result.failed("Reserve capacity ahead of insertions!");
+        }
 
         // Allocate the neighbors
         node_t node = node_make_(key, target_level);
-        if (!node)
+        if (!node) {
+            nodes_count_.fetch_sub(1);
             return result.failed("Out of memory!");
-        std::size_t new_slot = nodes_count_.fetch_add(1);
+        }
+        if (target_level <= max_level_copy)
+            new_level_lock.unlock();
+
         nodes_[new_slot] = node;
         result.new_size = new_slot + 1;
         result.slot = new_slot;

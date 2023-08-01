@@ -191,7 +191,8 @@ static void add_typed_to_index(                                            //
         config.thread = thread_idx;
         key_t key = *reinterpret_cast<key_t const*>(keys_data + task_idx * keys_info.strides[0]);
         scalar_at const* vector = reinterpret_cast<scalar_at const*>(vectors_data + task_idx * vectors_info.strides[0]);
-        index.add(key, vector, config).error.raise();
+        dense_add_result_t result = index.add(key, vector, config);
+        result.error.raise();
         if (PyErr_CheckSignals() != 0)
             throw py::error_already_set();
     });
