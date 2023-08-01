@@ -8,7 +8,14 @@ from math import ceil
 import numpy as np
 
 from usearch.io import load_matrix
-from usearch.index import Index, Matches, MetricKind, MetricKindBitwise, Key
+from usearch.index import (
+    Index,
+    Matches,
+    BatchMatches,
+    MetricKind,
+    MetricKindBitwise,
+    Key,
+)
 
 
 def random_vectors(
@@ -48,15 +55,24 @@ def random_vectors(
         return x
 
 
-def recall_members(index: Index, sample: float = 1, **kwargs) -> float:
+def recall_members(index: Index, sample: float = 1, **kwargs) -> Tuple[float, float]:
     """Simplest benchmark for a quality of search, which queries every
     existing member of the index, to make sure approximate search finds
-    the point itself.
+    the point itself. Reports 2 metrics - "self-recall" and "efficiency".
+
+    Self-recall is the share of queried vectors, that were succesfully found.
+    Efficiency describes the number of distances that had to be computed for
+    each query, normalized to size of the `index`. Highest efficiency is 0.(9),
+    lowest is zero. Highest is achieved, when the distance metric was computed
+    just once per query. Lowest happens during exact search, when every distance
+    to every present vector had to be computed.
 
     :param index: Non-empty pre-constructed index
     :type index: Index
+    :param sample: Share of vectors to search, defaults to 1
+    :type sample: float
     :return: Value from 0 to 1, for the share of found self-references
-    :rtype: float
+    :rtype: float, float
     """
     if len(index) == 0:
         return 0
@@ -68,8 +84,10 @@ def recall_members(index: Index, sample: float = 1, **kwargs) -> float:
         keys = np.random.choice(keys, int(ceil(len(keys) * sample)))
 
     queries = index.get_vectors(keys, index.dtype)
-    matches: Matches = index.search(queries, **kwargs)
-    return matches.recall_first(keys)
+    matches: BatchMatches = index.search(queries, **kwargs)
+    recall_first: float = matches.recall_first(keys)
+    efficiency: float = 1 - float(matches.measurements) / (len(keys) * len(index))
+    return recall_first, efficiency
 
 
 def measure_seconds(f: Callable) -> Tuple[float, Any]:

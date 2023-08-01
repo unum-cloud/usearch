@@ -270,7 +270,7 @@ The trivial way is to measure `recall@1` on the entries already present in the i
 ```py
 from usearch.eval import recall_members
 
-assert recall_members(index, exact=True) == 1
+assert recall_members(index, exact=True) == (1, 0)
 print(recall_members(index, exact=False))
 ```
 
