@@ -249,8 +249,8 @@ class Matches:
     keys: np.ndarray
     distances: np.ndarray
 
-    lookups: int
-    measurements: int
+    visited_members: int
+    computed_distances: int
 
     def __len__(self) -> int:
         return len(self.keys)
@@ -284,8 +284,8 @@ class BatchMatches:
     distances: np.ndarray
     counts: np.ndarray
 
-    lookups: int
-    measurements: int
+    visited_members: int
+    computed_distances: int
 
     def __len__(self) -> int:
         return len(self.counts)
@@ -295,8 +295,8 @@ class BatchMatches:
             return Matches(
                 keys=self.keys[index, : self.counts[index]],
                 distances=self.distances[index, : self.counts[index]],
-                lookups=self.lookups // len(self),
-                measurements=self.measurements // len(self),
+                visited_members=self.visited_members // len(self),
+                computed_distances=self.computed_distances // len(self),
             )
         else:
             raise IndexError(f"`index` must be an integer under {len(self)}")
@@ -306,19 +306,26 @@ class BatchMatches:
         list_of_matches = [self.__getitem__(row) for row in range(self.__len__())]
         return [match.to_list() for matches in list_of_matches for match in matches]
 
-    def recall_first(self, expected: np.ndarray) -> float:
-        """Measures recall [0, 1] as of `Matches` that contain the corresponding
-        `expected` entry as the first result."""
-        return np.sum(self.keys[:, 0] == expected) / len(expected)
-
-    def recall(self, expected: np.ndarray) -> float:
+    def mean_recall(self, expected: np.ndarray, k: Optional[int] = None) -> float:
         """Measures recall [0, 1] as of `Matches` that contain the corresponding
         `expected` entry anywhere among results."""
-        assert len(expected) == self.batch_size
+        return self.count_matches(expected, k=k) / len(expected)
+
+    def count_matches(self, expected: np.ndarray, k: Optional[int] = None) -> int:
+        """Measures recall [0, len(expected)] as of `Matches` that contain the corresponding
+        `expected` entry anywhere among results.
+        """
+        assert len(expected) == len(self)
         recall = 0
-        for i in range(self.batch_size):
-            recall += expected[i] in self.keys[i]
-        return recall / len(expected)
+        if k is None:
+            k = self.keys.shape[1]
+
+        if k == 1:
+            recall = np.sum(self.keys[:, 0] == expected)
+        else:
+            for i in range(len(self)):
+                recall += expected[i] in self.keys[i, :k]
+        return recall
 
     def __repr__(self) -> str:
         return f"usearch.BatchMatches({np.sum(self.counts)} across {len(self)} queries)"

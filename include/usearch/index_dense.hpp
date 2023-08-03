@@ -114,11 +114,11 @@ struct index_dense_serialization_config_t {
     bool use_64_bit_dimensions = false;
 };
 
-struct index_dense_add_config_t : public index_add_config_t {
+struct index_dense_update_config_t : public index_update_config_t {
     bool force_vector_copy = false;
 
-    index_dense_add_config_t() = default;
-    index_dense_add_config_t(index_add_config_t base) noexcept : index_add_config_t(base) {}
+    index_dense_update_config_t() = default;
+    index_dense_update_config_t(index_update_config_t base) noexcept : index_update_config_t(base) {}
 };
 
 struct index_dense_copy_config_t : public index_copy_config_t {
@@ -307,11 +307,12 @@ class index_dense_gt {
         cast_t to_f64;
     } casts_;
 
-    /// @brief An instance of a potentially statefull `metric_t` used to initialize copies and forks.
+    /// @brief An instance of a potentially stateful `metric_t` used to initialize copies and forks.
     metric_t metric_;
 
+    using vectors_tape_allocator_t = memory_mapping_allocator_gt<8>;
     /// @brief Allocator for the copied vectors, aligned to widest double-precision scalars.
-    memory_mapping_allocator_gt<8> vectors_allocator_;
+    vectors_tape_allocator_t vectors_tape_allocator_;
 
     /// @brief For every managed `compressed_slot_t` stores a pointer to the allocated vector copy.
     mutable std::vector<byte_t*> vectors_lookup_;
@@ -353,13 +354,13 @@ class index_dense_gt {
     mutable shared_mutex_t slot_lookup_mutex_;
 
     /// @brief Ring-shaped queue of deleted entries, to be reused on future insertions.
-    ring_gt<compressed_slot_t> free_ids_;
+    ring_gt<compressed_slot_t> free_keys_;
 
-    /// @brief Mutex, controlling concurrent access to `free_ids_`.
-    mutable std::mutex free_ids_mutex_;
+    /// @brief Mutex, controlling concurrent access to `free_keys_`.
+    mutable std::mutex free_keys_mutex_;
 
     /// @brief A constant for the reserved key value, used to mark deleted entries.
-    key_t free_label_ = default_free_value<key_t>();
+    key_t free_key_ = default_free_value<key_t>();
 
   public:
     using search_result_t = typename index_t::search_result_t;
@@ -376,13 +377,13 @@ class index_dense_gt {
           casts_(std::move(other.casts_)),             //
           metric_(std::move(other.metric_)),           //
 
-          vectors_allocator_(std::move(other.vectors_allocator_)), //
-          vectors_lookup_(std::move(other.vectors_lookup_)),       //
+          vectors_tape_allocator_(std::move(other.vectors_tape_allocator_)), //
+          vectors_lookup_(std::move(other.vectors_lookup_)),                 //
 
           available_threads_(std::move(other.available_threads_)), //
           slot_lookup_(std::move(other.slot_lookup_)),             //
-          free_ids_(std::move(other.free_ids_)),                   //
-          free_label_(std::move(other.free_label_)) {}             //
+          free_keys_(std::move(other.free_keys_)),                 //
+          free_key_(std::move(other.free_key_)) {}                 //
 
     index_dense_gt& operator=(index_dense_gt&& other) {
         swap(other);
@@ -401,13 +402,13 @@ class index_dense_gt {
         std::swap(casts_, other.casts_);
         std::swap(metric_, other.metric_);
 
-        std::swap(vectors_allocator_, other.vectors_allocator_);
+        std::swap(vectors_tape_allocator_, other.vectors_tape_allocator_);
         std::swap(vectors_lookup_, other.vectors_lookup_);
 
         std::swap(available_threads_, other.available_threads_);
         std::swap(slot_lookup_, other.slot_lookup_);
-        std::swap(free_ids_, other.free_ids_);
-        std::swap(free_label_, other.free_label_);
+        std::swap(free_keys_, other.free_keys_);
+        std::swap(free_key_, other.free_key_);
     }
 
     ~index_dense_gt() {
@@ -437,7 +438,7 @@ class index_dense_gt {
         result.cast_buffer_.resize(hardware_threads * metric.bytes_per_vector());
         result.casts_ = make_casts_(scalar_kind);
         result.metric_ = metric;
-        result.free_label_ = free_label;
+        result.free_key_ = free_label;
 
         // Fill the thread IDs.
         result.available_threads_.resize(hardware_threads);
@@ -467,7 +468,7 @@ class index_dense_gt {
 
     explicit operator bool() const { return typed_; }
     std::size_t connectivity() const { return typed_->connectivity(); }
-    std::size_t size() const { return typed_->size() - free_ids_.size(); }
+    std::size_t size() const { return typed_->size() - free_keys_.size(); }
     std::size_t capacity() const { return typed_->capacity(); }
     std::size_t max_level() const noexcept { return typed_->max_level(); }
     index_dense_config_t const& config() const { return config_; }
@@ -501,7 +502,7 @@ class index_dense_gt {
             typed_->memory_usage(0) +                   //
             typed_->tape_allocator().total_wasted() +   //
             typed_->tape_allocator().total_reserved() + //
-            vectors_allocator_.total_allocated();
+            vectors_tape_allocator_.total_allocated();
     }
 
     // clang-format off
@@ -511,11 +512,11 @@ class index_dense_gt {
     add_result_t add(key_t key, f32_t const* vector) { return add_(key, vector, casts_.from_f32); }
     add_result_t add(key_t key, f64_t const* vector) { return add_(key, vector, casts_.from_f64); }
 
-    add_result_t add(key_t key, b1x8_t const* vector, index_dense_add_config_t config) { return add_(key, vector, config, casts_.from_b1x8); }
-    add_result_t add(key_t key, f8_bits_t const* vector, index_dense_add_config_t config) { return add_(key, vector, config, casts_.from_f8); }
-    add_result_t add(key_t key, f16_t const* vector, index_dense_add_config_t config) { return add_(key, vector, config, casts_.from_f16); }
-    add_result_t add(key_t key, f32_t const* vector, index_dense_add_config_t config) { return add_(key, vector, config, casts_.from_f32); }
-    add_result_t add(key_t key, f64_t const* vector, index_dense_add_config_t config) { return add_(key, vector, config, casts_.from_f64); }
+    add_result_t add(key_t key, b1x8_t const* vector, index_dense_update_config_t config) { return add_(key, vector, config, casts_.from_b1x8); }
+    add_result_t add(key_t key, f8_bits_t const* vector, index_dense_update_config_t config) { return add_(key, vector, config, casts_.from_f8); }
+    add_result_t add(key_t key, f16_t const* vector, index_dense_update_config_t config) { return add_(key, vector, config, casts_.from_f16); }
+    add_result_t add(key_t key, f32_t const* vector, index_dense_update_config_t config) { return add_(key, vector, config, casts_.from_f32); }
+    add_result_t add(key_t key, f64_t const* vector, index_dense_update_config_t config) { return add_(key, vector, config, casts_.from_f64); }
 
     search_result_t search(b1x8_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_b1x8); }
     search_result_t search(f8_bits_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f8); }
@@ -558,12 +559,12 @@ class index_dense_gt {
     void clear() {
         unique_lock_t lookup_lock(slot_lookup_mutex_);
 
-        std::unique_lock<std::mutex> free_lock(free_ids_mutex_);
+        std::unique_lock<std::mutex> free_lock(free_keys_mutex_);
         typed_->clear();
         slot_lookup_.clear();
         vectors_lookup_.clear();
-        free_ids_.clear();
-        vectors_allocator_.reset();
+        free_keys_.clear();
+        vectors_tape_allocator_.reset();
     }
 
     /**
@@ -576,13 +577,13 @@ class index_dense_gt {
     void reset() {
         unique_lock_t lookup_lock(slot_lookup_mutex_);
 
-        std::unique_lock<std::mutex> free_lock(free_ids_mutex_);
+        std::unique_lock<std::mutex> free_lock(free_keys_mutex_);
         std::unique_lock<std::mutex> available_threads_lock(available_threads_mutex_);
         typed_->reset();
         slot_lookup_.clear();
         vectors_lookup_.clear();
-        free_ids_.clear();
-        vectors_allocator_.reset();
+        free_keys_.clear();
+        vectors_tape_allocator_.reset();
         available_threads_.clear();
     }
 
@@ -590,7 +591,7 @@ class index_dense_gt {
      *  @brief Saves the index to a file.
      *  @param[in] path The path to the file.
      *  @param[in] config Configuration parameters for exports.
-     *  @return Outcome descriptor explictly convertable to boolean.
+     *  @return Outcome descriptor explicitly convertible to boolean.
      */
     serialization_result_t save(output_file_t file, serialization_config_t config = {}) const {
 
@@ -669,7 +670,7 @@ class index_dense_gt {
      *  @brief Parses the index from file to RAM.
      *  @param[in] path The path to the file.
      *  @param[in] config Configuration parameters for imports.
-     *  @return Outcome descriptor explictly convertable to boolean.
+     *  @return Outcome descriptor explicitly convertible to boolean.
      */
     serialization_result_t load(input_file_t file, serialization_config_t config = {}) {
 
@@ -701,7 +702,7 @@ class index_dense_gt {
             // Load the vectors one after another
             vectors_lookup_.resize(matrix_rows);
             for (std::uint64_t slot = 0; slot != matrix_rows; ++slot) {
-                byte_t* vector = vectors_allocator_.allocate(matrix_cols);
+                byte_t* vector = vectors_tape_allocator_.allocate(matrix_cols);
                 result = file.read(vector, matrix_cols);
                 if (!result)
                     return result;
@@ -748,7 +749,7 @@ class index_dense_gt {
      *  @brief Parses the index from file, without loading it into RAM.
      *  @param[in] path The path to the file.
      *  @param[in] config Configuration parameters for imports.
-     *  @return Outcome descriptor explictly convertable to boolean.
+     *  @return Outcome descriptor explicitly convertible to boolean.
      */
     serialization_result_t view(memory_mapped_file_t file, std::size_t offset = 0, serialization_config_t config = {}) {
 
@@ -873,19 +874,19 @@ class index_dense_gt {
             return result;
 
         // Grow the removed entries ring, if needed
-        std::unique_lock<std::mutex> free_lock(free_ids_mutex_);
-        if (free_ids_.size() == free_ids_.capacity())
-            if (!free_ids_.reserve((std::max<std::size_t>)(free_ids_.capacity() * 2, 64ul)))
+        std::unique_lock<std::mutex> free_lock(free_keys_mutex_);
+        if (free_keys_.size() == free_keys_.capacity())
+            if (!free_keys_.reserve((std::max<std::size_t>)(free_keys_.capacity() * 2, 64ul)))
                 return result.failed("Can't allocate memory for a free-list");
 
         // A removed entry would be:
-        // - present in `free_ids_`
+        // - present in `free_keys_`
         // - missing in the `slot_lookup_`
-        // - marked in the `typed_` index with a `free_label_`
+        // - marked in the `typed_` index with a `free_key_`
         compressed_slot_t slot = (*labeled_iterator).slot;
-        free_ids_.push(slot);
+        free_keys_.push(slot);
         slot_lookup_.erase(labeled_iterator);
-        typed_->at(slot).key = free_label_;
+        typed_->at(slot).key = free_key_;
         result.completed = true;
 
         return result;
@@ -904,11 +905,11 @@ class index_dense_gt {
 
         labeling_result_t result;
         unique_lock_t lookup_lock(slot_lookup_mutex_);
-        std::unique_lock<std::mutex> free_lock(free_ids_mutex_);
+        std::unique_lock<std::mutex> free_lock(free_keys_mutex_);
 
         // Grow the removed entries ring, if needed
         std::size_t count_requests = std::distance(labels_begin, labels_end);
-        if (!free_ids_.reserve(free_ids_.size() + count_requests))
+        if (!free_keys_.reserve(free_keys_.size() + count_requests))
             return result.failed("Can't allocate memory for a free-list");
 
         // Remove them one-by-one
@@ -919,13 +920,13 @@ class index_dense_gt {
                 continue;
 
             // A removed entry would be:
-            // - present in `free_ids_`
+            // - present in `free_keys_`
             // - missing in the `slot_lookup_`
-            // - marked in the `typed_` index with a `free_label_`
+            // - marked in the `typed_` index with a `free_key_`
             compressed_slot_t slot = (*labeled_iterator).slot;
-            free_ids_.push(slot);
+            free_keys_.push(slot);
             slot_lookup_.erase(labeled_iterator);
-            typed_->at(slot).key = free_label_;
+            typed_->at(slot).key = free_key_;
             result.completed += 1;
         }
 
@@ -998,10 +999,10 @@ class index_dense_gt {
 
         // Export the free (removed) slot numbers
         index_dense_gt& copy = result.index;
-        if (!copy.free_ids_.reserve(free_ids_.size()))
+        if (!copy.free_keys_.reserve(free_keys_.size()))
             return result.failed(std::move(typed_result.error));
-        for (std::size_t i = 0; i != free_ids_.size(); ++i)
-            copy.free_ids_.push(free_ids_[i]);
+        for (std::size_t i = 0; i != free_keys_.size(); ++i)
+            copy.free_keys_.push(free_keys_[i]);
 
         // Allocate buffers and move the vectors themselves
         if (!config.force_vector_copy && copy.config_.exclude_vectors)
@@ -1009,7 +1010,7 @@ class index_dense_gt {
         else {
             copy.vectors_lookup_.resize(vectors_lookup_.size());
             for (std::size_t slot = 0; slot != vectors_lookup_.size(); ++slot)
-                copy.vectors_lookup_[slot] = copy.vectors_allocator_.allocate(copy.metric_.bytes_per_vector());
+                copy.vectors_lookup_[slot] = copy.vectors_tape_allocator_.allocate(copy.metric_.bytes_per_vector());
             if (std::count(copy.vectors_lookup_.begin(), copy.vectors_lookup_.end(), nullptr))
                 return result.failed("Out of memory!");
             for (std::size_t slot = 0; slot != vectors_lookup_.size(); ++slot)
@@ -1035,15 +1036,13 @@ class index_dense_gt {
 
         other.metric_ = metric_;
         other.available_threads_ = available_threads_;
-        other.free_label_ = free_label_;
+        other.free_key_ = free_key_;
 
         index_t* raw = index_allocator_t{}.allocate(1);
         if (!raw)
             return result.failed("Can't allocate the index");
 
-        new (raw) index_t(config()
-                          //, typed_->dynamic_allocator(), typed_->tape_allocator()
-        );
+        new (raw) index_t(config());
         other.typed_ = raw;
         return result;
     }
@@ -1068,16 +1067,53 @@ class index_dense_gt {
      *          `result.error` will contain an error message if an error occurred during the compaction operation.
      */
     template <typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
-    compaction_result_t compact(executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
+    compaction_result_t isolate(executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
         compaction_result_t result;
         std::atomic<std::size_t> pruned_edges;
         auto disallow = [&](member_cref_t const& member) noexcept {
-            bool freed = member.key == free_label_;
+            bool freed = member.key == free_key_;
             pruned_edges += freed;
             return freed;
         };
         typed_->isolate(disallow, std::forward<executor_at>(executor), std::forward<progress_at>(progress));
         result.pruned_edges = pruned_edges;
+        return result;
+    }
+
+    class values_proxy_t {
+        index_dense_gt const* index_;
+
+      public:
+        values_proxy_t(index_dense_gt const& index) noexcept : index_(&index) {}
+        byte_t const* operator[](compressed_slot_t slot) const noexcept { return index_->vectors_lookup_[slot]; }
+        byte_t const* operator[](member_citerator_t it) const noexcept { return index_->vectors_lookup_[get_slot(it)]; }
+    };
+
+    /**
+     *  @brief Performs compaction on the index, pruning links to removed entries.
+     *  @param executor The executor parallel processing. Default ::dummy_executor_t single-threaded.
+     *  @param progress The progress tracker instance to use. Default ::dummy_progress_t reports nothing.
+     *  @return The ::compaction_result_t indicating the result of the compaction operation.
+     *          `result.pruned_edges` will contain the number of edges that were removed.
+     *          `result.error` will contain an error message if an error occurred during the compaction operation.
+     */
+    template <typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
+    compaction_result_t compact(executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
+        compaction_result_t result;
+
+        std::vector<byte_t*> new_vectors_lookup(vectors_lookup_.size());
+        vectors_tape_allocator_t new_vectors_allocator;
+
+        auto track_slot_change = [&](key_t, compressed_slot_t old_slot, compressed_slot_t new_slot) {
+            byte_t* new_vector = new_vectors_allocator.allocate(metric_.bytes_per_vector());
+            byte_t* old_vector = vectors_lookup_[old_slot];
+            std::memcpy(new_vector, old_vector, metric_.bytes_per_vector());
+            new_vectors_lookup[new_slot] = new_vector;
+        };
+        typed_->compact(values_proxy_t{*this}, metric_proxy_t{*this}, track_slot_change,
+                        std::forward<executor_at>(executor), std::forward<progress_at>(progress));
+        vectors_lookup_ = std::move(new_vectors_lookup);
+        vectors_tape_allocator_ = std::move(new_vectors_allocator);
         return result;
     }
 
@@ -1095,17 +1131,10 @@ class index_dense_gt {
         executor_at&& executor = executor_at{},             //
         progress_at&& progress = progress_at{}) const {
 
-        class lookup_proxy_t {
-            index_dense_gt const* index_;
-
-          public:
-            lookup_proxy_t(index_dense_gt const& index) noexcept : index_(&index) {}
-            byte_t const* operator[](compressed_slot_t slot) const noexcept { return index_->vectors_lookup_[slot]; }
-        };
         index_dense_gt const& men = *this;
         return unum::usearch::join(                      //
             *men.typed_, *women.typed_,                  //
-            lookup_proxy_t{men}, lookup_proxy_t{women},  //
+            values_proxy_t{men}, values_proxy_t{women},  //
             metric_proxy_t{men}, metric_proxy_t{women},  //
             config,                                      //
             std::forward<man_to_woman_at>(man_to_woman), //
@@ -1137,12 +1166,12 @@ class index_dense_gt {
     }
 
     template <typename scalar_at>
-    add_result_t add_(key_t key, scalar_at const* vector, index_dense_add_config_t config, cast_t const& cast) {
+    add_result_t add_(key_t key, scalar_at const* vector, index_dense_update_config_t config, cast_t const& cast) {
 
         if (!config_.allow_key_collisions && contains(key))
             return add_result_t{}.failed("Duplicate keys not allowed in high-level wrappers");
 
-        // Cast the vector, if needed for compaatibility with `metric_`
+        // Cast the vector, if needed for compatibility with `metric_`
         bool copy_vector = !config_.exclude_vectors || config.force_vector_copy;
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
         {
@@ -1155,8 +1184,8 @@ class index_dense_gt {
         // Check if there are some removed entries, whose nodes we can reuse
         compressed_slot_t free_slot = default_free_value<compressed_slot_t>();
         {
-            std::unique_lock<std::mutex> lock(free_ids_mutex_);
-            free_ids_.try_pop(free_slot);
+            std::unique_lock<std::mutex> lock(free_keys_mutex_);
+            free_keys_.try_pop(free_slot);
         }
 
         // Perform the insertion or the update
@@ -1166,7 +1195,7 @@ class index_dense_gt {
             slot_lookup_.insert({key, static_cast<compressed_slot_t>(member.slot)});
             if (copy_vector) {
                 if (!reuse_node)
-                    vectors_lookup_[member.slot] = vectors_allocator_.allocate(metric_.bytes_per_vector());
+                    vectors_lookup_[member.slot] = vectors_tape_allocator_.allocate(metric_.bytes_per_vector());
                 std::memcpy(vectors_lookup_[member.slot], vector_data, metric_.bytes_per_vector());
             } else
                 vectors_lookup_[member.slot] = (byte_t*)vector_data;
@@ -1183,7 +1212,7 @@ class index_dense_gt {
         scalar_at const* vector, std::size_t wanted, //
         index_search_config_t config, cast_t const& cast) const {
 
-        // Cast the vector, if needed for compaatibility with `metric_`
+        // Cast the vector, if needed for compatibility with `metric_`
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
         {
             byte_t* casted_data = cast_buffer_.data() + metric_.bytes_per_vector() * config.thread;
@@ -1192,7 +1221,7 @@ class index_dense_gt {
                 vector_data = casted_data;
         }
 
-        auto allow = [=](member_cref_t const& member) noexcept { return member.key != free_label_; };
+        auto allow = [=](member_cref_t const& member) noexcept { return member.key != free_key_; };
         return typed_->search(vector_data, wanted, metric_proxy_t{*this}, config, allow);
     }
 
@@ -1208,20 +1237,20 @@ class index_dense_gt {
         std::size_t count_removed = 0;
         for (std::size_t i = 0; i != count_total; ++i) {
             member_cref_t member = typed_->at(i);
-            count_removed += member.key == free_label_;
+            count_removed += member.key == free_key_;
         }
 
-        // Pull entries fron the underlying `typed_` into either
-        // into `slot_lookup_`, or `free_ids_` if they are unused.
+        // Pull entries from the underlying `typed_` into either
+        // into `slot_lookup_`, or `free_keys_` if they are unused.
         unique_lock_t lock(slot_lookup_mutex_);
         slot_lookup_.clear();
         slot_lookup_.reserve(count_total - count_removed);
-        free_ids_.clear();
-        free_ids_.reserve(count_removed);
+        free_keys_.clear();
+        free_keys_.reserve(count_removed);
         for (std::size_t i = 0; i != typed_->size(); ++i) {
             member_cref_t member = typed_->at(i);
-            if (member.key == free_label_)
-                free_ids_.push(static_cast<compressed_slot_t>(i));
+            if (member.key == free_key_)
+                free_keys_.push(static_cast<compressed_slot_t>(i));
             else
                 slot_lookup_.insert(key_and_slot_t{key_t(member.key), static_cast<compressed_slot_t>(i)});
         }
@@ -1247,10 +1276,10 @@ class index_dense_gt {
 
     template <typename scalar_at> add_result_t add_(key_t key, scalar_at const* vector, cast_t const& cast) {
         thread_lock_t lock = thread_lock_();
-        index_dense_add_config_t add_config;
-        add_config.thread = lock.thread_id;
-        add_config.expansion = config_.expansion_add;
-        return add_(key, vector, add_config, cast);
+        index_dense_update_config_t update_config;
+        update_config.thread = lock.thread_id;
+        update_config.expansion = config_.expansion_add;
+        return add_(key, vector, update_config, cast);
     }
 
     template <typename scalar_at>

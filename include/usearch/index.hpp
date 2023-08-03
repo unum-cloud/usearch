@@ -962,7 +962,7 @@ struct index_limits_t {
     inline std::size_t concurrency() const noexcept { return (std::min)(threads_add, threads_search); }
 };
 
-struct index_add_config_t {
+struct index_update_config_t {
     /// @brief Hyper-parameter controlling the quality of indexing.
     /// Defaults to 40 in FAISS and 200 in hnswlib.
     /// > It is called `efConstruction` in the paper.
@@ -970,6 +970,9 @@ struct index_add_config_t {
 
     /// @brief Optional thread identifier for multi-threaded construction.
     std::size_t thread = 0;
+
+    /// @brief Brute-forces exhaustive search over all entries in the index.
+    bool exact = false;
 };
 
 struct index_search_config_t {
@@ -1159,6 +1162,7 @@ class input_file_t {
             std::fclose(exchange(file_, nullptr));
     }
 
+    explicit operator bool() const noexcept { return file_; }
     bool seek_to(std::size_t progress) noexcept { return std::fseek(file_, progress, SEEK_SET) == 0; }
     bool seek_to_end() noexcept { return std::fseek(file_, 0L, SEEK_END) == 0; }
     bool infer_progress(std::size_t& progress) noexcept {
@@ -1338,7 +1342,7 @@ template <typename key_at> inline key_at get_key(member_ref_gt<key_at> const& m)
  *  @brief  Approximate Nearest Neighbors Search @b index-structure using the
  *          Hierarchical Navigable Small World @b (HNSW) graphs algorithm.
  *          If classical containers store @b Key->Value mappings, this one can
- *          be seen as a network of keys, accelerating approximate @b Value~>Key lookups.
+ *          be seen as a network of keys, accelerating approximate @b Value~>Key visited_members.
  *
  *  Unlike most implementations, this one is generic anc can be used for any search,
  *  not just within equi-dimensional vectors. Examples range from texts to similar Chess
@@ -1408,7 +1412,7 @@ template <typename key_at> inline key_at get_key(member_ref_gt<key_at> const& m)
  *      -   `member_citerator_t` and `member_iterator_t` have only slots, no indirections.
  *
  *      -   `member_cref_t` and `member_ref_t` contains the `slot` and a reference
- *          to the key. So it passes through 1 level of lookups in `nodes_`.
+ *          to the key. So it passes through 1 level of visited_members in `nodes_`.
  *          Retrieving the key via `get_key` will cause fetching yet another cache line.
  *
  *      -   `member_gt` contains an already prefetched copy of the key.
@@ -1609,7 +1613,7 @@ class index_gt {
         visits_bitset_t visits{};
         std::default_random_engine level_generator{};
         std::size_t iteration_cycles{};
-        std::size_t measurements_count{};
+        std::size_t computed_distances_count{};
 
         template <typename value_at, typename metric_at, typename entry_at> //
         inline distance_t measure(value_at const& first, entry_at const& second, metric_at&& metric) noexcept {
@@ -1617,7 +1621,7 @@ class index_gt {
                 std::is_same<entry_at, member_cref_t>::value || std::is_same<entry_at, member_citerator_t>::value,
                 "Unexpected type");
 
-            measurements_count++;
+            computed_distances_count++;
             return metric(first, second);
         }
 
@@ -1627,7 +1631,7 @@ class index_gt {
                 std::is_same<entry_at, member_cref_t>::value || std::is_same<entry_at, member_citerator_t>::value,
                 "Unexpected type");
 
-            measurements_count++;
+            computed_distances_count++;
             return metric(first, second);
         }
     };
@@ -1854,8 +1858,8 @@ class index_gt {
     struct add_result_t {
         error_t error{};
         std::size_t new_size{};
-        std::size_t lookups{};
-        std::size_t measurements{};
+        std::size_t visited_members{};
+        std::size_t computed_distances{};
         std::size_t slot{};
 
         explicit operator bool() const noexcept { return !error; }
@@ -1884,9 +1888,9 @@ class index_gt {
         /** @brief  Number of search results found. */
         std::size_t count{};
         /** @brief  Number of graph nodes traversed. */
-        std::size_t lookups{};
+        std::size_t visited_members{};
         /** @brief  Number of times the distances were computed. */
-        std::size_t measurements{};
+        std::size_t computed_distances{};
         error_t error{};
 
         inline search_result_t() noexcept {}
@@ -1956,7 +1960,7 @@ class index_gt {
     };
 
     /**
-     *  @brief  Inserts a new entry into the index. Thread-safe. Supports @b heterogeneous lookups.
+     *  @brief  Inserts a new entry into the index. Thread-safe. Supports @b heterogeneous visited_members.
      *          Expects needed capacity to be reserved ahead of time: `size() < capacity()`.
      *
      *  @tparam metric_at
@@ -1975,7 +1979,7 @@ class index_gt {
     template <typename value_at, typename metric_at, typename callback_at = dummy_callback_t>
     add_result_t add(                                    //
         key_t key, value_at&& value, metric_at&& metric, //
-        index_add_config_t config = {}, callback_at&& callback = callback_at{}) usearch_noexcept_m {
+        index_update_config_t config = {}, callback_at&& callback = callback_at{}) usearch_noexcept_m {
 
         add_result_t result;
         if (is_immutable())
@@ -2034,8 +2038,8 @@ class index_gt {
         }
 
         // Pull stats
-        result.measurements = context.measurements_count;
-        result.lookups = context.iteration_cycles;
+        result.computed_distances = context.computed_distances_count;
+        result.visited_members = context.iteration_cycles;
 
         connect_node_across_levels_(                      //
             new_slot, value, metric,                      //
@@ -2043,8 +2047,8 @@ class index_gt {
             config, context);
 
         // Normalize stats
-        result.measurements = context.measurements_count - result.measurements;
-        result.lookups = context.iteration_cycles - result.lookups;
+        result.computed_distances = context.computed_distances_count - result.computed_distances;
+        result.visited_members = context.iteration_cycles - result.visited_members;
 
         // Updating the entry point if needed
         if (target_level > max_level_copy) {
@@ -2054,14 +2058,8 @@ class index_gt {
         return result;
     }
 
-    enum class callback_kind_t {
-        members_k = 0,
-        slots_k,
-        slots_batch_k,
-    };
-
     /**
-     *  @brief  Update an existing entry. Thread-safe. Supports heterogeneous lookups.
+     *  @brief  Update an existing entry. Thread-safe. Supports heterogeneous visited_members.
      *
      *  @tparam metric_at
      *      A function responsible for computing the distance @b (dis-similarity) between two objects.
@@ -2082,7 +2080,7 @@ class index_gt {
     template <typename value_at, typename metric_at, typename callback_at = dummy_callback_t>
     add_result_t update(                                                             //
         member_iterator_t iterator, key_t key, value_at&& value, metric_at&& metric, //
-        index_add_config_t config = {}, callback_at&& callback = callback_at{}) usearch_noexcept_m {
+        index_update_config_t config = {}, callback_at&& callback = callback_at{}) usearch_noexcept_m {
 
         usearch_assert_m(!is_immutable(), "Can't add to an immutable index");
         add_result_t result;
@@ -2113,8 +2111,8 @@ class index_gt {
         node.level(node_level);
 
         // Pull stats
-        result.measurements = context.measurements_count;
-        result.lookups = context.iteration_cycles;
+        result.computed_distances = context.computed_distances_count;
+        result.visited_members = context.iteration_cycles;
 
         connect_node_across_levels_(             //
             old_slot, value, metric,             //
@@ -2123,8 +2121,8 @@ class index_gt {
         node.key(key);
 
         // Normalize stats
-        result.measurements = context.measurements_count - result.measurements;
-        result.lookups = context.iteration_cycles - result.lookups;
+        result.computed_distances = context.computed_distances_count - result.computed_distances;
+        result.visited_members = context.iteration_cycles - result.visited_members;
         result.slot = old_slot;
 
         callback(at(old_slot));
@@ -2152,8 +2150,8 @@ class index_gt {
             return result;
 
         // Go down the level, tracking only the closest match
-        result.measurements = context.measurements_count;
-        result.lookups = context.iteration_cycles;
+        result.computed_distances = context.computed_distances_count;
+        result.visited_members = context.iteration_cycles;
 
         if (config.exact) {
             if (!top.reserve(wanted))
@@ -2178,8 +2176,8 @@ class index_gt {
         top.shrink(wanted);
 
         // Normalize stats
-        result.measurements = context.measurements_count - result.measurements;
-        result.lookups = context.iteration_cycles - result.lookups;
+        result.computed_distances = context.computed_distances_count - result.computed_distances;
+        result.visited_members = context.iteration_cycles - result.visited_members;
         result.count = top.size();
         return result;
     }
@@ -2427,6 +2425,98 @@ class index_gt {
 #pragma endregion
 
     /**
+     *  @brief  Performs compaction on the whole HNSW index, purging some entries
+     *          and links to them, while also generating a more efficient mapping,
+     *          putting the more frequently used entries closer together.
+     *
+     *
+     * Scans the whole collection, removing the links leading towards
+     *          banned entries. This essentially isolates some nodes from the rest
+     *          of the graph, while keeping their outgoing links, in case the node
+     *          is structurally relevant and has a crucial role in the index.
+     *          It won't reclaim the memory.
+     *
+     *  @param[in] allow_member Predicate to mark nodes for isolation.
+     *  @param[in] executor Thread-pool to execute the job in parallel.
+     *  @param[in] progress Callback to report the execution progress.
+     */
+    template <typename values_at, typename metric_at,                       //
+              typename slot_transition_at = dummy_label_to_label_mapping_t, //
+              typename executor_at = dummy_executor_t,                      //
+              typename progress_at = dummy_progress_t                       //
+              >
+    void compact(                             //
+        values_at&& values,                   //
+        metric_at&& metric,                   //
+        slot_transition_at&& slot_transition, //
+
+        executor_at&& executor = executor_at{}, //
+        progress_at&& progress = progress_at{}) noexcept {
+
+        // Export all the keys, slots, and levels.
+        // Partition them with the predicate.
+        // Sort the allowed entries in descending order of their level.
+        // Create a new array mapping old slots to the new ones (INT_MAX for deleted items).
+        struct slot_level_t {
+            compressed_slot_t old_slot;
+            compressed_slot_t cluster;
+            level_t level;
+        };
+        using slot_level_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<slot_level_t>;
+        buffer_gt<slot_level_t, slot_level_allocator_t> slots_and_levels(size());
+
+        // For every bottom level node, determine its parent cluster
+        executor.execute_bulk(slots_and_levels.size(), [&](std::size_t thread_idx, std::size_t old_slot) {
+            context_t& context = contexts_[thread_idx];
+            std::size_t cluster =
+                search_for_one_(entry_slot_, values[citerator_at(old_slot)], metric, max_level_, 0, context);
+            slots_and_levels[old_slot] = {static_cast<compressed_slot_t>(old_slot),
+                                          static_cast<compressed_slot_t>(cluster), node_at_(old_slot).level()};
+        });
+
+        // Where the actual permutation happens:
+        std::sort(slots_and_levels.begin(), slots_and_levels.end(), [](slot_level_t const& a, slot_level_t const& b) {
+            return a.level == b.level ? a.cluster < b.cluster : a.level > b.level;
+        });
+
+        using size_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<std::size_t>;
+        buffer_gt<std::size_t, size_allocator_t> old_slot_to_new(slots_and_levels.size());
+        for (std::size_t new_slot = 0; new_slot != slots_and_levels.size(); ++new_slot)
+            old_slot_to_new[slots_and_levels[new_slot].old_slot] = new_slot;
+
+        // Erase all the incoming links
+        buffer_gt<node_t, nodes_allocator_t> reordered_nodes(slots_and_levels.size());
+        tape_allocator_t reordered_tape;
+
+        for (std::size_t new_slot = 0; new_slot != slots_and_levels.size(); ++new_slot) {
+            std::size_t old_slot = slots_and_levels[new_slot].old_slot;
+            node_t old_node = node_at_(old_slot);
+
+            std::size_t node_bytes = node_bytes_(old_node.level());
+            byte_t* new_data = (byte_t*)reordered_tape.allocate(node_bytes);
+            node_t new_node{new_data};
+            std::memcpy(new_data, old_node.tape(), node_bytes);
+
+            for (level_t level = 0; level <= old_node.level(); ++level)
+                for (misaligned_ref_gt<compressed_slot_t> neighbor : neighbors_(new_node, level))
+                    neighbor = static_cast<compressed_slot_t>(old_slot_to_new[compressed_slot_t(neighbor)]);
+
+            reordered_nodes[new_slot] = new_node;
+        }
+
+        for (std::size_t new_slot = 0; new_slot != slots_and_levels.size(); ++new_slot) {
+            std::size_t old_slot = slots_and_levels[new_slot].old_slot;
+            slot_transition(node_at_(old_slot).ckey(),                //
+                            static_cast<compressed_slot_t>(old_slot), //
+                            static_cast<compressed_slot_t>(new_slot));
+        }
+
+        nodes_ = std::move(reordered_nodes);
+        tape_allocator_ = std::move(reordered_tape);
+        entry_slot_ = old_slot_to_new[entry_slot_];
+    }
+
+    /**
      *  @brief  Scans the whole collection, removing the links leading towards
      *          banned entries. This essentially isolates some nodes from the rest
      *          of the graph, while keeping their outgoing links, in case the node
@@ -2546,8 +2636,10 @@ class index_gt {
     void connect_node_across_levels_(                                    //
         std::size_t node_slot, value_at&& value, metric_at&& metric,     //
         std::size_t entry_slot, level_t max_level, level_t target_level, //
-        index_add_config_t const& config, context_t& context) usearch_noexcept_m {
+        index_update_config_t const& config, context_t& context) usearch_noexcept_m {
 
+        if (config.exact) {
+        }
         // Go down the level, tracking only the closest match
         std::size_t closest_slot = search_for_one_(entry_slot, value, metric, max_level, target_level, context);
 
@@ -2849,8 +2941,8 @@ struct join_result_t {
     error_t error{};
     std::size_t intersection_size{};
     std::size_t engagements{};
-    std::size_t lookups{};
-    std::size_t measurements{};
+    std::size_t visited_members{};
+    std::size_t computed_distances{};
 
     explicit operator bool() const noexcept { return !error; }
     join_result_t failed(error_t message) noexcept {
@@ -2959,8 +3051,8 @@ static join_result_t join(               //
 
     std::atomic<std::size_t> rounds{0};
     std::atomic<std::size_t> engagements{0};
-    std::atomic<std::size_t> measurements{0};
-    std::atomic<std::size_t> lookups{0};
+    std::atomic<std::size_t> computed_distances{0};
+    std::atomic<std::size_t> visited_members{0};
 
     // Concurrently process all the men
     executor.execute_bulk([&](std::size_t thread_idx) {
@@ -2993,8 +3085,8 @@ static join_result_t join(               //
             // Find the closest woman, to whom this man hasn't proposed yet.
             ++free_man_proposals;
             auto candidates = women.search(men_values[free_man_slot], free_man_proposals, women_metric, search_config);
-            lookups += candidates.lookups;
-            measurements += candidates.measurements;
+            visited_members += candidates.visited_members;
+            computed_distances += candidates.computed_distances;
             if (!candidates) {
                 // TODO:
             }
@@ -3055,8 +3147,8 @@ static join_result_t join(               //
     // Export stats
     result.engagements = engagements;
     result.intersection_size = intersection_size;
-    result.measurements = measurements;
-    result.lookups = lookups;
+    result.computed_distances = computed_distances;
+    result.visited_members = visited_members;
     return result;
 }
 

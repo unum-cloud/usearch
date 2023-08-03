@@ -55,24 +55,51 @@ def random_vectors(
         return x
 
 
-def recall_members(index: Index, sample: float = 1, **kwargs) -> Tuple[float, float]:
-    """Simplest benchmark for a quality of search, which queries every
-    existing member of the index, to make sure approximate search finds
-    the point itself. Reports 2 metrics - "self-recall" and "efficiency".
+@dataclass
+class SearchStats:
+    """
+    Contains statistics for one or more search runs, including the number of
+    internal nodes that were fetched (`visited_members`) and the number
+    of times the distance metric was invoked (`computed_distances`).
 
-    Self-recall is the share of queried vectors, that were succesfully found.
+    Other derivative metrics include the `mean_recall` and `mean_efficiency`.
+    Recall is the share of queried vectors, that were successfully found.
     Efficiency describes the number of distances that had to be computed for
     each query, normalized to size of the `index`. Highest efficiency is 0.(9),
     lowest is zero. Highest is achieved, when the distance metric was computed
     just once per query. Lowest happens during exact search, when every distance
     to every present vector had to be computed.
+    """
+
+    index_size: int
+    count_queries: int
+    count_matches: int
+
+    visited_members: int
+    computed_distances: int
+
+    @property
+    def mean_efficiency(self) -> float:
+        return 1 - float(self.computed_distances) / (
+            self.count_queries * self.index_size
+        )
+
+    @property
+    def mean_recall(self) -> float:
+        return self.count_matches / self.count_queries
+
+
+def self_recall(index: Index, sample: float = 1, **kwargs) -> SearchStats:
+    """Simplest benchmark for a quality of search, which queries every
+    existing member of the index, to make sure approximate search finds
+    the point itself.
 
     :param index: Non-empty pre-constructed index
     :type index: Index
     :param sample: Share of vectors to search, defaults to 1
     :type sample: float
-    :return: Value from 0 to 1, for the share of found self-references
-    :rtype: float, float
+    :return: Evaluation report with key metrics
+    :rtype: SearchStats
     """
     if len(index) == 0:
         return 0
@@ -85,9 +112,14 @@ def recall_members(index: Index, sample: float = 1, **kwargs) -> Tuple[float, fl
 
     queries = index.get_vectors(keys, index.dtype)
     matches: BatchMatches = index.search(queries, **kwargs)
-    recall_first: float = matches.recall_first(keys)
-    efficiency: float = 1 - float(matches.measurements) / (len(keys) * len(index))
-    return recall_first, efficiency
+    count_matches: float = matches.count_matches(keys)
+    return SearchStats(
+        index_size=len(index),
+        count_queries=len(keys),
+        count_matches=count_matches,
+        visited_members=matches.visited_members,
+        computed_distances=matches.computed_distances,
+    )
 
 
 def measure_seconds(f: Callable) -> Tuple[float, Any]:

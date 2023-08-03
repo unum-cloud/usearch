@@ -11,7 +11,7 @@ using search_result_t = typename index_t::search_result_t;
 Index::Index(std::unique_ptr<index_t> index) : index_(std::move(index)) {}
 
 void Index::add_in_thread(key_t key, rust::Slice<float const> vector, size_t thread) const {
-    index_add_config_t config;
+    index_update_config_t config;
     config.thread = thread;
     config.expansion = index_->expansion_add();
     index_->add(key, vector.data(), config).error.raise();

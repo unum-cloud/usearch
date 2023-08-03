@@ -268,10 +268,15 @@ One may often want to evaluate the quality of the constructed index before runni
 The trivial way is to measure `recall@1` on the entries already present in the index.
 
 ```py
-from usearch.eval import recall_members
+from usearch.eval import self_recall
 
-assert recall_members(index, exact=True) == (1, 0)
-print(recall_members(index, exact=False))
+stats: SearchStats = self_recall(index, exact=True)
+assert stats.visited_members == 0, "Exact search won't attend index nodes"
+assert stats.computed_distances == len(index), "And will compute the distance to every node"
+
+stats: SearchStats = self_recall(index, exact=False)
+assert stats.visited_members > 0
+assert stats.computed_distances <= len(index)
 ```
 
 In case you have some ground-truth data for more than one entry, you compare search results against expected values:

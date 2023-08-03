@@ -286,7 +286,7 @@ void index_many(index_at& index, std::size_t n, vector_id_at const* ids, real_at
 #pragma omp parallel for schedule(static, 32)
 #endif
     for (std::size_t i = 0; i < n; ++i) {
-        index_add_config_t config;
+        index_update_config_t config;
 #if USEARCH_USE_OPENMP
         config.thread = omp_get_thread_num();
 #endif
@@ -373,7 +373,7 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
                     if (progress % 1000 == 0)
                         printer.print(progress, total);
                 });
-            join_attempts = result.cycles;
+            join_attempts = result.visited_members;
         }
     }
     // Evaluate join quality
