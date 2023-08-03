@@ -18,25 +18,25 @@ USEARCH_EXPORT typedef char const* usearch_error_t;
 USEARCH_EXPORT typedef usearch_distance_t (*usearch_metric_t)(void const*, void const*);
 
 USEARCH_EXPORT typedef enum usearch_metric_kind_t {
-    usearch_metric_ip_k = 0,
-    usearch_metric_l2sq_k,
+    usearch_metric_unknown_k = 0,
+    usearch_metric_ip_k,
     usearch_metric_cos_k,
+    usearch_metric_l2sq_k,
     usearch_metric_haversine_k,
     usearch_metric_pearson_k,
     usearch_metric_jaccard_k,
     usearch_metric_hamming_k,
     usearch_metric_tanimoto_k,
     usearch_metric_sorensen_k,
-    usearch_metric_unknown_k,
 } usearch_metric_kind_t;
 
 USEARCH_EXPORT typedef enum usearch_scalar_kind_t {
-    usearch_scalar_f32_k = 0,
+    usearch_scalar_unknown_k = 0,
+    usearch_scalar_f32_k,
     usearch_scalar_f64_k,
     usearch_scalar_f16_k,
     usearch_scalar_i8_k,
     usearch_scalar_b1_k,
-    usearch_scalar_unknown_k,
 } usearch_scalar_kind_t;
 
 USEARCH_EXPORT typedef struct usearch_init_options_t {

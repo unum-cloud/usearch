@@ -143,19 +143,6 @@ java -cp . -Djava.library.path="$(pwd)/java/cloud/unum/usearch/" Index.java
 java -cp . -Djava.library.path="$(pwd)/java" cloud.unum.usearch.Index
 ```
 
-## Wolfram
-
-```sh
-brew install --cask wolfram-engine
-```
-
-## GoLang
-
-```sh
-cd golang
-go test -v
-```
-
 ## Objective-C and Swift
 
 ```sh
@@ -170,6 +157,24 @@ Linux:
 ```sh
 g++ -std=c++11 -shared -fPIC c/lib.cpp -I ./include/  -I ./fp16/include/ -I ./robin-map/include/ -o libusearch.so
 ```
+
+
+## GoLang
+
+GoLang bindings are based on C.
+So one should first compile the C library, link it with GoLang, and only then run tests.
+
+```sh
+cd golang
+go test -v
+```
+
+## Wolfram
+
+```sh
+brew install --cask wolfram-engine
+```
+
 
 ## Docker
 
