@@ -87,7 +87,7 @@ index = Index(
 
 vector = np.array([0.2, 0.6, 0.4])
 index.add(42, vector)
-matches: SearchResults = index.search(vector, 10)
+matches: Matches = index.search(vector, 10)
 
 assert len(index) == 1
 assert len(matches) == 1

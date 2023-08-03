@@ -6,4 +6,4 @@ typedef struct {
     float* Distances;
     int Len;
     char* Error;
-} SearchResults;
+} Matches;

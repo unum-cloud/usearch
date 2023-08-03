@@ -17,8 +17,8 @@ void Index::add_in_thread(key_t key, rust::Slice<float const> vector, size_t thr
     index_->add(key, vector.data(), config).error.raise();
 }
 
-SearchResults Index::search_in_thread(rust::Slice<float const> vector, size_t count, size_t thread) const {
-    SearchResults matches;
+Matches Index::search_in_thread(rust::Slice<float const> vector, size_t count, size_t thread) const {
+    Matches matches;
     matches.keys.reserve(count);
     matches.distances.reserve(count);
     for (size_t i = 0; i != count; ++i)
@@ -36,8 +36,8 @@ SearchResults Index::search_in_thread(rust::Slice<float const> vector, size_t co
 
 void Index::add(key_t key, rust::Slice<float const> vector) const { index_->add(key, vector.data()).error.raise(); }
 
-SearchResults Index::search(rust::Slice<float const> vector, size_t count) const {
-    SearchResults matches;
+Matches Index::search(rust::Slice<float const> vector, size_t count) const {
+    Matches matches;
     matches.keys.reserve(count);
     matches.distances.reserve(count);
     for (size_t i = 0; i != count; ++i)

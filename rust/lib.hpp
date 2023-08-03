@@ -5,7 +5,7 @@
 
 #include <usearch/index_dense.hpp>
 
-struct SearchResults;
+struct Matches;
 struct IndexOptions;
 
 class Index {
@@ -24,8 +24,8 @@ class Index {
     void add(key_t key, rust::Slice<float const> vector) const;
     void add_in_thread(key_t key, rust::Slice<float const> vector, size_t thread) const;
 
-    SearchResults search(rust::Slice<float const> vector, size_t count) const;
-    SearchResults search_in_thread(rust::Slice<float const> vector, size_t count, size_t thread) const;
+    Matches search(rust::Slice<float const> vector, size_t count) const;
+    Matches search_in_thread(rust::Slice<float const> vector, size_t count, size_t thread) const;
 
     size_t dimensions() const;
     size_t connectivity() const;

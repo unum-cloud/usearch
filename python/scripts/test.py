@@ -12,8 +12,8 @@ from usearch.index import (
     MetricKind,
     ScalarKind,
     Match,
-    SearchResults,
-    BatchSearchResults,
+    Matches,
+    BatchMatches,
 )
 from usearch.index import (
     DEFAULT_CONNECTIVITY,
@@ -117,7 +117,7 @@ def test_index(
     if numpy_type != np.byte:
         assert np.allclose(index[42], vector, atol=0.1)
 
-    matches: SearchResults = index.search(vector, 10)
+    matches: Matches = index.search(vector, 10)
     assert len(matches.keys) == 1, "Number of matches"
     assert len(matches.keys) == len(matches.distances), "Symmetric match sub-arrays"
     assert len({match.key for match in matches}) == 1, "Iteration over matches"
@@ -152,27 +152,27 @@ def test_index(
     assert len(index) == 0
     index.add(42, vector)
     assert len(index) == 1
-    matches: SearchResults = index.search(vector, 10)
+    matches: Matches = index.search(vector, 10)
     assert len(matches) == 1
 
     index_copy = index.copy()
     assert len(index_copy) == 1
     assert len(index_copy[42]) == ndim
-    matches_copy: SearchResults = index_copy.search(vector, 10)
+    matches_copy: Matches = index_copy.search(vector, 10)
     assert np.all(matches_copy.keys == matches.keys)
 
     index.load(temporary_usearch_filename)
     assert len(index) == 1
     assert len(index[42]) == ndim
 
-    matches_loaded: SearchResults = index.search(vector, 10)
+    matches_loaded: Matches = index.search(vector, 10)
     assert np.all(matches_loaded.keys == matches.keys)
 
     index = Index.restore(temporary_usearch_filename, view=True)
     assert len(index) == 1
     assert len(index[42]) == ndim
 
-    matches_viewed: SearchResults = index.search(vector, 10)
+    matches_viewed: Matches = index.search(vector, 10)
     assert np.all(matches_viewed.keys == matches.keys)
 
     # Cleanup
@@ -217,7 +217,7 @@ def test_index_batch(
     assert len(index) == batch_size
     assert np.allclose(index.get_vectors(keys).astype(numpy_type), vectors, atol=0.1)
 
-    matches: BatchSearchResults = index.search(vectors, 10, threads=2)
+    matches: BatchMatches = index.search(vectors, 10, threads=2)
     assert matches.keys.shape[0] == matches.distances.shape[0]
     assert len(matches) == batch_size
     assert np.all(np.sort(index.keys) == np.sort(keys))
@@ -238,7 +238,7 @@ def test_index_batch(
     assert len(index[0]) == ndim
 
     if batch_size > 1:
-        matches_loaded: BatchSearchResults = index.search(vectors, 10, threads=2)
+        matches_loaded: BatchMatches = index.search(vectors, 10, threads=2)
         for idx in range(len(matches_loaded)):
             assert np.all(matches_loaded[idx].keys == matches[idx].keys)
 
@@ -247,7 +247,7 @@ def test_index_batch(
     assert len(index[0]) == ndim
 
     if batch_size > 1:
-        matches_viewed: BatchSearchResults = index.search(vectors, 10, threads=2)
+        matches_viewed: BatchMatches = index.search(vectors, 10, threads=2)
         for idx in range(len(matches_viewed)):
             assert np.all(matches_viewed[idx].keys == matches[idx].keys)
 
@@ -279,7 +279,7 @@ def test_exact_recall(
 
     # Search one at a time
     for i in range(batch_size):
-        matches: SearchResults = index.search(vectors[i], 10, exact=True)
+        matches: Matches = index.search(vectors[i], 10, exact=True)
         found_labels = matches.keys
         assert found_labels[0] == i
         assert matches.computed_distances == len(index)
@@ -287,7 +287,7 @@ def test_exact_recall(
 
     # Search the whole batch
     if batch_size > 1:
-        matches: BatchSearchResults = index.search(vectors, 10, exact=True)
+        matches: BatchMatches = index.search(vectors, 10, exact=True)
         assert matches.computed_distances == len(index) * len(vectors)
         assert matches.visited_members == 0, "Exact search won't traverse the graph"
 

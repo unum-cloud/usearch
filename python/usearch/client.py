@@ -3,7 +3,7 @@ from typing import Union, Optional, List
 import numpy as np
 from ucall.client import Client
 
-from usearch.index import SearchResults
+from usearch.index import Matches
 
 
 def _vector_to_ascii(vector: np.ndarray) -> Optional[str]:
@@ -49,7 +49,7 @@ class IndexClient:
         else:
             return self.add_many(keys, vectors)
 
-    def search_one(self, vector: np.ndarray, count: int) -> SearchResults:
+    def search_one(self, vector: np.ndarray, count: int) -> Matches:
         matches: List[dict] = []
         vector = vector.flatten()
         ascii = _vector_to_ascii(vector)
@@ -71,7 +71,7 @@ class IndexClient:
 
         return keys, distances, counts
 
-    def search_many(self, vectors: np.ndarray, count: int) -> SearchResults:
+    def search_many(self, vectors: np.ndarray, count: int) -> Matches:
         batch_size: int = vectors.shape[0]
         list_of_matches: List[List[dict]] = self.client.search_many(
             vectors=vectors, count=count
@@ -88,7 +88,7 @@ class IndexClient:
 
         return keys, distances, counts
 
-    def search(self, vectors: np.ndarray, count: int) -> SearchResults:
+    def search(self, vectors: np.ndarray, count: int) -> Matches:
         if vectors.ndim == 1 or (vectors.ndim == 2 and vectors.shape[0] == 1):
             return self.search_one(vectors, count)
         else:

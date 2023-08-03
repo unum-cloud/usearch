@@ -108,7 +108,7 @@ enum class scalar_kind_t : std::uint8_t {
     f64_k,
     f32_k,
     f16_k,
-    i8_k,
+    f8_k,
     // Common Integral:
     u64_k,
     u32_k,

@@ -23,7 +23,7 @@ index = Index(
 
 vector = np.array([0.2, 0.6, 0.4])
 index.add(42, vector)
-matches: SearchResults = index.search(vector, 10)
+matches: Matches = index.search(vector, 10)
 
 assert len(index) == 1
 assert len(matches) == 1
@@ -61,9 +61,9 @@ keys = np.arange(n)
 vectors = np.random.uniform(0, 0.3, (n, index.ndim)).astype(np.float32)
 
 index.add(keys, vectors, threads=..., copy=...)
-matches: BatchSearchResults = index.search(vectors, 10, threads=...)
+matches: BatchMatches = index.search(vectors, 10, threads=...)
 
-first_query_matches: SearchResults = matches[0]
+first_query_matches: Matches = matches[0]
 assert matches[0].key == 0
 assert matches[0].distance <= 0.001
 

@@ -7,7 +7,7 @@ import numpy as np
 from typing import List
 
 from ucall.rich_posix import Server
-from usearch.index import Index, SearchResults, Key
+from usearch.index import Index, Matches, Key
 
 
 def _ascii_to_vector(string: str) -> np.ndarray:
@@ -73,12 +73,12 @@ def serve(
     def search_one(vector: np.ndarray, count: int) -> List[dict]:
         print("search", vector, count)
         vectors = vector.reshape(vector.shape[0], 1)
-        results: SearchResults = index.search(vectors, count)
+        results: Matches = index.search(vectors, count)
         return results.to_list()
 
     @server
     def search_many(vectors: np.ndarray, count: int) -> List[List[dict]]:
-        results: SearchResults = index.search(vectors, count)
+        results: Matches = index.search(vectors, count)
         return results.to_list()
 
     @server

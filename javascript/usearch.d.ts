@@ -1,6 +1,6 @@
 
 /** Search result object. */
-export interface SearchResults {
+export interface Matches {
     /** The labels of the nearest neighbors found, size n*k. */
     labels: BigUint64Array,
     /** The disances of the nearest negihbors found, size n*k. */
@@ -81,7 +81,7 @@ export class Index {
      *
      * @param {Float32Array} mat Input vectors to search, matrix of size n * d.
      * @param {number} k The number of nearest neighbors to search for.
-     * @return {SearchResults} Output of the search result.
+     * @return {Matches} Output of the search result.
      */
-    search(mat: Float32Array, k: number): SearchResults;
+    search(mat: Float32Array, k: number): Matches;
 }
