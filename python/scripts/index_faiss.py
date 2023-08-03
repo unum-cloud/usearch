@@ -4,7 +4,7 @@ from typing import Optional
 import numpy as np
 from faiss import IndexHNSWFlat, IndexIVFPQ, read_index
 
-from usearch.index import Matches
+from usearch.index import SearchResults
 from usearch.index import (
     DEFAULT_CONNECTIVITY,
     DEFAULT_EXPANSION_ADD,
@@ -45,9 +45,9 @@ class IndexFAISS:
         # self._faiss.add_with_ids(vectors, keys)
         self._faiss.add(vectors)
 
-    def search(self, queries, k: int) -> Matches:
+    def search(self, queries, k: int) -> SearchResults:
         distances, keys = self._faiss.search(queries, k)
-        return Matches(keys, distances, np.array([k] * queries.shape[0]))
+        return SearchResults(keys, distances, np.array([k] * queries.shape[0]))
 
     def __len__(self) -> int:
         return self._faiss.ntotal

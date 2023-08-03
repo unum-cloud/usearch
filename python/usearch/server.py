@@ -7,13 +7,13 @@ import numpy as np
 from typing import List
 
 from ucall.rich_posix import Server
-from usearch.index import Index, Matches, Key
+from usearch.index import Index, SearchResults, Key
 
 
 def _ascii_to_vector(string: str) -> np.ndarray:
     """
     WARNING: A dirty performance hack!
-    Assuming the `f8` vectors in our implementations are just integers,
+    Assuming the `i8` vectors in our implementations are just integers,
     and generally contain scalars in the [0, 100] range, we can transmit
     them as JSON-embedded strings. The only symbols we must avoid are
     the double-quote '"' (code 22) and backslash '\' (code 60).
@@ -73,12 +73,12 @@ def serve(
     def search_one(vector: np.ndarray, count: int) -> List[dict]:
         print("search", vector, count)
         vectors = vector.reshape(vector.shape[0], 1)
-        results: Matches = index.search(vectors, count)
+        results: SearchResults = index.search(vectors, count)
         return results.to_list()
 
     @server
     def search_many(vectors: np.ndarray, count: int) -> List[List[dict]]:
-        results: Matches = index.search(vectors, count)
+        results: SearchResults = index.search(vectors, count)
         return results.to_list()
 
     @server

@@ -17,8 +17,8 @@ void Index::add_in_thread(key_t key, rust::Slice<float const> vector, size_t thr
     index_->add(key, vector.data(), config).error.raise();
 }
 
-Matches Index::search_in_thread(rust::Slice<float const> vector, size_t count, size_t thread) const {
-    Matches matches;
+SearchResults Index::search_in_thread(rust::Slice<float const> vector, size_t count, size_t thread) const {
+    SearchResults matches;
     matches.keys.reserve(count);
     matches.distances.reserve(count);
     for (size_t i = 0; i != count; ++i)
@@ -36,8 +36,8 @@ Matches Index::search_in_thread(rust::Slice<float const> vector, size_t count, s
 
 void Index::add(key_t key, rust::Slice<float const> vector) const { index_->add(key, vector.data()).error.raise(); }
 
-Matches Index::search(rust::Slice<float const> vector, size_t count) const {
-    Matches matches;
+SearchResults Index::search(rust::Slice<float const> vector, size_t count) const {
+    SearchResults matches;
     matches.keys.reserve(count);
     matches.distances.reserve(count);
     for (size_t i = 0; i != count; ++i)
@@ -87,7 +87,7 @@ metric_kind_t rust_to_cpp_metric(MetricKind value) {
 
 scalar_kind_t rust_to_cpp_scalar(ScalarKind value) {
     switch (value) {
-    case ScalarKind::F8: return scalar_kind_t::f8_k;
+    case ScalarKind::I8: return scalar_kind_t::i8_k;
     case ScalarKind::F16: return scalar_kind_t::f16_k;
     case ScalarKind::F32: return scalar_kind_t::f32_k;
     case ScalarKind::F64: return scalar_kind_t::f64_k;

@@ -15,7 +15,7 @@ from usearch.index import Index
 index = Index(
     ndim=3, # Define the number of dimensions in input vectors
     metric='cos', # Choose 'l2sq', 'haversine' or other metric, default = 'ip'
-    dtype='f32', # Quantize to 'f16' or 'f8' if needed, default = 'f32'
+    dtype='f32', # Quantize to 'f16' or 'i8' if needed, default = 'f32'
     connectivity=16, # How frequent should the connections in the graph be, optional
     expansion_add=128, # Control the recall of indexing, optional
     expansion_search=64, # Control the quality of search, optional
@@ -23,7 +23,7 @@ index = Index(
 
 vector = np.array([0.2, 0.6, 0.4])
 index.add(42, vector)
-matches: Matches = index.search(vector, 10)
+matches: SearchResults = index.search(vector, 10)
 
 assert len(index) == 1
 assert len(matches) == 1
@@ -61,9 +61,9 @@ keys = np.arange(n)
 vectors = np.random.uniform(0, 0.3, (n, index.ndim)).astype(np.float32)
 
 index.add(keys, vectors, threads=..., copy=...)
-matches: BatchMatches = index.search(vectors, 10, threads=...)
+matches: BatchSearchResults = index.search(vectors, 10, threads=...)
 
-first_query_matches: Matches = matches[0]
+first_query_matches: SearchResults = matches[0]
 assert matches[0].key == 0
 assert matches[0].distance <= 0.001
 

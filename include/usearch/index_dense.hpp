@@ -295,13 +295,13 @@ class index_dense_gt {
     mutable std::vector<byte_t> cast_buffer_;
     struct casts_t {
         cast_t from_b1x8;
-        cast_t from_f8;
+        cast_t from_i8;
         cast_t from_f16;
         cast_t from_f32;
         cast_t from_f64;
 
         cast_t to_b1x8;
-        cast_t to_f8;
+        cast_t to_i8;
         cast_t to_f16;
         cast_t to_f32;
         cast_t to_f64;
@@ -507,31 +507,31 @@ class index_dense_gt {
 
     // clang-format off
     add_result_t add(key_t key, b1x8_t const* vector) { return add_(key, vector, casts_.from_b1x8); }
-    add_result_t add(key_t key, f8_bits_t const* vector) { return add_(key, vector, casts_.from_f8); }
+    add_result_t add(key_t key, i8_bits_t const* vector) { return add_(key, vector, casts_.from_i8); }
     add_result_t add(key_t key, f16_t const* vector) { return add_(key, vector, casts_.from_f16); }
     add_result_t add(key_t key, f32_t const* vector) { return add_(key, vector, casts_.from_f32); }
     add_result_t add(key_t key, f64_t const* vector) { return add_(key, vector, casts_.from_f64); }
 
     add_result_t add(key_t key, b1x8_t const* vector, index_dense_update_config_t config) { return add_(key, vector, config, casts_.from_b1x8); }
-    add_result_t add(key_t key, f8_bits_t const* vector, index_dense_update_config_t config) { return add_(key, vector, config, casts_.from_f8); }
+    add_result_t add(key_t key, i8_bits_t const* vector, index_dense_update_config_t config) { return add_(key, vector, config, casts_.from_i8); }
     add_result_t add(key_t key, f16_t const* vector, index_dense_update_config_t config) { return add_(key, vector, config, casts_.from_f16); }
     add_result_t add(key_t key, f32_t const* vector, index_dense_update_config_t config) { return add_(key, vector, config, casts_.from_f32); }
     add_result_t add(key_t key, f64_t const* vector, index_dense_update_config_t config) { return add_(key, vector, config, casts_.from_f64); }
 
     search_result_t search(b1x8_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_b1x8); }
-    search_result_t search(f8_bits_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f8); }
+    search_result_t search(i8_bits_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_i8); }
     search_result_t search(f16_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f16); }
     search_result_t search(f32_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f32); }
     search_result_t search(f64_t const* vector, std::size_t wanted) const { return search_(vector, wanted, casts_.from_f64); }
 
     search_result_t search(b1x8_t const* vector, std::size_t wanted, index_search_config_t config) const { return search_(vector, wanted, config, casts_.from_b1x8); }
-    search_result_t search(f8_bits_t const* vector, std::size_t wanted, index_search_config_t config) const { return search_(vector, wanted, config, casts_.from_f8); }
+    search_result_t search(i8_bits_t const* vector, std::size_t wanted, index_search_config_t config) const { return search_(vector, wanted, config, casts_.from_i8); }
     search_result_t search(f16_t const* vector, std::size_t wanted, index_search_config_t config) const { return search_(vector, wanted, config, casts_.from_f16); }
     search_result_t search(f32_t const* vector, std::size_t wanted, index_search_config_t config) const { return search_(vector, wanted, config, casts_.from_f32); }
     search_result_t search(f64_t const* vector, std::size_t wanted, index_search_config_t config) const { return search_(vector, wanted, config, casts_.from_f64); }
 
     bool get(key_t key, b1x8_t* vector) const { return get_(key, vector, casts_.to_b1x8); }
-    bool get(key_t key, f8_bits_t* vector) const { return get_(key, vector, casts_.to_f8); }
+    bool get(key_t key, i8_bits_t* vector) const { return get_(key, vector, casts_.to_i8); }
     bool get(key_t key, f16_t* vector) const { return get_(key, vector, casts_.to_f16); }
     bool get(key_t key, f32_t* vector) const { return get_(key, vector, casts_.to_f32); }
     bool get(key_t key, f64_t* vector) const { return get_(key, vector, casts_.to_f64); }
@@ -1297,13 +1297,13 @@ class index_dense_gt {
         casts_t result;
 
         result.from_b1x8 = cast_gt<b1x8_t, to_scalar_at>{};
-        result.from_f8 = cast_gt<f8_bits_t, to_scalar_at>{};
+        result.from_i8 = cast_gt<i8_bits_t, to_scalar_at>{};
         result.from_f16 = cast_gt<f16_t, to_scalar_at>{};
         result.from_f32 = cast_gt<f32_t, to_scalar_at>{};
         result.from_f64 = cast_gt<f64_t, to_scalar_at>{};
 
         result.to_b1x8 = cast_gt<to_scalar_at, b1x8_t>{};
-        result.to_f8 = cast_gt<to_scalar_at, f8_bits_t>{};
+        result.to_i8 = cast_gt<to_scalar_at, i8_bits_t>{};
         result.to_f16 = cast_gt<to_scalar_at, f16_t>{};
         result.to_f32 = cast_gt<to_scalar_at, f32_t>{};
         result.to_f64 = cast_gt<to_scalar_at, f64_t>{};
@@ -1316,7 +1316,7 @@ class index_dense_gt {
         case scalar_kind_t::f64_k: return make_casts_<f64_t>();
         case scalar_kind_t::f32_k: return make_casts_<f32_t>();
         case scalar_kind_t::f16_k: return make_casts_<f16_t>();
-        case scalar_kind_t::f8_k: return make_casts_<f8_bits_t>();
+        case scalar_kind_t::i8_k: return make_casts_<i8_bits_t>();
         case scalar_kind_t::b1x8_k: return make_casts_<b1x8_t>();
         default: return {};
         }

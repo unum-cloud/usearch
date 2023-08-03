@@ -34,7 +34,7 @@ USEARCH_EXPORT typedef enum usearch_scalar_kind_t {
     usearch_scalar_f32_k = 0,
     usearch_scalar_f64_k,
     usearch_scalar_f16_k,
-    usearch_scalar_f8_k,
+    usearch_scalar_i8_k,
     usearch_scalar_b1_k,
     usearch_scalar_unknown_k,
 } usearch_scalar_kind_t;

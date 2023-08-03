@@ -50,13 +50,13 @@ def _normalize_dtype(dtype, metric: MetricKind = MetricKind.IP) -> ScalarKind:
         "f64": ScalarKind.F64,
         "f32": ScalarKind.F32,
         "f16": ScalarKind.F16,
-        "f8": ScalarKind.F8,
+        "i8": ScalarKind.I8,
         "b1": ScalarKind.B1,
         "b1x8": ScalarKind.B1,
         np.float64: ScalarKind.F64,
         np.float32: ScalarKind.F32,
         np.float16: ScalarKind.F16,
-        np.int8: ScalarKind.F8,
+        np.int8: ScalarKind.I8,
     }
     return _normalize[dtype]
 
@@ -66,7 +66,7 @@ def _to_numpy_compatible_dtype(dtype: ScalarKind) -> ScalarKind:
         ScalarKind.F64: ScalarKind.F64,
         ScalarKind.F32: ScalarKind.F32,
         ScalarKind.F16: ScalarKind.F16,
-        ScalarKind.F8: ScalarKind.F16,
+        ScalarKind.I8: ScalarKind.F16,
         ScalarKind.B1: ScalarKind.B1,
     }
     return _normalize[dtype]
@@ -77,7 +77,7 @@ def _to_numpy_dtype(dtype: ScalarKind):
         ScalarKind.F64: np.float64,
         ScalarKind.F32: np.float32,
         ScalarKind.F16: np.float16,
-        ScalarKind.F8: np.float16,
+        ScalarKind.I8: np.float16,
         ScalarKind.B1: np.uint8,
     }
     return _normalize[dtype]
@@ -112,7 +112,7 @@ def _search_in_compiled(
     exact: bool,
     log: Union[str, bool],
     batch_size: int,
-) -> Union[Matches, BatchMatches]:
+) -> Union[SearchResults, BatchSearchResults]:
     #
     assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
     assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
@@ -120,7 +120,9 @@ def _search_in_compiled(
         vectors = vectors.reshape(1, len(vectors))
     count_vectors = vectors.shape[0]
 
-    def distil_batch(batch_matches: BatchMatches) -> Union[BatchMatches, Matches]:
+    def distil_batch(
+        batch_matches: BatchSearchResults,
+    ) -> Union[BatchSearchResults, SearchResults]:
         return batch_matches[0] if count_vectors == 1 else batch_matches
 
     if log and batch_size == 0:
@@ -147,12 +149,12 @@ def _search_in_compiled(
                 exact=exact,
                 threads=threads,
             )
-            tasks_matches.append(BatchMatches(*tuple_))
+            tasks_matches.append(BatchSearchResults(*tuple_))
             pbar.update(vectors.shape[0])
 
         pbar.close()
         return distil_batch(
-            BatchMatches(
+            BatchSearchResults(
                 keys=np.vstack([m.keys for m in tasks_matches]),
                 distances=np.vstack([m.distances for m in tasks_matches]),
                 counts=np.concatenate([m.counts for m in tasks_matches], axis=None),
@@ -166,7 +168,7 @@ def _search_in_compiled(
             exact=exact,
             threads=threads,
         )
-        return distil_batch(BatchMatches(*tuple_))
+        return distil_batch(BatchSearchResults(*tuple_))
 
 
 def _add_to_compiled(
@@ -242,7 +244,7 @@ class Match:
 
 
 @dataclass
-class Matches:
+class SearchResults:
     """This class contains information about multiple retrieved vectors for single query,
     i.e it is a set of `Match` instances."""
 
@@ -272,13 +274,13 @@ class Matches:
         return [(int(l), float(d)) for l, d in zip(self.keys, self.distances)]
 
     def __repr__(self) -> str:
-        return f"usearch.Matches({len(self)})"
+        return f"usearch.SearchResults({len(self)})"
 
 
 @dataclass
-class BatchMatches:
+class BatchSearchResults:
     """This class contains information about multiple retrieved vectors for multiple queries,
-    i.e it is a set of `Matches` instances."""
+    i.e it is a set of `SearchResults` instances."""
 
     keys: np.ndarray
     distances: np.ndarray
@@ -290,9 +292,9 @@ class BatchMatches:
     def __len__(self) -> int:
         return len(self.counts)
 
-    def __getitem__(self, index: int) -> Matches:
+    def __getitem__(self, index: int) -> SearchResults:
         if isinstance(index, int) and index < len(self):
-            return Matches(
+            return SearchResults(
                 keys=self.keys[index, : self.counts[index]],
                 distances=self.distances[index, : self.counts[index]],
                 visited_members=self.visited_members // len(self),
@@ -307,12 +309,12 @@ class BatchMatches:
         return [match.to_list() for matches in list_of_matches for match in matches]
 
     def mean_recall(self, expected: np.ndarray, k: Optional[int] = None) -> float:
-        """Measures recall [0, 1] as of `Matches` that contain the corresponding
+        """Measures recall [0, 1] as of `SearchResults` that contain the corresponding
         `expected` entry anywhere among results."""
         return self.count_matches(expected, k=k) / len(expected)
 
     def count_matches(self, expected: np.ndarray, k: Optional[int] = None) -> int:
-        """Measures recall [0, len(expected)] as of `Matches` that contain the corresponding
+        """Measures recall [0, len(expected)] as of `SearchResults` that contain the corresponding
         `expected` entry anywhere among results.
         """
         assert len(expected) == len(self)
@@ -328,7 +330,7 @@ class BatchMatches:
         return recall
 
     def __repr__(self) -> str:
-        return f"usearch.BatchMatches({np.sum(self.counts)} across {len(self)} queries)"
+        return f"usearch.BatchSearchResults({np.sum(self.counts)} across {len(self)} queries)"
 
 
 class CompiledMetric(NamedTuple):
@@ -376,7 +378,7 @@ class Index:
 
         :param dtype: Scalar type for internal vector storage, defaults to None
         :type dtype: Optional[Union[str, ScalarKind]], optional
-            For continuous metrics can be: f16, f32, f64, or f8.
+            For continuous metrics can be: f16, f32, f64, or i8.
             For bitwise metrics it's implementation-defined, and can't change.
             Example: you can use the `f16` index with `f32` vectors in Euclidean space,
             which will be automatically downcasted.
@@ -532,7 +534,7 @@ class Index:
         exact: bool = False,
         log: Union[str, bool] = False,
         batch_size: int = 0,
-    ) -> Union[Matches, BatchMatches]:
+    ) -> Union[SearchResults, BatchSearchResults]:
         """
         Performs approximate nearest neighbors search for one or more queries.
 
@@ -549,7 +551,7 @@ class Index:
         :param batch_size: Number of vectors to process at once, defaults to 0
         :type batch_size: int, optional
         :return: Approximate matches for one or more queries
-        :rtype: Union[Matches, BatchMatches]
+        :rtype: Union[SearchResults, BatchSearchResults]
         """
 
         return _search_in_compiled(

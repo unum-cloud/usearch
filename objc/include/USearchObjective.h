@@ -8,7 +8,7 @@ typedef NS_ENUM(NSUInteger, USearchScalar) {
     USearchScalarF32,
     USearchScalarF16,
     USearchScalarF64,
-    USearchScalarF8,
+    USearchScalarI8,
     USearchScalarB1
 };
 

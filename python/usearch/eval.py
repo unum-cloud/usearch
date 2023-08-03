@@ -10,8 +10,8 @@ import numpy as np
 from usearch.io import load_matrix
 from usearch.index import (
     Index,
-    Matches,
-    BatchMatches,
+    SearchResults,
+    BatchSearchResults,
     MetricKind,
     MetricKindBitwise,
     Key,
@@ -111,7 +111,7 @@ def self_recall(index: Index, sample: float = 1, **kwargs) -> SearchStats:
         keys = np.random.choice(keys, int(ceil(len(keys) * sample)))
 
     queries = index.get_vectors(keys, index.dtype)
-    matches: BatchMatches = index.search(queries, **kwargs)
+    matches: BatchSearchResults = index.search(queries, **kwargs)
     count_matches: float = matches.count_matches(keys)
     return SearchStats(
         index_size=len(index),

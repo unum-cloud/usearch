@@ -44,7 +44,7 @@ def jit(
     )
 
     numba_supported_types = (
-        ScalarKind.F8,
+        ScalarKind.I8,
         # Half-precision is still unsupported
         # https://github.com/numba/numba/issues/4402
         # ScalarKind.F16: np.float16,
@@ -55,7 +55,7 @@ def jit(
         return metric
 
     scalar_kind_to_accumulator_type = {
-        ScalarKind.F8: types.int32,
+        ScalarKind.I8: types.int32,
         ScalarKind.F16: types.float16,
         ScalarKind.F32: types.float32,
         ScalarKind.F64: types.float64,
@@ -98,7 +98,7 @@ def jit(
         return types.float32(ab_delta_sq)
 
     scalar_kind_to_signature = {
-        ScalarKind.F8: signature_i8args,
+        ScalarKind.I8: signature_i8args,
         ScalarKind.F16: signature_f16args,
         ScalarKind.F32: signature_f32args,
         ScalarKind.F64: signature_f64args,
@@ -110,7 +110,7 @@ def jit(
         MetricKind.L2sq: numba_l2sq,
     }
 
-    if dtype == ScalarKind.F8 and metric == MetricKind.IP:
+    if dtype == ScalarKind.I8 and metric == MetricKind.IP:
         metric = MetricKind.Cos
 
     pointer = cfunc(scalar_kind_to_signature[dtype])(metric_kind_to_function[metric])

@@ -44,7 +44,7 @@ const (
 	f32 Quantization = iota
 	f16
 	f64
-	f8
+	i8
 )
 
 func (a Quantization) String() string {
@@ -55,8 +55,8 @@ func (a Quantization) String() string {
 		return "f32"
 	case f64:
 		return "f64"
-	case f8:
-		return "f8"
+	case i8:
+		return "i8"
 	default:
 		panic("unknown quantization")
 	}

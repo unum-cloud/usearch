@@ -133,7 +133,7 @@ metric_t udf(metric_kind_t kind, metric_signature_t signature, std::uintptr_t me
              scalar_kind_t scalar_kind, std::size_t dimensions) {
     switch (scalar_kind) {
     case scalar_kind_t::b1x8_k: return typed_udf<b1x8_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
-    case scalar_kind_t::f8_k: return typed_udf<f8_bits_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
+    case scalar_kind_t::i8_k: return typed_udf<i8_bits_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
     case scalar_kind_t::f16_k: return typed_udf<f16_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
     case scalar_kind_t::f32_k: return typed_udf<f32_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
     case scalar_kind_t::f64_k: return typed_udf<f64_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
@@ -164,12 +164,12 @@ scalar_kind_t numpy_string_to_kind(std::string const& name) {
     if (name == "B" || name == "<B" || name == "u1" || name == "|u1")
         return scalar_kind_t::b1x8_k;
     else if (name == "b" || name == "<b" || name == "i1" || name == "|i1")
-        return scalar_kind_t::f8_k;
+        return scalar_kind_t::i8_k;
     else if (name == "e" || name == "<e" || name == "f2" || name == "<f2")
         return scalar_kind_t::f16_k;
     else if (name == "f" || name == "<f" || name == "f4" || name == "<f4")
         return scalar_kind_t::f32_k;
-    else if (name == "d" || name == "<d" || name == "f8" || name == "<f8")
+    else if (name == "d" || name == "<d" || name == "i8" || name == "<i8")
         return scalar_kind_t::f64_k;
     else
         return scalar_kind_t::unknown_k;
@@ -232,7 +232,7 @@ static void add_many_to_index(                            //
     // clang-format off
     switch (numpy_string_to_kind(vectors_info.format)) {
     case scalar_kind_t::b1x8_k: add_typed_to_index<b1x8_t>(index, keys_info, vectors_info, force_copy, threads); break;
-    case scalar_kind_t::f8_k: add_typed_to_index<f8_bits_t>(index, keys_info, vectors_info, force_copy, threads); break;
+    case scalar_kind_t::i8_k: add_typed_to_index<i8_bits_t>(index, keys_info, vectors_info, force_copy, threads); break;
     case scalar_kind_t::f16_k: add_typed_to_index<f16_t>(index, keys_info, vectors_info, force_copy, threads); break;
     case scalar_kind_t::f32_k: add_typed_to_index<f32_t>(index, keys_info, vectors_info, force_copy, threads); break;
     case scalar_kind_t::f64_k: add_typed_to_index<f64_t>(index, keys_info, vectors_info, force_copy, threads); break;
@@ -369,7 +369,7 @@ static py::tuple search_many_in_index( //
     // clang-format off
     switch (numpy_string_to_kind(vectors_info.format)) {
     case scalar_kind_t::b1x8_k: search_typed<b1x8_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
-    case scalar_kind_t::f8_k: search_typed<f8_bits_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
+    case scalar_kind_t::i8_k: search_typed<i8_bits_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
     case scalar_kind_t::f16_k: search_typed<f16_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
     case scalar_kind_t::f32_k: search_typed<f32_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
     case scalar_kind_t::f64_k: search_typed<f64_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
@@ -452,8 +452,8 @@ template <typename index_at> py::object get_member(index_at const& index, key_t 
         return get_typed_member<f64_t>(index, key);
     else if (scalar_kind == scalar_kind_t::f16_k)
         return get_typed_member<f16_t, std::uint16_t>(index, key);
-    else if (scalar_kind == scalar_kind_t::f8_k)
-        return get_typed_member<f8_bits_t, std::int8_t>(index, key);
+    else if (scalar_kind == scalar_kind_t::i8_k)
+        return get_typed_member<i8_bits_t, std::int8_t>(index, key);
     else if (scalar_kind == scalar_kind_t::b1x8_k)
         return get_typed_member<b1x8_t, std::uint8_t>(index, key);
     else
@@ -520,7 +520,7 @@ PYBIND11_MODULE(compiled, m) {
         .value("F64", scalar_kind_t::f64_k)
         .value("F32", scalar_kind_t::f32_k)
         .value("F16", scalar_kind_t::f16_k)
-        .value("F8", scalar_kind_t::f8_k)
+        .value("I8", scalar_kind_t::i8_k)
         .value("U64", scalar_kind_t::u64_k)
         .value("U32", scalar_kind_t::u32_k)
         .value("U16", scalar_kind_t::u16_k)

@@ -451,7 +451,7 @@ struct args_t {
     bool big = false;
 
     bool quantize_f16 = false;
-    bool quantize_f8 = false;
+    bool quantize_i8 = false;
     bool quantize_b1 = false;
 
     bool metric_ip = false;
@@ -481,8 +481,8 @@ struct args_t {
     scalar_kind_t quantization() const noexcept {
         if (quantize_f16)
             return scalar_kind_t::f16_k;
-        if (quantize_f8)
-            return scalar_kind_t::f8_k;
+        if (quantize_i8)
+            return scalar_kind_t::i8_k;
         if (quantize_b1)
             return scalar_kind_t::b1x8_k;
         return scalar_kind_t::f32_k;
@@ -553,7 +553,7 @@ int main(int argc, char** argv) {
         (option("--rows-take") & value("integer", args.vectors_to_take)).doc("Number of vectors to take"),
         ( //
             option("-f16", "--f16quant").set(args.quantize_f16).doc("Enable `f16_t` quantization") |
-            option("-f8", "--f8quant").set(args.quantize_f8).doc("Enable `f8_t` quantization") |
+            option("-i8", "--i8quant").set(args.quantize_i8).doc("Enable `i8_t` quantization") |
             option("-b1", "--b1quant").set(args.quantize_b1).doc("Enable `b1x8_t` quantization")),
         ( //
             option("--ip").set(args.metric_ip).doc("Choose Inner Product metric") |
