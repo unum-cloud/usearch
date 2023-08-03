@@ -79,20 +79,28 @@ func (a Quantization) String() string {
 }
 
 type IndexConfig struct {
-	Quantization    Quantization
-	Metric          Metric
-	Dimensions      uint
-	Connectivity    uint
-	ExpansionAdd    uint
+	// The scalar kind used for quantization of vector data during indexing.
+	Quantization Quantization
+	// The metric kind used for distance calculation between vectors.
+	Metric Metric
+	// The number of dimensions in the vectors to be indexed.
+	Dimensions uint
+	// The @b optional connectivity parameter that limits connections-per-node in graph.
+	Connectivity uint
+	// The @b optional expansion factor used for index construction when adding vectors.
+	ExpansionAdd uint
+	// The @b optional expansion factor used for index construction during search operations.
 	ExpansionSearch uint
 }
 
 func DefaultConfig(dimensions uint) IndexConfig {
 	c := IndexConfig{}
-	c.Connectivity = 16
 	c.Dimensions = dimensions
-	c.ExpansionAdd = 128
-	c.ExpansionSearch = 64
+	c.Metric = Cosine
+	// Zeros will be replaced by the underlying C implementation
+	c.Connectivity = 0
+	c.ExpansionAdd = 0
+	c.ExpansionSearch = 0
 	return c
 }
 
@@ -101,6 +109,7 @@ type Index struct {
 	config        IndexConfig
 }
 
+// Initializes a new instance of the index.
 func NewIndex(conf IndexConfig) (index *Index, err error) {
 	index = &Index{config: conf}
 
@@ -200,6 +209,7 @@ func (index *Index) Capacity() (cap uint, err error) {
 	return cap, err
 }
 
+// Frees the resources associated with the index.
 func (index *Index) Destroy() error {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -215,6 +225,7 @@ func (index *Index) Destroy() error {
 	return nil
 }
 
+// Reserves memory for a specified number of incoming vectors.
 func (index *Index) Reserve(capacity uint) error {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -228,6 +239,7 @@ func (index *Index) Reserve(capacity uint) error {
 	return nil
 }
 
+// Adds a vector with a key to the index.
 func (index *Index) Add(key Key, vec []float32) error {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -241,6 +253,7 @@ func (index *Index) Add(key Key, vec []float32) error {
 	return nil
 }
 
+// Removes the vector associated with the given key from the index.
 func (index *Index) Remove(key Key) error {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -254,6 +267,7 @@ func (index *Index) Remove(key Key) error {
 	return nil
 }
 
+// Checks if the index contains a vector with a specific key.
 func (index *Index) Contains(key Key) (found bool, err error) {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -284,6 +298,7 @@ func (index *Index) Get(key Key) (vector []float32, err error) {
 	return vector, nil
 }
 
+// Performs k-Approximate Nearest Neighbors Search for closest vectors to query.
 func (index *Index) Search(query []float32, limit uint) (keys []Key, distances []float32, err error) {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -305,6 +320,7 @@ func (index *Index) Search(query []float32, limit uint) (keys []Key, distances [
 	return keys, distances, nil
 }
 
+// Saves the index to a file.
 func (index *Index) Save(path string) error {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -321,6 +337,7 @@ func (index *Index) Save(path string) error {
 	return nil
 }
 
+// Loads the index from a file.
 func (index *Index) Load(path string) error {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -337,6 +354,7 @@ func (index *Index) Load(path string) error {
 	return nil
 }
 
+// Creates a view of the index from a file without loading it into memory.
 func (index *Index) View(path string) error {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
