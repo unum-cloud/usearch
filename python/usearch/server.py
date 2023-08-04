@@ -7,13 +7,13 @@ import numpy as np
 from typing import List
 
 from ucall.rich_posix import Server
-from usearch.index import Index, Matches, Label
+from usearch.index import Index, Matches, Key
 
 
 def _ascii_to_vector(string: str) -> np.ndarray:
     """
     WARNING: A dirty performance hack!
-    Assuming the `f8` vectors in our implementations are just integers,
+    Assuming the `i8` vectors in our implementations are just integers,
     and generally contain scalars in the [0, 100] range, we can transmit
     them as JSON-embedded strings. The only symbols we must avoid are
     the double-quote '"' (code 22) and backslash '\' (code 60).
@@ -59,15 +59,15 @@ def serve(
         return index.connectivity()
 
     @server
-    def add_one(label: int, vector: np.ndarray):
-        print("adding", label, vector)
-        labels = np.array([label], dtype=Label)
+    def add_one(key: int, vector: np.ndarray):
+        print("adding", key, vector)
+        keys = np.array([key], dtype=Key)
         vectors = vector.flatten().reshape(vector.shape[0], 1)
-        index.add(labels, vectors)
+        index.add(keys, vectors)
 
     @server
-    def add_many(labels: np.ndarray, vectors: np.ndarray):
-        index.add(labels, vectors, threads=threads)
+    def add_many(keys: np.ndarray, vectors: np.ndarray):
+        index.add(keys, vectors, threads=threads)
 
     @server
     def search_one(vector: np.ndarray, count: int) -> List[dict]:
@@ -82,8 +82,8 @@ def serve(
         return results.to_list()
 
     @server
-    def add_ascii(label: int, string: str):
-        return add_one(label, _ascii_to_vector(string))
+    def add_ascii(key: int, string: str):
+        return add_one(key, _ascii_to_vector(string))
 
     @server
     def search_ascii(string: str, count: int):

@@ -14,7 +14,8 @@ macros_args = [
 
 if sys.platform == "linux":
     compile_args.append("-std=c++11")
-    compile_args.append("-O3")
+    compile_args.append("-O3")  # Maximize performance
+    compile_args.append("-g")  # Simplify debugging
     compile_args.append("-Wno-unknown-pragmas")
 
     macros_args.append(("USEARCH_USE_OPENMP", "1"))
@@ -26,7 +27,8 @@ if sys.platform == "darwin":
     # https://github.com/unum-cloud/usearch/actions/runs/4975434891/jobs/8902603392
     compile_args.append("-mmacosx-version-min=10.15")
     compile_args.append("-std=c++11")
-    compile_args.append("-O3")
+    compile_args.append("-O3")  # Maximize performance
+    compile_args.append("-g")  # Simplify debugging
     compile_args.append("-Wno-unknown-pragmas")
 
     # Linking OpenMP requires additional preparion in CIBuildWheel
@@ -63,6 +65,7 @@ setup(
     packages=["usearch"],
     package_dir={"usearch": "python/usearch"},
     description="Smaller & Faster Single-File Vector Search Engine from Unum",
+    author="Ash Vardanian",
     long_description=long_description,
     long_description_content_type="text/markdown",
     license="Apache-2.0",

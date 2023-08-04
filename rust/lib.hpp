@@ -3,27 +3,26 @@
 
 #include <memory> // `std::shared_ptr`
 
-#include <usearch/index_punned_dense.hpp>
+#include <usearch/index_dense.hpp>
 
 struct Matches;
 struct IndexOptions;
 
 class Index {
   public:
-    using metric_t = unum::usearch::index_punned_dense_metric_t;
-    using distance_t = unum::usearch::punned_distance_t;
-    using index_t = unum::usearch::punned_small_t;
-    using add_result_t = typename index_t::add_result_t;
-    using search_result_t = typename index_t::search_result_t;
-    using label_t = typename index_t::label_t;
-    using id_t = typename index_t::id_t;
+    using metric_t = unum::usearch::metric_punned_t;
+    using distance_t = unum::usearch::distance_punned_t;
+    using index_dense_t = unum::usearch::index_dense_t;
+    using add_result_t = typename index_dense_t::add_result_t;
+    using search_result_t = typename index_dense_t::search_result_t;
+    using key_t = typename index_dense_t::key_t;
 
-    Index(std::unique_ptr<index_t> index);
+    Index(std::unique_ptr<index_dense_t> index);
 
     void reserve(size_t) const;
 
-    void add(label_t label, rust::Slice<float const> vector) const;
-    void add_in_thread(label_t label, rust::Slice<float const> vector, size_t thread) const;
+    void add(key_t key, rust::Slice<float const> vector) const;
+    void add_in_thread(key_t key, rust::Slice<float const> vector, size_t thread) const;
 
     Matches search(rust::Slice<float const> vector, size_t count) const;
     Matches search_in_thread(rust::Slice<float const> vector, size_t count, size_t thread) const;
@@ -38,7 +37,7 @@ class Index {
     void view(rust::Str path) const;
 
   private:
-    std::unique_ptr<index_t> index_;
+    std::unique_ptr<index_dense_t> index_;
 };
 
 std::unique_ptr<Index> new_index(IndexOptions const& options);

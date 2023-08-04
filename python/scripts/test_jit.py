@@ -85,13 +85,12 @@ def test_index_numba(ndim: int, batch_size: int):
         )
         index = Index(ndim=ndim, metric=metric)
 
-        labels = np.arange(batch_size)
+        keys = np.arange(batch_size)
         vectors = random_vectors(count=batch_size, ndim=ndim)
 
-        index.add(labels, vectors)
-        matches, distances, count = index.search(vectors, 10)
-        assert matches.shape[0] == distances.shape[0]
-        assert count.shape[0] == batch_size
+        index.add(keys, vectors)
+        matches = index.search(vectors, 10)
+        assert len(matches) == batch_size
 
 
 @pytest.mark.parametrize("ndim", dimensions[-1:])
@@ -149,13 +148,12 @@ def test_index_cppyy(ndim: int, batch_size: int):
         )
         index = Index(ndim=ndim, metric=metric)
 
-        labels = np.arange(batch_size)
+        keys = np.arange(batch_size)
         vectors = random_vectors(count=batch_size, ndim=ndim)
 
-        index.add(labels, vectors)
-        matches, distances, count = index.search(vectors, 10)
-        assert matches.shape[0] == distances.shape[0]
-        assert count.shape[0] == batch_size
+        index.add(keys, vectors)
+        matches = index.search(vectors, 10)
+        assert len(matches) == batch_size
 
 
 @pytest.mark.parametrize("ndim", [8])
@@ -235,10 +233,10 @@ def test_index_peachpy(ndim: int, batch_size: int):
     )
     index = Index(ndim=ndim, metric=metric)
 
-    labels = np.arange(batch_size)
+    keys = np.arange(batch_size)
     vectors = random_vectors(count=batch_size, ndim=ndim)
 
-    index.add(labels, vectors)
+    index.add(keys, vectors)
     matches, distances, count = index.search(vectors, 10)
     assert matches.shape[0] == distances.shape[0]
     assert count.shape[0] == batch_size

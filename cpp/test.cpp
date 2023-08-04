@@ -3,8 +3,11 @@
  */
 #include <algorithm>
 #include <stdexcept>
+#include <unordered_map>
 
-#include <usearch/index_punned_dense.hpp>
+#include <usearch/index.hpp>
+#include <usearch/index_dense.hpp>
+#include <usearch/index_plugins.hpp>
 
 using namespace unum::usearch;
 using namespace unum;
@@ -14,94 +17,197 @@ void expect(bool must_be_true) {
         throw std::runtime_error("Failed!");
 }
 
-template <typename scalar_at, typename index_at> void test3d(index_at&& index) {
+template <bool punned_ak, typename index_at, typename scalar_at, typename... extra_args_at>
+void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vectors, extra_args_at&&... args) {
 
     using scalar_t = scalar_at;
-    using view_t = span_gt<scalar_t const>;
-    using index_t = typename std::remove_reference<index_at>::type;
+    using index_t = index_at;
+    using key_t = typename index_t::key_t;
     using distance_t = typename index_t::distance_t;
-    using label_t = typename index_t::label_t;
 
-    scalar_t vec[3] = {10, 20, 15};
-    scalar_t vec_a[3] = {15, 16, 17};
-    scalar_t vec_b[3] = {16, 17, 18};
+    // Generate some keys starting from end,
+    // for three vectors from the dataset
+    key_t const key_max = default_free_value<key_t>() - 1;
+    key_t const key_first = key_max - 0;
+    key_t const key_second = key_max - 1;
+    key_t const key_third = key_max - 2;
+    scalar_t const* vector_first = vectors[0].data();
+    scalar_t const* vector_second = vectors[1].data();
+    scalar_t const* vector_third = vectors[2].data();
+    std::size_t dimensions = vectors[0].size();
 
     index.reserve(10);
-    index.add(42, view_t{&vec[0], 3ul});
+    index.add(key_first, vector_first, args...);
 
     // Default approximate search
-    label_t matched_labels[10] = {0};
+    key_t matched_labels[10] = {0};
     distance_t matched_distances[10] = {0};
-    std::size_t matched_count = index.search(view_t{&vec[0], 3ul}, 5).dump_to(matched_labels, matched_distances);
+    std::size_t matched_count = index.search(vector_first, 5, args...).dump_to(matched_labels, matched_distances);
 
     expect(matched_count == 1);
-    expect(matched_labels[0] == 42);
+    expect(matched_labels[0] == key_first);
     expect(std::abs(matched_distances[0]) < 0.01);
 
     // Add more entries
-    search_config_t search_config;
+    index_search_config_t search_config;
     search_config.exact = true;
-    index.add(43, view_t{&vec_a[0], 3ul});
-    index.add(44, view_t{&vec_b[0], 3ul});
+    index.add(key_second, vector_second, args...);
+    index.add(key_third, vector_third, args...);
     expect(index.size() == 3);
 
     // Perform exact search
-    matched_count = index.search(view_t{&vec[0], 3ul}, 5, search_config).dump_to(matched_labels, matched_distances);
+    matched_count = index.search(vector_first, 5, args..., search_config).dump_to(matched_labels, matched_distances);
 
     // Validate scans
     std::size_t count = 0;
     for (auto member : index) {
-        label_t id = member.label;
-        expect(id >= 42 && id <= 44);
+        key_t id = member.key;
+        expect(id <= key_first && id >= key_third);
         count++;
     }
     expect((count == 3));
     expect((index.stats(0).nodes == 3));
 
+    // Try removals and replacements
+    if constexpr (punned_ak) {
+        using labeling_result_t = typename index_t::labeling_result_t;
+        labeling_result_t result = index.remove(key_third);
+        expect(bool(result));
+        expect(index.size() == 2);
+        index.add(key_third, vector_third, args...);
+        expect(index.size() == 3);
+    }
+
     // Search again over reconstructed index
     index.save("tmp.usearch");
     index.load("tmp.usearch");
-    matched_count = index.search(view_t{&vec[0], 3ul}, 5).dump_to(matched_labels, matched_distances);
+    matched_count = index.search(vector_first, 5, args...).dump_to(matched_labels, matched_distances);
     expect(matched_count == 3);
-    expect(matched_labels[0] == 42);
+    expect(matched_labels[0] == key_first);
     expect(std::abs(matched_distances[0]) < 0.01);
 
+    if constexpr (punned_ak) {
+        std::vector<scalar_t> vec_recovered_from_load(dimensions);
+        index.get(key_second, vec_recovered_from_load.data());
+        expect(std::equal(vector_second, vector_second + dimensions, vec_recovered_from_load.data()));
+    }
+
+    // Try batch requests
+    executor_default_t executor;
+    index.reserve({vectors.size(), executor.size()});
+    executor.execute_bulk(vectors.size() - 3, [&](std::size_t thread, std::size_t task) {
+        index_update_config_t config;
+        config.thread = thread;
+        index.add(key_max - task - 3, vectors[task + 3].data(), args..., config);
+    });
+
     // Search again over mapped index
-    file_head_result_t head = index_metadata("tmp.usearch");
-    expect(head.size == 3);
+    // file_head_result_t head = index_dense_metadata("tmp.usearch");
+    // expect(head.size == 3);
     index.view("tmp.usearch");
-    matched_count = index.search(view_t{&vec[0], 3ul}, 5).dump_to(matched_labels, matched_distances);
+    matched_count = index.search(vector_first, 5, args...).dump_to(matched_labels, matched_distances);
     expect(matched_count == 3);
-    expect(matched_labels[0] == 42);
+    expect(matched_labels[0] == key_first);
     expect(std::abs(matched_distances[0]) < 0.01);
+
+    if constexpr (punned_ak) {
+        std::vector<scalar_t> vec_recovered_from_view(dimensions);
+        index.get(key_second, vec_recovered_from_view.data());
+        expect(std::equal(vector_second, vector_second + dimensions, vec_recovered_from_view.data()));
+
+        auto compaction_result = index.compact();
+        expect(bool(compaction_result));
+    }
 
     expect(index.memory_usage() > 0);
     expect(index.stats().max_edges > 0);
+
+    // Check metadata
+    if constexpr (punned_ak) {
+        index_dense_metadata_result_t meta = index_dense_metadata("tmp.usearch");
+        expect(bool(meta));
+    }
 }
 
-template <typename scalar_at, typename index_at> void test3d_punned(index_at&& index) {
+template <typename scalar_at, typename key_at, typename slot_at> //
+void test_cosine(std::size_t collection_size, std::size_t dimensions) {
 
     using scalar_t = scalar_at;
-    using view_t = span_gt<scalar_t const>;
-    using span_t = span_gt<scalar_at>;
+    using key_t = key_at;
+    using slot_t = slot_at;
 
-    scalar_t vec42[3] = {10, 20, 15};
-    scalar_t vec43[3] = {19, 22, 11};
+    using index_typed_t = index_gt<float, key_t, slot_t>;
+    using member_cref_t = typename index_typed_t::member_cref_t;
+    using member_citerator_t = typename index_typed_t::member_citerator_t;
 
-    index.reserve(10);
-    index.add(42, view_t{&vec42[0], 3ul});
+    std::vector<std::vector<scalar_at>> matrix(collection_size);
+    for (std::vector<scalar_at>& vector : matrix) {
+        vector.resize(dimensions);
+        std::generate(vector.begin(), vector.end(), [=] { return float(std::rand()) / float(INT_MAX); });
+    }
 
-    // Reconstruct
-    scalar_t vec42_reconstructed[3] = {0, 0, 0};
-    index.get(42, span_t{&vec42_reconstructed[0], 3ul});
-    expect(vec42_reconstructed[0] == vec42[0]);
-    expect(vec42_reconstructed[1] == vec42[1]);
-    expect(vec42_reconstructed[2] == vec42[2]);
+    struct metric_t {
+        std::vector<std::vector<scalar_at>> const* matrix_ptr;
+        std::size_t dimensions;
 
-    index.add(43, view_t{&vec43[0], 3ul});
-    expect(index.size() == 2);
-    index.remove(43);
-    expect(index.size() == 1);
+        scalar_t const* row(std::size_t i) const noexcept { return (*matrix_ptr)[i].data(); }
+
+        float operator()(member_cref_t const& a, member_cref_t const& b) const {
+            return metric_cos_gt<scalar_t>{}(row(get_slot(b)), row(get_slot(a)), dimensions);
+        }
+        float operator()(scalar_t const* some_vector, member_cref_t const& member) const {
+            return metric_cos_gt<scalar_t>{}(some_vector, row(get_slot(member)), dimensions);
+        }
+        float operator()(member_citerator_t const& a, member_citerator_t const& b) const {
+            return metric_cos_gt<scalar_t>{}(row(get_slot(b)), row(get_slot(a)), dimensions);
+        }
+        float operator()(scalar_t const* some_vector, member_citerator_t const& member) const {
+            return metric_cos_gt<scalar_t>{}(some_vector, row(get_slot(member)), dimensions);
+        }
+    };
+
+    // Template:
+    for (std::size_t connectivity : {3, 13, 50}) {
+        std::printf("- templates with connectivity %zu \n", connectivity);
+        metric_t metric{&matrix, dimensions};
+        index_config_t config(connectivity);
+        index_typed_t index_typed(config);
+        test_cosine<false>(index_typed, matrix, metric);
+    }
+
+    // Type-punned:
+    for (std::size_t connectivity : {3, 13, 50}) {
+        std::printf("- punned with connectivity %zu \n", connectivity);
+        using index_t = index_dense_gt<key_t, slot_t>;
+        metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
+        index_config_t config(connectivity);
+        index_t index = index_t::make(metric, config);
+        test_cosine<true>(index, matrix);
+    }
+}
+
+template <typename key_at, typename slot_at> void test_tanimoto(std::size_t dimensions, std::size_t connectivity) {
+
+    using key_t = key_at;
+    using slot_t = slot_at;
+
+    using index_punned_t = index_dense_gt<key_t, slot_t>;
+    std::size_t words = divide_round_up<CHAR_BIT>(dimensions);
+    metric_punned_t metric(words, metric_kind_t::tanimoto_k, scalar_kind_t::b1x8_k);
+    index_config_t config(connectivity);
+    index_punned_t index = index_punned_t::make(metric, config);
+
+    executor_default_t executor;
+    std::size_t batch_size = 1000;
+    std::vector<b1x8_t> scalars(batch_size * index.scalar_words());
+    std::generate(scalars.begin(), scalars.end(), [] { return static_cast<b1x8_t>(std::rand()); });
+
+    index.reserve({batch_size + index.size(), executor.size()});
+    executor.execute_bulk(batch_size, [&](std::size_t thread, std::size_t task) {
+        index_update_config_t config;
+        config.thread = thread;
+        index.add(task + 25000, scalars.data() + index.scalar_words() * task, config);
+    });
 }
 
 template <typename index_at> void test_sets(index_at&& index) {
@@ -122,18 +228,18 @@ template <typename index_at> void test_sets(index_at&& index) {
     expect(index.size() == 3);
 }
 
-template <typename index_at> void test_sets_moved() {
+template <typename index_at> void test_sets_moved(index_config_t const& config) {
     {
-        index_at index;
+        index_at index{config};
         test_sets(index);
     }
     {
-        index_at index;
+        index_at index{config};
         index.reserve(1);
         test_sets(index_at(std::move(index)));
     }
     {
-        index_at index;
+        index_at index{config};
         index.reserve(1);
         index_at index_moved = std::move(index);
         test_sets(index_moved);
@@ -142,39 +248,17 @@ template <typename index_at> void test_sets_moved() {
 
 int main(int, char**) {
 
-    static_assert(!std::is_same<index_gt<ip_gt<>>::value_type, std::true_type>());
-    static_assert(!std::is_same<index_gt<cos_gt<>>::value_type, std::true_type>());
-    static_assert(!std::is_same<index_gt<l2sq_gt<>>::value_type, std::true_type>());
+    for (std::size_t collection_size : {10, 500})
+        for (std::size_t dimensions : {97, 256}) {
+            std::printf("Indexing %zu vectors with cos: <float, std::int64_t, std::uint32_t> \n", collection_size);
+            test_cosine<float, std::int64_t, std::uint32_t>(collection_size, dimensions);
+            std::printf("Indexing %zu vectors with cos: <float, std::int64_t, uint40_t> \n", collection_size);
+            test_cosine<float, std::int64_t, uint40_t>(collection_size, dimensions);
+        }
 
-    static_assert(has_reset<memory_mapping_allocator_t>());
-    // static_assert(!std::is_same<index_gt<hamming_gt<>>::value_type, std::true_type>());
-    // static_assert(!std::is_same<index_gt<tanimoto_gt<>>::value_type, std::true_type>());
-    // static_assert(!std::is_same<index_gt<sorensen_gt<>>::value_type, std::true_type>());
-    // static_assert(!std::is_same<index_gt<jaccard_gt<>>::value_type, std::true_type>());
-    // static_assert(!std::is_same<index_gt<pearson_correlation_gt<>>::value_type, std::true_type>());
-    // static_assert(!std::is_same<index_gt<haversine_gt<>>::value_type, std::true_type>());
-
-    using big_point_id_t = std::int64_t;
-    test3d<float>(index_gt<cos_gt<float>, big_point_id_t, std::uint32_t>{});
-    test3d<float>(index_gt<l2sq_gt<float>, big_point_id_t, std::uint32_t>{});
-
-    test3d<double>(index_gt<cos_gt<double>, big_point_id_t, std::uint32_t>{});
-    test3d<double>(index_gt<l2sq_gt<double>, big_point_id_t, std::uint32_t>{});
-
-    test3d<float>(punned_small_t::make(3, metric_kind_t::cos_k));
-    test3d<float>(punned_small_t::make(3, metric_kind_t::l2sq_k));
-
-    test3d<double>(punned_small_t::make(3, metric_kind_t::cos_k));
-    test3d<double>(punned_small_t::make(3, metric_kind_t::l2sq_k));
-
-    test3d_punned<float>(punned_small_t::make(3, metric_kind_t::cos_k));
-    test3d_punned<float>(punned_small_t::make(3, metric_kind_t::l2sq_k));
-
-    test_sets(index_gt<jaccard_gt<std::int32_t, float>, big_point_id_t, std::uint32_t>{});
-    test_sets(index_gt<jaccard_gt<std::int64_t, float>, big_point_id_t, std::uint32_t>{});
-
-    test_sets_moved<index_gt<jaccard_gt<std::int32_t, float>, big_point_id_t, std::uint32_t>>();
-    test_sets_moved<index_gt<jaccard_gt<std::int64_t, float>, big_point_id_t, std::uint32_t>>();
+    for (std::size_t connectivity : {3, 13, 50})
+        for (std::size_t dimensions : {97, 256})
+            test_tanimoto<std::int64_t, std::uint32_t>(dimensions, connectivity);
 
     return 0;
 }
