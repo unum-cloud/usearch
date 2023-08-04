@@ -594,11 +594,22 @@ class index_dense_gt {
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
     serialization_result_t save(output_file_t file, serialization_config_t config = {}) const {
-
         serialization_result_t result = file.open_if_not();
-        if (!result)
-            return result;
+        if (result)
+            stream([&](void* buffer, std::size_t length) {
+                result = file.write(buffer, length);
+                return !!result;
+            });
+        return result;
+    }
 
+    /**
+     *  @brief  Saves serialized binary index representation to a stream.
+     */
+    template <typename output_callback_at, typename progress_at = dummy_progress_t>
+    serialization_result_t stream(output_callback_at&& callback, serialization_config_t config = {}) const noexcept {
+
+        serialization_result_t result;
         std::uint64_t matrix_rows = 0;
         std::uint64_t matrix_cols = 0;
 
@@ -609,18 +620,16 @@ class index_dense_gt {
                 std::uint32_t dimensions[2];
                 dimensions[0] = static_cast<std::uint32_t>(typed_->size());
                 dimensions[1] = static_cast<std::uint32_t>(metric_.bytes_per_vector());
-                result = file.write(&dimensions, sizeof(dimensions));
-                if (!result)
-                    return result;
+                if (!callback(&dimensions, sizeof(dimensions)))
+                    return result.failed("Failed to serialize into stream");
                 matrix_rows = dimensions[0];
                 matrix_cols = dimensions[1];
             } else {
                 std::uint64_t dimensions[2];
                 dimensions[0] = static_cast<std::uint64_t>(typed_->size());
                 dimensions[1] = static_cast<std::uint64_t>(metric_.bytes_per_vector());
-                result = file.write(&dimensions, sizeof(dimensions));
-                if (!result)
-                    return result;
+                if (!callback(&dimensions, sizeof(dimensions)))
+                    return result.failed("Failed to serialize into stream");
                 matrix_rows = dimensions[0];
                 matrix_cols = dimensions[1];
             }
@@ -628,9 +637,8 @@ class index_dense_gt {
             // Dump the vectors one after another
             for (std::uint64_t i = 0; i != matrix_rows; ++i) {
                 byte_t* vector = vectors_lookup_[i];
-                result = file.write(vector, matrix_cols);
-                if (!result)
-                    return result;
+                if (!callback(vector, matrix_cols))
+                    return result.failed("Failed to serialize into stream");
             }
         }
 
@@ -657,13 +665,25 @@ class index_dense_gt {
             head.count_deleted = typed_->size() - size();
             head.dimensions = dimensions();
 
-            result = file.write(&buffer, sizeof(buffer));
-            if (!result)
-                return result;
+            if (!callback(&buffer, sizeof(buffer)))
+                return result.failed("Failed to serialize into stream");
         }
 
         // Save the actual proximity graph
-        return typed_->save(std::move(file));
+        return typed_->stream(std::forward<output_callback_at>(callback));
+    }
+
+    /**
+     *  @brief  Estimate the binary length (in bytes) of the serialized index.
+     */
+    std::size_t stream_length(serialization_config_t config = {}) const noexcept {
+        std::size_t dimensions_length = 0;
+        std::size_t matrix_length = 0;
+        if (!config.exclude_vectors) {
+            dimensions_length = config.use_64_bit_dimensions ? sizeof(std::uint64_t) * 2 : sizeof(std::uint32_t) * 2;
+            matrix_length = typed_->size() * metric_.bytes_per_vector();
+        }
+        return dimensions_length + matrix_length + sizeof(index_dense_head_buffer_t) + typed_->stream_length();
     }
 
     /**
