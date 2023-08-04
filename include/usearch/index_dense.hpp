@@ -60,7 +60,7 @@ struct index_dense_head_t {
     misaligned_ref_gt<scalar_kind_t> kind_key;
     misaligned_ref_gt<scalar_kind_t> kind_compressed_slot;
 
-    // Populational: 8 * 3 = 24 bytes
+    // Population: 8 * 3 = 24 bytes
     misaligned_ref_gt<std::uint64_t> count_present;
     misaligned_ref_gt<std::uint64_t> count_deleted;
     misaligned_ref_gt<std::uint64_t> dimensions;
@@ -171,7 +171,7 @@ inline index_dense_metadata_result_t index_dense_metadata(char const* file_path)
     if (!read)
         return result.failed(std::feof(file.get()) ? "End of file reached!" : std::strerror(errno));
 
-    // Check if the file immeditely starts with the index, instead of vectors
+    // Check if the file immediately starts with the index, instead of vectors
     result.config.exclude_vectors = true;
     if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
         return result;
@@ -481,7 +481,7 @@ class index_dense_gt {
     std::size_t scalar_words() const noexcept { return metric_.scalar_words(); }
     std::size_t dimensions() const noexcept { return metric_.dimensions(); }
 
-    // Fetching and changing search critereas:
+    // Fetching and changing search criteria
     std::size_t expansion_add() const { return config_.expansion_add; }
     std::size_t expansion_search() const { return config_.expansion_search; }
     void change_expansion_add(std::size_t n) { config_.expansion_add = n; }
@@ -497,6 +497,12 @@ class index_dense_gt {
     stats_t stats() const { return typed_->stats(); }
     stats_t stats(std::size_t level) const { return typed_->stats(level); }
 
+    /**
+     *  @brief  A relatively accurate lower bound on the amount of memory consumed by the system.
+     *          In practice it's error will be below 10%.
+     *
+     *  @see    `stream_length` for the length of the binary serialized representation.
+     */
     std::size_t memory_usage() const {
         return                                          //
             typed_->memory_usage(0) +                   //
@@ -596,10 +602,12 @@ class index_dense_gt {
     serialization_result_t save(output_file_t file, serialization_config_t config = {}) const {
         serialization_result_t result = file.open_if_not();
         if (result)
-            stream([&](void* buffer, std::size_t length) {
-                result = file.write(buffer, length);
-                return !!result;
-            });
+            stream(
+                [&](void* buffer, std::size_t length) {
+                    result = file.write(buffer, length);
+                    return !!result;
+                },
+                config);
         return result;
     }
 
@@ -849,7 +857,7 @@ class index_dense_gt {
     }
 
     /**
-     *  @brief Checks if a vector with specidied key is present.
+     *  @brief Checks if a vector with specified key is present.
      *  @return `true` if the key is present in the index, `false` otherwise.
      */
     bool contains(key_t key) const {
@@ -858,10 +866,10 @@ class index_dense_gt {
     }
 
     /**
-     *  @brief Checks if a vector with specidied key is present.
-     *  @return `true` if the key is present in the index, `false` otherwise.
+     *  @brief Count the number of vectors with specified key present.
+     *  @return Zero if nothing is found, a positive integer otherwise.
      */
-    bool count(key_t key) const {
+    std::size_t count(key_t key) const {
         shared_lock_t lock(slot_lookup_mutex_);
         return slot_lookup_.count(key);
     }

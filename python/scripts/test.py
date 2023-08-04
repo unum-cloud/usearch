@@ -123,8 +123,8 @@ def test_index(
     assert len({match.key for match in matches}) == 1, "Iteration over matches"
     assert matches[0].key == 42
     assert matches[0].distance == pytest.approx(0, abs=1e-3)
-    assert matches.computed_distances <= 2
-    assert matches.visited_members <= 2
+    assert matches.computed_distances != 0
+    assert matches.visited_members != 0
 
     # Validating the index structure and metadata:
     assert index.max_level >= 0

@@ -129,8 +129,10 @@ metric_t typed_udf(                                                             
     return metric_t(stl_function, dimensions, kind, scalar_kind);
 }
 
-metric_t udf(metric_kind_t kind, metric_signature_t signature, std::uintptr_t metric_uintptr, //
-             scalar_kind_t scalar_kind, std::size_t dimensions) {
+metric_t udf(                                                                        //
+    metric_kind_t kind, metric_signature_t signature, std::uintptr_t metric_uintptr, //
+    scalar_kind_t scalar_kind, std::size_t dimensions) {
+
     switch (scalar_kind) {
     case scalar_kind_t::b1x8_k: return typed_udf<b1x8_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
     case scalar_kind_t::i8_k: return typed_udf<i8_bits_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
@@ -502,15 +504,20 @@ PYBIND11_MODULE(compiled, m) {
 
     py::enum_<metric_kind_t>(m, "MetricKind")
         .value("Unknown", metric_kind_t::unknown_k)
+
         .value("IP", metric_kind_t::ip_k)
         .value("Cos", metric_kind_t::cos_k)
         .value("L2sq", metric_kind_t::l2sq_k)
+
         .value("Haversine", metric_kind_t::haversine_k)
         .value("Pearson", metric_kind_t::pearson_k)
         .value("Jaccard", metric_kind_t::jaccard_k)
         .value("Hamming", metric_kind_t::hamming_k)
         .value("Tanimoto", metric_kind_t::tanimoto_k)
-        .value("Sorensen", metric_kind_t::sorensen_k);
+        .value("Sorensen", metric_kind_t::sorensen_k)
+
+        .value("Cosine", metric_kind_t::cos_k)
+        .value("InnerProduct", metric_kind_t::ip_k);
 
     py::enum_<scalar_kind_t>(m, "ScalarKind")
         .value("Unknown", scalar_kind_t::unknown_k)
@@ -520,7 +527,7 @@ PYBIND11_MODULE(compiled, m) {
         .value("F64", scalar_kind_t::f64_k)
         .value("F32", scalar_kind_t::f32_k)
         .value("F16", scalar_kind_t::f16_k)
-        .value("I8", scalar_kind_t::i8_k)
+        .value("F8", scalar_kind_t::f8_k)
         .value("U64", scalar_kind_t::u64_k)
         .value("U32", scalar_kind_t::u32_k)
         .value("U16", scalar_kind_t::u16_k)

@@ -150,7 +150,20 @@ swift build
 swift test -v
 ```
 
-## C99
+## C 99
+
+There are a few ways to compile the C 99 USearch SDK.
+Using the Makefile:
+
+```sh
+make -C ./c build
+```
+
+Using CMake:
+
+```sh
+cmake -B ./build_release -DUSEARCH_BUILD_C=1 && make -C ./build_release -j
+```
 
 Linux:
 
@@ -166,6 +179,7 @@ So one should first compile the C library, link it with GoLang, and only then ru
 
 ```sh
 cd golang
+make -C ../c build && mv ../c/libusearch.so libusearch.so
 go test -v
 ```
 
