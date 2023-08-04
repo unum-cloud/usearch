@@ -1294,7 +1294,7 @@ class memory_mapped_file_t {
 
     serialization_result_t open_if_not() noexcept {
         serialization_result_t result;
-        if (!path_)
+        if (!path_ || ptr_)
             return result;
 
 #if defined(USEARCH_DEFINED_WINDOWS)
@@ -1338,7 +1338,7 @@ class memory_mapped_file_t {
         }
 
         // Map the entire file
-        byte_t* file = (byte_t*)mmap(NULL, file_stat.st_size, PROT_READ, MAP_PRIVATE, descriptor, 0);
+        byte_t* file = (byte_t*)mmap(NULL, file_stat.st_size, PROT_READ, MAP_SHARED, descriptor, 0);
         if (file == MAP_FAILED) {
             ::close(descriptor);
             return result.failed(std::strerror(errno));

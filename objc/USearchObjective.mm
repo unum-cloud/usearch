@@ -52,7 +52,7 @@ metric_kind_t to_native_metric(USearchMetric m) {
 
 scalar_kind_t to_native_scalar(USearchScalar m) {
     switch (m) {
-        case USearchScalarF8:
+        case USearchScalarI8:
             return scalar_kind_t::i8_k;
 
         case USearchScalarF16:
