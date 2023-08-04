@@ -178,9 +178,7 @@ GoLang bindings are based on C.
 So one should first compile the C library, link it with GoLang, and only then run tests.
 
 ```sh
-cd golang
-make -C ../c build && mv ../c/libusearch.so libusearch.so
-go test -v
+cd golang && make -C ../c build && mv ../c/libusearch.so libusearch.so && go test -v
 ```
 
 ## Wolfram
