@@ -1,7 +1,7 @@
 # This CMake file is heavily inspired by following `usearch` CMake:
 # https://github.com/nlohmann/json/blob/develop/CMakeLists.txt
 cmake_minimum_required(VERSION 3.1)
-project(usearch VERSION 0.6.0 LANGUAGES CXX)
+project(usearch VERSION 0.6.0 LANGUAGES C CXX)
 
 # Determine if USearch is built as a subproject (using `add_subdirectory`) or if it is the main project
 set(USEARCH_IS_MAIN_PROJECT OFF)
@@ -14,7 +14,7 @@ option(USEARCH_INSTALL "Install CMake targets" OFF)
 option(USEARCH_BUILD_TEST "Compile a native unit test in C++" ${USEARCH_IS_MAIN_PROJECT})
 option(USEARCH_BUILD_BENCHMARK "Compile a native benchmark in C++" ${USEARCH_IS_MAIN_PROJECT})
 option(USEARCH_BUILD_WOLFRAM "Compile Wolfram Language bindings" OFF)
-option(USEARCH_BUILD_C "Compile a native library for the C 99 interface" OFF)
+option(USEARCH_BUILD_CLIB "Compile a native library for the C 99 interface" OFF)
 
 # Includes
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
@@ -124,6 +124,6 @@ if(${USEARCH_BUILD_WASM})
     add_subdirectory(wasm)
 endif()
 
-if(${USEARCH_BUILD_C})
+if (${USEARCH_BUILD_CLIB})
     add_subdirectory(c)
 endif()
