@@ -5,7 +5,11 @@
 extern "C" {
 #endif
 #ifndef USEARCH_EXPORT
+#if defined(_WIN32) && !defined(__MINGW32__)
+#define USEARCH_EXPORT __declspec(dllexport)
+#else
 #define USEARCH_EXPORT
+#endif
 #endif
 #include <stdbool.h> // `bool`
 #include <stdint.h>  // `size_t`

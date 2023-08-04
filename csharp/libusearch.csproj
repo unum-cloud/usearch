@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net7.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<Platforms>x64</Platforms>
+		<LangVersion>latest</LangVersion>
+		<AssemblyName>$(MSBuildProjectName).interop</AssemblyName>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	</PropertyGroup>
+
+	<Target Name="usearch" BeforeTargets="Build">
+		<PropertyGroup>
+			<ProjectRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../c'))</ProjectRoot>
+			<Command Condition="'$(OS)' == 'Windows_NT'">"$(VsInstallRoot)\VC\Auxiliary\Build\vcvars64.bat" &amp;&amp; cd "$(ProjectRoot)" &amp;&amp; cl.exe /EHsc /W4 /O2 /LD /Fe"libusearch.dll" lib.cpp /I. /I../include /I../fp16/include /I../robin-map/include</Command>
+			<Command Condition="$([System.String]::new('$(OS)').StartsWith('Unix'))">g++ -shared -fPIC -o libusearch.so lib.cpp -I. -I../include -I../fp16/include -I../robin-map/include</Command>
+		</PropertyGroup>
+		<WriteLinesToFile Condition="'$(OS)' == 'Windows_NT'" File="$(ProjectRoot)\build.bat" Lines="$(Command)" Overwrite="true" />
+		<Exec Condition="'$(OS)' == 'Windows_NT'" WorkingDirectory="$(ProjectRoot)" Command="cmd /C build.bat" />
+		<Exec Condition="$([System.String]::new('$(OS)').StartsWith('Unix'))" Command="cd $(ProjectRoot) &amp;&amp; $(Command)" />
+		<Delete Condition="'$(OS)' == 'Windows_NT'" Files="$(ProjectRoot)\build.bat" />
+		<Copy Condition="'$(OS)' == 'Windows_NT'" SourceFiles="$(ProjectRoot)\libusearch.dll" DestinationFolder="$(OutDir)" />
+		<Copy Condition="$([System.String]::new('$(OS)').StartsWith('Unix'))" SourceFiles="$(ProjectRoot)/libusearch.so" DestinationFolder="$(OutDir)" />
+	</Target>
+
+	<ItemGroup>
+		<Compile Remove="test.cs" />
+	</ItemGroup>
+
+</Project>

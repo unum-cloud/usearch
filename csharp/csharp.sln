@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.6.33829.357
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "libusearch", "libusearch.csproj", "{EA08318F-989A-41B3-ADD3-50070AB5E22D}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "test", "test.csproj", "{14DFBDB5-42A5-4559-BB53-DD21A5ADF351}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EA08318F-989A-41B3-ADD3-50070AB5E22D}.Debug|x64.ActiveCfg = Debug|x64
+		{EA08318F-989A-41B3-ADD3-50070AB5E22D}.Debug|x64.Build.0 = Debug|x64
+		{EA08318F-989A-41B3-ADD3-50070AB5E22D}.Release|x64.ActiveCfg = Release|x64
+		{EA08318F-989A-41B3-ADD3-50070AB5E22D}.Release|x64.Build.0 = Release|x64
+		{14DFBDB5-42A5-4559-BB53-DD21A5ADF351}.Debug|x64.ActiveCfg = Debug|x64
+		{14DFBDB5-42A5-4559-BB53-DD21A5ADF351}.Debug|x64.Build.0 = Debug|x64
+		{14DFBDB5-42A5-4559-BB53-DD21A5ADF351}.Release|x64.ActiveCfg = Release|x64
+		{14DFBDB5-42A5-4559-BB53-DD21A5ADF351}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F3178344-453D-421F-B382-FCB9D2FAE0F5}
+	EndGlobalSection
+EndGlobal
