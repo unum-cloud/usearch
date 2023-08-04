@@ -2,49 +2,63 @@ package usearch
 
 import (
 	"errors"
-	"fmt"
 	"unsafe"
 )
 
 /*
-#include "../c/usearch.h"
-
-#cgo CPPFLAGS: -I.
-#cgo LDFLAGS: -lusearch
+#cgo CFLAGS: -I${SRCDIR}/../c/
+#cgo LDFLAGS: -L./ -lusearch
+#include <usearch.h>
+#include <stdlib.h>
 */
 import "C"
 
-type DistMetric int8
+type Key = uint64
+
+type Metric uint8
 
 const (
-	L2_SQ DistMetric = iota
-	IP
-	COS
+	InnerProduct Metric = iota
+	Cosine
+	L2sq
 	Haversine
+	Pearson
+	Hamming
+	Tanimoto
+	Sorensen
 )
 
-func (m DistMetric) String() string {
+func (m Metric) String() string {
 	switch m {
-	case L2_SQ:
+	case L2sq:
 		return "l2sq"
-	case IP:
+	case InnerProduct:
 		return "ip"
-	case COS:
+	case Cosine:
 		return "cos"
 	case Haversine:
 		return "haversine"
+	case Pearson:
+		return "pearson"
+	case Hamming:
+		return "hamming"
+	case Tanimoto:
+		return "tanimoto"
+	case Sorensen:
+		return "sorensen"
 	default:
-		panic("unknown metric")
+		panic("Unknown metric")
 	}
 }
 
-type Quantization int8
+type Quantization uint8
 
 const (
 	f32 Quantization = iota
 	f16
 	f64
-	f8
+	i8
+	b1
 )
 
 func (a Quantization) String() string {
@@ -55,30 +69,38 @@ func (a Quantization) String() string {
 		return "f32"
 	case f64:
 		return "f64"
-	case f8:
-		return "f8"
+	case i8:
+		return "i8"
+	case b1:
+		return "b1"
 	default:
-		panic("unknown quantization")
+		panic("Unknown quantization")
 	}
 }
 
 type IndexConfig struct {
-	Quantization        Quantization
-	Metric          DistMetric
-	VecDimension    int
-	InitCapacity    int
-	Connectivity    int
-	ExpansionAdd    int
-	ExpansionSearch int
+	// The scalar kind used for quantization of vector data during indexing.
+	Quantization Quantization
+	// The metric kind used for distance calculation between vectors.
+	Metric Metric
+	// The number of dimensions in the vectors to be indexed.
+	Dimensions uint
+	// The @b optional connectivity parameter that limits connections-per-node in graph.
+	Connectivity uint
+	// The @b optional expansion factor used for index construction when adding vectors.
+	ExpansionAdd uint
+	// The @b optional expansion factor used for index construction during search operations.
+	ExpansionSearch uint
 }
 
-func DefaultConfig(dimension int) IndexConfig {
+func DefaultConfig(dimensions uint) IndexConfig {
 	c := IndexConfig{}
-	c.InitCapacity = 32
-	c.Connectivity = 16
-	c.VecDimension = dimension
-	c.ExpansionAdd = 128
-	c.ExpansionSearch = 64
+	c.Dimensions = dimensions
+	c.Metric = Cosine
+	// Zeros will be replaced by the underlying C implementation
+	c.Connectivity = 0
+	c.ExpansionAdd = 0
+	c.ExpansionSearch = 0
 	return c
 }
 
@@ -87,152 +109,264 @@ type Index struct {
 	config        IndexConfig
 }
 
-func NewIndex(conf IndexConfig) *Index {
-	ind := &Index{config: conf}
-	ind.init()
-	return ind
-}
+// Initializes a new instance of the index.
+func NewIndex(conf IndexConfig) (index *Index, err error) {
+	index = &Index{config: conf}
 
-func (ind *Index) init() {
-	conf := ind.config
-	metric_str := C.CString(conf.Metric.String())
-	defer C.free(unsafe.Pointer(metric_str))
-	metric_len := C.int(len(conf.Metric.String()))
-	quantization_str := C.CString(conf.Quantization.String())
-	defer C.free(unsafe.Pointer(quantization_str))
-	quantization_len := C.int(len(conf.Quantization.String()))
-	dimensions := C.int(conf.VecDimension)
-	capacity := C.int(conf.InitCapacity)
-	connectivity := C.int(conf.Connectivity)
-	expansion_add := C.int(conf.ExpansionAdd)
-	expansion_search := C.int(conf.ExpansionSearch)
-	ptr := C.usearch_new(metric_str, metric_len,
-		quantization_str, quantization_len,
-		dimensions, capacity, connectivity,
-		expansion_add, expansion_search)
+	conf = index.config
+	dimensions := C.ulong(conf.Dimensions)
+	connectivity := C.ulong(conf.Connectivity)
+	expansion_add := C.ulong(conf.ExpansionAdd)
+	expansion_search := C.ulong(conf.ExpansionSearch)
 
-	ind.opaque_handle = (*C.void)(unsafe.Pointer(ptr))
-}
+	options := C.struct_usearch_init_options_t{}
+	options.dimensions = dimensions
+	options.connectivity = connectivity
+	options.expansion_add = expansion_add
+	options.expansion_search = expansion_search
 
-func (ind *Index) Destroy() {
-	if ind.opaque_handle == nil {
-		panic("index not initialized")
+	// Map the metric kind to a C enum
+	switch conf.Metric {
+	case L2sq:
+		options.metric_kind = C.usearch_metric_l2sq_k
+	case InnerProduct:
+		options.metric_kind = C.usearch_metric_ip_k
+	case Cosine:
+		options.metric_kind = C.usearch_metric_cos_k
+	case Haversine:
+		options.metric_kind = C.usearch_metric_haversine_k
+	case Pearson:
+		options.metric_kind = C.usearch_metric_pearson_k
+	case Hamming:
+		options.metric_kind = C.usearch_metric_hamming_k
+	case Tanimoto:
+		options.metric_kind = C.usearch_metric_tanimoto_k
+	case Sorensen:
+		options.metric_kind = C.usearch_metric_sorensen_k
+	default:
+		options.metric_kind = C.usearch_metric_unknown_k
 	}
-	C.usearch_free(unsafe.Pointer(ind.opaque_handle))
-	ind.opaque_handle = nil
-	ind.config = IndexConfig{}
+
+	// Map the quantization method
+	switch conf.Quantization {
+	case f16:
+		options.quantization = C.usearch_scalar_f16_k
+	case f32:
+		options.quantization = C.usearch_scalar_f32_k
+	case f64:
+		options.quantization = C.usearch_scalar_f64_k
+	case i8:
+		options.quantization = C.usearch_scalar_i8_k
+	case b1:
+		options.quantization = C.usearch_scalar_b1_k
+	default:
+		options.quantization = C.usearch_scalar_unknown_k
+	}
+
+	var errorMessage *C.char
+	ptr := C.usearch_init(&options, (*C.usearch_error_t)(&errorMessage))
+	if errorMessage != nil {
+		return nil, errors.New(C.GoString(errorMessage))
+	}
+
+	index.opaque_handle = (*C.void)(unsafe.Pointer(ptr))
+	return index, nil
 }
 
-func (ind *Index) fileOp(path string, op string) error {
-	if ind.opaque_handle == nil {
-		panic("index not initialized")
+func (index *Index) Len() (len uint, err error) {
+	var errorMessage *C.char
+	len = uint(C.usearch_size((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (*C.usearch_error_t)(&errorMessage)))
+	if errorMessage != nil {
+		err = errors.New(C.GoString(errorMessage))
 	}
+	return len, err
+}
+
+func (index *Index) Connectivity() (con uint, err error) {
+	var errorMessage *C.char
+	con = uint(C.usearch_connectivity((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (*C.usearch_error_t)(&errorMessage)))
+	if errorMessage != nil {
+		err = errors.New(C.GoString(errorMessage))
+	}
+	return con, err
+}
+
+func (index *Index) Dimensions() (dim uint, err error) {
+	var errorMessage *C.char
+	dim = uint(C.usearch_dimensions((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (*C.usearch_error_t)(&errorMessage)))
+	if errorMessage != nil {
+		err = errors.New(C.GoString(errorMessage))
+	}
+	return dim, err
+}
+
+func (index *Index) Capacity() (cap uint, err error) {
+	var errorMessage *C.char
+	cap = uint(C.usearch_capacity((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (*C.usearch_error_t)(&errorMessage)))
+	if errorMessage != nil {
+		err = errors.New(C.GoString(errorMessage))
+	}
+	return cap, err
+}
+
+// Frees the resources associated with the index.
+func (index *Index) Destroy() error {
+	if index.opaque_handle == nil {
+		panic("Index is uninitialized")
+	}
+
+	var errorMessage *C.char
+	C.usearch_free((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (*C.usearch_error_t)(&errorMessage))
+	if errorMessage != nil {
+		return errors.New(C.GoString(errorMessage))
+	}
+	index.opaque_handle = nil
+	index.config = IndexConfig{}
+	return nil
+}
+
+// Reserves memory for a specified number of incoming vectors.
+func (index *Index) Reserve(capacity uint) error {
+	if index.opaque_handle == nil {
+		panic("Index is uninitialized")
+	}
+
+	var errorMessage *C.char
+	C.usearch_reserve((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (C.size_t)(capacity), (*C.usearch_error_t)(&errorMessage))
+	if errorMessage != nil {
+		return errors.New(C.GoString(errorMessage))
+	}
+	return nil
+}
+
+// Adds a vector with a key to the index.
+func (index *Index) Add(key Key, vec []float32) error {
+	if index.opaque_handle == nil {
+		panic("Index is uninitialized")
+	}
+
+	var errorMessage *C.char
+	C.usearch_add((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (C.usearch_key_t)(key), unsafe.Pointer(&vec[0]), C.usearch_scalar_f32_k, (*C.usearch_error_t)(&errorMessage))
+	if errorMessage != nil {
+		return errors.New(C.GoString(errorMessage))
+	}
+	return nil
+}
+
+// Removes the vector associated with the given key from the index.
+func (index *Index) Remove(key Key) error {
+	if index.opaque_handle == nil {
+		panic("Index is uninitialized")
+	}
+
+	var errorMessage *C.char
+	C.usearch_remove((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (C.usearch_key_t)(key), (*C.usearch_error_t)(&errorMessage))
+	if errorMessage != nil {
+		return errors.New(C.GoString(errorMessage))
+	}
+	return nil
+}
+
+// Checks if the index contains a vector with a specific key.
+func (index *Index) Contains(key Key) (found bool, err error) {
+	if index.opaque_handle == nil {
+		panic("Index is uninitialized")
+	}
+
+	var errorMessage *C.char
+	found = bool(C.usearch_contains((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (C.usearch_key_t)(key), (*C.usearch_error_t)(&errorMessage)))
+	if errorMessage != nil {
+		return found, errors.New(C.GoString(errorMessage))
+	}
+	return found, nil
+}
+
+func (index *Index) Get(key Key) (vector []float32, err error) {
+	if index.opaque_handle == nil {
+		panic("Index is uninitialized")
+	}
+
+	vector = make([]float32, index.config.Dimensions)
+	var errorMessage *C.char
+	found := bool(C.usearch_get((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (C.usearch_key_t)(key), unsafe.Pointer(&vector[0]), C.usearch_scalar_f32_k, (*C.usearch_error_t)(&errorMessage)))
+	if errorMessage != nil {
+		return nil, errors.New(C.GoString(errorMessage))
+	}
+	if !found {
+		return nil, nil
+	}
+	return vector, nil
+}
+
+// Performs k-Approximate Nearest Neighbors Search for closest vectors to query.
+func (index *Index) Search(query []float32, limit uint) (keys []Key, distances []float32, err error) {
+	if index.opaque_handle == nil {
+		panic("Index is uninitialized")
+	}
+	if len(query) != int(index.config.Dimensions) {
+		return nil, nil, errors.New("Number of dimensions doesn't match!")
+	}
+
+	keys = make([]Key, limit)
+	distances = make([]float32, limit)
+	var errorMessage *C.char
+	count := uint(C.usearch_search((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), unsafe.Pointer(&query[0]), C.usearch_scalar_f32_k, (C.size_t)(limit), (*C.usearch_key_t)(&keys[0]), (*C.usearch_distance_t)(&distances[0]), (*C.usearch_error_t)(&errorMessage)))
+	if errorMessage != nil {
+		return nil, nil, errors.New(C.GoString(errorMessage))
+	}
+
+	keys = keys[:count]
+	distances = distances[:count]
+	return keys, distances, nil
+}
+
+// Saves the index to a file.
+func (index *Index) Save(path string) error {
+	if index.opaque_handle == nil {
+		panic("Index is uninitialized")
+	}
+
 	c_path := C.CString(path)
 	defer C.free(unsafe.Pointer(c_path))
-	var errStr *C.char
-	switch op {
-	case "load":
-		errStr = C.usearch_load(unsafe.Pointer(ind.opaque_handle), c_path)
-	case "save":
-		errStr = C.usearch_save(unsafe.Pointer(ind.opaque_handle), c_path)
-	case "view":
-		errStr = C.usearch_view(unsafe.Pointer(ind.opaque_handle), c_path)
-	default:
-		panic("unknown file operation")
+
+	var errorMessage *C.char
+	C.usearch_save((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), c_path, (*C.usearch_error_t)(&errorMessage))
+	if errorMessage != nil {
+		return errors.New(C.GoString(errorMessage))
 	}
-	var err error
-	if errStr != nil {
-		err = errors.New(C.GoString(errStr))
-		C.free(unsafe.Pointer(errStr))
-	}
-	return err
+	return nil
 }
 
-func (ind *Index) Save(path string) error {
-	return ind.fileOp(path, "save")
-}
-
-func (ind *Index) Load(path string) error {
-	return ind.fileOp(path, "load")
-}
-
-func (ind *Index) View(path string) error {
-	return ind.fileOp(path, "view")
-}
-
-func (ind *Index) Len() int {
-	return int(C.usearch_size(unsafe.Pointer(ind.opaque_handle)))
-}
-
-func (ind *Index) Connectivity() int {
-	return int(C.usearch_connectivity(unsafe.Pointer(ind.opaque_handle)))
-}
-
-func (ind *Index) VecDimension() int {
-	return int(C.usearch_dimensions(unsafe.Pointer(ind.opaque_handle)))
-}
-
-func (ind *Index) Capacity() int {
-	return int(C.usearch_capacity(unsafe.Pointer(ind.opaque_handle)))
-}
-
-func (ind *Index) Reserve(capacity int) error {
-	if ind.opaque_handle == nil {
-		panic("index not initialized")
+// Loads the index from a file.
+func (index *Index) Load(path string) error {
+	if index.opaque_handle == nil {
+		panic("Index is uninitialized")
 	}
-	errStr := C.usearch_reserve(unsafe.Pointer(ind.opaque_handle), (C.int)(capacity))
-	var err error
-	if errStr != nil {
-		err = errors.New(C.GoString(errStr))
-		C.free(unsafe.Pointer(errStr))
+
+	c_path := C.CString(path)
+	defer C.free(unsafe.Pointer(c_path))
+
+	var errorMessage *C.char
+	C.usearch_load((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), c_path, (*C.usearch_error_t)(&errorMessage))
+	if errorMessage != nil {
+		return errors.New(C.GoString(errorMessage))
 	}
-	return err
+	return nil
 }
 
-func (ind *Index) Add(key int, vec []float32) error {
-	if ind.opaque_handle == nil {
-		panic("index not initialized")
+// Creates a view of the index from a file without loading it into memory.
+func (index *Index) View(path string) error {
+	if index.opaque_handle == nil {
+		panic("Index is uninitialized")
 	}
-	errStr := C.usearch_add(unsafe.Pointer(ind.opaque_handle), (C.int)(key), (*C.float)(&vec[0]))
-	var err error
-	if errStr != nil {
-		err = errors.New(C.GoString(errStr))
-		C.free(unsafe.Pointer(errStr))
-	}
-	return err
 
-}
+	c_path := C.CString(path)
+	defer C.free(unsafe.Pointer(c_path))
 
-// return must be int32 because int is 64bit in golang and 32bit in C
-func (ind *Index) Search(query []float32, limit int) []int32 {
-	if ind.opaque_handle == nil {
-		panic("index not initialized")
+	var errorMessage *C.char
+	C.usearch_view((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), c_path, (*C.usearch_error_t)(&errorMessage))
+	if errorMessage != nil {
+		return errors.New(C.GoString(errorMessage))
 	}
-	if len(query) != ind.config.VecDimension {
-		panic(fmt.Sprintf("query vector dimension mismatch. expected %d, got %d",
-			ind.config.VecDimension, len(query)))
-	}
-	if limit <= 0 {
-		panic("limit must be greater than 0")
-	}
-	res := C.usearch_search(unsafe.Pointer(ind.opaque_handle),
-		(*C.float)(&query[0]), (C.int)(len(query)), (C.int)(limit))
-
-	// my understanding is that search panics in truly exceptional cases,
-	// none of which is every expected. so, not passing the error to the caller
-	if res.Error != nil {
-		defer C.free(unsafe.Pointer(res.Error))
-		panic(C.GoString(res.Error))
-	}
-	var labs []int32
-	//q:: who free's this memory? will golang do it?
-	labs = unsafe.Slice((*int32)(unsafe.Pointer(res.Labels)), res.Len)
-	return labs
-}
-
-func (ind *Index) Size() int {
-	if ind.opaque_handle == nil {
-		panic("index not initialized")
-	}
-	return int(C.usearch_size(unsafe.Pointer(ind.opaque_handle)))
+	return nil
 }

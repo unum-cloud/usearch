@@ -129,11 +129,13 @@ metric_t typed_udf(                                                             
     return metric_t(stl_function, dimensions, kind, scalar_kind);
 }
 
-metric_t udf(metric_kind_t kind, metric_signature_t signature, std::uintptr_t metric_uintptr, //
-             scalar_kind_t scalar_kind, std::size_t dimensions) {
+metric_t udf(                                                                        //
+    metric_kind_t kind, metric_signature_t signature, std::uintptr_t metric_uintptr, //
+    scalar_kind_t scalar_kind, std::size_t dimensions) {
+
     switch (scalar_kind) {
     case scalar_kind_t::b1x8_k: return typed_udf<b1x8_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
-    case scalar_kind_t::f8_k: return typed_udf<f8_bits_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
+    case scalar_kind_t::i8_k: return typed_udf<i8_bits_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
     case scalar_kind_t::f16_k: return typed_udf<f16_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
     case scalar_kind_t::f32_k: return typed_udf<f32_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
     case scalar_kind_t::f64_k: return typed_udf<f64_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
@@ -164,12 +166,12 @@ scalar_kind_t numpy_string_to_kind(std::string const& name) {
     if (name == "B" || name == "<B" || name == "u1" || name == "|u1")
         return scalar_kind_t::b1x8_k;
     else if (name == "b" || name == "<b" || name == "i1" || name == "|i1")
-        return scalar_kind_t::f8_k;
+        return scalar_kind_t::i8_k;
     else if (name == "e" || name == "<e" || name == "f2" || name == "<f2")
         return scalar_kind_t::f16_k;
     else if (name == "f" || name == "<f" || name == "f4" || name == "<f4")
         return scalar_kind_t::f32_k;
-    else if (name == "d" || name == "<d" || name == "f8" || name == "<f8")
+    else if (name == "d" || name == "<d" || name == "i8" || name == "<i8")
         return scalar_kind_t::f64_k;
     else
         return scalar_kind_t::unknown_k;
@@ -186,7 +188,7 @@ static void add_typed_to_index(                                            //
     byte_t const* keys_data = reinterpret_cast<byte_t const*>(keys_info.ptr);
 
     executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-        index_dense_add_config_t config;
+        index_dense_update_config_t config;
         config.force_vector_copy = force_copy;
         config.thread = thread_idx;
         key_t key = *reinterpret_cast<key_t const*>(keys_data + task_idx * keys_info.strides[0]);
@@ -232,7 +234,7 @@ static void add_many_to_index(                            //
     // clang-format off
     switch (numpy_string_to_kind(vectors_info.format)) {
     case scalar_kind_t::b1x8_k: add_typed_to_index<b1x8_t>(index, keys_info, vectors_info, force_copy, threads); break;
-    case scalar_kind_t::f8_k: add_typed_to_index<f8_bits_t>(index, keys_info, vectors_info, force_copy, threads); break;
+    case scalar_kind_t::i8_k: add_typed_to_index<i8_bits_t>(index, keys_info, vectors_info, force_copy, threads); break;
     case scalar_kind_t::f16_k: add_typed_to_index<f16_t>(index, keys_info, vectors_info, force_copy, threads); break;
     case scalar_kind_t::f32_k: add_typed_to_index<f32_t>(index, keys_info, vectors_info, force_copy, threads); break;
     case scalar_kind_t::f64_k: add_typed_to_index<f64_t>(index, keys_info, vectors_info, force_copy, threads); break;
@@ -246,7 +248,7 @@ static void search_typed(                                   //
     dense_index_py_t& index, py::buffer_info& vectors_info, //
     std::size_t wanted, bool exact, std::size_t threads,    //
     py::array_t<key_t>& keys_py, py::array_t<distance_t>& distances_py, py::array_t<Py_ssize_t>& counts_py,
-    std::atomic<std::size_t>& stats_lookups, std::atomic<std::size_t>& stats_measurements) {
+    std::atomic<std::size_t>& stats_visited_members, std::atomic<std::size_t>& stats_computed_distances) {
 
     auto keys_py2d = keys_py.template mutable_unchecked<2>();
     auto distances_py2d = distances_py.template mutable_unchecked<2>();
@@ -270,8 +272,8 @@ static void search_typed(                                   //
         counts_py1d(task_idx) =
             static_cast<Py_ssize_t>(result.dump_to(&keys_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
 
-        stats_lookups += result.lookups;
-        stats_measurements += result.measurements;
+        stats_visited_members += result.visited_members;
+        stats_computed_distances += result.computed_distances;
         if (PyErr_CheckSignals() != 0)
             throw py::error_already_set();
     });
@@ -282,7 +284,7 @@ static void search_typed(                                       //
     dense_indexes_py_t& indexes, py::buffer_info& vectors_info, //
     std::size_t wanted, bool exact, std::size_t threads,        //
     py::array_t<key_t>& keys_py, py::array_t<distance_t>& distances_py, py::array_t<Py_ssize_t>& counts_py,
-    std::atomic<std::size_t>& stats_lookups, std::atomic<std::size_t>& stats_measurements) {
+    std::atomic<std::size_t>& stats_visited_members, std::atomic<std::size_t>& stats_computed_distances) {
 
     auto keys_py2d = keys_py.template mutable_unchecked<2>();
     auto distances_py2d = distances_py.template mutable_unchecked<2>();
@@ -324,8 +326,8 @@ static void search_typed(                                       //
                     wanted));
             }
 
-            stats_lookups += result.lookups;
-            stats_measurements += result.measurements;
+            stats_visited_members += result.visited_members;
+            stats_computed_distances += result.computed_distances;
             if (PyErr_CheckSignals() != 0)
                 throw py::error_already_set();
         }
@@ -363,16 +365,16 @@ static py::tuple search_many_in_index( //
     py::array_t<key_t> keys_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
     py::array_t<distance_t> distances_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
     py::array_t<Py_ssize_t> counts_py(vectors_count);
-    std::atomic<std::size_t> stats_lookups(0);
-    std::atomic<std::size_t> stats_measurements(0);
+    std::atomic<std::size_t> stats_visited_members(0);
+    std::atomic<std::size_t> stats_computed_distances(0);
 
     // clang-format off
     switch (numpy_string_to_kind(vectors_info.format)) {
-    case scalar_kind_t::b1x8_k: search_typed<b1x8_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_lookups, stats_measurements); break;
-    case scalar_kind_t::f8_k: search_typed<f8_bits_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_lookups, stats_measurements); break;
-    case scalar_kind_t::f16_k: search_typed<f16_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_lookups, stats_measurements); break;
-    case scalar_kind_t::f32_k: search_typed<f32_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_lookups, stats_measurements); break;
-    case scalar_kind_t::f64_k: search_typed<f64_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_lookups, stats_measurements); break;
+    case scalar_kind_t::b1x8_k: search_typed<b1x8_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
+    case scalar_kind_t::i8_k: search_typed<i8_bits_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
+    case scalar_kind_t::f16_k: search_typed<f16_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
+    case scalar_kind_t::f32_k: search_typed<f32_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
+    case scalar_kind_t::f64_k: search_typed<f64_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
     default: throw std::invalid_argument("Incompatible scalars in the query matrix: " + vectors_info.format);
     }
     // clang-format on
@@ -381,8 +383,8 @@ static py::tuple search_many_in_index( //
     results[0] = keys_py;
     results[1] = distances_py;
     results[2] = counts_py;
-    results[3] = stats_lookups.load();
-    results[4] = stats_measurements.load();
+    results[3] = stats_visited_members.load();
+    results[4] = stats_computed_distances.load();
     return results;
 }
 
@@ -391,21 +393,18 @@ static std::unordered_map<key_t, key_t> join_index(       //
     std::size_t max_proposals, bool exact) {
 
     std::unordered_map<key_t, key_t> a_to_b;
+    dummy_label_to_label_mapping_t b_to_a;
     a_to_b.reserve((std::min)(a.size(), b.size()));
 
-    // index_join_config_t config;
+    index_join_config_t config;
+    config.max_proposals = max_proposals;
+    config.exact = exact;
+    config.expansion = (std::max)(a.expansion_search(), b.expansion_search());
+    std::size_t threads = (std::min)(a.limits().threads(), b.limits().threads());
+    executor_default_t executor{threads};
+    join_result_t result = a.join(b, config, a_to_b, b_to_a, executor);
+    result.error.raise();
 
-    // config.max_proposals = max_proposals;
-    // config.exact = exact;
-    // config.expansion = (std::max)(a.expansion_search(), b.expansion_search());
-    // std::size_t threads = (std::min)(a.limits().threads(), b.limits().threads());
-    // executor_default_t executor{threads};
-    // join_result_t result = dense_index_py_t::join( //
-    //     a, b, config,                              //
-    //     a_to_b,                                    //
-    //     dummy_label_to_label_mapping_t{},          //
-    //     executor);
-    // result.error.raise();
     return a_to_b;
 }
 
@@ -416,6 +415,16 @@ static dense_index_py_t copy_index(dense_index_py_t const& index) {
     copy_result_t result = index.copy(config);
     result.error.raise();
     return std::move(result.index);
+}
+
+static void compact_index(dense_index_py_t& index, std::size_t threads) {
+
+    if (!threads)
+        threads = std::thread::hardware_concurrency();
+    if (!index.reserve(index_limits_t(index.size(), threads)))
+        throw std::invalid_argument("Out of memory!");
+
+    index.compact(executor_default_t{threads});
 }
 
 // clang-format off
@@ -445,8 +454,8 @@ template <typename index_at> py::object get_member(index_at const& index, key_t 
         return get_typed_member<f64_t>(index, key);
     else if (scalar_kind == scalar_kind_t::f16_k)
         return get_typed_member<f16_t, std::uint16_t>(index, key);
-    else if (scalar_kind == scalar_kind_t::f8_k)
-        return get_typed_member<f8_bits_t, std::int8_t>(index, key);
+    else if (scalar_kind == scalar_kind_t::i8_k)
+        return get_typed_member<i8_bits_t, std::int8_t>(index, key);
     else if (scalar_kind == scalar_kind_t::b1x8_k)
         return get_typed_member<b1x8_t, std::uint8_t>(index, key);
     else
@@ -495,15 +504,20 @@ PYBIND11_MODULE(compiled, m) {
 
     py::enum_<metric_kind_t>(m, "MetricKind")
         .value("Unknown", metric_kind_t::unknown_k)
+
         .value("IP", metric_kind_t::ip_k)
         .value("Cos", metric_kind_t::cos_k)
         .value("L2sq", metric_kind_t::l2sq_k)
+
         .value("Haversine", metric_kind_t::haversine_k)
         .value("Pearson", metric_kind_t::pearson_k)
         .value("Jaccard", metric_kind_t::jaccard_k)
         .value("Hamming", metric_kind_t::hamming_k)
         .value("Tanimoto", metric_kind_t::tanimoto_k)
-        .value("Sorensen", metric_kind_t::sorensen_k);
+        .value("Sorensen", metric_kind_t::sorensen_k)
+
+        .value("Cosine", metric_kind_t::cos_k)
+        .value("InnerProduct", metric_kind_t::ip_k);
 
     py::enum_<scalar_kind_t>(m, "ScalarKind")
         .value("Unknown", scalar_kind_t::unknown_k)
@@ -601,7 +615,7 @@ PYBIND11_MODULE(compiled, m) {
             if (!index.reserve(index_limits_t(index.size(), threads)))
                 throw std::invalid_argument("Out of memory!");
 
-            index.compact(executor_default_t{threads});
+            index.isolate(executor_default_t{threads});
             return result.completed;
         },
         py::arg("key"), py::arg("compact"), py::arg("threads"));
@@ -619,7 +633,7 @@ PYBIND11_MODULE(compiled, m) {
             if (!index.reserve(index_limits_t(index.size(), threads)))
                 throw std::invalid_argument("Out of memory!");
 
-            index.compact(executor_default_t{threads});
+            index.isolate(executor_default_t{threads});
             return result.completed;
         },
         py::arg("key"), py::arg("compact"), py::arg("threads"));
@@ -651,6 +665,7 @@ PYBIND11_MODULE(compiled, m) {
     i.def("reset", &reset_index<dense_index_py_t>, py::call_guard<py::gil_scoped_release>());
     i.def("clear", &clear_index<dense_index_py_t>, py::call_guard<py::gil_scoped_release>());
     i.def("copy", &copy_index, py::call_guard<py::gil_scoped_release>());
+    i.def("compact", &compact_index, py::call_guard<py::gil_scoped_release>());
     i.def("join", &join_index, py::arg("other"), py::arg("max_proposals") = 0, py::arg("exact") = false,
           py::call_guard<py::gil_scoped_release>());
 

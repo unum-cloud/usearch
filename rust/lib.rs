@@ -23,7 +23,7 @@ pub mod ffi {
         F64,
         F32,
         F16,
-        F8,
+        I8,
         B1,
     }
 

@@ -14,6 +14,7 @@ option(USEARCH_INSTALL "Install CMake targets" OFF)
 option(USEARCH_BUILD_TEST "Compile a native unit test in C++" ${USEARCH_IS_MAIN_PROJECT})
 option(USEARCH_BUILD_BENCHMARK "Compile a native benchmark in C++" ${USEARCH_IS_MAIN_PROJECT})
 option(USEARCH_BUILD_WOLFRAM "Compile Wolfram Language bindings" OFF)
+option(USEARCH_BUILD_C "Compile a native library for the C 99 interface" OFF)
 
 # Includes
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
@@ -121,4 +122,8 @@ endif()
 
 if(${USEARCH_BUILD_WASM})
     add_subdirectory(wasm)
+endif()
+
+if(${USEARCH_BUILD_C})
+    add_subdirectory(c)
 endif()

@@ -81,7 +81,7 @@ Instead of spawning additional threads within USearch, we focus on the thread sa
 ```cpp
 #pragma omp parallel for
     for (std::size_t i = 0; i < n; ++i)
-        native.add(key, span_t{vector, dims}, index_add_config_t { .thread = omp_get_thread_num() });
+        native.add(key, span_t{vector, dims}, index_update_config_t { .thread = omp_get_thread_num() });
 ```
 
 During initialization, we allocate enough temporary memory for all the cores on the machine.

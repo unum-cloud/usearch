@@ -52,7 +52,7 @@ struct uuid_t {
     std::uint8_t octets[16];
 };
 
-class f8_bits_t;
+class i8_bits_t;
 class f16_bits_t;
 
 #if USEARCH_USE_NATIVE_F16
@@ -147,8 +147,8 @@ template <typename scalar_at> scalar_kind_t scalar_kind() noexcept {
         return scalar_kind_t::f32_k;
     if (std::is_same<scalar_at, f16_t>())
         return scalar_kind_t::f16_k;
-    if (std::is_same<scalar_at, f8_bits_t>())
-        return scalar_kind_t::f8_k;
+    if (std::is_same<scalar_at, i8_bits_t>())
+        return scalar_kind_t::i8_k;
     if (std::is_same<scalar_at, u64_t>())
         return scalar_kind_t::u64_k;
     if (std::is_same<scalar_at, u32_t>())
@@ -223,7 +223,7 @@ inline std::size_t bits_per_scalar(scalar_kind_t scalar_kind) noexcept {
     case scalar_kind_t::f64_k: return 64;
     case scalar_kind_t::f32_k: return 32;
     case scalar_kind_t::f16_k: return 16;
-    case scalar_kind_t::f8_k: return 8;
+    case scalar_kind_t::i8_k: return 8;
     case scalar_kind_t::b1x8_k: return 1;
     default: return 0;
     }
@@ -234,7 +234,7 @@ inline std::size_t bits_per_scalar_word(scalar_kind_t scalar_kind) noexcept {
     case scalar_kind_t::f64_k: return 64;
     case scalar_kind_t::f32_k: return 32;
     case scalar_kind_t::f16_k: return 16;
-    case scalar_kind_t::f8_k: return 8;
+    case scalar_kind_t::i8_k: return 8;
     case scalar_kind_t::b1x8_k: return 8;
     default: return 0;
     }
@@ -245,7 +245,7 @@ inline char const* scalar_kind_name(scalar_kind_t scalar_kind) noexcept {
     case scalar_kind_t::f32_k: return "f32";
     case scalar_kind_t::f16_k: return "f16";
     case scalar_kind_t::f64_k: return "f64";
-    case scalar_kind_t::f8_k: return "f8";
+    case scalar_kind_t::i8_k: return "i8";
     case scalar_kind_t::b1x8_k: return "b1x8";
     default: return "";
     }
@@ -274,10 +274,10 @@ inline expected_gt<scalar_kind_t> scalar_kind_from_name(char const* name, std::s
         parsed.result = scalar_kind_t::f64_k;
     else if (str_equals(name, len, "f16"))
         parsed.result = scalar_kind_t::f16_k;
-    else if (str_equals(name, len, "f8"))
-        parsed.result = scalar_kind_t::f8_k;
+    else if (str_equals(name, len, "i8"))
+        parsed.result = scalar_kind_t::i8_k;
     else
-        parsed.failed("Unknown type, choose: f32, f16, f64, f8");
+        parsed.failed("Unknown type, choose: f32, f16, f64, i8");
     return parsed;
 }
 
@@ -344,7 +344,7 @@ class f16_bits_t {
     inline operator float() const noexcept { return f16_to_f32(uint16_); }
     inline explicit operator bool() const noexcept { return f16_to_f32(uint16_) > 0.5f; }
 
-    inline f16_bits_t(f8_bits_t) noexcept;
+    inline f16_bits_t(i8_bits_t) noexcept;
     inline f16_bits_t(bool v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(float v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(double v) noexcept : uint16_(f32_to_f16(v)) {}
@@ -387,7 +387,7 @@ class f16_bits_t {
  *  @brief  Numeric type for uniformly-distributed floating point
  *          values within [-1,1] range, quantized to integers [-100,100].
  */
-class f8_bits_t {
+class i8_bits_t {
     std::int8_t int8_{};
 
   public:
@@ -395,13 +395,13 @@ class f8_bits_t {
     constexpr static std::int8_t min_k = -100;
     constexpr static std::int8_t max_k = 100;
 
-    inline f8_bits_t() noexcept : int8_(0) {}
-    inline f8_bits_t(bool v) noexcept : int8_(v ? max_k : 0) {}
+    inline i8_bits_t() noexcept : int8_(0) {}
+    inline i8_bits_t(bool v) noexcept : int8_(v ? max_k : 0) {}
 
-    inline f8_bits_t(f8_bits_t&&) = default;
-    inline f8_bits_t& operator=(f8_bits_t&&) = default;
-    inline f8_bits_t(f8_bits_t const&) = default;
-    inline f8_bits_t& operator=(f8_bits_t const&) = default;
+    inline i8_bits_t(i8_bits_t&&) = default;
+    inline i8_bits_t& operator=(i8_bits_t&&) = default;
+    inline i8_bits_t(i8_bits_t const&) = default;
+    inline i8_bits_t& operator=(i8_bits_t const&) = default;
 
     inline operator float() const noexcept { return float(int8_) / divisor_k; }
     inline operator f16_t() const noexcept { return float(int8_) / divisor_k; }
@@ -412,15 +412,15 @@ class f8_bits_t {
     inline explicit operator std::int32_t() const noexcept { return int8_; }
     inline explicit operator std::int64_t() const noexcept { return int8_; }
 
-    inline f8_bits_t(f16_t v)
+    inline i8_bits_t(f16_t v)
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
-    inline f8_bits_t(float v)
+    inline i8_bits_t(float v)
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
-    inline f8_bits_t(double v)
+    inline i8_bits_t(double v)
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
 };
 
-inline f16_bits_t::f16_bits_t(f8_bits_t v) noexcept : f16_bits_t(float(v)) {}
+inline f16_bits_t::f16_bits_t(i8_bits_t v) noexcept : f16_bits_t(float(v)) {}
 
 /**
  *  @brief  An STL-based executor or a "thread-pool" for parallel execution.
@@ -761,7 +761,7 @@ template <> struct cast_gt<f16_bits_t, f16_bits_t> {
     bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
 };
 
-template <> struct cast_gt<f8_bits_t, f8_bits_t> {
+template <> struct cast_gt<i8_bits_t, i8_bits_t> {
     bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
 };
 
@@ -1012,11 +1012,11 @@ template <typename scalar_at = float, typename result_at = float> struct metric_
     }
 };
 
-struct cos_f8_t {
-    using scalar_t = f8_bits_t;
+struct cos_i8_t {
+    using scalar_t = i8_bits_t;
     using result_t = f32_t;
 
-    inline result_t operator()(f8_bits_t const* a, f8_bits_t const* b, std::size_t dim) const noexcept {
+    inline result_t operator()(i8_bits_t const* a, i8_bits_t const* b, std::size_t dim) const noexcept {
         std::int32_t ab{}, a2{}, b2{};
 #if USEARCH_USE_OPENMP
 #pragma omp simd reduction(+ : ab, a2, b2)
@@ -1036,11 +1036,11 @@ struct cos_f8_t {
     }
 };
 
-struct l2sq_f8_t {
-    using scalar_t = f8_bits_t;
+struct l2sq_i8_t {
+    using scalar_t = i8_bits_t;
     using result_t = f32_t;
 
-    inline result_t operator()(f8_bits_t const* a, f8_bits_t const* b, std::size_t dim) const noexcept {
+    inline result_t operator()(i8_bits_t const* a, i8_bits_t const* b, std::size_t dim) const noexcept {
         std::int32_t ab_deltas_sq{};
 #if USEARCH_USE_OPENMP
 #pragma omp simd reduction(+ : ab_deltas_sq)
@@ -1199,18 +1199,18 @@ class metric_punned_t {
         return {to_stl_<metric_cos_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
     }
 
-    static metric_punned_t cos_metric_f8_(std::size_t bytes_per_vector) {
+    static metric_punned_t cos_metric_i8_(std::size_t bytes_per_vector) {
         #if USEARCH_USE_SIMSIMD
-        if (hardware_supports(isa_kind_t::neon_k) && bytes_per_vector % 16 == 0) return {pun_stl_<int8_t>([=](int8_t const* a, int8_t const* b) { return simsimd_cos_i8x16_neon(a, b, bytes_per_vector); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f8_k, isa_kind_t::neon_k};
+        if (hardware_supports(isa_kind_t::neon_k) && bytes_per_vector % 16 == 0) return {pun_stl_<int8_t>([=](int8_t const* a, int8_t const* b) { return simsimd_cos_i8x16_neon(a, b, bytes_per_vector); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::i8_k, isa_kind_t::neon_k};
         #endif
-        return {to_stl_<cos_f8_t>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f8_k, isa_kind_t::auto_k};
+        return {to_stl_<cos_i8_t>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::i8_k, isa_kind_t::auto_k};
     }
 
     static metric_punned_t ip_metric_(std::size_t bytes_per_vector, scalar_kind_t scalar_kind) {        
         switch (scalar_kind) { // The two most common numeric types for the most common metric have optimized versions
         case scalar_kind_t::f32_k: return ip_metric_f32_(bytes_per_vector);
         case scalar_kind_t::f16_k: return cos_metric_f16_(bytes_per_vector); // Dot-product accumulates error, Cosine-distance normalizes it
-        case scalar_kind_t::f8_k:  return cos_metric_f8_(bytes_per_vector);
+        case scalar_kind_t::i8_k:  return cos_metric_i8_(bytes_per_vector);
         case scalar_kind_t::f64_k: return {to_stl_<metric_ip_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
         default: return {};
         }
@@ -1218,7 +1218,7 @@ class metric_punned_t {
 
     static metric_punned_t l2sq_metric_(std::size_t bytes_per_vector, scalar_kind_t scalar_kind) {
         switch (scalar_kind) {
-        case scalar_kind_t::f8_k: return {to_stl_<l2sq_f8_t>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f8_k, isa_kind_t::auto_k};
+        case scalar_kind_t::i8_k: return {to_stl_<l2sq_i8_t>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::i8_k, isa_kind_t::auto_k};
         case scalar_kind_t::f16_k: return {to_stl_<metric_l2sq_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
         case scalar_kind_t::f32_k: return {to_stl_<metric_l2sq_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
         case scalar_kind_t::f64_k: return {to_stl_<metric_l2sq_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
@@ -1228,7 +1228,7 @@ class metric_punned_t {
 
     static metric_punned_t cos_metric_(std::size_t bytes_per_vector, scalar_kind_t scalar_kind) {
         switch (scalar_kind) {
-        case scalar_kind_t::f8_k: return cos_metric_f8_(bytes_per_vector);
+        case scalar_kind_t::i8_k: return cos_metric_i8_(bytes_per_vector);
         case scalar_kind_t::f16_k: return cos_metric_f16_(bytes_per_vector);
         case scalar_kind_t::f32_k: return {to_stl_<metric_cos_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
         case scalar_kind_t::f64_k: return {to_stl_<metric_cos_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
@@ -1239,7 +1239,7 @@ class metric_punned_t {
     static metric_punned_t haversine_metric_(scalar_kind_t scalar_kind) {
         std::size_t bytes_per_vector = 2u * bits_per_scalar(scalar_kind) / CHAR_BIT;
         switch (scalar_kind) {
-        case scalar_kind_t::f8_k: return {to_stl_<metric_haversine_gt<f8_bits_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::haversine_k, scalar_kind_t::f8_k, isa_kind_t::auto_k};
+        case scalar_kind_t::i8_k: return {to_stl_<metric_haversine_gt<i8_bits_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::haversine_k, scalar_kind_t::i8_k, isa_kind_t::auto_k};
         case scalar_kind_t::f16_k: return {to_stl_<metric_haversine_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::haversine_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
         case scalar_kind_t::f32_k: return {to_stl_<metric_haversine_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::haversine_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
         case scalar_kind_t::f64_k: return {to_stl_<metric_haversine_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::haversine_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
@@ -1249,7 +1249,7 @@ class metric_punned_t {
 
     static metric_punned_t pearson_metric_(std::size_t bytes_per_vector, scalar_kind_t scalar_kind) {
         switch (scalar_kind) {
-        case scalar_kind_t::f8_k: return {to_stl_<metric_pearson_gt<f8_bits_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::f8_k, isa_kind_t::auto_k};
+        case scalar_kind_t::i8_k: return {to_stl_<metric_pearson_gt<i8_bits_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::i8_k, isa_kind_t::auto_k};
         case scalar_kind_t::f16_k: return {to_stl_<metric_pearson_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
         case scalar_kind_t::f32_k: return {to_stl_<metric_pearson_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
         case scalar_kind_t::f64_k: return {to_stl_<metric_pearson_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};

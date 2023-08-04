@@ -33,7 +33,7 @@ index_types = [
     ScalarKind.F32,
     ScalarKind.F64,
     ScalarKind.F16,
-    ScalarKind.F8,
+    ScalarKind.I8,
 ]
 numpy_types = [np.float32, np.float64, np.float16]
 
@@ -108,21 +108,23 @@ def test_index(
     index.add(42, vector)
 
     assert len(index) == 1, "Size after addition"
-    assert 42 in index, "Presense in the index"
+    assert 42 in index, "Presence in the index"
     assert 42 in index.keys, "Presence among keys"
-    assert 43 not in index, "Presense in the index, false positive"
+    assert 43 not in index, "Presence in the index, false positive"
     assert index[42] is not None, "Vector recovery"
     assert index[43] is None, "Vector recovery, false positive"
     assert len(index[42]) == ndim
     if numpy_type != np.byte:
         assert np.allclose(index[42], vector, atol=0.1)
 
-    matches = index.search(vector, 10)
+    matches: Matches = index.search(vector, 10)
     assert len(matches.keys) == 1, "Number of matches"
-    assert len(matches.keys) == len(matches.distances), "Symmetric match subarrays"
+    assert len(matches.keys) == len(matches.distances), "Symmetric match sub-arrays"
     assert len({match.key for match in matches}) == 1, "Iteration over matches"
     assert matches[0].key == 42
     assert matches[0].distance == pytest.approx(0, abs=1e-3)
+    assert matches.computed_distances != 0
+    assert matches.visited_members != 0
 
     # Validating the index structure and metadata:
     assert index.max_level >= 0
@@ -137,7 +139,7 @@ def test_index(
     index.remove(43)
     assert len(index) == 1
 
-    # Try insreting back
+    # Try inserting back
     index.add(43, other_vector)
     assert len(index) == 2
     index.remove(43)
@@ -183,7 +185,7 @@ def test_index(
     index = Index.restore(temporary_usearch_filename)
     assert index is None
 
-    # Try openning a corrupt file
+    # Try opening a corrupt file
     with open(temporary_usearch_filename, "w") as file:
         file.write("Some random string")
     meta = Index.metadata(temporary_usearch_filename)
@@ -280,15 +282,20 @@ def test_exact_recall(
         matches: Matches = index.search(vectors[i], 10, exact=True)
         found_labels = matches.keys
         assert found_labels[0] == i
+        assert matches.computed_distances == len(index)
+        assert matches.visited_members == 0, "Exact search won't traverse the graph"
 
     # Search the whole batch
     if batch_size > 1:
         matches: BatchMatches = index.search(vectors, 10, exact=True)
+        assert matches.computed_distances == len(index) * len(vectors)
+        assert matches.visited_members == 0, "Exact search won't traverse the graph"
+
         found_labels = matches.keys
         for i in range(batch_size):
             assert found_labels[i, 0] == i
 
-    # Match entries aginst themselves
+    # Match entries against themselves
     index_copy: Index = index.copy()
     mapping: dict = index.join(index_copy, exact=True)
     for man, woman in mapping.items():

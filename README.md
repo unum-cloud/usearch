@@ -41,7 +41,7 @@ Linux • MacOS • Windows • Docker • WebAssembly
 - ✅ SIMD-optimized and [user-defined metrics](#user-defined-functions) with JIT compilation.
 - ✅ Variable dimensionality vectors for unique applications, including search over compressed data.
 - ✅ Bitwise Tanimoto and Sorensen coefficients for [Genomics and Chemistry applications](#usearch--rdkit--molecular-search).
-- ✅ Hardware-agnostic `f16` & `f8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
+- ✅ Hardware-agnostic `f16` & `i8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
 - ✅ [View large indexes from disk](#disk-based-indexes) without loading into RAM.
 - ✅ Space-efficient point-clouds with `uint40_t`, accommodating 4B+ size.
 - ✅ Compatible with OpenMP and custom "executors", for fine-grained control over CPU utilization.
@@ -79,7 +79,7 @@ from usearch.index import Index
 index = Index(
     ndim=3, # Define the number of dimensions in input vectors
     metric='cos', # Choose 'l2sq', 'haversine' or other metric, default = 'ip'
-    dtype='f32', # Quantize to 'f16' or 'f8' if needed, default = 'f32'
+    dtype='f32', # Quantize to 'f16' or 'i8' if needed, default = 'f32'
     connectivity=16, # Optional: How frequent should the connections in the graph be
     expansion_add=128, # Optional: Control the recall of indexing
     expansion_search=64, # Optional: Control the quality of search
@@ -121,10 +121,10 @@ Those, however, are only sometimes reliable, can significantly affect the statis
 ![USearch uint40_t support](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-neighbor-types.png?raw=true)
 
 Instead, we have focused on high-precision arithmetic over low-precision downcasted vectors.
-The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f32_t`, `f16_t`, `f64_t`, and `f8_t` representations, even if the hardware doesn't natively support it.
+The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f32_t`, `f16_t`, `f64_t`, and `i8_t` representations, even if the hardware doesn't natively support it.
 Continuing the topic of memory efficiency, we provide a `uint40_t` to allow collection with over 4B+ vectors without allocating 8 bytes for every neighbor reference in the proximity graph.
 
-|              | FAISS, `f32` | USearch, `f32` | USearch, `f16` |     USearch, `f8` |
+|              | FAISS, `f32` | USearch, `f32` | USearch, `f16` |     USearch, `i8` |
 | :----------- | -----------: | -------------: | -------------: | ----------------: |
 | Batch Insert |       16 K/s |         73 K/s |        100 K/s | 104 K/s **+550%** |
 | Batch Search |       82 K/s |        103 K/s |        113 K/s |  134 K/s **+63%** |

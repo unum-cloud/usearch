@@ -46,7 +46,7 @@ The main columns are:
 | `f32` x256   |      16      |  128   |   64   |    87'995    |     171'856     |         99.1% |
 | `f16` x256   |      16      |  128   |   64   |    87'270    |     153'788     |         98.4% |
 | `f16` x256 ✳️ |      16      |  128   |   64   |    71'454    |     132'673     |         98.4% |
-| `f8` x256    |      16      |  128   |   64   |   115'923    |     274'653     |         98.9% |
+| `i8` x256    |      16      |  128   |   64   |   115'923    |     274'653     |         98.9% |
 
 As seen on the chart, for `f16` quantization, performance may differ depending on native hardware support for that numeric type.
 Also worth noting, 8-bit quantization results in almost no quantization loss and may perform better than `f16`.
