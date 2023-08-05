@@ -97,37 +97,37 @@ namespace LibUSearch
         [DllImport("libusearch", EntryPoint = "usearch_size")]
         private static extern nuint _usearch_size(usearch_index_t index, out nint error);
 
-        public static int usearch_size(usearch_index_t index, out usearch_error_t? error)
+        public static ulong usearch_size(usearch_index_t index, out usearch_error_t? error)
         {
             var result = _usearch_size(index, out var err);
             error = Marshal.PtrToStringAnsi(err);
-            return (int)result;
+            return result;
         }
 
         [DllImport("libusearch", EntryPoint = "usearch_capacity")]
         private static extern nuint _usearch_capacity(usearch_index_t index, out nint error);
 
-        public static int usearch_capacity(usearch_index_t index, out usearch_error_t? error)
+        public static ulong usearch_capacity(usearch_index_t index, out usearch_error_t? error)
         {
             var result = _usearch_capacity(index, out var err);
             error = Marshal.PtrToStringAnsi(err);
-            return (int)result;
+            return result;
         }
 
         [DllImport("libusearch", EntryPoint = "usearch_dimensions")]
         private static extern nuint _usearch_dimensions(usearch_index_t index, out nint error);
 
-        public static int usearch_dimensions(usearch_index_t index, out usearch_error_t? error)
+        public static ulong usearch_dimensions(usearch_index_t index, out usearch_error_t? error)
         {
             var result = _usearch_dimensions(index, out var err);
             error = Marshal.PtrToStringAnsi(err);
-            return (int)result;
+            return result;
         }
 
         [DllImport("libusearch", EntryPoint = "usearch_connectivity")]
         private static extern nuint _usearch_connectivity(usearch_index_t index, out nint error);
 
-        public static nuint usearch_connectivity(usearch_index_t index, out usearch_error_t? error)
+        public static ulong usearch_connectivity(usearch_index_t index, out usearch_error_t? error)
         {
             var result = _usearch_connectivity(index, out var err);
             error = Marshal.PtrToStringAnsi(err);
@@ -137,7 +137,7 @@ namespace LibUSearch
         [DllImport("libusearch", EntryPoint = "usearch_reserve")]
         private static extern void _usearch_reserve(usearch_index_t index, nuint capacity, out nint error);
 
-        public static void usearch_reserve(usearch_index_t index, int capacity, out usearch_error_t? error)
+        public static void usearch_reserve(usearch_index_t index, ulong capacity, out usearch_error_t? error)
         {
             _usearch_reserve(index, (nuint)capacity, out var err);
             error = Marshal.PtrToStringAnsi(err);
@@ -211,15 +211,15 @@ namespace LibUSearch
             out nint error
         );
 
-        public static int usearch_search<T>(
+        public static ulong usearch_search<T>(
             usearch_index_t index,
             T[] query_vector,
-            int results_limit,
+            ulong results_limit,
             out Dictionary<usearch_key_t, usearch_distance_t> found_labels_distances,
             out usearch_error_t? error
         ) where T : struct
         {
-            int result;
+            ulong result;
             nint err;
 
             var found_labels = new usearch_key_t[results_limit];
@@ -227,7 +227,7 @@ namespace LibUSearch
 
             if (typeof(T) == typeof(float))
             {
-                result = (int)_usearch_search_f32(
+                result = _usearch_search_f32(
                     index,
                     (float[])(object)query_vector,
                     usearch_scalar_kind_t.usearch_scalar_f32_k,
@@ -238,7 +238,7 @@ namespace LibUSearch
             }
             else if (typeof(T) == typeof(double))
             {
-                result = (int)_usearch_search_f64(
+                result = _usearch_search_f64(
                     index,
                     (double[])(object)query_vector,
                     usearch_scalar_kind_t.usearch_scalar_f64_k,
@@ -253,7 +253,7 @@ namespace LibUSearch
             }
 
             found_labels_distances = new Dictionary<usearch_key_t, usearch_distance_t>();
-            for (var i = 0; i < result; i++)
+            for (ulong i = 0; i < result; i++)
                 found_labels_distances.Add(found_labels[i], found_distances[i]);
 
             error = Marshal.PtrToStringAnsi(err);
@@ -266,17 +266,20 @@ namespace LibUSearch
         [DllImport("libusearch", EntryPoint = "usearch_get")]
         private static extern bool _usearch_get_f64(usearch_index_t index, usearch_key_t key, double[] vector, usearch_scalar_kind_t vector_kind, out nint error);
 
-        public static bool usearch_get<T>(usearch_index_t index, usearch_key_t key, T[] vector, out usearch_error_t? error) where T : struct
+        public static bool usearch_get<T>(usearch_index_t index, usearch_key_t key, out T[]? vector, out usearch_error_t? error) where T : struct
         {
             bool result;
             nint err;
+
+            var dim = usearch_dimensions(index, out error);
+            var vec = new T[dim];
 
             if (typeof(T) == typeof(float))
             {
                 result = _usearch_get_f32(
                     index,
                     key,
-                    (float[])(object)vector,
+                    (float[])(object)vec,
                     usearch_scalar_kind_t.usearch_scalar_f32_k,
                     out err);
             }
@@ -285,7 +288,7 @@ namespace LibUSearch
                 result = _usearch_get_f64(
                     index,
                     key,
-                    (double[])(object)vector,
+                    (double[])(object)vec,
                     usearch_scalar_kind_t.usearch_scalar_f64_k,
                     out err);
             }
@@ -293,6 +296,9 @@ namespace LibUSearch
             {
                 throw new NotSupportedException($"Type not supported ({nameof(T)}).");
             }
+
+            if (result) vector = vec;
+            else vector = null;
 
             error = Marshal.PtrToStringAnsi(err);
             return result;
