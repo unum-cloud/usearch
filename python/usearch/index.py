@@ -93,7 +93,11 @@ def _normalize_metric(metric):
     if isinstance(metric, str):
         _normalize = {
             "cos": MetricKind.Cos,
-            "ip": MetricKind.Cos,
+            "cosine": MetricKind.Cos,
+            "ip": MetricKind.IP,
+            "dot": MetricKind.IP,
+            "inner_product": MetricKind.IP,
+            "l2sq": MetricKind.L2sq,
             "l2_sq": MetricKind.L2sq,
             "haversine": MetricKind.Haversine,
             "pearson": MetricKind.Pearson,
