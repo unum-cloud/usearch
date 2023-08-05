@@ -8,7 +8,7 @@ extern "C" {
 #if defined(_WIN32) && !defined(__MINGW32__)
 #define USEARCH_EXPORT __declspec(dllexport)
 #else
-#define USEARCH_EXPORT __attribute__((visibility("default")))
+#define USEARCH_EXPORT
 #endif
 #endif
 #include <stdbool.h> // `bool`
