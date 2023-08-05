@@ -11,7 +11,7 @@ export interface Matches {
 
 /** K-Approximate Nearest Neighbors search index. */
 export class Index {
-    
+
     /**
      * Constructs a new index.
      * 
@@ -42,7 +42,7 @@ export class Index {
      * @return {bigints} The capacity of index.
      */
     capacity(): bigint;
-    
+
     /**
      * Returns connectivity.
      * @return {bigint} The connectivity of index.
@@ -84,4 +84,19 @@ export class Index {
      * @return {Matches} Output of the search result.
      */
     search(mat: Float32Array, k: bigint): Matches;
+
+    /** 
+     * Check if an entry is contained in the index.
+     * 
+     * @param {bigint} key Identifier to look up.
+     */
+    contains(key: bigint): boolean;
+
+    /** 
+     * Remove a vector from the index.
+     * 
+     * @param {bigint} key Input identifier for every vector to be removed.
+     */
+    remove(key: bigint): boolean;
+
 }
