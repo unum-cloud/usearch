@@ -196,6 +196,7 @@ namespace LibUSearch
         }
 
         [DllImport("libusearch", EntryPoint = "usearch_contains")]
+        [return: MarshalAs(UnmanagedType.I1)]
         private static extern bool _usearch_contains(usearch_index_t index, usearch_key_t key, out nint error);
 
         public static bool usearch_contains(usearch_index_t index, usearch_key_t key, out usearch_error_t? error)
@@ -299,56 +300,84 @@ namespace LibUSearch
         }
 
         [DllImport("libusearch", EntryPoint = "usearch_get")]
-        private static extern bool _usearch_get_f16(usearch_index_t index, usearch_key_t key, f16_t[] vector, usearch_scalar_kind_t vector_kind, out nint error);
+        [return: MarshalAs(UnmanagedType.I1)]
+        // https://learn.microsoft.com/en-us/dotnet/standard/native-interop/type-marshalling#default-rules-for-marshalling-common-types
+        // Half has no default marshalling since it has no primitive
+        // https://learn.microsoft.com/en-us/dotnet/framework/interop/blittable-and-non-blittable-types
+        // Also not officially blittable however both sides are IEEE 754
+        private static extern bool _usearch_get_f16(usearch_index_t index, usearch_key_t key, ushort[] vector, usearch_scalar_kind_t vector_kind, out nint error);
 
         [DllImport("libusearch", EntryPoint = "usearch_get")]
+        [return: MarshalAs(UnmanagedType.I1)]
         private static extern bool _usearch_get_f32(usearch_index_t index, usearch_key_t key, f32_t[] vector, usearch_scalar_kind_t vector_kind, out nint error);
 
         [DllImport("libusearch", EntryPoint = "usearch_get")]
+        [return: MarshalAs(UnmanagedType.I1)]
         private static extern bool _usearch_get_f64(usearch_index_t index, usearch_key_t key, f64_t[] vector, usearch_scalar_kind_t vector_kind, out nint error);
 
-        public static bool usearch_get<T>(usearch_index_t index, usearch_key_t key, out T[]? vector, out usearch_error_t? error) where T : struct
+        public unsafe static bool usearch_get<T>(usearch_index_t index, usearch_key_t key, out T[]? vector, out usearch_error_t? error) where T : struct
         {
             bool result;
             nint err;
 
             var dim = usearch_dimensions(index, out error);
-            var vec = new T[dim];
+            vector = null;
 
             if (typeof(T) == typeof(f16_t))
             {
+                var vec = new ushort[dim];
+
                 result = _usearch_get_f16(
                     index,
                     key,
-                    (f16_t[])(object)vec,
+                    vec,
                     usearch_scalar_kind_t.usearch_scalar_f16_k,
                     out err);
+
+                if (result)
+                {
+                    vector = new T[dim];
+#pragma warning disable CS8500
+                    fixed (void* src = vec, dest = vector)
+#pragma warning restore
+                    {
+                        var size = (int)dim * Marshal.SizeOf<T>();
+                        Buffer.MemoryCopy(src, dest, size, size);
+                    }
+                }
             }
             else if (typeof(T) == typeof(f32_t))
             {
+                var vec = new T[dim];
+
                 result = _usearch_get_f32(
                     index,
                     key,
                     (f32_t[])(object)vec,
                     usearch_scalar_kind_t.usearch_scalar_f32_k,
                     out err);
+
+                if (result)
+                    vector = vec;
             }
             else if (typeof(T) == typeof(f64_t))
             {
+                var vec = new T[dim];
+
                 result = _usearch_get_f64(
                     index,
                     key,
                     (f64_t[])(object)vec,
                     usearch_scalar_kind_t.usearch_scalar_f64_k,
                     out err);
+
+                if (result)
+                    vector = vec;
             }
             else
             {
                 throw new NotSupportedException($"Type not supported ({nameof(T)}).");
             }
-
-            if (result) vector = vec;
-            else vector = null;
 
             error = Marshal.PtrToStringAnsi(err);
             return result;

@@ -17,20 +17,33 @@ namespace LibUSearch
     {
         static void Main()
         {
-            //parse_vectors_from_file<f16_t>(@"sample-f16.fvecs", out var vectors_count, out var vector_dimension, out var data);
-            parse_vectors_from_file<f32_t>(@"sample-f32.fvecs", out var vectors_count, out var vector_dimension, out var data);
-            //parse_vectors_from_file<f64_t>(@"sample-f64.fvecs", out var vectors_count, out var vector_dimension, out var data);
+            var tests = new Dictionary<string, Action>
+            {
+                ["f16_t"] = () => run_test<f16_t>("sample-f16.fvecs"),
+                ["f32_t"] = () => run_test<f16_t>("sample-f32.fvecs"),
+                ["f64_t"] = () => run_test<f16_t>("sample-f64.fvecs"),
+            };
 
+            foreach (var test in tests)
+            {
+                Console.WriteLine($"TESTS: {test.Key}");
+                test.Value();
+            }
+        }
+
+        static void run_test<T>(string file_path) where T : struct
+        {
+            parse_vectors_from_file<T>(file_path, out var vectors_count, out var vector_dimension, out var data);
             vectors_count = vectors_count > 100000 ? 100000 : vectors_count;
 
-            // Test
+            // Tests
             test_init(vectors_count, vector_dimension);
             test_add_vector(data);
             test_get_vector(data);
             test_find_vector(data);
             test_remove_vector(data);
-            test_save_load(data);
-            test_view(data);
+            test_save_load($"{file_path}.usearch_index.bin", data);
+            test_view($"{file_path}.usearch_index.bin", data);
         }
 
         static void parse_vectors_from_file<T>(string file_path, out ulong count, out ulong dimension, out T[][] data) where T : struct
@@ -249,7 +262,7 @@ namespace LibUSearch
             Console.Write("Test: Remove Vector - PASSED\n");
         }
 
-        static void test_save_load<T>(T[][] data) where T : struct
+        static void test_save_load<T>(string file_path, T[][] data) where T : struct
         {
             Console.Write("Test: Save/Load...\n");
 
@@ -269,7 +282,7 @@ namespace LibUSearch
             }
 
             // Save and free the index
-            usearch_save(idx, "usearch_index.bin", out error);
+            usearch_save(idx, file_path, out error);
             Debug.Assert(error == null, error);
             usearch_free(idx, out error);
             Debug.Assert(error == null, error);
@@ -280,7 +293,7 @@ namespace LibUSearch
             Debug.Assert(usearch_size(idx, out error) == 0, error);
 
             // Load
-            usearch_load(idx, "usearch_index.bin", out error);
+            usearch_load(idx, file_path, out error);
             Debug.Assert(error == null, error);
             Debug.Assert(usearch_size(idx, out error) == vectors_count, error);
             Debug.Assert(usearch_capacity(idx, out error) == vectors_count, error);
@@ -298,7 +311,7 @@ namespace LibUSearch
             Console.Write("Test: Save/Load - PASSED\n");
         }
 
-        static void test_view<T>(T[][] data) where T : struct
+        static void test_view<T>(string file_path, T[][] data) where T : struct
         {
             Console.Write("Test: View...\n");
 
@@ -318,7 +331,7 @@ namespace LibUSearch
             }
 
             // Save and free the index
-            usearch_save(idx, "usearch_index.bin", out error);
+            usearch_save(idx, file_path, out error);
             Debug.Assert(error == null, error);
             usearch_free(idx, out error);
             Debug.Assert(error == null, error);
@@ -328,7 +341,7 @@ namespace LibUSearch
             Debug.Assert(error == null, error);
 
             // View
-            usearch_view(idx, "usearch_index.bin", out error);
+            usearch_view(idx, file_path, out error);
             Debug.Assert(error == null, error);
 
             usearch_free(idx, out error);
