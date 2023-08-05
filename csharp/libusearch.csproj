@@ -6,23 +6,27 @@
 		<Nullable>enable</Nullable>
 		<Platforms>x64</Platforms>
 		<LangVersion>latest</LangVersion>
-		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<AssemblyName>$(MSBuildProjectName).interop</AssemblyName>
+
+		<DefineConstants Condition="'$(OS)' == 'Windows_NT'">WINDOWS</DefineConstants>
+		<DefineConstants Condition="$([System.String]::new('$(OS)').StartsWith('Unix'))">LINUX</DefineConstants>
 	</PropertyGroup>
 
 	<Target Name="usearch" BeforeTargets="Build">
 		<PropertyGroup>
 			<ProjectRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\c'))</ProjectRoot>
-			<Command>"$(VsInstallRoot)\VC\Auxiliary\Build\vcvars64.bat" &amp;&amp; cd "$(ProjectRoot)" &amp;&amp; cl.exe /W4 /O2 /LD /Fe"libusearch.dll" lib.cpp /I. /I../include /I../fp16/include /I../robin-map/include</Command>
+			<Command Condition="'$(DefineConstants)' == 'WINDOWS'">"$(VsInstallRoot)\VC\Auxiliary\Build\vcvars64.bat" &amp;&amp; cd "$(ProjectRoot)" &amp;&amp; cl.exe /W4 /O2 /LD /Fe"libusearch.dll" lib.cpp /I. /I../include /I../fp16/include /I../robin-map/include</Command>
+			<Command Condition="'$(DefineConstants)' == 'LINUX'">g++ -shared -o libusearch.so lib.cpp -I. -I../include -I../fp16/include -I../robin-map/include</Command>
 		</PropertyGroup>
-		<WriteLinesToFile File="$(ProjectRoot)\build.bat" Lines="$(Command)" Overwrite="true" />
-		<Exec WorkingDirectory="$(ProjectRoot)" Command="cmd /C build.bat" />
-		<Delete Files="$(ProjectRoot)\build.bat" />
-		<Copy SourceFiles="$(ProjectRoot)\libusearch.dll" DestinationFolder="$(OutDir)" />
+		<WriteLinesToFile Condition="'$(DefineConstants)' == 'WINDOWS'" File="$(ProjectRoot)\build.bat" Lines="$(Command)" Overwrite="true" />
+		<Exec Condition="'$(DefineConstants)' == 'WINDOWS'" WorkingDirectory="$(ProjectRoot)" Command="cmd /C build.bat" />
+		<Delete Condition="'$(DefineConstants)' == 'WINDOWS'" Files="$(ProjectRoot)\build.bat" />
+		<Copy Condition="'$(DefineConstants)' == 'WINDOWS'" SourceFiles="$(ProjectRoot)\libusearch.dll" DestinationFolder="$(OutDir)" />
+		<Copy Condition="'$(DefineConstants)' == 'LINUX'" SourceFiles="$(ProjectRoot)\libusearch.so" DestinationFolder="$(OutDir)" />
 	</Target>
 
 	<ItemGroup>
-	  <Compile Remove="test.cs" />
+		<Compile Remove="test.cs" />
 	</ItemGroup>
 
 </Project>
