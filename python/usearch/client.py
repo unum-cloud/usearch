@@ -21,36 +21,33 @@ def _vector_to_ascii(vector: np.ndarray) -> Optional[str]:
 
 
 class IndexClient:
-
     def __init__(
-            self,
-            uri: str = '127.0.0.1',
-            port: int = 8545,
-            use_http: bool = True) -> None:
+        self, uri: str = "127.0.0.1", port: int = 8545, use_http: bool = True
+    ) -> None:
         self.client = Client(uri=uri, port=port, use_http=use_http)
 
-    def add_one(self, label: int, vector: np.ndarray):
-        assert isinstance(label, int)
+    def add_one(self, key: int, vector: np.ndarray):
+        assert isinstance(key, int)
         assert isinstance(vector, np.ndarray)
         vector = vector.flatten()
         ascii = _vector_to_ascii(vector)
         if ascii:
-            self.client.add_ascii(label=label, string=ascii)
+            self.client.add_ascii(key=key, string=ascii)
         else:
-            self.client.add_one(label=label, vectors=vector)
+            self.client.add_one(key=key, vectors=vector)
 
-    def add_many(self, labels: np.ndarray, vectors: np.ndarray):
-        assert isinstance(labels, int)
+    def add_many(self, keys: np.ndarray, vectors: np.ndarray):
+        assert isinstance(keys, int)
         assert isinstance(vectors, np.ndarray)
-        assert labels.ndim == 1 and vectors.ndim == 2
-        assert labels.shape[0] == vectors.shape[0]
-        self.client.add_many(labels=labels, vectors=vectors)
+        assert keys.ndim == 1 and vectors.ndim == 2
+        assert keys.shape[0] == vectors.shape[0]
+        self.client.add_many(keys=keys, vectors=vectors)
 
-    def add(self, labels: Union[np.ndarray, int], vectors: np.ndarray):
-        if isinstance(labels, int) or len(labels) == 1:
-            return self.add_one(labels, vectors)
+    def add(self, keys: Union[np.ndarray, int], vectors: np.ndarray):
+        if isinstance(keys, int) or len(keys) == 1:
+            return self.add_one(keys, vectors)
         else:
-            return self.add_many(labels, vectors)
+            return self.add_many(keys, vectors)
 
     def search_one(self, vector: np.ndarray, count: int) -> Matches:
         matches: List[dict] = []
@@ -64,31 +61,32 @@ class IndexClient:
         print(matches.data)
         matches = matches.json
 
-        labels = np.array((1, count), dtype=np.uint32)
+        keys = np.array((1, count), dtype=np.uint32)
         distances = np.array((1, count), dtype=np.float32)
         counts = np.array((1), dtype=np.uint32)
         for col, result in enumerate(matches):
-            labels[0, col] = result['label']
-            distances[0, col] = result['distance']
+            keys[0, col] = result["key"]
+            distances[0, col] = result["distance"]
         counts[0] = len(matches)
 
-        return labels, distances, counts
+        return keys, distances, counts
 
     def search_many(self, vectors: np.ndarray, count: int) -> Matches:
         batch_size: int = vectors.shape[0]
         list_of_matches: List[List[dict]] = self.client.search_many(
-            vectors=vectors, count=count)
+            vectors=vectors, count=count
+        )
 
-        labels = np.array((batch_size, count), dtype=np.uint32)
+        keys = np.array((batch_size, count), dtype=np.uint32)
         distances = np.array((batch_size, count), dtype=np.float32)
         counts = np.array((batch_size), dtype=np.uint32)
         for row, matches in enumerate(list_of_matches):
             for col, result in enumerate(matches):
-                labels[row, col] = result['label']
-                distances[row, col] = result['distance']
+                keys[row, col] = result["key"]
+                distances[row, col] = result["distance"]
             counts[row] = len(results)
 
-        return labels, distances, counts
+        return keys, distances, counts
 
     def search(self, vectors: np.ndarray, count: int) -> Matches:
         if vectors.ndim == 1 or (vectors.ndim == 2 and vectors.shape[0] == 1):
@@ -119,7 +117,7 @@ class IndexClient:
         raise NotImplementedError()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     index = IndexClient()
     index.add(42, np.array([0.4] * 256, dtype=np.float32))
     results = index.search(np.array([0.4] * 256, dtype=np.float32), 10)

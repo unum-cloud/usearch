@@ -13,3 +13,4 @@ set(USEARCH_PUNNED_INCLUDE_DIRS
 add_executable(index lib.cpp)
 target_include_directories(index PRIVATE ${USEARCH_PUNNED_INCLUDE_DIRS})
 set_target_properties(index PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/wasm)
+set_target_properties(index PROPERTIES CXX_STANDARD 11)

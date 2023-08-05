@@ -4,7 +4,7 @@ pub mod ffi {
     // Shared structs with fields visible to both languages.
     struct Matches {
         count: usize,
-        labels: Vec<u64>,
+        keys: Vec<u64>,
         distances: Vec<f32>,
     }
 
@@ -23,7 +23,7 @@ pub mod ffi {
         F64,
         F32,
         F16,
-        F8,
+        I8,
         B1,
     }
 
@@ -51,7 +51,7 @@ pub mod ffi {
         pub fn size(self: &Index) -> usize;
         pub fn capacity(self: &Index) -> usize;
 
-        pub fn add(self: &Index, label: u64, vector: &[f32]) -> Result<()>;
+        pub fn add(self: &Index, key: u64, vector: &[f32]) -> Result<()>;
         pub fn search(self: &Index, query: &[f32], count: usize) -> Result<Matches>;
 
         pub fn save(self: &Index, path: &str) -> Result<()>;

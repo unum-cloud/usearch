@@ -38,15 +38,14 @@ Linux • MacOS • Windows • Docker • WebAssembly
 
 - ✅ Benchmark-topping performance.
 - ✅ Simple and extensible [single C++11 header][usearch-header] implementation.
-- ✅ SIMD-optimized and [user-defined metrics](#user-defined-functions) with JIT-compilation.
+- ✅ SIMD-optimized and [user-defined metrics](#user-defined-functions) with JIT compilation.
 - ✅ Variable dimensionality vectors for unique applications, including search over compressed data.
 - ✅ Bitwise Tanimoto and Sorensen coefficients for [Genomics and Chemistry applications](#usearch--rdkit--molecular-search).
-- ✅ Hardware-agmostic `f16` & `f8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
+- ✅ Hardware-agnostic `f16` & `i8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
 - ✅ [View large indexes from disk](#disk-based-indexes) without loading into RAM.
 - ✅ Space-efficient point-clouds with `uint40_t`, accommodating 4B+ size.
 - ✅ Compatible with OpenMP and custom "executors", for fine-grained control over CPU utilization.
-- ✅ Supports multiple vectors per label.
-- ✅ On-the-fly deletions.
+- ✅ Heterogeneous lookups, renaming/relabeling, and on-the-fly deletions.
 - ✅ [Semantic Search](#usearch--ai--multi-modal-semantic-search) and [Joins](#joins).
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/index.hpp
@@ -69,7 +68,7 @@ USearch is compact and broadly compatible without sacrificing performance, with 
 
 [sloc]: https://en.wikipedia.org/wiki/Source_lines_of_code
 
-Base functionality is identical to FAISS, and the interface must be familiar if you have ever investigated Approximate Nearest Neigbors search:
+Base functionality is identical to FAISS, and the interface must be familiar if you have ever investigated Approximate Nearest Neighbors search:
 
 ```py
 $ pip install usearch numpy
@@ -80,7 +79,7 @@ from usearch.index import Index
 index = Index(
     ndim=3, # Define the number of dimensions in input vectors
     metric='cos', # Choose 'l2sq', 'haversine' or other metric, default = 'ip'
-    dtype='f32', # Quantize to 'f16' or 'f8' if needed, default = 'f32'
+    dtype='f32', # Quantize to 'f16' or 'i8' if needed, default = 'f32'
     connectivity=16, # Optional: How frequent should the connections in the graph be
     expansion_add=128, # Optional: Control the recall of indexing
     expansion_search=64, # Optional: Control the quality of search
@@ -88,12 +87,12 @@ index = Index(
 
 vector = np.array([0.2, 0.6, 0.4])
 index.add(42, vector)
-matches, distances, count = index.search(vector, 10)
+matches: Matches = index.search(vector, 10)
 
 assert len(index) == 1
-assert count == 1
-assert matches[0] == 42
-assert distances[0] <= 0.001
+assert len(matches) == 1
+assert matches[0].key == 42
+assert matches[0].distance <= 0.001
 assert np.allclose(index[42], vector)
 ```
 
@@ -108,7 +107,7 @@ Unlike older approaches indexing high-dimensional spaces, like KD-Trees and Loca
 They only have to be comparable.
 So you can apply it in [obscure][obscure] applications, like searching for similar sets or fuzzy text matching, using [GZip][gzip-similarity] as a distance function.
 
-> Read more about [JIT and UDF in USearch Python SDK]().
+> Read more about [JIT and UDF in USearch Python SDK](https://unum-cloud.github.io/usearch/python#user-defined-metrics-and-jit-in-python).
 
 [haversine]: https://ashvardanian.com/posts/abusing-vector-search#geo-spatial-indexing
 [obscure]: https://ashvardanian.com/posts/abusing-vector-search
@@ -122,10 +121,10 @@ Those, however, are only sometimes reliable, can significantly affect the statis
 ![USearch uint40_t support](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-neighbor-types.png?raw=true)
 
 Instead, we have focused on high-precision arithmetic over low-precision downcasted vectors.
-The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f32_t`, `f16_t`, `f64_t`, and `f8_t` representations, even if the hardware doesn't natively support it.
-Continuing the topic of memory-efficiency, we provide a `uint40_t` to allow collection with over 4B+ vectors without allocating 8 bytes for every neighbor reference in the proximity graph.
+The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f32_t`, `f16_t`, `f64_t`, and `i8_t` representations, even if the hardware doesn't natively support it.
+Continuing the topic of memory efficiency, we provide a `uint40_t` to allow collection with over 4B+ vectors without allocating 8 bytes for every neighbor reference in the proximity graph.
 
-|              | FAISS, `f32` | USearch, `f32` | USearch, `f16` |     USearch, `f8` |
+|              | FAISS, `f32` | USearch, `f32` | USearch, `f16` |     USearch, `i8` |
 | :----------- | -----------: | -------------: | -------------: | ----------------: |
 | Batch Insert |       16 K/s |         73 K/s |        100 K/s | 104 K/s **+550%** |
 | Batch Search |       82 K/s |        103 K/s |        113 K/s |  134 K/s **+63%** |
@@ -148,7 +147,7 @@ Continuing the topic of memory-efficiency, we provide a `uint40_t` to allow coll
 ## Disk-based Indexes
 
 With USearch, you can serve indexes from external memory, enabling you to optimize your server choices for indexing speed and serving costs.
-This can result in **20x costs reduction** on AWS and other public clouds.
+This can result in **20x cost reduction** on AWS and other public clouds.
 
 ```py
 index.save("index.usearch")
@@ -162,7 +161,7 @@ other_view.view("index.usearch")
 
 ## Joins
 
-One of the big questions these days is how will AI change the world of databases and data-management?
+One of the big questions these days is how will AI change the world of databases and data management.
 Most databases are still struggling to implement high-quality fuzzy search, and the only kind of joins they know are deterministic.
 A `join` is different from searching for every entry, as it requires a one-to-one mapping, banning collisions among separate search results.
 
@@ -171,7 +170,7 @@ A `join` is different from searching for every entry, as it requires a one-to-on
 |  Exact Join  | Fuzzy Join ? | Semantic Join ??  |
 
 Using USearch one can implement sub-quadratic complexity approximate, fuzzy, and semantic joins.
-This can come handy in any fuzzy-matching tasks, common to Database Management Software.
+This can come in handy in any fuzzy-matching tasks, common to Database Management Software.
 
 ```py
 men = Index(...)
@@ -183,17 +182,17 @@ pairs: dict = men.join(women, max_proposals=0, exact=False)
 
 ## Functionality
 
-By now, core functionality is supported across all bindings.
+By now, the core functionality is supported across all bindings.
 Broader functionality is ported per request.
 
-|                         |  C++  | Python | Java  | JavaScript | Rust  | GoLang | Swift |
-| :---------------------- | :---: | :----: | :---: | :--------: | :---: | :----: | :---: |
-| add/search/remove       |   ✅   |   ✅    |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
-| save/load/view          |   ✅   |   ✅    |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
-| join                    |   ✅   |   ✅    |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
-| user-defiend metrics    |   ✅   |   ✅    |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
-| variable-length vectors |   ✅   |   ✅    |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
-| 4B+ capacities          |   ✅   |   ❌    |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
+|                         | C++ 11 | Python 3 | C 99  | Java  | JavaScript | Rust  | GoLang | Swift |
+| :---------------------- | :----: | :------: | :---: | :---: | :--------: | :---: | :----: | :---: |
+| Add, search             |   ✅    |    ✅     |   ✅   |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
+| Save, load, view        |   ✅    |    ✅     |   ✅   |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
+| Join                    |   ✅    |    ✅     |   ✅   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
+| User-defined metrics    |   ✅    |    ✅     |   ✅   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
+| Variable-length vectors |   ✅    |    ✅     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
+| 4B+ capacities          |   ✅    |    ❌     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 
 ## Application Examples
 
@@ -215,22 +214,22 @@ model = uform.get_model('unum-cloud/uform-vl-multilingual')
 index = usearch.index.Index(ndim=256)
 
 @server
-def add(label: int, photo: pil.Image.Image):
+def add(key: int, photo: pil.Image.Image):
     image = model.preprocess_image(photo)
     vector = model.encode_image(image).detach().numpy()
-    index.add(label, vector.flatten(), copy=True)
+    index.add(key, vector.flatten(), copy=True)
 
 @server
 def search(query: str) -> np.ndarray:
     tokens = model.preprocess_text(query)
     vector = model.encode_text(tokens).detach().numpy()
     matches = index.search(vector.flatten(), 3)
-    return matches.labels
+    return matches.keys
 
 server.run()
 ```
 
-We have pre-processed some commonly used datasets, cleaning the images, producing the vectors, and pre-building the index.
+We have pre-processed some commonly used datasets, cleaned the images, produced the vectors, and pre-built the index.
 
 | Dataset                                |            Modalities | Images |                              Download |
 | :------------------------------------- | --------------------: | -----: | ------------------------------------: |
@@ -250,10 +249,10 @@ We have pre-processed some commonly used datasets, cleaning the images, producin
 
 Comparing molecule graphs and searching for similar structures is expensive and slow.
 It can be seen as a special case of the NP-Complete Subgraph Isomorphism problem.
-Luckily, domain-specific approximate methods exists.
+Luckily, domain-specific approximate methods exist.
 The one commonly used in Chemistry, is to generate structures from [SMILES][smiles], and later hash them into binary fingerprints.
-The later are searchable with bitwise similarity metrics, like the Tanimoto coefficient.
-Below is na example using the RDKit package.
+The latter are searchable with bitwise similarity metrics, like the Tanimoto coefficient.
+Below is an example using the RDKit package.
 
 ```python
 from usearch.index import Index, MetricKind
@@ -269,27 +268,22 @@ fingerprints = np.vstack([encoder.GetFingerprint(x) for x in molecules])
 fingerprints = np.packbits(fingerprints, axis=1)
 
 index = Index(ndim=2048, metric=MetricKind.Tanimoto)
-labels = np.arange(len(molecules))
+keys = np.arange(len(molecules))
 
-index.add(labels, fingerprints)
+index.add(keys, fingerprints)
 matches = index.search(fingerprints, 10)
 ```
 
 [smiles]: https://en.wikipedia.org/wiki/Simplified_molecular-input_line-entry_system
 [rdkit-fingerprints]: https://www.rdkit.org/docs/RDKit_Book.html#additional-information-about-the-fingerprints
 
-## TODO
-
-- JavaScript: Allow calling from "worker threads".
-- Rust: Allow passing a custom thread ID.
-- C# .NET bindings.
 
 ## Integrations
 
 - [x] GPT-Cache.
 - [ ] LangChain.
 - [ ] Microsoft Semantic Kernel.
-- [ ] PyTorch.
+- [ ] ClickHouse.
 
 ## Citations
 

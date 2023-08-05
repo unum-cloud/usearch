@@ -69,7 +69,7 @@
                     "conanfile.py",
                     "package.json",
                     "Cargo.toml",
-                    "wasmer.toml",
+                    "wasmer.toml"
                 ],
                 "message": "Build: Released ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
             }
