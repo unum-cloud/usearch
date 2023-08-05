@@ -27,6 +27,9 @@ class Index {
     Matches search(rust::Slice<float const> vector, size_t count) const;
     Matches search_in_thread(rust::Slice<float const> vector, size_t count, size_t thread) const;
 
+    bool remove(key_t key) const;
+    bool contains(key_t key) const;
+
     size_t dimensions() const;
     size_t connectivity() const;
     size_t size() const;
