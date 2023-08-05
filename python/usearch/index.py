@@ -16,7 +16,8 @@ from usearch.compiled import Index as _CompiledIndex
 from usearch.compiled import Indexes as _CompiledIndexes
 from usearch.compiled import IndexStats as _CompiledIndexStats
 
-from usearch.compiled import index_dense_metadata
+from usearch.compiled import index_dense_metadata as _index_dense_metadata
+from usearch.compiled import exact_search as _exact_search
 from usearch.compiled import MetricKind, ScalarKind, MetricSignature
 from usearch.compiled import (
     DEFAULT_CONNECTIVITY,
@@ -36,7 +37,7 @@ MetricKindBitwise = (
 Key = np.uint64
 
 
-def _normalize_dtype(dtype, metric: MetricKind = MetricKind.IP) -> ScalarKind:
+def _normalize_dtype(dtype, metric: MetricKind = MetricKind.Cos) -> ScalarKind:
     if dtype is None or dtype == "":
         return ScalarKind.B1 if metric in MetricKindBitwise else ScalarKind.F32
 
@@ -53,11 +54,13 @@ def _normalize_dtype(dtype, metric: MetricKind = MetricKind.IP) -> ScalarKind:
         "i8": ScalarKind.I8,
         "b1": ScalarKind.B1,
         "b1x8": ScalarKind.B1,
-        np.float64: ScalarKind.F64,
-        np.float32: ScalarKind.F32,
-        np.float16: ScalarKind.F16,
-        np.int8: ScalarKind.I8,
+        "float64": ScalarKind.F64,
+        "float32": ScalarKind.F32,
+        "float16": ScalarKind.F16,
+        "int8": ScalarKind.I8,
     }
+    if isinstance(dtype, np.dtype):
+        dtype = dtype.name
     return _normalize[dtype]
 
 
@@ -85,12 +88,12 @@ def _to_numpy_dtype(dtype: ScalarKind):
 
 def _normalize_metric(metric):
     if metric is None:
-        return MetricKind.IP
+        return MetricKind.Cos
 
     if isinstance(metric, str):
         _normalize = {
             "cos": MetricKind.Cos,
-            "ip": MetricKind.IP,
+            "ip": MetricKind.Cos,
             "l2_sq": MetricKind.L2sq,
             "haversine": MetricKind.Haversine,
             "pearson": MetricKind.Pearson,
@@ -352,7 +355,7 @@ class Index:
     def __init__(
         self,
         ndim: int = 0,
-        metric: Union[str, MetricKind, CompiledMetric] = MetricKind.IP,
+        metric: Union[str, MetricKind, CompiledMetric] = MetricKind.Cos,
         dtype: Optional[Union[str, ScalarKind]] = None,
         connectivity: Optional[int] = None,
         expansion_add: Optional[int] = None,
@@ -369,12 +372,11 @@ class Index:
             coordinates. Angular (Cos) and Euclidean (L2sq), obviously, apply to
             vectors with arbitrary number of dimensions.
 
-        :param metric: Distance function, defaults to MetricKind.IP
+        :param metric: Distance function, defaults to MetricKind.Cos
         :type metric: Union[MetricKind, Callable, str], optional
             Kind of the distance function, or the Numba `cfunc` JIT-compiled object.
             Possible `MetricKind` values: IP, Cos, L2sq, Haversine, Pearson,
             Hamming, Tanimoto, Sorensen.
-            Not every kind is JIT-able. For Jaccard distance, use `SparseIndex`.
 
         :param dtype: Scalar type for internal vector storage, defaults to None
         :type dtype: Optional[Union[str, ScalarKind]], optional
@@ -459,7 +461,7 @@ class Index:
         if not os.path.exists(path):
             return None
         try:
-            return index_dense_metadata(path)
+            return _index_dense_metadata(path)
         except Exception:
             return None
 
@@ -501,9 +503,9 @@ class Index:
         primary vectors store during the process of construction.
 
         :param keys: Unique identifier(s) for passed vectors, optional
-        :type keys: Buffer
+        :type keys: np.ndarray
         :param vectors: Vector or a row-major matrix
-        :type vectors: Buffer
+        :type vectors: np.ndarray
         :param copy: Should the index store a copy of vectors, defaults to True
         :type copy: bool, optional
         :param threads: Optimal number of cores to use, defaults to 0
@@ -539,7 +541,7 @@ class Index:
         Performs approximate nearest neighbors search for one or more queries.
 
         :param vectors: Query vector or vectors.
-        :type vectors: Buffer
+        :type vectors: np.ndarray
         :param k: Upper limit on the number of matches to find, defaults to 10
         :type k: int, optional
         :param threads: Optimal number of cores to use, defaults to 0
@@ -550,7 +552,7 @@ class Index:
         :type log: Union[str, bool], optional
         :param batch_size: Number of vectors to process at once, defaults to 0
         :type batch_size: int, optional
-        :return: Approximate matches for one or more queries
+        :return: Matches for one or more queries
         :rtype: Union[Matches, BatchMatches]
         """
 
@@ -578,7 +580,7 @@ class Index:
         In other cases, rebuilding - is the recommended approach.
 
         :param keys: Unique identifier for passed vectors, optional
-        :type keys: Buffer
+        :type keys: np.ndarray
         :param compact: Removes links to removed nodes (expensive), defaults to False
         :type compact: bool, optional
         :param threads: Optimal number of cores to use, defaults to 0
@@ -869,3 +871,98 @@ class Indexes:
             log=False,
             batch_size=None,
         )
+
+
+def search(
+    dataset: np.ndarray,
+    query: np.ndarray,
+    k: int = 10,
+    metric: Union[str, MetricKind, CompiledMetric] = MetricKind.Cos,
+    *,
+    exact: bool = False,
+    threads: int = 0,
+    log: Union[str, bool] = False,
+    batch_size: int = 0,
+) -> Union[Matches, BatchMatches]:
+    """Shortcut for search, that can avoid index construction. Particularly useful for
+    tiny datasets, where brute-force exact search works fast enough.
+
+    :param dataset: Row-major matrix.
+    :type dataset: np.ndarray
+    :param query: Query vector or vectors (also row-major), to find in `dataset`.
+    :type query: np.ndarray
+
+    :param k: Upper limit on the number of matches to find, defaults to 10
+    :type k: int, optional
+
+    :param metric: Distance function, defaults to MetricKind.Cos
+    :type metric: Union[MetricKind, Callable, str], optional
+        Kind of the distance function, or the Numba `cfunc` JIT-compiled object.
+        Possible `MetricKind` values: IP, Cos, L2sq, Haversine, Pearson,
+        Hamming, Tanimoto, Sorensen.
+
+    :param threads: Optimal number of cores to use, defaults to 0
+    :type threads: int, optional
+    :param exact: Perform exhaustive linear-time exact search, defaults to False
+    :type exact: bool, optional
+    :param log: Whether to print the progress bar, default to False
+    :type log: Union[str, bool], optional
+    :param batch_size: Number of vectors to process at once, defaults to 0
+    :type batch_size: int, optional
+
+    :return: Matches for one or more queries
+    :rtype: Union[Matches, BatchMatches]
+    """
+    assert dataset.ndim == 2, "Dataset must be a matrix, with a vector in each row"
+
+    if not exact:
+        index = Index(
+            dataset.shape[1],
+            metric=metric,
+            dtype=dataset.dtype,
+        )
+        return index.search(
+            query,
+            k,
+            threads=threads,
+            log=log,
+            batch_size=batch_size,
+        )
+
+    metric = _normalize_metric(metric)
+    if isinstance(metric, MetricKind):
+        metric_kind = metric
+        metric_pointer = 0
+        metric_signature = MetricSignature.ArrayArraySize
+    elif isinstance(metric, CompiledMetric):
+        metric_kind = metric.kind
+        metric_pointer = metric.pointer
+        metric_signature = metric.signature
+    else:
+        raise ValueError("The `metric` must be a `CompiledMetric` or a `MetricKind`")
+
+    class WrappedDataset:
+        def __init__(self) -> None:
+            pass
+
+        def search(self, query, k, **kwargs):
+            kwargs.pop("exact")
+            kwargs["metric_kind"] = metric_kind
+            kwargs["metric_pointer"] = metric_pointer
+            kwargs["metric_signature"] = metric_signature
+
+            assert dataset.shape[1] == query.shape[1], "Number of dimensions differs"
+            if dataset.dtype != query.dtype:
+                query = query.astype(dataset.dtype)
+
+            return _exact_search(dataset, query, k, **kwargs)
+
+    return _search_in_compiled(
+        compiled=WrappedDataset(),
+        vectors=query,
+        k=k,
+        threads=threads,
+        exact=True,
+        log=log,
+        batch_size=batch_size,
+    )

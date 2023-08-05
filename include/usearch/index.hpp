@@ -468,6 +468,21 @@ template <typename allocator_at = std::allocator<byte_t>> class visits_bitset_gt
     }
 
 #endif
+
+    class lock_t {
+        visits_bitset_gt& bitset_;
+        std::size_t bit_offset_;
+
+      public:
+        inline ~lock_t() noexcept { bitset_.atomic_reset(bit_offset_); }
+        inline lock_t(visits_bitset_gt& bitset, std::size_t bit_offset) noexcept
+            : bitset_(bitset), bit_offset_(bit_offset) {
+            while (bitset_.atomic_set(bit_offset_))
+                ;
+        }
+    };
+
+    inline lock_t lock(std::size_t i) noexcept { return {*this, i}; }
 };
 
 using visits_bitset_t = visits_bitset_gt<>;
@@ -2010,7 +2025,7 @@ class index_gt {
                 std::memmove(distances + offset + 1, distances + offset, count_worse * sizeof(distance_t));
                 keys[offset] = result.member.key;
                 distances[offset] = result.distance;
-                merged_count = (std::min)(merged_count + 1u, max_count);
+                merged_count += merged_count != max_count;
             }
             return merged_count;
         }
