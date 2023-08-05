@@ -476,6 +476,8 @@ class index_dense_gt {
 
     // The metric and its properties
     metric_t const& metric() const { return metric_; }
+    void change_metric(metric_t metric) { metric_ = std::move(metric); }
+
     scalar_kind_t scalar_kind() const noexcept { return metric_.scalar_kind(); }
     std::size_t bytes_per_vector() const noexcept { return metric_.bytes_per_vector(); }
     std::size_t scalar_words() const noexcept { return metric_.scalar_words(); }

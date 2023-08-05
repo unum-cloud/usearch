@@ -146,10 +146,10 @@ metric_t udf(                                                                   
 static dense_index_py_t make_index(      //
     std::size_t dimensions,              //
     scalar_kind_t scalar_kind,           //
-    metric_kind_t metric_kind,           //
     std::size_t connectivity,            //
     std::size_t expansion_add,           //
     std::size_t expansion_search,        //
+    metric_kind_t metric_kind,           //
     metric_signature_t metric_signature, //
     std::uintptr_t metric_uintptr) {
 
@@ -696,10 +696,10 @@ PYBIND11_MODULE(compiled, m) {
           py::kw_only(),                                                   //
           py::arg("ndim") = 0,                                             //
           py::arg("dtype") = scalar_kind_t::f32_k,                         //
-          py::arg("metric_kind") = metric_kind_t::cos_k,                   //
           py::arg("connectivity") = default_connectivity(),                //
           py::arg("expansion_add") = default_expansion_add(),              //
           py::arg("expansion_search") = default_expansion_search(),        //
+          py::arg("metric_kind") = metric_kind_t::cos_k,                   //
           py::arg("metric_signature") = metric_signature_t::array_array_k, //
           py::arg("metric_pointer") = 0                                    //
     );
@@ -780,6 +780,23 @@ PYBIND11_MODULE(compiled, m) {
 
     i.def_property("expansion_add", &dense_index_py_t::expansion_add, &dense_index_py_t::change_expansion_add);
     i.def_property("expansion_search", &dense_index_py_t::expansion_search, &dense_index_py_t::change_expansion_search);
+
+    i.def(
+        "change_metric",
+        [](dense_index_py_t& index, metric_kind_t metric_kind, metric_signature_t metric_signature,
+           std::uintptr_t metric_uintptr) {
+            scalar_kind_t scalar_kind = index.scalar_kind();
+            std::size_t dimensions = index.dimensions();
+            metric_t metric =  //
+                metric_uintptr //
+                    ? udf(metric_kind, metric_signature, metric_uintptr, scalar_kind, dimensions)
+                    : metric_t(dimensions, metric_kind, scalar_kind);
+            index.change_metric(std::move(metric));
+        },
+        py::arg("metric_kind") = metric_kind_t::cos_k,                   //
+        py::arg("metric_signature") = metric_signature_t::array_array_k, //
+        py::arg("metric_pointer") = 0                                    //
+    );
 
     i.def_property_readonly("keys", &get_all_keys<dense_index_py_t>);
     i.def("get_keys", &get_keys<dense_index_py_t>, py::arg("offset") = 0,

@@ -354,6 +354,7 @@ class Index:
 
     def __init__(
         self,
+        *,
         ndim: int = 0,
         metric: Union[str, MetricKind, CompiledMetric] = MetricKind.Cos,
         dtype: Optional[Union[str, ScalarKind]] = None,
@@ -441,12 +442,12 @@ class Index:
         self._compiled = _CompiledIndex(
             ndim=ndim,
             dtype=dtype,
-            metric_kind=self._metric_kind,
-            metric_pointer=self._metric_pointer,
-            metric_signature=self._metric_signature,
             connectivity=connectivity,
             expansion_add=expansion_add,
             expansion_search=expansion_search,
+            metric_kind=self._metric_kind,
+            metric_pointer=self._metric_pointer,
+            metric_signature=self._metric_signature,
         )
 
         self.path = path
@@ -642,6 +643,28 @@ class Index:
     @property
     def metric(self) -> Union[MetricKind, CompiledMetric]:
         return self._metric_jit if self._metric_jit else self._metric_kind
+
+    @metric.setter
+    def metric(self, metric: Union[str, MetricKind, CompiledMetric]):
+        metric = _normalize_metric(metric)
+        if isinstance(metric, MetricKind):
+            metric_kind = metric
+            metric_pointer = 0
+            metric_signature = MetricSignature.ArrayArraySize
+        elif isinstance(metric, CompiledMetric):
+            metric_kind = metric.kind
+            metric_pointer = metric.pointer
+            metric_signature = metric.signature
+        else:
+            raise ValueError(
+                "The `metric` must be a `CompiledMetric` or a `MetricKind`"
+            )
+
+        return self._compiled.change_metric(
+            metric_kind=metric_kind,
+            metric_pointer=metric_pointer,
+            metric_signature=metric_signature,
+        )
 
     @property
     def dtype(self) -> ScalarKind:
@@ -921,6 +944,13 @@ def search(
             metric=metric,
             dtype=dataset.dtype,
         )
+        index.add(
+            None,
+            dataset,
+            threads=threads,
+            log=log,
+            batch_size=batch_size,
+        )
         return index.search(
             query,
             k,
@@ -947,10 +977,13 @@ def search(
 
         def search(self, query, k, **kwargs):
             kwargs.pop("exact")
-            kwargs["metric_kind"] = metric_kind
-            kwargs["metric_pointer"] = metric_pointer
-            kwargs["metric_signature"] = metric_signature
-
+            kwargs.update(
+                dict(
+                    metric_kind=metric_kind,
+                    metric_pointer=metric_pointer,
+                    metric_signature=metric_signature,
+                )
+            )
             assert dataset.shape[1] == query.shape[1], "Number of dimensions differs"
             if dataset.dtype != query.dtype:
                 query = query.astype(dataset.dtype)
