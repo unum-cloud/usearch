@@ -5,6 +5,7 @@ import numpy as np
 
 from usearch.io import load_matrix, save_matrix
 from usearch.eval import random_vectors
+from usearch.index import search
 
 from usearch.index import (
     Index,
@@ -79,6 +80,27 @@ def test_serializing_ibin_matrix(rows: int, cols: int):
     reconstructed = load_matrix(temporary_filename + ".ibin")
     assert np.allclose(original, reconstructed)
     os.remove(temporary_filename + ".ibin")
+
+
+@pytest.mark.parametrize("rows", batch_sizes)
+@pytest.mark.parametrize("cols", dimensions)
+def test_exact_search(rows: int, cols: int):
+    """
+    Test exact search.
+
+    :param int rows: The number of rows in the matrix.
+    :param int cols: The number of columns in the matrix.
+    """
+    original = np.random.rand(rows, cols)
+    matches: BatchMatches = search(original, original, 10, exact=True)
+    top_matches = (
+        [int(m.keys[0]) for m in matches] if rows > 1 else int(matches.keys[0])
+    )
+    assert np.all(top_matches == np.arange(rows))
+
+    matches: Matches = search(original, original[0], 10, exact=True)
+    top_match = int(matches.keys[0])
+    assert top_match == 0
 
 
 @pytest.mark.parametrize("ndim", dimensions)
