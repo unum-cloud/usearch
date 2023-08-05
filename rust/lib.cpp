@@ -4,9 +4,10 @@
 using namespace unum::usearch;
 using namespace unum;
 
-using index_t = typename Index::index_t;
+using index_t = index_dense_t;
 using add_result_t = typename index_t::add_result_t;
 using search_result_t = typename index_t::search_result_t;
+using labeling_result_t = typename index_t::labeling_result_t;
 
 Index::Index(std::unique_ptr<index_t> index) : index_(std::move(index)) {}
 
@@ -28,13 +29,21 @@ Matches Index::search_in_thread(rust::Slice<float const> vector, size_t count, s
     config.expansion = index_->expansion_search();
     search_result_t result = index_->search(vector.data(), count, config);
     result.error.raise();
-    matches.count = result.dump_to(matches.keys.data(), matches.distances.data());
-    matches.keys.truncate(matches.count);
-    matches.distances.truncate(matches.count);
+    count = result.dump_to(matches.keys.data(), matches.distances.data());
+    matches.keys.truncate(count);
+    matches.distances.truncate(count);
     return matches;
 }
 
 void Index::add(key_t key, rust::Slice<float const> vector) const { index_->add(key, vector.data()).error.raise(); }
+
+bool Index::remove(key_t key) const {
+    labeling_result_t result = index_->remove(key);
+    result.error.raise();
+    return result.completed;
+}
+
+bool Index::contains(key_t key) const { return index_->contains(key); }
 
 Matches Index::search(rust::Slice<float const> vector, size_t count) const {
     Matches matches;
@@ -44,9 +53,9 @@ Matches Index::search(rust::Slice<float const> vector, size_t count) const {
         matches.keys.push_back(0), matches.distances.push_back(0);
     search_result_t result = index_->search(vector.data(), count);
     result.error.raise();
-    matches.count = result.dump_to(matches.keys.data(), matches.distances.data());
-    matches.keys.truncate(matches.count);
-    matches.distances.truncate(matches.count);
+    count = result.dump_to(matches.keys.data(), matches.distances.data());
+    matches.keys.truncate(count);
+    matches.distances.truncate(count);
     return matches;
 }
 
@@ -74,7 +83,7 @@ std::unique_ptr<Index> wrap(index_t&& index) {
 metric_kind_t rust_to_cpp_metric(MetricKind value) {
     switch (value) {
     case MetricKind::IP: return metric_kind_t::ip_k;
-    case MetricKind::L2Sq: return metric_kind_t::l2sq_k;
+    case MetricKind::L2sq: return metric_kind_t::l2sq_k;
     case MetricKind::Cos: return metric_kind_t::cos_k;
     case MetricKind::Pearson: return metric_kind_t::pearson_k;
     case MetricKind::Haversine: return metric_kind_t::haversine_k;

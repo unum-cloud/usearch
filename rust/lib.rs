@@ -3,14 +3,13 @@ pub mod ffi {
     
     // Shared structs with fields visible to both languages.
     struct Matches {
-        count: usize,
         keys: Vec<u64>,
         distances: Vec<f32>,
     }
 
     enum MetricKind {
         IP,
-        L2Sq,
+        L2sq,
         Cos,
         Pearson,
         Haversine,
@@ -53,6 +52,8 @@ pub mod ffi {
 
         pub fn add(self: &Index, key: u64, vector: &[f32]) -> Result<()>;
         pub fn search(self: &Index, query: &[f32], count: usize) -> Result<Matches>;
+        pub fn remove(self: &Index, key: u64) -> Result<bool>;
+        pub fn contains(self: &Index, key: u64) -> bool;
 
         pub fn save(self: &Index, path: &str) -> Result<()>;
         pub fn load(self: &Index, path: &str) -> Result<()>;
@@ -97,7 +98,7 @@ mod tests {
     
         // Read back the tags
         let results = index.search(&first, 10).unwrap();
-        assert_eq!(results.count, 2);
+        assert_eq!(results.keys.len(), 2);
     
         // Validate serialization
         assert!(index.save("index.rust.usearch").is_ok());
@@ -106,7 +107,7 @@ mod tests {
     
         // Make sure every function is called at least once
         assert!(new_index(&options).is_ok());
-        options.metric = MetricKind::L2Sq;
+        options.metric = MetricKind::L2sq;
         assert!(new_index(&options).is_ok());
         options.metric = MetricKind::Cos;
         assert!(new_index(&options).is_ok());

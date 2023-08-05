@@ -11,6 +11,7 @@ assert.equal(index.size(), 0n, 'initial size should be 0');
 index.add(15n, new Float32Array([10, 20]));
 index.add(16n, new Float32Array([10, 25]));
 assert.equal(index.size(), 2n, 'size after adding elements should be 2');
+assert.equal(index.contains(15n), true, 'entry must be present after insertion');
 
 var results = index.search(new Float32Array([13, 14]), 2n);
 assert.deepEqual(results.keys, new BigUint64Array([15n, 16n]), 'keys should be 15 and 16');

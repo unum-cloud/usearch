@@ -37,6 +37,8 @@ class Index : public Napi::ObjectWrap<Index> {
 
     void Add(Napi::CallbackInfo const& ctx);
     Napi::Value Search(Napi::CallbackInfo const& ctx);
+    Napi::Value Remove(Napi::CallbackInfo const& ctx);
+    Napi::Value Contains(Napi::CallbackInfo const& ctx);
 
     std::unique_ptr<index_dense_t> native_;
 };
@@ -51,6 +53,8 @@ Napi::Object Index::Init(Napi::Env env, Napi::Object exports) {
             InstanceMethod("connectivity", &Index::GetConnectivity),
             InstanceMethod("add", &Index::Add),
             InstanceMethod("search", &Index::Search),
+            InstanceMethod("remove", &Index::Remove),
+            InstanceMethod("contains", &Index::Contains),
             InstanceMethod("save", &Index::Save),
             InstanceMethod("load", &Index::Load),
             InstanceMethod("view", &Index::View),
@@ -282,6 +286,64 @@ Napi::Value Index::Search(Napi::CallbackInfo const& ctx) {
         result_js.Set("distances", distances_js);
         result_js.Set("count", Napi::BigInt::New(env, count));
         return result_js;
+    } catch (std::bad_alloc const&) {
+        Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
+        return {};
+    } catch (...) {
+        Napi::TypeError::New(env, "Search failed").ThrowAsJavaScriptException();
+        return {};
+    }
+}
+
+Napi::Value Index::Remove(Napi::CallbackInfo const& ctx) {
+    Napi::Env env = ctx.Env();
+    if (ctx.Length() < 1 || !ctx[0].IsBigInt()) {
+        Napi::TypeError::New(env, "Expects an entry identifier").ThrowAsJavaScriptException();
+        return {};
+    }
+
+    Napi::BigInt key_js = ctx[0].As<Napi::BigInt>();
+    bool lossless = true;
+    std::uint64_t key = key_js.Uint64Value(&lossless);
+    if (!lossless) {
+        Napi::TypeError::New(env, "Identifier must be an unsigned integer").ThrowAsJavaScriptException();
+        return {};
+    }
+
+    try {
+        auto result = native_->remove(key);
+        if (!result) {
+            Napi::TypeError::New(env, "Removal has failed").ThrowAsJavaScriptException();
+            return {};
+        }
+        return Napi::Boolean::New(env, result.completed);
+    } catch (std::bad_alloc const&) {
+        Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
+        return {};
+    } catch (...) {
+        Napi::TypeError::New(env, "Search failed").ThrowAsJavaScriptException();
+        return {};
+    }
+}
+
+Napi::Value Index::Contains(Napi::CallbackInfo const& ctx) {
+    Napi::Env env = ctx.Env();
+    if (ctx.Length() < 1 || !ctx[0].IsBigInt()) {
+        Napi::TypeError::New(env, "Expects an entry identifier").ThrowAsJavaScriptException();
+        return {};
+    }
+
+    Napi::BigInt key_js = ctx[0].As<Napi::BigInt>();
+    bool lossless = true;
+    std::uint64_t key = key_js.Uint64Value(&lossless);
+    if (!lossless) {
+        Napi::TypeError::New(env, "Identifier must be an unsigned integer").ThrowAsJavaScriptException();
+        return {};
+    }
+
+    try {
+        bool result = native_->contains(key);
+        return Napi::Boolean::New(env, result);
     } catch (std::bad_alloc const&) {
         Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
         return {};
