@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>net7.0</TargetFramework>
@@ -6,23 +6,28 @@
 		<Nullable>enable</Nullable>
 		<Platforms>x64</Platforms>
 		<LangVersion>latest</LangVersion>
-		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<AssemblyName>$(MSBuildProjectName).interop</AssemblyName>
+
+		<DefineConstants Condition="'$(OS)' == 'Windows_NT'">WINDOWS</DefineConstants>
+		<DefineConstants Condition="$([System.String]::new('$(OS)').StartsWith('Unix'))">LINUX</DefineConstants>
 	</PropertyGroup>
 
 	<Target Name="usearch" BeforeTargets="Build">
 		<PropertyGroup>
-			<ProjectRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\c'))</ProjectRoot>
-			<Command>"$(VsInstallRoot)\VC\Auxiliary\Build\vcvars64.bat" &amp;&amp; cd "$(ProjectRoot)" &amp;&amp; cl.exe /W4 /O2 /LD /Fe"libusearch.dll" lib.cpp /I. /I../include /I../fp16/include /I../robin-map/include</Command>
+			<ProjectRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../c'))</ProjectRoot>
+			<Command Condition="'$(OS)' == 'Windows_NT'">"$(VsInstallRoot)\VC\Auxiliary\Build\vcvars64.bat" &amp;&amp; cd "$(ProjectRoot)" &amp;&amp; cl.exe /W4 /O2 /LD /Fe"libusearch.dll" lib.cpp /I. /I../include /I../fp16/include /I../robin-map/include</Command>
+			<Command Condition="$([System.String]::new('$(OS)').StartsWith('Unix'))">g++ -shared -fPIC -o libusearch.so lib.cpp -I. -I../include -I../fp16/include -I../robin-map/include</Command>
 		</PropertyGroup>
-		<WriteLinesToFile File="$(ProjectRoot)\build.bat" Lines="$(Command)" Overwrite="true" />
-		<Exec WorkingDirectory="$(ProjectRoot)" Command="cmd /C build.bat" />
-		<Delete Files="$(ProjectRoot)\build.bat" />
-		<Copy SourceFiles="$(ProjectRoot)\libusearch.dll" DestinationFolder="$(OutDir)" />
+		<WriteLinesToFile Condition="'$(OS)' == 'Windows_NT'" File="$(ProjectRoot)\build.bat" Lines="$(Command)" Overwrite="true" />
+		<Exec Condition="'$(OS)' == 'Windows_NT'" WorkingDirectory="$(ProjectRoot)" Command="cmd /C build.bat" />
+		<Exec Condition="$([System.String]::new('$(OS)').StartsWith('Unix'))" Command="cd $(ProjectRoot) &amp;&amp; $(Command)" />
+		<Delete Condition="'$(OS)' == 'Windows_NT'" Files="$(ProjectRoot)\build.bat" />
+		<Copy Condition="'$(OS)' == 'Windows_NT'" SourceFiles="$(ProjectRoot)\libusearch.dll" DestinationFolder="$(OutDir)" />
+		<Copy Condition="$([System.String]::new('$(OS)').StartsWith('Unix'))" SourceFiles="$(ProjectRoot)/libusearch.so" DestinationFolder="$(OutDir)" />
 	</Target>
 
 	<ItemGroup>
-	  <Compile Remove="test.cs" />
+		<Compile Remove="test.cs" />
 	</ItemGroup>
 
 </Project>
