@@ -7,6 +7,10 @@ namespace LibUSearch
     using usearch_distance_t = System.Single;
     using usearch_error_t = System.String;
 
+    using f16_t = System.Half;
+    using f32_t = System.Single;
+    using f64_t = System.Double;
+
     public static class Interop
     {
         public delegate usearch_distance_t usearch_metric_t(object a, object b);
@@ -144,30 +148,42 @@ namespace LibUSearch
         }
 
         [DllImport("libusearch", EntryPoint = "usearch_add")]
-        private static extern void _usearch_add_f32(usearch_index_t index, usearch_key_t key, float[] vector, usearch_scalar_kind_t vector_kind, out nint error);
+        private static extern void _usearch_add_f16(usearch_index_t index, usearch_key_t key, f16_t[] vector, usearch_scalar_kind_t vector_kind, out nint error);
 
         [DllImport("libusearch", EntryPoint = "usearch_add")]
-        private static extern void _usearch_add_f64(usearch_index_t index, usearch_key_t key, double[] vector, usearch_scalar_kind_t vector_kind, out nint error);
+        private static extern void _usearch_add_f32(usearch_index_t index, usearch_key_t key, f32_t[] vector, usearch_scalar_kind_t vector_kind, out nint error);
+
+        [DllImport("libusearch", EntryPoint = "usearch_add")]
+        private static extern void _usearch_add_f64(usearch_index_t index, usearch_key_t key, f64_t[] vector, usearch_scalar_kind_t vector_kind, out nint error);
 
         public static void usearch_add<T>(usearch_index_t index, usearch_key_t key, T[] vector, out usearch_error_t? error) where T : struct
         {
             nint err;
 
-            if (typeof(T) == typeof(float))
+            if (typeof(T) == typeof(f16_t))
+            {
+                _usearch_add_f16(
+                    index,
+                    key,
+                    (f16_t[])(object)vector,
+                    usearch_scalar_kind_t.usearch_scalar_f16_k,
+                    out err);
+            }
+            else if (typeof(T) == typeof(f32_t))
             {
                 _usearch_add_f32(
                     index,
                     key,
-                    (float[])(object)vector,
+                    (f32_t[])(object)vector,
                     usearch_scalar_kind_t.usearch_scalar_f32_k,
                     out err);
             }
-            else if (typeof(T) == typeof(double))
+            else if (typeof(T) == typeof(f64_t))
             {
                 _usearch_add_f64(
                     index,
                     key,
-                    (double[])(object)vector,
+                    (f64_t[])(object)vector,
                     usearch_scalar_kind_t.usearch_scalar_f64_k,
                     out err);
             }
@@ -190,9 +206,20 @@ namespace LibUSearch
         }
 
         [DllImport("libusearch", EntryPoint = "usearch_search")]
+        private static extern nuint _usearch_search_f16(
+            usearch_index_t index,
+            f16_t[] query_vector,
+            usearch_scalar_kind_t query_kind,
+            nuint results_limit,
+            usearch_key_t[] found_keys,
+            usearch_distance_t[] found_distances,
+            out nint error
+        );
+
+        [DllImport("libusearch", EntryPoint = "usearch_search")]
         private static extern nuint _usearch_search_f32(
             usearch_index_t index,
-            float[] query_vector,
+            f32_t[] query_vector,
             usearch_scalar_kind_t query_kind,
             nuint results_limit,
             usearch_key_t[] found_keys,
@@ -203,7 +230,7 @@ namespace LibUSearch
         [DllImport("libusearch", EntryPoint = "usearch_search")]
         private static extern nuint _usearch_search_f64(
             usearch_index_t index,
-            double[] query_vector,
+            f64_t[] query_vector,
             usearch_scalar_kind_t query_kind,
             nuint results_limit,
             usearch_key_t[] found_keys,
@@ -225,22 +252,33 @@ namespace LibUSearch
             var found_labels = new usearch_key_t[results_limit];
             var found_distances = new usearch_distance_t[results_limit];
 
-            if (typeof(T) == typeof(float))
+            if (typeof(T) == typeof(f16_t))
+            {
+                result = _usearch_search_f16(
+                    index,
+                    (f16_t[])(object)query_vector,
+                    usearch_scalar_kind_t.usearch_scalar_f16_k,
+                    (nuint)results_limit,
+                    found_labels,
+                    found_distances,
+                    out err);
+            }
+            else if (typeof(T) == typeof(f32_t))
             {
                 result = _usearch_search_f32(
                     index,
-                    (float[])(object)query_vector,
+                    (f32_t[])(object)query_vector,
                     usearch_scalar_kind_t.usearch_scalar_f32_k,
                     (nuint)results_limit,
                     found_labels,
                     found_distances,
                     out err);
             }
-            else if (typeof(T) == typeof(double))
+            else if (typeof(T) == typeof(f64_t))
             {
                 result = _usearch_search_f64(
                     index,
-                    (double[])(object)query_vector,
+                    (f64_t[])(object)query_vector,
                     usearch_scalar_kind_t.usearch_scalar_f64_k,
                     (nuint)results_limit,
                     found_labels,
@@ -261,10 +299,13 @@ namespace LibUSearch
         }
 
         [DllImport("libusearch", EntryPoint = "usearch_get")]
-        private static extern bool _usearch_get_f32(usearch_index_t index, usearch_key_t key, float[] vector, usearch_scalar_kind_t vector_kind, out nint error);
+        private static extern bool _usearch_get_f16(usearch_index_t index, usearch_key_t key, f16_t[] vector, usearch_scalar_kind_t vector_kind, out nint error);
 
         [DllImport("libusearch", EntryPoint = "usearch_get")]
-        private static extern bool _usearch_get_f64(usearch_index_t index, usearch_key_t key, double[] vector, usearch_scalar_kind_t vector_kind, out nint error);
+        private static extern bool _usearch_get_f32(usearch_index_t index, usearch_key_t key, f32_t[] vector, usearch_scalar_kind_t vector_kind, out nint error);
+
+        [DllImport("libusearch", EntryPoint = "usearch_get")]
+        private static extern bool _usearch_get_f64(usearch_index_t index, usearch_key_t key, f64_t[] vector, usearch_scalar_kind_t vector_kind, out nint error);
 
         public static bool usearch_get<T>(usearch_index_t index, usearch_key_t key, out T[]? vector, out usearch_error_t? error) where T : struct
         {
@@ -274,21 +315,30 @@ namespace LibUSearch
             var dim = usearch_dimensions(index, out error);
             var vec = new T[dim];
 
-            if (typeof(T) == typeof(float))
+            if (typeof(T) == typeof(f16_t))
+            {
+                result = _usearch_get_f16(
+                    index,
+                    key,
+                    (f16_t[])(object)vec,
+                    usearch_scalar_kind_t.usearch_scalar_f16_k,
+                    out err);
+            }
+            else if (typeof(T) == typeof(f32_t))
             {
                 result = _usearch_get_f32(
                     index,
                     key,
-                    (float[])(object)vec,
+                    (f32_t[])(object)vec,
                     usearch_scalar_kind_t.usearch_scalar_f32_k,
                     out err);
             }
-            else if (typeof(T) == typeof(double))
+            else if (typeof(T) == typeof(f64_t))
             {
                 result = _usearch_get_f64(
                     index,
                     key,
-                    (double[])(object)vec,
+                    (f64_t[])(object)vec,
                     usearch_scalar_kind_t.usearch_scalar_f64_k,
                     out err);
             }
