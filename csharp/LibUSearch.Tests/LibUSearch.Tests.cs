@@ -20,8 +20,8 @@ namespace LibUSearch
             var tests = new Dictionary<string, Action>
             {
                 ["f16_t"] = () => run_test<f16_t>("sample-f16.fvecs"),
-                ["f32_t"] = () => run_test<f16_t>("sample-f32.fvecs"),
-                ["f64_t"] = () => run_test<f16_t>("sample-f64.fvecs"),
+                ["f32_t"] = () => run_test<f32_t>("sample-f32.fvecs"),
+                ["f64_t"] = () => run_test<f64_t>("sample-f64.fvecs"),
             };
 
             foreach (var test in tests)

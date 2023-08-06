@@ -52,7 +52,21 @@ namespace LibUSearch
             public nuint expansion_search;
         }
 
-        [DllImport("libusearch", EntryPoint = "usearch_init")]
+#if X86
+#if WIN
+        private const string NativeLibPath = @"runtimes\win-x86\native\libusearch";
+#elif LINUX
+        private const string NativeLibPath = @"runtimes\linux-x86\native\libusearch";
+#endif
+#elif X64
+#if WIN
+        private const string NativeLibPath = @"runtimes\win-x64\native\libusearch";
+#elif LINUX
+        private const string NativeLibPath = @"runtimes\linux-x64\native\libusearch";
+#endif
+#endif
+
+        [DllImport(NativeLibPath, EntryPoint = "usearch_init")]
         private static extern usearch_index_t _usearch_init(ref usearch_init_options_t options, out nint error);
 
         public static usearch_index_t usearch_init(ref usearch_init_options_t options, out usearch_error_t? error)
@@ -62,7 +76,7 @@ namespace LibUSearch
             return result;
         }
 
-        [DllImport("libusearch", EntryPoint = "usearch_free")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_free")]
         private static extern void _usearch_free(usearch_index_t index, out nint error);
 
         public static void usearch_free(usearch_index_t index, out usearch_error_t? error)
@@ -71,7 +85,7 @@ namespace LibUSearch
             error = Marshal.PtrToStringAnsi(err);
         }
 
-        [DllImport("libusearch", EntryPoint = "usearch_save")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_save")]
         private static extern void _usearch_save(usearch_index_t index, string path, out nint error);
 
         public static void usearch_save(usearch_index_t index, string path, out usearch_error_t? error)
@@ -80,7 +94,7 @@ namespace LibUSearch
             error = Marshal.PtrToStringAnsi(err);
         }
 
-        [DllImport("libusearch", EntryPoint = "usearch_load")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_load")]
         private static extern void _usearch_load(usearch_index_t index, string path, out nint error);
 
         public static void usearch_load(usearch_index_t index, string path, out usearch_error_t? error)
@@ -89,7 +103,7 @@ namespace LibUSearch
             error = Marshal.PtrToStringAnsi(err);
         }
 
-        [DllImport("libusearch", EntryPoint = "usearch_view")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_view")]
         private static extern void _usearch_view(usearch_index_t index, string path, out nint error);
 
         public static void usearch_view(usearch_index_t index, string path, out usearch_error_t? error)
@@ -98,7 +112,7 @@ namespace LibUSearch
             error = Marshal.PtrToStringAnsi(err);
         }
 
-        [DllImport("libusearch", EntryPoint = "usearch_size")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_size")]
         private static extern nuint _usearch_size(usearch_index_t index, out nint error);
 
         public static ulong usearch_size(usearch_index_t index, out usearch_error_t? error)
@@ -108,7 +122,7 @@ namespace LibUSearch
             return result;
         }
 
-        [DllImport("libusearch", EntryPoint = "usearch_capacity")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_capacity")]
         private static extern nuint _usearch_capacity(usearch_index_t index, out nint error);
 
         public static ulong usearch_capacity(usearch_index_t index, out usearch_error_t? error)
@@ -118,7 +132,7 @@ namespace LibUSearch
             return result;
         }
 
-        [DllImport("libusearch", EntryPoint = "usearch_dimensions")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_dimensions")]
         private static extern nuint _usearch_dimensions(usearch_index_t index, out nint error);
 
         public static ulong usearch_dimensions(usearch_index_t index, out usearch_error_t? error)
@@ -128,7 +142,7 @@ namespace LibUSearch
             return result;
         }
 
-        [DllImport("libusearch", EntryPoint = "usearch_connectivity")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_connectivity")]
         private static extern nuint _usearch_connectivity(usearch_index_t index, out nint error);
 
         public static ulong usearch_connectivity(usearch_index_t index, out usearch_error_t? error)
@@ -138,7 +152,7 @@ namespace LibUSearch
             return result;
         }
 
-        [DllImport("libusearch", EntryPoint = "usearch_reserve")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_reserve")]
         private static extern void _usearch_reserve(usearch_index_t index, nuint capacity, out nint error);
 
         public static void usearch_reserve(usearch_index_t index, ulong capacity, out usearch_error_t? error)
@@ -147,13 +161,13 @@ namespace LibUSearch
             error = Marshal.PtrToStringAnsi(err);
         }
 
-        [DllImport("libusearch", EntryPoint = "usearch_add")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_add")]
         private static extern void _usearch_add_f16(usearch_index_t index, usearch_key_t key, f16_t[] vector, usearch_scalar_kind_t vector_kind, out nint error);
 
-        [DllImport("libusearch", EntryPoint = "usearch_add")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_add")]
         private static extern void _usearch_add_f32(usearch_index_t index, usearch_key_t key, f32_t[] vector, usearch_scalar_kind_t vector_kind, out nint error);
 
-        [DllImport("libusearch", EntryPoint = "usearch_add")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_add")]
         private static extern void _usearch_add_f64(usearch_index_t index, usearch_key_t key, f64_t[] vector, usearch_scalar_kind_t vector_kind, out nint error);
 
         public static void usearch_add<T>(usearch_index_t index, usearch_key_t key, T[] vector, out usearch_error_t? error) where T : struct
@@ -195,7 +209,7 @@ namespace LibUSearch
             error = Marshal.PtrToStringAnsi(err);
         }
 
-        [DllImport("libusearch", EntryPoint = "usearch_contains")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_contains")]
         [return: MarshalAs(UnmanagedType.I1)]
         private static extern bool _usearch_contains(usearch_index_t index, usearch_key_t key, out nint error);
 
@@ -206,7 +220,7 @@ namespace LibUSearch
             return result;
         }
 
-        [DllImport("libusearch", EntryPoint = "usearch_search")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_search")]
         private static extern nuint _usearch_search_f16(
             usearch_index_t index,
             f16_t[] query_vector,
@@ -217,7 +231,7 @@ namespace LibUSearch
             out nint error
         );
 
-        [DllImport("libusearch", EntryPoint = "usearch_search")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_search")]
         private static extern nuint _usearch_search_f32(
             usearch_index_t index,
             f32_t[] query_vector,
@@ -228,7 +242,7 @@ namespace LibUSearch
             out nint error
         );
 
-        [DllImport("libusearch", EntryPoint = "usearch_search")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_search")]
         private static extern nuint _usearch_search_f64(
             usearch_index_t index,
             f64_t[] query_vector,
@@ -299,7 +313,7 @@ namespace LibUSearch
             return result;
         }
 
-        [DllImport("libusearch", EntryPoint = "usearch_get")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_get")]
         [return: MarshalAs(UnmanagedType.I1)]
         // https://learn.microsoft.com/en-us/dotnet/standard/native-interop/type-marshalling#default-rules-for-marshalling-common-types
         // Half has no default marshalling since it has no primitive
@@ -307,11 +321,11 @@ namespace LibUSearch
         // Also not officially blittable however both sides are IEEE 754
         private static extern bool _usearch_get_f16(usearch_index_t index, usearch_key_t key, nint vector, usearch_scalar_kind_t vector_kind, out nint error);
 
-        [DllImport("libusearch", EntryPoint = "usearch_get")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_get")]
         [return: MarshalAs(UnmanagedType.I1)]
         private static extern bool _usearch_get_f32(usearch_index_t index, usearch_key_t key, f32_t[] vector, usearch_scalar_kind_t vector_kind, out nint error);
 
-        [DllImport("libusearch", EntryPoint = "usearch_get")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_get")]
         [return: MarshalAs(UnmanagedType.I1)]
         private static extern bool _usearch_get_f64(usearch_index_t index, usearch_key_t key, f64_t[] vector, usearch_scalar_kind_t vector_kind, out nint error);
 
@@ -367,7 +381,7 @@ namespace LibUSearch
             return result;
         }
 
-        [DllImport("libusearch", EntryPoint = "usearch_remove")]
+        [DllImport(NativeLibPath, EntryPoint = "usearch_remove")]
         private static extern void _usearch_remove(usearch_index_t index, usearch_key_t key, out nint error);
 
         public static void usearch_remove(usearch_index_t index, usearch_key_t key, out usearch_error_t? error)

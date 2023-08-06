@@ -1,0 +1,54 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFrameworks>net7.0</TargetFrameworks>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<Platforms>x64;x86</Platforms>
+		<LangVersion>latest</LangVersion>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+		<AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+		<BaseOutputPath>..\</BaseOutputPath>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Platform)'=='x64'">
+		<PackageId>Unum.LibUSearch.Interop.$(Platform)</PackageId>
+		<Version>1.1.0</Version>
+		<Authors>Unum</Authors>
+		<Company>Unum</Company>
+		<Description>USearch - Smaller &amp; Faster Single-File Vector Search Engine</Description>
+		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+		<PackageOutputPath>..\nuget</PackageOutputPath>
+
+		<DefineConstants>$(DefineConstants);X64</DefineConstants>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Platform)'=='x86'">
+		<PackageId>Unum.LibUSearch.Interop.$(Platform)</PackageId>
+		<Version>1.1.0</Version>
+		<Authors>Unum</Authors>
+		<Company>Unum</Company>
+		<Description>USearch - Smaller &amp; Faster Single-File Vector Search Engine</Description>
+		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+		<PackageOutputPath>..\nuget</PackageOutputPath>
+
+		<DefineConstants>$(DefineConstants);X86</DefineConstants>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+		<DefineConstants>$(DefineConstants);WIN</DefineConstants>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(OS)' == 'Unix'">
+		<DefineConstants>$(DefineConstants);LINUX</DefineConstants>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="NuGet.Build.Tasks.Pack" Version="6.6.1">
+	    <PrivateAssets>all</PrivateAssets>
+	    <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+	  </PackageReference>
+	</ItemGroup>
+
+</Project>

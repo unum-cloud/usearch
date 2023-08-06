@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package >
+	<metadata>
+		<id>Unum.LibUSearch.Native.win-x86</id>
+		<version>1.1.0</version>
+		<authors>Unum</authors>
+		<owners>Unum</owners>
+		<license type="expression">Apache-2.0</license>
+		<requireLicenseAcceptance>true</requireLicenseAcceptance>
+		<description>USearch - Smaller &amp; Faster Single-File Vector Search Engine</description>
+		<tags>native</tags>
+	</metadata>
+	<files>
+		<file src="..\x86\Release\libusearch.dll" target="runtimes/win-x86/native" />
+	</files>
+</package>
