@@ -20,12 +20,12 @@ Vector Search Engine<br/>
 <p align="center">
 Euclidean • Angular • Jaccard • Hamming • Haversine • User-Defined Metrics
 <br/>
-<a href="https://unum-cloud.github.io/usearch/cpp">C++11</a> •
-<a href="https://unum-cloud.github.io/usearch/python">Python</a> •
+<a href="https://unum-cloud.github.io/usearch/cpp">C++ 11</a> •
+<a href="https://unum-cloud.github.io/usearch/python">Python 3</a> •
 <a href="https://unum-cloud.github.io/usearch/javascript">JavaScript</a> •
 <a href="https://unum-cloud.github.io/usearch/java">Java</a> •
 <a href="https://unum-cloud.github.io/usearch/rust">Rust</a> •
-<a href="https://unum-cloud.github.io/usearch/c">C99</a> •
+<a href="https://unum-cloud.github.io/usearch/c">C 99</a> •
 <a href="https://unum-cloud.github.io/usearch/objective-c">Objective-C</a> •
 <a href="https://unum-cloud.github.io/usearch/swift">Swift</a> •
 <a href="https://unum-cloud.github.io/usearch/golang">GoLang</a> •
@@ -159,7 +159,46 @@ other_view = Index(ndim=..., metric=CompiledMetric(...))
 other_view.view("index.usearch")
 ```
 
-## Joins
+## Exact, Approximate, and Multi-Index Lookups
+
+Approximate search methods, such as HNSW, are predominantly used when an exact brute-force search becomes too resource-intensive.
+This typically occurs when you have millions of entries in a collection.
+For smaller collections, we offer a more direct approach with the `search` method.
+
+```py
+from usearch.index import search, MetricKind, Matches, BatchMatches
+import numpy as np
+
+# Generate 10'000 random vectors with 1024 dimensions
+vectors = np.random.rand(10_000, 1024).astype(np.float32)
+vector = np.random.rand(1024).astype(np.float32)
+
+one_in_many: Matches = search(vectors, vector, 50, MetricKind.L2sq, exact=True)
+many_in_many: BatchMatches = search(vectors, vectors, 50, MetricKind.L2sq, exact=True)
+```
+
+By passing the `exact=True` argument, the system bypasses indexing altogether and performs a brute-force search through the entire dataset using SIMD-optimized similarity metrics from [SimSIMD](https://github.com/ashvardanian/simsimd).
+When compared to FAISS's `IndexFlatL2` in Google Colab, **[USearch may offer up to a 20x performance improvement](https://github.com/unum-cloud/usearch/issues/176#issuecomment-1666650778)**:
+
+- `faiss.IndexFlatL2`: **55.3 ms**.
+- `usearch.index.search`: **2.54 ms**.
+
+For larger workloads targeting billions or even trillions of vectors, parallel multi-index lookups become invaluable.
+These lookups prevent the need to construct a single, massive index, allowing users to query multiple smaller ones instead.
+
+```py
+from usearch.index import Indexes
+
+multi_index = Indexes(
+    indexes: Iterable[usearch.index.Index] = [...],
+    paths: Iterable[os.PathLike] = [...],
+    view: bool = False,
+    threads: int = 0,
+)
+multi_index.search(...)
+```
+
+## Joins, One-to-One, One-to-Many, and Many-to-Many Mappings
 
 One of the big questions these days is how will AI change the world of databases and data management.
 Most databases are still struggling to implement high-quality fuzzy search, and the only kind of joins they know are deterministic.
@@ -189,9 +228,9 @@ Broader functionality is ported per request.
 | :---------------------- | :----: | :------: | :---: | :---: | :--------: | :---: | :----: | :---: |
 | Add, search             |   ✅    |    ✅     |   ✅   |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
 | Save, load, view        |   ✅    |    ✅     |   ✅   |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
-| Join                    |   ✅    |    ✅     |   ✅   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 | User-defined metrics    |   ✅    |    ✅     |   ✅   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
-| Variable-length vectors |   ✅    |    ✅     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
+| Joins                    |   ✅    |    ✅     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
+| Variable-length vectors |   ✅    |    ❌     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 | 4B+ capacities          |   ✅    |    ❌     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 
 ## Application Examples
@@ -281,9 +320,9 @@ matches = index.search(fingerprints, 10)
 ## Integrations
 
 - [x] GPT-Cache.
-- [ ] LangChain.
-- [ ] Microsoft Semantic Kernel.
+- [x] LangChain.
 - [ ] ClickHouse.
+- [ ] Microsoft Semantic Kernel.
 
 ## Citations
 
