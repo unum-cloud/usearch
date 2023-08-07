@@ -298,7 +298,10 @@ static void search_typed(                                       //
     if (!threads)
         threads = std::thread::hardware_concurrency();
 
-    std::vector<std::mutex> query_mutexes(static_cast<std::size_t>(vectors_count));
+    visits_bitset_t query_mutexes(static_cast<std::size_t>(vectors_count));
+    if (!query_mutexes)
+        throw std::bad_alloc();
+
     executor_default_t{threads}.execute_bulk(indexes.shards_.size(), [&](std::size_t, std::size_t task_idx) {
         dense_index_py_t& index = *indexes.shards_[task_idx].get();
 
@@ -318,7 +321,7 @@ static void search_typed(                                       //
             dense_search_result_t result = index.search(vector, wanted, config);
             result.error.raise();
             {
-                std::unique_lock<std::mutex> lock(query_mutexes[vector_idx]);
+                auto lock = query_mutexes.lock(vector_idx);
                 counts_py1d(vector_idx) = static_cast<Py_ssize_t>(result.merge_into( //
                     &keys_py2d(vector_idx, 0),                                       //
                     &distances_py2d(vector_idx, 0),                                  //
