@@ -829,6 +829,9 @@ class Index:
         """
         return self._compiled.level_stats(level)
 
+    def __del__(self):
+        self.reset()
+
     def __repr__(self) -> str:
         f = "usearch.Index({} x {}, {}, expansion: {} & {}, {} vectors in {} levels)"
         return f.format(
