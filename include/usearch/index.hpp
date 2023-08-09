@@ -324,6 +324,9 @@ class error_t {
         message_ = message;
         return *this;
     }
+
+    error_t(error_t const&) = delete;
+    error_t& operator=(error_t const&) = delete;
     error_t(error_t&& other) noexcept : message_(exchange(other.message_, nullptr)) {}
     error_t& operator=(error_t&& other) noexcept {
         std::swap(message_, other.message_);
@@ -331,6 +334,7 @@ class error_t {
     }
     explicit operator bool() const noexcept { return message_ != nullptr; }
     char const* what() const noexcept { return message_; }
+    char const* release() noexcept { return exchange(message_, nullptr); }
 
 #if defined(__cpp_exceptions) || defined(__EXCEPTIONS)
     ~error_t() noexcept(false) {

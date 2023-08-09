@@ -39,6 +39,11 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     index.reserve(10);
     index.add(key_first, vector_first, args...);
 
+    if constexpr (punned_ak) {
+        auto result = index.add(key_first, vector_first, args...);
+        expect(!result);
+    }
+
     // Default approximate search
     key_t matched_labels[10] = {0};
     distance_t matched_distances[10] = {0};

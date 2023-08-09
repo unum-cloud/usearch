@@ -12,7 +12,10 @@
  *
  *  @copyright Copyright (c) 2023
  */
+#if !defined(__cpp_exceptions)
 #define __cpp_exceptions 1
+#endif
+
 #include <limits> // `std::numeric_limits`
 #include <thread> // `std::thread`
 

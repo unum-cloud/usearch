@@ -429,6 +429,20 @@ inline f16_bits_t::f16_bits_t(i8_bits_t v) noexcept : f16_bits_t(float(v)) {}
 class executor_stl_t {
     std::size_t threads_count_{};
 
+    struct jthread_t {
+        std::thread native_;
+
+        jthread_t() = default;
+        jthread_t(jthread_t&&) = default;
+        jthread_t(jthread_t const&) = delete;
+        template <typename callable_at> jthread_t(callable_at&& func) : native_([=]() { func(); }) {}
+
+        ~jthread_t() {
+            if (native_.joinable())
+                native_.join();
+        }
+    };
+
   public:
     /**
      *  @param threads_count The number of threads to be used for parallel execution.
@@ -449,11 +463,12 @@ class executor_stl_t {
      */
     template <typename thread_aware_function_at>
     void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
-        std::vector<std::thread> threads_pool;
+        std::vector<jthread_t> threads_pool;
         std::size_t tasks_per_thread = tasks;
-        if (threads_count_ > 1) {
-            tasks_per_thread = (tasks / threads_count_) + ((tasks % threads_count_) != 0);
-            for (std::size_t thread_idx = 1; thread_idx < threads_count_; ++thread_idx) {
+        std::size_t threads_count = (std::min)(threads_count_, tasks);
+        if (threads_count > 1) {
+            tasks_per_thread = (tasks / threads_count) + ((tasks % threads_count) != 0);
+            for (std::size_t thread_idx = 1; thread_idx < threads_count; ++thread_idx) {
                 threads_pool.emplace_back([=]() {
                     for (std::size_t task_idx = thread_idx * tasks_per_thread;
                          task_idx < (std::min)(tasks, thread_idx * tasks_per_thread + tasks_per_thread); ++task_idx)
@@ -463,8 +478,6 @@ class executor_stl_t {
         }
         for (std::size_t task_idx = 0; task_idx < (std::min)(tasks, tasks_per_thread); ++task_idx)
             thread_aware_function(0, task_idx);
-        for (std::thread& thread : threads_pool)
-            thread.join();
     }
 
     /**
@@ -476,12 +489,10 @@ class executor_stl_t {
     void execute_bulk(thread_aware_function_at&& thread_aware_function) noexcept(false) {
         if (threads_count_ == 1)
             return thread_aware_function(0);
-        std::vector<std::thread> threads_pool;
+        std::vector<jthread_t> threads_pool;
         for (std::size_t thread_idx = 1; thread_idx < threads_count_; ++thread_idx)
             threads_pool.emplace_back([=]() { thread_aware_function(thread_idx); });
         thread_aware_function(0);
-        for (std::thread& thread : threads_pool)
-            thread.join();
     }
 };
 

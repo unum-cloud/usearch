@@ -108,7 +108,7 @@ def test_exact_search(rows: int, cols: int):
 @pytest.mark.parametrize("index_type", index_types)
 @pytest.mark.parametrize("numpy_type", numpy_types)
 @pytest.mark.parametrize("connectivity", connectivity_options)
-def test_index(
+def test_minimal_index(
     ndim: int,
     metric: MetricKind,
     index_type: ScalarKind,
@@ -128,6 +128,16 @@ def test_index(
 
     vector = random_vectors(count=1, ndim=ndim, dtype=numpy_type).flatten()
     index.add(42, vector)
+
+    # Ban vectors with a wrong number of dimensions
+    with pytest.raises(Exception):
+        index.add(
+            42, random_vectors(count=1, ndim=(ndim * 2), dtype=numpy_type).flatten()
+        )
+
+    # Ban duplicates unless explicitly allowed
+    with pytest.raises(Exception):
+        index.add(42, vector)
 
     assert len(index) == 1, "Size after addition"
     assert 42 in index, "Presence in the index"
@@ -238,6 +248,10 @@ def test_index_batch(
     index.add(keys, vectors, threads=2)
     assert len(index) == batch_size
     assert np.allclose(index.get_vectors(keys).astype(numpy_type), vectors, atol=0.1)
+
+    # Ban duplicates unless explicitly allowed
+    with pytest.raises(Exception):
+        index.add(keys, vectors, threads=2)
 
     matches: BatchMatches = index.search(vectors, 10, threads=2)
     assert matches.keys.shape[0] == matches.distances.shape[0]
