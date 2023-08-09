@@ -456,6 +456,7 @@ class Index:
 
         self.path = path
         if path and os.path.exists(path):
+            path = os.fspath(path)
             if view:
                 self._compiled.view(path)
             else:
@@ -463,6 +464,7 @@ class Index:
 
     @staticmethod
     def metadata(path: os.PathLike) -> Optional[dict]:
+        path = os.fspath(path)
         if not os.path.exists(path):
             return None
         try:
@@ -472,6 +474,7 @@ class Index:
 
     @staticmethod
     def restore(path: os.PathLike, view: bool = False) -> Optional[Index]:
+        path = os.fspath(path)
         meta = Index.metadata(path)
         if not meta:
             return None
