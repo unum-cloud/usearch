@@ -168,7 +168,7 @@ cmake -B ./build_release -DUSEARCH_BUILD_C=1 && make -C ./build_release -j
 Linux:
 
 ```sh
-g++ -std=c++11 -shared -fPIC c/lib.cpp -I ./include/  -I ./fp16/include/ -I ./robin-map/include/ -o libusearch.so
+g++ -std=c++11 -shared -fPIC c/lib.cpp -I ./include/  -I ./fp16/include/ -I ./robin-map/include/ -o libusearch_c.a
 ```
 
 
@@ -178,7 +178,8 @@ GoLang bindings are based on C.
 So one should first compile the C library, link it with GoLang, and only then run tests.
 
 ```sh
-cd golang && make -C ../c build && mv ../c/libusearch.so libusearch.so && go test -v
+make -C ./c libusearch_c.so && mv ./c/libusearch_c.so ./golang/libusearch_c.so 
+cd golang && go test -v ; cd ..
 ```
 
 ## Wolfram
