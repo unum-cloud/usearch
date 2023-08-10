@@ -868,6 +868,10 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("metric_pointer") = 0                                    //
     );
 
+    i.def_property_readonly("hardware_acceleration", [](dense_index_py_t const& index) -> py::str {
+        return isa_name(index.metric().isa_kind());
+    });
+
     i.def_property_readonly("keys", &get_all_keys<dense_index_py_t>);
     i.def("get_keys", &get_keys<dense_index_py_t>, py::arg("offset") = 0,
           py::arg("limit") = std::numeric_limits<std::size_t>::max());

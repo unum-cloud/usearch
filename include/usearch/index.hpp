@@ -2311,22 +2311,23 @@ class index_gt {
 #pragma region Metadata
 
     struct stats_t {
-        std::size_t nodes;
-        std::size_t edges;
-        std::size_t max_edges;
-        std::size_t allocated_bytes;
+        std::size_t nodes{};
+        std::size_t edges{};
+        std::size_t max_edges{};
+        std::size_t allocated_bytes{};
     };
 
     stats_t stats() const noexcept {
         stats_t result{};
-        result.nodes = size();
-        for (std::size_t i = 0; i != result.nodes; ++i) {
+
+        for (std::size_t i = 0; i != size(); ++i) {
             node_t node = node_at_(i);
             std::size_t max_edges = node.level() * config_.connectivity + config_.connectivity_base;
             std::size_t edges = 0;
             for (level_t level = 0; level <= node.level(); ++level)
                 edges += neighbors_(node, level).size();
 
+            ++result.nodes;
             result.allocated_bytes += node_bytes_(node).size();
             result.edges += edges;
             result.max_edges += max_edges;
@@ -2338,7 +2339,7 @@ class index_gt {
         stats_t result{};
 
         std::size_t neighbors_bytes = !level ? pre_.neighbors_base_bytes : pre_.neighbors_bytes;
-        for (std::size_t i = 0; i != result.nodes; ++i) {
+        for (std::size_t i = 0; i != size(); ++i) {
             node_t node = node_at_(i);
             if (static_cast<std::size_t>(node.level()) < level)
                 continue;

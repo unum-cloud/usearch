@@ -640,6 +640,10 @@ class Index:
         return self._metric_jit is not None
 
     @property
+    def hardware_acceleration(self) -> str:
+        return self._compiled.hardware_acceleration
+
+    @property
     def size(self) -> int:
         return self._compiled.size
 
@@ -847,25 +851,33 @@ class Index:
             self.max_level + 1,
         )
 
-    def _repr_pretty_(self) -> str:
+    def _repr_pretty_(self, printer, cycle) -> str:
         level_stats = [
-            f"--- {i}. {self.level_stats(i).nodes} nodes" for i in range(self.max_level)
+            f"--- {i}. {self.level_stats(i).nodes:,} nodes"
+            for i in range(self.max_level)
         ]
-        return "\n".join(
+        lines = "\n".join(
             [
                 "usearch.Index",
-                "- config" f"-- data type: {self.dtype}",
+                "- config",
+                f"-- data type: {self.dtype}",
                 f"-- dimensions: {self.ndim}",
                 f"-- metric: {self.metric}",
                 f"-- expansion on addition:{self.expansion_add} candidates",
                 f"-- expansion on search: {self.expansion_search} candidates",
+                "- binary",
+                f"-- uses OpenMP: {USES_OPENMP}",
+                f"-- uses SimSIMD: {USES_SIMSIMD}",
+                f"-- supports half-precision: {USES_NATIVE_F16}",
+                f"-- uses hardware acceletion: {self.hardware_acceleration}",
                 "- state",
-                f"-- size: {self.size} vectors",
-                f"-- memory usage: {self.memory_usage} bytes",
+                f"-- size: {self.size:,} vectors",
+                f"-- memory usage: {self.memory_usage:,} bytes",
                 f"-- max level: {self.max_level}",
                 *level_stats,
             ]
         )
+        printer.text(lines)
 
 
 class Indexes:
