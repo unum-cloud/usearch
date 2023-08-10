@@ -617,7 +617,7 @@ class index_dense_gt {
      *  @brief  Saves serialized binary index representation to a stream.
      */
     template <typename output_callback_at, typename progress_at = dummy_progress_t>
-    serialization_result_t stream(output_callback_at&& callback, serialization_config_t config = {}) const noexcept {
+    serialization_result_t stream(output_callback_at&& callback, serialization_config_t config = {}) const {
 
         serialization_result_t result;
         std::uint64_t matrix_rows = 0;

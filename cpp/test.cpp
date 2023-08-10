@@ -42,6 +42,7 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     if constexpr (punned_ak) {
         auto result = index.add(key_first, vector_first, args...);
         expect(!result);
+        result.error.release();
     }
 
     // Default approximate search
@@ -100,7 +101,7 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     // Try batch requests
     executor_default_t executor;
     index.reserve({vectors.size(), executor.size()});
-    executor.execute_bulk(vectors.size() - 3, [&](std::size_t thread, std::size_t task) {
+    executor.fixed(vectors.size() - 3, [&](std::size_t thread, std::size_t task) {
         index_update_config_t config;
         config.thread = thread;
         index.add(key_max - task - 3, vectors[task + 3].data(), args..., config);
@@ -208,7 +209,7 @@ template <typename key_at, typename slot_at> void test_tanimoto(std::size_t dime
     std::generate(scalars.begin(), scalars.end(), [] { return static_cast<b1x8_t>(std::rand()); });
 
     index.reserve({batch_size + index.size(), executor.size()});
-    executor.execute_bulk(batch_size, [&](std::size_t thread, std::size_t task) {
+    executor.fixed(batch_size, [&](std::size_t thread, std::size_t task) {
         index_update_config_t config;
         config.thread = thread;
         index.add(task + 25000, scalars.data() + index.scalar_words() * task, config);

@@ -77,15 +77,16 @@ struct dense_indexes_py_t {
 
         shards_.reserve(shards_.size() + paths.size());
         std::mutex shards_mutex;
-        executor_default_t{threads}.execute_bulk(paths.size(), [&](std::size_t, std::size_t task_idx) {
+        executor_default_t{threads}.dynamic(paths.size(), [&](std::size_t, std::size_t task_idx) {
             index_dense_t index = index_dense_t::make(paths[task_idx].c_str(), view);
             if (!index)
-                return;
+                return false;
             auto shared_index = std::make_shared<dense_index_py_t>(std::move(index));
             std::unique_lock<std::mutex> lock(shards_mutex);
             shards_.push_back(shared_index);
             if (PyErr_CheckSignals() != 0)
                 throw py::error_already_set();
+            return true;
         });
     }
 
@@ -180,6 +181,18 @@ scalar_kind_t numpy_string_to_kind(std::string const& name) {
         return scalar_kind_t::unknown_k;
 }
 
+template <typename result_at> void forward_error(result_at&& result) {
+
+    if (!result)
+        throw std::invalid_argument(result.error.release());
+
+    int signals = PyErr_CheckSignals();
+    if (signals != 0)
+        throw py::error_already_set();
+}
+
+using atomic_error_t = std::atomic<char const*>;
+
 template <typename scalar_at>
 static void add_typed_to_index(                                            //
     dense_index_py_t& index,                                               //
@@ -189,18 +202,33 @@ static void add_typed_to_index(                                            //
     Py_ssize_t vectors_count = vectors_info.shape[0];
     byte_t const* vectors_data = reinterpret_cast<byte_t const*>(vectors_info.ptr);
     byte_t const* keys_data = reinterpret_cast<byte_t const*>(keys_info.ptr);
+    atomic_error_t atomic_error{nullptr};
 
-    executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+    executor_default_t{threads}.dynamic(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
         index_dense_update_config_t config;
         config.force_vector_copy = force_copy;
         config.thread = thread_idx;
         key_t key = *reinterpret_cast<key_t const*>(keys_data + task_idx * keys_info.strides[0]);
         scalar_at const* vector = reinterpret_cast<scalar_at const*>(vectors_data + task_idx * vectors_info.strides[0]);
         dense_add_result_t result = index.add(key, vector, config);
-        result.error.raise();
-        if (PyErr_CheckSignals() != 0)
-            throw py::error_already_set();
+        if (!result) {
+            atomic_error = result.error.release();
+            return false;
+        }
+
+        // We don't want to check for signals from multiple threads
+        if (thread_idx == 0)
+            if (PyErr_CheckSignals() != 0)
+                return false;
+        return true;
     });
+
+    // Raise the error from a single thread
+    auto error = atomic_error.load();
+    if (error) {
+        PyErr_SetString(PyExc_RuntimeError, error);
+        throw py::error_already_set();
+    }
 }
 
 template <typename index_at>
@@ -265,21 +293,37 @@ static void search_typed(                                   //
     if (!index.reserve(index_limits_t(index.size(), threads)))
         throw std::invalid_argument("Out of memory!");
 
-    executor_default_t{threads}.execute_bulk(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+    atomic_error_t atomic_error{nullptr};
+    executor_default_t{threads}.dynamic(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
         index_search_config_t config;
         config.thread = thread_idx;
         config.exact = exact;
         scalar_at const* vector = (scalar_at const*)(vectors_data + task_idx * vectors_info.strides[0]);
         dense_search_result_t result = index.search(vector, wanted, config);
-        result.error.raise();
+        if (!result) {
+            atomic_error = result.error.release();
+            return false;
+        }
+
         counts_py1d(task_idx) =
             static_cast<Py_ssize_t>(result.dump_to(&keys_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
 
         stats_visited_members += result.visited_members;
         stats_computed_distances += result.computed_distances;
-        if (PyErr_CheckSignals() != 0)
-            throw py::error_already_set();
+
+        // We don't want to check for signals from multiple threads
+        if (thread_idx == 0)
+            if (PyErr_CheckSignals() != 0)
+                return false;
+        return true;
     });
+
+    // Raise the error from a single thread
+    auto error = atomic_error.load();
+    if (error) {
+        PyErr_SetString(PyExc_RuntimeError, error);
+        throw py::error_already_set();
+    }
 }
 
 template <typename scalar_at>
@@ -305,15 +349,18 @@ static void search_typed(                                       //
     if (!query_mutexes)
         throw std::bad_alloc();
 
-    executor_default_t{threads}.execute_bulk(indexes.shards_.size(), [&](std::size_t, std::size_t task_idx) {
+    atomic_error_t atomic_error{nullptr};
+    executor_default_t{threads}.dynamic(indexes.shards_.size(), [&](std::size_t thread_idx, std::size_t task_idx) {
         dense_index_py_t& index = *indexes.shards_[task_idx].get();
 
         index_limits_t limits;
         limits.members = index.size();
         limits.threads_add = 0;
         limits.threads_search = 1;
-        if (!index.reserve(limits))
-            throw std::bad_alloc();
+        if (!index.reserve(limits)) {
+            atomic_error = "Out of memory!";
+            return false;
+        }
 
         index_search_config_t config;
         config.thread = 0;
@@ -322,7 +369,11 @@ static void search_typed(                                       //
         for (std::size_t vector_idx = 0; vector_idx != static_cast<std::size_t>(vectors_count); ++vector_idx) {
             scalar_at const* vector = (scalar_at const*)(vectors_data + vector_idx * vectors_info.strides[0]);
             dense_search_result_t result = index.search(vector, wanted, config);
-            result.error.raise();
+            if (!result) {
+                atomic_error = result.error.release();
+                return false;
+            }
+
             {
                 auto lock = query_mutexes.lock(vector_idx);
                 counts_py1d(vector_idx) = static_cast<Py_ssize_t>(result.merge_into( //
@@ -334,10 +385,21 @@ static void search_typed(                                       //
 
             stats_visited_members += result.visited_members;
             stats_computed_distances += result.computed_distances;
-            if (PyErr_CheckSignals() != 0)
-                throw py::error_already_set();
+
+            // We don't want to check for signals from multiple threads
+            if (thread_idx == 0)
+                if (PyErr_CheckSignals() != 0)
+                    return false;
+            return true;
         }
     });
+
+    // Raise the error from a single thread
+    auto error = atomic_error.load();
+    if (error) {
+        PyErr_SetString(PyExc_RuntimeError, error);
+        throw py::error_already_set();
+    }
 }
 
 /**
@@ -421,7 +483,7 @@ static void search_typed_brute_force(                                //
     if (!query_mutexes)
         throw std::bad_alloc();
 
-    executor_default_t{threads}.execute_bulk(tasks_count, [&](std::size_t, std::size_t task_idx) {
+    executor_default_t{threads}.dynamic(tasks_count, [&](std::size_t thread_idx, std::size_t task_idx) {
         //
         std::size_t dataset_idx = task_idx / queries_count;
         std::size_t query_idx = task_idx % queries_count;
@@ -437,7 +499,7 @@ static void search_typed_brute_force(                                //
             std::size_t& matches = reinterpret_cast<std::size_t&>(counts_py1d(query_idx));
             if (matches == wanted)
                 if (distances[wanted - 1] <= distance)
-                    return;
+                    return true;
 
             std::size_t offset = std::lower_bound(distances, distances + matches, distance) - distances;
 
@@ -449,8 +511,11 @@ static void search_typed_brute_force(                                //
             matches += matches != wanted;
         }
 
-        if (PyErr_CheckSignals() != 0)
-            throw py::error_already_set();
+        // We don't want to check for signals from multiple threads
+        if (thread_idx == 0)
+            if (PyErr_CheckSignals() != 0)
+                return false;
+        return true;
     });
 }
 
@@ -526,7 +591,7 @@ static std::unordered_map<key_t, key_t> join_index(       //
     std::size_t threads = (std::min)(a.limits().threads(), b.limits().threads());
     executor_default_t executor{threads};
     join_result_t result = a.join(b, config, a_to_b, b_to_a, executor);
-    result.error.raise();
+    forward_error(result);
 
     return a_to_b;
 }
@@ -536,7 +601,7 @@ static dense_index_py_t copy_index(dense_index_py_t const& index) {
     using copy_result_t = typename dense_index_py_t::copy_result_t;
     index_copy_config_t config;
     copy_result_t result = index.copy(config);
-    result.error.raise();
+    forward_error(result);
     return std::move(result.index);
 }
 
@@ -662,7 +727,8 @@ PYBIND11_MODULE(compiled, m) {
 
     m.def("index_dense_metadata", [](std::string const& path) -> py::dict {
         index_dense_metadata_result_t meta = index_dense_metadata(path.c_str());
-        meta.error.raise();
+        forward_error(meta);
+
         index_dense_head_t const& head = meta.head;
 
         py::dict result;
@@ -731,7 +797,7 @@ PYBIND11_MODULE(compiled, m) {
         "rename",
         [](dense_index_py_t& index, key_t from, key_t to) -> bool {
             dense_labeling_result_t result = index.rename(from, to);
-            result.error.raise();
+            forward_error(result);
             return result.completed;
         },
         py::arg("from"), py::arg("to"));
@@ -740,7 +806,7 @@ PYBIND11_MODULE(compiled, m) {
         "remove",
         [](dense_index_py_t& index, key_t key, bool compact, std::size_t threads) -> bool {
             dense_labeling_result_t result = index.remove(key);
-            result.error.raise();
+            forward_error(result);
             if (!compact)
                 return result.completed;
 
@@ -758,7 +824,7 @@ PYBIND11_MODULE(compiled, m) {
         "remove",
         [](dense_index_py_t& index, std::vector<key_t> const& keys, bool compact, std::size_t threads) -> std::size_t {
             dense_labeling_result_t result = index.remove(keys.begin(), keys.end());
-            result.error.raise();
+            forward_error(result);
             if (!compact)
                 return result.completed;
 
@@ -781,8 +847,7 @@ PYBIND11_MODULE(compiled, m) {
     i.def_property_readonly( //
         "dtype", [](dense_index_py_t const& index) -> scalar_kind_t { return index.scalar_kind(); });
     i.def_property_readonly( //
-        "memory_usage", [](dense_index_py_t const& index) -> std::size_t { return index.memory_usage(); },
-        py::call_guard<py::gil_scoped_release>());
+        "memory_usage", [](dense_index_py_t const& index) -> std::size_t { return index.memory_usage(); });
 
     i.def_property("expansion_add", &dense_index_py_t::expansion_add, &dense_index_py_t::change_expansion_add);
     i.def_property("expansion_search", &dense_index_py_t::expansion_search, &dense_index_py_t::change_expansion_search);
@@ -810,15 +875,14 @@ PYBIND11_MODULE(compiled, m) {
     i.def("__contains__", &dense_index_py_t::contains);
     i.def("__getitem__", &get_member<dense_index_py_t>, py::arg("key"), py::arg("dtype") = scalar_kind_t::f32_k);
 
-    i.def("save", &save_index<dense_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
-    i.def("load", &load_index<dense_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
-    i.def("view", &view_index<dense_index_py_t>, py::arg("path"), py::call_guard<py::gil_scoped_release>());
-    i.def("reset", &reset_index<dense_index_py_t>, py::call_guard<py::gil_scoped_release>());
-    i.def("clear", &clear_index<dense_index_py_t>, py::call_guard<py::gil_scoped_release>());
-    i.def("copy", &copy_index, py::call_guard<py::gil_scoped_release>());
-    i.def("compact", &compact_index, py::call_guard<py::gil_scoped_release>());
-    i.def("join", &join_index, py::arg("other"), py::arg("max_proposals") = 0, py::arg("exact") = false,
-          py::call_guard<py::gil_scoped_release>());
+    i.def("save", &save_index<dense_index_py_t>, py::arg("path"));
+    i.def("load", &load_index<dense_index_py_t>, py::arg("path"));
+    i.def("view", &view_index<dense_index_py_t>, py::arg("path"));
+    i.def("reset", &reset_index<dense_index_py_t>);
+    i.def("clear", &clear_index<dense_index_py_t>);
+    i.def("copy", &copy_index);
+    i.def("compact", &compact_index);
+    i.def("join", &join_index, py::arg("other"), py::arg("max_proposals") = 0, py::arg("exact") = false);
 
     using punned_index_stats_t = typename dense_index_py_t::stats_t;
     auto i_stats = py::class_<punned_index_stats_t>(m, "IndexStats");

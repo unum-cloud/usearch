@@ -1082,9 +1082,9 @@ struct dummy_prefetch_t {
 /**
  *  @brief  An example of what a USearch-compatible executor (thread-pool) should look like.
  *
- *  It's expected to have `execute_bulk(callback)` API to schedule one task per thread;
- *  an identical `execute_bulk(count, callback)` overload that also accepts the number
- *  of tasks, and somehow schedules them between threads; as well as `size()` to
+ *  It's expected to have `parallel(callback)` API to schedule one task per thread;
+ *  an identical `fixed(count, callback)` and `dynamic(count, callback)` overloads that also accepts
+ *  the number of tasks, and somehow schedules them between threads; as well as `size()` to
  *  determine the number of available threads.
  */
 struct dummy_executor_t {
@@ -1092,13 +1092,20 @@ struct dummy_executor_t {
     std::size_t size() const noexcept { return 1; }
 
     template <typename thread_aware_function_at>
-    void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept {
+    void fixed(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept {
         for (std::size_t task_idx = 0; task_idx != tasks; ++task_idx)
             thread_aware_function(0, task_idx);
     }
 
     template <typename thread_aware_function_at>
-    void execute_bulk(thread_aware_function_at&& thread_aware_function) noexcept {
+    void dynamic(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept {
+        for (std::size_t task_idx = 0; task_idx != tasks; ++task_idx)
+            if (!thread_aware_function(0, task_idx))
+                break;
+    }
+
+    template <typename thread_aware_function_at>
+    void parallel(thread_aware_function_at&& thread_aware_function) noexcept {
         thread_aware_function(0);
     }
 };
@@ -2605,7 +2612,7 @@ class index_gt {
         buffer_gt<slot_level_t, slot_level_allocator_t> slots_and_levels(size());
 
         // For every bottom level node, determine its parent cluster
-        executor.execute_bulk(slots_and_levels.size(), [&](std::size_t thread_idx, std::size_t old_slot) {
+        executor.fixed(slots_and_levels.size(), [&](std::size_t thread_idx, std::size_t old_slot) {
             context_t& context = contexts_[thread_idx];
             std::size_t cluster = search_for_one_( //
                 values[citerator_at(old_slot)],    //
@@ -2684,7 +2691,7 @@ class index_gt {
 
         // Erase all the incoming links
         std::size_t nodes_count = size();
-        executor.execute_bulk(nodes_count, [&](std::size_t, std::size_t node_idx) {
+        executor.fixed(nodes_count, [&](std::size_t, std::size_t node_idx) {
             node_t node = node_at_(node_idx);
             for (level_t level = 0; level <= node.level(); ++level) {
                 neighbors_ref_t neighbors = neighbors_(node, level);
@@ -3294,7 +3301,7 @@ static join_result_t join(               //
     std::atomic<std::size_t> visited_members{0};
 
     // Concurrently process all the men
-    executor.execute_bulk([&](std::size_t thread_idx) {
+    executor.parallel([&](std::size_t thread_idx) {
         index_search_config_t search_config;
         search_config.expansion = config.expansion;
         search_config.exact = config.exact;

@@ -456,13 +456,13 @@ class executor_stl_t {
     std::size_t size() const noexcept { return threads_count_; }
 
     /**
-     *  @brief Executes tasks in bulk using the specified thread-aware function.
+     *  @brief Executes a fixed number of tasks using the specified thread-aware function.
      *  @param tasks                 The total number of tasks to be executed.
      *  @param thread_aware_function The thread-aware function to be called for each thread index and task index.
      *  @throws If an exception occurs during execution of the thread-aware function.
      */
     template <typename thread_aware_function_at>
-    void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
+    void fixed(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
         std::vector<jthread_t> threads_pool;
         std::size_t tasks_per_thread = tasks;
         std::size_t threads_count = (std::min)(threads_count_, tasks);
@@ -481,12 +481,43 @@ class executor_stl_t {
     }
 
     /**
+     *  @brief Executes limited number of tasks using the specified thread-aware function.
+     *  @param tasks                 The upper bound on the number of tasks.
+     *  @param thread_aware_function The thread-aware function to be called for each thread index and task index.
+     *  @throws If an exception occurs during execution of the thread-aware function.
+     */
+    template <typename thread_aware_function_at>
+    void dynamic(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
+        std::vector<jthread_t> threads_pool;
+        std::size_t tasks_per_thread = tasks;
+        std::size_t threads_count = (std::min)(threads_count_, tasks);
+        std::atomic_bool stop{false};
+        if (threads_count > 1) {
+            tasks_per_thread = (tasks / threads_count) + ((tasks % threads_count) != 0);
+            for (std::size_t thread_idx = 1; thread_idx < threads_count; ++thread_idx) {
+                threads_pool.emplace_back([=, &stop]() {
+                    for (std::size_t task_idx = thread_idx * tasks_per_thread;
+                         task_idx < (std::min)(tasks, thread_idx * tasks_per_thread + tasks_per_thread) &&
+                         !stop.load(std::memory_order_relaxed);
+                         ++task_idx)
+                        if (!thread_aware_function(thread_idx, task_idx))
+                            stop.store(true, std::memory_order_relaxed);
+                });
+            }
+        }
+        for (std::size_t task_idx = 0;
+             task_idx < (std::min)(tasks, tasks_per_thread) && !stop.load(std::memory_order_relaxed); ++task_idx)
+            if (!thread_aware_function(0, task_idx))
+                stop.store(true, std::memory_order_relaxed);
+    }
+
+    /**
      *  @brief Saturates every available thread with the given workload, until they finish.
      *  @param thread_aware_function The thread-aware function to be called for each thread index.
      *  @throws If an exception occurs during execution of the thread-aware function.
      */
     template <typename thread_aware_function_at>
-    void execute_bulk(thread_aware_function_at&& thread_aware_function) noexcept(false) {
+    void parallel(thread_aware_function_at&& thread_aware_function) noexcept(false) {
         if (threads_count_ == 1)
             return thread_aware_function(0);
         std::vector<jthread_t> threads_pool;
@@ -523,10 +554,39 @@ class executor_openmp_t {
      *  @throws If an exception occurs during execution of the thread-aware function.
      */
     template <typename thread_aware_function_at>
-    void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
-#pragma omp parallel for schedule(dynamic)
+    void fixed(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
+#pragma omp parallel for schedule(dynamic, 1)
         for (std::size_t i = 0; i != tasks; ++i) {
             thread_aware_function(omp_get_thread_num(), i);
+        }
+    }
+
+    /**
+     *  @brief Executes tasks in bulk using the specified thread-aware function.
+     *  @param tasks                 The total number of tasks to be executed.
+     *  @param thread_aware_function The thread-aware function to be called for each thread index and task index.
+     *  @throws If an exception occurs during execution of the thread-aware function.
+     *
+     *  Uses OpenMP cancellation points, if `OMP_CANCELLATION` environment variable is set.
+     *  http://jakascorner.com/blog/2016/08/omp-cancel.html
+     */
+    template <typename thread_aware_function_at>
+    void dynamic(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
+        if (omp_get_cancellation()) {
+#pragma omp parallel for schedule(dynamic, 1)
+            for (std::size_t i = 0; i != tasks; ++i) {
+#pragma omp cancellation point for
+                if (!thread_aware_function(omp_get_thread_num(), i)) {
+#pragma omp cancel for
+                }
+            }
+        } else {
+            std::atomic_bool stop{false};
+#pragma omp parallel for schedule(dynamic, 1) shared(stop)
+            for (std::size_t i = 0; i != tasks; ++i) {
+                if (!stop.load(std::memory_order_relaxed) && !thread_aware_function(omp_get_thread_num(), i))
+                    stop.store(true, std::memory_order_relaxed);
+            }
         }
     }
 
@@ -536,7 +596,7 @@ class executor_openmp_t {
      *  @throws If an exception occurs during execution of the thread-aware function.
      */
     template <typename thread_aware_function_at>
-    void execute_bulk(thread_aware_function_at&& thread_aware_function) noexcept(false) {
+    void parallel(thread_aware_function_at&& thread_aware_function) noexcept(false) {
 #pragma omp parallel
         { thread_aware_function(omp_get_thread_num()); }
     }
