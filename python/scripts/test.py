@@ -224,6 +224,12 @@ def test_minimal_index(
     assert meta is None
     index = Index.restore(temporary_usearch_filename)
 
+    # Try saving and opening and empty index
+    index_copy.reset()
+    index_copy.save(temporary_usearch_filename)
+    assert Index.restore(temporary_usearch_filename, view=False) is not None
+    assert Index.restore(temporary_usearch_filename, view=True) is not None
+
     assert index is None
     os.remove(temporary_usearch_filename)
 
