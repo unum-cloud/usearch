@@ -2336,7 +2336,6 @@ class index_gt {
 
     stats_t stats(std::size_t level) const noexcept {
         stats_t result{};
-        result.nodes = size();
 
         std::size_t neighbors_bytes = !level ? pre_.neighbors_base_bytes : pre_.neighbors_bytes;
         for (std::size_t i = 0; i != result.nodes; ++i) {
@@ -2344,6 +2343,7 @@ class index_gt {
             if (static_cast<std::size_t>(node.level()) < level)
                 continue;
 
+            ++result.nodes;
             result.edges += neighbors_(node, level).size();
             result.allocated_bytes += node_head_bytes_() + neighbors_bytes;
         }
