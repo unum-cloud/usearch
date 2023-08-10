@@ -111,7 +111,7 @@ USEARCH_EXPORT void usearch_save(usearch_index_t index, char const* path, usearc
     assert(index && path && error);
     serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->save(path);
     if (!result)
-        *error = result.error.what();
+        *error = result.error.release();
 }
 
 USEARCH_EXPORT void usearch_load(usearch_index_t index, char const* path, usearch_error_t* error) {
@@ -119,7 +119,7 @@ USEARCH_EXPORT void usearch_load(usearch_index_t index, char const* path, usearc
     assert(index && path && error);
     serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->load(path);
     if (!result)
-        *error = result.error.what();
+        *error = result.error.release();
 }
 
 USEARCH_EXPORT void usearch_view(usearch_index_t index, char const* path, usearch_error_t* error) {
@@ -127,7 +127,7 @@ USEARCH_EXPORT void usearch_view(usearch_index_t index, char const* path, usearc
     assert(index && path && error);
     serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->view(path);
     if (!result)
-        *error = result.error.what();
+        *error = result.error.release();
 }
 
 USEARCH_EXPORT size_t usearch_size(usearch_index_t index, usearch_error_t*) { //
@@ -159,7 +159,7 @@ USEARCH_EXPORT void usearch_add(                                                
     assert(index && vector && error);
     add_result_t result = add_(reinterpret_cast<index_dense_t*>(index), key, vector, to_native_scalar(kind));
     if (!result)
-        *error = result.error.what();
+        *error = result.error.release();
 }
 
 USEARCH_EXPORT bool usearch_contains(usearch_index_t index, usearch_key_t key, usearch_error_t*) {
@@ -175,7 +175,7 @@ USEARCH_EXPORT size_t usearch_search(                                           
     search_result_t result =
         search_(reinterpret_cast<index_dense_t*>(index), vector, to_native_scalar(kind), results_limit);
     if (!result) {
-        *error = result.error.what();
+        *error = result.error.release();
         return 0;
     }
 
@@ -195,7 +195,7 @@ USEARCH_EXPORT bool usearch_remove(usearch_index_t index, usearch_key_t key, use
     assert(index && error);
     labeling_result_t result = reinterpret_cast<index_dense_t*>(index)->remove(key);
     if (!result)
-        *error = result.error.what();
+        *error = result.error.release();
     return result.completed;
 }
 }
