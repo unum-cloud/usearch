@@ -162,9 +162,17 @@ def _search_in_compiled(
         pbar.close()
         return distil_batch(
             BatchMatches(
-                keys=np.vstack([m.keys for m in tasks_matches]),
-                distances=np.vstack([m.distances for m in tasks_matches]),
+                # Keys array can be 1 or 2 dimensional
+                keys=np.vstack([m.keys for m in tasks_matches])
+                if tasks_matches[0].keys.ndim == 2
+                else np.concatenate([m.keys for m in tasks_matches], axis=None),
+                # Distances array can be 1 or 2 dimensional
+                distances=np.vstack([m.distances for m in tasks_matches])
+                if tasks_matches[0].distances.ndim == 2
+                else np.concatenate([m.distances for m in tasks_matches], axis=None),
                 counts=np.concatenate([m.counts for m in tasks_matches], axis=None),
+                visited_members=sum([m.visited_members for m in tasks_matches]),
+                computed_distances=sum([m.computed_distances for m in tasks_matches]),
             )
         )
 
@@ -569,6 +577,49 @@ class Index:
             vectors=vectors,
             k=k,
             exact=exact,
+            threads=threads,
+            log=log,
+            batch_size=batch_size,
+        )
+
+    def cluster(
+        self,
+        vectors,
+        level: int = 1,
+        *,
+        threads: int = 0,
+        log: Union[str, bool] = False,
+        batch_size: int = 0,
+    ) -> Union[Matches, BatchMatches]:
+        """
+        Performs approximate nearest neighbors search for one or more queries.
+
+        :param vectors: Query vector or vectors.
+        :type vectors: np.ndarray
+        :param level: Graph level to target - higher means coarse, defaults to 1
+        :type level: int, optional
+        :param threads: Optimal number of cores to use, defaults to 0
+        :type threads: int, optional
+        :param log: Whether to print the progress bar, default to False
+        :type log: Union[str, bool], optional
+        :param batch_size: Number of vectors to process at once, defaults to 0
+        :type batch_size: int, optional
+        :return: Matches for one or more queries
+        :rtype: Union[Matches, BatchMatches]
+        """
+
+        compiled_clustering = self._compiled.cluster
+
+        class WrappedDataset:
+            def search(self, query, k, **kwargs):
+                kwargs.pop("exact")
+                return compiled_clustering(query, k, **kwargs)
+
+        return _search_in_compiled(
+            compiled=WrappedDataset(),
+            vectors=vectors,
+            k=level,
+            exact=False,
             threads=threads,
             log=log,
             batch_size=batch_size,
@@ -994,9 +1045,6 @@ def search(
         raise ValueError("The `metric` must be a `CompiledMetric` or a `MetricKind`")
 
     class WrappedDataset:
-        def __init__(self) -> None:
-            pass
-
         def search(self, query, k, **kwargs):
             kwargs.pop("exact")
             kwargs.update(

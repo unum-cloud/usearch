@@ -1004,6 +1004,16 @@ struct index_search_config_t {
     bool exact = false;
 };
 
+struct index_cluster_config_t {
+    /// @brief Hyper-parameter controlling the quality of search.
+    /// Defaults to 16 in FAISS and 10 in hnswlib.
+    /// > It is called `ef` in the paper.
+    std::size_t expansion = default_expansion_search();
+
+    /// @brief Optional thread identifier for multi-threaded construction.
+    std::size_t thread = 0;
+};
+
 struct index_copy_config_t {};
 
 struct index_join_config_t {
@@ -1817,7 +1827,7 @@ class index_gt {
         }
     };
 
-    copy_result_t copy(index_copy_config_t /*config*/ = {}) const noexcept {
+    copy_result_t copy(index_copy_config_t config = {}) const noexcept {
         copy_result_t result;
         index_gt& other = result.index;
         other = index_gt(config_, dynamic_allocator_, tape_allocator_);
@@ -1832,6 +1842,9 @@ class index_gt {
         other.nodes_count_ = nodes_count_.load();
         other.max_level_ = max_level_;
         other.entry_slot_ = entry_slot_;
+
+        // This controls nothing for now :)
+        (void)config;
         return result;
     }
 
@@ -2057,6 +2070,19 @@ class index_gt {
         }
     };
 
+    struct cluster_result_t {
+        error_t error{};
+        std::size_t visited_members{};
+        std::size_t computed_distances{};
+        match_t cluster{{nullptr}, 0};
+
+        explicit operator bool() const noexcept { return !error; }
+        cluster_result_t failed(error_t message) noexcept {
+            error = std::move(message);
+            return std::move(*this);
+        }
+    };
+
     /**
      *  @brief  Inserts a new entry into the index. Thread-safe. Supports @b heterogeneous lookups.
      *          Expects needed capacity to be reserved ahead of time: `size() < capacity()`.
@@ -2251,7 +2277,7 @@ class index_gt {
      *  @param[in] wanted The upper bound for the number of results to return.
      *  @param[in] config Configuration options for this specific operation.
      *  @param[in] predicate Optional filtering predicate for `member_cref_t`.
-     *  @return Smart object referencing temporary memory. Valid until next `search()` or `add()`.
+     *  @return Smart object referencing temporary memory. Valid until next `search()`, `add()`, or `cluster()`.
      */
     template <                                     //
         typename value_at,                         //
@@ -2303,6 +2329,52 @@ class index_gt {
         result.computed_distances = context.computed_distances_count - result.computed_distances;
         result.visited_members = context.iteration_cycles - result.visited_members;
         result.count = top.size();
+        return result;
+    }
+
+    /**
+     *  @brief Identifies the closest cluster to the gived ::query. Thread-safe.
+     *
+     *  @param[in] query Content that will be compared against other entries in the index.
+     *  @param[in] level The index level to target. Higher means lower resolution.
+     *  @param[in] config Configuration options for this specific operation.
+     *  @param[in] predicate Optional filtering predicate for `member_cref_t`.
+     *  @return Smart object referencing temporary memory. Valid until next `search()`, `add()`, or `cluster()`.
+     */
+    template <                                     //
+        typename value_at,                         //
+        typename metric_at,                        //
+        typename predicate_at = dummy_predicate_t, //
+        typename prefetch_at = dummy_prefetch_t    //
+        >
+    cluster_result_t cluster(                      //
+        value_at&& query,                          //
+        std::size_t level,                         //
+        metric_at&& metric,                        //
+        index_cluster_config_t config = {},        //
+        predicate_at&& predicate = predicate_at{}, //
+        prefetch_at&& prefetch = prefetch_at{}) const noexcept {
+
+        context_t& context = contexts_[config.thread];
+        cluster_result_t result;
+        if (!nodes_count_)
+            return result.failed("No clusters to identify");
+
+        // Go down the level, tracking only the closest match
+        result.computed_distances = context.computed_distances_count;
+        result.visited_members = context.iteration_cycles;
+
+        next_candidates_t& next = context.next_candidates;
+        std::size_t expansion = config.expansion;
+        if (!next.reserve(expansion))
+            return result.failed("Out of memory!");
+
+        result.cluster.member = at(search_for_one_(query, metric, prefetch, entry_slot_, max_level_, level, context));
+        result.cluster.distance = context.measure(query, result.cluster.member, metric);
+
+        // Normalize stats
+        result.computed_distances = context.computed_distances_count - result.computed_distances;
+        result.visited_members = context.iteration_cycles - result.visited_members;
         return result;
     }
 

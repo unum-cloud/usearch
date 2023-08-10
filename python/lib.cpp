@@ -51,6 +51,7 @@ using distance_t = distance_punned_t;
 using dense_add_result_t = typename index_dense_t::add_result_t;
 using dense_search_result_t = typename index_dense_t::search_result_t;
 using dense_labeling_result_t = typename index_dense_t::labeling_result_t;
+using dense_cluster_result_t = typename index_dense_t::cluster_result_t;
 
 struct dense_index_py_t : public index_dense_t {
     using native_t = index_dense_t;
@@ -205,12 +206,9 @@ static void add_typed_to_index(                                            //
     atomic_error_t atomic_error{nullptr};
 
     executor_default_t{threads}.dynamic(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-        index_dense_update_config_t config;
-        config.force_vector_copy = force_copy;
-        config.thread = thread_idx;
         key_t key = *reinterpret_cast<key_t const*>(keys_data + task_idx * keys_info.strides[0]);
         scalar_at const* vector = reinterpret_cast<scalar_at const*>(vectors_data + task_idx * vectors_info.strides[0]);
-        dense_add_result_t result = index.add(key, vector, config);
+        dense_add_result_t result = index.add(key, vector, thread_idx, force_copy);
         if (!result) {
             atomic_error = result.error.release();
             return false;
@@ -295,11 +293,8 @@ static void search_typed(                                   //
 
     atomic_error_t atomic_error{nullptr};
     executor_default_t{threads}.dynamic(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-        index_search_config_t config;
-        config.thread = thread_idx;
-        config.exact = exact;
         scalar_at const* vector = (scalar_at const*)(vectors_data + task_idx * vectors_info.strides[0]);
-        dense_search_result_t result = index.search(vector, wanted, config);
+        dense_search_result_t result = index.search(vector, wanted, thread_idx, exact);
         if (!result) {
             atomic_error = result.error.release();
             return false;
@@ -362,13 +357,9 @@ static void search_typed(                                       //
             return false;
         }
 
-        index_search_config_t config;
-        config.thread = 0;
-        config.exact = exact;
-
         for (std::size_t vector_idx = 0; vector_idx != static_cast<std::size_t>(vectors_count); ++vector_idx) {
             scalar_at const* vector = (scalar_at const*)(vectors_data + vector_idx * vectors_info.strides[0]);
-            dense_search_result_t result = index.search(vector, wanted, config);
+            dense_search_result_t result = index.search(vector, wanted, 0, exact);
             if (!result) {
                 atomic_error = result.error.release();
                 return false;
@@ -409,7 +400,9 @@ static void search_typed(                                       //
  *  @return Tuple with:
  *      1. matrix of neighbors,
  *      2. matrix of distances,
- *      3. array with match counts.
+ *      3. array with match counts,
+ *      4. number of visited nodes,
+ *      4. number of computed pairwise distances.
  */
 template <typename index_at>
 static py::tuple search_many_in_index( //
@@ -575,6 +568,115 @@ static py::tuple search_many_brute_force(    //
     return results;
 }
 
+template <typename scalar_at>
+static void cluster_typed(                                              //
+    dense_index_py_t& index, py::buffer_info& vectors_info,             //
+    std::size_t level, std::size_t threads,                             //
+    py::array_t<key_t>& keys_py, py::array_t<distance_t>& distances_py, //
+    std::atomic<std::size_t>& stats_visited_members, std::atomic<std::size_t>& stats_computed_distances) {
+
+    auto keys_py1d = keys_py.template mutable_unchecked<1>();
+    auto distances_py1d = distances_py.template mutable_unchecked<1>();
+
+    Py_ssize_t vectors_count = vectors_info.shape[0];
+    byte_t const* vectors_data = reinterpret_cast<byte_t const*>(vectors_info.ptr);
+
+    if (!threads)
+        threads = std::thread::hardware_concurrency();
+    if (!index.reserve(index_limits_t(index.size(), threads)))
+        throw std::invalid_argument("Out of memory!");
+
+    atomic_error_t atomic_error{nullptr};
+    executor_default_t{threads}.dynamic(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
+        scalar_at const* vector = (scalar_at const*)(vectors_data + task_idx * vectors_info.strides[0]);
+        dense_cluster_result_t result = index.cluster(vector, level, thread_idx);
+        if (!result) {
+            atomic_error = result.error.release();
+            return false;
+        }
+
+        keys_py1d(task_idx) = result.cluster.member.key;
+        distances_py1d(task_idx) = result.cluster.distance;
+
+        stats_visited_members += result.visited_members;
+        stats_computed_distances += result.computed_distances;
+
+        // We don't want to check for signals from multiple threads
+        if (thread_idx == 0)
+            if (PyErr_CheckSignals() != 0)
+                return false;
+        return true;
+    });
+
+    // Raise the error from a single thread
+    auto error = atomic_error.load();
+    if (error) {
+        PyErr_SetString(PyExc_RuntimeError, error);
+        throw py::error_already_set();
+    }
+}
+
+/**
+ *  @param vectors Matrix of vectors to search for.
+ *  @param level Graph level to query.
+ *
+ *  @return Tuple with:
+ *      1. vector of cluster IDs,
+ *      2. vector of distances to those clusters,
+ *      3. array with match counts, set to all ones,
+ *      4. number of visited nodes,
+ *      4. number of computed pairwise distances.
+ */
+template <typename index_at>
+static py::tuple cluster_many_in_index( //
+    index_at& index, py::buffer vectors, std::size_t level, std::size_t threads) {
+
+    if (level == 0)
+        return py::tuple(5);
+
+    if (index.limits().threads_search < threads)
+        throw std::invalid_argument("Can't use that many threads!");
+
+    py::buffer_info vectors_info = vectors.request();
+    if (vectors_info.ndim != 2)
+        throw std::invalid_argument("Expects a matrix of vectors to add!");
+
+    Py_ssize_t vectors_count = vectors_info.shape[0];
+    Py_ssize_t vectors_dimensions = vectors_info.shape[1];
+    if (vectors_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
+        throw std::invalid_argument("The number of vector dimensions doesn't match!");
+
+    py::array_t<key_t> keys_py(vectors_count);
+    py::array_t<distance_t> distances_py(vectors_count);
+    py::array_t<Py_ssize_t> counts_py(vectors_count);
+    std::atomic<std::size_t> stats_visited_members(0);
+    std::atomic<std::size_t> stats_computed_distances(0);
+
+    // Those would be set for one for al entries, in case of success
+    auto counts_py1d = counts_py.template mutable_unchecked<1>();
+    for (Py_ssize_t vector_idx = 0; vector_idx != vectors_count; ++vector_idx)
+        counts_py1d(vector_idx) = 0;
+
+    // clang-format off
+    switch (numpy_string_to_kind(vectors_info.format)) {
+    case scalar_kind_t::b1x8_k: cluster_typed<b1x8_t>(index, vectors_info, level, threads, keys_py, distances_py, stats_visited_members, stats_computed_distances); break;
+    case scalar_kind_t::i8_k: cluster_typed<i8_bits_t>(index, vectors_info, level, threads, keys_py, distances_py, stats_visited_members, stats_computed_distances); break;
+    case scalar_kind_t::f16_k: cluster_typed<f16_t>(index, vectors_info, level, threads, keys_py, distances_py, stats_visited_members, stats_computed_distances); break;
+    case scalar_kind_t::f32_k: cluster_typed<f32_t>(index, vectors_info, level, threads, keys_py, distances_py, stats_visited_members, stats_computed_distances); break;
+    case scalar_kind_t::f64_k: cluster_typed<f64_t>(index, vectors_info, level, threads, keys_py, distances_py, stats_visited_members, stats_computed_distances); break;
+    default: throw std::invalid_argument("Incompatible scalars in the query matrix: " + vectors_info.format);
+    }
+    // clang-format on
+
+    py::tuple results(5);
+    results[0] = keys_py;
+    results[1] = distances_py;
+    results[2] = counts_py;
+    results[3] = stats_visited_members.load();
+    results[4] = stats_computed_distances.load();
+    return results;
+}
+
 static std::unordered_map<key_t, key_t> join_index(       //
     dense_index_py_t const& a, dense_index_py_t const& b, //
     std::size_t max_proposals, bool exact) {
@@ -595,10 +697,11 @@ static std::unordered_map<key_t, key_t> join_index(       //
     return a_to_b;
 }
 
-static dense_index_py_t copy_index(dense_index_py_t const& index) {
+static dense_index_py_t copy_index(dense_index_py_t const& index, bool force_copy) {
 
     using copy_result_t = typename dense_index_py_t::copy_result_t;
-    index_copy_config_t config;
+    index_dense_copy_config_t config;
+    config.force_vector_copy = force_copy;
     copy_result_t result = index.copy(config);
     forward_error(result);
     return std::move(result.index);
@@ -792,6 +895,13 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("threads") = 0                             //
     );
 
+    i.def(                                                   //
+        "cluster", &cluster_many_in_index<dense_index_py_t>, //
+        py::arg("query"),                                    //
+        py::arg("level") = 1,                                //
+        py::arg("threads") = 0                               //
+    );
+
     i.def(
         "rename",
         [](dense_index_py_t& index, key_t from, key_t to) -> bool {
@@ -883,7 +993,7 @@ PYBIND11_MODULE(compiled, m) {
     i.def("view", &view_index<dense_index_py_t>, py::arg("path"));
     i.def("reset", &reset_index<dense_index_py_t>);
     i.def("clear", &clear_index<dense_index_py_t>);
-    i.def("copy", &copy_index);
+    i.def("copy", &copy_index, py::kw_only(), py::arg("copy") = true);
     i.def("compact", &compact_index);
     i.def("join", &join_index, py::arg("other"), py::arg("max_proposals") = 0, py::arg("exact") = false);
 

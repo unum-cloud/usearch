@@ -287,6 +287,11 @@ def test_index_batch(
         for idx in range(len(matches_viewed)):
             assert np.all(matches_viewed[idx].keys == matches[idx].keys)
 
+    # Test clustering
+    if batch_size > 1:
+        clusters: BatchMatches = index.cluster(vectors, 1, threads=2)
+        assert len(clusters.keys) == batch_size
+
     # Cleanup
     index.reset()
     os.remove(temporary_usearch_filename)
