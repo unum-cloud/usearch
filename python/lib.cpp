@@ -468,7 +468,6 @@ static void search_typed_brute_force(                                //
 
     std::size_t dataset_count = static_cast<std::size_t>(dataset_info.shape[0]);
     std::size_t queries_count = static_cast<std::size_t>(queries_info.shape[0]);
-    std::size_t dimensions = static_cast<std::size_t>(dataset_info.shape[1]);
 
     byte_t const* dataset_data = reinterpret_cast<byte_t const*>(dataset_info.ptr);
     byte_t const* queries_data = reinterpret_cast<byte_t const*>(queries_info.ptr);
@@ -693,7 +692,7 @@ PYBIND11_MODULE(compiled, m) {
     py::enum_<metric_kind_t>(m, "MetricKind")
         .value("Unknown", metric_kind_t::unknown_k)
 
-        .value("IP", metric_kind_t::cos_k)
+        .value("IP", metric_kind_t::ip_k)
         .value("Cos", metric_kind_t::cos_k)
         .value("L2sq", metric_kind_t::l2sq_k)
 
@@ -705,7 +704,7 @@ PYBIND11_MODULE(compiled, m) {
         .value("Sorensen", metric_kind_t::sorensen_k)
 
         .value("Cosine", metric_kind_t::cos_k)
-        .value("InnerProduct", metric_kind_t::cos_k);
+        .value("InnerProduct", metric_kind_t::ip_k);
 
     py::enum_<scalar_kind_t>(m, "ScalarKind")
         .value("Unknown", scalar_kind_t::unknown_k)
