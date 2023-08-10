@@ -2468,6 +2468,11 @@ class index_gt {
         if (!result)
             return result;
 
+        if (!header.size) {
+            reset();
+            return result;
+        }
+
         // Allocate some dynamic memory to read all the levels
         using levels_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<level_t>;
         buffer_gt<level_t, levels_allocator_t> levels(header.size);
@@ -2525,6 +2530,11 @@ class index_gt {
         if (file.size() - offset < sizeof(header))
             return result.failed("File is corrupted and lacks a header");
         std::memcpy(&header, file.data() + offset, sizeof(header));
+
+        if (!header.size) {
+            reset();
+            return result;
+        }
 
         // Precompute offsets of every node, but before that we need to update the configs
         // This could have been done with `std::exclusive_scan`, but it's only available from C++17.
