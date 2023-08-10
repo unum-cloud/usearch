@@ -1,0 +1,89 @@
+# This workflow will build USearch libraries, then build and test C# USearch wrapper
+
+name: Test C# wrapper (Manual Workflow)
+
+# Manual startup for development
+on:
+  workflow_run:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: "gitactions_dev"
+      - run: git submodule update --init --recursive
+      - name: Build .so library for C#
+        run: |
+          make -C ./c libusearch_c.so
+          mkdir --parents ./csharp/src/LibUSearch.Tests/runtimes/linux-x64/native/; mv ./c/libusearch_c.so $_
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 6.0.x
+      - name: Restore dependencies
+        run: |
+          cd ./csharp && ls  
+          dotnet restore
+      - name: Build
+        run: cd ./csharp && dotnet build --no-restore
+      - name: Test
+        run: cd ./csharp && dotnet test --no-build --verbosity normal
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: "gitactions_dev"
+      - run: git submodule update --init --recursive
+      - name: Build .dll library for C#
+        run: |
+          make -C ./c libusearch_c.dll
+          mkdir --parents ./csharp/src/LibUSearch.Tests/runtimes/win-x64/native/; mv ./c/libusearch_c.dll $_
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 6.0.x
+      - name: Restore dependencies
+        run: |
+          cd ./csharp && ls  
+          dotnet restore
+      - name: Build
+        run: cd ./csharp && dotnet build --no-restore
+      - name: Test
+        run: cd ./csharp && dotnet test --no-build --verbosity normal
+
+  macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: "gitactions_dev"
+      - run: git submodule update --init --recursive
+      - name: Build .dll library for C#
+        run: |
+          make -C ./c libusearch_c.dylib
+          mkdir -p ./csharp/src/LibUSearch.Tests/runtimes/osx-x64/native/; mv ./c/libusearch_c.dylib $_
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 6.0.x
+      - name: Restore dependencies
+        run: |
+          cd ./csharp && ls  
+          dotnet restore
+      - name: Build
+        run: cd ./csharp && dotnet build --no-restore
+      - name: Test
+        run: cd ./csharp && dotnet test --no-build --verbosity normal

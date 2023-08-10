@@ -16,6 +16,14 @@ libusearch_c.a:
 libusearch_c.so:
 	$(CXX) $(CXX_FLAGS) -o libusearch_c.so -O3 lib.cpp $(HEADER_INCLUDES) -shared -fPIC
 
+.PHONY: libusearch_c.dll
+libusearch_c.dll:
+	$(CXX) $(CXX_FLAGS) -o libusearch_c.dll -O3 lib.cpp $(HEADER_INCLUDES) -shared -fPIC
+
+.PHONY: libusearch_c.dylib
+libusearch_c.dylib:
+	$(CXX) $(CXX_FLAGS) -o libusearch_c.dylib -O3 lib.cpp $(HEADER_INCLUDES) -dynamiclib -fPIC
+
 .PHONY: test_c
 test_c:
 	$(CC) $(C_FLAGS) test.c -L. -lusearch_c -Wl,-rpath,. -o test

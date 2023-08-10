@@ -12,6 +12,7 @@ internal static class NativeMethods
 {
     private const string LibraryName = "libusearch_c";
 
+    #region Resolving library path
     static NativeMethods()
     {
         NativeLibrary.SetDllImportResolver(typeof(NativeMethods).Assembly, ImportResolver);
@@ -19,17 +20,32 @@ internal static class NativeMethods
 
     private static IntPtr ImportResolver(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
     {
-        IntPtr libHandle = IntPtr.Zero;
-        if (libraryName == LibraryName && RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && Environment.Is64BitProcess)
+        if (libraryName == LibraryName)
         {
-            NativeLibrary.TryLoad("./runtimes/win-x64/native/libusearch_c.dll", out libHandle);
+            string path = $"./runtimes/{GetRuntimeIdentifier()}/native/libusearch_c{GetLibraryExtension()}";
+            if (NativeLibrary.TryLoad(path, out IntPtr libHandle))
+            {
+                return libHandle;
+            }
         }
-        if (libraryName == LibraryName && RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && Environment.Is64BitProcess)
-        {
-            NativeLibrary.TryLoad("./runtimes/linux-x64/native/libusearch_c.so", out libHandle);
-        }
-        return libHandle;
+        return IntPtr.Zero;
     }
+
+    private static string GetRuntimeIdentifier()
+        => RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? (Environment.Is64BitProcess ? "win10-x64" : "win10-x86")
+         : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? (Environment.Is64BitProcess ? "linux-x64" : "linux-x86")
+         : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? (Environment.Is64BitProcess ? "osx-x64" : "osx-x86")
+         : throw new PlatformNotSupportedException("Unsupported platform");
+
+    private static string GetLibraryExtension()
+        => RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".dll"
+         : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? ".so"
+         : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? ".dylib"
+         : throw new PlatformNotSupportedException("Unsupported platform");
+
+    public class PlatformNotSupportedException : Exception { public PlatformNotSupportedException(string message) : base(message) { } }
+    #endregion
+
 
     [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
     public static extern usearch_index_t usearch_init(ref usearch_init_options_t options, out usearch_error_t error);
