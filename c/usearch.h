@@ -185,6 +185,15 @@ USEARCH_EXPORT bool usearch_get(        //
  */
 USEARCH_EXPORT bool usearch_remove(usearch_index_t, usearch_key_t key, usearch_error_t* error);
 
+/**
+ *  @brief Renames the vector to map to a different key.
+ *  @param[in] from The key of the vector to be renamed.
+ *  @param[in] to New key for found entry.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ *  @return `true` if the vector is successfully removed, `false` if the vector is not found.
+ */
+USEARCH_EXPORT bool usearch_rename(usearch_index_t, usearch_key_t from, usearch_key_t to, usearch_error_t* error);
+
 #ifdef __cplusplus
 }
 #endif

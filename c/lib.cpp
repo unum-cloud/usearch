@@ -198,4 +198,14 @@ USEARCH_EXPORT bool usearch_remove(usearch_index_t index, usearch_key_t key, use
         *error = result.error.release();
     return result.completed;
 }
+
+USEARCH_EXPORT bool usearch_rename(usearch_index_t index, usearch_key_t from, usearch_key_t to,
+                                   usearch_error_t* error) {
+
+    assert(index && error);
+    labeling_result_t result = reinterpret_cast<index_dense_t*>(index)->rename(from, to);
+    if (!result)
+        *error = result.error.release();
+    return result.completed;
+}
 }

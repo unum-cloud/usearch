@@ -39,25 +39,114 @@ pub mod ffi {
     unsafe extern "C++" {
         include!("lib.hpp");
 
+        /// Represents the USearch index.
         type Index;
 
+        /// Initializes a new instance of the index with the provided options.
+        /// 
+        /// # Arguments
+        /// 
+        /// * `options` - A reference to the `IndexOptions` structure containing initialization options.
+        /// 
+        /// # Returns
+        /// 
+        /// A `Result` which is `Ok` if the index is successfully initialized, or `Err` if an error occurs.
         pub fn new_index(options: &IndexOptions) -> Result<UniquePtr<Index>>;
 
+        /// Reserves memory for a specified number of incoming vectors.
+        /// 
+        /// # Arguments
+        /// 
+        /// * `capacity` - The desired total capacity including the current size.
         pub fn reserve(self: &Index, capacity: usize) -> Result<()>;
 
+        /// Retrieves the number of dimensions in the vectors indexed.
         pub fn dimensions(self: &Index) -> usize;
+
+        /// Retrieves the connectivity parameter that limits connections-per-node in the graph.
         pub fn connectivity(self: &Index) -> usize;
+
+        /// Retrieves the current number of vectors in the index.
         pub fn size(self: &Index) -> usize;
+
+        /// Retrieves the total capacity of the index, including reserved space.
         pub fn capacity(self: &Index) -> usize;
 
+        /// Adds a vector with a specified key to the index.
+        /// 
+        /// # Arguments
+        /// 
+        /// * `key` - The key associated with the vector.
+        /// * `vector` - A slice containing the vector data.
         pub fn add(self: &Index, key: u64, vector: &[f32]) -> Result<()>;
+
+        /// Performs k-Approximate Nearest Neighbors (kANN) Search for closest vectors to the provided query.
+        /// 
+        /// # Arguments
+        /// 
+        /// * `query` - A slice containing the query vector data.
+        /// * `count` - The maximum number of neighbors to search for.
+        /// 
+        /// # Returns
+        /// 
+        /// A `Result` containing the matches found.
         pub fn search(self: &Index, query: &[f32], count: usize) -> Result<Matches>;
+
+        /// Removes the vector associated with the given key from the index.
+        /// 
+        /// # Arguments
+        /// 
+        /// * `key` - The key of the vector to be removed.
+        /// 
+        /// # Returns
+        /// 
+        /// `true` if the vector is successfully removed, `false` otherwise.
         pub fn remove(self: &Index, key: u64) -> Result<bool>;
+
+        /// Renames the vector under a certain key.
+        /// 
+        /// # Arguments
+        /// 
+        /// * `from` - The key of the vector to be renamed.
+        /// * `to` - The new name.
+        /// 
+        /// # Returns
+        /// 
+        /// `true` if the vector is successfully renamed, `false` otherwise.
+        pub fn rename(self: &Index, from: u64, to: u64) -> Result<bool>;
+
+        /// Checks if the index contains a vector with a specified key.
+        /// 
+        /// # Arguments
+        /// 
+        /// * `key` - The key to be checked.
+        /// 
+        /// # Returns
+        /// 
+        /// `true` if the index contains the vector with the given key, `false` otherwise.
         pub fn contains(self: &Index, key: u64) -> bool;
 
+        /// Saves the index to a specified file.
+        /// 
+        /// # Arguments
+        /// 
+        /// * `path` - The file path where the index will be saved.
         pub fn save(self: &Index, path: &str) -> Result<()>;
+
+        /// Loads the index from a specified file.
+        /// 
+        /// # Arguments
+        /// 
+        /// * `path` - The file path from where the index will be loaded.
         pub fn load(self: &Index, path: &str) -> Result<()>;
+
+        /// Creates a view of the index from a file without loading it into memory.
+        /// 
+        /// # Arguments
+        /// 
+        /// * `path` - The file path from where the view will be created.
         pub fn view(self: &Index, path: &str) -> Result<()>;
+
     }
 }
 

@@ -27,12 +27,14 @@ let package = Package(
             name: "USearch",
             dependencies: ["USearchObjective"],
             path: "swift",
+            exclude: ["README.md", "Test.swift"],
             sources: ["USearch.swift", "Index+Sugar.swift"]
         ),
         .testTarget(
             name: "USearchTests",
             dependencies: ["USearch"],
             path: "swift",
+            exclude: ["USearch.swift", "Index+Sugar.swift", "README.md"],
             sources: ["Test.swift"]
         )
     ],

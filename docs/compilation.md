@@ -156,19 +156,19 @@ There are a few ways to compile the C 99 USearch SDK.
 Using the Makefile:
 
 ```sh
-make -C ./c build
+make -C ./c make -C ./c libusearch_c.so
 ```
 
 Using CMake:
 
 ```sh
-cmake -B ./build_release -DUSEARCH_BUILD_C=1 && make -C ./build_release -j
+cmake -B ./build_release -DUSEARCH_BUILD_CLIB=1 && make -C ./build_release -j
 ```
 
 Linux:
 
 ```sh
-g++ -std=c++11 -shared -fPIC c/lib.cpp -I ./include/  -I ./fp16/include/ -I ./robin-map/include/ -o libusearch_c.a
+g++ -std=c++11 -shared -fPIC c/lib.cpp -I ./include/  -I ./fp16/include/ -I ./robin-map/include/ -o libusearch_c.so
 ```
 
 
