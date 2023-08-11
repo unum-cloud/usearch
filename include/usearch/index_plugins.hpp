@@ -30,7 +30,6 @@
 #include <fp16/fp16.h>
 #endif
 #else
-#define USEARCH_USE_NATIVE_F16 0
 #include <fp16/fp16.h>
 #endif
 
@@ -196,6 +195,9 @@ inline char const* isa_name(isa_kind_t isa_kind) noexcept {
 }
 
 inline bool hardware_supports(isa_kind_t isa_kind) noexcept {
+
+    // On Linux Arm machines the `getauxval` can be queried to check
+    // if SVE extensions are available. Arm Neon has no separate capability check.
 #if defined(USEARCH_DEFINED_ARM) && defined(USEARCH_DEFINED_LINUX)
     unsigned long capabilities = getauxval(AT_HWCAP);
     switch (isa_kind) {
@@ -205,11 +207,26 @@ inline bool hardware_supports(isa_kind_t isa_kind) noexcept {
     }
 #endif
 
+    // When compiling with GCC, one may use the "built-ins", including ones
+    // designed for CPU capability detection.
 #if defined(USEARCH_DEFINED_X86) && defined(USEARCH_DEFINED_GCC)
     __builtin_cpu_init();
     switch (isa_kind) {
     case isa_kind_t::avx2_k: return __builtin_cpu_supports("avx2");
     case isa_kind_t::avx512_k: return __builtin_cpu_supports("avx512f");
+    default: return false;
+    }
+#endif
+
+    // On Apple we can expect Arm devices to support Neon extesions,
+    // and the x86 machines to support AVX2 extensions.
+#if defined(USEARCH_DEFINED_APPLE)
+    switch (isa_kind) {
+#if defined(USEARCH_DEFINED_ARM)
+    case isa_kind_t::neon_k: return true;
+#else
+    case isa_kind_t::avx2_k: return true;
+#endif
     default: return false;
     }
 #endif

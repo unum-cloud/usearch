@@ -31,7 +31,7 @@ if sys.platform == "darwin":
     compile_args.append("-g")  # Simplify debugging
     compile_args.append("-Wno-unknown-pragmas")
 
-    # Linking OpenMP requires additional preparion in CIBuildWheel
+    # Linking OpenMP requires additional preparation in CIBuildWheel
     # macros_args.append(("USEARCH_USE_OPENMP", "1"))
     # compile_args.append("-Xpreprocessor -fopenmp")
     # link_args.append("-Xpreprocessor -lomp")

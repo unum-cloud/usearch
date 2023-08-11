@@ -55,14 +55,12 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     expect(std::abs(matched_distances[0]) < 0.01);
 
     // Add more entries
-    index_search_config_t search_config;
-    search_config.exact = true;
     index.add(key_second, vector_second, args...);
     index.add(key_third, vector_third, args...);
     expect(index.size() == 3);
 
     // Perform exact search
-    matched_count = index.search(vector_first, 5, args..., search_config).dump_to(matched_labels, matched_distances);
+    matched_count = index.search(vector_first, 5, args...).dump_to(matched_labels, matched_distances);
 
     // Validate scans
     std::size_t count = 0;
@@ -73,6 +71,9 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     }
     expect((count == 3));
     expect((index.stats(0).nodes == 3));
+
+    // Check if clustering endpoint compiles
+    index.cluster(vector_first, 0, args...);
 
     // Try removals and replacements
     if constexpr (punned_ak) {
@@ -102,9 +103,13 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     executor_default_t executor;
     index.reserve({vectors.size(), executor.size()});
     executor.fixed(vectors.size() - 3, [&](std::size_t thread, std::size_t task) {
-        index_update_config_t config;
-        config.thread = thread;
-        index.add(key_max - task - 3, vectors[task + 3].data(), args..., config);
+        if constexpr (punned_ak) {
+            index.add(key_max - task - 3, vectors[task + 3].data(), args...);
+        } else {
+            index_update_config_t config;
+            config.thread = thread;
+            index.add(key_max - task - 3, vectors[task + 3].data(), args..., config);
+        }
     });
 
     // Search again over mapped index
@@ -210,9 +215,7 @@ template <typename key_at, typename slot_at> void test_tanimoto(std::size_t dime
 
     index.reserve({batch_size + index.size(), executor.size()});
     executor.fixed(batch_size, [&](std::size_t thread, std::size_t task) {
-        index_update_config_t config;
-        config.thread = thread;
-        index.add(task + 25000, scalars.data() + index.scalar_words() * task, config);
+        index.add(task + 25000, scalars.data() + index.scalar_words() * task, thread);
     });
 }
 

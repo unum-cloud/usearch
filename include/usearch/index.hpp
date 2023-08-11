@@ -19,7 +19,7 @@
 #define USEARCH_DEFINED_CPP17
 #endif
 
-// Inferring target OS
+// Inferring target OS: Windows, MacOS, or Linux
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
 #define USEARCH_DEFINED_WINDOWS
 #elif defined(__APPLE__) && defined(__MACH__)
@@ -28,7 +28,7 @@
 #define USEARCH_DEFINED_LINUX
 #endif
 
-// Inferring the compiler
+// Inferring the compiler: Clang vs GCC
 #if defined(__clang__)
 #define USEARCH_DEFINED_CLANG
 #elif defined(__GNUC__)
