@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using static NativeMethods;
 
@@ -179,40 +178,41 @@ public class USearchIndex : IDisposable
         return success;
     }
 
-    private ulong Search<T>(T[] queryVector, ulong resultsLimit, out Dictionary<ulong, float> foundKeyDistances, ScalarKind scalarKind)
+    private int Search<T>(T[] queryVector, int resultsLimit, out ulong[] keys, out float[] distances, ScalarKind scalarKind)
     {
-        ulong[] keys = new ulong[resultsLimit];
-        float[] distances = new float[resultsLimit];
+        keys = new ulong[resultsLimit];
+        distances = new float[resultsLimit];
 
         GCHandle handle = GCHandle.Alloc(queryVector, GCHandleType.Pinned);
-        ulong matches = 0;
+        int matches = 0;
         try
         {
             IntPtr queryVectorPtr = handle.AddrOfPinnedObject();
-            matches = (ulong)usearch_search(this._index, queryVectorPtr, scalarKind, (UIntPtr)resultsLimit, keys, distances, out IntPtr error);
+            matches = checked((int)usearch_search(this._index, queryVectorPtr, scalarKind, (UIntPtr)resultsLimit, keys, distances, out IntPtr error));
             HandleError(error);
         }
         finally
         {
             handle.Free();
         }
-        foundKeyDistances = new Dictionary<ulong, float>();
-        for (ulong i = 0; i < matches; i++)
+
+        if (matches < resultsLimit)
         {
-            foundKeyDistances.Add(keys[i], distances[i]);
+            Array.Resize(ref keys, (int)matches);
+            Array.Resize(ref distances, (int)matches);
         }
 
         return matches;
     }
 
-    public ulong Search(float[] queryVector, ulong resultsLimit, out Dictionary<ulong, float> foundKeyDistances)
+    public int Search(float[] queryVector, int resultsLimit, out ulong[] keys, out float[] distances)
     {
-        return this.Search(queryVector, resultsLimit, out foundKeyDistances, ScalarKind.Float32);
+        return this.Search(queryVector, resultsLimit, out keys, out distances, ScalarKind.Float32);
     }
 
-    public ulong Search(double[] queryVector, ulong resultsLimit, out Dictionary<ulong, float> foundKeyDistances)
+    public int Search(double[] queryVector, int resultsLimit, out ulong[] keys, out float[] distances)
     {
-        return this.Search(queryVector, resultsLimit, out foundKeyDistances, ScalarKind.Float64);
+        return this.Search(queryVector, resultsLimit, out keys, out distances, ScalarKind.Float64);
     }
 
     public bool Remove(ulong key)
