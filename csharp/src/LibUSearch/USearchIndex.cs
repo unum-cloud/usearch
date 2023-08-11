@@ -7,11 +7,11 @@ public class USearchIndex : IDisposable
 {
     private IntPtr _index;
     private bool _disposedValue = false;
-    private ulong _cached_dimensions;
+    private ulong _cachedDimensions;
 
     public USearchIndex(
-        usearch_metric_kind_t metricKind,
-        usearch_scalar_kind_t quantization,
+        MetricKind metricKind,
+        ScalarKind quantization,
         ulong dimensions,
         ulong connectivity = 0,
         ulong expansionAdd = 0,
@@ -19,33 +19,33 @@ public class USearchIndex : IDisposable
     // CustomDistanceFunction? customMetric = null
     )
     {
-        usearch_init_options_t initOptions = new usearch_init_options_t
+        IndexOptions initOptions = new IndexOptions
         {
             metric_kind = metricKind,
             metric = default,
             quantization = quantization,
-            dimensions = (UIntPtr)dimensions,
-            connectivity = (UIntPtr)connectivity,
-            expansion_add = (UIntPtr)expansionAdd,
-            expansion_search = (UIntPtr)expansionSearch
+            dimensions = dimensions,
+            connectivity = connectivity,
+            expansion_add = expansionAdd,
+            expansion_search = expansionSearch
         };
 
         this._index = usearch_init(ref initOptions, out IntPtr error);
         HandleError(error);
-        this._cached_dimensions = dimensions;
+        this._cachedDimensions = dimensions;
     }
 
-    public USearchIndex(usearch_init_options_t options)
+    public USearchIndex(IndexOptions options)
     {
-        usearch_init_options_t initOptions = options;
+        IndexOptions initOptions = options;
         this._index = usearch_init(ref initOptions, out IntPtr error);
         HandleError(error);
-        this._cached_dimensions = (ulong)options.dimensions;
+        this._cachedDimensions = options.dimensions;
     }
 
     public USearchIndex(string path, bool view = false)
     {
-        usearch_init_options_t initOptions = new usearch_init_options_t();
+        IndexOptions initOptions = new IndexOptions();
         this._index = usearch_init(ref initOptions, out IntPtr error);
         HandleError(error);
 
@@ -60,7 +60,7 @@ public class USearchIndex : IDisposable
 
         HandleError(error);
 
-        this._cached_dimensions = this.Dimensions();
+        this._cachedDimensions = this.Dimensions();
     }
 
     public void Save(string path)
@@ -122,14 +122,14 @@ public class USearchIndex : IDisposable
     public void Add(ulong key, float[] vector)
     {
         this.CheckIncreaseCapacity(1);
-        usearch_add(this._index, key, vector, usearch_scalar_kind_t.usearch_scalar_f32_k, out IntPtr error);
+        usearch_add(this._index, key, vector, ScalarKind.Float32, out IntPtr error);
         HandleError(error);
     }
 
     public void Add(ulong key, double[] vector)
     {
         this.CheckIncreaseCapacity(1);
-        usearch_add(this._index, key, vector, usearch_scalar_kind_t.usearch_scalar_f64_k, out IntPtr error);
+        usearch_add(this._index, key, vector, ScalarKind.Float64, out IntPtr error);
         HandleError(error);
     }
 
@@ -138,7 +138,7 @@ public class USearchIndex : IDisposable
         this.CheckIncreaseCapacity((ulong)vectors.Length);
         for (int i = 0; i < vectors.Length; i++)
         {
-            usearch_add(this._index, keys[i], vectors[i], usearch_scalar_kind_t.usearch_scalar_f32_k, out IntPtr error);
+            usearch_add(this._index, keys[i], vectors[i], ScalarKind.Float32, out IntPtr error);
             HandleError(error);
         }
     }
@@ -148,15 +148,15 @@ public class USearchIndex : IDisposable
         this.CheckIncreaseCapacity((ulong)vectors.Length);
         for (int i = 0; i < vectors.Length; i++)
         {
-            usearch_add(this._index, keys[i], vectors[i], usearch_scalar_kind_t.usearch_scalar_f64_k, out IntPtr error);
+            usearch_add(this._index, keys[i], vectors[i], ScalarKind.Float64, out IntPtr error);
             HandleError(error);
         }
     }
 
     public bool Get(ulong key, out float[] vector)
     {
-        vector = new float[this._cached_dimensions];
-        bool success = usearch_get(this._index, key, vector, usearch_scalar_kind_t.usearch_scalar_f32_k, out IntPtr error);
+        vector = new float[this._cachedDimensions];
+        bool success = usearch_get(this._index, key, vector, ScalarKind.Float32, out IntPtr error);
         HandleError(error);
         if (!success)
         {
@@ -168,8 +168,8 @@ public class USearchIndex : IDisposable
 
     public bool Get(ulong key, out double[] vector)
     {
-        vector = new double[this._cached_dimensions];
-        bool success = usearch_get(this._index, key, vector, usearch_scalar_kind_t.usearch_scalar_f64_k, out IntPtr error);
+        vector = new double[this._cachedDimensions];
+        bool success = usearch_get(this._index, key, vector, ScalarKind.Float64, out IntPtr error);
         HandleError(error);
         if (!success)
         {
@@ -179,7 +179,7 @@ public class USearchIndex : IDisposable
         return success;
     }
 
-    private ulong Search<T>(T[] queryVector, ulong resultsLimit, out Dictionary<ulong, float> foundKeyDistances, usearch_scalar_kind_t scalarKind)
+    private ulong Search<T>(T[] queryVector, ulong resultsLimit, out Dictionary<ulong, float> foundKeyDistances, ScalarKind scalarKind)
     {
         ulong[] keys = new ulong[resultsLimit];
         float[] distances = new float[resultsLimit];
@@ -207,12 +207,12 @@ public class USearchIndex : IDisposable
 
     public ulong Search(float[] queryVector, ulong resultsLimit, out Dictionary<ulong, float> foundKeyDistances)
     {
-        return this.Search(queryVector, resultsLimit, out foundKeyDistances, usearch_scalar_kind_t.usearch_scalar_f32_k);
+        return this.Search(queryVector, resultsLimit, out foundKeyDistances, ScalarKind.Float32);
     }
 
     public ulong Search(double[] queryVector, ulong resultsLimit, out Dictionary<ulong, float> foundKeyDistances)
     {
-        return this.Search(queryVector, resultsLimit, out foundKeyDistances, usearch_scalar_kind_t.usearch_scalar_f64_k);
+        return this.Search(queryVector, resultsLimit, out foundKeyDistances, ScalarKind.Float64);
     }
 
     public bool Remove(ulong key)

@@ -9,8 +9,8 @@ public class InitTests
     public void InitializedAndDisposedSucceeds()
     {
         var uSearch = new USearchIndex(
-            usearch_metric_kind_t.usearch_metric_cos_k,
-            usearch_scalar_kind_t.usearch_scalar_f32_k,
+            MetricKind.Cos,
+            ScalarKind.Float32,
             3
         );
         Assert.NotNull(uSearch);
@@ -22,8 +22,8 @@ public class InitTests
     public void AddDoubleVectorSucceeds()
     {
         var uSearch = new USearchIndex(
-            usearch_metric_kind_t.usearch_metric_cos_k,
-            usearch_scalar_kind_t.usearch_scalar_f64_k,
+            MetricKind.Cos,
+            ScalarKind.Float64,
             3
         );
         uSearch.Add(1, new double[] { 1.0, 2.0, 3.0 });
@@ -37,8 +37,8 @@ public class InitTests
     public void AddFloatVectorSucceeds()
     {
         var uSearch = new USearchIndex(
-            usearch_metric_kind_t.usearch_metric_cos_k,
-            usearch_scalar_kind_t.usearch_scalar_f32_k,
+            MetricKind.Cos,
+            ScalarKind.Float32,
             3
         );
         uSearch.Add(1, new float[] { 1.0f, 2.0f, 3.0f });
@@ -52,8 +52,8 @@ public class InitTests
     public void AddGetFloatVectorSucceeds()
     {
         var uSearch = new USearchIndex(
-            usearch_metric_kind_t.usearch_metric_cos_k,
-            usearch_scalar_kind_t.usearch_scalar_f32_k,
+            MetricKind.Cos,
+            ScalarKind.Float32,
             3
         );
         var inputVector = new float[] { 1.0f, 2.0f, 3.0f };
@@ -76,8 +76,8 @@ public class InitTests
     public void AddGetDoubleVectorSucceeds()
     {
         var uSearch = new USearchIndex(
-            usearch_metric_kind_t.usearch_metric_cos_k,
-            usearch_scalar_kind_t.usearch_scalar_f64_k,
+            MetricKind.Cos,
+            ScalarKind.Float64,
             3
         );
         var inputVector = new double[] { 1.0, 2.0, 3.33 };
@@ -102,8 +102,8 @@ public class InitTests
     public void ItThrowsException_AddAddWithSameKeyAndGetVector()
     {
         var uSearch = new USearchIndex(
-            usearch_metric_kind_t.usearch_metric_cos_k,
-            usearch_scalar_kind_t.usearch_scalar_f32_k,
+            MetricKind.Cos,
+            ScalarKind.Float32,
             3
         );
 
@@ -120,8 +120,8 @@ public class InitTests
     public void TestAddRemoveAddAndGet()
     {
         var uSearch = new USearchIndex(
-            usearch_metric_kind_t.usearch_metric_cos_k,
-            usearch_scalar_kind_t.usearch_scalar_f32_k,
+            MetricKind.Cos,
+            ScalarKind.Float32,
             2
         );
         try
@@ -148,8 +148,8 @@ public class InitTests
     public void TestAddRemoveAddWithSameKeyVectorAndGet()
     {
         var uSearch = new USearchIndex(
-            usearch_metric_kind_t.usearch_metric_cos_k,
-            usearch_scalar_kind_t.usearch_scalar_f32_k,
+            MetricKind.Cos,
+            ScalarKind.Float32,
             2
         );
         try
@@ -177,8 +177,8 @@ public class InitTests
     public void TestGetKeyThatNotExist()
     {
         var uSearch = new USearchIndex(
-            usearch_metric_kind_t.usearch_metric_cos_k,
-            usearch_scalar_kind_t.usearch_scalar_f32_k,
+            MetricKind.Cos,
+            ScalarKind.Float32,
             3
         );
         try

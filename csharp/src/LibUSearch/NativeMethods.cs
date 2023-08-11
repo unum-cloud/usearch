@@ -12,7 +12,7 @@ internal static class NativeMethods
     private const string LibraryName = "libusearch_c";
 
     [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern usearch_index_t usearch_init(ref usearch_init_options_t options, out usearch_error_t error);
+    public static extern usearch_index_t usearch_init(ref IndexOptions options, out usearch_error_t error);
 
     [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
     public static extern void usearch_free(usearch_index_t index, out usearch_error_t error);
@@ -46,7 +46,7 @@ internal static class NativeMethods
         usearch_index_t index,
         usearch_key_t key,
         [In] float[] vector,
-        usearch_scalar_kind_t vector_kind,
+        ScalarKind vector_kind,
         out usearch_error_t error
     );
 
@@ -55,7 +55,7 @@ internal static class NativeMethods
         usearch_index_t index,
         usearch_key_t key,
         [In] double[] vector,
-        usearch_scalar_kind_t vector_kind,
+        ScalarKind vector_kind,
         out usearch_error_t error
     );
 
@@ -67,7 +67,7 @@ internal static class NativeMethods
     public static extern size_t usearch_search(
         usearch_index_t index,
         void_ptr_t query_vector,
-        usearch_scalar_kind_t query_kind,
+        ScalarKind query_kind,
         size_t results_limit,
         [Out] usearch_key_t[] found_keys,
         [Out] usearch_distance_t[] found_distances,
@@ -78,7 +78,7 @@ internal static class NativeMethods
     public static extern size_t usearch_search(
         usearch_index_t index,
         [In] float[] query_vector,
-        usearch_scalar_kind_t query_kind,
+        ScalarKind query_kind,
         size_t results_limit,
         [Out] usearch_key_t[] found_keys,
         [Out] usearch_distance_t[] found_distances,
@@ -89,7 +89,7 @@ internal static class NativeMethods
     public static extern size_t usearch_search(
         usearch_index_t index,
         [In] double[] query_vector,
-        usearch_scalar_kind_t query_kind,
+        ScalarKind query_kind,
         size_t results_limit,
         [Out] usearch_key_t[] found_keys,
         [Out] usearch_distance_t[] found_distances,
@@ -103,7 +103,7 @@ internal static class NativeMethods
         usearch_index_t index,
         usearch_key_t key,
         [Out] float[] vector,
-        usearch_scalar_kind_t vector_kind,
+        ScalarKind vector_kind,
         out usearch_error_t error
     );
 
@@ -113,7 +113,7 @@ internal static class NativeMethods
         usearch_index_t index,
         usearch_key_t key,
         [Out] double[] vector,
-        usearch_scalar_kind_t vector_kind,
+        ScalarKind vector_kind,
         out usearch_error_t error
     );
 
