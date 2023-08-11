@@ -163,4 +163,5 @@
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "golang.go"
     },
+    "dotnet.defaultSolution": "csharp/libusearch-wrapper.sln",
 }

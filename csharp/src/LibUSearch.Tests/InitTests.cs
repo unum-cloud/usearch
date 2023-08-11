@@ -1,4 +1,3 @@
-
 namespace LibUsearch.Tests;
 
 public class InitTests
@@ -50,21 +49,6 @@ public class InitTests
     }
 
     [Fact]
-    public void AddHalfVectorSucceeds()
-    {
-        var uSearch = new USearchIndex(
-            usearch_metric_kind_t.usearch_metric_cos_k,
-            usearch_scalar_kind_t.usearch_scalar_f16_k,
-            3
-        );
-        uSearch.Add(1, new Half[] { (Half)1.0f, (Half)2.0f, (Half)3.0f });
-        Assert.Equal((uint)1, uSearch.Size());
-        Assert.True(uSearch.Contains(1));
-        Assert.False(uSearch.Contains(2));
-        uSearch.Dispose();
-    }
-
-    [Fact]
     public void AddGetFloatVectorSucceeds()
     {
         var uSearch = new USearchIndex(
@@ -77,7 +61,7 @@ public class InitTests
         Assert.Equal((uint)1, uSearch.Size());
         Assert.True(uSearch.Contains(1));
         Assert.False(uSearch.Contains(2));
-        Assert.True(uSearch.Get(1, out float[]? retrievedVector));
+        Assert.True(uSearch.Get(1, out float[] retrievedVector));
         Assert.NotNull(retrievedVector);
         bool areEqual = inputVector
                                 .Zip(retrievedVector, (a, b) => (a, b))
@@ -101,7 +85,7 @@ public class InitTests
         Assert.Equal((uint)1, uSearch.Size());
         Assert.True(uSearch.Contains(1));
         Assert.False(uSearch.Contains(2));
-        Assert.True(uSearch.Get(1, out double[]? retrievedVector));
+        Assert.True(uSearch.Get(1, out double[] retrievedVector));
         Assert.NotNull(retrievedVector);
         bool areEqual = inputVector
                                 .Zip(retrievedVector, (a, b) => (a, b))
@@ -112,30 +96,6 @@ public class InitTests
         uSearch.Dispose();
     }
 
-
-    [Fact]
-    public void AddGetHalfVectorSucceeds()
-    {
-        var uSearch = new USearchIndex(
-            usearch_metric_kind_t.usearch_metric_cos_k,
-            usearch_scalar_kind_t.usearch_scalar_f32_k,
-            3
-        );
-        var inputVector = new Half[] { (Half)1.0f, (Half)2.0f, (Half)3.0f };
-        uSearch.Add(1, inputVector);
-        Assert.Equal((uint)1, uSearch.Size());
-        Assert.True(uSearch.Contains(1));
-        Assert.False(uSearch.Contains(2));
-        Assert.True(uSearch.Get(1, out Half[]? retrievedVector));
-        Assert.NotNull(retrievedVector);
-        Assert.Equal(3, retrievedVector.Length);
-        bool areEqual = inputVector
-                                .Zip(retrievedVector, (a, b) => (a, b))
-                                .All(pair => Math.Abs((float)pair.a - (float)pair.b) <= Epsilon);
-
-        Assert.True(areEqual);
-        uSearch.Dispose();
-    }
 
     // TODO return back this test when std::runtime_error wont be thrown from USearch lib
     [Fact(Skip = "This test is temporarily disabled because of hanging.")]
@@ -175,7 +135,7 @@ public class InitTests
             Assert.False(uSearch.Contains(key));
             uSearch.Add(key, vector);
             Assert.True(uSearch.Contains(key));
-            Assert.True(uSearch.Get(key, out float[]? retrievedVector));
+            Assert.True(uSearch.Get(key, out float[] retrievedVector));
             Assert.Equal(vector, retrievedVector);
         }
         finally
@@ -203,7 +163,7 @@ public class InitTests
             Assert.False(uSearch.Contains(key));
             uSearch.Add(key, vector);
             Assert.True(uSearch.Contains(key));
-            Assert.True(uSearch.Get(key, out float[]? retrievedVector));
+            Assert.True(uSearch.Get(key, out float[] retrievedVector));
             Assert.Equal(vector, retrievedVector);
         }
         finally
@@ -223,7 +183,7 @@ public class InitTests
         );
         try
         {
-            Assert.False(uSearch.Get(1, out float[]? retrievedVector));
+            Assert.False(uSearch.Get(1, out float[] retrievedVector));
             Assert.False(uSearch.Contains(1));
         }
         finally

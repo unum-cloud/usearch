@@ -1,6 +1,7 @@
 
 
-using static NativeMethods;
+using System;
+using System.Runtime.InteropServices;
 
 public enum usearch_metric_kind_t : uint
 {
@@ -29,13 +30,13 @@ public enum usearch_scalar_kind_t : uint
 // TODO implement custom metric delegate following microsoft guides:
 // 1) https://learn.microsoft.com/en-us/dotnet/standard/native-interop/best-practices
 // 2) https://learn.microsoft.com/en-us/dotnet/framework/interop/marshalling-a-delegate-as-a-callback-method
-public delegate float usearch_metric_t(nint a, nint b);
+// public delegate float usearch_metric_t(IntPtr a, IntPtr b);
 
 [StructLayout(LayoutKind.Sequential)]
 public struct usearch_init_options_t
 {
     public usearch_metric_kind_t metric_kind;
-    public usearch_metric_t? metric;
+    public IntPtr metric;
     public usearch_scalar_kind_t quantization;
     public UIntPtr dimensions;
     public UIntPtr connectivity;
@@ -44,12 +45,12 @@ public struct usearch_init_options_t
 
     public usearch_init_options_t(
         usearch_metric_kind_t metric_kind = usearch_metric_kind_t.usearch_metric_unknown_k,
-        usearch_metric_t? metric = null,
+        IntPtr metric = default,
         usearch_scalar_kind_t quantization = usearch_scalar_kind_t.usearch_scalar_unknown_k,
-        UIntPtr dimensions = 0,
-        UIntPtr connectivity = 0,
-        UIntPtr expansion_add = 0,
-        UIntPtr expansion_search = 0
+        UIntPtr dimensions = default,
+        UIntPtr connectivity = default,
+        UIntPtr expansion_add = default,
+        UIntPtr expansion_search = default
     )
     {
         this.metric_kind = metric_kind;

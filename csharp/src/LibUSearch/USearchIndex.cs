@@ -1,12 +1,13 @@
-
-using System.Text;
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using static NativeMethods;
 
 public class USearchIndex : IDisposable
 {
-    private nint _index;
+    private IntPtr _index;
     private bool _disposedValue = false;
-    private usearch_init_options_t _metaData;
+    private ulong _cached_dimensions;
 
     public USearchIndex(
         usearch_metric_kind_t metricKind,
@@ -21,180 +22,160 @@ public class USearchIndex : IDisposable
         usearch_init_options_t initOptions = new usearch_init_options_t
         {
             metric_kind = metricKind,
-            metric = null,
+            metric = default,
             quantization = quantization,
-            dimensions = (nuint)dimensions,
-            connectivity = (nuint)connectivity,
-            expansion_add = (nuint)expansionAdd,
-            expansion_search = (nuint)expansionSearch
+            dimensions = (UIntPtr)dimensions,
+            connectivity = (UIntPtr)connectivity,
+            expansion_add = (UIntPtr)expansionAdd,
+            expansion_search = (UIntPtr)expansionSearch
         };
 
-        _index = usearch_init(ref initOptions, out nint error);
+        this._index = usearch_init(ref initOptions, out IntPtr error);
         HandleError(error);
-        _metaData = initOptions;
+        this._cached_dimensions = dimensions;
     }
 
     public USearchIndex(usearch_init_options_t options)
     {
         usearch_init_options_t initOptions = options;
-        _index = usearch_init(ref initOptions, out nint error);
+        this._index = usearch_init(ref initOptions, out IntPtr error);
         HandleError(error);
-        _metaData = initOptions;
+        this._cached_dimensions = (ulong)options.dimensions;
     }
 
     public USearchIndex(string path, bool view = false)
     {
         usearch_init_options_t initOptions = new usearch_init_options_t();
-        _index = usearch_init(ref initOptions, out nint error);
+        this._index = usearch_init(ref initOptions, out IntPtr error);
         HandleError(error);
 
         if (view)
-            usearch_view(_index, path, out error);
+        {
+            usearch_view(this._index, path, out error);
+        }
         else
-            usearch_load(_index, path, out error);
-
-        _metaData = new usearch_init_options_t(
-            dimensions: (nuint)Dimensions(),
-            connectivity: (nuint)Connectivity()
-        );
+        {
+            usearch_load(this._index, path, out error);
+        }
 
         HandleError(error);
+
+        this._cached_dimensions = this.Dimensions();
     }
 
     public void Save(string path)
     {
-        usearch_save(_index, path, out nint error);
+        usearch_save(this._index, path, out IntPtr error);
         HandleError(error);
     }
 
     public ulong Size()
     {
-        nuint size = usearch_size(_index, out nint error);
+        ulong size = (ulong)usearch_size(this._index, out IntPtr error);
         HandleError(error);
         return size;
     }
 
-    public usearch_init_options_t GetMetadata() => _metaData;
-
     public ulong Capacity()
     {
-        nuint capacity = usearch_capacity(_index, out nint error);
+        ulong capacity = (ulong)usearch_capacity(this._index, out IntPtr error);
         HandleError(error);
         return capacity;
     }
 
     public ulong Dimensions()
     {
-        nuint dimensions = usearch_dimensions(_index, out nint error);
+        ulong dimensions = (ulong)usearch_dimensions(this._index, out IntPtr error);
         HandleError(error);
         return dimensions;
     }
 
     public ulong Connectivity()
     {
-        nuint connectivity = usearch_connectivity(_index, out nint error);
+        ulong connectivity = (ulong)usearch_connectivity(this._index, out IntPtr error);
         HandleError(error);
         return connectivity;
     }
 
     public bool Contains(ulong key)
     {
-        bool result = usearch_contains(_index, key, out nint error);
+        bool result = usearch_contains(this._index, key, out IntPtr error);
         HandleError(error);
         return result;
     }
 
-    private void IncreaseCapacity(nuint size)
+    private void IncreaseCapacity(ulong size)
     {
-        usearch_reserve(_index, (nuint)Size() + size, out nint error);
+        usearch_reserve(this._index, (UIntPtr)(this.Size() + size), out IntPtr error);
         HandleError(error);
     }
 
-    private void CheckIncreaseCapacity(nuint size_increase)
+    private void CheckIncreaseCapacity(ulong size_increase)
     {
-        nuint size_demand = (nuint)Size() + size_increase;
-        if (Capacity() < size_demand)
-            IncreaseCapacity(size_increase);
-    }
-
-    public void Add(ulong key, Half[] vector)
-    {
-        CheckIncreaseCapacity(1);
-        usearch_add(_index, key, vector, usearch_scalar_kind_t.usearch_scalar_f16_k, out nint error);
-        HandleError(error);
+        ulong size_demand = this.Size() + size_increase;
+        if (this.Capacity() < size_demand)
+        {
+            this.IncreaseCapacity(size_increase);
+        }
     }
 
     public void Add(ulong key, float[] vector)
     {
-        CheckIncreaseCapacity(1);
-        usearch_add(_index, key, vector, usearch_scalar_kind_t.usearch_scalar_f32_k, out nint error);
+        this.CheckIncreaseCapacity(1);
+        usearch_add(this._index, key, vector, usearch_scalar_kind_t.usearch_scalar_f32_k, out IntPtr error);
         HandleError(error);
     }
 
     public void Add(ulong key, double[] vector)
     {
-        CheckIncreaseCapacity(1);
-        usearch_add(_index, key, vector, usearch_scalar_kind_t.usearch_scalar_f64_k, out nint error);
+        this.CheckIncreaseCapacity(1);
+        usearch_add(this._index, key, vector, usearch_scalar_kind_t.usearch_scalar_f64_k, out IntPtr error);
         HandleError(error);
-    }
-
-    public void AddMany(ulong[] keys, Half[][] vectors)
-    {
-        CheckIncreaseCapacity((nuint)vectors.Length);
-        for (int i = 0; i < vectors.Length; i++)
-        {
-            usearch_add(_index, keys[i], vectors[i], usearch_scalar_kind_t.usearch_scalar_f16_k, out nint error);
-            HandleError(error);
-        }
     }
 
     public void AddMany(ulong[] keys, float[][] vectors)
     {
-        CheckIncreaseCapacity((nuint)vectors.Length);
+        this.CheckIncreaseCapacity((ulong)vectors.Length);
         for (int i = 0; i < vectors.Length; i++)
         {
-            usearch_add(_index, keys[i], vectors[i], usearch_scalar_kind_t.usearch_scalar_f32_k, out nint error);
+            usearch_add(this._index, keys[i], vectors[i], usearch_scalar_kind_t.usearch_scalar_f32_k, out IntPtr error);
             HandleError(error);
         }
     }
 
     public void AddMany(ulong[] keys, double[][] vectors)
     {
-        CheckIncreaseCapacity((nuint)vectors.Length);
+        this.CheckIncreaseCapacity((ulong)vectors.Length);
         for (int i = 0; i < vectors.Length; i++)
         {
-            usearch_add(_index, keys[i], vectors[i], usearch_scalar_kind_t.usearch_scalar_f64_k, out nint error);
+            usearch_add(this._index, keys[i], vectors[i], usearch_scalar_kind_t.usearch_scalar_f64_k, out IntPtr error);
             HandleError(error);
         }
     }
 
-    public bool Get(ulong key, out Half[]? vector)
+    public bool Get(ulong key, out float[] vector)
     {
-        vector = new Half[_metaData.dimensions];
-        bool success = usearch_get(_index, key, vector, usearch_scalar_kind_t.usearch_scalar_f16_k, out nint error);
+        vector = new float[this._cached_dimensions];
+        bool success = usearch_get(this._index, key, vector, usearch_scalar_kind_t.usearch_scalar_f32_k, out IntPtr error);
         HandleError(error);
         if (!success)
+        {
             vector = null;
+        }
+
         return success;
     }
 
-    public bool Get(ulong key, out float[]? vector)
+    public bool Get(ulong key, out double[] vector)
     {
-        vector = new float[_metaData.dimensions];
-        bool success = usearch_get(_index, key, vector, usearch_scalar_kind_t.usearch_scalar_f32_k, out nint error);
+        vector = new double[this._cached_dimensions];
+        bool success = usearch_get(this._index, key, vector, usearch_scalar_kind_t.usearch_scalar_f64_k, out IntPtr error);
         HandleError(error);
         if (!success)
+        {
             vector = null;
-        return success;
-    }
+        }
 
-    public bool Get(ulong key, out double[]? vector)
-    {
-        vector = new double[_metaData.dimensions];
-        bool success = usearch_get(_index, key, vector, usearch_scalar_kind_t.usearch_scalar_f64_k, out nint error);
-        HandleError(error);
-        if (!success)
-            vector = null;
         return success;
     }
 
@@ -208,7 +189,7 @@ public class USearchIndex : IDisposable
         try
         {
             IntPtr queryVectorPtr = handle.AddrOfPinnedObject();
-            matches = usearch_search(_index, queryVectorPtr, scalarKind, (nuint)resultsLimit, keys, distances, out nint error);
+            matches = (ulong)usearch_search(this._index, queryVectorPtr, scalarKind, (UIntPtr)resultsLimit, keys, distances, out IntPtr error);
             HandleError(error);
         }
         finally
@@ -217,35 +198,33 @@ public class USearchIndex : IDisposable
         }
         foundKeyDistances = new Dictionary<ulong, float>();
         for (ulong i = 0; i < matches; i++)
+        {
             foundKeyDistances.Add(keys[i], distances[i]);
-        return matches;
-    }
+        }
 
-    public ulong Search(Half[] queryVector, ulong resultsLimit, out Dictionary<ulong, float> foundKeyDistances)
-    {
-        return Search(queryVector, resultsLimit, out foundKeyDistances, usearch_scalar_kind_t.usearch_scalar_f16_k);
+        return matches;
     }
 
     public ulong Search(float[] queryVector, ulong resultsLimit, out Dictionary<ulong, float> foundKeyDistances)
     {
-        return Search(queryVector, resultsLimit, out foundKeyDistances, usearch_scalar_kind_t.usearch_scalar_f32_k);
+        return this.Search(queryVector, resultsLimit, out foundKeyDistances, usearch_scalar_kind_t.usearch_scalar_f32_k);
     }
 
     public ulong Search(double[] queryVector, ulong resultsLimit, out Dictionary<ulong, float> foundKeyDistances)
     {
-        return Search(queryVector, resultsLimit, out foundKeyDistances, usearch_scalar_kind_t.usearch_scalar_f64_k);
+        return this.Search(queryVector, resultsLimit, out foundKeyDistances, usearch_scalar_kind_t.usearch_scalar_f64_k);
     }
 
     public bool Remove(ulong key)
     {
-        bool success = usearch_remove(_index, key, out nint error);
+        bool success = usearch_remove(this._index, key, out IntPtr error);
         HandleError(error);
         return success;
     }
 
-    private static void HandleError(nint error)
+    private static void HandleError(IntPtr error)
     {
-        if (error != 0)
+        if (error != IntPtr.Zero)
         {
             Console.WriteLine($"Error {error}");
             throw new USearchException($"USearch operation failed: {Marshal.PtrToStringAnsi(error)}");
@@ -254,30 +233,30 @@ public class USearchIndex : IDisposable
 
     private void FreeIndex()
     {
-        if (_index == 0)
-            return;
-
-        usearch_free(_index, out nint error);
-        HandleError(error);
-        _index = 0;
+        if (this._index != IntPtr.Zero)
+        {
+            usearch_free(this._index, out IntPtr error);
+            HandleError(error);
+            this._index = IntPtr.Zero;
+        }
     }
 
     public void Dispose()
     {
-        Dispose(true);
+        this.Dispose(true);
         GC.SuppressFinalize(this);
     }
 
     protected virtual void Dispose(bool disposing)
     {
-        if (!_disposedValue)
+        if (!this._disposedValue)
         {
-            FreeIndex();
-            _disposedValue = true;
+            this.FreeIndex();
+            this._disposedValue = true;
         }
     }
 
-    ~USearchIndex() => Dispose(false);
+    ~USearchIndex() => this.Dispose(false);
 
     public class USearchException : Exception { public USearchException(string message) : base(message) { } }
 }

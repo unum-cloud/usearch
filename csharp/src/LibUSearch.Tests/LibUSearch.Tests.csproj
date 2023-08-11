@@ -3,9 +3,9 @@
   <PropertyGroup>
     <TargetFramework>net7.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-
     <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+    
 
   </PropertyGroup>
 
@@ -22,8 +22,9 @@
     </PackageReference>
   </ItemGroup>
 
+
   <ItemGroup>
-    <ProjectReference Include="..\LibUSearch\LibUSearch.csproj"/>
+    <ProjectReference Include="..\LibUSearch\LibUSearch.csproj" />
   </ItemGroup>
 
 
