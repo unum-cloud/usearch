@@ -1,89 +1,49 @@
-# This workflow will build USearch libraries, then build and test C# USearch wrapper
+# This workflow builds USearch native libraries, then build and test C# USearch wrapper
+# Currently for development purposes an if condition specified below to work only fork 
 
-name: Test C# wrapper (Manual Workflow)
+name: Test C# wrapper
 
-# Manual startup for development
 on:
-  workflow_run:
+  push:
+    branches: ["160-feature-c-bindings-and-semantic-kernel-integration"]
+
+env:
+  LINUX_OSX_SCRIPT: build_and_test.sh
+  WINDOWS_SCRIPT: build_and_test.cmd
 
 jobs:
-  linux:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: "gitactions_dev"
-      - run: git submodule update --init --recursive
-      - name: Build .so library for C#
-        run: |
-          make -C ./c libusearch_c.so
-          mkdir --parents ./csharp/src/LibUSearch.Tests/runtimes/linux-x64/native/; mv ./c/libusearch_c.so $_
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: 6.0.x
-      - name: Restore dependencies
-        run: |
-          cd ./csharp && ls  
-          dotnet restore
-      - name: Build
-        run: cd ./csharp && dotnet build --no-restore
-      - name: Test
-        run: cd ./csharp && dotnet test --no-build --verbosity normal
+  matrix-test:
+      if: github.repository == 'AleksandrKent/usearch'
+      runs-on: ${{ matrix.os }}  
+      strategy:
+        fail-fast: false
+        matrix:
+          os: [ubuntu-latest, windows-latest, macos-latest]
+      steps:
+        - uses: actions/checkout@v3
+          with:
+            ref: "160-feature-c-bindings-and-semantic-kernel-integration"
+        - run: |
+            git submodule update --init --recursive
+          shell: bash
 
-  windows:
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: "gitactions_dev"
-      - run: git submodule update --init --recursive
-      - name: Build .dll library for C#
-        run: |
-          make -C ./c libusearch_c.dll
-          mkdir --parents ./csharp/src/LibUSearch.Tests/runtimes/win-x64/native/; mv ./c/libusearch_c.dll $_
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: 6.0.x
-      - name: Restore dependencies
-        run: |
-          cd ./csharp && ls  
-          dotnet restore
-      - name: Build
-        run: cd ./csharp && dotnet build --no-restore
-      - name: Test
-        run: cd ./csharp && dotnet test --no-build --verbosity normal
+        - name: Setup .NET
+          uses: actions/setup-dotnet@v3
+          with:
+            dotnet-version: 6.0.x
 
-  macos:
-    runs-on: macos-latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: "gitactions_dev"
-      - run: git submodule update --init --recursive
-      - name: Build .dll library for C#
-        run: |
-          make -C ./c libusearch_c.dylib
-          mkdir -p ./csharp/src/LibUSearch.Tests/runtimes/osx-x64/native/; mv ./c/libusearch_c.dylib $_
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: 6.0.x
-      - name: Restore dependencies
-        run: |
-          cd ./csharp && ls  
-          dotnet restore
-      - name: Build
-        run: cd ./csharp && dotnet build --no-restore
-      - name: Test
-        run: cd ./csharp && dotnet test --no-build --verbosity normal
+        # Ubuntu and macOS steps
+        - name: Run ${{ env.LINUX_OSX_SCRIPT }} on Ubuntu or macOS
+          if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+          run: |
+            cd ./csharp
+            "./${{ env.LINUX_OSX_SCRIPT }}"
+          shell: bash
+        
+        # Windows step
+        - name: Run ${{ env.WINDOWS_SCRIPT }} on Windows
+          if: matrix.os == 'windows-latest'
+          run: |
+            cd .\csharp
+            ${{ env.WINDOWS_SCRIPT }}
+          shell: cmd

@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    
   </PropertyGroup>
 
   <!-- Explicitly clear output folders to avoid issues with out-of-date files like dlls-->

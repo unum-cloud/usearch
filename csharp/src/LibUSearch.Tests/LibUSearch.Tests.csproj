@@ -22,17 +22,16 @@
     </PackageReference>
   </ItemGroup>
 
-
   <ItemGroup>
     <ProjectReference Include="..\LibUSearch\LibUSearch.csproj" />
   </ItemGroup>
 
-
   <ItemGroup>
-    <Content Include="runtimes\**">
+    <None Include="runtimes\*.*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>%(RecursiveDir)%(Filename)%(Extension)</Link>
       <Pack>false</Pack>
-  </Content>
+    </None>
   </ItemGroup>
 
   <!-- Explicitly clear output folders to avoid issues with out-of-date files like dlls-->
