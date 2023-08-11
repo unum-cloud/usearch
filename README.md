@@ -319,10 +319,10 @@ matches = index.search(fingerprints, 10)
 
 ## Integrations
 
-- [x] GPT-Cache.
-- [x] LangChain.
-- [ ] ClickHouse.
-- [ ] Microsoft Semantic Kernel.
+- [x] GPTCache: [Python](https://github.com/zilliztech/GPTCache/releases/tag/0.1.29).
+- [x] LangChain: [Python](https://github.com/langchain-ai/langchain/releases/tag/v0.0.257) and [JavaScipt](https://github.com/hwchase17/langchainjs/releases/tag/0.0.125).
+- [ ] Microsoft Semantic Kernel: [Python](https://github.com/microsoft/semantic-kernel/pull/2358) and C#.
+- [ ] ClickHouse: C++.
 
 ## Citations
 
@@ -332,8 +332,8 @@ doi = {10.5281/zenodo.7949416},
 author = {Vardanian, Ash},
 title = {{USearch by Unum Cloud}},
 url = {https://github.com/unum-cloud/usearch},
-version = {0.13.0},
-year = {2022}
+version = {1.0.0},
+year = {2022},
 month = jun,
 }
 ```
