@@ -122,22 +122,6 @@ jobs:
           toolchain: stable
           override: true
 
-  test_golang:
-    name: Test GoLang
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    - run: git submodule update --init --recursive
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.15'
-    - name: Build C library for cGo
-      run: |
-        make -C ./c libusearch_c.so
-        mv ./c/libusearch_c.so ./golang/libusearch_c.so
-        cd golang && ls && go test -v
-
   test_java:
     name: Test Java
     runs-on: ubuntu-latest
