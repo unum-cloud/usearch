@@ -6,8 +6,17 @@ from __future__ import annotations
 # into the primary `Index` class, connecting USearch with Numba.
 import os
 import math
-from typing import Optional, Union, NamedTuple, List, Iterable
 from dataclasses import dataclass
+from typing import (
+    Optional,
+    Union,
+    NamedTuple,
+    List,
+    Iterable,
+    Tuple,
+    Dict,
+    Callable,
+)
 
 import numpy as np
 from tqdm import tqdm
@@ -34,7 +43,24 @@ MetricKindBitwise = (
     MetricKind.Sorensen,
 )
 
+
+class CompiledMetric(NamedTuple):
+    pointer: int
+    kind: MetricKind
+    signature: MetricSignature
+
+
+os.PathLike
+
 Key = np.uint64
+
+KeyOrKeysLike = Union[Key, Iterable[Key], int, Iterable[int], np.ndarray, memoryview]
+
+VectorOrVectorsLike = Union[np.ndarray, Iterable[np.ndarray], memoryview]
+
+DTypeLike = Union[str, ScalarKind]
+
+MetricLike = Union[str, MetricKind, CompiledMetric]
 
 
 def _normalize_dtype(dtype, metric: MetricKind = MetricKind.Cos) -> ScalarKind:
@@ -86,7 +112,7 @@ def _to_numpy_dtype(dtype: ScalarKind):
     return _normalize[dtype]
 
 
-def _normalize_metric(metric):
+def _normalize_metric(metric) -> MetricKind:
     if metric is None:
         return MetricKind.Cos
 
@@ -111,14 +137,12 @@ def _normalize_metric(metric):
 
 
 def _search_in_compiled(
-    *,
-    compiled: Union[_CompiledIndex, _CompiledIndexes],
+    compiled_callable: Callable,
     vectors: np.ndarray,
-    k: int,
-    threads: int,
-    exact: bool,
+    *,
     log: Union[str, bool],
     batch_size: int,
+    **kwargs,
 ) -> Union[Matches, BatchMatches]:
     #
     assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
@@ -150,26 +174,15 @@ def _search_in_compiled(
             disable=log is False,
         )
         for vectors in tasks:
-            tuple_ = compiled.search(
-                vectors,
-                k,
-                exact=exact,
-                threads=threads,
-            )
+            tuple_ = compiled_callable(vectors, **kwargs)
             tasks_matches.append(BatchMatches(*tuple_))
             pbar.update(vectors.shape[0])
 
         pbar.close()
         return distil_batch(
             BatchMatches(
-                # Keys array can be 1 or 2 dimensional
-                keys=np.vstack([m.keys for m in tasks_matches])
-                if tasks_matches[0].keys.ndim == 2
-                else np.concatenate([m.keys for m in tasks_matches], axis=None),
-                # Distances array can be 1 or 2 dimensional
-                distances=np.vstack([m.distances for m in tasks_matches])
-                if tasks_matches[0].distances.ndim == 2
-                else np.concatenate([m.distances for m in tasks_matches], axis=None),
+                keys=np.vstack([m.keys for m in tasks_matches]),
+                distances=np.vstack([m.distances for m in tasks_matches]),
                 counts=np.concatenate([m.counts for m in tasks_matches], axis=None),
                 visited_members=sum([m.visited_members for m in tasks_matches]),
                 computed_distances=sum([m.computed_distances for m in tasks_matches]),
@@ -177,18 +190,13 @@ def _search_in_compiled(
         )
 
     else:
-        tuple_ = compiled.search(
-            vectors,
-            k,
-            exact=exact,
-            threads=threads,
-        )
+        tuple_ = compiled_callable(vectors, **kwargs)
         return distil_batch(BatchMatches(*tuple_))
 
 
 def _add_to_compiled(
-    *,
     compiled,
+    *,
     keys,
     vectors,
     copy: bool,
@@ -239,13 +247,13 @@ def _add_to_compiled(
             disable=log is False,
         )
         for keys, vectors in tasks:
-            compiled.add(keys, vectors, copy=copy, threads=threads)
+            compiled.add_many(keys, vectors, copy=copy, threads=threads)
             pbar.update(len(keys))
 
         pbar.close()
 
     else:
-        compiled.add(keys, vectors, copy=copy, threads=threads)
+        compiled.add_many(keys, vectors, copy=copy, threads=threads)
 
     return keys
 
@@ -323,56 +331,82 @@ class BatchMatches:
         list_of_matches = [self.__getitem__(row) for row in range(self.__len__())]
         return [match.to_list() for matches in list_of_matches for match in matches]
 
-    def mean_recall(self, expected: np.ndarray, k: Optional[int] = None) -> float:
+    def mean_recall(self, expected: np.ndarray, count: Optional[int] = None) -> float:
         """Measures recall [0, 1] as of `Matches` that contain the corresponding
         `expected` entry anywhere among results."""
-        return self.count_matches(expected, k=k) / len(expected)
+        return self.count_matches(expected, count=count) / len(expected)
 
-    def count_matches(self, expected: np.ndarray, k: Optional[int] = None) -> int:
+    def count_matches(self, expected: np.ndarray, count: Optional[int] = None) -> int:
         """Measures recall [0, len(expected)] as of `Matches` that contain the corresponding
         `expected` entry anywhere among results.
         """
         assert len(expected) == len(self)
         recall = 0
-        if k is None:
-            k = self.keys.shape[1]
+        if count is None:
+            count = self.keys.shape[1]
 
-        if k == 1:
+        if count == 1:
             recall = np.sum(self.keys[:, 0] == expected)
         else:
             for i in range(len(self)):
-                recall += expected[i] in self.keys[i, :k]
+                recall += expected[i] in self.keys[i, :count]
         return recall
 
     def __repr__(self) -> str:
         return f"usearch.BatchMatches({np.sum(self.counts)} across {len(self)} queries)"
 
 
-class CompiledMetric(NamedTuple):
-    pointer: int
-    kind: MetricKind
-    signature: MetricSignature
+class IndexedKeys:
+    """Smart-reference for the range of keys present in a specific `Index`"""
+
+    def __init__(self, index: Index) -> None:
+        self.index = index
+
+    def __len__(self) -> int:
+        return len(self.index)
+
+    def __getitem__(
+        self,
+        offset_offsets_or_slice: Union[int, np.ndarray, slice],
+    ) -> Union[Key, np.ndarray]:
+        if isinstance(offset_offsets_or_slice, slice):
+            start, stop, step = offset_offsets_or_slice.indices(len(self))
+            if step:
+                raise
+            return self.index._compiled.get_keys_in_slice(start, stop - start)
+
+        elif isinstance(offset_offsets_or_slice, Iterable):
+            offsets = np.array(offset_offsets_or_slice)
+            return self.index._compiled.get_keys_at_offsets(offsets)
+
+        else:
+            offset = int(offset_offsets_or_slice)
+            return self.index._compiled.get_key_at_offset(offset)
+
+    def __array__(self, dtype=None) -> np.ndarray:
+        return self.index._compiled.get_keys_in_slice().astype(dtype)
 
 
 class Index:
-    """Fast JIT-compiled vector-search index for dense equi-dimensional embeddings.
+    """Fast vector-search engine for dense equi-dimensional embeddings.
 
     Vector keys must be integers.
     Vectors must have the same number of dimensions within the index.
-    Supports Inner Product, Cosine Distance, Ln measures
-    like the Euclidean metric, as well as automatic downcasting
-    and quantization.
+    Supports Inner Product, Cosine Distance, L^n measures like the Euclidean metric,
+    as well as automatic downcasting to low-precision floating-point and integral
+    representations.
     """
 
     def __init__(
         self,
         *,
         ndim: int = 0,
-        metric: Union[str, MetricKind, CompiledMetric] = MetricKind.Cos,
-        dtype: Optional[Union[str, ScalarKind]] = None,
+        metric: MetricLike = MetricKind.Cos,
+        dtype: Optional[DTypeLike] = None,
         connectivity: Optional[int] = None,
         expansion_add: Optional[int] = None,
         expansion_search: Optional[int] = None,
+        multi: bool = True,
         path: Optional[os.PathLike] = None,
         view: bool = False,
     ) -> None:
@@ -385,41 +419,43 @@ class Index:
             coordinates. Angular (Cos) and Euclidean (L2sq), obviously, apply to
             vectors with arbitrary number of dimensions.
 
-        :param metric: Distance function, defaults to MetricKind.Cos
-        :type metric: Union[MetricKind, Callable, str], optional
+        :param metric: Distance function
+        :type metric: MetricLike, defaults to MetricKind.Cos
             Kind of the distance function, or the Numba `cfunc` JIT-compiled object.
             Possible `MetricKind` values: IP, Cos, L2sq, Haversine, Pearson,
             Hamming, Tanimoto, Sorensen.
 
-        :param dtype: Scalar type for internal vector storage, defaults to None
-        :type dtype: Optional[Union[str, ScalarKind]], optional
+        :param dtype: Scalar type for internal vector storage
+        :type dtype: Optional[DTypeLike], defaults to None
             For continuous metrics can be: f16, f32, f64, or i8.
             For bitwise metrics it's implementation-defined, and can't change.
             Example: you can use the `f16` index with `f32` vectors in Euclidean space,
             which will be automatically downcasted.
 
-        :param connectivity: Connections per node in HNSW, defaults to None
-        :type connectivity: Optional[int], optional
+        :param connectivity: Connections per node in HNSW
+        :type connectivity: Optional[int], defaults to None
             Hyper-parameter for the number of Graph connections
             per layer of HNSW. The original paper calls it "M".
             Optional, but can't be changed after construction.
 
-        :param expansion_add: Traversal depth on insertions, defaults to None
-        :type expansion_add: Optional[int], optional
+        :param expansion_add: Traversal depth on insertions
+        :type expansion_add: Optional[int], defaults to None
             Hyper-parameter for the search depth when inserting new
             vectors. The original paper calls it "efConstruction".
             Can be changed afterwards, as the `.expansion_add`.
 
-        :param expansion_search: Traversal depth on queries, defaults to None
-        :type expansion_search: Optional[int], optional
+        :param expansion_search: Traversal depth on queries
+        :type expansion_search: Optional[int], defaults to None
             Hyper-parameter for the search depth when querying
             nearest neighbors. The original paper calls it "ef".
             Can be changed afterwards, as the `.expansion_search`.
 
-        :param path: Where to store the index, defaults to None
-        :type path: Optional[os.PathLike], optional
-        :param view: Are we simply viewing an immutable index, defaults to False
-        :type view: bool, optional
+        :param multi: Allow multiple vectors with the same key
+        :type multi: bool, defaults to True
+        :param path: Where to store the index
+        :type path: Optional[os.PathLike], defaults to None
+        :param view: Are we simply viewing an immutable index
+        :type view: bool, defaults to False
         """
 
         if connectivity is None:
@@ -457,6 +493,7 @@ class Index:
             connectivity=connectivity,
             expansion_add=expansion_add,
             expansion_search=expansion_search,
+            multi=multi,
             metric_kind=self._metric_kind,
             metric_pointer=self._metric_pointer,
             metric_signature=self._metric_signature,
@@ -494,10 +531,13 @@ class Index:
             view=view,
         )
 
+    def __len__(self) -> int:
+        return self._compiled.__len__()
+
     def add(
         self,
-        keys,
-        vectors,
+        keys: KeyOrKeysLike,
+        vectors: VectorOrVectorsLike,
         *,
         copy: bool = True,
         threads: int = 0,
@@ -518,23 +558,23 @@ class Index:
         pass `copy=False`, if you can guarantee the lifetime of the
         primary vectors store during the process of construction.
 
-        :param keys: Unique identifier(s) for passed vectors, optional
-        :type keys: np.ndarray
+        :param keys: Unique identifier(s) for passed vectors
+        :type keys: Optional[KeyOrKeysLike], can be `None`
         :param vectors: Vector or a row-major matrix
-        :type vectors: np.ndarray
-        :param copy: Should the index store a copy of vectors, defaults to True
-        :type copy: bool, optional
-        :param threads: Optimal number of cores to use, defaults to 0
-        :type threads: int, optional
-        :param log: Whether to print the progress bar, default to False
-        :type log: Union[str, bool], optional
-        :param batch_size: Number of vectors to process at once, defaults to 0
-        :type batch_size: int, optional
+        :type vectors: VectorOrVectorsLike
+        :param copy: Should the index store a copy of vectors
+        :type copy: bool, defaults to True
+        :param threads: Optimal number of cores to use
+        :type threads: int, defaults to 0
+        :param log: Whether to print the progress bar
+        :type log: Union[str, bool], defaults to False
+        :param batch_size: Number of vectors to process at once
+        :type batch_size: int, defaults to 0
         :return: Inserted key or keys
         :type: Union[int, np.ndarray]
         """
         return _add_to_compiled(
-            compiled=self._compiled,
+            self._compiled,
             keys=keys,
             vectors=vectors,
             copy=copy,
@@ -545,8 +585,9 @@ class Index:
 
     def search(
         self,
-        vectors,
-        k: int = 10,
+        vectors: VectorOrVectorsLike,
+        count: int = 10,
+        radius: float = math.inf,
         *,
         threads: int = 0,
         exact: bool = False,
@@ -557,81 +598,110 @@ class Index:
         Performs approximate nearest neighbors search for one or more queries.
 
         :param vectors: Query vector or vectors.
-        :type vectors: np.ndarray
-        :param k: Upper limit on the number of matches to find, defaults to 10
-        :type k: int, optional
-        :param threads: Optimal number of cores to use, defaults to 0
-        :type threads: int, optional
-        :param exact: Perform exhaustive linear-time exact search, defaults to False
-        :type exact: bool, optional
+        :type vectors: VectorOrVectorsLike
+        :param count: Upper count on the number of matches to find
+        :type count: int, defaults to 10
+        :param threads: Optimal number of cores to use
+        :type threads: int, defaults to 0
+        :param exact: Perform exhaustive linear-time exact search
+        :type exact: bool, defaults to False
         :param log: Whether to print the progress bar, default to False
         :type log: Union[str, bool], optional
-        :param batch_size: Number of vectors to process at once, defaults to 0
-        :type batch_size: int, optional
+        :param batch_size: Number of vectors to process at once
+        :type batch_size: int, defaults to 0
         :return: Matches for one or more queries
         :rtype: Union[Matches, BatchMatches]
         """
 
         return _search_in_compiled(
-            compiled=self._compiled,
-            vectors=vectors,
-            k=k,
+            self._compiled.search_many,
+            vectors,
+            # Batch scheduling:
+            log=log,
+            batch_size=batch_size,
+            # Search constraints:
+            count=count,
             exact=exact,
             threads=threads,
-            log=log,
-            batch_size=batch_size,
         )
 
-    def cluster(
+    def contains(self, keys: KeyOrKeysLike) -> Union[bool, np.ndarray]:
+        if isinstance(keys, Iterable):
+            return self._compiled.contains_many(np.array(keys, dtype=Key))
+        else:
+            return self._compiled.contains_one(int(keys))
+
+    def __contains__(self, keys: KeyOrKeysLike) -> Union[bool, np.ndarray]:
+        return self.contains(keys)
+
+    def count(self, keys: KeyOrKeysLike) -> Union[int, np.ndarray]:
+        if isinstance(keys, Iterable):
+            return self._compiled.count_many(np.array(keys, dtype=Key))
+        else:
+            return self._compiled.count_one(int(keys))
+
+    def get(
         self,
-        vectors,
-        level: int = 1,
-        *,
-        threads: int = 0,
-        log: Union[str, bool] = False,
-        batch_size: int = 0,
-    ) -> Union[Matches, BatchMatches]:
+        keys: KeyOrKeysLike,
+        dtype: Optional[DTypeLike] = None,
+    ) -> Union[Optional[np.ndarray], Tuple[Optional[np.ndarray]]]:
+        """Looks up one or more keys from the `Index`, retrieving corresponding vectors.
+
+        Returns `None`, if one key is requested, and its not present.
+        Returns a (row) vector, if the key maps into a single vector.
+        Returns a (row-major) matrix, if the key maps into a multiple vectors.
+        If multiple keys are requested, composes many such responses into a `tuple`.
+
+        :param keys: One or more keys to lookup
+        :type keys: KeyOrKeysLike
+        :return: One or more keys lookup results
+        :rtype: Union[Optional[np.ndarray], Tuple[Optional[np.ndarray]]]
         """
-        Performs approximate nearest neighbors search for one or more queries.
+        if not dtype:
+            dtype = self.dtype
 
-        :param vectors: Query vector or vectors.
-        :type vectors: np.ndarray
-        :param level: Graph level to target - higher means coarse, defaults to 1
-        :type level: int, optional
-        :param threads: Optimal number of cores to use, defaults to 0
-        :type threads: int, optional
-        :param log: Whether to print the progress bar, default to False
-        :type log: Union[str, bool], optional
-        :param batch_size: Number of vectors to process at once, defaults to 0
-        :type batch_size: int, optional
-        :return: Matches for one or more queries
-        :rtype: Union[Matches, BatchMatches]
+        get_dtype = _to_numpy_compatible_dtype(dtype)
+        view_dtype = _to_numpy_dtype(dtype)
+
+        def cast(result):
+            if result is not None:
+                return result.view(view_dtype)
+            return result
+
+        is_one = not isinstance(keys, Iterable)
+        if is_one:
+            keys = [keys]
+        if not isinstance(keys, np.ndarray):
+            keys = np.array(keys, dtype=Key)
+
+        results = self._compiled.get_many(keys, get_dtype)
+        results = [cast(result) for result in results]
+        return results[0] if is_one else results
+
+    def __getitem__(
+        self, keys: KeyOrKeysLike
+    ) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+        """Looks up one or more keys from the `Index`, retrieving corresponding vectors.
+
+        Returns `None`, if one key is requested, and its not present.
+        Returns a (row) vector, if the key maps into a single vector.
+        Returns a (row-major) matrix, if the key maps into a multiple vectors.
+        If multiple keys are requested, composes many such responses into a `tuple`.
+
+        :param keys: One or more keys to lookup
+        :type keys: KeyOrKeysLike
+        :return: One or more keys lookup results
+        :rtype: Union[Optional[np.ndarray], Tuple[Optional[np.ndarray]]]
         """
-
-        compiled_clustering = self._compiled.cluster
-
-        class WrappedDataset:
-            def search(self, query, k, **kwargs):
-                kwargs.pop("exact")
-                return compiled_clustering(query, k, **kwargs)
-
-        return _search_in_compiled(
-            compiled=WrappedDataset(),
-            vectors=vectors,
-            k=level,
-            exact=False,
-            threads=threads,
-            log=log,
-            batch_size=batch_size,
-        )
+        return self.get(keys)
 
     def remove(
         self,
-        keys: Union[int, Iterable[int]],
+        keys: KeyOrKeysLike,
         *,
         compact: bool = False,
         threads: int = 0,
-    ) -> Union[bool, int]:
+    ) -> Union[int, np.ndarray]:
         """Removes one or move vectors from the index.
 
         When working with extremely large indexes, you may want to
@@ -639,59 +709,70 @@ class Index:
         In other cases, rebuilding - is the recommended approach.
 
         :param keys: Unique identifier for passed vectors, optional
-        :type keys: np.ndarray
+        :type keys: KeyOrKeysLike
         :param compact: Removes links to removed nodes (expensive), defaults to False
         :type compact: bool, optional
         :param threads: Optimal number of cores to use, defaults to 0
         :type threads: int, optional
-        :return: Number of removed entries
-        :type: Union[bool, int]
+        :return: Array of integers for the number of removed vectors per key
+        :type: Union[int, np.ndarray]
         """
-        return self._compiled.remove(keys, compact=compact, threads=threads)
+        if not isinstance(keys, Iterable):
+            return self._compiled.remove_one(keys, compact=compact, threads=threads)
+        else:
+            keys = np.array(keys, dtype=Key)
+            return self._compiled.remove_many(keys, compact=compact, threads=threads)
 
-    def rename(self, label_from: int, label_to: int) -> bool:
-        """Relabel existing entry"""
-        return self._compiled.rename(label_from, label_to)
+    def __delitem__(self, keys: KeyOrKeysLike) -> Union[int, np.ndarray]:
+        raise self.remove(keys)
 
-    @property
-    def specs(self) -> dict:
-        return {
-            "Class": "usearch.Index",
-            "Connectivity": self.connectivity,
-            "Size": self.size,
-            "Dimensions": self.ndim,
-            "Expansion@Add": self.expansion_add,
-            "Expansion@Search": self.expansion_search,
-            "OpenMP": USES_OPENMP,
-            "SimSIMD": USES_SIMSIMD,
-            "NativeF16": USES_NATIVE_F16,
-            "JIT": self.jit,
-            "DType": self.dtype,
-            "Path": self.path,
-        }
+    def rename(
+        self,
+        from_: KeyOrKeysLike,
+        to: KeyOrKeysLike,
+    ) -> Union[int, np.ndarray]:
+        """Rename existing member vector or vectors.
 
-    def __len__(self) -> int:
-        return self._compiled.__len__()
+        May be used in iterative clustering procedures, where one would iteratively
+        relabel every vector with the name of the cluster an entry belongs to, until
+        the system converges.
 
-    def __delitem__(self, key: int) -> bool:
-        raise self.remove(key)
+        :param from_: One or more keys to be renamed
+        :type from_: KeyOrKeysLike
+        :param to: New name or names (of identical length as `from_`)
+        :type to: KeyOrKeysLike
+        :return: Number of vectors that were found and renamed
+        :rtype: int
+        """
+        if isinstance(from_, Iterable):
+            from_ = np.array(from_, dtype=Key)
+            if isinstance(to, Iterable):
+                to = np.array(to, dtype=Key)
+                return self._compiled.rename_many_to_many(from_, to)
 
-    def __contains__(self, key: int) -> bool:
-        return self._compiled.__contains__(key)
+            else:
+                return self._compiled.rename_many_to_one(from_, int(to))
 
-    def __getitem__(self, key: int) -> np.ndarray:
-        dtype = self.dtype
-        get_dtype = _to_numpy_compatible_dtype(dtype)
-        vector = self._compiled.__getitem__(key, get_dtype)
-        view_dtype = _to_numpy_dtype(dtype)
-        return None if vector is None else vector.view(view_dtype)
+        else:
+            return self._compiled.rename_one_to_one(int(from_), int(to))
 
     @property
     def jit(self) -> bool:
+        """
+        :return: True, if the provided `metric` was JIT-ed
+        :rtype: bool
+        """
         return self._metric_jit is not None
 
     @property
     def hardware_acceleration(self) -> str:
+        """Describes the kind of hardware-acceleration support used in
+        that exact instance of the `Index`, for that metric kind, and
+        the given number of dimensions.
+
+        :return: "auto", if nothing is available, ISA subset name otherwise
+        :rtype: str
+        """
         return self._compiled.hardware_acceleration
 
     @property
@@ -707,7 +788,7 @@ class Index:
         return self._metric_jit if self._metric_jit else self._metric_kind
 
     @metric.setter
-    def metric(self, metric: Union[str, MetricKind, CompiledMetric]):
+    def metric(self, metric: MetricLike):
         metric = _normalize_metric(metric)
         if isinstance(metric, MetricKind):
             metric_kind = metric
@@ -786,6 +867,9 @@ class Index:
         """Erases all members from index, closing files, and returning RAM to OS."""
         self._compiled.reset()
 
+    def __del__(self):
+        self.reset()
+
     def copy(self) -> Index:
         result = Index(
             ndim=self.ndim,
@@ -799,7 +883,12 @@ class Index:
         result._compiled = self._compiled.copy()
         return result
 
-    def join(self, other: Index, max_proposals: int = 0, exact: bool = False) -> dict:
+    def join(
+        self,
+        other: Index,
+        max_proposals: int = 0,
+        exact: bool = False,
+    ) -> Dict[Key, Key]:
         """Performs "Semantic Join" or pairwise matching between `self` & `other` index.
         Is different from `search`, as no collisions are allowed in resulting pairs.
         Uses the concept of "Stable Marriages" from Combinatorics, famous for the 2012
@@ -812,7 +901,7 @@ class Index:
         :param exact: Controls if underlying `search` should be exact, defaults to False
         :type exact: bool, optional
         :return: Mapping from keys of `self` to keys of `other`
-        :rtype: dict
+        :rtype: Dict[Key, Key]
         """
         return self._compiled.join(
             other=other._compiled,
@@ -820,39 +909,56 @@ class Index:
             exact=exact,
         )
 
-    def get_keys(self, offset: int = 0, limit: int = 0) -> np.ndarray:
-        if limit == 0:
-            limit = 2**63 - 1
-        return self._compiled.get_keys(offset, limit)
+    def cluster(
+        self,
+        vectors: np.ndarray,
+        *,
+        count: Optional[int] = None,
+        level: Optional[int] = None,
+        threads: int = 0,
+        log: Union[str, bool] = False,
+        batch_size: int = 0,
+    ) -> Union[Matches, BatchMatches]:
+        """
+        Performs approximate nearest neighbors search for one or more queries.
+
+        :param vectors: Query vector or vectors.
+        :type vectors: VectorOrVectorsLike
+        :param count: Number of clusters to produce, can be inferred from `level`
+        :type count: Optional[int], defaults to None
+        :param level: Graph level to target - higher means coarse, can be inferred from `count`
+        :type level: Optional[int], defaults to None
+
+        :param threads: Optimal number of cores to use,
+        :type threads: int, defaults to 0
+        :param log: Whether to print the progress bar
+        :type log: Union[str, bool], defaults to False
+        :param batch_size: Number of vectors to process at once, defaults to 0
+        :type batch_size: int, defaults to 0
+        :return: Matches for one or more queries
+        :rtype: Union[Matches, BatchMatches]
+        """
+        if level is None and count is None:
+            level = 1
+
+        return _search_in_compiled(
+            self._compiled.cluster_many,
+            vectors,
+            # Batch scheduling:
+            log=log,
+            batch_size=batch_size,
+            # Search constraints:
+            level=level,
+            threads=threads,
+        )
 
     @property
-    def keys(self) -> np.ndarray:
-        """Retrieves the keys of all vectors present in `self`
-
-        :return: Array of keys
-        :rtype: np.ndarray
-        """
-        return self._compiled.keys
-
-    def get_vectors(
-        self,
-        keys: np.ndarray,
-        dtype: ScalarKind = ScalarKind.F32,
-    ) -> np.ndarray:
-        """Retrieves vectors associated with given `keys`
-
-        :return: Matrix of vectors (row-major)
-        :rtype: np.ndarray
-        """
-        dtype = _normalize_dtype(dtype, self._metric_kind)
-        get_dtype = _to_numpy_compatible_dtype(dtype)
-        vectors = np.vstack([self._compiled.__getitem__(l, get_dtype) for l in keys])
-        view_dtype = _to_numpy_dtype(dtype)
-        return vectors.view(view_dtype)
+    def keys(self) -> IndexedKeys:
+        return IndexedKeys(self)
 
     @property
     def vectors(self) -> np.ndarray:
-        return self.get_vectors(self.keys, self.dtype)
+        return self.get(self.keys, vstack=True)
 
     @property
     def max_level(self) -> int:
@@ -887,8 +993,22 @@ class Index:
         """
         return self._compiled.level_stats(level)
 
-    def __del__(self):
-        self.reset()
+    @property
+    def specs(self) -> Dict[str, Union[str, int, bool]]:
+        return {
+            "Class": "usearch.Index",
+            "Connectivity": self.connectivity,
+            "Size": self.size,
+            "Dimensions": self.ndim,
+            "Expansion@Add": self.expansion_add,
+            "Expansion@Search": self.expansion_search,
+            "OpenMP": USES_OPENMP,
+            "SimSIMD": USES_SIMSIMD,
+            "NativeF16": USES_NATIVE_F16,
+            "JIT": self.jit,
+            "DType": self.dtype,
+            "Path": self.path,
+        }
 
     def __repr__(self) -> str:
         f = "usearch.Index({} x {}, {}, expansion: {} & {}, {} vectors in {} levels)"
@@ -941,11 +1061,14 @@ class Indexes:
     ) -> None:
         self._compiled = _CompiledIndexes()
         for index in indexes:
-            self._compiled.add(index._compiled)
-        self._compiled.add_paths(paths, view=view, threads=threads)
+            self._compiled.merge(index._compiled)
+        self._compiled.merge_paths(paths, view=view, threads=threads)
 
-    def add(self, index: Index):
-        self._compiled.add(index._compiled)
+    def merge(self, index: Index):
+        self._compiled.merge(index._compiled)
+
+    def merge_path(self, path: os.PathLike):
+        self._compiled.merge_path(os.fspath(path))
 
     def __len__(self) -> int:
         return self._compiled.__len__()
@@ -953,27 +1076,29 @@ class Indexes:
     def search(
         self,
         vectors,
-        k: int = 10,
+        count: int = 10,
         *,
         threads: int = 0,
         exact: bool = False,
     ):
         return _search_in_compiled(
-            compiled=self._compiled,
-            vectors=vectors,
-            k=k,
-            exact=exact,
-            threads=threads,
+            self._compiled.search_many,
+            vectors,
+            # Batch scheduling:
             log=False,
             batch_size=None,
+            # Search constraints:
+            count=count,
+            exact=exact,
+            threads=threads,
         )
 
 
 def search(
     dataset: np.ndarray,
     query: np.ndarray,
-    k: int = 10,
-    metric: Union[str, MetricKind, CompiledMetric] = MetricKind.Cos,
+    count: int = 10,
+    metric: MetricLike = MetricKind.Cos,
     *,
     exact: bool = False,
     threads: int = 0,
@@ -988,11 +1113,11 @@ def search(
     :param query: Query vector or vectors (also row-major), to find in `dataset`.
     :type query: np.ndarray
 
-    :param k: Upper limit on the number of matches to find, defaults to 10
-    :type k: int, optional
+    :param count: Upper count on the number of matches to find, defaults to 10
+    :type count: int, optional
 
-    :param metric: Distance function, defaults to MetricKind.Cos
-    :type metric: Union[MetricKind, Callable, str], optional
+    :param metric: Distance function
+    :type metric: MetricLike, defaults to MetricKind.Cos
         Kind of the distance function, or the Numba `cfunc` JIT-compiled object.
         Possible `MetricKind` values: IP, Cos, L2sq, Haversine, Pearson,
         Hamming, Tanimoto, Sorensen.
@@ -1026,7 +1151,7 @@ def search(
         )
         return index.search(
             query,
-            k,
+            count,
             threads=threads,
             log=log,
             batch_size=batch_size,
@@ -1044,28 +1169,27 @@ def search(
     else:
         raise ValueError("The `metric` must be a `CompiledMetric` or a `MetricKind`")
 
-    class WrappedDataset:
-        def search(self, query, k, **kwargs):
-            kwargs.pop("exact")
-            kwargs.update(
-                dict(
-                    metric_kind=metric_kind,
-                    metric_pointer=metric_pointer,
-                    metric_signature=metric_signature,
-                )
-            )
-            assert dataset.shape[1] == query.shape[1], "Number of dimensions differs"
-            if dataset.dtype != query.dtype:
-                query = query.astype(dataset.dtype)
+    def search_batch(query, **kwargs):
+        assert dataset.shape[1] == query.shape[1], "Number of dimensions differs"
+        if dataset.dtype != query.dtype:
+            query = query.astype(dataset.dtype)
 
-            return _exact_search(dataset, query, k, **kwargs)
+        return _exact_search(
+            dataset,
+            query,
+            metric_kind=metric_kind,
+            metric_pointer=metric_pointer,
+            metric_signature=metric_signature,
+            **kwargs,
+        )
 
     return _search_in_compiled(
-        compiled=WrappedDataset(),
-        vectors=query,
-        k=k,
-        threads=threads,
-        exact=True,
+        search_batch,
+        query,
+        # Batch scheduling:
         log=log,
         batch_size=batch_size,
+        # Search constraints:
+        count=count,
+        threads=threads,
     )

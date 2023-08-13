@@ -96,7 +96,7 @@ struct index_dense_config_t : public index_config_t {
     std::size_t expansion_add = default_expansion_add();
     std::size_t expansion_search = default_expansion_search();
     bool exclude_vectors = false;
-    bool allow_key_collisions = false;
+    bool ban_collisions = false;
 
     index_dense_config_t(index_config_t base) noexcept : index_config_t(base) {}
 
@@ -528,11 +528,11 @@ class index_dense_gt {
     cluster_result_t cluster(f32_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_f32); }
     cluster_result_t cluster(f64_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_f64); }
 
-    bool get(key_t key, b1x8_t* vector) const { return get_(key, vector, casts_.to_b1x8); }
-    bool get(key_t key, i8_bits_t* vector) const { return get_(key, vector, casts_.to_i8); }
-    bool get(key_t key, f16_t* vector) const { return get_(key, vector, casts_.to_f16); }
-    bool get(key_t key, f32_t* vector) const { return get_(key, vector, casts_.to_f32); }
-    bool get(key_t key, f64_t* vector) const { return get_(key, vector, casts_.to_f64); }
+    bool get(key_t key, b1x8_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_b1x8); }
+    bool get(key_t key, i8_bits_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_i8); }
+    bool get(key_t key, f16_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f16); }
+    bool get(key_t key, f32_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f32); }
+    bool get(key_t key, f64_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f64); }
     // clang-format on
 
     /**
@@ -1197,7 +1197,7 @@ class index_dense_gt {
         key_t key, scalar_at const* vector, //
         std::size_t thread, bool force_vector_copy, cast_t const& cast) {
 
-        if (!config_.allow_key_collisions && contains(key))
+        if (config_.ban_collisions && contains(key))
             return add_result_t{}.failed("Duplicate keys not allowed in high-level wrappers");
 
         // Cast the vector, if needed for compatibility with `metric_`
@@ -1319,22 +1319,40 @@ class index_dense_gt {
         }
     }
 
-    template <typename scalar_at> bool get_(key_t key, scalar_at* reconstructed, cast_t const& cast) const {
-        compressed_slot_t slot;
-        // Find the matching ID
-        {
+    template <typename scalar_at>
+    std::size_t get_(key_t key, scalar_at* reconstructed, std::size_t vectors_limit, cast_t const& cast) const {
+
+        if (config_.ban_collisions) {
+            compressed_slot_t slot;
+            // Find the matching ID
+            {
+                shared_lock_t lock(slot_lookup_mutex_);
+                auto it = slot_lookup_.find(key);
+                if (it == slot_lookup_.end())
+                    return false;
+                slot = (*it).slot;
+            }
+            // Export the entry
+            byte_t const* punned_vector = reinterpret_cast<byte_t const*>(vectors_lookup_[slot]);
+            bool casted = cast(punned_vector, dimensions(), (byte_t*)reconstructed);
+            if (!casted)
+                std::memcpy(reconstructed, punned_vector, metric_.bytes_per_vector());
+            return true;
+        } else {
             shared_lock_t lock(slot_lookup_mutex_);
-            auto it = slot_lookup_.find(key);
-            if (it == slot_lookup_.end())
-                return false;
-            slot = (*it).slot;
+            auto equal_range_pair = slot_lookup_.equal_range(key);
+            std::size_t count_exported = 0;
+            for (auto begin = equal_range_pair.first;
+                 begin != equal_range_pair.second && count_exported != vectors_limit; ++begin, ++count_exported) {
+                compressed_slot_t slot = (*begin).slot;
+                byte_t const* punned_vector = reinterpret_cast<byte_t const*>(vectors_lookup_[slot]);
+                byte_t* reconstructed_vector = (byte_t*)reconstructed + metric_.bytes_per_vector() * count_exported;
+                bool casted = cast(punned_vector, dimensions(), reconstructed_vector);
+                if (!casted)
+                    std::memcpy(reconstructed_vector, punned_vector, metric_.bytes_per_vector());
+            }
+            return count_exported;
         }
-        // Export the entry
-        byte_t const* punned_vector = reinterpret_cast<byte_t const*>(vectors_lookup_[slot]);
-        bool casted = cast(punned_vector, dimensions(), (byte_t*)reconstructed);
-        if (!casted)
-            std::memcpy(reconstructed, punned_vector, metric_.bytes_per_vector());
-        return true;
     }
 
     template <typename to_scalar_at> static casts_t make_casts_() {

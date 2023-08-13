@@ -122,6 +122,7 @@ def test_minimal_index(
         connectivity=connectivity,
         expansion_add=DEFAULT_EXPANSION_ADD,
         expansion_search=DEFAULT_EXPANSION_SEARCH,
+        multi=False,
     )
     assert index.ndim == ndim
     assert index.connectivity == connectivity
@@ -145,7 +146,7 @@ def test_minimal_index(
     assert 43 not in index, "Presence in the index, false positive"
     assert index[42] is not None, "Vector recovery"
     assert index[43] is None, "Vector recovery, false positive"
-    assert len(index[42]) == ndim
+    assert len(index[42].flatten()) == ndim
     if numpy_type != np.byte:
         assert np.allclose(index[42], vector, atol=0.1)
 
@@ -189,20 +190,20 @@ def test_minimal_index(
 
     index_copy = index.copy()
     assert len(index_copy) == 1
-    assert len(index_copy[42]) == ndim
+    assert len(index_copy[42].flatten()) == ndim
     matches_copy: Matches = index_copy.search(vector, 10)
     assert np.all(matches_copy.keys == matches.keys)
 
     index.load(temporary_usearch_filename)
     assert len(index) == 1
-    assert len(index[42]) == ndim
+    assert len(index[42].flatten()) == ndim
 
     matches_loaded: Matches = index.search(vector, 10)
     assert np.all(matches_loaded.keys == matches.keys)
 
     index = Index.restore(temporary_usearch_filename, view=True)
     assert len(index) == 1
-    assert len(index[42]) == ndim
+    assert len(index[42].flatten()) == ndim
 
     matches_viewed: Matches = index.search(vector, 10)
     assert np.all(matches_viewed.keys == matches.keys)
@@ -246,14 +247,21 @@ def test_index_batch(
     index_type: ScalarKind,
     numpy_type: str,
 ):
-    index = Index(ndim=ndim, metric=metric, dtype=index_type)
+    index = Index(
+        ndim=ndim,
+        metric=metric,
+        dtype=index_type,
+        multi=False,
+    )
 
     keys = np.arange(batch_size)
     vectors = random_vectors(count=batch_size, ndim=ndim, dtype=numpy_type)
 
     index.add(keys, vectors, threads=2)
     assert len(index) == batch_size
-    assert np.allclose(index.get_vectors(keys).astype(numpy_type), vectors, atol=0.1)
+
+    vectors_retrived = np.vstack(index.get(keys))
+    assert np.allclose(vectors_retrived.astype(numpy_type), vectors, atol=0.1)
 
     # Ban duplicates unless explicitly allowed
     with pytest.raises(Exception):
@@ -277,7 +285,7 @@ def test_index_batch(
 
     index.load(temporary_usearch_filename)
     assert len(index) == batch_size
-    assert len(index[0]) == ndim
+    assert len(index[0].flatten()) == ndim
 
     if batch_size > 1:
         matches_loaded: BatchMatches = index.search(vectors, 10, threads=2)
@@ -286,7 +294,7 @@ def test_index_batch(
 
     index = Index.restore(temporary_usearch_filename, view=True)
     assert len(index) == batch_size
-    assert len(index[0]) == ndim
+    assert len(index[0].flatten()) == ndim
 
     if batch_size > 1:
         matches_viewed: BatchMatches = index.search(vectors, 10, threads=2)
@@ -295,7 +303,7 @@ def test_index_batch(
 
     # Test clustering
     if batch_size > 1:
-        clusters: BatchMatches = index.cluster(vectors, 1, threads=2)
+        clusters: BatchMatches = index.cluster(vectors, threads=2)
         assert len(clusters.keys) == batch_size
 
     # Cleanup
@@ -380,7 +388,9 @@ def test_bitwise_index(
     bit_vectors = np.packbits(byte_vectors, axis=1)
 
     index.add(keys, bit_vectors)
-    assert np.all(index.get_vectors(keys, ScalarKind.B1) == bit_vectors)
+
+    byte_vectors_retrieved = np.vstack(index.get(keys, ScalarKind.B1))
+    assert np.all(byte_vectors_retrieved == bit_vectors)
 
     index.search(bit_vectors, 10)
 
