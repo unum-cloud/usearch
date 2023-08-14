@@ -39,22 +39,13 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     index.reserve(10);
     index.add(key_first, vector_first, args...);
 
-    if constexpr (punned_ak) {
-        auto result = index.add(key_first, vector_first, args...);
-        expect(!!result == index.multi());
-        result.error.release();
-
-        std::size_t first_key_count = index.count(key_first);
-        expect(first_key_count == (1ul + index.multi()));
-    }
-
     // Default approximate search
-    key_t matched_labels[10] = {0};
+    key_t matched_keys[10] = {0};
     distance_t matched_distances[10] = {0};
-    std::size_t matched_count = index.search(vector_first, 5, args...).dump_to(matched_labels, matched_distances);
+    std::size_t matched_count = index.search(vector_first, 5, args...).dump_to(matched_keys, matched_distances);
 
     expect(matched_count == 1);
-    expect(matched_labels[0] == key_first);
+    expect(matched_keys[0] == key_first);
     expect(std::abs(matched_distances[0]) < 0.01);
 
     // Add more entries
@@ -63,7 +54,7 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     expect(index.size() == 3);
 
     // Perform exact search
-    matched_count = index.search(vector_first, 5, args...).dump_to(matched_labels, matched_distances);
+    matched_count = index.search(vector_first, 5, args...).dump_to(matched_keys, matched_distances);
 
     // Validate scans
     std::size_t count = 0;
@@ -91,9 +82,9 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     // Search again over reconstructed index
     index.save("tmp.usearch");
     index.load("tmp.usearch");
-    matched_count = index.search(vector_first, 5, args...).dump_to(matched_labels, matched_distances);
+    matched_count = index.search(vector_first, 5, args...).dump_to(matched_keys, matched_distances);
     expect(matched_count == 3);
-    expect(matched_labels[0] == key_first);
+    expect(matched_keys[0] == key_first);
     expect(std::abs(matched_distances[0]) < 0.01);
 
     if constexpr (punned_ak) {
@@ -115,13 +106,24 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
         }
     });
 
+    // Check for duplicates
+    if constexpr (punned_ak) {
+        index.reserve({vectors.size() + 1u, executor.size()});
+        auto result = index.add(key_first, vector_first, args...);
+        expect(!!result == index.multi());
+        result.error.release();
+
+        std::size_t first_key_count = index.count(key_first);
+        expect(first_key_count == (1ul + index.multi()));
+    }
+
     // Search again over mapped index
     // file_head_result_t head = index_dense_metadata("tmp.usearch");
     // expect(head.size == 3);
     index.view("tmp.usearch");
-    matched_count = index.search(vector_first, 5, args...).dump_to(matched_labels, matched_distances);
+    matched_count = index.search(vector_first, 5, args...).dump_to(matched_keys, matched_distances);
     expect(matched_count == 3);
-    expect(matched_labels[0] == key_first);
+    expect(matched_keys[0] == key_first);
     expect(std::abs(matched_distances[0]) < 0.01);
 
     if constexpr (punned_ak) {

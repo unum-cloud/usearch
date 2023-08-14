@@ -885,7 +885,9 @@ class ring_gt {
     bool reserve(std::size_t n) noexcept {
         if (n < size())
             return false; // prevent data loss
-        n = (std::max<std::size_t>)(n, 64u);
+        if (n <= capacity())
+            return true;
+        n = (std::max<std::size_t>)(ceil2(n), 64u);
         element_t* elements = allocator_.allocate(n);
         if (!elements)
             return false;

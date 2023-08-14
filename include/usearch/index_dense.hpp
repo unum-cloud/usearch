@@ -1,11 +1,12 @@
 #pragma once
 #include <stdlib.h> // `aligned_alloc`
 
-#include <functional>   // `std::function`
-#include <numeric>      // `std::iota`
-#include <shared_mutex> // `std::shared_mutex`
-#include <thread>       // `std::thread`
-#include <vector>       // `std::vector`
+#include <functional>    // `std::function`
+#include <numeric>       // `std::iota`
+#include <shared_mutex>  // `std::shared_mutex`
+#include <thread>        // `std::thread`
+#include <unordered_set> // `std::unordered_multiset`
+#include <vector>        // `std::vector`
 
 #include <usearch/index.hpp>
 #include <usearch/index_plugins.hpp>
@@ -323,7 +324,12 @@ class index_dense_gt {
     struct key_and_slot_t {
         key_t key;
         compressed_slot_t slot;
+
+        bool any_slot() const { return slot == default_free_value<compressed_slot_t>(); }
+        static key_and_slot_t any_slot(key_t key) { return {key, default_free_value<compressed_slot_t>()}; }
     };
+
+    key_and_slot_t key_and_any_slot() {}
 
     struct lookup_key_hash_t {
         using is_transparent = void;
@@ -336,12 +342,12 @@ class index_dense_gt {
         bool operator()(key_and_slot_t const& a, key_t const& b) const noexcept { return a.key == b; }
         bool operator()(key_t const& a, key_and_slot_t const& b) const noexcept { return a == b.key; }
         bool operator()(key_and_slot_t const& a, key_and_slot_t const& b) const noexcept {
-            return a.key == b.key && a.slot == b.slot;
+            return (!a.any_slot() & !b.any_slot()) ? a.key == b.key && a.slot == b.slot : a.key == b.key;
         }
     };
 
     /// @brief Multi-Map from keys to IDs, and allocated vectors.
-    tsl::robin_set<key_and_slot_t, lookup_key_hash_t, lookup_key_same_t> slot_lookup_;
+    std::unordered_multiset<key_and_slot_t, lookup_key_hash_t, lookup_key_same_t> slot_lookup_;
 
     /// @brief Mutex, controlling concurrent access to `slot_lookup_`.
     mutable shared_mutex_t slot_lookup_mutex_;
@@ -855,7 +861,7 @@ class index_dense_gt {
      */
     bool contains(key_t key) const {
         shared_lock_t lock(slot_lookup_mutex_);
-        return slot_lookup_.contains(key);
+        return slot_lookup_.find(key_and_slot_t::any_slot(key)) != slot_lookup_.end();
     }
 
     /**
@@ -864,7 +870,7 @@ class index_dense_gt {
      */
     std::size_t count(key_t key) const {
         shared_lock_t lock(slot_lookup_mutex_);
-        return slot_lookup_.count(key);
+        return slot_lookup_.count(key_and_slot_t::any_slot(key));
     }
 
     struct labeling_result_t {
@@ -890,65 +896,70 @@ class index_dense_gt {
         labeling_result_t result;
 
         unique_lock_t lookup_lock(slot_lookup_mutex_);
-        auto labeled_iterator = slot_lookup_.find(key);
-        if (labeled_iterator == slot_lookup_.end())
+        auto matching_slots = slot_lookup_.equal_range(key_and_slot_t::any_slot(key));
+        if (matching_slots.first == matching_slots.second)
             return result;
 
         // Grow the removed entries ring, if needed
+        std::size_t matching_count = std::distance(matching_slots.first, matching_slots.second);
         std::unique_lock<std::mutex> free_lock(free_keys_mutex_);
-        if (free_keys_.size() == free_keys_.capacity())
-            if (!free_keys_.reserve((std::max<std::size_t>)(free_keys_.capacity() * 2, 64ul)))
-                return result.failed("Can't allocate memory for a free-list");
+        if (!free_keys_.reserve(free_keys_.size() + matching_count))
+            return result.failed("Can't allocate memory for a free-list");
 
         // A removed entry would be:
         // - present in `free_keys_`
         // - missing in the `slot_lookup_`
         // - marked in the `typed_` index with a `free_key_`
-        compressed_slot_t slot = (*labeled_iterator).slot;
-        free_keys_.push(slot);
-        slot_lookup_.erase(labeled_iterator);
-        typed_->at(slot).key = free_key_;
-        result.completed = true;
+        for (auto slots_it = matching_slots.first; slots_it != matching_slots.second; ++slots_it) {
+            compressed_slot_t slot = (*slots_it).slot;
+            free_keys_.push(slot);
+            typed_->at(slot).key = free_key_;
+        }
+        slot_lookup_.erase(matching_slots.first, matching_slots.second);
+        result.completed = matching_count;
 
         return result;
     }
 
     /**
      *  @brief Removes multiple entries with the specified keys from the index.
-     *  @param[in] labels_begin The beginning of the keys range.
-     *  @param[in] labels_end The ending of the keys range.
+     *  @param[in] keys_begin The beginning of the keys range.
+     *  @param[in] keys_end The ending of the keys range.
      *  @return The ::labeling_result_t indicating the result of the removal operation.
      *          `result.completed` will contain the number of keys that were successfully removed.
      *          `result.error` will contain an error message if an error occurred during the removal operation.
      */
     template <typename labels_iterator_at>
-    labeling_result_t remove(labels_iterator_at&& labels_begin, labels_iterator_at&& labels_end) {
+    labeling_result_t remove(labels_iterator_at keys_begin, labels_iterator_at keys_end) {
 
         labeling_result_t result;
         unique_lock_t lookup_lock(slot_lookup_mutex_);
         std::unique_lock<std::mutex> free_lock(free_keys_mutex_);
-
         // Grow the removed entries ring, if needed
-        std::size_t count_requests = std::distance(labels_begin, labels_end);
-        if (!free_keys_.reserve(free_keys_.size() + count_requests))
+        std::size_t matching_count = 0;
+        for (auto keys_it = keys_begin; keys_it != keys_end; ++keys_it)
+            matching_count += slot_lookup_.count(key_and_slot_t::any_slot(*keys_it));
+
+        if (!free_keys_.reserve(free_keys_.size() + matching_count))
             return result.failed("Can't allocate memory for a free-list");
 
         // Remove them one-by-one
-        for (auto label_it = labels_begin; label_it != labels_end; ++label_it) {
-            key_t key = *label_it;
-            auto labeled_iterator = slot_lookup_.find(key);
-            if (labeled_iterator == slot_lookup_.end())
-                continue;
-
+        for (auto keys_it = keys_begin; keys_it != keys_end; ++keys_it) {
+            key_t key = *keys_it;
+            auto matching_slots = slot_lookup_.equal_range(key_and_slot_t::any_slot(key));
             // A removed entry would be:
             // - present in `free_keys_`
             // - missing in the `slot_lookup_`
             // - marked in the `typed_` index with a `free_key_`
-            compressed_slot_t slot = (*labeled_iterator).slot;
-            free_keys_.push(slot);
-            slot_lookup_.erase(labeled_iterator);
-            typed_->at(slot).key = free_key_;
-            result.completed += 1;
+            for (auto slots_it = matching_slots.first; slots_it != matching_slots.second; ++slots_it) {
+                compressed_slot_t slot = (*slots_it).slot;
+                free_keys_.push(slot);
+                typed_->at(slot).key = free_key_;
+            }
+
+            matching_count = std::distance(matching_slots.first, matching_slots.second);
+            slot_lookup_.erase(matching_slots.first, matching_slots.second);
+            result.completed += matching_count;
         }
 
         return result;
@@ -965,16 +976,24 @@ class index_dense_gt {
     labeling_result_t rename(key_t from, key_t to) {
         labeling_result_t result;
         unique_lock_t lookup_lock(slot_lookup_mutex_);
-        auto labeled_iterator = slot_lookup_.find(from);
-        if (labeled_iterator == slot_lookup_.end())
-            return result;
 
-        compressed_slot_t slot = (*labeled_iterator).slot;
-        key_and_slot_t key_and_slot{to, slot};
-        slot_lookup_.erase(labeled_iterator);
-        slot_lookup_.insert(key_and_slot);
-        typed_->at(slot).key = to;
-        result.completed = true;
+        if (!multi() && slot_lookup_.count(key_and_slot_t::any_slot(to)))
+            return result.failed("Renaming impossible, the key is already in use");
+
+        // The `from` may map to multiple entries
+        while (true) {
+            auto slots_it = slot_lookup_.find(key_and_slot_t::any_slot(from));
+            if (slots_it == slot_lookup_.end())
+                break;
+
+            compressed_slot_t slot = (*slots_it).slot;
+            key_and_slot_t key_and_slot{to, slot};
+            slot_lookup_.erase(slots_it);
+            slot_lookup_.insert(key_and_slot);
+            typed_->at(slot).key = to;
+            ++result.completed;
+        }
+
         return result;
     }
 
@@ -1328,7 +1347,7 @@ class index_dense_gt {
             // Find the matching ID
             {
                 shared_lock_t lock(slot_lookup_mutex_);
-                auto it = slot_lookup_.find(key);
+                auto it = slot_lookup_.find(key_and_slot_t::any_slot(key));
                 if (it == slot_lookup_.end())
                     return false;
                 slot = (*it).slot;
@@ -1341,10 +1360,11 @@ class index_dense_gt {
             return true;
         } else {
             shared_lock_t lock(slot_lookup_mutex_);
-            auto equal_range_pair = slot_lookup_.equal_range(key);
+            auto equal_range_pair = slot_lookup_.equal_range(key_and_slot_t::any_slot(key));
             std::size_t count_exported = 0;
             for (auto begin = equal_range_pair.first;
                  begin != equal_range_pair.second && count_exported != vectors_limit; ++begin, ++count_exported) {
+                //
                 compressed_slot_t slot = (*begin).slot;
                 byte_t const* punned_vector = reinterpret_cast<byte_t const*>(vectors_lookup_[slot]);
                 byte_t* reconstructed_vector = (byte_t*)reconstructed + metric_.bytes_per_vector() * count_exported;

@@ -114,11 +114,7 @@ def test_index_duplicates(batch_size):
     assert len(index) == batch_size * 2
 
     two_per_key = index.get(keys)
-    print(two_per_key)
-    if batch_size == 1:
-        assert two_per_key.shape == (2, ndim)
-    else:
-        assert np.vstack(two_per_key).shape == (2 * batch_size, ndim)
+    assert np.vstack(two_per_key).shape == (2 * batch_size, ndim)
 
 
 @pytest.mark.parametrize("batch_size", [1, 7, 1024])
