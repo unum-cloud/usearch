@@ -407,7 +407,7 @@ class Index:
         connectivity: Optional[int] = None,
         expansion_add: Optional[int] = None,
         expansion_search: Optional[int] = None,
-        multi: bool = True,
+        multi: bool = False,
         path: Optional[os.PathLike] = None,
         view: bool = False,
     ) -> None:

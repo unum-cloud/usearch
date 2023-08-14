@@ -192,13 +192,13 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     }
 
     // Type-punned:
-    for (bool ban_collisions : {false, true}) {
+    for (bool multi : {false, true}) {
         for (std::size_t connectivity : {3, 13, 50}) {
             std::printf("- punned with connectivity %zu \n", connectivity);
             using index_t = index_dense_gt<key_t, slot_t>;
             metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
             index_dense_config_t config(connectivity);
-            config.ban_collisions = ban_collisions;
+            config.multi = multi;
             index_t index = index_t::make(metric, config);
             test_cosine<true>(index, matrix);
         }

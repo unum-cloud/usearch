@@ -95,7 +95,7 @@ struct index_dense_config_t : public index_config_t {
     std::size_t expansion_add = default_expansion_add();
     std::size_t expansion_search = default_expansion_search();
     bool exclude_vectors = false;
-    bool ban_collisions = false;
+    bool multi = false;
 
     index_dense_config_t(index_config_t base) noexcept : index_config_t(base) {}
 
@@ -471,7 +471,7 @@ class index_dense_gt {
     std::size_t max_level() const noexcept { return typed_->max_level(); }
     index_dense_config_t const& config() const { return config_; }
     index_limits_t const& limits() const { return typed_->limits(); }
-    bool multi() const { return !config_.ban_collisions; }
+    bool multi() const { return config_.multi; }
 
     // The metric and its properties
     metric_t const& metric() const { return metric_; }
@@ -1215,7 +1215,7 @@ class index_dense_gt {
         key_t key, scalar_at const* vector, //
         std::size_t thread, bool force_vector_copy, cast_t const& cast) {
 
-        if (config_.ban_collisions && contains(key))
+        if (!multi() && contains(key))
             return add_result_t{}.failed("Duplicate keys not allowed in high-level wrappers");
 
         // Cast the vector, if needed for compatibility with `metric_`
@@ -1340,7 +1340,7 @@ class index_dense_gt {
     template <typename scalar_at>
     std::size_t get_(key_t key, scalar_at* reconstructed, std::size_t vectors_limit, cast_t const& cast) const {
 
-        if (config_.ban_collisions) {
+        if (!multi()) {
             compressed_slot_t slot;
             // Find the matching ID
             {

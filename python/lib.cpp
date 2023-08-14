@@ -165,7 +165,7 @@ static dense_index_py_t make_index(      //
     bool multi) {
 
     index_dense_config_t config(connectivity, expansion_add, expansion_search);
-    config.ban_collisions = !multi;
+    config.multi = multi;
 
     metric_t metric =  //
         metric_uintptr //
