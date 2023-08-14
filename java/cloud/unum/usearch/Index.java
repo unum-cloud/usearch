@@ -69,6 +69,14 @@ public class Index {
     c_view(c_ptr, path);
   }
 
+  public boolean remove(int key) {
+    return c_remove(c_ptr, key);
+  }
+  
+  public boolean rename(int from, int to) {
+    return c_rename(c_ptr, from, to);
+  }
+
   public static class Config {
     private String _metric = "ip";
     private String _quantization = "f32";
@@ -164,4 +172,8 @@ public class Index {
   private static native void c_load(long ptr, String path);
 
   private static native void c_view(long ptr, String path);
+
+  private static native boolean c_remove(long ptr, int key);
+
+  private static native boolean c_rename(long ptr, int from, int to);
 }
