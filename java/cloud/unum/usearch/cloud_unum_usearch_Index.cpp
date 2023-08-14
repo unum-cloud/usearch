@@ -165,11 +165,26 @@ JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search( //
     return matches;
 }
 
-JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1remove(JNIEnv*, jclass, jlong c_ptr, jlong key) {
-    return reinterpret_cast<index_dense_t*>(c_ptr)->remove(static_cast<index_dense_t::key_t>(key)).completed;
+JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1remove(JNIEnv* env, jclass, jlong c_ptr, jlong key) {
+    using key_t = typename index_dense_t::key_t;
+    using labeling_result_t = typename index_dense_t::labeling_result_t;
+    labeling_result_t result = reinterpret_cast<index_dense_t*>(c_ptr)->remove(static_cast<key_t>(key));
+    if (!result) {
+        jclass jc = (*env).FindClass("java/lang/Error");
+        if (jc)
+            (*env).ThrowNew(jc, "Failed to remove in vector index!");
+    }
+    return result.completed;
 }
 
-JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1rename(JNIEnv*, jclass, jlong c_ptr, jlong from, jlong to) {
+JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1rename(JNIEnv* env, jclass, jlong c_ptr, jlong from, jlong to) {
     using key_t = typename index_dense_t::key_t;
-    return reinterpret_cast<index_dense_t*>(c_ptr)->rename(static_cast<key_t>(from),static_cast<key_t>(to)).completed;
+    using labeling_result_t = typename index_dense_t::labeling_result_t;
+    labeling_result_t result = reinterpret_cast<index_dense_t*>(c_ptr)->rename(static_cast<key_t>(from), static_cast<key_t>(to));
+    if (!result) {
+        jclass jc = (*env).FindClass("java/lang/Error");
+        if (jc)
+            (*env).ThrowNew(jc, "Failed to rename in vector index!");
+    }
+    return result.completed;
 }
