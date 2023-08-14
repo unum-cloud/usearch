@@ -2516,7 +2516,7 @@ class index_gt {
     std::size_t stream_length() const noexcept {
         std::size_t neighbors_length = 0;
         for (std::size_t i = 0; i != size(); ++i)
-            neighbors_length += node_bytes_(node_at_(i).level());
+            neighbors_length += node_bytes_(node_at_(i).level()) + sizeof(level_t);
         return sizeof(index_serialized_header_t) + neighbors_length;
     }
 
