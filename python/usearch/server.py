@@ -13,7 +13,7 @@ from usearch.index import Index, Matches, Key
 def _ascii_to_vector(string: str) -> np.ndarray:
     """
     WARNING: A dirty performance hack!
-    Assuming the `f8` vectors in our implementations are just integers,
+    Assuming the `i8` vectors in our implementations are just integers,
     and generally contain scalars in the [0, 100] range, we can transmit
     them as JSON-embedded strings. The only symbols we must avoid are
     the double-quote '"' (code 22) and backslash '\' (code 60).

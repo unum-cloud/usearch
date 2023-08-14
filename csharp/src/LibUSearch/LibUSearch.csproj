@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <!-- Explicitly clear output folders to avoid issues with out-of-date files like dlls-->
+  <Target Name="PostClean" AfterTargets="Clean">
+      <RemoveDir Directories="$(BaseIntermediateOutputPath)" /><!-- obj -->
+      <RemoveDir Directories="$(BaseOutputPath)" /><!-- bin -->
+  </Target>
+
+</Project>

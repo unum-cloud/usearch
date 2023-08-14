@@ -143,19 +143,6 @@ java -cp . -Djava.library.path="$(pwd)/java/cloud/unum/usearch/" Index.java
 java -cp . -Djava.library.path="$(pwd)/java" cloud.unum.usearch.Index
 ```
 
-## Wolfram
-
-```sh
-brew install --cask wolfram-engine
-```
-
-## GoLang
-
-```sh
-cd golang
-go test -v
-```
-
 ## Objective-C and Swift
 
 ```sh
@@ -163,13 +150,44 @@ swift build
 swift test -v
 ```
 
-## C99
+## C 99
+
+There are a few ways to compile the C 99 USearch SDK.
+Using the Makefile:
+
+```sh
+make -C ./c build
+```
+
+Using CMake:
+
+```sh
+cmake -B ./build_release -DUSEARCH_BUILD_C=1 && make -C ./build_release -j
+```
 
 Linux:
 
 ```sh
-g++ -std=c++11 -shared -fPIC c/lib.cpp -I ./include/  -I ./fp16/include/ -I ./robin-map/include/ -o libusearch.so
+g++ -std=c++11 -shared -fPIC c/lib.cpp -I ./include/  -I ./fp16/include/ -I ./robin-map/include/ -o libusearch_c.a
 ```
+
+
+## GoLang
+
+GoLang bindings are based on C.
+So one should first compile the C library, link it with GoLang, and only then run tests.
+
+```sh
+make -C ./c libusearch_c.so && mv ./c/libusearch_c.so ./golang/libusearch_c.so 
+cd golang && go test -v ; cd ..
+```
+
+## Wolfram
+
+```sh
+brew install --cask wolfram-engine
+```
+
 
 ## Docker
 

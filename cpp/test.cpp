@@ -96,7 +96,7 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     executor_default_t executor;
     index.reserve({vectors.size(), executor.size()});
     executor.execute_bulk(vectors.size() - 3, [&](std::size_t thread, std::size_t task) {
-        index_add_config_t config;
+        index_update_config_t config;
         config.thread = thread;
         index.add(key_max - task - 3, vectors[task + 3].data(), args..., config);
     });
@@ -114,6 +114,9 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
         std::vector<scalar_t> vec_recovered_from_view(dimensions);
         index.get(key_second, vec_recovered_from_view.data());
         expect(std::equal(vector_second, vector_second + dimensions, vec_recovered_from_view.data()));
+
+        auto compaction_result = index.compact();
+        expect(bool(compaction_result));
     }
 
     expect(index.memory_usage() > 0);
@@ -201,7 +204,7 @@ template <typename key_at, typename slot_at> void test_tanimoto(std::size_t dime
 
     index.reserve({batch_size + index.size(), executor.size()});
     executor.execute_bulk(batch_size, [&](std::size_t thread, std::size_t task) {
-        index_add_config_t config;
+        index_update_config_t config;
         config.thread = thread;
         index.add(task + 25000, scalars.data() + index.scalar_words() * task, config);
     });

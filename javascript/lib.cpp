@@ -37,6 +37,8 @@ class Index : public Napi::ObjectWrap<Index> {
 
     void Add(Napi::CallbackInfo const& ctx);
     Napi::Value Search(Napi::CallbackInfo const& ctx);
+    Napi::Value Remove(Napi::CallbackInfo const& ctx);
+    Napi::Value Contains(Napi::CallbackInfo const& ctx);
 
     std::unique_ptr<index_dense_t> native_;
 };
@@ -51,6 +53,8 @@ Napi::Object Index::Init(Napi::Env env, Napi::Object exports) {
             InstanceMethod("connectivity", &Index::GetConnectivity),
             InstanceMethod("add", &Index::Add),
             InstanceMethod("search", &Index::Search),
+            InstanceMethod("remove", &Index::Remove),
+            InstanceMethod("contains", &Index::Contains),
             InstanceMethod("save", &Index::Save),
             InstanceMethod("load", &Index::Load),
             InstanceMethod("view", &Index::View),
@@ -74,8 +78,10 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
         return;
     }
 
+    bool lossless = true;
     Napi::Object params = ctx[0].As<Napi::Object>();
-    std::size_t dimensions = params.Has("dimensions") ? params.Get("dimensions").As<Napi::Number>().Uint32Value() : 0;
+    std::size_t dimensions =
+        params.Has("dimensions") ? params.Get("dimensions").As<Napi::BigInt>().Uint64Value(&lossless) : 0;
 
     index_limits_t limits;
     std::size_t connectivity = default_connectivity();
@@ -83,13 +89,17 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
     std::size_t expansion_search = default_expansion_search();
 
     if (params.Has("capacity"))
-        limits.members = params.Get("capacity").As<Napi::Number>().Uint32Value();
+        limits.members = params.Get("capacity").As<Napi::BigInt>().Uint64Value(&lossless);
     if (params.Has("connectivity"))
-        connectivity = params.Get("connectivity").As<Napi::Number>().Uint32Value();
+        connectivity = params.Get("connectivity").As<Napi::BigInt>().Uint64Value(&lossless);
     if (params.Has("expansion_add"))
-        expansion_add = params.Get("expansion_add").As<Napi::Number>().Uint32Value();
+        expansion_add = params.Get("expansion_add").As<Napi::BigInt>().Uint64Value(&lossless);
     if (params.Has("expansion_search"))
-        expansion_search = params.Get("expansion_search").As<Napi::Number>().Uint32Value();
+        expansion_search = params.Get("expansion_search").As<Napi::BigInt>().Uint64Value(&lossless);
+    if (!lossless) {
+        Napi::TypeError::New(env, "Arguments must be unsigned integers").ThrowAsJavaScriptException();
+        return;
+    }
 
     scalar_kind_t quantization = scalar_kind_t::f32_k;
     if (params.Has("quantization")) {
@@ -121,14 +131,16 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
 }
 
 Napi::Value Index::GetDimensions(Napi::CallbackInfo const& ctx) {
-    return Napi::Number::New(ctx.Env(), native_->dimensions());
+    return Napi::BigInt::New(ctx.Env(), static_cast<std::uint64_t>(native_->dimensions()));
 }
-Napi::Value Index::GetSize(Napi::CallbackInfo const& ctx) { return Napi::Number::New(ctx.Env(), native_->size()); }
+Napi::Value Index::GetSize(Napi::CallbackInfo const& ctx) {
+    return Napi::BigInt::New(ctx.Env(), static_cast<std::uint64_t>(native_->size()));
+}
 Napi::Value Index::GetConnectivity(Napi::CallbackInfo const& ctx) {
-    return Napi::Number::New(ctx.Env(), native_->connectivity());
+    return Napi::BigInt::New(ctx.Env(), static_cast<std::uint64_t>(native_->connectivity()));
 }
 Napi::Value Index::GetCapacity(Napi::CallbackInfo const& ctx) {
-    return Napi::Number::New(ctx.Env(), native_->capacity());
+    return Napi::BigInt::New(ctx.Env(), static_cast<std::uint64_t>(native_->capacity()));
 }
 
 void Index::Save(Napi::CallbackInfo const& ctx) {
@@ -191,8 +203,12 @@ void Index::Add(Napi::CallbackInfo const& ctx) {
     using key_t = typename index_dense_t::key_t;
     std::size_t index_dimensions = native_->dimensions();
 
-    auto add = [&](Napi::Number key_js, Napi::Float32Array vector_js) {
-        key_t key = key_js.Uint32Value();
+    auto add = [&](Napi::BigInt key_js, Napi::Float32Array vector_js) {
+        bool lossless = true;
+        key_t key = static_cast<key_t>(key_js.Uint64Value(&lossless));
+        if (!lossless)
+            return Napi::TypeError::New(env, "Keys must be unsigned integers").ThrowAsJavaScriptException();
+
         float const* vector = vector_js.Data();
         std::size_t dimensions = static_cast<std::size_t>(vector_js.ElementLength());
 
@@ -223,13 +239,13 @@ void Index::Add(Napi::CallbackInfo const& ctx) {
         for (std::size_t i = 0; i < length; i++) {
             Napi::Value key_js = keys_js[i];
             Napi::Value vector_js = vectors_js[i];
-            add(key_js.As<Napi::Number>(), vector_js.As<Napi::Float32Array>());
+            add(key_js.As<Napi::BigInt>(), vector_js.As<Napi::Float32Array>());
         }
 
-    } else if (ctx[0].IsNumber() && ctx[1].IsTypedArray()) {
+    } else if (ctx[0].IsBigInt() && ctx[1].IsTypedArray()) {
         if (native_->size() + 1 >= native_->capacity())
             native_->reserve(ceil2(native_->size() + 1));
-        add(ctx[0].As<Napi::Number>(), ctx[1].As<Napi::Float32Array>());
+        add(ctx[0].As<Napi::BigInt>(), ctx[1].As<Napi::Float32Array>());
     } else
         return Napi::TypeError::New(env, "Invalid argument type, expects integral key(s) and float vector(s)")
             .ThrowAsJavaScriptException();
@@ -237,32 +253,97 @@ void Index::Add(Napi::CallbackInfo const& ctx) {
 
 Napi::Value Index::Search(Napi::CallbackInfo const& ctx) {
     Napi::Env env = ctx.Env();
-    if (ctx.Length() < 2 || !ctx[0].IsTypedArray() || !ctx[1].IsNumber()) {
+    if (ctx.Length() < 2 || !ctx[0].IsTypedArray() || !ctx[1].IsBigInt()) {
         Napi::TypeError::New(env, "Expects a  and the number of wanted results").ThrowAsJavaScriptException();
         return {};
     }
 
     Napi::Float32Array vector_js = ctx[0].As<Napi::Float32Array>();
-    Napi::Number wanted_js = ctx[1].As<Napi::Number>();
+    Napi::BigInt wanted_js = ctx[1].As<Napi::BigInt>();
 
     float const* vector = vector_js.Data();
     std::size_t dimensions = static_cast<std::size_t>(vector_js.ElementLength());
-    std::uint32_t wanted = wanted_js.Uint32Value();
     if (dimensions != native_->dimensions()) {
         Napi::TypeError::New(env, "Wrong number of dimensions").ThrowAsJavaScriptException();
         return {};
     }
 
+    bool lossless = true;
+    std::uint64_t wanted = wanted_js.Uint64Value(&lossless);
+    if (!lossless) {
+        Napi::TypeError::New(env, "Wanted number of matches must be an unsigned integer").ThrowAsJavaScriptException();
+        return {};
+    }
+
     using key_t = typename index_dense_t::key_t;
     Napi::TypedArrayOf<key_t> matches_js = Napi::TypedArrayOf<key_t>::New(env, wanted);
+    static_assert(std::is_same<std::uint64_t, key_t>::value, "Matches.key interface expects BigUint64Array");
     Napi::Float32Array distances_js = Napi::Float32Array::New(env, wanted);
     try {
-        std::size_t count = native_->search(vector, wanted).dump_to(matches_js.Data(), distances_js.Data());
+        std::uint64_t count = native_->search(vector, wanted).dump_to(matches_js.Data(), distances_js.Data());
         Napi::Object result_js = Napi::Object::New(env);
         result_js.Set("keys", matches_js);
         result_js.Set("distances", distances_js);
-        result_js.Set("count", Napi::Number::New(env, count));
+        result_js.Set("count", Napi::BigInt::New(env, count));
         return result_js;
+    } catch (std::bad_alloc const&) {
+        Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
+        return {};
+    } catch (...) {
+        Napi::TypeError::New(env, "Search failed").ThrowAsJavaScriptException();
+        return {};
+    }
+}
+
+Napi::Value Index::Remove(Napi::CallbackInfo const& ctx) {
+    Napi::Env env = ctx.Env();
+    if (ctx.Length() < 1 || !ctx[0].IsBigInt()) {
+        Napi::TypeError::New(env, "Expects an entry identifier").ThrowAsJavaScriptException();
+        return {};
+    }
+
+    Napi::BigInt key_js = ctx[0].As<Napi::BigInt>();
+    bool lossless = true;
+    std::uint64_t key = key_js.Uint64Value(&lossless);
+    if (!lossless) {
+        Napi::TypeError::New(env, "Identifier must be an unsigned integer").ThrowAsJavaScriptException();
+        return {};
+    }
+
+    try {
+        auto result = native_->remove(key);
+        if (!result) {
+            Napi::TypeError::New(env, "Removal has failed").ThrowAsJavaScriptException();
+            return {};
+        }
+        return Napi::Boolean::New(env, result.completed);
+    } catch (std::bad_alloc const&) {
+        Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
+        return {};
+    } catch (...) {
+        Napi::TypeError::New(env, "Search failed").ThrowAsJavaScriptException();
+        return {};
+    }
+}
+
+Napi::Value Index::Contains(Napi::CallbackInfo const& ctx) {
+    Napi::Env env = ctx.Env();
+    if (ctx.Length() < 1 || !ctx[0].IsBigInt()) {
+        Napi::TypeError::New(env, "Expects an entry identifier").ThrowAsJavaScriptException();
+        return {};
+    }
+
+    Napi::BigInt key_js = ctx[0].As<Napi::BigInt>();
+    bool lossless = true;
+    std::uint64_t key = key_js.Uint64Value(&lossless);
+    if (!lossless) {
+        Napi::TypeError::New(env, "Identifier must be an unsigned integer").ThrowAsJavaScriptException();
+        return {};
+    }
+
+    try {
+        bool result = native_->contains(key);
+        return Napi::Boolean::New(env, result);
     } catch (std::bad_alloc const&) {
         Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
         return {};
