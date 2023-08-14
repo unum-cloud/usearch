@@ -19,7 +19,6 @@ let package = Package(
             cxxSettings: [
                 .headerSearchPath("../include/"),
                 .headerSearchPath("../fp16/include/"),
-                .headerSearchPath("../robin-map/include/"),
                 .headerSearchPath("../simismd/include/")
             ]
         ),

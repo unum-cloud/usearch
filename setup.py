@@ -90,7 +90,7 @@ setup(
         "Topic :: Database :: Database Engines/Servers",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
-    include_dirs=["include", "fp16/include", "robin-map/include", "simsimd/include"],
+    include_dirs=["include", "fp16/include", "simsimd/include"],
     ext_modules=ext_modules,
     install_requires=[
         "numpy",

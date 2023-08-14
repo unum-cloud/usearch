@@ -134,7 +134,6 @@ g++ -shared -o USearchJNI.dll cloud_unum_usearch_Index.o -Wl,--add-stdcall-alias
 g++ -std=c++11 -c -fPIC \
     -I../../../../include \
     -I../../../../fp16/include \
-    -I../../../../robin-map/include \
     -I../../../../simsimd/include \
     -I${JAVA_HOME}/include -I${JAVA_HOME}/include/darwin cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
 g++ -dynamiclib -o libusearch.dylib cloud_unum_usearch_Index.o -lc
@@ -168,7 +167,7 @@ cmake -B ./build_release -DUSEARCH_BUILD_CLIB=1 && make -C ./build_release -j
 Linux:
 
 ```sh
-g++ -std=c++11 -shared -fPIC c/lib.cpp -I ./include/  -I ./fp16/include/ -I ./robin-map/include/ -o libusearch_c.so
+g++ -std=c++11 -shared -fPIC c/lib.cpp -I ./include/  -I ./fp16/include/ -o libusearch_c.so
 ```
 
 

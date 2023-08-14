@@ -7,7 +7,6 @@ set(USEARCH_PUNNED_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/../c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../include"
     "${CMAKE_CURRENT_SOURCE_DIR}/../fp16/include"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../robin-map/include"
 )
 
 add_executable(index lib.cpp)

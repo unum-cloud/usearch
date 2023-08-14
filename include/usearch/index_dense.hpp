@@ -11,8 +11,6 @@
 #include <usearch/index.hpp>
 #include <usearch/index_plugins.hpp>
 
-#include <tsl/robin_set.h>
-
 namespace unum {
 namespace usearch {
 
