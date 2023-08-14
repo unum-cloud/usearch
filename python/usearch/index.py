@@ -50,8 +50,6 @@ class CompiledMetric(NamedTuple):
     signature: MetricSignature
 
 
-os.PathLike
-
 Key = np.uint64
 
 KeyOrKeysLike = Union[Key, Iterable[Key], int, Iterable[int], np.ndarray, memoryview]
@@ -265,6 +263,9 @@ class Match:
     key: int
     distance: float
 
+    def to_tuple(self) -> tuple:
+        return self.key, self.distance
+
 
 @dataclass
 class Matches:
@@ -329,7 +330,7 @@ class BatchMatches:
     def to_list(self) -> List[List[tuple]]:
         """Convert the result for each query to the list of tuples with information about its matches."""
         list_of_matches = [self.__getitem__(row) for row in range(self.__len__())]
-        return [match.to_list() for matches in list_of_matches for match in matches]
+        return [match.to_tuple() for matches in list_of_matches for match in matches]
 
     def mean_recall(self, expected: np.ndarray, count: Optional[int] = None) -> float:
         """Measures recall [0, 1] as of `Matches` that contain the corresponding

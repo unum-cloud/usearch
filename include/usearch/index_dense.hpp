@@ -467,6 +467,7 @@ class index_dense_gt {
     std::size_t max_level() const noexcept { return typed_->max_level(); }
     index_dense_config_t const& config() const { return config_; }
     index_limits_t const& limits() const { return typed_->limits(); }
+    bool multi() const { return !config_.ban_collisions; }
 
     // The metric and its properties
     metric_t const& metric() const { return metric_; }
@@ -1222,7 +1223,7 @@ class index_dense_gt {
         bool reuse_node = free_slot != default_free_value<compressed_slot_t>();
         auto on_success = [&](member_ref_t member) {
             unique_lock_t slot_lock(slot_lookup_mutex_);
-            slot_lookup_.insert({key, static_cast<compressed_slot_t>(member.slot)});
+            slot_lookup_.insert(key_and_slot_t{key, static_cast<compressed_slot_t>(member.slot)});
             if (copy_vector) {
                 if (!reuse_node)
                     vectors_lookup_[member.slot] = vectors_tape_allocator_.allocate(metric_.bytes_per_vector());

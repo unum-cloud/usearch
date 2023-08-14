@@ -41,8 +41,11 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
 
     if constexpr (punned_ak) {
         auto result = index.add(key_first, vector_first, args...);
-        expect(!result);
+        expect(!!result == index.multi());
         result.error.release();
+
+        std::size_t first_key_count = index.count(key_first);
+        expect(first_key_count == (1ul + index.multi()));
     }
 
     // Default approximate search
@@ -187,13 +190,16 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     }
 
     // Type-punned:
-    for (std::size_t connectivity : {3, 13, 50}) {
-        std::printf("- punned with connectivity %zu \n", connectivity);
-        using index_t = index_dense_gt<key_t, slot_t>;
-        metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
-        index_config_t config(connectivity);
-        index_t index = index_t::make(metric, config);
-        test_cosine<true>(index, matrix);
+    for (bool ban_collisions : {false, true}) {
+        for (std::size_t connectivity : {3, 13, 50}) {
+            std::printf("- punned with connectivity %zu \n", connectivity);
+            using index_t = index_dense_gt<key_t, slot_t>;
+            metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
+            index_dense_config_t config(connectivity);
+            config.ban_collisions = ban_collisions;
+            index_t index = index_t::make(metric, config);
+            test_cosine<true>(index, matrix);
+        }
     }
 }
 
