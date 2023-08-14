@@ -58,30 +58,33 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1save(JNIEnv* env, jclass, jlong c_ptr, jstring path) {
     char const* path_cstr = (*env).GetStringUTFChars(path, 0);
-    if (!reinterpret_cast<index_dense_t*>(c_ptr)->save(path_cstr)) {
+    serialization_result_t result = reinterpret_cast<index_dense_t*>(c_ptr)->save(path_cstr);
+    if (!result) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
-            (*env).ThrowNew(jc, "Failed to dump vector index to path!");
+            (*env).ThrowNew(jc, result.error.release());
     }
     (*env).ReleaseStringUTFChars(path, path_cstr);
 }
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1load(JNIEnv* env, jclass, jlong c_ptr, jstring path) {
     char const* path_cstr = (*env).GetStringUTFChars(path, 0);
-    if (!reinterpret_cast<index_dense_t*>(c_ptr)->load(path_cstr)) {
+    serialization_result_t result = reinterpret_cast<index_dense_t*>(c_ptr)->load(path_cstr);
+    if (!result) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
-            (*env).ThrowNew(jc, "Failed to load vector index from path!");
+            (*env).ThrowNew(jc, result.error.release());
     }
     (*env).ReleaseStringUTFChars(path, path_cstr);
 }
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1view(JNIEnv* env, jclass, jlong c_ptr, jstring path) {
     char const* path_cstr = (*env).GetStringUTFChars(path, 0);
-    if (!reinterpret_cast<index_dense_t*>(c_ptr)->view(path_cstr)) {
+    serialization_result_t result = reinterpret_cast<index_dense_t*>(c_ptr)->view(path_cstr);
+    if (!result) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
-            (*env).ThrowNew(jc, "Failed to view vector index from path!");
+            (*env).ThrowNew(jc, result.error.release());
     }
     (*env).ReleaseStringUTFChars(path, path_cstr);
 }
@@ -122,10 +125,13 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add( //
     float_span_t vector_span = float_span_t{vector_data, static_cast<std::size_t>(vector_dims)};
 
     using key_t = typename index_dense_t::key_t;
-    if (!reinterpret_cast<index_dense_t*>(c_ptr)->add(static_cast<key_t>(key), vector_span)) {
+    using add_result_t = typename index_dense_t::add_result_t;
+
+    add_result_t result = reinterpret_cast<index_dense_t*>(c_ptr)->add(static_cast<key_t>(key), vector_span);
+    if (!result) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
-            (*env).ThrowNew(jc, "Failed to insert a new point in vector index!");
+            (*env).ThrowNew(jc, result.error.release());
     }
     (*env).ReleaseFloatArrayElements(vector, vector_data, 0);
 }
@@ -157,7 +163,7 @@ JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search( //
     } else {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
-            (*env).ThrowNew(jc, "Failed to find in vector index!");
+            (*env).ThrowNew(jc, result.error.release());
     }
 
     (*env).ReleaseFloatArrayElements(vector, vector_data, 0);
@@ -172,7 +178,7 @@ JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1remove(JNIEnv* env, jcla
     if (!result) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
-            (*env).ThrowNew(jc, "Failed to remove in vector index!");
+            (*env).ThrowNew(jc, result.error.release());
     }
     return result.completed;
 }
@@ -180,11 +186,12 @@ JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1remove(JNIEnv* env, jcla
 JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1rename(JNIEnv* env, jclass, jlong c_ptr, jlong from, jlong to) {
     using key_t = typename index_dense_t::key_t;
     using labeling_result_t = typename index_dense_t::labeling_result_t;
-    labeling_result_t result = reinterpret_cast<index_dense_t*>(c_ptr)->rename(static_cast<key_t>(from), static_cast<key_t>(to));
+    labeling_result_t result =
+        reinterpret_cast<index_dense_t*>(c_ptr)->rename(static_cast<key_t>(from), static_cast<key_t>(to));
     if (!result) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
-            (*env).ThrowNew(jc, "Failed to rename in vector index!");
+            (*env).ThrowNew(jc, result.error.release());
     }
     return result.completed;
 }
