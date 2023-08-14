@@ -164,3 +164,12 @@ JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search( //
     std::free(matches_data);
     return matches;
 }
+
+JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1remove(JNIEnv*, jclass, jlong c_ptr, jlong key) {
+    return reinterpret_cast<index_dense_t*>(c_ptr)->remove(static_cast<index_dense_t::key_t>(key)).completed;
+}
+
+JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1rename(JNIEnv*, jclass, jlong c_ptr, jlong from, jlong to) {
+    using key_t = typename index_dense_t::key_t;
+    return reinterpret_cast<index_dense_t*>(c_ptr)->rename(static_cast<key_t>(from),static_cast<key_t>(to)).completed;
+}
