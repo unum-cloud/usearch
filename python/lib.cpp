@@ -636,11 +636,17 @@ static void cluster_typed(                                              //
  *      4. number of computed pairwise distances.
  */
 template <typename index_at>
-static py::tuple cluster_many_in_index( //
-    index_at& index, py::buffer vectors, std::size_t level, std::size_t threads) {
+static py::tuple cluster_many_in_index(  //
+    index_at& index, py::buffer vectors, //
+    std::size_t level, std::size_t count, std::size_t threads) {
 
-    if (level == 0)
-        return py::tuple(5);
+    // Determine the level, which would contain enough clusters for it
+    if (level == 0) {
+        for (; level <= index.max_level(); ++level) {
+            if (index.stats(level).nodes < count)
+                break;
+        }
+    }
 
     if (index.limits().threads_search < threads)
         throw std::invalid_argument("Can't use that many threads!");
@@ -660,10 +666,10 @@ static py::tuple cluster_many_in_index( //
     std::atomic<std::size_t> stats_visited_members(0);
     std::atomic<std::size_t> stats_computed_distances(0);
 
-    // Those would be set for one for al entries, in case of success
+    // Those would be set for one for all entries, in case of success
     auto counts_py1d = counts_py.template mutable_unchecked<1>();
     for (Py_ssize_t vector_idx = 0; vector_idx != vectors_count; ++vector_idx)
-        counts_py1d(vector_idx) = 0;
+        counts_py1d(vector_idx) = 1;
 
     // clang-format off
     switch (numpy_string_to_kind(vectors_info.format)) {
@@ -675,6 +681,71 @@ static py::tuple cluster_many_in_index( //
     default: throw std::invalid_argument("Incompatible scalars in the query matrix: " + vectors_info.format);
     }
     // clang-format on
+
+    struct cluster_t {
+        key_t key = 0;
+        union {
+            std::size_t popularity = 0;
+            key_t replacement;
+        };
+    };
+
+    // Now once we have identified the closest clusters,
+    // we can try reducing their quantity, refining
+    std::vector<cluster_t> clusters(vectors_count);
+    auto keys_py2d = keys_py.template mutable_unchecked<2>();
+    for (Py_ssize_t vector_idx = 0; vector_idx != vectors_count; ++vector_idx)
+        clusters[vector_idx].key = keys_py2d(vector_idx, 0), clusters[vector_idx].popularity = 1;
+
+    // Sort by cluster key
+    std::sort(clusters.begin(), clusters.end(), [](cluster_t& a, cluster_t& b) { return a.key < b.key; });
+
+    // Transform into run-length encoding
+    std::size_t last_idx = 0;
+    for (std::size_t current_idx = 1; current_idx != clusters.size(); ++current_idx) {
+        if (clusters[last_idx].key == clusters[current_idx].key) {
+            clusters[last_idx].popularity++;
+        } else {
+            last_idx++;
+            clusters[last_idx] = clusters[current_idx];
+        }
+    }
+    clusters.resize(last_idx + 1);
+
+    // Drop smaller clusters iteratively merging those into the closest ones.
+    std::sort(clusters.begin(), clusters.end(), [](cluster_t& a, cluster_t& b) { return a.popularity > b.popularity; });
+
+    // Instead of doing it at once, use the `cluster_t::replacement` property to plan future re-mapping.
+    for (std::size_t cluster_idx = count; cluster_idx < clusters.size(); ++cluster_idx) {
+        key_t dropped_cluster_key = clusters[cluster_idx].key;
+        key_t target_key = dropped_cluster_key;
+        distance_t target_distance = std::numeric_limits<distance_t>::max();
+        for (std::size_t candidate_idx = 0; candidate_idx != count; ++candidate_idx) {
+            key_t cluster_key = clusters[candidate_idx].key;
+            distance_t cluster_distance = index.distance_between(dropped_cluster_key, cluster_key);
+            if (cluster_distance <= target_distance)
+                target_key = cluster_key, target_distance = cluster_distance;
+        }
+        clusters[cluster_idx].replacement = target_key;
+    }
+
+    // Sort dropped clusters by name to accelerate future lookups
+    std::sort(clusters.begin() + count, clusters.end(), [](cluster_t& a, cluster_t& b) { return a.key < b.key; });
+
+    // Replace evicted clusters
+    for (Py_ssize_t vector_idx = 0; vector_idx != vectors_count; ++vector_idx) {
+        key_t& cluster_key = keys_py2d(vector_idx, 0);
+
+        // To avoid implementing heterogeneous comparisons, lets wrap the `cluster_key`
+        cluster_t cluster_key_wrapped;
+        cluster_key_wrapped.key = cluster_key;
+        auto displaced_range = std::equal_range(clusters.begin() + count, clusters.end(), cluster_key_wrapped,
+                                                [](cluster_t const& a, cluster_t const& b) { return a.key < b.key; });
+        if (displaced_range.first == displaced_range.second)
+            continue;
+
+        cluster_key = displaced_range.first->replacement;
+    }
 
     py::tuple results(5);
     results[0] = keys_py;
@@ -904,6 +975,7 @@ PYBIND11_MODULE(compiled, m) {
         "cluster_many", &cluster_many_in_index<dense_index_py_t>, //
         py::arg("query"),                                         //
         py::arg("level") = 1,                                     //
+        py::arg("count") = 0,                                     //
         py::arg("threads") = 0                                    //
     );
 

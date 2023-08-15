@@ -327,8 +327,6 @@ class index_dense_gt {
         static key_and_slot_t any_slot(key_t key) { return {key, default_free_value<compressed_slot_t>()}; }
     };
 
-    key_and_slot_t key_and_any_slot() {}
-
     struct lookup_key_hash_t {
         using is_transparent = void;
         std::size_t operator()(key_and_slot_t const& k) const noexcept { return std::hash<key_t>{}(k.key); }
@@ -340,7 +338,7 @@ class index_dense_gt {
         bool operator()(key_and_slot_t const& a, key_t const& b) const noexcept { return a.key == b; }
         bool operator()(key_t const& a, key_and_slot_t const& b) const noexcept { return a == b.key; }
         bool operator()(key_and_slot_t const& a, key_and_slot_t const& b) const noexcept {
-            return (!a.any_slot() & !b.any_slot()) ? a.key == b.key && a.slot == b.slot : a.key == b.key;
+            return (!a.any_slot() && !b.any_slot()) ? a.key == b.key && a.slot == b.slot : a.key == b.key;
         }
     };
 
@@ -539,6 +537,13 @@ class index_dense_gt {
     bool get(key_t key, f32_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f32); }
     bool get(key_t key, f64_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f64); }
     // clang-format on
+
+    /**
+     *  @brief Computes the distance between two managed entities.
+     */
+    distance_punned_t distance_between(key_t a, key_t b) const {
+        return metric_proxy_t{*this}(typed_->at(a), typed_->at(b));
+    }
 
     /**
      *  @brief Reserves memory for the index and the labeled lookup.

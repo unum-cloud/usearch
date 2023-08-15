@@ -934,8 +934,10 @@ class Index:
         :return: Matches for one or more queries
         :rtype: Union[Matches, BatchMatches]
         """
-        if level is None and count is None:
+        if level is None:
             level = 1
+        if count is None:
+            count = 0
 
         return _search_in_compiled(
             self._compiled.cluster_many,
@@ -945,6 +947,7 @@ class Index:
             batch_size=batch_size,
             # Search constraints:
             level=level,
+            count=count,
             threads=threads,
         )
 
