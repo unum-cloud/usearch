@@ -82,19 +82,11 @@ def _normalize_dtype(dtype, metric: MetricKind = MetricKind.Cos) -> ScalarKind:
         "float32": ScalarKind.F32,
         "float16": ScalarKind.F16,
         "int8": ScalarKind.I8,
-    }
-    if isinstance(dtype, np.dtype):
-        dtype = dtype.name
-    return _normalize[dtype]
-
-
-def _to_numpy_compatible_dtype(dtype: ScalarKind) -> ScalarKind:
-    _normalize = {
-        ScalarKind.F64: ScalarKind.F64,
-        ScalarKind.F32: ScalarKind.F32,
-        ScalarKind.F16: ScalarKind.F16,
-        ScalarKind.I8: ScalarKind.F16,
-        ScalarKind.B1: ScalarKind.B1,
+        np.float64: ScalarKind.F64,
+        np.float32: ScalarKind.F32,
+        np.float16: ScalarKind.F16,
+        np.int8: ScalarKind.I8,
+        np.uint8: ScalarKind.B1,
     }
     return _normalize[dtype]
 
@@ -104,9 +96,11 @@ def _to_numpy_dtype(dtype: ScalarKind):
         ScalarKind.F64: np.float64,
         ScalarKind.F32: np.float32,
         ScalarKind.F16: np.float16,
-        ScalarKind.I8: np.float16,
+        ScalarKind.I8: np.int8,
         ScalarKind.B1: np.uint8,
     }
+    if dtype in _normalize.values():
+        return dtype
     return _normalize[dtype]
 
 
@@ -660,8 +654,9 @@ class Index:
         """
         if not dtype:
             dtype = self.dtype
+        else:
+            dtype = _normalize_dtype(dtype)
 
-        get_dtype = _to_numpy_compatible_dtype(dtype)
         view_dtype = _to_numpy_dtype(dtype)
 
         def cast(result):
@@ -675,7 +670,7 @@ class Index:
         if not isinstance(keys, np.ndarray):
             keys = np.array(keys, dtype=Key)
 
-        results = self._compiled.get_many(keys, get_dtype)
+        results = self._compiled.get_many(keys, dtype)
         results = [cast(result) for result in results]
         return results[0] if is_one else results
 

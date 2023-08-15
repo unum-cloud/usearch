@@ -66,8 +66,8 @@ def test_index_retrieval(ndim, metric, quantization, dtype, batch_size):
     keys = np.arange(batch_size)
     vectors = random_vectors(count=batch_size, ndim=ndim, dtype=dtype)
     index.add(keys, vectors, threads=threads)
-    vectors_retrived = np.vstack(index.get(keys))
-    assert np.allclose(vectors_retrived.astype(dtype), vectors, atol=0.1)
+    vectors_retrived = np.vstack(index.get(keys, dtype))
+    assert np.allclose(vectors_retrived, vectors, atol=0.1)
 
 
 @pytest.mark.parametrize("ndim", [3, 97, 256])
