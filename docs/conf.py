@@ -47,4 +47,4 @@ html_baseurl = '/docs/usearch/'
 breathe_projects = {'USearch': '../build/xml'}
 breathe_default_project = 'USearch'
 
-js_source_path = '../javascript/usearch.js'
+js_source_path = '../javascript/docs.js'
