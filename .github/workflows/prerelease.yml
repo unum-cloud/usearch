@@ -45,7 +45,7 @@ jobs:
 
   
   test_cpp_risc_v:
-    name: Test C++ on RISC-V
+    name: Test C++ for RISC-V
     runs-on: ubuntu-latest
 
     steps:
