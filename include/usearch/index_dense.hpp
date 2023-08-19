@@ -63,19 +63,21 @@ struct index_dense_head_t {
     misaligned_ref_gt<std::uint64_t> count_present;
     misaligned_ref_gt<std::uint64_t> count_deleted;
     misaligned_ref_gt<std::uint64_t> dimensions;
+    misaligned_ref_gt<bool> multi;
 
     index_dense_head_t(byte_t* ptr) noexcept
-        : magic((char const*)exchange(ptr, ptr + sizeof(magic_t))), //
-          version_major(exchange(ptr, ptr + sizeof(version_t))),    //
-          version_minor(exchange(ptr, ptr + sizeof(version_t))),    //
-          version_patch(exchange(ptr, ptr + sizeof(version_t))),    //
-          kind_metric(exchange(ptr, ptr + sizeof(metric_kind_t))),  //
-          kind_scalar(exchange(ptr, ptr + sizeof(scalar_kind_t))),  //
-          kind_key(exchange(ptr, ptr + sizeof(scalar_kind_t))),     //
-          kind_compressed_slot(exchange(ptr, ptr + sizeof(scalar_kind_t))),
-          count_present(exchange(ptr, ptr + sizeof(std::uint64_t))),
-          count_deleted(exchange(ptr, ptr + sizeof(std::uint64_t))),
-          dimensions(exchange(ptr, ptr + sizeof(std::uint64_t))) {}
+        : magic((char const*)exchange(ptr, ptr + sizeof(magic_t))),         //
+          version_major(exchange(ptr, ptr + sizeof(version_t))),            //
+          version_minor(exchange(ptr, ptr + sizeof(version_t))),            //
+          version_patch(exchange(ptr, ptr + sizeof(version_t))),            //
+          kind_metric(exchange(ptr, ptr + sizeof(metric_kind_t))),          //
+          kind_scalar(exchange(ptr, ptr + sizeof(scalar_kind_t))),          //
+          kind_key(exchange(ptr, ptr + sizeof(scalar_kind_t))),             //
+          kind_compressed_slot(exchange(ptr, ptr + sizeof(scalar_kind_t))), //
+          count_present(exchange(ptr, ptr + sizeof(std::uint64_t))),        //
+          count_deleted(exchange(ptr, ptr + sizeof(std::uint64_t))),        //
+          dimensions(exchange(ptr, ptr + sizeof(std::uint64_t))),           //
+          multi(exchange(ptr, ptr + sizeof(bool))) {}
 };
 
 struct index_dense_head_result_t {
@@ -674,6 +676,7 @@ class index_dense_gt {
             head.count_present = size();
             head.count_deleted = typed_->size() - size();
             head.dimensions = dimensions();
+            head.multi = multi();
 
             if (!callback(&buffer, sizeof(buffer)))
                 return result.failed("Failed to serialize into stream");
@@ -762,6 +765,7 @@ class index_dense_gt {
                 return result.failed("Slot type doesn't match, consider rebuilding");
 
             metric_ = metric_t(head.dimensions, head.kind_metric, head.kind_scalar);
+            config_.multi = head.multi;
         }
 
         // Pull the actual proximity graph
@@ -838,6 +842,7 @@ class index_dense_gt {
                 return result.failed("Slot type doesn't match, consider rebuilding");
 
             metric_ = metric_t(head.dimensions, head.kind_metric, head.kind_scalar);
+            config_.multi = head.multi;
             offset += sizeof(buffer);
         }
 
