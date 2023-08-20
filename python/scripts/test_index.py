@@ -192,7 +192,7 @@ def test_index_contains_remove_rename(batch_size):
 
 @pytest.mark.parametrize("ndim", [3, 97, 256])
 @pytest.mark.parametrize("metric", [MetricKind.Cos, MetricKind.L2sq])
-@pytest.mark.parametrize("batch_size", [100, 1024])
+@pytest.mark.parametrize("batch_size", [500, 1024])
 @pytest.mark.parametrize("quantization", [ScalarKind.F32, ScalarKind.I8])
 @pytest.mark.parametrize("dtype", [np.float32, np.float64, np.float16])
 def test_index_clustering(ndim, metric, quantization, dtype, batch_size):
@@ -211,3 +211,8 @@ def test_index_clustering(ndim, metric, quantization, dtype, batch_size):
     # If no argument is provided, we cluster the present entries
     clusters: BatchMatches = index.cluster(keys=keys[:50], threads=threads)
     assert len(clusters.keys) == 50
+
+    # If no argument is provided, we cluster the present entries
+    clusters: BatchMatches = index.cluster(min_count=3, max_count=10, threads=threads)
+    unique_clusters = set(clusters.keys.flatten().tolist())
+    assert len(unique_clusters) >= 3 and len(unique_clusters) <= 10

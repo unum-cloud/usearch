@@ -2400,7 +2400,8 @@ class index_gt {
         if (!next.reserve(expansion))
             return result.failed("Out of memory!");
 
-        result.cluster.member = at(search_for_one_(query, metric, prefetch, entry_slot_, max_level_, level, context));
+        result.cluster.member =
+            at(search_for_one_(query, metric, prefetch, entry_slot_, max_level_, level - 1, context));
         result.cluster.distance = context.measure(query, result.cluster.member, metric);
 
         // Normalize stats

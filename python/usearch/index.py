@@ -351,6 +351,22 @@ class BatchMatches:
         return f"usearch.BatchMatches({np.sum(self.counts)} across {len(self)} queries)"
 
 
+@dataclass
+class Clustering:
+    def __init__(
+        self,
+        index: Index,
+        queries: np.ndarray,
+        matches: BatchMatches,
+    ) -> None:
+        self.index = index
+        self.queries = queries
+        self.matches = matches
+
+    def __repr__(self) -> str:
+        return f"usearch.Clustering(for {len(self.queries)} queries)"
+
+
 class IndexedKeys:
     """Smart-reference for the range of keys present in a specific `Index`"""
 
@@ -910,7 +926,8 @@ class Index:
         *,
         vectors: Optional[np.ndarray] = None,
         keys: Optional[np.ndarray] = None,
-        count: Optional[int] = None,
+        min_count: Optional[int] = None,
+        max_count: Optional[int] = None,
         threads: int = 0,
         log: Union[str, bool] = False,
         batch_size: int = 0,
@@ -932,13 +949,18 @@ class Index:
         :return: Matches for one or more queries
         :rtype: Union[Matches, BatchMatches]
         """
-        if count is None:
-            count = 0
+        if min_count is None:
+            min_count = 0
+        if max_count is None:
+            max_count = 0
 
         if vectors is not None:
             assert keys is None, "You can either cluster vectors or member keys"
             results = self._compiled.cluster_vectors(
-                vectors, count=count, threads=threads
+                vectors,
+                min_count=min_count,
+                max_count=max_count,
+                threads=threads,
             )
         else:
             if keys is None:
@@ -946,9 +968,26 @@ class Index:
             if not isinstance(keys, np.ndarray):
                 keys = np.array(keys)
             keys = keys.astype(Key)
-            results = self._compiled.cluster_keys(keys, count=count, threads=threads)
+            results = self._compiled.cluster_keys(
+                keys,
+                min_count=min_count,
+                max_count=max_count,
+                threads=threads,
+            )
 
         return BatchMatches(*results)
+
+    def pairwise_distance(
+        self, left: KeyOrKeysLike, right: KeyOrKeysLike
+    ) -> Union[np.ndarray, float]:
+        assert isinstance(left, Iterable) == isinstance(right, Iterable)
+
+        if not isinstance(left, Iterable):
+            return self._compiled.pairwise_distance(int(left), int(right))
+        else:
+            left = np.array(left).astype(Key)
+            right = np.array(right).astype(Key)
+            return self._compiled.pairwise_distances(left, right)
 
     @property
     def keys(self) -> IndexedKeys:

@@ -599,7 +599,9 @@ template <typename scalar_at> struct rows_lookup_gt {
  *      4. number of computed pairwise distances.
  */
 template <typename index_at>
-static py::tuple cluster_vectors(index_at& index, py::buffer queries, std::size_t count, std::size_t threads) {
+static py::tuple cluster_vectors(        //
+    index_at& index, py::buffer queries, //
+    std::size_t min_count, std::size_t max_count, std::size_t threads) {
 
     if (index.limits().threads_search < threads)
         throw std::invalid_argument("Can't use that many threads!");
@@ -629,11 +631,11 @@ static py::tuple cluster_vectors(index_at& index, py::buffer queries, std::size_
 
     // clang-format off
     switch (numpy_string_to_kind(queries_info.format)) {
-    case scalar_kind_t::b1x8_k: cluster_result = cluster(index, queries_begin.as<b1x8_t const>(), queries_end.as<b1x8_t const>(), count, keys_ptr, distances_ptr, executor); break;
-    case scalar_kind_t::i8_k: cluster_result = cluster(index, queries_begin.as<i8_bits_t const>(), queries_end.as<i8_bits_t const>(), count, keys_ptr, distances_ptr, executor); break;
-    case scalar_kind_t::f16_k: cluster_result = cluster(index, queries_begin.as<f16_t const>(), queries_end.as<f16_t const>(), count, keys_ptr, distances_ptr, executor); break;
-    case scalar_kind_t::f32_k: cluster_result = cluster(index, queries_begin.as<f32_t const>(), queries_end.as<f32_t const>(), count, keys_ptr, distances_ptr, executor); break;
-    case scalar_kind_t::f64_k: cluster_result = cluster(index, queries_begin.as<f64_t const>(), queries_end.as<f64_t const>(), count, keys_ptr, distances_ptr, executor); break;
+    case scalar_kind_t::b1x8_k: cluster_result = cluster(index, queries_begin.as<b1x8_t const>(), queries_end.as<b1x8_t const>(), min_count, max_count, keys_ptr, distances_ptr, executor); break;
+    case scalar_kind_t::i8_k: cluster_result = cluster(index, queries_begin.as<i8_bits_t const>(), queries_end.as<i8_bits_t const>(), min_count, max_count, keys_ptr, distances_ptr, executor); break;
+    case scalar_kind_t::f16_k: cluster_result = cluster(index, queries_begin.as<f16_t const>(), queries_end.as<f16_t const>(), min_count, max_count, keys_ptr, distances_ptr, executor); break;
+    case scalar_kind_t::f32_k: cluster_result = cluster(index, queries_begin.as<f32_t const>(), queries_end.as<f32_t const>(), min_count, max_count, keys_ptr, distances_ptr, executor); break;
+    case scalar_kind_t::f64_k: cluster_result = cluster(index, queries_begin.as<f64_t const>(), queries_end.as<f64_t const>(), min_count, max_count, keys_ptr, distances_ptr, executor); break;
     default: throw std::invalid_argument("Incompatible scalars in the query matrix: " + queries_info.format);
     }
     // clang-format on
@@ -667,7 +669,9 @@ static py::tuple cluster_vectors(index_at& index, py::buffer queries, std::size_
  *      4. number of computed pairwise distances.
  */
 template <typename index_at>
-static py::tuple cluster_keys(index_at& index, py::array_t<key_t> queries_py, std::size_t count, std::size_t threads) {
+static py::tuple cluster_keys(                      //
+    index_at& index, py::array_t<key_t> queries_py, //
+    std::size_t min_count, std::size_t max_count, std::size_t threads) {
 
     if (index.limits().threads_search < threads)
         throw std::invalid_argument("Can't use that many threads!");
@@ -687,7 +691,7 @@ static py::tuple cluster_keys(index_at& index, py::array_t<key_t> queries_py, st
     distance_t* distances_ptr = reinterpret_cast<distance_t*>(&distances_py2d(0, 0));
 
     clustering_result_t cluster_result =
-        cluster(index, queries_begin, queries_end, count, keys_ptr, distances_ptr, executor);
+        cluster(index, queries_begin, queries_end, min_count, max_count, keys_ptr, distances_ptr, executor);
     cluster_result.error.raise();
 
     // Those would be set to 1 for all entries, in case of success
@@ -923,14 +927,16 @@ PYBIND11_MODULE(compiled, m) {
     i.def(                                                     //
         "cluster_vectors", &cluster_vectors<dense_index_py_t>, //
         py::arg("queries"),                                    //
-        py::arg("count") = 0,                                  //
+        py::arg("min_count") = 0,                              //
+        py::arg("max_count") = 0,                              //
         py::arg("threads") = 0                                 //
     );
 
     i.def(                                               //
         "cluster_keys", &cluster_keys<dense_index_py_t>, //
         py::arg("queries"),                              //
-        py::arg("count") = 0,                            //
+        py::arg("min_count") = 0,                        //
+        py::arg("max_count") = 0,                        //
         py::arg("threads") = 0                           //
     );
 
@@ -1064,6 +1070,24 @@ PYBIND11_MODULE(compiled, m) {
             for (Py_ssize_t task_idx = 0; task_idx != keys_py.size(); ++task_idx)
                 results_py1d(task_idx) = index.count(keys_py1d(task_idx));
             return results_py;
+        });
+
+    i.def( //
+        "pairwise_distances",
+        [](dense_index_py_t const& index, py::array_t<key_t> const& left_py,
+           py::array_t<key_t> const& right_py) -> py::array_t<distance_t> {
+            py::array_t<distance_t> results_py(left_py.size());
+            auto results_py1d = results_py.template mutable_unchecked<1>();
+            auto left_py1d = left_py.template unchecked<1>();
+            auto right_py1d = right_py.template unchecked<1>();
+            for (Py_ssize_t task_idx = 0; task_idx != left_py.size(); ++task_idx)
+                results_py1d(task_idx) = index.distance_between(left_py1d(task_idx), right_py1d(task_idx)).min;
+            return results_py;
+        });
+
+    i.def( //
+        "pairwise_distance", [](dense_index_py_t const& index, key_t left, key_t right) -> distance_t {
+            return index.distance_between(left, right).min;
         });
 
     i.def("get_many", &get_many<dense_index_py_t>, py::arg("keys"), py::arg("dtype") = scalar_kind_t::f32_k);
