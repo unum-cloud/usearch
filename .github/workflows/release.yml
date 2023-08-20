@@ -319,7 +319,7 @@ jobs:
         run: |
               sudo apt update && 
               sudo apt install -y doxygen graphviz dia git && 
-              pip install sphinx sphinx-js breathe furo m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery && 
+              pip install sphinx==7.1.2 sphinx-js breathe furo m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery && 
               npm install -g jsdoc
       - name: Install USearch from PyPi
         run: pip install usearch
