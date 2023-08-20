@@ -1123,13 +1123,13 @@ struct dummy_executor_t {
 };
 
 /**
- *  @brief  An example of what a USearch-compatible label-to-label mapping should look like.
+ *  @brief  An example of what a USearch-compatible key-to-key mapping should look like.
  *
  *  This is particularly helpful for "Semantic Joins", where we map entries of one collection
  *  to entries of another. In assymetric setups, where A -> B is needed, but B -> A is not,
  *  this can be passed to minimize memory usage.
  */
-struct dummy_label_to_label_mapping_t {
+struct dummy_key_to_key_mapping_t {
     struct member_ref_t {
         template <typename key_at> member_ref_t& operator=(key_at&&) noexcept { return *this; }
     };
@@ -1147,7 +1147,7 @@ template <typename object_at> static constexpr bool is_dummy() {
            std::is_same<object_t, dummy_progress_t>::value ||  //
            std::is_same<object_t, dummy_prefetch_t>::value ||  //
            std::is_same<object_t, dummy_executor_t>::value ||  //
-           std::is_same<object_t, dummy_label_to_label_mapping_t>::value;
+           std::is_same<object_t, dummy_key_to_key_mapping_t>::value;
 }
 
 template <typename, typename at> struct has_reset_gt {
@@ -1987,6 +1987,28 @@ class index_gt {
     struct match_t {
         member_cref_t member;
         distance_t distance;
+
+        inline match_t(member_cref_t member, distance_t distance) noexcept : member(member), distance(distance) {}
+
+        inline match_t(match_t&& other) noexcept
+            : member({other.member.key.ptr(), other.member.slot}), distance(other.distance) {}
+
+        inline match_t(match_t const& other) noexcept
+            : member({other.member.key.ptr(), other.member.slot}), distance(other.distance) {}
+
+        inline match_t& operator=(match_t const& other) noexcept {
+            member.key.reset(other.member.key.ptr());
+            member.slot = other.member.slot;
+            distance = other.distance;
+            return *this;
+        }
+
+        inline match_t& operator=(match_t&& other) noexcept {
+            member.key.reset(other.member.key.ptr());
+            member.slot = other.member.slot;
+            distance = other.distance;
+            return *this;
+        }
     };
 
     class search_result_t {
@@ -2076,7 +2098,7 @@ class index_gt {
         error_t error{};
         std::size_t visited_members{};
         std::size_t computed_distances{};
-        match_t cluster{{nullptr}, 0};
+        match_t cluster{{nullptr}, std::numeric_limits<distance_t>::max()};
 
         explicit operator bool() const noexcept { return !error; }
         cluster_result_t failed(error_t message) noexcept {
@@ -2670,10 +2692,10 @@ class index_gt {
      *  @param[in] executor Thread-pool to execute the job in parallel.
      *  @param[in] progress Callback to report the execution progress.
      */
-    template <typename values_at, typename metric_at,                       //
-              typename slot_transition_at = dummy_label_to_label_mapping_t, //
-              typename executor_at = dummy_executor_t,                      //
-              typename progress_at = dummy_progress_t,                      //
+    template <typename values_at, typename metric_at,                   //
+              typename slot_transition_at = dummy_key_to_key_mapping_t, //
+              typename executor_at = dummy_executor_t,                  //
+              typename progress_at = dummy_progress_t,                  //
               typename prefetch_at = dummy_prefetch_t>
     void compact(                             //
         values_at&& values,                   //
@@ -3301,10 +3323,10 @@ template < //
     typename men_metric_at,   //
     typename women_metric_at, //
 
-    typename man_to_woman_at = dummy_label_to_label_mapping_t, //
-    typename woman_to_man_at = dummy_label_to_label_mapping_t, //
-    typename executor_at = dummy_executor_t,                   //
-    typename progress_at = dummy_progress_t                    //
+    typename man_to_woman_at = dummy_key_to_key_mapping_t, //
+    typename woman_to_man_at = dummy_key_to_key_mapping_t, //
+    typename executor_at = dummy_executor_t,               //
+    typename progress_at = dummy_progress_t                //
     >
 static join_result_t join(               //
     men_at const& men,                   //
@@ -3384,6 +3406,7 @@ static join_result_t join(               //
     std::atomic<std::size_t> engagements{0};
     std::atomic<std::size_t> computed_distances{0};
     std::atomic<std::size_t> visited_members{0};
+    std::atomic<char const*> atomic_error{nullptr};
 
     // Concurrently process all the men
     executor.parallel([&](std::size_t thread_idx) {
@@ -3394,7 +3417,7 @@ static join_result_t join(               //
         compressed_slot_t free_man_slot;
 
         // While there exist a free man who still has a woman to propose to.
-        while (true) {
+        while (!atomic_error.load(std::memory_order_relaxed)) {
             std::size_t passed_rounds = 0;
             std::size_t total_rounds = 0;
             {
@@ -3419,7 +3442,8 @@ static join_result_t join(               //
             visited_members += candidates.visited_members;
             computed_distances += candidates.computed_distances;
             if (!candidates) {
-                // TODO:
+                atomic_error = candidates.error.release();
+                break;
             }
 
             auto match = candidates.back();
@@ -3461,6 +3485,9 @@ static join_result_t join(               //
             women_locks.atomic_reset(woman.slot);
         }
     });
+
+    if (atomic_error)
+        return result.failed(atomic_error.load());
 
     // Export the "slots" into keys:
     std::size_t intersection_size = 0;
