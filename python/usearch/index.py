@@ -907,23 +907,21 @@ class Index:
 
     def cluster(
         self,
-        vectors: np.ndarray,
         *,
+        vectors: Optional[np.ndarray] = None,
+        keys: Optional[np.ndarray] = None,
         count: Optional[int] = None,
-        level: Optional[int] = None,
         threads: int = 0,
         log: Union[str, bool] = False,
         batch_size: int = 0,
     ) -> Union[Matches, BatchMatches]:
         """
-        Performs approximate nearest neighbors search for one or more queries.
+        Clusters already indexed or provided `vectors`, mapping them to various centroids.
 
-        :param vectors: Query vector or vectors.
-        :type vectors: VectorOrVectorsLike
-        :param count: Number of clusters to produce, can be inferred from `level`
+        :param vectors: .
+        :type vectors: Optional[VectorOrVectorsLike]
+        :param count: Upper bound on the number of clusters to produce
         :type count: Optional[int], defaults to None
-        :param level: Graph level to target - higher means coarse, can be inferred from `count`
-        :type level: Optional[int], defaults to None
 
         :param threads: Optimal number of cores to use,
         :type threads: int, defaults to 0
@@ -934,22 +932,23 @@ class Index:
         :return: Matches for one or more queries
         :rtype: Union[Matches, BatchMatches]
         """
-        if level is None:
-            level = 1
         if count is None:
             count = 0
 
-        return _search_in_compiled(
-            self._compiled.cluster_many,
-            vectors,
-            # Batch scheduling:
-            log=log,
-            batch_size=batch_size,
-            # Search constraints:
-            level=level,
-            count=count,
-            threads=threads,
-        )
+        if vectors is not None:
+            assert keys is None, "You can either cluster vectors or member keys"
+            results = self._compiled.cluster_vectors(
+                vectors, count=count, threads=threads
+            )
+        else:
+            if keys is None:
+                keys = self._compiled.get_keys_in_slice()
+            if not isinstance(keys, np.ndarray):
+                keys = np.array(keys)
+            keys = keys.astype(Key)
+            results = self._compiled.cluster_keys(keys, count=count, threads=threads)
+
+        return BatchMatches(*results)
 
     @property
     def keys(self) -> IndexedKeys:

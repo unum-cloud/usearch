@@ -53,7 +53,7 @@ cppcheck --enable=all --force --suppress=cstyleCast --suppress=unusedFunction \
 Testing:
 
 ```sh
-cmake -DCMAKE_CXX_COMPILER=gcc-12 -DCMAKE_CXX_COMPILER=g++-12 -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make -C ./build_debug && ./build_debug/test
+cmake -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make -C ./build_debug && ./build_debug/test
 ```
 
 ## Python 3
@@ -63,7 +63,7 @@ The `-s` option will disable capturing the logs.
 The `-x` option will exit after first failure to simplify debugging.
 
 ```sh
-pip install -e . && pytest python/scripts/test_index.py -s -x
+pip install -e . && pytest python/scripts/ -s -x
 ```
 
 Linting:

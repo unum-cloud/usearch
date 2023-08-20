@@ -576,57 +576,20 @@ static py::tuple search_many_brute_force(    //
     return results;
 }
 
-template <typename scalar_at>
-static void cluster_typed(                                              //
-    dense_index_py_t& index, py::buffer_info& vectors_info,             //
-    std::size_t level, std::size_t threads,                             //
-    py::array_t<key_t>& keys_py, py::array_t<distance_t>& distances_py, //
-    std::atomic<std::size_t>& stats_visited_members, std::atomic<std::size_t>& stats_computed_distances) {
+template <typename scalar_at> struct rows_lookup_gt {
+    byte_t* data_;
+    std::size_t stride_;
 
-    auto keys_py2d = keys_py.template mutable_unchecked<2>();
-    auto distances_py2d = distances_py.template mutable_unchecked<2>();
-
-    Py_ssize_t vectors_count = vectors_info.shape[0];
-    byte_t const* vectors_data = reinterpret_cast<byte_t const*>(vectors_info.ptr);
-
-    if (!threads)
-        threads = std::thread::hardware_concurrency();
-    if (!index.reserve(index_limits_t(index.size(), threads)))
-        throw std::invalid_argument("Out of memory!");
-
-    atomic_error_t atomic_error{nullptr};
-    executor_default_t{threads}.dynamic(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-        scalar_at const* vector = (scalar_at const*)(vectors_data + task_idx * vectors_info.strides[0]);
-        dense_cluster_result_t result = index.cluster(vector, level, thread_idx);
-        if (!result) {
-            atomic_error = result.error.release();
-            return false;
-        }
-
-        keys_py2d(task_idx, 0) = result.cluster.member.key;
-        distances_py2d(task_idx, 0) = result.cluster.distance;
-
-        stats_visited_members += result.visited_members;
-        stats_computed_distances += result.computed_distances;
-
-        // We don't want to check for signals from multiple threads
-        if (thread_idx == 0)
-            if (PyErr_CheckSignals() != 0)
-                return false;
-        return true;
-    });
-
-    // Raise the error from a single thread
-    auto error = atomic_error.load();
-    if (error) {
-        PyErr_SetString(PyExc_RuntimeError, error);
-        throw py::error_already_set();
-    }
-}
+    rows_lookup_gt(void* data, std::size_t stride) noexcept : data_((byte_t*)data), stride_(stride) {}
+    scalar_at* operator[](std::size_t i) const noexcept { return reinterpret_cast<scalar_at*>(data_ + i * stride_); }
+    std::ptrdiff_t operator-(rows_lookup_gt const& other) const noexcept { return (data_ - other.data_) / stride_; }
+    rows_lookup_gt operator+(std::size_t n) const noexcept { return {data_ + stride_ * n, stride_}; }
+    template <typename other_scalar_at> rows_lookup_gt<other_scalar_at> as() const noexcept { return {data_, stride_}; }
+};
 
 /**
- *  @param vectors Matrix of vectors to search for.
- *  @param level Graph level to query.
+ *  @param queries Matrix of vectors to search for.
+ *  @param count Number of clusters to produce.
  *
  *  @return Tuple with:
  *      1. vector of cluster IDs,
@@ -636,123 +599,109 @@ static void cluster_typed(                                              //
  *      4. number of computed pairwise distances.
  */
 template <typename index_at>
-static py::tuple cluster_many_in_index(  //
-    index_at& index, py::buffer vectors, //
-    std::size_t level, std::size_t count, std::size_t threads) {
-
-    // Determine the level, which would contain enough clusters for it
-    if (level == 0) {
-        for (; level <= index.max_level(); ++level) {
-            if (index.stats(level).nodes < count)
-                break;
-        }
-    }
+static py::tuple cluster_vectors(index_at& index, py::buffer queries, std::size_t count, std::size_t threads) {
 
     if (index.limits().threads_search < threads)
         throw std::invalid_argument("Can't use that many threads!");
 
-    py::buffer_info vectors_info = vectors.request();
-    if (vectors_info.ndim != 2)
-        throw std::invalid_argument("Expects a matrix of vectors to add!");
+    py::buffer_info queries_info = queries.request();
+    if (queries_info.ndim != 2)
+        throw std::invalid_argument("Expects a matrix of queries to add!");
 
-    Py_ssize_t vectors_count = vectors_info.shape[0];
-    Py_ssize_t vectors_dimensions = vectors_info.shape[1];
-    if (vectors_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
+    std::size_t queries_count = static_cast<std::size_t>(queries_info.shape[0]);
+    std::size_t queries_stride = static_cast<std::size_t>(queries_info.strides[0]);
+    std::size_t queries_dimensions = static_cast<std::size_t>(queries_info.shape[1]);
+    if (queries_dimensions != index.scalar_words())
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
 
-    py::array_t<key_t> keys_py({vectors_count, Py_ssize_t(1)});
-    py::array_t<distance_t> distances_py({vectors_count, Py_ssize_t(1)});
-    py::array_t<Py_ssize_t> counts_py(vectors_count);
-    std::atomic<std::size_t> stats_visited_members(0);
-    std::atomic<std::size_t> stats_computed_distances(0);
+    py::array_t<key_t> keys_py({Py_ssize_t(queries_count), Py_ssize_t(1)});
+    py::array_t<distance_t> distances_py({Py_ssize_t(queries_count), Py_ssize_t(1)});
+    clustering_result_t cluster_result;
+    executor_default_t executor{threads};
 
-    // Those would be set for one for all entries, in case of success
-    auto counts_py1d = counts_py.template mutable_unchecked<1>();
-    for (Py_ssize_t vector_idx = 0; vector_idx != vectors_count; ++vector_idx)
-        counts_py1d(vector_idx) = 1;
+    auto keys_py2d = keys_py.template mutable_unchecked<2>();
+    auto distances_py2d = distances_py.template mutable_unchecked<2>();
+    key_t* keys_ptr = reinterpret_cast<key_t*>(&keys_py2d(0, 0));
+    distance_t* distances_ptr = reinterpret_cast<distance_t*>(&distances_py2d(0, 0));
+
+    rows_lookup_gt<byte_t const> queries_begin(queries_info.ptr, queries_stride);
+    rows_lookup_gt<byte_t const> queries_end = queries_begin + queries_count;
 
     // clang-format off
-    switch (numpy_string_to_kind(vectors_info.format)) {
-    case scalar_kind_t::b1x8_k: cluster_typed<b1x8_t>(index, vectors_info, level, threads, keys_py, distances_py, stats_visited_members, stats_computed_distances); break;
-    case scalar_kind_t::i8_k: cluster_typed<i8_bits_t>(index, vectors_info, level, threads, keys_py, distances_py, stats_visited_members, stats_computed_distances); break;
-    case scalar_kind_t::f16_k: cluster_typed<f16_t>(index, vectors_info, level, threads, keys_py, distances_py, stats_visited_members, stats_computed_distances); break;
-    case scalar_kind_t::f32_k: cluster_typed<f32_t>(index, vectors_info, level, threads, keys_py, distances_py, stats_visited_members, stats_computed_distances); break;
-    case scalar_kind_t::f64_k: cluster_typed<f64_t>(index, vectors_info, level, threads, keys_py, distances_py, stats_visited_members, stats_computed_distances); break;
-    default: throw std::invalid_argument("Incompatible scalars in the query matrix: " + vectors_info.format);
+    switch (numpy_string_to_kind(queries_info.format)) {
+    case scalar_kind_t::b1x8_k: cluster_result = cluster(index, queries_begin.as<b1x8_t const>(), queries_end.as<b1x8_t const>(), count, keys_ptr, distances_ptr, executor); break;
+    case scalar_kind_t::i8_k: cluster_result = cluster(index, queries_begin.as<i8_bits_t const>(), queries_end.as<i8_bits_t const>(), count, keys_ptr, distances_ptr, executor); break;
+    case scalar_kind_t::f16_k: cluster_result = cluster(index, queries_begin.as<f16_t const>(), queries_end.as<f16_t const>(), count, keys_ptr, distances_ptr, executor); break;
+    case scalar_kind_t::f32_k: cluster_result = cluster(index, queries_begin.as<f32_t const>(), queries_end.as<f32_t const>(), count, keys_ptr, distances_ptr, executor); break;
+    case scalar_kind_t::f64_k: cluster_result = cluster(index, queries_begin.as<f64_t const>(), queries_end.as<f64_t const>(), count, keys_ptr, distances_ptr, executor); break;
+    default: throw std::invalid_argument("Incompatible scalars in the query matrix: " + queries_info.format);
     }
     // clang-format on
 
-    struct cluster_t {
-        key_t key = 0;
-        union {
-            std::size_t popularity = 0;
-            key_t replacement;
-        };
-    };
+    cluster_result.error.raise();
 
-    // Now once we have identified the closest clusters,
-    // we can try reducing their quantity, refining
-    std::vector<cluster_t> clusters(vectors_count);
-    auto keys_py2d = keys_py.template mutable_unchecked<2>();
-    for (Py_ssize_t vector_idx = 0; vector_idx != vectors_count; ++vector_idx)
-        clusters[vector_idx].key = keys_py2d(vector_idx, 0), clusters[vector_idx].popularity = 1;
-
-    // Sort by cluster key
-    std::sort(clusters.begin(), clusters.end(), [](cluster_t& a, cluster_t& b) { return a.key < b.key; });
-
-    // Transform into run-length encoding
-    std::size_t last_idx = 0;
-    for (std::size_t current_idx = 1; current_idx != clusters.size(); ++current_idx) {
-        if (clusters[last_idx].key == clusters[current_idx].key) {
-            clusters[last_idx].popularity++;
-        } else {
-            last_idx++;
-            clusters[last_idx] = clusters[current_idx];
-        }
-    }
-    clusters.resize(last_idx + 1);
-
-    // Drop smaller clusters iteratively merging those into the closest ones.
-    std::sort(clusters.begin(), clusters.end(), [](cluster_t& a, cluster_t& b) { return a.popularity > b.popularity; });
-
-    // Instead of doing it at once, use the `cluster_t::replacement` property to plan future re-mapping.
-    for (std::size_t cluster_idx = count; cluster_idx < clusters.size(); ++cluster_idx) {
-        key_t dropped_cluster_key = clusters[cluster_idx].key;
-        key_t target_key = dropped_cluster_key;
-        distance_t target_distance = std::numeric_limits<distance_t>::max();
-        for (std::size_t candidate_idx = 0; candidate_idx != count; ++candidate_idx) {
-            key_t cluster_key = clusters[candidate_idx].key;
-            distance_t cluster_distance = index.distance_between(dropped_cluster_key, cluster_key);
-            if (cluster_distance <= target_distance)
-                target_key = cluster_key, target_distance = cluster_distance;
-        }
-        clusters[cluster_idx].replacement = target_key;
-    }
-
-    // Sort dropped clusters by name to accelerate future lookups
-    std::sort(clusters.begin() + count, clusters.end(), [](cluster_t& a, cluster_t& b) { return a.key < b.key; });
-
-    // Replace evicted clusters
-    for (Py_ssize_t vector_idx = 0; vector_idx != vectors_count; ++vector_idx) {
-        key_t& cluster_key = keys_py2d(vector_idx, 0);
-
-        // To avoid implementing heterogeneous comparisons, lets wrap the `cluster_key`
-        cluster_t cluster_key_wrapped;
-        cluster_key_wrapped.key = cluster_key;
-        auto displaced_range = std::equal_range(clusters.begin() + count, clusters.end(), cluster_key_wrapped,
-                                                [](cluster_t const& a, cluster_t const& b) { return a.key < b.key; });
-        if (displaced_range.first == displaced_range.second)
-            continue;
-
-        cluster_key = displaced_range.first->replacement;
-    }
+    // Those would be set to 1 for all entries, in case of success
+    py::array_t<Py_ssize_t> counts_py(queries_count);
+    auto counts_py1d = counts_py.template mutable_unchecked<1>();
+    for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx)
+        counts_py1d(static_cast<Py_ssize_t>(query_idx)) = 1;
 
     py::tuple results(5);
     results[0] = keys_py;
     results[1] = distances_py;
     results[2] = counts_py;
-    results[3] = stats_visited_members.load();
-    results[4] = stats_computed_distances.load();
+    results[3] = cluster_result.visited_members;
+    results[4] = cluster_result.computed_distances;
+    return results;
+}
+
+/**
+ *  @param queries Array of keys to cluster.
+ *  @param count Number of clusters to produce.
+ *
+ *  @return Tuple with:
+ *      1. vector of cluster IDs,
+ *      2. vector of distances to those clusters,
+ *      3. array with match counts, set to all ones,
+ *      4. number of visited nodes,
+ *      4. number of computed pairwise distances.
+ */
+template <typename index_at>
+static py::tuple cluster_keys(index_at& index, py::array_t<key_t> queries_py, std::size_t count, std::size_t threads) {
+
+    if (index.limits().threads_search < threads)
+        throw std::invalid_argument("Can't use that many threads!");
+
+    std::size_t queries_count = static_cast<std::size_t>(queries_py.size());
+    auto queries_py1d = queries_py.template unchecked<1>();
+    key_t const* queries_begin = &queries_py1d(0);
+    key_t const* queries_end = queries_begin + queries_count;
+
+    py::array_t<key_t> keys_py({Py_ssize_t(queries_count), Py_ssize_t(1)});
+    py::array_t<distance_t> distances_py({Py_ssize_t(queries_count), Py_ssize_t(1)});
+    executor_default_t executor{threads};
+
+    auto keys_py2d = keys_py.template mutable_unchecked<2>();
+    auto distances_py2d = distances_py.template mutable_unchecked<2>();
+    key_t* keys_ptr = reinterpret_cast<key_t*>(&keys_py2d(0, 0));
+    distance_t* distances_ptr = reinterpret_cast<distance_t*>(&distances_py2d(0, 0));
+
+    clustering_result_t cluster_result =
+        cluster(index, queries_begin, queries_end, count, keys_ptr, distances_ptr, executor);
+    cluster_result.error.raise();
+
+    // Those would be set to 1 for all entries, in case of success
+    py::array_t<Py_ssize_t> counts_py(queries_count);
+    auto counts_py1d = counts_py.template mutable_unchecked<1>();
+    for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx)
+        counts_py1d(static_cast<Py_ssize_t>(query_idx)) = 1;
+
+    py::tuple results(5);
+    results[0] = keys_py;
+    results[1] = distances_py;
+    results[2] = counts_py;
+    results[3] = cluster_result.visited_members;
+    results[4] = cluster_result.computed_distances;
     return results;
 }
 
@@ -761,7 +710,7 @@ static std::unordered_map<key_t, key_t> join_index(       //
     std::size_t max_proposals, bool exact) {
 
     std::unordered_map<key_t, key_t> a_to_b;
-    dummy_label_to_label_mapping_t b_to_a;
+    dummy_key_to_key_mapping_t b_to_a;
     a_to_b.reserve((std::min)(a.size(), b.size()));
 
     index_join_config_t config;
@@ -965,18 +914,24 @@ PYBIND11_MODULE(compiled, m) {
 
     i.def(                                                      //
         "search_many", &search_many_in_index<dense_index_py_t>, //
-        py::arg("query"),                                       //
+        py::arg("queries"),                                     //
         py::arg("count") = 10,                                  //
         py::arg("exact") = false,                               //
         py::arg("threads") = 0                                  //
     );
 
-    i.def(                                                        //
-        "cluster_many", &cluster_many_in_index<dense_index_py_t>, //
-        py::arg("query"),                                         //
-        py::arg("level") = 1,                                     //
-        py::arg("count") = 0,                                     //
-        py::arg("threads") = 0                                    //
+    i.def(                                                     //
+        "cluster_vectors", &cluster_vectors<dense_index_py_t>, //
+        py::arg("queries"),                                    //
+        py::arg("count") = 0,                                  //
+        py::arg("threads") = 0                                 //
+    );
+
+    i.def(                                               //
+        "cluster_keys", &cluster_keys<dense_index_py_t>, //
+        py::arg("queries"),                              //
+        py::arg("count") = 0,                            //
+        py::arg("threads") = 0                           //
     );
 
     i.def(

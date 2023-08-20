@@ -249,13 +249,16 @@ class index_dense_gt {
 
     using serialization_config_t = index_dense_serialization_config_t;
 
+    using dynamic_allocator_t = aligned_allocator_gt<byte_t, 64>;
+    using tape_allocator_t = memory_mapping_allocator_gt<64>;
+
   private:
     /// @brief Schema: input buffer, bytes in input buffer, output buffer.
     using cast_t = std::function<bool(byte_t const*, std::size_t, byte_t*)>;
     /// @brief Punned index.
     using index_t = index_gt<                 //
         distance_t, key_t, compressed_slot_t, //
-        aligned_allocator_gt<byte_t, 64>, memory_mapping_allocator_gt<64>>;
+        dynamic_allocator_t, tape_allocator_t>;
     using index_allocator_t = aligned_allocator_gt<index_t, 64>;
 
     using member_iterator_t = typename index_t::member_iterator_t;
@@ -420,13 +423,13 @@ class index_dense_gt {
      *  @brief Constructs an instance of ::index_dense_gt.
      *  @param[in] metric One of the provided or an @b ad-hoc metric, type-punned.
      *  @param[in] config The index configuration (optional).
-     *  @param[in] free_label The key used for freed vectors (optional).
+     *  @param[in] free_key The key used for freed vectors (optional).
      *  @return An instance of ::index_dense_gt.
      */
     static index_dense_gt make(           //
         metric_t metric,                  //
         index_dense_config_t config = {}, //
-        key_t free_label = default_free_value<key_t>()) {
+        key_t free_key = default_free_value<key_t>()) {
 
         scalar_kind_t scalar_kind = metric.scalar_kind();
         std::size_t hardware_threads = std::thread::hardware_concurrency();
@@ -436,7 +439,7 @@ class index_dense_gt {
         result.cast_buffer_.resize(hardware_threads * metric.bytes_per_vector());
         result.casts_ = make_casts_(scalar_kind);
         result.metric_ = metric;
-        result.free_key_ = free_label;
+        result.free_key_ = free_key;
 
         // Fill the thread IDs.
         result.available_threads_.resize(hardware_threads);
@@ -498,6 +501,8 @@ class index_dense_gt {
     stats_t stats() const { return typed_->stats(); }
     stats_t stats(std::size_t level) const { return typed_->stats(level); }
 
+    dynamic_allocator_t const& allocator() const { return typed_->dynamic_allocator(); }
+
     /**
      *  @brief  A relatively accurate lower bound on the amount of memory consumed by the system.
      *          In practice it's error will be below 10%.
@@ -513,6 +518,14 @@ class index_dense_gt {
     }
 
     static constexpr std::size_t any_thread() { return std::numeric_limits<std::size_t>::max(); }
+    static constexpr distance_t infinite_distance() { return std::numeric_limits<distance_t>::max(); }
+
+    struct aggregated_distances_t {
+        std::size_t count = 0;
+        distance_t mean = infinite_distance();
+        distance_t min = infinite_distance();
+        distance_t max = infinite_distance();
+    };
 
     // clang-format off
     add_result_t add(key_t key, b1x8_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_b1x8); }
@@ -527,28 +540,104 @@ class index_dense_gt {
     search_result_t search(f32_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, thread, exact, casts_.from_f32); }
     search_result_t search(f64_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, thread, exact, casts_.from_f64); }
 
+    bool get(key_t key, b1x8_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_b1x8); }
+    bool get(key_t key, i8_bits_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_i8); }
+    bool get(key_t key, f16_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f16); }
+    bool get(key_t key, f32_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f32); }
+    bool get(key_t key, f64_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f64); }
+
     cluster_result_t cluster(b1x8_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_b1x8); }
     cluster_result_t cluster(i8_bits_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_i8); }
     cluster_result_t cluster(f16_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_f16); }
     cluster_result_t cluster(f32_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_f32); }
     cluster_result_t cluster(f64_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_f64); }
 
-    bool get(key_t key, b1x8_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_b1x8); }
-    bool get(key_t key, i8_bits_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_i8); }
-    bool get(key_t key, f16_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f16); }
-    bool get(key_t key, f32_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f32); }
-    bool get(key_t key, f64_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f64); }
+    aggregated_distances_t distance_between(key_t key, b1x8_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_b1x8); }
+    aggregated_distances_t distance_between(key_t key, i8_bits_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_i8); }
+    aggregated_distances_t distance_between(key_t key, f16_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_f16); }
+    aggregated_distances_t distance_between(key_t key, f32_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_f32); }
+    aggregated_distances_t distance_between(key_t key, f64_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_f64); }
     // clang-format on
 
     /**
-     *  @brief Computes the distance between two managed entities.
+     *  @brief  Computes the distance between two managed entities.
+     *          If either key maps into more than one vector, will aggregate results
+     *          exporting the mean, maximum, and minimum values.
      */
-    distance_punned_t distance_between(key_t a, key_t b) const {
-        return metric_proxy_t{*this}(typed_->at(a), typed_->at(b));
+    aggregated_distances_t distance_between(key_t a, key_t b, std::size_t = any_thread()) const {
+        shared_lock_t lock(slot_lookup_mutex_);
+        auto a_range = slot_lookup_.equal_range(key_and_slot_t::any_slot(a));
+        auto b_range = slot_lookup_.equal_range(key_and_slot_t::any_slot(b));
+        bool a_missing = a_range.first == a_range.second;
+        bool b_missing = b_range.first == b_range.second;
+        aggregated_distances_t result;
+        if (!a_missing || !b_missing)
+            return result;
+
+        result.min = std::numeric_limits<distance_t>::max();
+        result.max = std::numeric_limits<distance_t>::min();
+        result.mean = 0;
+        result.count = 0;
+
+        while (a_range.first != a_range.second) {
+            key_and_slot_t a_key_and_slot = *a_range.first;
+            byte_t const* a_vector = vectors_lookup_[a_key_and_slot.slot];
+            while (b_range.first != b_range.second) {
+                key_and_slot_t b_key_and_slot = *b_range.first;
+                byte_t const* b_vector = vectors_lookup_[b_key_and_slot.slot];
+                distance_t a_b_distance = metric_(a_vector, b_vector);
+
+                result.mean += a_b_distance;
+                result.min = (std::min)(result.min, a_b_distance);
+                result.max = (std::max)(result.max, a_b_distance);
+                result.count++;
+
+                //
+                ++b_range.first;
+            }
+            ++a_range.first;
+        }
+
+        result.mean /= result.count;
+        return result;
     }
 
     /**
-     *  @brief Reserves memory for the index and the labeled lookup.
+     *  @brief  Identifies a node in a given `level`, that is the closest to the `key`.
+     */
+    cluster_result_t cluster(key_t key, std::size_t level, std::size_t thread = any_thread()) const {
+
+        // Check if such `key` is even present.
+        shared_lock_t slots_lock(slot_lookup_mutex_);
+        auto key_range = slot_lookup_.equal_range(key_and_slot_t::any_slot(key));
+        cluster_result_t result;
+        if (key_range.first == key_range.second)
+            return result.failed("Key missing!");
+
+        index_cluster_config_t cluster_config;
+        thread_lock_t lock = thread_lock_(thread);
+        cluster_config.thread = lock.thread_id;
+        cluster_config.expansion = config_.expansion_search;
+        metric_proxy_t metric{*this};
+        auto allow = [=](member_cref_t const& member) noexcept { return member.key != free_key_; };
+
+        // Find the closest cluster for any vector under that key.
+        while (key_range.first != key_range.second) {
+            key_and_slot_t key_and_slot = *key_range.first;
+            byte_t const* vector_data = vectors_lookup_[key_and_slot.slot];
+            cluster_result_t new_result = typed_->cluster(vector_data, level, metric, cluster_config, allow);
+            if (!new_result)
+                return new_result;
+            if (new_result.cluster.distance < result.cluster.distance)
+                result = std::move(new_result);
+
+            ++key_range.first;
+        }
+        return result;
+    }
+
+    /**
+     *  @brief Reserves memory for the index and the keyed lookup.
      *  @return `true` if the memory reservation was successful, `false` otherwise.
      */
     bool reserve(index_limits_t limits) {
@@ -594,7 +683,10 @@ class index_dense_gt {
         vectors_lookup_.clear();
         free_keys_.clear();
         vectors_tape_allocator_.reset();
-        available_threads_.clear();
+
+        // Reset the thread IDs.
+        available_threads_.resize(std::thread::hardware_concurrency());
+        std::iota(available_threads_.begin(), available_threads_.end(), 0ul);
     }
 
     /**
@@ -775,7 +867,7 @@ class index_dense_gt {
         if (typed_->size() != static_cast<std::size_t>(matrix_rows))
             return result.failed("Index size and the number of vectors doesn't match");
 
-        reindex_labels_();
+        reindex_keys_();
         return result;
     }
 
@@ -859,7 +951,7 @@ class index_dense_gt {
             for (std::uint64_t slot = 0; slot != matrix_rows; ++slot)
                 vectors_lookup_[slot] = (byte_t*)vectors_buffer.data() + matrix_cols * slot;
 
-        reindex_labels_();
+        reindex_keys_();
         return result;
     }
 
@@ -937,8 +1029,8 @@ class index_dense_gt {
      *          `result.completed` will contain the number of keys that were successfully removed.
      *          `result.error` will contain an error message if an error occurred during the removal operation.
      */
-    template <typename labels_iterator_at>
-    labeling_result_t remove(labels_iterator_at keys_begin, labels_iterator_at keys_end) {
+    template <typename keys_iterator_at>
+    labeling_result_t remove(keys_iterator_at keys_begin, keys_iterator_at keys_end) {
 
         labeling_result_t result;
         unique_lock_t lookup_lock(slot_lookup_mutex_);
@@ -1165,11 +1257,11 @@ class index_dense_gt {
         return result;
     }
 
-    template <                                                     //
-        typename man_to_woman_at = dummy_label_to_label_mapping_t, //
-        typename woman_to_man_at = dummy_label_to_label_mapping_t, //
-        typename executor_at = dummy_executor_t,                   //
-        typename progress_at = dummy_progress_t                    //
+    template <                                                 //
+        typename man_to_woman_at = dummy_key_to_key_mapping_t, //
+        typename woman_to_man_at = dummy_key_to_key_mapping_t, //
+        typename executor_at = dummy_executor_t,               //
+        typename progress_at = dummy_progress_t                //
         >
     join_result_t join(                                     //
         index_dense_gt const& women,                        //
@@ -1316,12 +1408,58 @@ class index_dense_gt {
         return typed_->cluster(vector_data, level, metric_proxy_t{*this}, cluster_config, allow);
     }
 
+    template <typename scalar_at>
+    aggregated_distances_t distance_between_( //
+        key_t key, scalar_at const* vector,   //
+        std::size_t thread, cast_t const& cast) const {
+
+        // Cast the vector, if needed for compatibility with `metric_`
+        thread_lock_t lock = thread_lock_(thread);
+        byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
+        {
+            byte_t* casted_data = cast_buffer_.data() + metric_.bytes_per_vector() * lock.thread_id;
+            bool casted = cast(vector_data, dimensions(), casted_data);
+            if (casted)
+                vector_data = casted_data;
+        }
+
+        // Check if such `key` is even present.
+        shared_lock_t slots_lock(slot_lookup_mutex_);
+        auto key_range = slot_lookup_.equal_range(key_and_slot_t::any_slot(key));
+        aggregated_distances_t result;
+        if (key_range.first == key_range.second)
+            return result;
+
+        result.min = std::numeric_limits<distance_t>::max();
+        result.max = std::numeric_limits<distance_t>::min();
+        result.mean = 0;
+        result.count = 0;
+
+        while (key_range.first != key_range.second) {
+            key_and_slot_t key_and_slot = *key_range.first;
+            byte_t const* a_vector = vectors_lookup_[key_and_slot.slot];
+            byte_t const* b_vector = vector_data;
+            distance_t a_b_distance = metric_(a_vector, b_vector);
+
+            result.mean += a_b_distance;
+            result.min = (std::min)(result.min, a_b_distance);
+            result.max = (std::max)(result.max, a_b_distance);
+            result.count++;
+
+            //
+            ++key_range.first;
+        }
+
+        result.mean /= result.count;
+        return result;
+    }
+
     compressed_slot_t lookup_id_(key_t key) const {
         shared_lock_t lock(slot_lookup_mutex_);
         return slot_lookup_.at(key);
     }
 
-    void reindex_labels_() {
+    void reindex_keys_() {
 
         // Estimate number of entries first
         std::size_t count_total = typed_->size();
@@ -1429,19 +1567,19 @@ using index_dense_big_t = index_dense_gt<uuid_t, uint40_t>;
  */
 template < //
 
-    typename men_label_at,   //
-    typename women_label_at, //
-    typename men_slot_at,    //
-    typename women_slot_at,  //
+    typename men_key_at,    //
+    typename women_key_at,  //
+    typename men_slot_at,   //
+    typename women_slot_at, //
 
-    typename man_to_woman_at = dummy_label_to_label_mapping_t, //
-    typename woman_to_man_at = dummy_label_to_label_mapping_t, //
-    typename executor_at = dummy_executor_t,                   //
-    typename progress_at = dummy_progress_t                    //
+    typename man_to_woman_at = dummy_key_to_key_mapping_t, //
+    typename woman_to_man_at = dummy_key_to_key_mapping_t, //
+    typename executor_at = dummy_executor_t,               //
+    typename progress_at = dummy_progress_t                //
     >
-static join_result_t join(                                      //
-    index_dense_gt<men_label_at, men_slot_at> const& men,       //
-    index_dense_gt<women_label_at, women_slot_at> const& women, //
+static join_result_t join(                                    //
+    index_dense_gt<men_key_at, men_slot_at> const& men,       //
+    index_dense_gt<women_key_at, women_slot_at> const& women, //
 
     index_join_config_t config = {},                    //
     man_to_woman_at&& man_to_woman = man_to_woman_at{}, //
@@ -1455,6 +1593,187 @@ static join_result_t join(                                      //
         std::forward<man_to_woman_at>(man_to_woman), //
         std::forward<executor_at>(executor),         //
         std::forward<progress_at>(progress));
+}
+
+struct clustering_result_t {
+    error_t error{};
+    std::size_t clusters{};
+    std::size_t visited_members{};
+    std::size_t computed_distances{};
+
+    explicit operator bool() const noexcept { return !error; }
+    clustering_result_t failed(error_t message) noexcept {
+        error = std::move(message);
+        return std::move(*this);
+    }
+};
+
+struct clustering_config_t {
+    std::size_t target_clusters = 0;
+};
+
+/**
+ *  @brief  Implements clustering, classifying the given objects (vectors of member keys)
+ *          into a given number of clusters.
+ *
+ *  @param[in] queries_begin Iterator targeting the fiest query.
+ *  @param[in] queries_end
+ *  @param[in] executor Thread-pool to execute the job in parallel.
+ *  @param[in] progress Callback to report the execution progress.
+ */
+template <                                   //
+    typename key_at,                         //
+    typename slot_at,                        //
+    typename queries_iterator_at,            //
+    typename executor_at = dummy_executor_t, //
+    typename progress_at = dummy_progress_t  //
+    >
+static clustering_result_t cluster(               //
+    index_dense_gt<key_at, slot_at> const& index, //
+    queries_iterator_at queries_begin,            //
+    queries_iterator_at queries_end,              //
+    //
+    std::size_t max_clusters,               //
+    key_at* cluster_keys,                   //
+    distance_punned_t* cluster_distances,   //
+    executor_at&& executor = executor_at{}, //
+    progress_at&& progress = progress_at{}) {
+
+    using index_t = index_dense_gt<key_at, slot_at>;
+    using key_t = typename index_t::key_t;
+    using distance_t = typename index_t::distance_t;
+
+    std::size_t const queries_count = queries_end - queries_begin;
+
+    // Skip the first few top level, assuming they can't even potentially have enough clusters
+    std::size_t level = index.max_level();
+    if (max_clusters)
+        for (; level > 1; --level) {
+            if (index.stats(level).nodes < max_clusters)
+                break;
+        }
+    else
+        max_clusters = index.stats(1).nodes, level = 1;
+
+    clustering_result_t result;
+    if (index.max_level() < 1)
+        return result.failed("Index too small to cluster!");
+
+    // A structure used to track the popularity of a specific cluster
+    struct cluster_t {
+        key_t key = 0;
+        union {
+            std::size_t popularity = 0;
+            key_t replacement;
+        };
+    };
+
+    auto smaller_key = [](cluster_t const& a, cluster_t const& b) { return a.key < b.key; };
+    auto higher_popularity = [](cluster_t const& a, cluster_t const& b) { return a.popularity > b.popularity; };
+
+    std::atomic<std::size_t> visited_members(0);
+    std::atomic<std::size_t> computed_distances(0);
+    std::atomic<char const*> atomic_error{nullptr};
+
+repeat_clustering:
+    // Concurrently perform search until a certain depth
+    executor.dynamic(queries_count, [&](std::size_t thread_idx, std::size_t query_idx) {
+        auto result = index.cluster(queries_begin[query_idx], level, thread_idx);
+        if (!result) {
+            atomic_error = result.error.release();
+            return false;
+        }
+
+        cluster_keys[query_idx] = result.cluster.member.key;
+        cluster_distances[query_idx] = result.cluster.distance;
+
+        visited_members += result.visited_members;
+        computed_distances += result.computed_distances;
+        return true;
+    });
+
+    if (atomic_error)
+        return result.failed(atomic_error.load());
+
+    // Now once we have identified the closest clusters,
+    // we can try reducing their quantity, refining
+    using dynamic_allocator_t = typename index_t::dynamic_allocator_t;
+    using dynamic_allocator_traits_t = std::allocator_traits<dynamic_allocator_t>;
+    using clusters_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<cluster_t>;
+    buffer_gt<cluster_t, clusters_allocator_t> clusters(queries_count);
+    if (!clusters)
+        return result.failed("Out of memory!");
+
+    for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx)
+        clusters[query_idx].key = cluster_keys[query_idx], clusters[query_idx].popularity = 1;
+
+    // Sort by cluster key
+    std::sort(clusters.begin(), clusters.end(), smaller_key);
+
+    // Transform into run-length encoding, cmoputing the number of unique clusters
+    std::size_t unique_clusters = 0;
+    {
+        std::size_t last_idx = 0;
+        for (std::size_t current_idx = 1; current_idx != clusters.size(); ++current_idx) {
+            if (clusters[last_idx].key == clusters[current_idx].key) {
+                clusters[last_idx].popularity++;
+            } else {
+                last_idx++;
+                clusters[last_idx] = clusters[current_idx];
+            }
+        }
+        unique_clusters = last_idx + 1;
+    }
+
+    // In some cases the queries may be co-located, all mapping into the same cluster on that
+    // level. In that case we refine the granularity and dive deeper into clusters:
+    if (unique_clusters < max_clusters && level > 1) {
+        level--;
+        goto repeat_clustering;
+    }
+
+    // Drop smaller clusters iteratively merging those into the closest ones
+    if (max_clusters < unique_clusters) {
+        std::sort(clusters.data(), clusters.data() + unique_clusters, higher_popularity);
+
+        // Instead of doing it at once, use the `cluster_t::replacement` property to plan future re-mapping
+        for (std::size_t cluster_idx = max_clusters; cluster_idx < unique_clusters; ++cluster_idx) {
+            key_t dropped_cluster_key = clusters[cluster_idx].key;
+            key_t target_key = dropped_cluster_key;
+            distance_t target_distance = std::numeric_limits<distance_t>::max();
+            for (std::size_t candidate_idx = 0; candidate_idx != max_clusters; ++candidate_idx) {
+                key_t cluster_key = clusters[candidate_idx].key;
+                distance_t cluster_distance = index.distance_between(dropped_cluster_key, cluster_key).mean;
+                if (cluster_distance <= target_distance)
+                    target_key = cluster_key, target_distance = cluster_distance;
+            }
+            clusters[cluster_idx].replacement = target_key;
+        }
+
+        // Sort dropped clusters by name to accelerate future lookups
+        std::sort(clusters.data() + max_clusters, clusters.data() + unique_clusters, smaller_key);
+
+        // Replace evicted clusters
+        for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx) {
+            key_t& cluster_key = cluster_keys[query_idx];
+            distance_t& cluster_distance = cluster_distances[query_idx];
+
+            // To avoid implementing heterogeneous comparisons, lets wrap the `cluster_key`
+            cluster_t cluster_key_wrapped;
+            cluster_key_wrapped.key = cluster_key;
+            auto displaced_range = std::equal_range(clusters.data() + max_clusters, clusters.data() + unique_clusters,
+                                                    cluster_key_wrapped, smaller_key);
+            if (displaced_range.first == displaced_range.second)
+                continue;
+
+            cluster_key = displaced_range.first->replacement;
+            cluster_distance = index.distance_between(cluster_key, queries_begin[query_idx], 0).mean;
+        }
+    }
+
+    result.computed_distances = computed_distances;
+    result.visited_members = visited_members;
+    return result;
 }
 
 } // namespace usearch
