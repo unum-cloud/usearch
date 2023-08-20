@@ -1044,7 +1044,7 @@ using return_type_gt =
  *  @brief  An example of what a USearch-compatible ad-hoc filter would look like.
  *
  *  A similar function object can be passed to search queries to further filter entries
- *  on their auxiliary properties, such as some categorical labels stored in an external DBMS.
+ *  on their auxiliary properties, such as some categorical keys stored in an external DBMS.
  */
 struct dummy_predicate_t {
     template <typename member_at> constexpr bool operator()(member_at&&) const noexcept { return true; }
@@ -1061,6 +1061,12 @@ struct dummy_callback_t {
     template <typename member_at> void operator()(member_at&&) const noexcept {}
 };
 
+struct progress_t {
+    std::size_t thread;
+    std::size_t task;
+    std::size_t total;
+};
+
 /**
  *  @brief  An example of what a USearch-compatible progress-bar should look like.
  *
@@ -1069,6 +1075,7 @@ struct dummy_callback_t {
  */
 struct dummy_progress_t {
     inline void operator()(std::size_t /*progress*/, std::size_t /*total*/) const noexcept {}
+    inline bool stop(progress_t) const noexcept { return false; }
 };
 
 /**
