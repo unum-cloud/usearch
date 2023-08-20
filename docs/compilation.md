@@ -155,7 +155,7 @@ There are a few ways to compile the C 99 USearch SDK.
 Using the Makefile:
 
 ```sh
-make -C ./c make -C ./c libusearch_c.so
+make -C ./c libusearch_c.so -C ./c libusearch_c.so
 ```
 
 Using CMake:

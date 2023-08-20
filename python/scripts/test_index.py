@@ -195,7 +195,7 @@ def test_index_contains_remove_rename(batch_size):
 @pytest.mark.parametrize("batch_size", [100, 1024])
 @pytest.mark.parametrize("quantization", [ScalarKind.F32, ScalarKind.I8])
 @pytest.mark.parametrize("dtype", [np.float32, np.float64, np.float16])
-def test_index_vectors_clustering(ndim, metric, quantization, dtype, batch_size):
+def test_index_clustering(ndim, metric, quantization, dtype, batch_size):
     index = Index(ndim=ndim, metric=metric, dtype=quantization, multi=False)
     keys = np.arange(batch_size)
     vectors = random_vectors(count=batch_size, ndim=ndim, dtype=dtype)
@@ -204,18 +204,10 @@ def test_index_vectors_clustering(ndim, metric, quantization, dtype, batch_size)
     clusters: BatchMatches = index.cluster(vectors=vectors, threads=threads)
     assert len(clusters.keys) == batch_size
 
-
-@pytest.mark.parametrize("ndim", [3, 97, 256])
-@pytest.mark.parametrize("metric", [MetricKind.Cos, MetricKind.L2sq])
-@pytest.mark.parametrize("batch_size", [100, 1024])
-@pytest.mark.parametrize("quantization", [ScalarKind.F32, ScalarKind.I8])
-@pytest.mark.parametrize("dtype", [np.float32, np.float64, np.float16])
-def test_index_members_clustering(ndim, metric, quantization, dtype, batch_size):
-    index = Index(ndim=ndim, metric=metric, dtype=quantization, multi=False)
-    keys = np.arange(batch_size)
-    vectors = random_vectors(count=batch_size, ndim=ndim, dtype=dtype)
-    index.add(keys, vectors, threads=threads)
-
     # If no argument is provided, we cluster the present entries
     clusters: BatchMatches = index.cluster(threads=threads)
     assert len(clusters.keys) == batch_size
+
+    # If no argument is provided, we cluster the present entries
+    clusters: BatchMatches = index.cluster(keys=keys[:50], threads=threads)
+    assert len(clusters.keys) == 50
