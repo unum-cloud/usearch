@@ -1745,7 +1745,8 @@ merge_nearby_clusters:
             std::size_t to_idx = 0;
         };
 
-        std::atomic<cluster_merge_t> atomic_merge;
+        std::mutex merge_mutex;
+        cluster_merge_t merge;
         std::atomic<distance_t> atomic_merge_distance = std::numeric_limits<distance_t>::max();
 
         executor.dynamic(unique_clusters * unique_clusters, [&](std::size_t thread_idx, std::size_t task_idx) {
@@ -1756,12 +1757,14 @@ merge_nearby_clusters:
             key_t first_key = clusters[first_idx].centroid;
             key_t second_key = clusters[second_idx].centroid;
             distance_t distance = index.distance_between(first_key, second_key, thread_idx).mean;
-            if (distance < atomic_merge_distance)
-                atomic_merge_distance = distance, atomic_merge = {first_idx, second_idx};
+            if (distance < atomic_merge_distance) {
+                std::unique_lock<std::mutex> lock(merge_mutex);
+                atomic_merge_distance = distance;
+                merge = {first_idx, second_idx};
+            }
             return true;
         });
 
-        cluster_merge_t merge = atomic_merge.load();
         if (clusters[merge.from_idx].popularity > clusters[merge.to_idx].popularity)
             std::swap(merge.from_idx, merge.to_idx);
 
