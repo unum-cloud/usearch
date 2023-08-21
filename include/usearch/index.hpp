@@ -1995,6 +1995,8 @@ class index_gt {
         member_cref_t member;
         distance_t distance;
 
+        inline match_t() noexcept : member({nullptr, 0}), distance(std::numeric_limits<distance_t>::max()) {}
+
         inline match_t(member_cref_t member, distance_t distance) noexcept : member(member), distance(distance) {}
 
         inline match_t(match_t&& other) noexcept
@@ -2105,7 +2107,7 @@ class index_gt {
         error_t error{};
         std::size_t visited_members{};
         std::size_t computed_distances{};
-        match_t cluster{{nullptr}, std::numeric_limits<distance_t>::max()};
+        match_t cluster{};
 
         explicit operator bool() const noexcept { return !error; }
         cluster_result_t failed(error_t message) noexcept {

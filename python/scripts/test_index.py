@@ -9,7 +9,6 @@ from usearch.index import search
 
 from usearch.index import (
     Index,
-    Indexes,
     MetricKind,
     ScalarKind,
     Match,

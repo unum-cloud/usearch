@@ -1517,7 +1517,6 @@ class index_dense_gt {
                 if (!casted)
                     std::memcpy(reconstructed_vector, punned_vector, metric_.bytes_per_vector());
             }
-            std::printf("exported %zu of %zu limit \n", count_exported, vectors_limit);
             return count_exported;
         }
     }
