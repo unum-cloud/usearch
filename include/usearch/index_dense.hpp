@@ -1677,10 +1677,6 @@ static clustering_result_t cluster(               //
 
     using dynamic_allocator_t = typename index_t::dynamic_allocator_t;
     using dynamic_allocator_traits_t = std::allocator_traits<dynamic_allocator_t>;
-    using clusters_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<cluster_t>;
-    buffer_gt<cluster_t, clusters_allocator_t> clusters(queries_count);
-    if (!clusters)
-        return result.failed("Out of memory!");
 
 map_to_clusters:
     // Concurrently perform search until a certain depth
@@ -1702,6 +1698,11 @@ map_to_clusters:
     if (atomic_error)
         return result.failed(atomic_error.load());
 
+    using clusters_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<cluster_t>;
+    buffer_gt<cluster_t, clusters_allocator_t> clusters(queries_count);
+    if (!clusters)
+        return result.failed("Out of memory!");
+
     // Now once we have identified the closest clusters,
     // we can try reducing their quantity, refining
     for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx)
@@ -1712,7 +1713,7 @@ map_to_clusters:
     // Sort by cluster key
     std::sort(clusters.begin(), clusters.end(), smaller_key);
 
-    // Transform into run-length encoding, cmoputing the number of unique clusters
+    // Transform into run-length encoding, computing the number of unique clusters
     std::size_t unique_clusters = 0;
     {
         std::size_t last_idx = 0;
@@ -1744,18 +1745,23 @@ merge_nearby_clusters:
             std::size_t to_idx = 0;
         };
 
-        cluster_merge_t merge;
-        distance_t merge_distance = std::numeric_limits<distance_t>::max();
-        for (std::size_t first_idx = 0; first_idx != unique_clusters; ++first_idx) {
-            key_t first_key = clusters[first_idx].centroid;
-            for (std::size_t second_idx = 0; second_idx != first_idx; ++second_idx) {
-                key_t second_key = clusters[second_idx].centroid;
-                distance_t distance = index.distance_between(first_key, second_key, 0).mean;
-                if (distance < merge_distance)
-                    merge = {first_idx, second_idx}, merge_distance = distance;
-            }
-        }
+        std::atomic<cluster_merge_t> atomic_merge;
+        std::atomic<distance_t> atomic_merge_distance = std::numeric_limits<distance_t>::max();
 
+        executor.dynamic(unique_clusters * unique_clusters, [&](std::size_t thread_idx, std::size_t task_idx) {
+            std::size_t first_idx = task_idx / unique_clusters;
+            std::size_t second_idx = task_idx % unique_clusters;
+            if (first_idx == second_idx)
+                return true;
+            key_t first_key = clusters[first_idx].centroid;
+            key_t second_key = clusters[second_idx].centroid;
+            distance_t distance = index.distance_between(first_key, second_key, thread_idx).mean;
+            if (distance < atomic_merge_distance)
+                atomic_merge_distance = distance, atomic_merge = {first_idx, second_idx};
+            return true;
+        });
+
+        cluster_merge_t merge = atomic_merge.load();
         if (clusters[merge.from_idx].popularity > clusters[merge.to_idx].popularity)
             std::swap(merge.from_idx, merge.to_idx);
 

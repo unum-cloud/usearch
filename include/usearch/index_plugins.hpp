@@ -597,13 +597,13 @@ class executor_openmp_t {
 #pragma omp cancel for
                 }
             }
-        } else {
-            std::atomic_bool stop{false};
+            return;
+        }
+        std::atomic_bool stop{false};
 #pragma omp parallel for schedule(dynamic, 1) shared(stop)
-            for (std::size_t i = 0; i != tasks; ++i) {
-                if (!stop.load(std::memory_order_relaxed) && !thread_aware_function(omp_get_thread_num(), i))
-                    stop.store(true, std::memory_order_relaxed);
-            }
+        for (std::size_t i = 0; i != tasks; ++i) {
+            if (!stop.load(std::memory_order_relaxed) && !thread_aware_function(omp_get_thread_num(), i))
+                stop.store(true, std::memory_order_relaxed);
         }
     }
 
