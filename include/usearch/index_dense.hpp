@@ -342,9 +342,7 @@ class index_dense_gt {
         using is_transparent = void;
         bool operator()(key_and_slot_t const& a, key_t const& b) const noexcept { return a.key == b; }
         bool operator()(key_t const& a, key_and_slot_t const& b) const noexcept { return a == b.key; }
-        bool operator()(key_and_slot_t const& a, key_and_slot_t const& b) const noexcept {
-            return (!a.any_slot() && !b.any_slot()) ? a.key == b.key && a.slot == b.slot : a.key == b.key;
-        }
+        bool operator()(key_and_slot_t const& a, key_and_slot_t const& b) const noexcept { return a.key == b.key; }
     };
 
     /// @brief Multi-Map from keys to IDs, and allocated vectors.
@@ -1519,6 +1517,7 @@ class index_dense_gt {
                 if (!casted)
                     std::memcpy(reconstructed_vector, punned_vector, metric_.bytes_per_vector());
             }
+            std::printf("exported %zu of %zu limit \n", count_exported, vectors_limit);
             return count_exported;
         }
     }
