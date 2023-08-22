@@ -6,6 +6,9 @@
 #include <thread>  // `std::thread`
 #include <vector>  // `std::vector`
 
+#include <atomic> // `std::atomic`
+#include <thread> // `std::thread`
+
 #include <usearch/index.hpp> // `expected_gt` and macros
 
 #if USEARCH_USE_OPENMP
@@ -821,6 +824,86 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
 };
 
 using memory_mapping_allocator_t = memory_mapping_allocator_gt<>;
+
+/**
+ *  @brief  C++11 userspace implementation of an oversimplified `std::shared_mutex`,
+ *          that assumes rare interleaving of shared and unique locks. It's not fair,
+ *          but requires only a single 32-bit atomic integer to work.
+ */
+class unfair_shared_mutex_t {
+    /** Any positive integer describes the number of concurrent readers */
+    enum state_t : std::int32_t {
+        idle_k = 0,
+        writing_k = -1,
+    };
+    std::atomic<std::int32_t> state_{idle_k};
+
+  public:
+    inline void lock() noexcept {
+        std::int32_t raw;
+    relock:
+        raw = idle_k;
+        if (!state_.compare_exchange_weak(raw, writing_k, std::memory_order_acquire, std::memory_order_relaxed)) {
+            std::this_thread::yield();
+            goto relock;
+        }
+    }
+
+    inline void unlock() noexcept { state_.store(idle_k, std::memory_order_release); }
+
+    inline void lock_shared() noexcept {
+        std::int32_t raw;
+    relock_shared:
+        raw = state_.load(std::memory_order_acquire);
+        // Spin while it's uniquely locked
+        if (raw == writing_k) {
+            std::this_thread::yield();
+            goto relock_shared;
+        }
+        // Try incrementing the counter
+        if (!state_.compare_exchange_weak(raw, raw + 1, std::memory_order_acquire, std::memory_order_relaxed)) {
+            std::this_thread::yield();
+            goto relock_shared;
+        }
+    }
+
+    inline void unlock_shared() noexcept { state_.fetch_sub(1, std::memory_order_release); }
+
+    /**
+     *  @brief Try upgrades the current `lock_shared()` to a unique `lock()` state.
+     */
+    inline bool try_escalate() noexcept {
+        std::int32_t one_read = 1;
+        return state_.compare_exchange_weak(one_read, writing_k, std::memory_order_acquire, std::memory_order_relaxed);
+    }
+
+    /**
+     *  @brief Escalates current lock potentially loosing control in the middle.
+     *  It's a shortcut for `try_escalate`-`unlock_shared`-`lock` trio.
+     */
+    inline void unsafe_escalate() noexcept {
+        if (!try_escalate()) {
+            unlock_shared();
+            lock();
+        }
+    }
+
+    /**
+     *  @brief Upgrades the current `lock_shared()` to a unique `lock()` state.
+     */
+    inline void escalate() noexcept {
+        while (!try_escalate())
+            std::this_thread::yield();
+    }
+
+    /**
+     *  @brief De-escalation of a previously escalated state.
+     */
+    inline void de_escalate() noexcept {
+        std::int32_t one_read = 1;
+        state_.store(one_read, std::memory_order_release);
+    }
+};
 
 /**
  *  @brief  Utility class used to cast arrays of one scalar type to another,

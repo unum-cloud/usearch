@@ -1061,12 +1061,6 @@ struct dummy_callback_t {
     template <typename member_at> void operator()(member_at&&) const noexcept {}
 };
 
-struct progress_t {
-    std::size_t thread;
-    std::size_t task;
-    std::size_t total;
-};
-
 /**
  *  @brief  An example of what a USearch-compatible progress-bar should look like.
  *
@@ -1074,8 +1068,7 @@ struct progress_t {
  *  saving, and loading from disk, or index-level joins.
  */
 struct dummy_progress_t {
-    inline void operator()(std::size_t /*progress*/, std::size_t /*total*/) const noexcept {}
-    inline bool stop(progress_t) const noexcept { return false; }
+    inline void operator()(std::size_t, std::size_t) const noexcept {}
 };
 
 /**
