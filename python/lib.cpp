@@ -21,6 +21,7 @@
 
 #define _CRT_SECURE_NO_WARNINGS
 #define PY_SSIZE_T_CLEAN
+#include <pybind11/functional.h>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -51,6 +52,18 @@ using distance_t = distance_punned_t;
 using dense_add_result_t = typename index_dense_t::add_result_t;
 using dense_search_result_t = typename index_dense_t::search_result_t;
 using dense_labeling_result_t = typename index_dense_t::labeling_result_t;
+
+using progress_func_t = std::function<bool(std::size_t /*processed*/, std::size_t /*total*/)>;
+
+struct progress_t {
+    inline progress_t(progress_func_t const& func) : func_(func ? func : &dummy_progress) {}
+    inline bool operator()(std::size_t processed, std::size_t total) const noexcept { return func_(processed, total); }
+
+  private:
+    static inline bool dummy_progress(std::size_t /*processed*/, std::size_t /*total*/) { return true; }
+
+    progress_func_t func_;
+};
 
 struct dense_index_py_t : public index_dense_t {
     using native_t = index_dense_t;
@@ -578,7 +591,8 @@ static py::tuple search_many_brute_force(    //
 
 static std::unordered_map<key_t, key_t> join_index(       //
     dense_index_py_t const& a, dense_index_py_t const& b, //
-    std::size_t max_proposals, bool exact) {
+    std::size_t max_proposals, bool exact,                //
+    progress_func_t const& progress) {
 
     std::unordered_map<key_t, key_t> a_to_b;
     dummy_label_to_label_mapping_t b_to_a;
@@ -590,7 +604,7 @@ static std::unordered_map<key_t, key_t> join_index(       //
     config.expansion = (std::max)(a.expansion_search(), b.expansion_search());
     std::size_t threads = (std::min)(a.limits().threads(), b.limits().threads());
     executor_default_t executor{threads};
-    join_result_t result = a.join(b, config, a_to_b, b_to_a, executor);
+    join_result_t result = a.join(b, config, a_to_b, b_to_a, executor, progress_t{progress});
     forward_error(result);
 
     return a_to_b;
@@ -605,20 +619,20 @@ static dense_index_py_t copy_index(dense_index_py_t const& index) {
     return std::move(result.index);
 }
 
-static void compact_index(dense_index_py_t& index, std::size_t threads) {
+static void compact_index(dense_index_py_t& index, std::size_t threads, progress_func_t const& progress) {
 
     if (!threads)
         threads = std::thread::hardware_concurrency();
     if (!index.reserve(index_limits_t(index.size(), threads)))
         throw std::invalid_argument("Out of memory!");
 
-    index.compact(executor_default_t{threads});
+    index.compact(executor_default_t{threads}, progress_t{progress});
 }
 
 // clang-format off
-template <typename index_at> void save_index(index_at const& index, std::string const& path) { index.save(path.c_str()).error.raise(); }
-template <typename index_at> void load_index(index_at& index, std::string const& path) { index.load(path.c_str()).error.raise(); }
-template <typename index_at> void view_index(index_at& index, std::string const& path) { index.view(path.c_str()).error.raise(); }
+template <typename index_at> void save_index(index_at const& index, std::string const& path, progress_func_t const& progress) { index.save(path.c_str(), {}, progress_t{progress}).error.raise(); }
+template <typename index_at> void load_index(index_at& index, std::string const& path, progress_func_t const& progress) { index.load(path.c_str(), {}, progress_t{progress}).error.raise(); }
+template <typename index_at> void view_index(index_at& index, std::string const& path, progress_func_t const& progress) { index.view(path.c_str(), 0, {}, progress_t{progress}).error.raise(); }
 template <typename index_at> void reset_index(index_at& index) { index.reset(); }
 template <typename index_at> void clear_index(index_at& index) { index.clear(); }
 template <typename index_at> std::size_t max_level(index_at const &index) { return index.max_level(); }
@@ -875,14 +889,15 @@ PYBIND11_MODULE(compiled, m) {
     i.def("__contains__", &dense_index_py_t::contains);
     i.def("__getitem__", &get_member<dense_index_py_t>, py::arg("key"), py::arg("dtype") = scalar_kind_t::f32_k);
 
-    i.def("save", &save_index<dense_index_py_t>, py::arg("path"));
-    i.def("load", &load_index<dense_index_py_t>, py::arg("path"));
-    i.def("view", &view_index<dense_index_py_t>, py::arg("path"));
+    i.def("save", &save_index<dense_index_py_t>, py::arg("path"), py::arg("progress") = nullptr);
+    i.def("load", &load_index<dense_index_py_t>, py::arg("path"), py::arg("progress") = nullptr);
+    i.def("view", &view_index<dense_index_py_t>, py::arg("path"), py::arg("progress") = nullptr);
     i.def("reset", &reset_index<dense_index_py_t>);
     i.def("clear", &clear_index<dense_index_py_t>);
     i.def("copy", &copy_index);
-    i.def("compact", &compact_index);
-    i.def("join", &join_index, py::arg("other"), py::arg("max_proposals") = 0, py::arg("exact") = false);
+    i.def("compact", &compact_index, py::arg("threads"), py::arg("progress") = nullptr);
+    i.def("join", &join_index, py::arg("other"), py::arg("max_proposals") = 0, py::arg("exact") = false,
+          py::arg("progress") = nullptr);
 
     using punned_index_stats_t = typename dense_index_py_t::stats_t;
     auto i_stats = py::class_<punned_index_stats_t>(m, "IndexStats");

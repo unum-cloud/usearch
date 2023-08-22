@@ -601,7 +601,10 @@ class index_dense_gt {
      *  @param[in] config Configuration parameters for exports.
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
-    serialization_result_t save(output_file_t file, serialization_config_t config = {}) const {
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t save(output_file_t file,                 //
+                                serialization_config_t config = {}, //
+                                progress_at&& progress = {}) const {
         serialization_result_t result = file.open_if_not();
         if (result)
             stream(
@@ -609,7 +612,7 @@ class index_dense_gt {
                     result = file.write(buffer, length);
                     return !!result;
                 },
-                config);
+                config, std::forward<progress_at>(progress));
         return result;
     }
 
@@ -617,7 +620,9 @@ class index_dense_gt {
      *  @brief  Saves serialized binary index representation to a stream.
      */
     template <typename output_callback_at, typename progress_at = dummy_progress_t>
-    serialization_result_t stream(output_callback_at&& callback, serialization_config_t config = {}) const {
+    serialization_result_t stream(output_callback_at&& callback,      //
+                                  serialization_config_t config = {}, //
+                                  progress_at&& progress = {}) const {
 
         serialization_result_t result;
         std::uint64_t matrix_rows = 0;
@@ -680,7 +685,7 @@ class index_dense_gt {
         }
 
         // Save the actual proximity graph
-        return typed_->stream(std::forward<output_callback_at>(callback));
+        return typed_->stream(std::forward<output_callback_at>(callback), std::forward<progress_at>(progress));
     }
 
     /**
@@ -702,7 +707,10 @@ class index_dense_gt {
      *  @param[in] config Configuration parameters for imports.
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
-    serialization_result_t load(input_file_t file, serialization_config_t config = {}) {
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t load(input_file_t file,                  //
+                                serialization_config_t config = {}, //
+                                progress_at&& progress = {}) {
 
         serialization_result_t result = file.open_if_not();
         if (!result)
@@ -765,7 +773,7 @@ class index_dense_gt {
         }
 
         // Pull the actual proximity graph
-        result = typed_->load(std::move(file));
+        result = typed_->load(std::move(file), std::forward<progress_at>(progress));
         if (!result)
             return result;
         if (typed_->size() != static_cast<std::size_t>(matrix_rows))
@@ -781,7 +789,10 @@ class index_dense_gt {
      *  @param[in] config Configuration parameters for imports.
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
-    serialization_result_t view(memory_mapped_file_t file, std::size_t offset = 0, serialization_config_t config = {}) {
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t view(memory_mapped_file_t file,                                  //
+                                std::size_t offset = 0, serialization_config_t config = {}, //
+                                progress_at&& progress = {}) {
 
         serialization_result_t result = file.open_if_not();
         if (!result)
@@ -842,7 +853,7 @@ class index_dense_gt {
         }
 
         // Pull the actual proximity graph
-        result = typed_->view(std::move(file), offset);
+        result = typed_->view(std::move(file), offset, std::forward<progress_at>(progress));
         if (!result)
             return result;
         if (typed_->size() != static_cast<std::size_t>(matrix_rows))

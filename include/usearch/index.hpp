@@ -1054,9 +1054,10 @@ struct dummy_callback_t {
  *
  *  This is particularly helpful when handling long-running tasks, like serialization,
  *  saving, and loading from disk, or index-level joins.
+ *  The reporter checks return value to continue or stop the process, `false` means need to stop.
  */
 struct dummy_progress_t {
-    inline void operator()(std::size_t /*progress*/, std::size_t /*total*/) const noexcept {}
+    inline bool operator()(std::size_t /*processed*/, std::size_t /*total*/) const noexcept { return true; }
 };
 
 /**
@@ -2416,6 +2417,10 @@ class index_gt {
         if (!callback(&header, sizeof(header)))
             return result.failed("Failed to serialize into stream");
 
+        // Progress status
+        std::size_t processed = 0;
+        std::size_t const total = 2 * header.size;
+
         // Export the number of levels per node
         // That is both enough to estimate the overall memory consumption,
         // and to be able to estimate the offsets of every entry in the file.
@@ -2424,6 +2429,8 @@ class index_gt {
             level_t level = node.level();
             if (!callback(&level, sizeof(level)))
                 return result.failed("Failed to serialize into stream");
+            if (!progress(++processed, total))
+                return result.failed("Terminated by user");
         }
 
         // After that dump the nodes themselves
@@ -2431,7 +2438,8 @@ class index_gt {
             span_bytes_t node_bytes = node_bytes_(node_at_(i));
             if (!callback(node_bytes.data(), node_bytes.size()))
                 return result.failed("Failed to serialize into stream");
-            progress(i, header.size);
+            if (!progress(++processed, total))
+                return result.failed("Terminated by user");
         }
 
         return {};
@@ -2505,7 +2513,8 @@ class index_gt {
                 return result;
             }
             nodes_[i] = node_t{node_bytes.data()};
-            progress(i, header.size);
+            if (!progress(i + 1, header.size))
+                return result.failed("Terminated by user");
         }
         return {};
     }
@@ -2571,7 +2580,8 @@ class index_gt {
         // Rapidly address all the nodes
         for (std::size_t i = 0; i != header.size; ++i) {
             nodes_[i] = node_t{(byte_t*)file.data() + offsets[i]};
-            progress(i, header.size);
+            if (!progress(i + 1, header.size))
+                return result.failed("Terminated by user");
         }
         viewed_file_ = std::move(file);
         return {};
@@ -2605,9 +2615,9 @@ class index_gt {
         metric_at&& metric,                   //
         slot_transition_at&& slot_transition, //
 
-        executor_at&& executor = executor_at{}, //
-        progress_at&& progress = progress_at{}, //
-        prefetch_at&& prefetch = prefetch_at{}) noexcept {
+        executor_at&& executor = {}, //
+        progress_at&& progress = {}, //
+        prefetch_at&& prefetch = {}) noexcept {
 
         // Export all the keys, slots, and levels.
         // Partition them with the predicate.
@@ -2621,8 +2631,13 @@ class index_gt {
         using slot_level_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<slot_level_t>;
         buffer_gt<slot_level_t, slot_level_allocator_t> slots_and_levels(size());
 
+        // Progress status
+        std::atomic<bool> do_tasks{true};
+        std::atomic<std::size_t> processed{0};
+        std::size_t const total = 3 * slots_and_levels.size();
+
         // For every bottom level node, determine its parent cluster
-        executor.fixed(slots_and_levels.size(), [&](std::size_t thread_idx, std::size_t old_slot) {
+        executor.dynamic(slots_and_levels.size(), [&](std::size_t thread_idx, std::size_t old_slot) {
             context_t& context = contexts_[thread_idx];
             std::size_t cluster = search_for_one_( //
                 values[citerator_at(old_slot)],    //
@@ -2632,7 +2647,13 @@ class index_gt {
                                           static_cast<compressed_slot_t>(old_slot), //
                                           static_cast<compressed_slot_t>(cluster),  //
                                           node_at_(old_slot).level()};
+            ++processed;
+            if (thread_idx == 0)
+                do_tasks = progress(processed.load(), total);
+            return do_tasks.load();
         });
+        if (!do_tasks.load())
+            return;
 
         // Where the actual permutation happens:
         std::sort(slots_and_levels.begin(), slots_and_levels.end(), [](slot_level_t const& a, slot_level_t const& b) {
@@ -2662,8 +2683,8 @@ class index_gt {
                     neighbor = static_cast<compressed_slot_t>(old_slot_to_new[compressed_slot_t(neighbor)]);
 
             reordered_nodes[new_slot] = new_node;
-
-            progress(new_slot, slots_and_levels.size());
+            if (!progress(++processed, total))
+                return;
         }
 
         for (std::size_t new_slot = 0; new_slot != slots_and_levels.size(); ++new_slot) {
@@ -2671,6 +2692,8 @@ class index_gt {
             slot_transition(node_at_(old_slot).ckey(),                //
                             static_cast<compressed_slot_t>(old_slot), //
                             static_cast<compressed_slot_t>(new_slot));
+            if (!progress(++processed, total))
+                return;
         }
 
         nodes_ = std::move(reordered_nodes);
@@ -2697,11 +2720,15 @@ class index_gt {
     void isolate(                               //
         allow_member_at&& allow_member,         //
         executor_at&& executor = executor_at{}, //
-        progress_at&& progress = progress_at{}) noexcept {
+        progress_at&& progress = {}) noexcept {
+
+        // Progress status
+        std::atomic<bool> do_tasks{true};
+        std::atomic<std::size_t> processed{0};
 
         // Erase all the incoming links
         std::size_t nodes_count = size();
-        executor.fixed(nodes_count, [&](std::size_t, std::size_t node_idx) {
+        executor.dynamic(nodes_count, [&](std::size_t thread_idx, std::size_t node_idx) {
             node_t node = node_at_(node_idx);
             for (level_t level = 0; level <= node.level(); ++level) {
                 neighbors_ref_t neighbors = neighbors_(node, level);
@@ -2714,7 +2741,10 @@ class index_gt {
                         neighbors.push_back(neighbor_slot);
                 }
             }
-            progress(node_idx, nodes_count);
+            ++processed;
+            if (thread_idx == 0)
+                do_tasks = progress(processed.load(), nodes_count);
+            return do_tasks.load();
         });
     }
 
@@ -3310,6 +3340,9 @@ static join_result_t join(               //
     std::atomic<std::size_t> computed_distances{0};
     std::atomic<std::size_t> visited_members{0};
 
+    // Progress status
+    std::atomic<bool> do_tasks{true};
+
     // Concurrently process all the men
     executor.parallel([&](std::size_t thread_idx) {
         index_search_config_t search_config;
@@ -3330,7 +3363,10 @@ static join_result_t join(               //
                 passed_rounds = ++rounds;
                 total_rounds = passed_rounds + free_men.size();
             }
-            progress(passed_rounds, total_rounds);
+            if (thread_idx == 0)
+                do_tasks = progress(passed_rounds, total_rounds);
+            if (do_tasks.load())
+                break;
             while (men_locks.atomic_set(free_man_slot))
                 ;
 
@@ -3386,6 +3422,8 @@ static join_result_t join(               //
             women_locks.atomic_reset(woman.slot);
         }
     });
+    if (!do_tasks.load())
+        return result.failed("Terminated by user");
 
     // Export the "slots" into keys:
     std::size_t intersection_size = 0;
