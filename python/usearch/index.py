@@ -356,15 +356,53 @@ class Clustering:
     def __init__(
         self,
         index: Index,
-        queries: np.ndarray,
         matches: BatchMatches,
+        queries: Optional[np.ndarray] = None,
     ) -> None:
+        if queries is None:
+            queries = index._compiled.get_keys_in_slice()
         self.index = index
         self.queries = queries
         self.matches = matches
 
     def __repr__(self) -> str:
         return f"usearch.Clustering(for {len(self.queries)} queries)"
+
+    @property
+    def centroids_popularity(self) -> Tuple[np.ndarray, np.ndarray]:
+        return np.unique(self.matches.keys, return_counts=True)
+
+    def members_of(self, centroid: Key) -> np.ndarray:
+        return self.queries[self.matches.keys.flatten() == centroid]
+
+    def subcluster(self, centroid: Key, **clustering_kwards) -> Clustering:
+        sub_keys = self.members_of(centroid)
+        return self.index.cluster(keys=sub_keys, **clustering_kwards)
+
+    def plot_centroids_popularity(self):
+        from matplotlib import pyplot as plt
+
+        _, sizes = self.centroids_popularity
+        plt.yscale("log")
+        plt.plot(sorted(sizes), np.arange(len(sizes)))
+        plt.show()
+
+    @property
+    def network(self):
+        import networkx as nx
+
+        keys, sizes = self.centroids_popularity
+
+        g = nx.Graph()
+        for key, size in zip(keys, sizes):
+            g.add_node(key, size=size)
+
+        for i, i_key in enumerate(keys):
+            for j_key in keys[:i]:
+                d = self.index.pairwise_distance(i_key, j_key)
+                g.add_edge(i_key, j_key, distance=d)
+
+        return g
 
 
 class IndexedKeys:
@@ -931,7 +969,7 @@ class Index:
         threads: int = 0,
         log: Union[str, bool] = False,
         batch_size: int = 0,
-    ) -> Union[Matches, BatchMatches]:
+    ) -> Clustering:
         """
         Clusters already indexed or provided `vectors`, mapping them to various centroids.
 
@@ -975,7 +1013,8 @@ class Index:
                 threads=threads,
             )
 
-        return BatchMatches(*results)
+        batch_matches = BatchMatches(*results)
+        return Clustering(self, batch_matches, keys)
 
     def pairwise_distance(
         self, left: KeyOrKeysLike, right: KeyOrKeysLike
