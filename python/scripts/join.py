@@ -110,28 +110,28 @@ if len(run_diagnostics) == 0 or run_diagnostics.lower() == "y":
         exact=exact,
     )
 
-    secs, a_self_recall = dt(lambda: a.search(a.vectors, **args).recall(a.labels))
+    secs, a_self_recall = dt(lambda: a.search(a.vectors, **args).recall(a.keys))
     print(
         "Self-recall @{} of {} index: {:.2f}%, took {:.2f}s".format(
             k, a_name, a_self_recall * 100, secs
         )
     )
 
-    secs, b_self_recall = dt(lambda: b.search(b.vectors, **args).recall(b.labels))
+    secs, b_self_recall = dt(lambda: b.search(b.vectors, **args).recall(b.keys))
     print(
         "Self-recall @{} of {} index: {:.2f}%, took {:.2f}s".format(
             k, b_name, b_self_recall * 100, secs
         )
     )
 
-    secs, ab_recall = dt(lambda: b.search(a.vectors, **args).recall(b.labels))
+    secs, ab_recall = dt(lambda: b.search(a.vectors, **args).recall(b.keys))
     print(
         "Cross-recall @{} of {} in {}: {:.2f}%, took {:.2f}s".format(
             k, a_name, b_name, ab_recall * 100, secs
         )
     )
 
-    secs, ba_recall = dt(lambda: a.search(b.vectors, **args).recall(a.labels))
+    secs, ba_recall = dt(lambda: a.search(b.vectors, **args).recall(a.keys))
     print(
         "Cross-recall @{} of {} in {}: {:.2f}%, took {:.2f}s".format(
             k, b_name, a_name, ba_recall * 100, secs

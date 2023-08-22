@@ -17,8 +17,8 @@ permissions:
 
 jobs:
 
-  build_test:
-    name: Test USearch
+  test_cpp:
+    name: Test C++
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -122,6 +122,22 @@ jobs:
           toolchain: stable
           override: true
 
+  test_golang:
+    name: Test GoLang
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: git submodule update --init --recursive
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.15'
+    - name: Build C library for cGo
+      run: |
+        make -C ./c libusearch_c.so
+        mv ./c/libusearch_c.so ./golang/libusearch_c.so
+        cd golang && ls && go test -v
+
   test_java:
     name: Test Java
     runs-on: ubuntu-latest
@@ -160,10 +176,10 @@ jobs:
         sudo apt install -y nodejs
         git clone https://github.com/emscripten-core/emsdk.git
         ./emsdk/emsdk install latest
-    - name: Build USearch by Emscripten
+    - name: Build USearch using Emscripten
       run: |
         ./emsdk/emsdk activate latest && source ./emsdk/emsdk_env.sh
-        emcmake cmake -B ./build -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} -s TOTAL_MEMORY=64MB" && emmake make -C ./build
+        emcmake cmake -DUSEARCH_BUILD_BENCHMARK=0 -DUSEARCH_BUILD_WASM=1 -B ./build -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} -s TOTAL_MEMORY=64MB" && emmake make -C ./build
     - name: Run tests
       run: node ./build/test.js
 

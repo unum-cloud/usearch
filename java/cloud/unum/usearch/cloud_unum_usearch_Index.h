@@ -103,6 +103,22 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1load
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1view
   (JNIEnv *, jclass, jlong, jstring);
 
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_remove
+ * Signature: (JLjava/lang/String;)V
+ */
+JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1remove
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_rename
+ * Signature: (JLjava/lang/String;)V
+ */
+JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1rename
+  (JNIEnv *, jclass, jlong, jlong);
+  
 #ifdef __cplusplus
 }
 #endif

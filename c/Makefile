@@ -1,17 +1,21 @@
-CC = gcc-12
-CXX = g++-12
+CC = gcc
+CXX = g++
 
 C_FLAGS = -std=c99
-CXX_FLAGS = -std=c++17
+CXX_FLAGS = -std=c++11
 
-CXX_FLAGS += -Wall -Wextra -Wno-conversion -Wno-unknown-pragmas -O3 -march=native
+CXX_FLAGS += -Wall -Wextra -Wno-conversion -Wno-unknown-pragmas -pedantic
 
 HEADER_INCLUDES = -I.  -I ../include/  -I ../fp16/include/ -I ../robin-map/include/
 
-.PHONY: build
-build:
-	$(CXX) $(CXX_FLAGS) -o libusearch.so -O3 lib.cpp $(HEADER_INCLUDES) -shared -fPIC
+.PHONY: libusearch_c.a
+libusearch_c.a:
+	$(CXX) $(CXX_FLAGS) -o libusearch_c.a -O3 lib.cpp $(HEADER_INCLUDES) -static
 
-.PHONY: test
-test:
-	$(CC) $(C_FLAGS) test.c -L. -lusearch -Wl,-rpath,. -o test
+.PHONY: libusearch_c.so
+libusearch_c.so:
+	$(CXX) $(CXX_FLAGS) -o libusearch_c.so -O3 lib.cpp $(HEADER_INCLUDES) -shared -fPIC
+
+.PHONY: test_c
+test_c:
+	$(CC) $(C_FLAGS) test.c -L. -lusearch_c -Wl,-rpath,. -o test

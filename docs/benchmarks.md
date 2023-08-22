@@ -39,24 +39,24 @@ The main columns are:
 | `f32` x256 |      16      |   64   |   32   |   128'644    |     228'422     |         97.2% |
 | `f32` x256 |      16      |  256   |  128   |    39'981    |     69'065      |         99.2% |
 
-### Different vectors "accuracy"
+### Different vectors "quantization"
 
 | Vectors      | Connectivity | EF @ A | EF @ S | **Add**, QPS | **Search**, QPS | **Recall @1** |
 | :----------- | :----------: | :----: | :----: | :----------: | :-------------: | ------------: |
 | `f32` x256   |      16      |  128   |   64   |    87'995    |     171'856     |         99.1% |
 | `f16` x256   |      16      |  128   |   64   |    87'270    |     153'788     |         98.4% |
 | `f16` x256 ✳️ |      16      |  128   |   64   |    71'454    |     132'673     |         98.4% |
-| `f8` x256    |      16      |  128   |   64   |   115'923    |     274'653     |         98.9% |
+| `i8` x256    |      16      |  128   |   64   |   115'923    |     274'653     |         98.9% |
 
-As seen on the chart, for `f16` accuracy, performance may differ depending on native hardware support for that numeric type.
-Also worth noting, 8-bit quantization results in almost no accuracy loss and may perform better than `f16`.
+As seen on the chart, for `f16` quantization, performance may differ depending on native hardware support for that numeric type.
+Also worth noting, 8-bit quantization results in almost no quantization loss and may perform better than `f16`.
 
 ## Utilities
 
 Within this repository you will find two commonly used utilities:
 
 - `cpp/bench.cpp` the produces the `bench` binary for broad USearch benchmarks.
-- `python/bench.py` for simple benchmarks against FAISS.
+- `python/bench.py` and `python/bench.ipynb` for interactive charts against FAISS.
 
 To achieve best highest results we suggest compiling locally for the target architecture.
 
@@ -111,6 +111,27 @@ OPTIONS
         --haversine Choose Haversine metric
         -h, --help  Print this help information on this tool and exit
 ```
+
+Here is an example of running the C++ benchmark:
+
+```sh
+./build_release/bench \
+    --vectors datasets/wiki_1M/base.1M.fbin \
+    --queries datasets/wiki_1M/query.public.100K.fbin \
+    --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin
+
+./build_release/bench \
+    --vectors datasets/t2i_1B/base.1B.fbin \
+    --queries datasets/t2i_1B/query.public.100K.fbin \
+    --neighbors datasets/t2i_1B/groundtruth.public.100K.ibin \
+    --output datasets/t2i_1B/index.usearch \
+    --cos
+```
+
+
+> Optional parameters include `connectivity`, `expansion_add`, `expansion_search`.
+
+For Python, jut open the Jupyter Notebook and start playing around.
 
 ## Datasets
 

@@ -40,14 +40,14 @@ class IndexFAISS:
 
         self.path = path
 
-    def add(self, labels, vectors):
-        # Adding labels isn't supported for most index types
-        # self._faiss.add_with_ids(vectors, labels)
+    def add(self, keys, vectors):
+        # Adding keys isn't supported for most index types
+        # self._faiss.add_with_ids(vectors, keys)
         self._faiss.add(vectors)
 
     def search(self, queries, k: int) -> Matches:
-        distances, labels = self._faiss.search(queries, k)
-        return Matches(labels, distances, np.array([k] * queries.shape[0]))
+        distances, keys = self._faiss.search(queries, k)
+        return Matches(keys, distances, np.array([k] * queries.shape[0]))
 
     def __len__(self) -> int:
         return self._faiss.ntotal

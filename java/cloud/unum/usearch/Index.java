@@ -16,12 +16,12 @@ public class Index {
 
   private long c_ptr = 0;
 
-  public Index(String metric, String accuracy, //
+  public Index(String metric, String quantization, //
       long dimensions, long capacity, long connectivity, //
       long expansion_add, long expansion_search) {
     c_ptr = c_create(
         metric,
-        accuracy,
+        quantization,
         dimensions,
         capacity,
         connectivity,
@@ -49,8 +49,8 @@ public class Index {
     c_reserve(c_ptr, capacity);
   }
 
-  public void add(int label, float vector[]) {
-    c_add(c_ptr, label, vector);
+  public void add(int key, float vector[]) {
+    c_add(c_ptr, key, vector);
   }
 
   public int[] search(float vector[], long count) {
@@ -69,9 +69,17 @@ public class Index {
     c_view(c_ptr, path);
   }
 
+  public boolean remove(int key) {
+    return c_remove(c_ptr, key);
+  }
+  
+  public boolean rename(int from, int to) {
+    return c_rename(c_ptr, from, to);
+  }
+
   public static class Config {
     private String _metric = "ip";
-    private String _accuracy = "f32";
+    private String _quantization = "f32";
     private long _dimensions = 0;
     private long _capacity = 0;
     private long _connectivity = 0;
@@ -84,7 +92,7 @@ public class Index {
     public Index build() {
       return new Index(
           _metric,
-          _accuracy,
+          _quantization,
           _dimensions,
           _capacity,
           _connectivity,
@@ -97,8 +105,8 @@ public class Index {
       return this;
     }
 
-    public Config accuracy(String _accuracy) {
-      this._accuracy = _accuracy;
+    public Config quantization(String _quantization) {
+      this._quantization = _quantization;
       return this;
     }
 
@@ -138,7 +146,7 @@ public class Index {
   }
 
   private static native long c_create(//
-      String metric, String accuracy, //
+      String metric, String quantization, //
       long dimensions, long capacity, long connectivity, //
       long expansion_add, long expansion_search);
 
@@ -154,7 +162,7 @@ public class Index {
 
   private static native void c_reserve(long ptr, long capacity);
 
-  private static native void c_add(long ptr, int label, float vector[]);
+  private static native void c_add(long ptr, int key, float vector[]);
 
   private static native int[] c_search(long ptr, float vector[], long count);
 
@@ -163,4 +171,8 @@ public class Index {
   private static native void c_load(long ptr, String path);
 
   private static native void c_view(long ptr, String path);
+
+  private static native boolean c_remove(long ptr, int key);
+
+  private static native boolean c_rename(long ptr, int from, int to);
 }

@@ -65,6 +65,7 @@ setup(
     packages=["usearch"],
     package_dir={"usearch": "python/usearch"},
     description="Smaller & Faster Single-File Vector Search Engine from Unum",
+    author="Ash Vardanian",
     long_description=long_description,
     long_description_content_type="text/markdown",
     license="Apache-2.0",
@@ -93,7 +94,6 @@ setup(
     ext_modules=ext_modules,
     install_requires=[
         "numpy",
-        "pandas",
         "tqdm",
         'ucall; python_version >= "3.9"',
     ],

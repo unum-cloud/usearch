@@ -20,12 +20,12 @@ Vector Search Engine<br/>
 <p align="center">
 Euclidean • Angular • Jaccard • Hamming • Haversine • User-Defined Metrics
 <br/>
-<a href="https://unum-cloud.github.io/usearch/cpp">C++11</a> •
-<a href="https://unum-cloud.github.io/usearch/python">Python</a> •
+<a href="https://unum-cloud.github.io/usearch/cpp">C++ 11</a> •
+<a href="https://unum-cloud.github.io/usearch/python">Python 3</a> •
 <a href="https://unum-cloud.github.io/usearch/javascript">JavaScript</a> •
 <a href="https://unum-cloud.github.io/usearch/java">Java</a> •
 <a href="https://unum-cloud.github.io/usearch/rust">Rust</a> •
-<a href="https://unum-cloud.github.io/usearch/c">C99</a> •
+<a href="https://unum-cloud.github.io/usearch/c">C 99</a> •
 <a href="https://unum-cloud.github.io/usearch/objective-c">Objective-C</a> •
 <a href="https://unum-cloud.github.io/usearch/swift">Swift</a> •
 <a href="https://unum-cloud.github.io/usearch/golang">GoLang</a> •
@@ -41,12 +41,11 @@ Linux • MacOS • Windows • Docker • WebAssembly
 - ✅ SIMD-optimized and [user-defined metrics](#user-defined-functions) with JIT compilation.
 - ✅ Variable dimensionality vectors for unique applications, including search over compressed data.
 - ✅ Bitwise Tanimoto and Sorensen coefficients for [Genomics and Chemistry applications](#usearch--rdkit--molecular-search).
-- ✅ Hardware-agmostic `f16` & `f8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
+- ✅ Hardware-agnostic `f16` & `i8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
 - ✅ [View large indexes from disk](#disk-based-indexes) without loading into RAM.
 - ✅ Space-efficient point-clouds with `uint40_t`, accommodating 4B+ size.
 - ✅ Compatible with OpenMP and custom "executors", for fine-grained control over CPU utilization.
-- ✅ Supports multiple vectors per label.
-- ✅ On-the-fly deletions.
+- ✅ Heterogeneous lookups, renaming/relabeling, and on-the-fly deletions.
 - ✅ [Semantic Search](#usearch--ai--multi-modal-semantic-search) and [Joins](#joins).
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/index.hpp
@@ -80,7 +79,7 @@ from usearch.index import Index
 index = Index(
     ndim=3, # Define the number of dimensions in input vectors
     metric='cos', # Choose 'l2sq', 'haversine' or other metric, default = 'ip'
-    dtype='f32', # Quantize to 'f16' or 'f8' if needed, default = 'f32'
+    dtype='f32', # Quantize to 'f16' or 'i8' if needed, default = 'f32'
     connectivity=16, # Optional: How frequent should the connections in the graph be
     expansion_add=128, # Optional: Control the recall of indexing
     expansion_search=64, # Optional: Control the quality of search
@@ -88,19 +87,19 @@ index = Index(
 
 vector = np.array([0.2, 0.6, 0.4])
 index.add(42, vector)
-matches, distances, count = index.search(vector, 10)
+matches: Matches = index.search(vector, 10)
 
 assert len(index) == 1
-assert count == 1
-assert matches[0] == 42
-assert distances[0] <= 0.001
+assert len(matches) == 1
+assert matches[0].key == 42
+assert matches[0].distance <= 0.001
 assert np.allclose(index[42], vector)
 ```
 
 ## User-Defined Functions
 
 While most vector search packages concentrate on just a couple of metrics - "Inner Product distance" and "Euclidean distance," USearch extends this list to include any user-defined metrics.
-This flexibility allows you to customize your search for a myriad of applications, from computing geospatial coordinates with the rare [Haversine][haversine] distance to creating custom metrics for composite embeddings from multiple AI models.
+This flexibility allows you to customize your search for a myriad of applications, from computing geo-spatial coordinates with the rare [Haversine][haversine] distance to creating custom metrics for composite embeddings from multiple AI models.
 
 ![USearch: Vector Search Approaches](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-approaches-white.png?raw=true)
 
@@ -108,7 +107,7 @@ Unlike older approaches indexing high-dimensional spaces, like KD-Trees and Loca
 They only have to be comparable.
 So you can apply it in [obscure][obscure] applications, like searching for similar sets or fuzzy text matching, using [GZip][gzip-similarity] as a distance function.
 
-> Read more about [JIT and UDF in USearch Python SDK]().
+> Read more about [JIT and UDF in USearch Python SDK](https://unum-cloud.github.io/usearch/python#user-defined-metrics-and-jit-in-python).
 
 [haversine]: https://ashvardanian.com/posts/abusing-vector-search#geo-spatial-indexing
 [obscure]: https://ashvardanian.com/posts/abusing-vector-search
@@ -122,10 +121,10 @@ Those, however, are only sometimes reliable, can significantly affect the statis
 ![USearch uint40_t support](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-neighbor-types.png?raw=true)
 
 Instead, we have focused on high-precision arithmetic over low-precision downcasted vectors.
-The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f32_t`, `f16_t`, `f64_t`, and `f8_t` representations, even if the hardware doesn't natively support it.
+The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f32_t`, `f16_t`, `f64_t`, and `i8_t` representations, even if the hardware doesn't natively support it.
 Continuing the topic of memory efficiency, we provide a `uint40_t` to allow collection with over 4B+ vectors without allocating 8 bytes for every neighbor reference in the proximity graph.
 
-|              | FAISS, `f32` | USearch, `f32` | USearch, `f16` |     USearch, `f8` |
+|              | FAISS, `f32` | USearch, `f32` | USearch, `f16` |     USearch, `i8` |
 | :----------- | -----------: | -------------: | -------------: | ----------------: |
 | Batch Insert |       16 K/s |         73 K/s |        100 K/s | 104 K/s **+550%** |
 | Batch Search |       82 K/s |        103 K/s |        113 K/s |  134 K/s **+63%** |
@@ -160,7 +159,46 @@ other_view = Index(ndim=..., metric=CompiledMetric(...))
 other_view.view("index.usearch")
 ```
 
-## Joins
+## Exact, Approximate, and Multi-Index Lookups
+
+Approximate search methods, such as HNSW, are predominantly used when an exact brute-force search becomes too resource-intensive.
+This typically occurs when you have millions of entries in a collection.
+For smaller collections, we offer a more direct approach with the `search` method.
+
+```py
+from usearch.index import search, MetricKind, Matches, BatchMatches
+import numpy as np
+
+# Generate 10'000 random vectors with 1024 dimensions
+vectors = np.random.rand(10_000, 1024).astype(np.float32)
+vector = np.random.rand(1024).astype(np.float32)
+
+one_in_many: Matches = search(vectors, vector, 50, MetricKind.L2sq, exact=True)
+many_in_many: BatchMatches = search(vectors, vectors, 50, MetricKind.L2sq, exact=True)
+```
+
+By passing the `exact=True` argument, the system bypasses indexing altogether and performs a brute-force search through the entire dataset using SIMD-optimized similarity metrics from [SimSIMD](https://github.com/ashvardanian/simsimd).
+When compared to FAISS's `IndexFlatL2` in Google Colab, **[USearch may offer up to a 20x performance improvement](https://github.com/unum-cloud/usearch/issues/176#issuecomment-1666650778)**:
+
+- `faiss.IndexFlatL2`: **55.3 ms**.
+- `usearch.index.search`: **2.54 ms**.
+
+For larger workloads targeting billions or even trillions of vectors, parallel multi-index lookups become invaluable.
+These lookups prevent the need to construct a single, massive index, allowing users to query multiple smaller ones instead.
+
+```py
+from usearch.index import Indexes
+
+multi_index = Indexes(
+    indexes: Iterable[usearch.index.Index] = [...],
+    paths: Iterable[os.PathLike] = [...],
+    view: bool = False,
+    threads: int = 0,
+)
+multi_index.search(...)
+```
+
+## Joins, One-to-One, One-to-Many, and Many-to-Many Mappings
 
 One of the big questions these days is how will AI change the world of databases and data management.
 Most databases are still struggling to implement high-quality fuzzy search, and the only kind of joins they know are deterministic.
@@ -190,9 +228,9 @@ Broader functionality is ported per request.
 | :---------------------- | :----: | :------: | :---: | :---: | :--------: | :---: | :----: | :---: |
 | Add, search             |   ✅    |    ✅     |   ✅   |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
 | Save, load, view        |   ✅    |    ✅     |   ✅   |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
-| Join                    |   ✅    |    ✅     |   ✅   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 | User-defined metrics    |   ✅    |    ✅     |   ✅   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
-| Variable-length vectors |   ✅    |    ✅     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
+| Joins                    |   ✅    |    ✅     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
+| Variable-length vectors |   ✅    |    ❌     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 | 4B+ capacities          |   ✅    |    ❌     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 
 ## Application Examples
@@ -215,17 +253,17 @@ model = uform.get_model('unum-cloud/uform-vl-multilingual')
 index = usearch.index.Index(ndim=256)
 
 @server
-def add(label: int, photo: pil.Image.Image):
+def add(key: int, photo: pil.Image.Image):
     image = model.preprocess_image(photo)
     vector = model.encode_image(image).detach().numpy()
-    index.add(label, vector.flatten(), copy=True)
+    index.add(key, vector.flatten(), copy=True)
 
 @server
 def search(query: str) -> np.ndarray:
     tokens = model.preprocess_text(query)
     vector = model.encode_text(tokens).detach().numpy()
     matches = index.search(vector.flatten(), 3)
-    return matches.labels
+    return matches.keys
 
 server.run()
 ```
@@ -269,9 +307,9 @@ fingerprints = np.vstack([encoder.GetFingerprint(x) for x in molecules])
 fingerprints = np.packbits(fingerprints, axis=1)
 
 index = Index(ndim=2048, metric=MetricKind.Tanimoto)
-labels = np.arange(len(molecules))
+keys = np.arange(len(molecules))
 
-index.add(labels, fingerprints)
+index.add(keys, fingerprints)
 matches = index.search(fingerprints, 10)
 ```
 
@@ -282,9 +320,9 @@ matches = index.search(fingerprints, 10)
 ## Integrations
 
 - [x] GPT-Cache.
-- [ ] LangChain.
+- [x] LangChain.
+- [ ] ClickHouse.
 - [ ] Microsoft Semantic Kernel.
-- [ ] PyTorch.
 
 ## Citations
 

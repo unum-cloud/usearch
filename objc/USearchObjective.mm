@@ -2,21 +2,19 @@
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdocumentation"
-#import <usearch/index_punned_dense.hpp>
+#import <usearch/index_dense.hpp>
 #pragma clang diagnostic pop
 
 using namespace unum::usearch;
 using namespace unum;
 
-using metric_t = index_punned_dense_metric_t;
-using distance_t = punned_distance_t;
-using index_t = punned_small_t;
-using add_result_t = typename index_t::add_result_t;
-using search_result_t = typename index_t::search_result_t;
-using serialization_result_t = typename index_t::serialization_result_t;
-using label_t = typename index_t::label_t;
-using id_t = typename index_t::id_t;
-using shared_index_t = std::shared_ptr<index_t>;
+using distance_t = distance_punned_t;
+using add_result_t = typename index_dense_t::add_result_t;
+using labeling_result_t = typename index_dense_t::labeling_result_t;
+using search_result_t = typename index_dense_t::search_result_t;
+using shared_index_dense_t = std::shared_ptr<index_dense_t>;
+
+static_assert(std::is_same<USearchKey, index_dense_t::key_t>::value, "Type mismatch between Objective-C and C++");
 
 metric_kind_t to_native_metric(USearchMetric m) {
     switch (m) {
@@ -54,8 +52,8 @@ metric_kind_t to_native_metric(USearchMetric m) {
 
 scalar_kind_t to_native_scalar(USearchScalar m) {
     switch (m) {
-        case USearchScalarF8:
-            return scalar_kind_t::f8_k;
+        case USearchScalarI8:
+            return scalar_kind_t::i8_k;
 
         case USearchScalarF16:
             return scalar_kind_t::f16_k;
@@ -73,15 +71,15 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
 @interface USearchIndex ()
 
-@property (readonly) shared_index_t native;
+@property (readonly) shared_index_dense_t native;
 
-- (instancetype)initWithIndex:(shared_index_t)native;
+- (instancetype)initWithIndex:(shared_index_dense_t)native;
 
 @end
 
 @implementation USearchIndex
 
-- (instancetype)initWithIndex:(shared_index_t)native {
+- (instancetype)initWithIndex:(shared_index_dense_t)native {
     self = [super init];
     _native = native;
     return self;
@@ -115,93 +113,93 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
     return static_cast<UInt32>(_native->expansion_search());
 }
 
-+ (instancetype)make:(USearchMetric)metric dimensions:(UInt32)dimensions connectivity:(UInt32)connectivity quantization:(USearchScalar)quantization {
++ (instancetype)make:(USearchMetric)metricKind dimensions:(UInt32)dimensions connectivity:(UInt32)connectivity quantization:(USearchScalar)quantization {
     std::size_t dims = static_cast<std::size_t>(dimensions);
-    index_config_t config;
 
-    config.connectivity = static_cast<std::size_t>(connectivity);
-    shared_index_t ptr = std::make_shared<index_t>(index_t::make(dims, to_native_metric(metric), config, to_native_scalar(quantization)));
+    index_config_t config(static_cast<std::size_t>(connectivity));
+    metric_punned_t metric(dims, to_native_metric(metricKind), to_native_scalar(quantization));
+    shared_index_dense_t ptr = std::make_shared<index_dense_t>(index_dense_t::make(metric, config));
     return [[USearchIndex alloc] initWithIndex:ptr];
 }
 
-- (void)addSingle:(USearchLabel)label
+- (void)addSingle:(USearchKey)key
            vector:(Float32 const *_Nonnull)vector {
-    add_result_t result = _native->add(label, vector);
+    add_result_t result = _native->add(key, vector);
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't add to index"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 }
 
 - (UInt32)searchSingle:(Float32 const *_Nonnull)vector
                  count:(UInt32)wanted
-                labels:(USearchLabel *_Nullable)labels
+                  keys:(USearchKey *_Nullable)keys
              distances:(Float32 *_Nullable)distances {
     search_result_t result = _native->search(vector, static_cast<std::size_t>(wanted));
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't find in index"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 
-    std::size_t found = result.dump_to(labels, distances);
+    std::size_t found = result.dump_to(keys, distances);
     return static_cast<UInt32>(found);
 }
 
-- (void)addDouble:(USearchLabel)label
+- (void)addDouble:(USearchKey)key
            vector:(Float64 const *_Nonnull)vector {
-    add_result_t result = _native->add(label, (f64_t const *)vector);
+    add_result_t result = _native->add(key, (f64_t const *)vector);
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't add to index"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 }
 
 - (UInt32)searchDouble:(Float64 const *_Nonnull)vector
                  count:(UInt32)wanted
-                labels:(USearchLabel *_Nullable)labels
+                  keys:(USearchKey *_Nullable)keys
              distances:(Float32 *_Nullable)distances {
     search_result_t result = _native->search((f64_t const *)vector, static_cast<std::size_t>(wanted));
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't find in index"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 
-    std::size_t found = result.dump_to(labels, distances);
+    std::size_t found = result.dump_to(keys, distances);
     return static_cast<UInt32>(found);
 }
 
-- (void)addHalf:(USearchLabel)label
+- (void)addHalf:(USearchKey)key
          vector:(void const *_Nonnull)vector {
-    add_result_t result = _native->add(label, (f16_t const *)vector);
+    add_result_t result = _native->add(key, (f16_t const *)vector);
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't add to index"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 }
 
 - (UInt32)searchHalf:(void const *_Nonnull)vector
                count:(UInt32)wanted
-              labels:(USearchLabel *_Nullable)labels
+                keys:(USearchKey *_Nullable)keys
            distances:(Float32 *_Nullable)distances {
     search_result_t result = _native->search((f16_t const *)vector, static_cast<std::size_t>(wanted));
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't find in index"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 
-    std::size_t found = result.dump_to(labels, distances);
+    std::size_t found = result.dump_to(keys, distances);
     return static_cast<UInt32>(found);
 }
 
@@ -211,6 +209,34 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
 - (void)reserve:(UInt32)count {
     _native->reserve(static_cast<std::size_t>(count));
+}
+
+- (Boolean)contains:(USearchKey)key {
+    return _native->contains(key);
+}
+
+- (UInt32)count:(USearchKey)key {
+    return _native->count(key);
+}
+
+- (void)remove:(USearchKey)key {
+    labeling_result_t result = _native->remove(key);
+
+    if (!result) {
+        @throw [NSException exceptionWithName:@"Can't remove an entry"
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
+                                     userInfo:nil];
+    }
+}
+
+- (void)rename:(USearchKey)key to:(USearchKey)to {
+    labeling_result_t result = _native->rename(key, to);
+
+    if (!result) {
+        @throw [NSException exceptionWithName:@"Can't rename the entry"
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
+                                     userInfo:nil];
+    }
 }
 
 - (void)save:(NSString *)path {
@@ -226,7 +252,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't save to disk"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 }
@@ -244,7 +270,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't load from disk"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 }
@@ -262,7 +288,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't view from disk"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 }
