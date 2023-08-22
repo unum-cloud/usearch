@@ -1348,14 +1348,14 @@ class index_dense_gt {
 
         std::size_t const queries_count = queries_end - queries_begin;
 
-        // Skip the first few top level, assuming they can't even potentially have enough clusters
+        // Find the first level (top -> down) that has enough nodes to exceed `config.min_clusters`.
         std::size_t level = max_level();
-        if (config.min_clusters)
+        if (config.min_clusters) {
             for (; level > 1; --level) {
-                if (stats(level).nodes < config.min_clusters)
+                if (stats(level).nodes > config.min_clusters)
                     break;
             }
-        else
+        } else
             level = 1, config.max_clusters = stats(1).nodes, config.min_clusters = 2;
 
         clustering_result_t result;
@@ -1370,7 +1370,7 @@ class index_dense_gt {
             byte_t* vector;
         };
 
-        auto smaller_key = [](cluster_t const& a, cluster_t const& b) { return a.centroid < b.centroid; };
+        auto centroid_id = [](cluster_t const& a, cluster_t const& b) { return a.centroid < b.centroid; };
         auto higher_popularity = [](cluster_t const& a, cluster_t const& b) { return a.popularity > b.popularity; };
 
         std::atomic<std::size_t> visited_members(0);
@@ -1411,7 +1411,7 @@ class index_dense_gt {
 
         // Now once we have identified the closest clusters,
         // we can try reducing their quantity, refining
-        std::sort(clusters.begin(), clusters.end(), smaller_key);
+        std::sort(clusters.begin(), clusters.end(), centroid_id);
 
         // Transform into run-length encoding, computing the number of unique clusters
         std::size_t unique_clusters = 0;
@@ -1435,40 +1435,33 @@ class index_dense_gt {
             goto map_to_clusters;
         }
 
+        std::sort(clusters.data(), clusters.data() + unique_clusters, higher_popularity);
+
         // If clusters are too numerous, merge the ones that are too close to each other.
         std::size_t merge_cycles = 0;
     merge_nearby_clusters:
         if (unique_clusters > config.max_clusters) {
 
-            struct cluster_merge_t {
-                std::size_t from_idx = 0;
-                std::size_t to_idx = 0;
-            };
-
-            cluster_merge_t merge;
+            cluster_t& merge_source = clusters[unique_clusters - 1];
+            std::size_t merge_target_idx = 0;
             distance_t merge_distance = std::numeric_limits<distance_t>::max();
 
-            for (std::size_t first_idx = 0; first_idx != unique_clusters; ++first_idx) {
-                for (std::size_t second_idx = 0; second_idx != first_idx; ++second_idx) {
-                    distance_t distance = metric_(clusters[first_idx].vector, clusters[second_idx].vector);
-                    if (distance < merge_distance) {
-                        merge_distance = distance;
-                        merge = {first_idx, second_idx};
-                    }
+            for (std::size_t candidate_idx = 0; candidate_idx + 1 < unique_clusters; ++candidate_idx) {
+                distance_t distance = metric_(merge_source.vector, clusters[candidate_idx].vector);
+                if (distance < merge_distance) {
+                    merge_distance = distance;
+                    merge_target_idx = candidate_idx;
                 }
             }
 
-            if (clusters[merge.from_idx].popularity > clusters[merge.to_idx].popularity)
-                std::swap(merge.from_idx, merge.to_idx);
+            merge_source.merged_into = clusters[merge_target_idx].centroid;
+            clusters[merge_target_idx].popularity += exchange(merge_source.popularity, 0);
 
-            clusters[merge.from_idx].merged_into = clusters[merge.to_idx].centroid;
-            clusters[merge.to_idx].popularity += exchange(clusters[merge.from_idx].popularity, 0);
+            // The target object may have to be swapped a few times to get to optimal position.
+            while (merge_target_idx &&
+                   clusters[merge_target_idx - 1].popularity < clusters[merge_target_idx].popularity)
+                std::swap(clusters[merge_target_idx - 1], clusters[merge_target_idx]), --merge_target_idx;
 
-            // Move the merged entry to the end
-            // std::partition(clusters.data(), clusters.data() + unique_clusters,
-            //                [&](cluster_t const& c) { return c.merged_into == free_key(); });
-            if (merge.from_idx != (unique_clusters - 1))
-                std::swap(clusters[merge.from_idx], clusters[unique_clusters - 1]);
             unique_clusters--;
             merge_cycles++;
             goto merge_nearby_clusters;
@@ -1478,7 +1471,7 @@ class index_dense_gt {
         if (merge_cycles) {
             // Sort dropped clusters by name to accelerate future lookups
             auto clusters_end = clusters.data() + config.max_clusters + merge_cycles;
-            std::sort(clusters.data(), clusters_end, smaller_key);
+            std::sort(clusters.data(), clusters_end, centroid_id);
 
             executor.dynamic(queries_count, [&](std::size_t thread_idx, std::size_t query_idx) {
                 key_t& cluster_key = cluster_keys[query_idx];
@@ -1489,7 +1482,7 @@ class index_dense_gt {
                     // To avoid implementing heterogeneous comparisons, lets wrap the `cluster_key`
                     cluster_t updated_cluster;
                     updated_cluster.centroid = cluster_key;
-                    updated_cluster = *std::lower_bound(clusters.data(), clusters_end, updated_cluster, smaller_key);
+                    updated_cluster = *std::lower_bound(clusters.data(), clusters_end, updated_cluster, centroid_id);
                     if (updated_cluster.merged_into == free_key())
                         break;
                     cluster_key = updated_cluster.merged_into;
