@@ -52,6 +52,7 @@ using dense_add_result_t = typename index_dense_t::add_result_t;
 using dense_search_result_t = typename index_dense_t::search_result_t;
 using dense_labeling_result_t = typename index_dense_t::labeling_result_t;
 using dense_cluster_result_t = typename index_dense_t::cluster_result_t;
+using dense_clustering_result_t = typename index_dense_t::clustering_result_t;
 
 struct dense_index_py_t : public index_dense_t {
     using native_t = index_dense_t;
@@ -618,7 +619,7 @@ static py::tuple cluster_vectors(        //
 
     py::array_t<key_t> keys_py({Py_ssize_t(queries_count), Py_ssize_t(1)});
     py::array_t<distance_t> distances_py({Py_ssize_t(queries_count), Py_ssize_t(1)});
-    clustering_result_t cluster_result;
+    dense_clustering_result_t cluster_result;
     executor_default_t executor{threads};
 
     auto keys_py2d = keys_py.template mutable_unchecked<2>();
@@ -626,16 +627,20 @@ static py::tuple cluster_vectors(        //
     key_t* keys_ptr = reinterpret_cast<key_t*>(&keys_py2d(0, 0));
     distance_t* distances_ptr = reinterpret_cast<distance_t*>(&distances_py2d(0, 0));
 
+    index_dense_clustering_config_t config;
+    config.min_clusters = min_count;
+    config.max_clusters = max_count;
+
     rows_lookup_gt<byte_t const> queries_begin(queries_info.ptr, queries_stride);
     rows_lookup_gt<byte_t const> queries_end = queries_begin + queries_count;
 
     // clang-format off
     switch (numpy_string_to_kind(queries_info.format)) {
-    case scalar_kind_t::b1x8_k: cluster_result = cluster(index, queries_begin.as<b1x8_t const>(), queries_end.as<b1x8_t const>(), min_count, max_count, keys_ptr, distances_ptr, executor); break;
-    case scalar_kind_t::i8_k: cluster_result = cluster(index, queries_begin.as<i8_bits_t const>(), queries_end.as<i8_bits_t const>(), min_count, max_count, keys_ptr, distances_ptr, executor); break;
-    case scalar_kind_t::f16_k: cluster_result = cluster(index, queries_begin.as<f16_t const>(), queries_end.as<f16_t const>(), min_count, max_count, keys_ptr, distances_ptr, executor); break;
-    case scalar_kind_t::f32_k: cluster_result = cluster(index, queries_begin.as<f32_t const>(), queries_end.as<f32_t const>(), min_count, max_count, keys_ptr, distances_ptr, executor); break;
-    case scalar_kind_t::f64_k: cluster_result = cluster(index, queries_begin.as<f64_t const>(), queries_end.as<f64_t const>(), min_count, max_count, keys_ptr, distances_ptr, executor); break;
+    case scalar_kind_t::b1x8_k: cluster_result = index.cluster(queries_begin.as<b1x8_t const>(), queries_end.as<b1x8_t const>(), config, keys_ptr, distances_ptr, executor); break;
+    case scalar_kind_t::i8_k: cluster_result = index.cluster(queries_begin.as<i8_bits_t const>(), queries_end.as<i8_bits_t const>(), config, keys_ptr, distances_ptr, executor); break;
+    case scalar_kind_t::f16_k: cluster_result = index.cluster(queries_begin.as<f16_t const>(), queries_end.as<f16_t const>(), config, keys_ptr, distances_ptr, executor); break;
+    case scalar_kind_t::f32_k: cluster_result = index.cluster(queries_begin.as<f32_t const>(), queries_end.as<f32_t const>(), config, keys_ptr, distances_ptr, executor); break;
+    case scalar_kind_t::f64_k: cluster_result = index.cluster(queries_begin.as<f64_t const>(), queries_end.as<f64_t const>(), config, keys_ptr, distances_ptr, executor); break;
     default: throw std::invalid_argument("Incompatible scalars in the query matrix: " + queries_info.format);
     }
     // clang-format on
@@ -690,8 +695,12 @@ static py::tuple cluster_keys(                      //
     key_t* keys_ptr = reinterpret_cast<key_t*>(&keys_py2d(0, 0));
     distance_t* distances_ptr = reinterpret_cast<distance_t*>(&distances_py2d(0, 0));
 
-    clustering_result_t cluster_result =
-        cluster(index, queries_begin, queries_end, min_count, max_count, keys_ptr, distances_ptr, executor);
+    index_dense_clustering_config_t config;
+    config.min_clusters = min_count;
+    config.max_clusters = max_count;
+
+    dense_clustering_result_t cluster_result =
+        index.cluster(queries_begin, queries_end, config, keys_ptr, distances_ptr, executor);
     cluster_result.error.raise();
 
     // Those would be set to 1 for all entries, in case of success

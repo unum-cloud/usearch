@@ -110,6 +110,15 @@ struct index_dense_config_t : public index_config_t {
           expansion_search(expansion_search ? expansion_search : default_expansion_search()) {}
 };
 
+struct index_dense_clustering_config_t {
+    std::size_t min_clusters = 0;
+    std::size_t max_clusters = 0;
+    enum mode_t {
+        merge_smallest_k,
+        merge_closest_k,
+    } mode = merge_smallest_k;
+};
+
 struct index_dense_serialization_config_t {
     bool exclude_vectors = false;
     bool use_64_bit_dimensions = false;
@@ -565,11 +574,30 @@ class index_dense_gt {
      */
     aggregated_distances_t distance_between(key_t a, key_t b, std::size_t = any_thread()) const {
         shared_lock_t lock(slot_lookup_mutex_);
+        aggregated_distances_t result;
+        if (!multi()) {
+            auto a_it = slot_lookup_.find(key_and_slot_t::any_slot(a));
+            auto b_it = slot_lookup_.find(key_and_slot_t::any_slot(b));
+            bool a_missing = a_it == slot_lookup_.end();
+            bool b_missing = b_it == slot_lookup_.end();
+            if (a_missing || b_missing)
+                return result;
+
+            key_and_slot_t a_key_and_slot = *a_it;
+            byte_t const* a_vector = vectors_lookup_[a_key_and_slot.slot];
+            key_and_slot_t b_key_and_slot = *b_it;
+            byte_t const* b_vector = vectors_lookup_[b_key_and_slot.slot];
+            distance_t a_b_distance = metric_(a_vector, b_vector);
+
+            result.mean = result.min = result.max = a_b_distance;
+            result.count = 1;
+            return result;
+        }
+
         auto a_range = slot_lookup_.equal_range(key_and_slot_t::any_slot(a));
         auto b_range = slot_lookup_.equal_range(key_and_slot_t::any_slot(b));
         bool a_missing = a_range.first == a_range.second;
         bool b_missing = b_range.first == b_range.second;
-        aggregated_distances_t result;
         if (a_missing || b_missing)
             return result;
 
@@ -1282,6 +1310,201 @@ class index_dense_gt {
             std::forward<progress_at>(progress));
     }
 
+    struct clustering_result_t {
+        error_t error{};
+        std::size_t clusters{};
+        std::size_t visited_members{};
+        std::size_t computed_distances{};
+
+        explicit operator bool() const noexcept { return !error; }
+        clustering_result_t failed(error_t message) noexcept {
+            error = std::move(message);
+            return std::move(*this);
+        }
+    };
+
+    /**
+     *  @brief  Implements clustering, classifying the given objects (vectors of member keys)
+     *          into a given number of clusters.
+     *
+     *  @param[in] queries_begin Iterator targeting the fiest query.
+     *  @param[in] queries_end
+     *  @param[in] executor Thread-pool to execute the job in parallel.
+     *  @param[in] progress Callback to report the execution progress.
+     */
+    template <                                   //
+        typename queries_iterator_at,            //
+        typename executor_at = dummy_executor_t, //
+        typename progress_at = dummy_progress_t  //
+        >
+    clustering_result_t cluster(                //
+        queries_iterator_at queries_begin,      //
+        queries_iterator_at queries_end,        //
+        index_dense_clustering_config_t config, //
+        key_t* cluster_keys,                    //
+        distance_t* cluster_distances,          //
+        executor_at&& executor = executor_at{}, //
+        progress_at&& progress = progress_at{}) {
+
+        std::size_t const queries_count = queries_end - queries_begin;
+
+        // Skip the first few top level, assuming they can't even potentially have enough clusters
+        std::size_t level = max_level();
+        if (config.min_clusters)
+            for (; level > 1; --level) {
+                if (stats(level).nodes < config.min_clusters)
+                    break;
+            }
+        else
+            level = 1, config.max_clusters = stats(1).nodes, config.min_clusters = 2;
+
+        clustering_result_t result;
+        if (max_level() < 2)
+            return result.failed("Index too small to cluster!");
+
+        // A structure used to track the popularity of a specific cluster
+        struct cluster_t {
+            key_t centroid;
+            key_t merged_into;
+            std::size_t popularity;
+            byte_t* vector;
+        };
+
+        auto smaller_key = [](cluster_t const& a, cluster_t const& b) { return a.centroid < b.centroid; };
+        auto higher_popularity = [](cluster_t const& a, cluster_t const& b) { return a.popularity > b.popularity; };
+
+        std::atomic<std::size_t> visited_members(0);
+        std::atomic<std::size_t> computed_distances(0);
+        std::atomic<char const*> atomic_error{nullptr};
+
+        using dynamic_allocator_traits_t = std::allocator_traits<dynamic_allocator_t>;
+        using clusters_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<cluster_t>;
+        buffer_gt<cluster_t, clusters_allocator_t> clusters(queries_count);
+        if (!clusters)
+            return result.failed("Out of memory!");
+
+    map_to_clusters:
+        // Concurrently perform search until a certain depth
+        executor.dynamic(queries_count, [&](std::size_t thread_idx, std::size_t query_idx) {
+            auto result = cluster(queries_begin[query_idx], level, thread_idx);
+            if (!result) {
+                atomic_error = result.error.release();
+                return false;
+            }
+
+            cluster_keys[query_idx] = result.cluster.member.key;
+            cluster_distances[query_idx] = result.cluster.distance;
+
+            // Export in case we need to refine afterwards
+            clusters[query_idx].centroid = result.cluster.member.key;
+            clusters[query_idx].vector = vectors_lookup_[result.cluster.member.slot];
+            clusters[query_idx].merged_into = free_key();
+            clusters[query_idx].popularity = 1;
+
+            visited_members += result.visited_members;
+            computed_distances += result.computed_distances;
+            return true;
+        });
+
+        if (atomic_error)
+            return result.failed(atomic_error.load());
+
+        // Now once we have identified the closest clusters,
+        // we can try reducing their quantity, refining
+        std::sort(clusters.begin(), clusters.end(), smaller_key);
+
+        // Transform into run-length encoding, computing the number of unique clusters
+        std::size_t unique_clusters = 0;
+        {
+            std::size_t last_idx = 0;
+            for (std::size_t current_idx = 1; current_idx != clusters.size(); ++current_idx) {
+                if (clusters[last_idx].centroid == clusters[current_idx].centroid) {
+                    clusters[last_idx].popularity++;
+                } else {
+                    last_idx++;
+                    clusters[last_idx] = clusters[current_idx];
+                }
+            }
+            unique_clusters = last_idx + 1;
+        }
+
+        // In some cases the queries may be co-located, all mapping into the same cluster on that
+        // level. In that case we refine the granularity and dive deeper into clusters:
+        if (unique_clusters < config.min_clusters && level > 1) {
+            level--;
+            goto map_to_clusters;
+        }
+
+        // If clusters are too numerous, merge the ones that are too close to each other.
+        std::size_t merge_cycles = 0;
+    merge_nearby_clusters:
+        if (unique_clusters > config.max_clusters) {
+
+            struct cluster_merge_t {
+                std::size_t from_idx = 0;
+                std::size_t to_idx = 0;
+            };
+
+            cluster_merge_t merge;
+            distance_t merge_distance = std::numeric_limits<distance_t>::max();
+
+            for (std::size_t first_idx = 0; first_idx != unique_clusters; ++first_idx) {
+                for (std::size_t second_idx = 0; second_idx != first_idx; ++second_idx) {
+                    distance_t distance = metric_(clusters[first_idx].vector, clusters[second_idx].vector);
+                    if (distance < merge_distance) {
+                        merge_distance = distance;
+                        merge = {first_idx, second_idx};
+                    }
+                }
+            }
+
+            if (clusters[merge.from_idx].popularity > clusters[merge.to_idx].popularity)
+                std::swap(merge.from_idx, merge.to_idx);
+
+            clusters[merge.from_idx].merged_into = clusters[merge.to_idx].centroid;
+            clusters[merge.to_idx].popularity += exchange(clusters[merge.from_idx].popularity, 0);
+
+            // Move the merged entry to the end
+            // std::partition(clusters.data(), clusters.data() + unique_clusters,
+            //                [&](cluster_t const& c) { return c.merged_into == free_key(); });
+            if (merge.from_idx != (unique_clusters - 1))
+                std::swap(clusters[merge.from_idx], clusters[unique_clusters - 1]);
+            unique_clusters--;
+            merge_cycles++;
+            goto merge_nearby_clusters;
+        }
+
+        // Replace evicted clusters
+        if (merge_cycles) {
+            // Sort dropped clusters by name to accelerate future lookups
+            auto clusters_end = clusters.data() + config.max_clusters + merge_cycles;
+            std::sort(clusters.data(), clusters_end, smaller_key);
+
+            executor.dynamic(queries_count, [&](std::size_t thread_idx, std::size_t query_idx) {
+                key_t& cluster_key = cluster_keys[query_idx];
+                distance_t& cluster_distance = cluster_distances[query_idx];
+
+                // Recursively trace replacements of that cluster
+                while (true) {
+                    // To avoid implementing heterogeneous comparisons, lets wrap the `cluster_key`
+                    cluster_t updated_cluster;
+                    updated_cluster.centroid = cluster_key;
+                    updated_cluster = *std::lower_bound(clusters.data(), clusters_end, updated_cluster, smaller_key);
+                    if (updated_cluster.merged_into == free_key())
+                        break;
+                    cluster_key = updated_cluster.merged_into;
+                }
+
+                cluster_distance = distance_between(cluster_key, queries_begin[query_idx], thread_idx).mean;
+                return true;
+            });
+        }
+
+        result.computed_distances = computed_distances;
+        result.visited_members = visited_members;
+        return result;
+    }
+
   private:
     struct thread_lock_t {
         index_dense_gt const& parent;
@@ -1592,221 +1815,6 @@ static join_result_t join(                                    //
         std::forward<man_to_woman_at>(man_to_woman), //
         std::forward<executor_at>(executor),         //
         std::forward<progress_at>(progress));
-}
-
-struct clustering_result_t {
-    error_t error{};
-    std::size_t clusters{};
-    std::size_t visited_members{};
-    std::size_t computed_distances{};
-
-    explicit operator bool() const noexcept { return !error; }
-    clustering_result_t failed(error_t message) noexcept {
-        error = std::move(message);
-        return std::move(*this);
-    }
-};
-
-struct clustering_config_t {
-    std::size_t target_clusters = 0;
-};
-
-/**
- *  @brief  Implements clustering, classifying the given objects (vectors of member keys)
- *          into a given number of clusters.
- *
- *  @param[in] queries_begin Iterator targeting the fiest query.
- *  @param[in] queries_end
- *  @param[in] executor Thread-pool to execute the job in parallel.
- *  @param[in] progress Callback to report the execution progress.
- */
-template <                                   //
-    typename key_at,                         //
-    typename slot_at,                        //
-    typename queries_iterator_at,            //
-    typename executor_at = dummy_executor_t, //
-    typename progress_at = dummy_progress_t  //
-    >
-static clustering_result_t cluster(               //
-    index_dense_gt<key_at, slot_at> const& index, //
-    queries_iterator_at queries_begin,            //
-    queries_iterator_at queries_end,              //
-    //
-    std::size_t min_clusters,               //
-    std::size_t max_clusters,               //
-    key_at* cluster_keys,                   //
-    distance_punned_t* cluster_distances,   //
-    executor_at&& executor = executor_at{}, //
-    progress_at&& progress = progress_at{}) {
-
-    using index_t = index_dense_gt<key_at, slot_at>;
-    using key_t = typename index_t::key_t;
-    using distance_t = typename index_t::distance_t;
-
-    std::size_t const queries_count = queries_end - queries_begin;
-
-    // Skip the first few top level, assuming they can't even potentially have enough clusters
-    std::size_t level = index.max_level();
-    if (min_clusters)
-        for (; level > 1; --level) {
-            if (index.stats(level).nodes < min_clusters)
-                break;
-        }
-    else
-        level = 1, max_clusters = index.stats(1).nodes, min_clusters = 2;
-
-    clustering_result_t result;
-    if (index.max_level() < 2)
-        return result.failed("Index too small to cluster!");
-
-    // A structure used to track the popularity of a specific cluster
-    struct cluster_t {
-        key_t centroid;
-        key_t merged_into;
-        std::size_t popularity;
-    };
-
-    auto smaller_key = [](cluster_t const& a, cluster_t const& b) { return a.centroid < b.centroid; };
-    auto higher_popularity = [](cluster_t const& a, cluster_t const& b) { return a.popularity > b.popularity; };
-
-    std::atomic<std::size_t> visited_members(0);
-    std::atomic<std::size_t> computed_distances(0);
-    std::atomic<char const*> atomic_error{nullptr};
-
-    using dynamic_allocator_t = typename index_t::dynamic_allocator_t;
-    using dynamic_allocator_traits_t = std::allocator_traits<dynamic_allocator_t>;
-
-map_to_clusters:
-    // Concurrently perform search until a certain depth
-    executor.dynamic(queries_count, [&](std::size_t thread_idx, std::size_t query_idx) {
-        auto result = index.cluster(queries_begin[query_idx], level, thread_idx);
-        if (!result) {
-            atomic_error = result.error.release();
-            return false;
-        }
-
-        cluster_keys[query_idx] = result.cluster.member.key;
-        cluster_distances[query_idx] = result.cluster.distance;
-
-        visited_members += result.visited_members;
-        computed_distances += result.computed_distances;
-        return true;
-    });
-
-    if (atomic_error)
-        return result.failed(atomic_error.load());
-
-    using clusters_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<cluster_t>;
-    buffer_gt<cluster_t, clusters_allocator_t> clusters(queries_count);
-    if (!clusters)
-        return result.failed("Out of memory!");
-
-    // Now once we have identified the closest clusters,
-    // we can try reducing their quantity, refining
-    for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx)
-        clusters[query_idx].centroid = cluster_keys[query_idx], //
-            clusters[query_idx].merged_into = index.free_key(), //
-            clusters[query_idx].popularity = 1;
-
-    // Sort by cluster key
-    std::sort(clusters.begin(), clusters.end(), smaller_key);
-
-    // Transform into run-length encoding, computing the number of unique clusters
-    std::size_t unique_clusters = 0;
-    {
-        std::size_t last_idx = 0;
-        for (std::size_t current_idx = 1; current_idx != clusters.size(); ++current_idx) {
-            if (clusters[last_idx].centroid == clusters[current_idx].centroid) {
-                clusters[last_idx].popularity++;
-            } else {
-                last_idx++;
-                clusters[last_idx] = clusters[current_idx];
-            }
-        }
-        unique_clusters = last_idx + 1;
-    }
-
-    // In some cases the queries may be co-located, all mapping into the same cluster on that
-    // level. In that case we refine the granularity and dive deeper into clusters:
-    if (unique_clusters < min_clusters && level > 1) {
-        level--;
-        goto map_to_clusters;
-    }
-
-    // If clusters are too numerous, merge the ones that are too close to each other.
-    std::size_t merge_cycles = 0;
-merge_nearby_clusters:
-    if (unique_clusters > max_clusters) {
-
-        struct cluster_merge_t {
-            std::size_t from_idx = 0;
-            std::size_t to_idx = 0;
-        };
-
-        std::mutex merge_mutex;
-        cluster_merge_t merge;
-        std::atomic<distance_t> atomic_merge_distance = std::numeric_limits<distance_t>::max();
-
-        executor.dynamic(unique_clusters * unique_clusters, [&](std::size_t thread_idx, std::size_t task_idx) {
-            std::size_t first_idx = task_idx / unique_clusters;
-            std::size_t second_idx = task_idx % unique_clusters;
-            if (first_idx == second_idx)
-                return true;
-            key_t first_key = clusters[first_idx].centroid;
-            key_t second_key = clusters[second_idx].centroid;
-            distance_t distance = index.distance_between(first_key, second_key, thread_idx).mean;
-            if (distance < atomic_merge_distance) {
-                std::unique_lock<std::mutex> lock(merge_mutex);
-                atomic_merge_distance = distance;
-                merge = {first_idx, second_idx};
-            }
-            return true;
-        });
-
-        if (clusters[merge.from_idx].popularity > clusters[merge.to_idx].popularity)
-            std::swap(merge.from_idx, merge.to_idx);
-
-        clusters[merge.from_idx].merged_into = clusters[merge.to_idx].centroid;
-        clusters[merge.to_idx].popularity += exchange(clusters[merge.from_idx].popularity, 0);
-
-        // Move the merged entry to the end
-        // std::partition(clusters.data(), clusters.data() + unique_clusters,
-        //                [&](cluster_t const& c) { return c.merged_into == index.free_key(); });
-        if (merge.from_idx != (unique_clusters - 1))
-            std::swap(clusters[merge.from_idx], clusters[unique_clusters - 1]);
-        unique_clusters--;
-        merge_cycles++;
-        goto merge_nearby_clusters;
-    }
-
-    // Replace evicted clusters
-    if (merge_cycles) {
-        // Sort dropped clusters by name to accelerate future lookups
-        auto clusters_end = clusters.data() + max_clusters + merge_cycles;
-        std::sort(clusters.data(), clusters_end, smaller_key);
-
-        for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx) {
-            key_t& cluster_key = cluster_keys[query_idx];
-            distance_t& cluster_distance = cluster_distances[query_idx];
-
-            // Recursively trace replacements of that cluster
-            while (true) {
-                // To avoid implementing heterogeneous comparisons, lets wrap the `cluster_key`
-                cluster_t updated_cluster;
-                updated_cluster.centroid = cluster_key;
-                updated_cluster = *std::lower_bound(clusters.data(), clusters_end, updated_cluster, smaller_key);
-                if (updated_cluster.merged_into == index.free_key())
-                    break;
-                cluster_key = updated_cluster.merged_into;
-            }
-
-            cluster_distance = index.distance_between(cluster_key, queries_begin[query_idx], 0).mean;
-        }
-    }
-
-    result.computed_distances = computed_distances;
-    result.visited_members = visited_members;
-    return result;
 }
 
 } // namespace usearch

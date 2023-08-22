@@ -583,22 +583,21 @@ class executor_openmp_t {
      *  @param tasks                 The total number of tasks to be executed.
      *  @param thread_aware_function The thread-aware function to be called for each thread index and task index.
      *  @throws If an exception occurs during execution of the thread-aware function.
-     *
-     *  Uses OpenMP cancellation points, if `OMP_CANCELLATION` environment variable is set.
-     *  http://jakascorner.com/blog/2016/08/omp-cancel.html
      */
     template <typename thread_aware_function_at>
     void dynamic(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
-        if (omp_get_cancellation()) {
-#pragma omp parallel for schedule(dynamic, 1)
-            for (std::size_t i = 0; i != tasks; ++i) {
-#pragma omp cancellation point for
-                if (!thread_aware_function(omp_get_thread_num(), i)) {
-#pragma omp cancel for
-                }
-            }
-            return;
-        }
+        // OpenMP cancellation points are not yet available on most platforms, and require
+        // the `OMP_CANCELLATION` environment variable to be set.
+        // http://jakascorner.com/blog/2016/08/omp-cancel.html
+        // if (omp_get_cancellation()) {
+        // #pragma omp parallel for schedule(dynamic, 1)
+        //     for (std::size_t i = 0; i != tasks; ++i) {
+        // #pragma omp cancellation point for
+        //         if (!thread_aware_function(omp_get_thread_num(), i)) {
+        // #pragma omp cancel for
+        //         }
+        //     }
+        // }
         std::atomic_bool stop{false};
 #pragma omp parallel for schedule(dynamic, 1) shared(stop)
         for (std::size_t i = 0; i != tasks; ++i) {
