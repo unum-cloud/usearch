@@ -1,0 +1,69 @@
+type size = u64
+
+type key = u64
+type distance = float32
+
+type error = string
+type index = unit
+
+variant vector {
+  floats32(list<float32>),
+  floats64(list<float64>),
+  ints8(list<s8>),
+  bytes(list<u8>),
+}
+
+enum metric-kind {
+    metric-unknown-k,
+    metric-cos-k,
+    metric-ip-k,
+    metric-l2sq-k,
+    metric-haversine-k,
+    metric-pearson-k,
+    metric-jaccard-k,
+    metric-hamming-k,
+    metric-tanimoto-k,
+    metric-sorensen-k,
+}
+
+enum scalar-kind {
+    scalar-unknown-k,
+    scalar-f32-k,
+    scalar-f64-k,
+    scalar-f16-k,
+    scalar-i8-k,
+    scalar-b1-k,
+}
+
+record init-options {
+  metric-kind: metric-kind,
+  quantization: scalar-kind,
+  dimensions: size,
+  connectivity: size,
+  expansion-add: size,
+  expansion-search: size,
+}
+
+init: func(options: init-options, error: error) -> index
+
+free: func(index: index, error: error)
+save: func(index: index, path: string, error: error)
+load: func(index: index, path: string, error: error)
+view: func(index: index, path: string, error: error)
+
+size: func(index: index, error: error) -> size
+capacity: func(index: index, error: error) -> size
+dimensions: func(index: index, error: error) -> size
+connectivity: func(index: index, error: error) -> size
+
+reserve: func(index: index, capacity: size, error: error)
+
+add: func(index: index, key: key, array: vector, vector-kind: scalar-kind, error: error)
+
+contains: func(index: index, key: key, error: error) -> bool
+
+search: func(index: index, query-array: vector, query-kind: scalar-kind, results-limit: size, found-keys: key, found-distances: distance, error: error) -> size
+
+get: func(index: index, key: key, array: vector, vector-kind: scalar-kind, error: error) -> bool
+
+remove: func(index: index, key: key, error: error) -> bool
