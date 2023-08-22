@@ -191,6 +191,14 @@ mkdir -p datasets/deep_1B/ && \
     wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/groundtruth.public.10K.ibin -P datasets/deep_1B/
 ```
 
+### Arxiv with E5
+
+```sh
+mkdir -p datasets/arxiv_2M/ && \
+    wget -nc https://huggingface.co/datasets/unum-cloud/ann-arxiv-2m/resolve/main/abstract.e5-base-v2.fbin -P datasets/arxiv_2M/ &&
+    wget -nc https://huggingface.co/datasets/unum-cloud/ann-arxiv-2m/resolve/main/title.e5-base-v2.fbin -P datasets/arxiv_2M/
+```
+
 ## Profiling
 
 With `perf`:

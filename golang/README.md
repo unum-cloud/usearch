@@ -4,7 +4,7 @@
 
 ```golang
 import (
-	"github.com/unum-cloud/usearch/golang"
+	"github.com/unum-cloud/usearch/golang-go"
 )
 ```
 
@@ -15,14 +15,38 @@ package main
 
 import (
 	"fmt"
-	"github.com/unum-cloud/usearch/golang"
+	"github.com/unum-cloud/usearch/golang-go"
 )
 
 func main() {
-	conf := usearch.DefaultConfig(128)
-	index := usearch.NewIndex(conf)
-	v := make([]float32, 128)
-	index.Add(42, v)
-	results := index.Search(v, 1)
+	dim := uint(128)
+	conf := DefaultConfig(dim)
+	ind, err := NewIndex(conf)
+	if err != nil {
+		panic("Failed to construct the index: %s", err)
+	}
+	defer ind.Destroy()
+
+	err = ind.Reserve(100)
+	if err != nil {
+		panic("Failed to reserve capacity: %s", err)
+	}
+
+	vec := make([]float32, dim)
+	vec[0] = 40.0
+	vec[1] = 2.0
+
+	err = ind.Add(42, vec)
+	if err != nil {
+		panic("Failed to insert: %s", err)
+	}
+
+	keys, distances, err := ind.Search(vec, 10)
+	if err != nil {
+		panic("Failed to search: %s", err)
+	}
+	if keys[0] != 42 || distances[0] != 0.0 {
+		panic("Expected result 42 with distance 0, got key %d with distance %f", keys[0], distances[0])
+	}
 }
 ```
