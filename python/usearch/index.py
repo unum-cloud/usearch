@@ -1002,6 +1002,10 @@ class Index:
         return self._compiled.max_level
 
     @property
+    def nlevels(self) -> int:
+        return self._compiled.max_level + 1
+
+    @property
     def levels_stats(self) -> _CompiledIndexStats:
         """Get the accumulated statistics for the entire multi-level graph.
 
@@ -1056,13 +1060,12 @@ class Index:
             self.expansion_add,
             self.expansion_search,
             len(self),
-            self.max_level + 1,
+            self.nlevels,
         )
 
     def _repr_pretty_(self, printer, cycle) -> str:
         level_stats = [
-            f"--- {i}. {self.level_stats(i).nodes:,} nodes"
-            for i in range(self.max_level)
+            f"--- {i}. {self.level_stats(i).nodes:,} nodes" for i in range(self.nlevels)
         ]
         lines = "\n".join(
             [
