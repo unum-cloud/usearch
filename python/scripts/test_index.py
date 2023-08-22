@@ -14,6 +14,7 @@ from usearch.index import (
     Match,
     Matches,
     BatchMatches,
+    Clustering,
 )
 from usearch.index import (
     DEFAULT_CONNECTIVITY,
@@ -200,18 +201,18 @@ def test_index_clustering(ndim, metric, quantization, dtype, batch_size):
     vectors = random_vectors(count=batch_size, ndim=ndim, dtype=dtype)
     index.add(keys, vectors, threads=threads)
 
-    clusters: BatchMatches = index.cluster(vectors=vectors, threads=threads)
-    assert len(clusters.keys) == batch_size
+    clusters: Clustering = index.cluster(vectors=vectors, threads=threads)
+    assert len(clusters.matches.keys) == batch_size
 
     # If no argument is provided, we cluster the present entries
-    clusters: BatchMatches = index.cluster(threads=threads)
-    assert len(clusters.keys) == batch_size
+    clusters: Clustering = index.cluster(threads=threads)
+    assert len(clusters.matches.keys) == batch_size
 
     # If no argument is provided, we cluster the present entries
-    clusters: BatchMatches = index.cluster(keys=keys[:50], threads=threads)
-    assert len(clusters.keys) == 50
+    clusters: Clustering = index.cluster(keys=keys[:50], threads=threads)
+    assert len(clusters.matches.keys) == 50
 
     # If no argument is provided, we cluster the present entries
-    clusters: BatchMatches = index.cluster(min_count=3, max_count=10, threads=threads)
-    unique_clusters = set(clusters.keys.flatten().tolist())
+    clusters: Clustering = index.cluster(min_count=3, max_count=10, threads=threads)
+    unique_clusters = set(clusters.matches.keys.flatten().tolist())
     assert len(unique_clusters) >= 3 and len(unique_clusters) <= 10
