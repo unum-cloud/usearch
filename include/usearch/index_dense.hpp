@@ -330,7 +330,7 @@ class index_dense_gt {
     mutable std::mutex available_threads_mutex_;
 
     using shared_mutex_t = unfair_shared_mutex_t;
-    using shared_lock_t = std::shared_lock<shared_mutex_t>;
+    using shared_lock_t = shared_lock_gt<shared_mutex_t>;
     using unique_lock_t = std::unique_lock<shared_mutex_t>;
 
     struct key_and_slot_t {

@@ -905,6 +905,14 @@ class unfair_shared_mutex_t {
     }
 };
 
+template <typename mutex_at = unfair_shared_mutex_t> class shared_lock_gt {
+    mutex_at& mutex_;
+
+  public:
+    inline explicit shared_lock_gt(mutex_at& m) noexcept : mutex_(m) { mutex_.lock_shared(); }
+    inline ~shared_lock_gt() noexcept { mutex_.unlock_shared(); }
+};
+
 /**
  *  @brief  Utility class used to cast arrays of one scalar type to another,
  *          avoiding unnecessary conversions.
