@@ -2715,9 +2715,9 @@ class index_gt {
         metric_at&& metric,                   //
         slot_transition_at&& slot_transition, //
 
-        executor_at&& executor = {}, //
-        progress_at&& progress = {}, //
-        prefetch_at&& prefetch = {}) noexcept {
+        executor_at&& executor = executor_at{}, //
+        progress_at&& progress = progress_at{}, //
+        prefetch_at&& prefetch = prefetch_at{}) noexcept {
 
         // Export all the keys, slots, and levels.
         // Partition them with the predicate.
@@ -2820,7 +2820,7 @@ class index_gt {
     void isolate(                               //
         allow_member_at&& allow_member,         //
         executor_at&& executor = executor_at{}, //
-        progress_at&& progress = {}) noexcept {
+        progress_at&& progress = progress_at{}) noexcept {
 
         // Progress status
         std::atomic<bool> do_tasks{true};
