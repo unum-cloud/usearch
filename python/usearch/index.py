@@ -725,6 +725,8 @@ class Index:
             keys = [keys]
         if not isinstance(keys, np.ndarray):
             keys = np.array(keys, dtype=Key)
+        else:
+            keys = keys.astype(Key)
 
         results = self._compiled.get_many(keys, dtype)
         results = [cast(result) for result in results]
