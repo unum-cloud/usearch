@@ -11,6 +11,7 @@ extern "C" {
 #else
 #define USEARCH_EXPORT
 #endif
+#endif
 
 #include <stdbool.h> // `bool`
 #include <stdint.h>  // `size_t`
@@ -216,4 +217,5 @@ USEARCH_EXPORT size_t usearch_rename(usearch_index_t, usearch_key_t from, usearc
 #ifdef __cplusplus
 }
 #endif
-#endif
+
+#endif // UNUM_USEARCH_H
