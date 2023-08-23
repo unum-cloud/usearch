@@ -103,8 +103,8 @@ def self_recall(index: Index, sample: float = 1, **kwargs) -> SearchStats:
     """
     if len(index) == 0:
         return 0
-    if "k" not in kwargs:
-        kwargs["k"] = 1
+    if "count" not in kwargs:
+        kwargs["count"] = 1
 
     keys = index.keys
     if sample != 1:
