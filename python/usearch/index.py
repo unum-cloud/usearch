@@ -433,6 +433,8 @@ class IndexedKeys:
             return self.index._compiled.get_key_at_offset(offset)
 
     def __array__(self, dtype=None) -> np.ndarray:
+        if dtype is None:
+            dtype = Key
         return self.index._compiled.get_keys_in_slice().astype(dtype)
 
 
