@@ -3441,9 +3441,6 @@ static join_result_t join(               //
     std::atomic<std::size_t> visited_members{0};
     std::atomic<char const*> atomic_error{nullptr};
 
-    // Progress status
-    std::atomic<bool> do_tasks{true};
-
     // Concurrently process all the men
     executor.parallel([&](std::size_t thread_idx) {
         index_search_config_t search_config;
@@ -3464,10 +3461,10 @@ static join_result_t join(               //
                 passed_rounds = ++rounds;
                 total_rounds = passed_rounds + free_men.size();
             }
-            if (thread_idx == 0)
-                do_tasks = progress(passed_rounds, total_rounds);
-            if (do_tasks.load())
+            if (thread_idx == 0 && !progress(passed_rounds, total_rounds)) {
+                atomic_error.store("Terminated by user");
                 break;
+            }
             while (men_locks.atomic_set(free_man_slot))
                 ;
 
@@ -3524,8 +3521,6 @@ static join_result_t join(               //
             women_locks.atomic_reset(woman.slot);
         }
     });
-    if (!do_tasks.load())
-        return result.failed("Terminated by user");
 
     if (atomic_error)
         return result.failed(atomic_error.load());
