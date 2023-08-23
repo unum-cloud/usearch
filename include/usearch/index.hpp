@@ -919,7 +919,7 @@ class growing_hash_set_gt {
     }
 
     bool reserve(std::size_t new_capacity) noexcept {
-        new_capacity = new_capacity * 5 / 3;
+        new_capacity = (new_capacity * 5u) / 3u;
         if (new_capacity <= capacity_)
             return true;
 
@@ -930,8 +930,8 @@ class growing_hash_set_gt {
 
         std::memset(new_slots, 0xFF, new_capacity * sizeof(element_t));
         std::size_t new_count = count_;
-        if (new_count) {
-            for (std::size_t old_index = 0; old_index < capacity_; ++old_index) {
+        if (count_) {
+            for (std::size_t old_index = 0; old_index != capacity_; ++old_index) {
                 if (slots_[old_index] == default_free_value<element_t>())
                     continue;
 
@@ -3137,6 +3137,8 @@ class index_gt {
         std::size_t current_;
 
         candidates_iterator_t& skip_missing() noexcept {
+            if (!visits_.size())
+                return *this;
             while (current_ != neighbors_.size()) {
                 compressed_slot_t neighbor_slot = neighbors_[current_];
                 if (visits_.test(neighbor_slot))
