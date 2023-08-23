@@ -16,12 +16,6 @@ namespace usearch {
 
 template <typename, typename> class index_dense_gt;
 
-// clang-format off
-template <typename key_at, typename std::enable_if<std::is_integral<key_at>::value>::type* = nullptr> key_at default_free_value() { return std::numeric_limits<key_at>::max(); }
-template <typename key_at, typename std::enable_if<std::is_same<key_at, uint40_t>::value>::type* = nullptr> uint40_t default_free_value() { return uint40_t::max(); }
-template <typename key_at, typename std::enable_if<!std::is_integral<key_at>::value && !std::is_same<key_at, uint40_t>::value>::type* = nullptr> key_at default_free_value() { return key_at(); }
-// clang-format on
-
 /**
  *  @brief  The "magic" sequence helps infer the type of the file.
  *          USearch indexes start with the "usearch" string.
