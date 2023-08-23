@@ -53,6 +53,7 @@ Linux • MacOS • Windows • iOS • Docker • WebAssembly
 - ✅ Space-efficient point-clouds with `uint40_t`, accommodating 4B+ size.
 - ✅ Compatible with OpenMP and custom "executors", for fine-grained control over CPU utilization.
 - ✅ Heterogeneous lookups, renaming/relabeling, and on-the-fly deletions.
+- ✅ Near-real-time [clustering and sub-clusterings](#clustering) for Tens or Millions of clusters.
 - ✅ [Semantic Search](#usearch--ai--multi-modal-semantic-search) and [Joins](#joins).
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/index.hpp
@@ -122,7 +123,6 @@ Comparing the performance of FAISS against USearch on 1 Million 96-dimensional v
 > Jump to the [Performance Tuning][benchmarking] section to read about the effects of those hyper-parameters.
 
 [benchmarking]: https://github.com/unum-cloud/usearch/blob/main/docs/benchmarks.md
-
 
 ## User-Defined Functions
 
@@ -207,6 +207,36 @@ multi_index = Indexes(
 )
 multi_index.search(...)
 ```
+
+## Clustering
+
+Once the index is constructed, it can be used to cluster entries much faster.
+In essense, the `Index` itself can be seen as a clustering, and it allows iterative deepening.
+
+```py
+clustering = index.cluster(
+    min_count=10, # Optional
+    max_count=15, # Optional
+    threads=..., # Optional
+)
+
+# Get the clusters and their sizes
+centroid_keys, sizes = clustering.centroids_popularity
+
+# Use Matplotlib draw a histogram
+clustering.plot_centroids_popularity()
+
+# Export a NetworkX graph of the clusters
+g = clustering.network
+
+# Get members of a specific cluster
+first_members = clustering.members_of(centroid_keys[0])
+
+# Deepen into that cluster spliting it into more parts, all same arguments supported
+sub_clustering = clustering.subcluster(min_count=..., max_count=...)
+```
+
+Using Scikit-Learn, on a 1 Million point dataset, one may expect queries to take anywhere from minutes to hours, depending on the number of clusters you want to highlight. For 50'000 clusters the performance difference between USearch and conventional clustering methods may easily reach 100x.
 
 ## Joins, One-to-One, One-to-Many, and Many-to-Many Mappings
 
@@ -325,6 +355,10 @@ matches = index.search(fingerprints, 10)
 
 [smiles]: https://en.wikipedia.org/wiki/Simplified_molecular-input_line-entry_system
 [rdkit-fingerprints]: https://www.rdkit.org/docs/RDKit_Book.html#additional-information-about-the-fingerprints
+
+### USearch + POI Coordinates = GIS Applications... on iOS?
+
+With Objective-C and iOS bindings, USearch can be easily used in mobile applications
 
 
 ## Integrations
