@@ -269,8 +269,8 @@ class Matches:
     keys: np.ndarray
     distances: np.ndarray
 
-    visited_members: int
-    computed_distances: int
+    visited_members: int = 0
+    computed_distances: int = 0
 
     def __len__(self) -> int:
         return len(self.keys)
@@ -304,8 +304,8 @@ class BatchMatches:
     distances: np.ndarray
     counts: np.ndarray
 
-    visited_members: int
-    computed_distances: int
+    visited_members: int = 0
+    computed_distances: int = 0
 
     def __len__(self) -> int:
         return len(self.counts)
