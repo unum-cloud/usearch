@@ -106,7 +106,11 @@ def self_recall(index: Index, sample: float = 1, **kwargs) -> SearchStats:
     if "count" not in kwargs:
         kwargs["count"] = 1
 
-    keys = index.keys
+    if "keys" in kwargs:
+        keys = kwargs["keys"]
+    else:
+        keys = np.array(index.keys)
+
     if sample != 1:
         keys = np.random.choice(keys, int(ceil(len(keys) * sample)))
 
