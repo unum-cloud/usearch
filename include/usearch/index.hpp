@@ -488,6 +488,8 @@ template <typename allocator_at = std::allocator<byte_t>> class bitset_gt {
     inline lock_t lock(std::size_t i) noexcept { return {*this, i}; }
 };
 
+using bitset_t = bitset_gt<>;
+
 /**
  *  @brief  Similar to `std::priority_queue`, but allows raw access to underlying
  *          memory, in case you want to shuffle it or sort. Good for collections
@@ -3552,7 +3554,7 @@ static join_result_t join(               //
     std::memset(proposal_counts.data(), 0, sizeof(proposals_count_t) * men.size());
 
     // Define locks, to limit concurrent accesses to `man_to_woman_slots` and `woman_to_man_slots`.
-    bitset_gt<dynamic_allocator_t> men_locks(men.size()), women_locks(women.size());
+    bitset_t men_locks(men.size()), women_locks(women.size());
     if (!men_locks || !women_locks)
         return result.failed("Can't allocate locks");
 

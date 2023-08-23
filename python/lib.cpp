@@ -350,7 +350,7 @@ static void search_typed(                                       //
     if (!threads)
         threads = std::thread::hardware_concurrency();
 
-    visits_bitset_t query_mutexes(static_cast<std::size_t>(vectors_count));
+    bitset_t query_mutexes(static_cast<std::size_t>(vectors_count));
     if (!query_mutexes)
         throw std::bad_alloc();
 
@@ -481,7 +481,7 @@ static void search_typed_brute_force(                                //
         threads = std::thread::hardware_concurrency();
 
     std::size_t tasks_count = static_cast<std::size_t>(dataset_count * queries_count);
-    visits_bitset_t query_mutexes(static_cast<std::size_t>(queries_count));
+    bitset_t query_mutexes(static_cast<std::size_t>(queries_count));
     if (!query_mutexes)
         throw std::bad_alloc();
 
