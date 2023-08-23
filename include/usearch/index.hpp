@@ -19,7 +19,7 @@
 #define USEARCH_DEFINED_CPP17
 #endif
 
-// Inferring target OS
+// Inferring target OS: Windows, MacOS, or Linux
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
 #define USEARCH_DEFINED_WINDOWS
 #elif defined(__APPLE__) && defined(__MACH__)
@@ -28,7 +28,7 @@
 #define USEARCH_DEFINED_LINUX
 #endif
 
-// Inferring the compiler
+// Inferring the compiler: Clang vs GCC
 #if defined(__clang__)
 #define USEARCH_DEFINED_CLANG
 #elif defined(__GNUC__)
@@ -885,7 +885,9 @@ class ring_gt {
     bool reserve(std::size_t n) noexcept {
         if (n < size())
             return false; // prevent data loss
-        n = (std::max<std::size_t>)(n, 64u);
+        if (n <= capacity())
+            return true;
+        n = (std::max<std::size_t>)(ceil2(n), 64u);
         element_t* elements = allocator_.allocate(n);
         if (!elements)
             return false;
@@ -1004,6 +1006,16 @@ struct index_search_config_t {
     bool exact = false;
 };
 
+struct index_cluster_config_t {
+    /// @brief Hyper-parameter controlling the quality of search.
+    /// Defaults to 16 in FAISS and 10 in hnswlib.
+    /// > It is called `ef` in the paper.
+    std::size_t expansion = default_expansion_search();
+
+    /// @brief Optional thread identifier for multi-threaded construction.
+    std::size_t thread = 0;
+};
+
 struct index_copy_config_t {};
 
 struct index_join_config_t {
@@ -1032,7 +1044,7 @@ using return_type_gt =
  *  @brief  An example of what a USearch-compatible ad-hoc filter would look like.
  *
  *  A similar function object can be passed to search queries to further filter entries
- *  on their auxiliary properties, such as some categorical labels stored in an external DBMS.
+ *  on their auxiliary properties, such as some categorical keys stored in an external DBMS.
  */
 struct dummy_predicate_t {
     template <typename member_at> constexpr bool operator()(member_at&&) const noexcept { return true; }
@@ -1112,13 +1124,13 @@ struct dummy_executor_t {
 };
 
 /**
- *  @brief  An example of what a USearch-compatible label-to-label mapping should look like.
+ *  @brief  An example of what a USearch-compatible key-to-key mapping should look like.
  *
  *  This is particularly helpful for "Semantic Joins", where we map entries of one collection
  *  to entries of another. In assymetric setups, where A -> B is needed, but B -> A is not,
  *  this can be passed to minimize memory usage.
  */
-struct dummy_label_to_label_mapping_t {
+struct dummy_key_to_key_mapping_t {
     struct member_ref_t {
         template <typename key_at> member_ref_t& operator=(key_at&&) noexcept { return *this; }
     };
@@ -1136,7 +1148,7 @@ template <typename object_at> static constexpr bool is_dummy() {
            std::is_same<object_t, dummy_progress_t>::value ||  //
            std::is_same<object_t, dummy_prefetch_t>::value ||  //
            std::is_same<object_t, dummy_executor_t>::value ||  //
-           std::is_same<object_t, dummy_label_to_label_mapping_t>::value;
+           std::is_same<object_t, dummy_key_to_key_mapping_t>::value;
 }
 
 template <typename, typename at> struct has_reset_gt {
@@ -1818,7 +1830,7 @@ class index_gt {
         }
     };
 
-    copy_result_t copy(index_copy_config_t /*config*/ = {}) const noexcept {
+    copy_result_t copy(index_copy_config_t config = {}) const noexcept {
         copy_result_t result;
         index_gt& other = result.index;
         other = index_gt(config_, dynamic_allocator_, tape_allocator_);
@@ -1833,6 +1845,9 @@ class index_gt {
         other.nodes_count_ = nodes_count_.load();
         other.max_level_ = max_level_;
         other.entry_slot_ = entry_slot_;
+
+        // This controls nothing for now :)
+        (void)config;
         return result;
     }
 
@@ -1973,6 +1988,30 @@ class index_gt {
     struct match_t {
         member_cref_t member;
         distance_t distance;
+
+        inline match_t() noexcept : member({nullptr, 0}), distance(std::numeric_limits<distance_t>::max()) {}
+
+        inline match_t(member_cref_t member, distance_t distance) noexcept : member(member), distance(distance) {}
+
+        inline match_t(match_t&& other) noexcept
+            : member({other.member.key.ptr(), other.member.slot}), distance(other.distance) {}
+
+        inline match_t(match_t const& other) noexcept
+            : member({other.member.key.ptr(), other.member.slot}), distance(other.distance) {}
+
+        inline match_t& operator=(match_t const& other) noexcept {
+            member.key.reset(other.member.key.ptr());
+            member.slot = other.member.slot;
+            distance = other.distance;
+            return *this;
+        }
+
+        inline match_t& operator=(match_t&& other) noexcept {
+            member.key.reset(other.member.key.ptr());
+            member.slot = other.member.slot;
+            distance = other.distance;
+            return *this;
+        }
     };
 
     class search_result_t {
@@ -2055,6 +2094,19 @@ class index_gt {
                 keys[i] = result.member.key;
             }
             return count;
+        }
+    };
+
+    struct cluster_result_t {
+        error_t error{};
+        std::size_t visited_members{};
+        std::size_t computed_distances{};
+        match_t cluster{};
+
+        explicit operator bool() const noexcept { return !error; }
+        cluster_result_t failed(error_t message) noexcept {
+            error = std::move(message);
+            return std::move(*this);
         }
     };
 
@@ -2252,7 +2304,7 @@ class index_gt {
      *  @param[in] wanted The upper bound for the number of results to return.
      *  @param[in] config Configuration options for this specific operation.
      *  @param[in] predicate Optional filtering predicate for `member_cref_t`.
-     *  @return Smart object referencing temporary memory. Valid until next `search()` or `add()`.
+     *  @return Smart object referencing temporary memory. Valid until next `search()`, `add()`, or `cluster()`.
      */
     template <                                     //
         typename value_at,                         //
@@ -2307,27 +2359,75 @@ class index_gt {
         return result;
     }
 
+    /**
+     *  @brief Identifies the closest cluster to the gived ::query. Thread-safe.
+     *
+     *  @param[in] query Content that will be compared against other entries in the index.
+     *  @param[in] level The index level to target. Higher means lower resolution.
+     *  @param[in] config Configuration options for this specific operation.
+     *  @param[in] predicate Optional filtering predicate for `member_cref_t`.
+     *  @return Smart object referencing temporary memory. Valid until next `search()`, `add()`, or `cluster()`.
+     */
+    template <                                     //
+        typename value_at,                         //
+        typename metric_at,                        //
+        typename predicate_at = dummy_predicate_t, //
+        typename prefetch_at = dummy_prefetch_t    //
+        >
+    cluster_result_t cluster(                      //
+        value_at&& query,                          //
+        std::size_t level,                         //
+        metric_at&& metric,                        //
+        index_cluster_config_t config = {},        //
+        predicate_at&& predicate = predicate_at{}, //
+        prefetch_at&& prefetch = prefetch_at{}) const noexcept {
+
+        context_t& context = contexts_[config.thread];
+        cluster_result_t result;
+        if (!nodes_count_)
+            return result.failed("No clusters to identify");
+
+        // Go down the level, tracking only the closest match
+        result.computed_distances = context.computed_distances_count;
+        result.visited_members = context.iteration_cycles;
+
+        next_candidates_t& next = context.next_candidates;
+        std::size_t expansion = config.expansion;
+        if (!next.reserve(expansion))
+            return result.failed("Out of memory!");
+
+        result.cluster.member =
+            at(search_for_one_(query, metric, prefetch, entry_slot_, max_level_, level - 1, context));
+        result.cluster.distance = context.measure(query, result.cluster.member, metric);
+
+        // Normalize stats
+        result.computed_distances = context.computed_distances_count - result.computed_distances;
+        result.visited_members = context.iteration_cycles - result.visited_members;
+        return result;
+    }
+
 #pragma endregion
 
 #pragma region Metadata
 
     struct stats_t {
-        std::size_t nodes;
-        std::size_t edges;
-        std::size_t max_edges;
-        std::size_t allocated_bytes;
+        std::size_t nodes{};
+        std::size_t edges{};
+        std::size_t max_edges{};
+        std::size_t allocated_bytes{};
     };
 
     stats_t stats() const noexcept {
         stats_t result{};
-        result.nodes = size();
-        for (std::size_t i = 0; i != result.nodes; ++i) {
+
+        for (std::size_t i = 0; i != size(); ++i) {
             node_t node = node_at_(i);
             std::size_t max_edges = node.level() * config_.connectivity + config_.connectivity_base;
             std::size_t edges = 0;
             for (level_t level = 0; level <= node.level(); ++level)
                 edges += neighbors_(node, level).size();
 
+            ++result.nodes;
             result.allocated_bytes += node_bytes_(node).size();
             result.edges += edges;
             result.max_edges += max_edges;
@@ -2337,14 +2437,14 @@ class index_gt {
 
     stats_t stats(std::size_t level) const noexcept {
         stats_t result{};
-        result.nodes = size();
 
         std::size_t neighbors_bytes = !level ? pre_.neighbors_base_bytes : pre_.neighbors_bytes;
-        for (std::size_t i = 0; i != result.nodes; ++i) {
+        for (std::size_t i = 0; i != size(); ++i) {
             node_t node = node_at_(i);
             if (static_cast<std::size_t>(node.level()) < level)
                 continue;
 
+            ++result.nodes;
             result.edges += neighbors_(node, level).size();
             result.allocated_bytes += node_head_bytes_() + neighbors_bytes;
         }
@@ -2605,10 +2705,10 @@ class index_gt {
      *  @param[in] executor Thread-pool to execute the job in parallel.
      *  @param[in] progress Callback to report the execution progress.
      */
-    template <typename values_at, typename metric_at,                       //
-              typename slot_transition_at = dummy_label_to_label_mapping_t, //
-              typename executor_at = dummy_executor_t,                      //
-              typename progress_at = dummy_progress_t,                      //
+    template <typename values_at, typename metric_at,                   //
+              typename slot_transition_at = dummy_key_to_key_mapping_t, //
+              typename executor_at = dummy_executor_t,                  //
+              typename progress_at = dummy_progress_t,                  //
               typename prefetch_at = dummy_prefetch_t>
     void compact(                             //
         values_at&& values,                   //
@@ -3256,10 +3356,10 @@ template < //
     typename men_metric_at,   //
     typename women_metric_at, //
 
-    typename man_to_woman_at = dummy_label_to_label_mapping_t, //
-    typename woman_to_man_at = dummy_label_to_label_mapping_t, //
-    typename executor_at = dummy_executor_t,                   //
-    typename progress_at = dummy_progress_t                    //
+    typename man_to_woman_at = dummy_key_to_key_mapping_t, //
+    typename woman_to_man_at = dummy_key_to_key_mapping_t, //
+    typename executor_at = dummy_executor_t,               //
+    typename progress_at = dummy_progress_t                //
     >
 static join_result_t join(               //
     men_at const& men,                   //
@@ -3339,6 +3439,7 @@ static join_result_t join(               //
     std::atomic<std::size_t> engagements{0};
     std::atomic<std::size_t> computed_distances{0};
     std::atomic<std::size_t> visited_members{0};
+    std::atomic<char const*> atomic_error{nullptr};
 
     // Progress status
     std::atomic<bool> do_tasks{true};
@@ -3352,7 +3453,7 @@ static join_result_t join(               //
         compressed_slot_t free_man_slot;
 
         // While there exist a free man who still has a woman to propose to.
-        while (true) {
+        while (!atomic_error.load(std::memory_order_relaxed)) {
             std::size_t passed_rounds = 0;
             std::size_t total_rounds = 0;
             {
@@ -3380,7 +3481,8 @@ static join_result_t join(               //
             visited_members += candidates.visited_members;
             computed_distances += candidates.computed_distances;
             if (!candidates) {
-                // TODO:
+                atomic_error = candidates.error.release();
+                break;
             }
 
             auto match = candidates.back();
@@ -3424,6 +3526,9 @@ static join_result_t join(               //
     });
     if (!do_tasks.load())
         return result.failed("Terminated by user");
+
+    if (atomic_error)
+        return result.failed(atomic_error.load());
 
     // Export the "slots" into keys:
     std::size_t intersection_size = 0;

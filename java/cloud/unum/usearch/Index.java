@@ -143,6 +143,7 @@ public class Index {
   public static void main(String[] args) {
     Index index = new Index.Config().metric("cos").dimensions(100).build();
     index.size();
+    System.out.println("Java tests passed!");
   }
 
   private static native long c_create(//
