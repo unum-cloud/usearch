@@ -4,7 +4,7 @@ type key = u64
 type distance = float32
 
 type error = string
-type index = unit
+type index = u64
 
 variant vector {
   floats32(list<float32>),
@@ -46,7 +46,7 @@ record init-options {
 
 init: func(options: init-options, error: error) -> index
 
-free: func(index: index, error: error)
+release: func(index: index, error: error)
 save: func(index: index, path: string, error: error)
 load: func(index: index, path: string, error: error)
 view: func(index: index, path: string, error: error)

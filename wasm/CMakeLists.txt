@@ -10,7 +10,7 @@ set(USEARCH_PUNNED_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/../robin-map/include"
 )
 
-add_executable(index lib.cpp)
-target_include_directories(index PRIVATE ${USEARCH_PUNNED_INCLUDE_DIRS})
-set_target_properties(index PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/wasm)
-set_target_properties(index PROPERTIES CXX_STANDARD 11)
+add_executable(usearch usearch_wasm.cpp usearch-wasm.c)
+target_include_directories(usearch PRIVATE ${USEARCH_PUNNED_INCLUDE_DIRS})
+set_target_properties(usearch PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/wasm)
+set_target_properties(usearch PROPERTIES CXX_STANDARD 11)

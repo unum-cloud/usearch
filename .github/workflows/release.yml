@@ -299,7 +299,7 @@ jobs:
       run: curl https://get.wasmer.io -sSfL | sh
 
     - name: Login Wasmer.io
-      run: source ~/.wasmer/wasmer.sh && wasmer login --token "${{ secrets.WASMER_TOKEN }}"
+      run: source ~/.wasmer/wasmer.sh && wasmer login "${{ secrets.WASMER_TOKEN }}"
 
     - name: Publish binary to Wasmer.io
       run: source ~/.wasmer/wasmer.sh && wasmer publish
