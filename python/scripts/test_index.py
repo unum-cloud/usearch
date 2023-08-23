@@ -155,6 +155,7 @@ def test_index_save_load_restore_copy(ndim, quantization, batch_size):
     assert len(copied_index) == len(index)
     assert np.allclose(np.vstack(copied_index.get(keys)), np.vstack(index.get(keys)))
 
+    index.reset()
     os.remove("tmp.usearch")
 
 
