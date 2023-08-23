@@ -35,9 +35,9 @@ Linux • MacOS • Windows • iOS • Docker • WebAssembly
 </p>
 
 <div align="center">
-<img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/usearch?label=pypi%20downloads">
-<img alt="npm" src="https://img.shields.io/npm/dy/usearch?label=npm%20dowloads">
-<img alt="Crates.io" src="https://img.shields.io/crates/d/usearch?label=crate%20downloads">
+<a href="https://pypi.org/project/usearch/"> <img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/usearch?label=pypi%20downloads"> </a>
+<a href="https://www.npmjs.com/package/usearch"> <img alt="npm" src="https://img.shields.io/npm/dy/usearch?label=npm%20dowloads"> </a>
+<a href="https://crates.io/crates/usearch"> <img alt="Crates.io" src="https://img.shields.io/crates/d/usearch?label=crate%20downloads"> </a>
 <img alt="GitHub code size in bytes" src="https://img.shields.io/github/languages/code-size/unum-cloud/usearch">
 </div>
 
