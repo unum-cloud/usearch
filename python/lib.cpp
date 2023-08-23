@@ -1153,7 +1153,7 @@ PYBIND11_MODULE(compiled, m) {
     i.def("reset", &reset_index<dense_index_py_t>);
     i.def("clear", &clear_index<dense_index_py_t>);
     i.def("copy", &copy_index, py::kw_only(), py::arg("copy") = true);
-    i.def("compact", &compact_index, py::arg("progress") = nullptr);
+    i.def("compact", &compact_index, py::arg("threads"), py::arg("progress") = nullptr);
     i.def("join", &join_index, py::arg("other"), py::arg("max_proposals") = 0, py::arg("exact") = false,
           py::arg("progress") = nullptr);
 
