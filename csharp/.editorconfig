@@ -53,7 +53,6 @@ charset = utf-8-bom
 ###############################
 # .NET Coding Conventions     #
 ###############################
-
 # Organize usings
 dotnet_sort_system_directives_first = true
 # this. preferences

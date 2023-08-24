@@ -1,10 +1,8 @@
-﻿using Cloud.Unum.USearch;
-
-namespace LibUsearch.Tests;
+namespace USearchNET.Tests;
 
 public class InitTests
 {
-    // Epsilon for real values comparisons
+    // Epsilon for real values comparison
     private const float Epsilon = 0.000001f;
 
     [Fact]
@@ -149,7 +147,7 @@ public class InitTests
     {
         using (var index = new USearchIndex(MetricKind.L2sq, ScalarKind.Float32, 2))
         {
-            index.AddMany(
+            index.Add(
                 Enumerable.Range(1, 5).Select(i => (ulong)i).ToArray(),
                 new float[][]
                 {

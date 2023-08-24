@@ -1,0 +1,90 @@
+# This workflow downloads artifacts with USearch libraries from another workflow,
+# create nuget package and push it to NuGet.
+# Currently, for development purposes, an 'if' condition is specified below to work only on forks.
+# TODO: replace branches ref in prod
+# TODO: remove `if` conditions in jobs in prod
+# TODO: retrieve `PACKAGE_VERSION` from VERSION file in repo root in prod
+# TODO: replace `NUGET_SOURCE` to official NUGET_SOURCE in prod
+# TODO: add to GitHub secrets `NUGET_TEST_APIKEY`
+name: Release C#
+
+# on: workflow_dispatch
+on:
+  workflow_dispatch:
+  push:
+    branches: ["160-feature-c-bindings-and-semantic-kernel-integration"]
+
+env:
+  ARTIFACTS_RETENTION_DAYS: 7
+  PACKAGE_VERSION: 0.3.3
+  NUGET_DIR: ${{ github.workspace}}/csharp/packages
+  USEARCH_LIBS: ${{ github.workspace}}/csharp/lib
+  NUGET_SOURCE: https://apiint.nugettest.org/v3/index.json
+  CHECKOUT_BRANCH: 160-feature-c-bindings-and-semantic-kernel-integration
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  create-nupkg:
+    if: github.repository == 'AleksandrKent/usearch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ env.CHECKOUT_BRANCH }}
+
+      - name: Update git submodules
+        run: |
+          git submodule update --init --recursive
+        
+      - name: Download usearch libs artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: libs-build.yml
+          workflow_conclusion: success
+          name: usearch-libs
+          path: ${{ env.USEARCH_LIBS }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 6.0.x      
+
+      - name: Pack project
+        run: dotnet pack -c Release -p:Version="${PACKAGE_VERSION}" --output ${{ env.NUGET_DIR }}
+        working-directory: ${{ github.workspace }}/csharp
+
+      # Create the NuGet package as an artifact
+      - uses: actions/upload-artifact@v3
+        with:
+          name: nuget
+          if-no-files-found: error
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
+          path: ${{ env.NUGET_DIR }}/*.nupkg
+
+  deploy:
+    if: github.repository == 'AleksandrKent/usearch'
+    runs-on: ubuntu-latest
+    needs: [ create-nupkg ]
+    steps:
+      # Download the NuGet package created in the previous job
+      - uses: actions/download-artifact@v3
+        with:
+          name: nuget
+          path: ${{ env.NUGET_DIR }}
+
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 6.0.x 
+
+      # Publish all NuGet packages to NuGet.org
+      # Use --skip-duplicate to prevent errors if a package with the same version already exists.
+      # If you retry a failed workflow, already published packages will be skipped without error.
+      - name: Publish NuGet packages
+        run: |
+          for file in $(find "${{  env.NUGET_DIR }}" -name "*.nupkg"); do
+            dotnet nuget push "$file" --api-key "${{ secrets.NUGET_TEST_APIKEY }}" --source "${{ env.NUGET_SOURCE }}" --skip-duplicate
+          done
