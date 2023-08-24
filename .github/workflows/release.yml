@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main-dev"]
 
 env:
   BUILD_TYPE: Release
@@ -17,259 +17,259 @@ permissions:
 
 jobs:
 
-  versioning:
-    name: Semantic Release
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        persist-credentials: false
-    - uses: actions/setup-node@v3
-    - run: npm install --save-dev @semantic-release/exec @semantic-release/git conventional-changelog-eslint semantic-release && npx semantic-release
+  # versioning:
+  #   name: Semantic Release
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #     with:
+  #       persist-credentials: false
+  #   - uses: actions/setup-node@v3
+  #   - run: npm install --save-dev @semantic-release/exec @semantic-release/git conventional-changelog-eslint semantic-release && npx semantic-release
 
 
-  rebase:
-    name: Rebase Development Branch
-    needs: versioning
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout the latest code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+  # rebase:
+  #   name: Rebase Development Branch
+  #   needs: versioning
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout the latest code
+  #       uses: actions/checkout@v3
+  #       with:
+  #         fetch-depth: 0
 
-      - name: Perform rebase
-        run: |
-          git checkout main-dev
-          git rebase main
+  #     - name: Perform rebase
+  #       run: |
+  #         git checkout main-dev
+  #         git rebase main
           
-      - name: Push changes
-        uses: CasperWA/push-protected@v2
-        with:
-          token: ${{ secrets.SEMANTIC_REBASE_TOKEN }}
-          branch: main-dev
-          unprotect_reviews: True
-          force: True
+  #     - name: Push changes
+  #       uses: CasperWA/push-protected@v2
+  #       with:
+  #         token: ${{ secrets.SEMANTIC_REBASE_TOKEN }}
+  #         branch: main-dev
+  #         unprotect_reviews: True
+  #         force: True
 
 
-  publish_hashes:
-    name: Add hashes to release notes
-    runs-on: ubuntu-latest
-    needs: versioning
-    steps:
-    - name: Get last release ID
-      id: last_release
-      run: |
-          response=$(curl -s -H "Authorization: Bearer ${{ secrets.SEMANTIC_RELEASE_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/latest")
-          echo "last_release_id=$(echo "$response" | jq -r '.id')" >> $GITHUB_OUTPUT
+  # publish_hashes:
+  #   name: Add hashes to release notes
+  #   runs-on: ubuntu-latest
+  #   needs: versioning
+  #   steps:
+  #   - name: Get last release ID
+  #     id: last_release
+  #     run: |
+  #         response=$(curl -s -H "Authorization: Bearer ${{ secrets.SEMANTIC_RELEASE_TOKEN }}" \
+  #           "https://api.github.com/repos/${{ github.repository }}/releases/latest")
+  #         echo "last_release_id=$(echo "$response" | jq -r '.id')" >> $GITHUB_OUTPUT
 
-    - uses: robinraju/release-downloader@v1.8
-      name: Download release assets
-      with:
-        latest: true
-        fileName: "*"
-        out-file-path: "downloads"
-        tarBall: true
-        zipBall: true
+  #   - uses: robinraju/release-downloader@v1.8
+  #     name: Download release assets
+  #     with:
+  #       latest: true
+  #       fileName: "*"
+  #       out-file-path: "downloads"
+  #       tarBall: true
+  #       zipBall: true
 
-    - name: Calculate source hashes
-      id: hashes
-      run: |
-        source_zip_path=$(find $GITHUB_WORKSPACE/downloads -name "*.zip")
-        zip_hash=$(sha256sum "$source_zip_path" | awk '{print $1}')
-        source_tar_path=$(find $GITHUB_WORKSPACE/downloads -name "*.tar.gz" ! -name "docs.tar.gz")
-        tar_hash=$(sha256sum "$source_tar_path" | awk '{print $1}')
-        echo "zip_hash=$zip_hash" >> $GITHUB_OUTPUT
-        echo "tar_hash=$tar_hash" >> $GITHUB_OUTPUT
+  #   - name: Calculate source hashes
+  #     id: hashes
+  #     run: |
+  #       source_zip_path=$(find $GITHUB_WORKSPACE/downloads -name "*.zip")
+  #       zip_hash=$(sha256sum "$source_zip_path" | awk '{print $1}')
+  #       source_tar_path=$(find $GITHUB_WORKSPACE/downloads -name "*.tar.gz" ! -name "docs.tar.gz")
+  #       tar_hash=$(sha256sum "$source_tar_path" | awk '{print $1}')
+  #       echo "zip_hash=$zip_hash" >> $GITHUB_OUTPUT
+  #       echo "tar_hash=$tar_hash" >> $GITHUB_OUTPUT
           
-    - name: Upload hashes to release
-      uses: irongut/EditRelease@v1.2.0
-      with:
-        token: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
-        id: ${{ steps.last_release.outputs.last_release_id }}
-        prerelease: false
-        replacebody: false
-        body: |
-            ## Hashes
-            * Source code (zip) : `${{ steps.hashes.outputs.zip_hash }}` 
-            * Source code (tar.gz) : `${{ steps.hashes.outputs.tar_hash }}`
+  #   - name: Upload hashes to release
+  #     uses: irongut/EditRelease@v1.2.0
+  #     with:
+  #       token: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
+  #       id: ${{ steps.last_release.outputs.last_release_id }}
+  #       prerelease: false
+  #       replacebody: false
+  #       body: |
+  #           ## Hashes
+  #           * Source code (zip) : `${{ steps.hashes.outputs.zip_hash }}` 
+  #           * Source code (tar.gz) : `${{ steps.hashes.outputs.tar_hash }}`
 
 
-  build_wheels:
-    name: Build Wheels for ${{ matrix.os }}
-    needs: versioning
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-20.04, macOS-11, windows-2022]
+  # build_wheels:
+  #   name: Build Wheels for ${{ matrix.os }}
+  #   needs: versioning
+  #   runs-on: ${{ matrix.os }}
+  #   strategy:
+  #     matrix:
+  #       os: [ubuntu-20.04, macOS-11, windows-2022]
 
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: 'main'      
-      - uses: actions/setup-python@v3
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #       with:
+  #         ref: 'main'      
+  #     - uses: actions/setup-python@v3
       
-      - name: Setup Docker
-        if: matrix.os == 'ubuntu-20.04'
-        uses: crazy-max/ghaction-setup-docker@v1.0.0
-        with:
-          version: 23.0.1
+  #     - name: Setup Docker
+  #       if: matrix.os == 'ubuntu-20.04'
+  #       uses: crazy-max/ghaction-setup-docker@v1.0.0
+  #       with:
+  #         version: 23.0.1
 
-      - name: Setup QEMU
-        if: matrix.os == 'ubuntu-20.04'
-        uses: docker/setup-qemu-action@v2.1.0
+  #     - name: Setup QEMU
+  #       if: matrix.os == 'ubuntu-20.04'
+  #       uses: docker/setup-qemu-action@v2.1.0
 
-      - name: Install CIBuildWheel
-        run: python -m pip install cibuildwheel
+  #     - name: Install CIBuildWheel
+  #       run: python -m pip install cibuildwheel
 
-      - name: Build wheels
-        run: python -m cibuildwheel
+  #     - name: Build wheels
+  #       run: python -m cibuildwheel
 
-      - uses: actions/upload-artifact@v3
-        with:
-          path: ./wheelhouse/*.whl
+  #     - uses: actions/upload-artifact@v3
+  #       with:
+  #         path: ./wheelhouse/*.whl
   
   
-  publish_python:
-    name: Publish Python
-    needs: build_wheels
-    runs-on: ubuntu-20.04
-    environment:
-      name: pypi
-      url: https://pypi.org/p/usearch
-    permissions:
-      id-token: write
+  # publish_python:
+  #   name: Publish Python
+  #   needs: build_wheels
+  #   runs-on: ubuntu-20.04
+  #   environment:
+  #     name: pypi
+  #     url: https://pypi.org/p/usearch
+  #   permissions:
+  #     id-token: write
 
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v3.0.2
-        with:
-          path: ./dist/
+  #   steps:
+  #     - name: Download artifacts
+  #       uses: actions/download-artifact@v3.0.2
+  #       with:
+  #         path: ./dist/
 
-      - name: Publish to PyPi
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: ./dist/artifact
-          verbose: true
-          print-hash: true
+  #     - name: Publish to PyPi
+  #       uses: pypa/gh-action-pypi-publish@release/v1
+  #       with:
+  #         packages-dir: ./dist/artifact
+  #         verbose: true
+  #         print-hash: true
 
-  publish_javascript:
-    name: Publish JavaScript
-    needs: versioning
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: 'main'  
-      - run: git submodule update --init --recursive
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 18
-      - run: npm install
-      - run: npm ci
-      - run: npm test
-      - uses: JS-DevTools/npm-publish@v2
-        with:
-          token: ${{ secrets.NPM_TOKEN }}
+  # publish_javascript:
+  #   name: Publish JavaScript
+  #   needs: versioning
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #       with:
+  #         ref: 'main'  
+  #     - run: git submodule update --init --recursive
+  #     - uses: actions/setup-node@v3
+  #       with:
+  #         node-version: 18
+  #     - run: npm install
+  #     - run: npm ci
+  #     - run: npm test
+  #     - uses: JS-DevTools/npm-publish@v2
+  #       with:
+  #         token: ${{ secrets.NPM_TOKEN }}
 
-  publish_rust:
-    name: Publish Rust
-    needs: versioning
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        ref: 'main'  
-    - run: git submodule update --init --recursive
-    - uses: actions-rs/toolchain@v1
-      with:
-          toolchain: stable
-          override: true
-    - uses: katyo/publish-crates@v2
-      with:
-          registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}          
+  # publish_rust:
+  #   name: Publish Rust
+  #   needs: versioning
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #     with:
+  #       ref: 'main'  
+  #   - run: git submodule update --init --recursive
+  #   - uses: actions-rs/toolchain@v1
+  #     with:
+  #         toolchain: stable
+  #         override: true
+  #   - uses: katyo/publish-crates@v2
+  #     with:
+  #         registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}          
 
-  publish_java:
-    name: Publish Java
-    needs: versioning
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        ref: 'main'  
-    - run: git submodule update --init --recursive
-    - uses: actions/setup-java@v3
-      with:
-        java-version: '11'
-        distribution: 'adopt'
-    - name: Setup Gradle
-      uses: gradle/gradle-build-action@v2.4.2
-    - name: Execute Gradle build
-      run: gradle clean build
-    - name: Publish package
-      run: gradle publish
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # publish_java:
+  #   name: Publish Java
+  #   needs: versioning
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: read
+  #     packages: write
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #     with:
+  #       ref: 'main'  
+  #   - run: git submodule update --init --recursive
+  #   - uses: actions/setup-java@v3
+  #     with:
+  #       java-version: '11'
+  #       distribution: 'adopt'
+  #   - name: Setup Gradle
+  #     uses: gradle/gradle-build-action@v2.4.2
+  #   - name: Execute Gradle build
+  #     run: gradle clean build
+  #   - name: Publish package
+  #     run: gradle publish
+  #     env:
+  #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  publish_swift:
-    name: Publish ObjC & Swift
-    needs: versioning
-    runs-on: macos-latest
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        ref: 'main'  
-    - run: git submodule update --init --recursive
-    - name: Build
-      run: swift build
-    - name: Run tests
-      run: swift test
+  # publish_swift:
+  #   name: Publish ObjC & Swift
+  #   needs: versioning
+  #   runs-on: macos-latest
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #     with:
+  #       ref: 'main'  
+  #   - run: git submodule update --init --recursive
+  #   - name: Build
+  #     run: swift build
+  #   - name: Run tests
+  #     run: swift test
 
-  # Publishes to both Docker Hub and GitHub Container Registry
-  # https://docs.github.com/en/actions/publishing-packages/publishing-docker-images#publishing-images-to-docker-hub-and-github-packages
-  publish_docker:
-    name: Publish Docker Image
-    needs: versioning
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        ref: 'main'  
-    - run: git submodule update --init --recursive
-    - name: Login to Docker Hub
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-    - name: Log in to GitHub Registry
-      uses: docker/login-action@v2
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
-    - name: Extract tags & labels for Docker
-      id: meta
-      uses: docker/metadata-action@v4
-      with:
-        images: |
-          unum/usearch
-          ghcr.io/${{ github.repository }}
-    - name: Build and push
-      uses: docker/build-push-action@v4
-      with:
-        context: .
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
+  # # Publishes to both Docker Hub and GitHub Container Registry
+  # # https://docs.github.com/en/actions/publishing-packages/publishing-docker-images#publishing-images-to-docker-hub-and-github-packages
+  # publish_docker:
+  #   name: Publish Docker Image
+  #   needs: versioning
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: read
+  #     packages: write
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #     with:
+  #       ref: 'main'  
+  #   - run: git submodule update --init --recursive
+  #   - name: Login to Docker Hub
+  #     uses: docker/login-action@v2
+  #     with:
+  #       username: ${{ secrets.DOCKERHUB_USERNAME }}
+  #       password: ${{ secrets.DOCKERHUB_TOKEN }}
+  #   - name: Log in to GitHub Registry
+  #     uses: docker/login-action@v2
+  #     with:
+  #       registry: ghcr.io
+  #       username: ${{ github.actor }}
+  #       password: ${{ secrets.GITHUB_TOKEN }}
+  #   - name: Set up Docker Buildx
+  #     uses: docker/setup-buildx-action@v2
+  #   - name: Extract tags & labels for Docker
+  #     id: meta
+  #     uses: docker/metadata-action@v4
+  #     with:
+  #       images: |
+  #         unum/usearch
+  #         ghcr.io/${{ github.repository }}
+  #   - name: Build and push
+  #     uses: docker/build-push-action@v4
+  #     with:
+  #       context: .
+  #       push: true
+  #       tags: ${{ steps.meta.outputs.tags }}
+  #       labels: ${{ steps.meta.outputs.labels }}
 
   build_docs:
     name: Build Docs
@@ -282,7 +282,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          ref: 'main'   
+          ref: 'main-dev'   
       - name: Install dependencies
         run: |
               sudo apt update && 
@@ -305,39 +305,39 @@ jobs:
           file: docs.tar.gz
           update_latest_release: true
 
-  deploy_docs_pages:
-    name: Deploy GitHub Pages
-    environment: 
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-22.04
-    if: ${{ always() }}
-    needs: build_docs
-    steps:
-      - uses: robinraju/release-downloader@v1.8
-        with:
-          latest: true
-          fileName: docs.tar.gz
-      - name: Unpack docs
-        run: tar -xf ./docs.tar.gz
-      - name: Setup GitHub Pages
-        uses: actions/configure-pages@v2
-      - name: Upload artifacts
-        uses: actions/upload-pages-artifact@v1
-        with:
-          path: ./build/docs/html
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v1
+  # deploy_docs_pages:
+  #   name: Deploy GitHub Pages
+  #   environment: 
+  #     name: github-pages
+  #     url: ${{ steps.deployment.outputs.page_url }}
+  #   runs-on: ubuntu-22.04
+  #   if: ${{ always() }}
+  #   needs: build_docs
+  #   steps:
+  #     - uses: robinraju/release-downloader@v1.8
+  #       with:
+  #         latest: true
+  #         fileName: docs.tar.gz
+  #     - name: Unpack docs
+  #       run: tar -xf ./docs.tar.gz
+  #     - name: Setup GitHub Pages
+  #       uses: actions/configure-pages@v2
+  #     - name: Upload artifacts
+  #       uses: actions/upload-pages-artifact@v1
+  #       with:
+  #         path: ./build/docs/html
+  #     - name: Deploy to GitHub Pages
+  #       id: deployment
+  #       uses: actions/deploy-pages@v1
 
-  deploy_docs_vercel:
-    name: Deploy Vercel
-    runs-on: ubuntu-22.04
-    if: ${{ always() }}
-    needs: build_docs
-    steps:
-      - name: Notify Vercel
-        uses: fjogeleit/http-request-action@v1
-        with:
-          url: ${{ secrets.DOCS_VERCEL }}
-          method: 'POST'
+  # deploy_docs_vercel:
+  #   name: Deploy Vercel
+  #   runs-on: ubuntu-22.04
+  #   if: ${{ always() }}
+  #   needs: build_docs
+  #   steps:
+  #     - name: Notify Vercel
+  #       uses: fjogeleit/http-request-action@v1
+  #       with:
+  #         url: ${{ secrets.DOCS_VERCEL }}
+  #         method: 'POST'
