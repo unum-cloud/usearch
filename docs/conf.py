@@ -23,7 +23,7 @@ extensions = [
     "breathe",
     "m2r2",
     "sphinx.ext.autodoc",
-    "sphinx_js",
+    "sphinx_js_3.2.1 ",
     "sphinx.ext.autosummary",
     "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
