@@ -4,9 +4,15 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 #ifndef USEARCH_EXPORT
+#if defined(_WIN32) && !defined(__MINGW32__)
+#define USEARCH_EXPORT __declspec(dllexport)
+#else
 #define USEARCH_EXPORT
 #endif
+#endif
+
 #include <stdbool.h> // `bool`
 #include <stdint.h>  // `size_t`
 
@@ -211,4 +217,5 @@ USEARCH_EXPORT size_t usearch_rename(usearch_index_t, usearch_key_t from, usearc
 #ifdef __cplusplus
 }
 #endif
-#endif
+
+#endif // UNUM_USEARCH_H
