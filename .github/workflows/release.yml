@@ -275,7 +275,7 @@ jobs:
     name: Build Docs
     runs-on: ubuntu-22.04
     if: ${{ always() }}
-    needs: [publish_python, publish_javascript, publish_rust, publish_java, publish_swift, publish_docker]
+    # needs: [publish_python, publish_javascript, publish_rust, publish_java, publish_swift, publish_docker]
     permissions:
       contents: write
     steps:
