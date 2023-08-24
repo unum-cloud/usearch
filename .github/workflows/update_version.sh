@@ -9,5 +9,5 @@ echo $1 > VERSION &&
     sed -i "s/^\(#define USEARCH_VERSION_MINOR \).*/\1$(echo "$1" | cut -d. -f2)/" ./include/usearch/index.hpp &&
     sed -i "s/^\(#define USEARCH_VERSION_PATCH \).*/\1$(echo "$1" | cut -d. -f3)/" ./include/usearch/index.hpp &&
     sed -i "s/<version>[0-9]\+\.[0-9]\+\.[0-9]\+/<version>$1/" README.md &&
-    sed -i "s/version = {0\.[0-9]\+\.[0-9]\+}/version = {$1}/" README.md &&
+    sed -i "s/version = {[0-9]\+\.[0-9]\+\.[0-9]\+}/version = {$1}/" README.md &&
     sed -i "s/version=\".*\"/version=\"$1\"/" wasmer.toml

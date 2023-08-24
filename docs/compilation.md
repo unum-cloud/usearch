@@ -53,7 +53,7 @@ cppcheck --enable=all --force --suppress=cstyleCast --suppress=unusedFunction \
 Testing:
 
 ```sh
-cmake -DCMAKE_CXX_COMPILER=gcc-12 -DCMAKE_CXX_COMPILER=g++-12 -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make -C ./build_debug && ./build_debug/test
+cmake -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make -C ./build_debug && ./build_debug/test
 ```
 
 ## Python 3
@@ -63,7 +63,7 @@ The `-s` option will disable capturing the logs.
 The `-x` option will exit after first failure to simplify debugging.
 
 ```sh
-pip install -e . && pytest python/scripts/test.py -s -x
+pip install -e . && pytest python/scripts/ -s -x
 ```
 
 Linting:
@@ -134,7 +134,6 @@ g++ -shared -o USearchJNI.dll cloud_unum_usearch_Index.o -Wl,--add-stdcall-alias
 g++ -std=c++11 -c -fPIC \
     -I../../../../include \
     -I../../../../fp16/include \
-    -I../../../../robin-map/include \
     -I../../../../simsimd/include \
     -I${JAVA_HOME}/include -I${JAVA_HOME}/include/darwin cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
 g++ -dynamiclib -o libusearch.dylib cloud_unum_usearch_Index.o -lc
@@ -156,19 +155,19 @@ There are a few ways to compile the C 99 USearch SDK.
 Using the Makefile:
 
 ```sh
-make -C ./c build
+make -C ./c libusearch_c.so -C ./c libusearch_c.so
 ```
 
 Using CMake:
 
 ```sh
-cmake -B ./build_release -DUSEARCH_BUILD_C=1 && make -C ./build_release -j
+cmake -B ./build_release -DUSEARCH_BUILD_CLIB=1 && make -C ./build_release -j
 ```
 
 Linux:
 
 ```sh
-g++ -std=c++11 -shared -fPIC c/lib.cpp -I ./include/  -I ./fp16/include/ -I ./robin-map/include/ -o libusearch.so
+g++ -std=c++11 -shared -fPIC c/lib.cpp -I ./include/  -I ./fp16/include/ -o libusearch_c.so
 ```
 
 
@@ -178,7 +177,8 @@ GoLang bindings are based on C.
 So one should first compile the C library, link it with GoLang, and only then run tests.
 
 ```sh
-cd golang && make -C ../c build && mv ../c/libusearch.so libusearch.so && go test -v
+make -C ./c libusearch_c.so && mv ./c/libusearch_c.so ./golang/libusearch_c.so 
+cd golang && go test -v ; cd ..
 ```
 
 ## Wolfram
