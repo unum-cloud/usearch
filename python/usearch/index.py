@@ -1095,11 +1095,12 @@ class Index:
         }
 
     def __repr__(self) -> str:
-        f = "usearch.Index({} x {}, {}, expansion: {} & {}, {} vectors in {} levels)"
+        f = "usearch.Index({} x {}, {}, connectivity: {}, expansion: {} & {}, {} vectors in {} levels)"
         return f.format(
             self.dtype,
             self.ndim,
             self.metric,
+            self.connectivity,
             self.expansion_add,
             self.expansion_search,
             len(self),
@@ -1117,6 +1118,7 @@ class Index:
                 f"-- data type: {self.dtype}",
                 f"-- dimensions: {self.ndim}",
                 f"-- metric: {self.metric}",
+                f"-- connectivity: {self.connectivity}",
                 f"-- expansion on addition:{self.expansion_add} candidates",
                 f"-- expansion on search: {self.expansion_search} candidates",
                 "- binary",
