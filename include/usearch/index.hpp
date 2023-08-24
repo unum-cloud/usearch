@@ -386,10 +386,10 @@ template <typename result_at> struct expected_gt {
 };
 
 /**
- *  @brief  Light-weight bitset implementation to track visited nodes during graph traversal.
+ *  @brief  Light-weight bitset implementation to sync nodes updates during graph mutations.
  *          Extends basic functionality with @b atomic operations.
  */
-template <typename allocator_at = std::allocator<byte_t>> class visits_bitset_gt {
+template <typename allocator_at = std::allocator<byte_t>> class bitset_gt {
     using allocator_t = allocator_at;
     using byte_t = typename allocator_t::value_type;
     static_assert(sizeof(byte_t) == 1, "Allocator must allocate separate addressable bytes");
@@ -405,8 +405,8 @@ template <typename allocator_at = std::allocator<byte_t>> class visits_bitset_gt
     std::size_t count_{};
 
   public:
-    visits_bitset_gt() noexcept {}
-    ~visits_bitset_gt() noexcept { reset(); }
+    bitset_gt() noexcept {}
+    ~bitset_gt() noexcept { reset(); }
 
     explicit operator bool() const noexcept { return slots_; }
     void clear() noexcept { std::memset(slots_, 0, count_ * sizeof(compressed_slot_t)); }
@@ -418,25 +418,25 @@ template <typename allocator_at = std::allocator<byte_t>> class visits_bitset_gt
         count_ = 0;
     }
 
-    visits_bitset_gt(std::size_t capacity) noexcept
+    bitset_gt(std::size_t capacity) noexcept
         : slots_((compressed_slot_t*)allocator_t{}.allocate(slots(capacity) * sizeof(compressed_slot_t))),
           count_(slots_ ? slots(capacity) : 0u) {
         clear();
     }
 
-    visits_bitset_gt(visits_bitset_gt&& other) noexcept {
+    bitset_gt(bitset_gt&& other) noexcept {
         slots_ = exchange(other.slots_, nullptr);
         count_ = exchange(other.count_, 0);
     }
 
-    visits_bitset_gt& operator=(visits_bitset_gt&& other) noexcept {
+    bitset_gt& operator=(bitset_gt&& other) noexcept {
         std::swap(slots_, other.slots_);
         std::swap(count_, other.count_);
         return *this;
     }
 
-    visits_bitset_gt(visits_bitset_gt const&) = delete;
-    visits_bitset_gt& operator=(visits_bitset_gt const&) = delete;
+    bitset_gt(bitset_gt const&) = delete;
+    bitset_gt& operator=(bitset_gt const&) = delete;
 
     inline bool test(std::size_t i) const noexcept { return slots_[i / bits_per_slot()] & (1ul << (i & bits_mask())); }
     inline bool set(std::size_t i) noexcept {
@@ -474,13 +474,12 @@ template <typename allocator_at = std::allocator<byte_t>> class visits_bitset_gt
 #endif
 
     class lock_t {
-        visits_bitset_gt& bitset_;
+        bitset_gt& bitset_;
         std::size_t bit_offset_;
 
       public:
         inline ~lock_t() noexcept { bitset_.atomic_reset(bit_offset_); }
-        inline lock_t(visits_bitset_gt& bitset, std::size_t bit_offset) noexcept
-            : bitset_(bitset), bit_offset_(bit_offset) {
+        inline lock_t(bitset_gt& bitset, std::size_t bit_offset) noexcept : bitset_(bitset), bit_offset_(bit_offset) {
             while (bitset_.atomic_set(bit_offset_))
                 ;
         }
@@ -489,7 +488,7 @@ template <typename allocator_at = std::allocator<byte_t>> class visits_bitset_gt
     inline lock_t lock(std::size_t i) noexcept { return {*this, i}; }
 };
 
-using visits_bitset_t = visits_bitset_gt<>;
+using bitset_t = bitset_gt<>;
 
 /**
  *  @brief  Similar to `std::priority_queue`, but allows raw access to underlying
@@ -809,6 +808,149 @@ class usearch_pack_m uint40_t {
 #endif
 
 static_assert(sizeof(uint40_t) == 5, "uint40_t must be exactly 5 bytes");
+
+// clang-format off
+template <typename key_at, typename std::enable_if<std::is_integral<key_at>::value>::type* = nullptr> key_at default_free_value() { return std::numeric_limits<key_at>::max(); }
+template <typename key_at, typename std::enable_if<std::is_same<key_at, uint40_t>::value>::type* = nullptr> uint40_t default_free_value() { return uint40_t::max(); }
+template <typename key_at, typename std::enable_if<!std::is_integral<key_at>::value && !std::is_same<key_at, uint40_t>::value>::type* = nullptr> key_at default_free_value() { return key_at(); }
+// clang-format on
+
+template <typename element_at> struct hash_gt {
+    std::size_t operator()(element_at const& element) const noexcept { return std::hash<element_at>{}(element); }
+};
+
+template <> struct hash_gt<uint40_t> {
+    std::size_t operator()(uint40_t const& element) const noexcept { return std::hash<std::size_t>{}(element); }
+};
+
+/**
+ *  @brief  Minimalistic hash-set implementation to track visited nodes during graph traversal.
+ *
+ *  It doesn't support deletion of separate objects, but supports `clear`-ing all at once.
+ *  It expects `reserve` to be called ahead of all insertions, so no resizes are needed.
+ *  It also assumes `0xFF...FF` slots to be unused, to simplify the design.
+ *  It uses linear probing, the number of slots is always a power of two, and it uses linear-probing
+ *  in case of bucket collisions.
+ */
+template <typename element_at, typename hasher_at = hash_gt<element_at>, typename allocator_at = std::allocator<byte_t>>
+class growing_hash_set_gt {
+
+    using element_t = element_at;
+    using hasher_t = hasher_at;
+
+    using allocator_t = allocator_at;
+    using byte_t = typename allocator_t::value_type;
+    static_assert(sizeof(byte_t) == 1, "Allocator must allocate separate addressable bytes");
+
+    element_t* slots_{};
+    /// @brief Number of slots.
+    std::size_t capacity_{};
+    /// @brief Number of populated.
+    std::size_t count_{};
+    hasher_t hasher_{};
+
+  public:
+    growing_hash_set_gt() noexcept {}
+    ~growing_hash_set_gt() noexcept { reset(); }
+
+    explicit operator bool() const noexcept { return slots_; }
+    std::size_t size() const noexcept { return count_; }
+
+    void clear() noexcept {
+        std::memset(slots_, 0xFF, capacity_ * sizeof(element_t));
+        count_ = 0;
+    }
+
+    void reset() noexcept {
+        if (slots_)
+            allocator_t{}.deallocate((byte_t*)slots_, capacity_ * sizeof(element_t));
+        slots_ = nullptr;
+        capacity_ = 0;
+        count_ = 0;
+    }
+
+    growing_hash_set_gt(std::size_t capacity) noexcept
+        : slots_((element_t*)allocator_t{}.allocate(ceil2(capacity) * sizeof(element_t))),
+          capacity_(slots_ ? ceil2(capacity) : 0u), count_(0u) {
+        clear();
+    }
+
+    growing_hash_set_gt(growing_hash_set_gt&& other) noexcept {
+        slots_ = exchange(other.slots_, nullptr);
+        capacity_ = exchange(other.capacity_, 0);
+        count_ = exchange(other.count_, 0);
+    }
+
+    growing_hash_set_gt& operator=(growing_hash_set_gt&& other) noexcept {
+        std::swap(slots_, other.slots_);
+        std::swap(capacity_, other.capacity_);
+        std::swap(count_, other.count_);
+        return *this;
+    }
+
+    growing_hash_set_gt(growing_hash_set_gt const&) = delete;
+    growing_hash_set_gt& operator=(growing_hash_set_gt const&) = delete;
+
+    inline bool test(element_t const& elem) const noexcept {
+        std::size_t index = hasher_(elem) & (capacity_ - 1);
+        while (slots_[index] != default_free_value<element_t>()) {
+            if (slots_[index] == elem)
+                return true;
+
+            index = (index + 1) & (capacity_ - 1);
+        }
+        return false;
+    }
+
+    /**
+     *
+     *  @return Similar to `bitset_gt`, returns the previous value.
+     */
+    inline bool set(element_t const& elem) noexcept {
+        std::size_t index = hasher_(elem) & (capacity_ - 1);
+        while (slots_[index] != default_free_value<element_t>()) {
+            // Already exists
+            if (slots_[index] == elem)
+                return true;
+
+            index = (index + 1) & (capacity_ - 1);
+        }
+        slots_[index] = elem;
+        ++count_;
+        return false;
+    }
+
+    bool reserve(std::size_t new_capacity) noexcept {
+        new_capacity = (new_capacity * 5u) / 3u;
+        if (new_capacity <= capacity_)
+            return true;
+
+        new_capacity = ceil2(new_capacity);
+        element_t* new_slots = (element_t*)allocator_t{}.allocate(new_capacity * sizeof(element_t));
+        if (!new_slots)
+            return false;
+
+        std::memset(new_slots, 0xFF, new_capacity * sizeof(element_t));
+        std::size_t new_count = count_;
+        if (count_) {
+            for (std::size_t old_index = 0; old_index != capacity_; ++old_index) {
+                if (slots_[old_index] == default_free_value<element_t>())
+                    continue;
+
+                std::size_t new_index = hasher_(slots_[old_index]) & (new_capacity - 1);
+                while (new_slots[new_index] != default_free_value<element_t>())
+                    new_index = (new_index + 1) & (new_capacity - 1);
+                new_slots[new_index] = slots_[old_index];
+            }
+        }
+
+        reset();
+        slots_ = new_slots;
+        capacity_ = new_capacity;
+        count_ = new_count;
+        return true;
+    }
+};
 
 /**
  *  @brief  Basic single-threaded @b ring class, used for all kinds of task queues.
@@ -1627,7 +1769,9 @@ class index_gt {
      */
     static constexpr std::size_t node_head_bytes_() { return sizeof(key_t) + sizeof(level_t); }
 
-    using visits_bitset_t = visits_bitset_gt<dynamic_allocator_t>;
+    using nodes_mutexes_t = bitset_gt<dynamic_allocator_t>;
+
+    using visits_hash_set_t = growing_hash_set_gt<compressed_slot_t, hash_gt<compressed_slot_t>, dynamic_allocator_t>;
 
     struct precomputed_constants_t {
         double inverse_log_connectivity{};
@@ -1721,7 +1865,7 @@ class index_gt {
     struct usearch_align_m context_t {
         top_candidates_t top_candidates{};
         next_candidates_t next_candidates{};
-        visits_bitset_t visits{};
+        visits_hash_set_t visits{};
         std::default_random_engine level_generator{};
         std::size_t iteration_cycles{};
         std::size_t computed_distances_count{};
@@ -1778,7 +1922,7 @@ class index_gt {
     buffer_gt<node_t, nodes_allocator_t> nodes_{};
 
     /// @brief  Mutex, that limits concurrent access to `nodes_`.
-    mutable visits_bitset_t nodes_mutexes_{};
+    mutable nodes_mutexes_t nodes_mutexes_{};
 
     using contexts_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<context_t>;
 
@@ -1941,17 +2085,11 @@ class index_gt {
             && limits.members <= limits_.members)
             return true;
 
-        visits_bitset_t new_mutexes(limits.members);
+        nodes_mutexes_t new_mutexes(limits.members);
         buffer_gt<node_t, nodes_allocator_t> new_nodes(limits.members);
         buffer_gt<context_t, contexts_allocator_t> new_contexts(limits.threads());
         if (!new_nodes || !new_contexts || !new_mutexes)
             return false;
-
-        for (context_t& context : new_contexts) {
-            context.visits = visits_bitset_t(limits.members);
-            if (!context.visits)
-                return false;
-        }
 
         // Move the nodes info, and deallocate previous buffers.
         if (nodes_)
@@ -2915,9 +3053,9 @@ class index_gt {
     }
 
     struct node_lock_t {
-        visits_bitset_t& bitset;
+        nodes_mutexes_t& mutexes;
         std::size_t slot;
-        inline ~node_lock_t() noexcept { bitset.atomic_reset(slot); }
+        inline ~node_lock_t() noexcept { mutexes.atomic_reset(slot); }
     };
 
     inline node_lock_t node_lock_(std::size_t slot) const noexcept {
@@ -3027,10 +3165,12 @@ class index_gt {
 
         index_gt const& index_;
         neighbors_ref_t neighbors_;
-        visits_bitset_t& visits_;
+        visits_hash_set_t& visits_;
         std::size_t current_;
 
         candidates_iterator_t& skip_missing() noexcept {
+            if (!visits_.size())
+                return *this;
             while (current_ != neighbors_.size()) {
                 compressed_slot_t neighbor_slot = neighbors_[current_];
                 if (visits_.test(neighbor_slot))
@@ -3050,7 +3190,7 @@ class index_gt {
         using reference = misaligned_ref_gt<element_t>;
 
         reference operator*() const noexcept { return slot(); }
-        candidates_iterator_t(index_gt const& index, neighbors_ref_t neighbors, visits_bitset_t& visits,
+        candidates_iterator_t(index_gt const& index, neighbors_ref_t neighbors, visits_hash_set_t& visits,
                               std::size_t progress) noexcept
             : index_(index), neighbors_(neighbors), visits_(visits), current_(progress) {}
         candidates_iterator_t operator++(int) noexcept {
@@ -3073,7 +3213,7 @@ class index_gt {
     struct candidates_range_t {
         index_gt const& index;
         neighbors_ref_t neighbors;
-        visits_bitset_t& visits;
+        visits_hash_set_t& visits;
 
         candidates_iterator_t begin() const noexcept {
             return candidates_iterator_t{index, neighbors, visits, 0}.skip_missing();
@@ -3086,7 +3226,7 @@ class index_gt {
         value_at&& query, metric_at&& metric, prefetch_at&& prefetch, //
         std::size_t closest_slot, level_t begin_level, level_t end_level, context_t& context) const noexcept {
 
-        visits_bitset_t& visits = context.visits;
+        visits_hash_set_t& visits = context.visits;
         visits.clear();
 
         // Optional prefetching
@@ -3133,13 +3273,15 @@ class index_gt {
         std::size_t start_slot, std::size_t new_slot, level_t level, std::size_t top_limit,
         context_t& context) noexcept {
 
-        visits_bitset_t& visits = context.visits;
+        visits_hash_set_t& visits = context.visits;
         next_candidates_t& next = context.next_candidates; // pop min, push
         top_candidates_t& top = context.top_candidates;    // pop max, push
 
         visits.clear();
         next.clear();
         top.clear();
+        if (!visits.reserve(config_.connectivity_base + 1u))
+            return false;
 
         // Optional prefetching
         if (!std::is_same<prefetch_at, dummy_prefetch_t>::value)
@@ -3172,6 +3314,10 @@ class index_gt {
                 prefetch(missing_candidates.begin(), missing_candidates.end());
             }
 
+            // Assume the worst-case when reserving memory
+            if (!visits.reserve(visits.size() + candidate_neighbors.size()))
+                return false;
+
             for (compressed_slot_t successor_slot : candidate_neighbors) {
                 if (visits.set(successor_slot))
                     continue;
@@ -3200,7 +3346,7 @@ class index_gt {
         value_at&& query, metric_at&& metric, predicate_at&& predicate, prefetch_at&& prefetch, //
         std::size_t start_slot, std::size_t expansion, context_t& context) const noexcept {
 
-        visits_bitset_t& visits = context.visits;
+        visits_hash_set_t& visits = context.visits;
         next_candidates_t& next = context.next_candidates; // pop min, push
         top_candidates_t& top = context.top_candidates;    // pop max, push
         std::size_t const top_limit = expansion;
@@ -3208,6 +3354,8 @@ class index_gt {
         visits.clear();
         next.clear();
         top.clear();
+        if (!visits.reserve(config_.connectivity_base + 1u))
+            return false;
 
         // Optional prefetching
         if (!std::is_same<prefetch_at, dummy_prefetch_t>::value)
@@ -3234,6 +3382,10 @@ class index_gt {
                 candidates_range_t missing_candidates{*this, candidate_neighbors, visits};
                 prefetch(missing_candidates.begin(), missing_candidates.end());
             }
+
+            // Assume the worst-case when reserving memory
+            if (!visits.reserve(visits.size() + candidate_neighbors.size()))
+                return false;
 
             for (compressed_slot_t successor_slot : candidate_neighbors) {
                 if (visits.set(successor_slot))
@@ -3400,6 +3552,7 @@ static join_result_t join(               //
     config.max_proposals = (std::min)(men.size(), config.max_proposals);
 
     using distance_t = typename men_at::distance_t;
+    using dynamic_allocator_t = typename men_at::dynamic_allocator_t;
     using dynamic_allocator_traits_t = typename men_at::dynamic_allocator_traits_t;
     using man_key_t = typename men_at::key_t;
     using woman_key_t = typename women_at::key_t;
@@ -3431,7 +3584,7 @@ static join_result_t join(               //
     std::memset(proposal_counts.data(), 0, sizeof(proposals_count_t) * men.size());
 
     // Define locks, to limit concurrent accesses to `man_to_woman_slots` and `woman_to_man_slots`.
-    visits_bitset_t men_locks(men.size()), women_locks(women.size());
+    bitset_t men_locks(men.size()), women_locks(women.size());
     if (!men_locks || !women_locks)
         return result.failed("Can't allocate locks");
 

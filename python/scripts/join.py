@@ -21,7 +21,7 @@ from usearch.index import Index, MetricKind, CompiledMetric, MetricSignature
 from usearch.io import load_matrix
 from usearch.eval import measure_seconds
 
-k = 10
+count = 10
 exact = False
 batch_size = 1024 * 4
 max_elements = 1000000
@@ -104,7 +104,7 @@ if len(run_diagnostics) == 0 or run_diagnostics.lower() == "y":
 
     dt = measure_seconds
     args = dict(
-        k=k,
+        count=count,
         batch_size=batch_size,
         log=True,
         exact=exact,
@@ -113,28 +113,28 @@ if len(run_diagnostics) == 0 or run_diagnostics.lower() == "y":
     secs, a_self_recall = dt(lambda: a.search(a.vectors, **args).recall(a.keys))
     print(
         "Self-recall @{} of {} index: {:.2f}%, took {:.2f}s".format(
-            k, a_name, a_self_recall * 100, secs
+            count, a_name, a_self_recall * 100, secs
         )
     )
 
     secs, b_self_recall = dt(lambda: b.search(b.vectors, **args).recall(b.keys))
     print(
         "Self-recall @{} of {} index: {:.2f}%, took {:.2f}s".format(
-            k, b_name, b_self_recall * 100, secs
+            count, b_name, b_self_recall * 100, secs
         )
     )
 
     secs, ab_recall = dt(lambda: b.search(a.vectors, **args).recall(b.keys))
     print(
         "Cross-recall @{} of {} in {}: {:.2f}%, took {:.2f}s".format(
-            k, a_name, b_name, ab_recall * 100, secs
+            count, a_name, b_name, ab_recall * 100, secs
         )
     )
 
     secs, ba_recall = dt(lambda: a.search(b.vectors, **args).recall(a.keys))
     print(
         "Cross-recall @{} of {} in {}: {:.2f}%, took {:.2f}s".format(
-            k, b_name, a_name, ba_recall * 100, secs
+            count, b_name, a_name, ba_recall * 100, secs
         )
     )
 

@@ -269,8 +269,8 @@ class Matches:
     keys: np.ndarray
     distances: np.ndarray
 
-    visited_members: int
-    computed_distances: int
+    visited_members: int = 0
+    computed_distances: int = 0
 
     def __len__(self) -> int:
         return len(self.keys)
@@ -304,8 +304,8 @@ class BatchMatches:
     distances: np.ndarray
     counts: np.ndarray
 
-    visited_members: int
-    computed_distances: int
+    visited_members: int = 0
+    computed_distances: int = 0
 
     def __len__(self) -> int:
         return len(self.counts)
@@ -433,6 +433,8 @@ class IndexedKeys:
             return self.index._compiled.get_key_at_offset(offset)
 
     def __array__(self, dtype=None) -> np.ndarray:
+        if dtype is None:
+            dtype = Key
         return self.index._compiled.get_keys_in_slice().astype(dtype)
 
 
@@ -723,6 +725,8 @@ class Index:
             keys = [keys]
         if not isinstance(keys, np.ndarray):
             keys = np.array(keys, dtype=Key)
+        else:
+            keys = keys.astype(Key)
 
         results = self._compiled.get_many(keys, dtype)
         results = [cast(result) for result in results]
@@ -1091,11 +1095,12 @@ class Index:
         }
 
     def __repr__(self) -> str:
-        f = "usearch.Index({} x {}, {}, expansion: {} & {}, {} vectors in {} levels)"
+        f = "usearch.Index({} x {}, {}, connectivity: {}, expansion: {} & {}, {} vectors in {} levels)"
         return f.format(
             self.dtype,
             self.ndim,
             self.metric,
+            self.connectivity,
             self.expansion_add,
             self.expansion_search,
             len(self),
@@ -1113,6 +1118,7 @@ class Index:
                 f"-- data type: {self.dtype}",
                 f"-- dimensions: {self.ndim}",
                 f"-- metric: {self.metric}",
+                f"-- connectivity: {self.connectivity}",
                 f"-- expansion on addition:{self.expansion_add} candidates",
                 f"-- expansion on search: {self.expansion_search} candidates",
                 "- binary",
