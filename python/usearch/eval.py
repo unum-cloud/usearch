@@ -103,14 +103,18 @@ def self_recall(index: Index, sample: float = 1, **kwargs) -> SearchStats:
     """
     if len(index) == 0:
         return 0
-    if "k" not in kwargs:
-        kwargs["k"] = 1
+    if "count" not in kwargs:
+        kwargs["count"] = 1
 
-    keys = index.keys
+    if "keys" in kwargs:
+        keys = kwargs["keys"]
+    else:
+        keys = np.array(index.keys)
+
     if sample != 1:
         keys = np.random.choice(keys, int(ceil(len(keys) * sample)))
 
-    queries = index.get_vectors(keys, index.dtype)
+    queries = index.get(keys, index.dtype)
     matches: BatchMatches = index.search(queries, **kwargs)
     count_matches: float = matches.count_matches(keys)
     return SearchStats(

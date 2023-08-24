@@ -54,13 +54,13 @@ add_result_t add_(index_dense_t* index, usearch_key_t key, void const* vector, s
     }
 }
 
-bool get_(index_dense_t* index, usearch_key_t key, void* vector, scalar_kind_t kind) {
+bool get_(index_dense_t* index, usearch_key_t key, size_t count, void* vector, scalar_kind_t kind) {
     switch (kind) {
-    case scalar_kind_t::f32_k: return index->get(key, (f32_t*)vector);
-    case scalar_kind_t::f64_k: return index->get(key, (f64_t*)vector);
-    case scalar_kind_t::f16_k: return index->get(key, (f16_t*)vector);
-    case scalar_kind_t::i8_k: return index->get(key, (i8_bits_t*)vector);
-    case scalar_kind_t::b1x8_k: return index->get(key, (b1x8_t*)vector);
+    case scalar_kind_t::f32_k: return index->get(key, (f32_t*)vector, count);
+    case scalar_kind_t::f64_k: return index->get(key, (f64_t*)vector, count);
+    case scalar_kind_t::f16_k: return index->get(key, (f16_t*)vector, count);
+    case scalar_kind_t::i8_k: return index->get(key, (i8_bits_t*)vector, count);
+    case scalar_kind_t::b1x8_k: return index->get(key, (b1x8_t*)vector, count);
     default: return search_result_t().failed("Unknown scalar kind!");
     }
 }
@@ -83,6 +83,7 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
     assert(options && error);
 
     index_dense_config_t config(options->connectivity, options->expansion_add, options->expansion_search);
+    config.multi = options->multi;
     metric_kind_t metric_kind = to_native_metric(options->metric_kind);
     scalar_kind_t scalar_kind = to_native_scalar(options->quantization);
 
@@ -107,7 +108,7 @@ USEARCH_EXPORT void usearch_save(usearch_index_t index, char const* path, usearc
     assert(index && path && error);
     serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->save(path);
     if (!result)
-        *error = result.error.what();
+        *error = result.error.release();
 }
 
 USEARCH_EXPORT void usearch_load(usearch_index_t index, char const* path, usearch_error_t* error) {
@@ -115,7 +116,7 @@ USEARCH_EXPORT void usearch_load(usearch_index_t index, char const* path, usearc
     assert(index && path && error);
     serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->load(path);
     if (!result)
-        *error = result.error.what();
+        *error = result.error.release();
 }
 
 USEARCH_EXPORT void usearch_view(usearch_index_t index, char const* path, usearch_error_t* error) {
@@ -123,7 +124,7 @@ USEARCH_EXPORT void usearch_view(usearch_index_t index, char const* path, usearc
     assert(index && path && error);
     serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->view(path);
     if (!result)
-        *error = result.error.what();
+        *error = result.error.release();
 }
 
 USEARCH_EXPORT size_t usearch_size(usearch_index_t index, usearch_error_t*) { //
@@ -155,7 +156,7 @@ USEARCH_EXPORT void usearch_add(                                                
     assert(index && vector && error);
     add_result_t result = add_(reinterpret_cast<index_dense_t*>(index), key, vector, to_native_scalar(kind));
     if (!result)
-        *error = result.error.what();
+        *error = result.error.release();
 }
 
 USEARCH_EXPORT bool usearch_contains(usearch_index_t index, usearch_key_t key, usearch_error_t*) {
@@ -163,35 +164,50 @@ USEARCH_EXPORT bool usearch_contains(usearch_index_t index, usearch_key_t key, u
     return reinterpret_cast<index_dense_t*>(index)->contains(key);
 }
 
+USEARCH_EXPORT size_t usearch_count(usearch_index_t index, usearch_key_t key, usearch_error_t*) {
+    assert(index);
+    return reinterpret_cast<index_dense_t*>(index)->count(key);
+}
+
 USEARCH_EXPORT size_t usearch_search(                                                            //
     usearch_index_t index, void const* vector, usearch_scalar_kind_t kind, size_t results_limit, //
-    usearch_key_t* found_labels, usearch_distance_t* found_distances, usearch_error_t* error) {
+    usearch_key_t* found_keys, usearch_distance_t* found_distances, usearch_error_t* error) {
 
     assert(index && vector && error);
     search_result_t result =
         search_(reinterpret_cast<index_dense_t*>(index), vector, to_native_scalar(kind), results_limit);
     if (!result) {
-        *error = result.error.what();
+        *error = result.error.release();
         return 0;
     }
 
-    return result.dump_to(found_labels, found_distances);
+    return result.dump_to(found_keys, found_distances);
 }
 
-USEARCH_EXPORT bool usearch_get(              //
-    usearch_index_t index, usearch_key_t key, //
-    void* vector, usearch_scalar_kind_t kind, usearch_error_t*) {
+USEARCH_EXPORT size_t usearch_get(                          //
+    usearch_index_t index, usearch_key_t key, size_t count, //
+    void* vectors, usearch_scalar_kind_t kind, usearch_error_t*) {
 
-    assert(index && vector);
-    return get_(reinterpret_cast<index_dense_t*>(index), key, vector, to_native_scalar(kind));
+    assert(index && vectors);
+    return get_(reinterpret_cast<index_dense_t*>(index), key, count, vectors, to_native_scalar(kind));
 }
 
-USEARCH_EXPORT bool usearch_remove(usearch_index_t index, usearch_key_t key, usearch_error_t* error) {
+USEARCH_EXPORT size_t usearch_remove(usearch_index_t index, usearch_key_t key, usearch_error_t* error) {
 
     assert(index && error);
     labeling_result_t result = reinterpret_cast<index_dense_t*>(index)->remove(key);
     if (!result)
-        *error = result.error.what();
+        *error = result.error.release();
+    return result.completed;
+}
+
+USEARCH_EXPORT size_t usearch_rename(usearch_index_t index, usearch_key_t from, usearch_key_t to,
+                                     usearch_error_t* error) {
+
+    assert(index && error);
+    labeling_result_t result = reinterpret_cast<index_dense_t*>(index)->rename(from, to);
+    if (!result)
+        *error = result.error.release();
     return result.completed;
 }
 }

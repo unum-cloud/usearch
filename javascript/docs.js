@@ -1,17 +1,19 @@
-
 /** Search result object. */
-export interface Matches {
-    /** The keys of the nearest neighbors found, size n*k. */
-    keys: BigUint64Array,
-    /** The distances of the nearest neighbors found, size n*k. */
-    distances: Float32Array,
-    /** The distances of the nearest neighbors found, size n*k. */
-    count: bigint
+class Matches {
+    /**
+     * @param {BigUint64Array} keys - The keys of the nearest neighbors found.
+     * @param {Float32Array} distances - The distances of the nearest neighbors found.
+     * @param {bigint} count - The count of nearest neighbors found.
+     */
+    constructor(keys, distances, count) {
+        this.keys = keys;
+        this.distances = distances;
+        this.count = count;
+    }
 }
 
 /** K-Approximate Nearest Neighbors search index. */
-export class Index {
-
+class Index {
     /**
      * Constructs a new index.
      * 
@@ -24,56 +26,56 @@ export class Index {
      * @param {bigint} expansion_search
      */
     constructor(
-        dimensions: bigint,
-        metric: string,
-        quantization: string,
-        capacity: bigint,
-        connectivity: bigint,
-        expansion_add: bigint,
-        expansion_search: bigint
-    );
+        dimensions,
+        metric,
+        quantization,
+        capacity,
+        connectivity,
+        expansion_add,
+        expansion_search
+    ) {}
 
     /**
      * Returns the dimensionality of vectors.
      * @return {bigint} The dimensionality of vectors.
      */
-    dimensions(): bigint;
+    dimensions() {}
 
     /**
      * Returns the bigint of vectors currently indexed.
      * @return {bigint} The bigint of vectors currently indexed.
      */
-    size(): bigint;
+    size() {}
 
     /**
      * Returns index capacity.
-     * @return {bigints} The capacity of index.
+     * @return {bigint} The capacity of index.
      */
-    capacity(): bigint;
+    capacity() {}
 
     /**
      * Returns connectivity.
      * @return {bigint} The connectivity of index.
      */
-    connectivity(): bigint;
+    connectivity() {}
 
     /** 
      * Write index to a file.
      * @param {string} path File path to write.
      */
-    save(path: string): void;
+    save(path) {}
 
     /** 
      * Load index from a file.
      * @param {string} path File path to read.
      */
-    load(path: string): void;
+    load(path) {}
 
     /** 
      * View index from a file, without loading into RAM.
      * @param {string} path File path to read.
      */
-    load(path: string): void;
+    view(path) {}
 
     /** 
      * Add n vectors of dimension d to the index.
@@ -81,7 +83,7 @@ export class Index {
      * @param {bigint | bigint[]} keys Input identifiers for every vector.
      * @param {Float32Array | Float32Array[]} mat Input matrix, matrix of size n * d.
      */
-    add(keys: bigint | bigint[], mat: Float32Array | Float32Array[]): void;
+    add(keys, mat) {}
 
     /** 
      * Query n vectors of dimension d to the index. Return at most k vectors for each. 
@@ -91,20 +93,19 @@ export class Index {
      * @param {bigint} k The bigint of nearest neighbors to search for.
      * @return {Matches} Output of the search result.
      */
-    search(mat: Float32Array, k: bigint): Matches;
+    search(mat, k) {}
 
     /** 
      * Check if an entry is contained in the index.
      * 
      * @param {bigint} key Identifier to look up.
      */
-    contains(key: bigint): boolean;
+    contains(key) {}
 
     /** 
      * Remove a vector from the index.
      * 
      * @param {bigint} key Input identifier for every vector to be removed.
      */
-    remove(key: bigint): boolean;
-
+    remove(key) {}
 }

@@ -111,13 +111,13 @@ jobs:
       - uses: actions/setup-python@v3
       
       - name: Setup Docker
-        if: matrix.os != 'windows-2022'
+        if: matrix.os == 'ubuntu-20.04'
         uses: crazy-max/ghaction-setup-docker@v1.0.0
         with:
           version: 23.0.1
 
       - name: Setup QEMU
-        if: matrix.os != 'windows-2022'
+        if: matrix.os == 'ubuntu-20.04'
         uses: docker/setup-qemu-action@v2.1.0
 
       - name: Install CIBuildWheel
@@ -319,7 +319,7 @@ jobs:
         run: |
               sudo apt update && 
               sudo apt install -y doxygen graphviz dia git && 
-              pip install sphinx sphinx-js breathe furo m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery && 
+              pip install sphinx==7.1.2 sphinx-js breathe furo m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery && 
               npm install -g jsdoc
       - name: Install USearch from PyPi
         run: pip install usearch
