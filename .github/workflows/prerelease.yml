@@ -28,11 +28,11 @@ jobs:
     - name: Prepare Environment
       run: |
         sudo apt update && 
-        sudo apt install -y cmake gcc-12 build-essential libjemalloc-dev
+        sudo apt install -y cmake g++-12 build-essential libjemalloc-dev
     - name: Build
       run: |
         cmake -B ./build_release \
-        -DCMAKE_CXX_COMPILER="gcc-12" \
+        -DCMAKE_CXX_COMPILER="g++-12" \
         -DCMAKE_BUILD_TYPE=Release \
         -DUSEARCH_BUILD_TEST=1 \
         -DUSEARCH_USE_OPENMP=1 \
