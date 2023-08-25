@@ -80,7 +80,7 @@ usearch_wasm_size_t usearch_wasm_search(usearch_wasm_index_t index, usearch_wasm
     return static_cast<usearch_wasm_size_t>(usearch_search(
         reinterpret_cast<usearch_index_t>(index), reinterpret_cast<void*>(array->val.bytes.ptr),
         static_cast<usearch_scalar_kind_t>(kind), static_cast<size_t>(results_limit),
-        reinterpret_cast<usearch_key_t*>(found_labels), static_cast<usearch_distance_t*>(found_distances),
+        reinterpret_cast<usearch_key_t*>(found_labels->ptr), static_cast<usearch_distance_t*>(found_distances->ptr),
         reinterpret_cast<usearch_error_t*>(error->ptr)));
 }
 
