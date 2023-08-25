@@ -52,31 +52,36 @@ usearch_wasm_size_t usearch_wasm_dimensions(usearch_wasm_index_t index, usearch_
 }
 
 usearch_wasm_size_t usearch_wasm_connectivity(usearch_wasm_index_t index, usearch_wasm_error_t* error) {
-    return usearch_connectivity(reinterpret_cast<usearch_index_t>(index), reinterpret_cast<usearch_error_t*>(error->ptr));
+    return usearch_connectivity(reinterpret_cast<usearch_index_t>(index),
+                                reinterpret_cast<usearch_error_t*>(error->ptr));
 }
 
 void usearch_wasm_reserve(usearch_wasm_index_t index, usearch_wasm_size_t capacity, usearch_wasm_error_t* error) {
-    usearch_reserve(reinterpret_cast<usearch_index_t>(index), static_cast<size_t>(capacity), reinterpret_cast<usearch_error_t*>(error->ptr));
+    usearch_reserve(reinterpret_cast<usearch_index_t>(index), static_cast<size_t>(capacity),
+                    reinterpret_cast<usearch_error_t*>(error->ptr));
 }
 
 void usearch_wasm_add(usearch_wasm_index_t index, usearch_wasm_key_t key, usearch_wasm_vector_t* array,
                       usearch_wasm_scalar_kind_t vector_kind, usearch_wasm_error_t* error) {
     usearch_add(reinterpret_cast<usearch_index_t>(index), static_cast<usearch_key_t>(key),
-                reinterpret_cast<void*>(array->val.bytes.ptr), static_cast<usearch_scalar_kind_t>(vector_kind), reinterpret_cast<usearch_error_t*>(error->ptr));
+                reinterpret_cast<void*>(array->val.bytes.ptr), static_cast<usearch_scalar_kind_t>(vector_kind),
+                reinterpret_cast<usearch_error_t*>(error->ptr));
 }
 
 bool usearch_wasm_contains(usearch_wasm_index_t index, usearch_wasm_key_t key, usearch_wasm_error_t* error) {
-    return usearch_contains(reinterpret_cast<usearch_index_t>(index), static_cast<usearch_key_t>(key), reinterpret_cast<usearch_error_t*>(error->ptr));
+    return usearch_contains(reinterpret_cast<usearch_index_t>(index), static_cast<usearch_key_t>(key),
+                            reinterpret_cast<usearch_error_t*>(error->ptr));
 }
 
-usearch_wasm_size_t usearch_wasm_search(usearch_wasm_index_t index, usearch_wasm_vector_t* query_array,
-                                        usearch_wasm_scalar_kind_t query_kind, usearch_wasm_size_t results_limit,
+usearch_wasm_size_t usearch_wasm_search(usearch_wasm_index_t index, usearch_wasm_vector_t* array,
+                                        usearch_wasm_scalar_kind_t kind, usearch_wasm_size_t results_limit,
                                         usearch_wasm_keys_t* found_labels, usearch_wasm_distances_t* found_distances,
                                         usearch_wasm_error_t* error) {
     return static_cast<usearch_wasm_size_t>(usearch_search(
-        reinterpret_cast<usearch_index_t>(index), reinterpret_cast<void*>(query_array->val.bytes.ptr),
-        static_cast<usearch_scalar_kind_t>(query_kind), static_cast<size_t>(results_limit),
-        reinterpret_cast<usearch_key_t*>(found_keys), static_cast<usearch_distance_t*>(&found_distances), reinterpret_cast<usearch_error_t*>(error->ptr)));
+        reinterpret_cast<usearch_index_t>(index), reinterpret_cast<void*>(array->val.bytes.ptr),
+        static_cast<usearch_scalar_kind_t>(kind), static_cast<size_t>(results_limit),
+        reinterpret_cast<usearch_key_t*>(found_labels), static_cast<usearch_distance_t*>(found_distances),
+        reinterpret_cast<usearch_error_t*>(error->ptr)));
 }
 
 bool usearch_wasm_get(usearch_wasm_index_t index, usearch_wasm_key_t key, usearch_wasm_vector_t* array,
@@ -87,5 +92,6 @@ bool usearch_wasm_get(usearch_wasm_index_t index, usearch_wasm_key_t key, usearc
 }
 
 bool usearch_wasm_remove(usearch_wasm_index_t index, usearch_wasm_key_t key, usearch_wasm_error_t* error) {
-    return usearch_remove(reinterpret_cast<usearch_index_t>(index), static_cast<usearch_key_t>(key), reinterpret_cast<usearch_error_t*>(error->ptr));
+    return usearch_remove(reinterpret_cast<usearch_index_t>(index), static_cast<usearch_key_t>(key),
+                          reinterpret_cast<usearch_error_t*>(error->ptr));
 }
