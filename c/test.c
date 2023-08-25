@@ -107,7 +107,7 @@ void test_find_vector(size_t collection_size, size_t dimensions) {
     usearch_reserve(idx, collection_size, &error);
 
     // Create result buffers
-    int results_count = 10;
+    int results_count = collection_size;
     usearch_key_t* keys = (usearch_key_t*)malloc(results_count * sizeof(usearch_key_t));
     float* distances = (float*)malloc(results_count * sizeof(float));
     ASSERT(keys && distances, "Failed to allocate memory");
@@ -145,7 +145,7 @@ void test_get_vector(size_t collection_size, size_t dimensions) {
     usearch_reserve(idx, collection_size, &error);
 
     // Create result buffers
-    int results_count = 10;
+    int results_count = collection_size;
     float* vectors = (float*)malloc(results_count * sizeof(float));
     ASSERT(vectors, "Failed to allocate memory");
 
