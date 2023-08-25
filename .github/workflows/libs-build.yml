@@ -24,18 +24,11 @@ jobs:
       run:
         shell: bash
     steps:
-      - name: Checkout git repo
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ env.CHECKOUT_BRANCH }}
-
-      - name: Update git submodules
-        run: |
-          git submodule update --init --recursive
+      - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
 
       - name: build
-        run: |
-          ./build_lib.sh
+        run: ./build_lib.sh
         working-directory: ${{ github.workspace }}/csharp/eng
 
       - name: Upload Artifacts
@@ -58,18 +51,11 @@ jobs:
       - name: Install/Upgrade bash on macOS
         run: brew install bash
 
-      - name: Checkout git repo
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ env.CHECKOUT_BRANCH }}
-
-      - name: Update git submodules
-        run: |
-          git submodule update --init --recursive
+      - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
 
       - name: build
-        run: |
-          ./build_lib.sh
+        run: ./build_lib.sh
         working-directory: ${{ github.workspace }}/csharp/eng
 
       - name: Upload Artifacts
@@ -86,14 +72,8 @@ jobs:
         os: [windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout git repo
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ env.CHECKOUT_BRANCH }}
-
-      - name: Update git submodules
-        run: |
-          git submodule update --init --recursive
+      - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
         shell: cmd
 
       - name: Custom MSVC build
@@ -127,10 +107,7 @@ jobs:
         os: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
-        with:
-          ref: ${{ env.CHECKOUT_BRANCH }}
-      - run: |
-          git submodule update --init --recursive
+      - run: git submodule update --init --recursive
         shell: bash
 
       - name: Download artifacts
