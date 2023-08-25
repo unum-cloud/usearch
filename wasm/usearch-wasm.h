@@ -17,11 +17,21 @@ extern "C"
   void usearch_wasm_string_dup(usearch_wasm_string_t *ret, const char *s);
   void usearch_wasm_string_free(usearch_wasm_string_t *ret);
   typedef uint64_t usearch_wasm_size_t;
-  typedef uint64_t usearch_wasm_key_t;
-  typedef float usearch_wasm_distance_t;
+  typedef uint64_t usearch_wasm_index_t;
   typedef usearch_wasm_string_t usearch_wasm_error_t;
   void usearch_wasm_error_free(usearch_wasm_error_t *ptr);
-  typedef uint64_t usearch_wasm_index_t;
+  typedef uint64_t usearch_wasm_key_t;
+  typedef struct {
+    usearch_wasm_key_t *ptr;
+    size_t len;
+  } usearch_wasm_keys_t;
+  void usearch_wasm_keys_free(usearch_wasm_keys_t *ptr);
+  typedef float usearch_wasm_distance_t;
+  typedef struct {
+    usearch_wasm_distance_t *ptr;
+    size_t len;
+  } usearch_wasm_distances_t;
+  void usearch_wasm_distances_free(usearch_wasm_distances_t *ptr);
   typedef struct {
     float *ptr;
     size_t len;
@@ -83,7 +93,7 @@ extern "C"
     usearch_wasm_size_t expansion_search;
   } usearch_wasm_init_options_t;
   usearch_wasm_index_t usearch_wasm_init(usearch_wasm_init_options_t *options, usearch_wasm_error_t *error);
-  void usearch_wasm_free(usearch_wasm_index_t index, usearch_wasm_error_t *error);
+  void usearch_wasm_release(usearch_wasm_index_t index, usearch_wasm_error_t *error);
   void usearch_wasm_save(usearch_wasm_index_t index, usearch_wasm_string_t *path, usearch_wasm_error_t *error);
   void usearch_wasm_load(usearch_wasm_index_t index, usearch_wasm_string_t *path, usearch_wasm_error_t *error);
   void usearch_wasm_view(usearch_wasm_index_t index, usearch_wasm_string_t *path, usearch_wasm_error_t *error);
@@ -94,7 +104,7 @@ extern "C"
   void usearch_wasm_reserve(usearch_wasm_index_t index, usearch_wasm_size_t capacity, usearch_wasm_error_t *error);
   void usearch_wasm_add(usearch_wasm_index_t index, usearch_wasm_key_t key, usearch_wasm_vector_t *array, usearch_wasm_scalar_kind_t vector_kind, usearch_wasm_error_t *error);
   bool usearch_wasm_contains(usearch_wasm_index_t index, usearch_wasm_key_t key, usearch_wasm_error_t *error);
-  usearch_wasm_size_t usearch_wasm_search(usearch_wasm_index_t index, usearch_wasm_vector_t *query_array, usearch_wasm_scalar_kind_t query_kind, usearch_wasm_size_t results_limit, usearch_wasm_key_t found_keys, usearch_wasm_distance_t found_distances, usearch_wasm_error_t *error);
+  usearch_wasm_size_t usearch_wasm_search(usearch_wasm_index_t index, usearch_wasm_vector_t *array, usearch_wasm_scalar_kind_t kind, usearch_wasm_size_t results_limit, usearch_wasm_keys_t *found_labels, usearch_wasm_distances_t *found_distances, usearch_wasm_error_t *error);
   bool usearch_wasm_get(usearch_wasm_index_t index, usearch_wasm_key_t key, usearch_wasm_vector_t *array, usearch_wasm_scalar_kind_t vector_kind, usearch_wasm_error_t *error);
   bool usearch_wasm_remove(usearch_wasm_index_t index, usearch_wasm_key_t key, usearch_wasm_error_t *error);
   #ifdef __cplusplus

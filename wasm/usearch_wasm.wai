@@ -1,10 +1,12 @@
 type size = u64
+type index = u64
 
 type key = u64
+type keys = list<key>
 type distance = float32
+type distances = list<distance>
 
 type error = string
-type index = u64
 
 variant vector {
   floats32(list<float32>),
@@ -62,7 +64,7 @@ add: func(index: index, key: key, array: vector, vector-kind: scalar-kind, error
 
 contains: func(index: index, key: key, error: error) -> bool
 
-search: func(index: index, query-array: vector, query-kind: scalar-kind, results-limit: size, found-keys: key, found-distances: distance, error: error) -> size
+search: func(index: index, array: vector, kind: scalar-kind, results-limit: size, found-labels: keys, found-distances: distances, error: error) -> size
 
 get: func(index: index, key: key, array: vector, vector-kind: scalar-kind, error: error) -> bool
 

@@ -1,7 +1,6 @@
-#include <stdlib.h>
-#include "usearch-wasm.h"
 #include <emscripten/emscripten.h>
-
+#include <stdlib.h>
+#include <usearch-wasm.h>
 
 __attribute__((weak, export_name("canonical_abi_realloc")))
 void *canonical_abi_realloc(
@@ -44,6 +43,12 @@ void usearch_wasm_string_free(usearch_wasm_string_t *ret) {
 }
 void usearch_wasm_error_free(usearch_wasm_error_t *ptr) {
   usearch_wasm_string_free(ptr);
+}
+void usearch_wasm_keys_free(usearch_wasm_keys_t *ptr) {
+  canonical_abi_free(ptr->ptr, ptr->len * 8, 8);
+}
+void usearch_wasm_distances_free(usearch_wasm_distances_t *ptr) {
+  canonical_abi_free(ptr->ptr, ptr->len * 4, 4);
 }
 void usearch_wasm_list_float32_free(usearch_wasm_list_float32_t *ptr) {
   canonical_abi_free(ptr->ptr, ptr->len * 4, 4);
@@ -176,7 +181,7 @@ EMSCRIPTEN_KEEPALIVE int32_t contains(int64_t arg, int64_t arg0, int32_t arg1, i
   return ret;
 }
 __attribute__((export_name("search")))
-EMSCRIPTEN_KEEPALIVE int64_t search(int64_t arg, int32_t arg0, int32_t arg1, int32_t arg2, int32_t arg3, int64_t arg4, int64_t arg5, float arg6, int32_t arg7, int32_t arg8) {
+EMSCRIPTEN_KEEPALIVE int64_t search(int64_t arg, int32_t arg0, int32_t arg1, int32_t arg2, int32_t arg3, int64_t arg4, int32_t arg5, int32_t arg6, int32_t arg7, int32_t arg8, int32_t arg9, int32_t arg10) {
   usearch_wasm_vector_t variant;
   variant.tag = arg0;
   switch ((int32_t) variant.tag) {
@@ -197,9 +202,11 @@ EMSCRIPTEN_KEEPALIVE int64_t search(int64_t arg, int32_t arg0, int32_t arg1, int
       break;
     }
   }
-  usearch_wasm_vector_t arg9 = variant;
-  usearch_wasm_error_t arg10 = (usearch_wasm_string_t) { (char*)(arg7), (size_t)(arg8) };
-  usearch_wasm_size_t ret = usearch_wasm_search((uint64_t) (arg), &arg9, arg3, (uint64_t) (arg4), (uint64_t) (arg5), arg6, &arg10);
+  usearch_wasm_vector_t arg11 = variant;
+  usearch_wasm_keys_t arg12 = (usearch_wasm_keys_t) { (usearch_wasm_key_t*)(arg5), (size_t)(arg6) };
+  usearch_wasm_distances_t arg13 = (usearch_wasm_distances_t) { (usearch_wasm_distance_t*)(arg7), (size_t)(arg8) };
+  usearch_wasm_error_t arg14 = (usearch_wasm_string_t) { (char*)(arg9), (size_t)(arg10) };
+  usearch_wasm_size_t ret = usearch_wasm_search((uint64_t) (arg), &arg11, arg3, (uint64_t) (arg4), &arg12, &arg13, &arg14);
   return (int64_t) (ret);
 }
 __attribute__((export_name("get")))

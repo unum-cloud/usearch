@@ -71,7 +71,7 @@ bool usearch_wasm_contains(usearch_wasm_index_t index, usearch_wasm_key_t key, u
 
 usearch_wasm_size_t usearch_wasm_search(usearch_wasm_index_t index, usearch_wasm_vector_t* query_array,
                                         usearch_wasm_scalar_kind_t query_kind, usearch_wasm_size_t results_limit,
-                                        usearch_wasm_key_t found_keys, usearch_wasm_distance_t found_distances,
+                                        usearch_wasm_keys_t* found_labels, usearch_wasm_distances_t* found_distances,
                                         usearch_wasm_error_t* error) {
     return static_cast<usearch_wasm_size_t>(usearch_search(
         reinterpret_cast<usearch_index_t>(index), reinterpret_cast<void*>(query_array->val.bytes.ptr),
