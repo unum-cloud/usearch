@@ -146,7 +146,7 @@ void test_get_vector(size_t collection_size, size_t dimensions) {
 
     // Create result buffers
     int results_count = collection_size;
-    float* vectors = (float*)malloc(results_count * sizeof(float));
+    float* vectors = (float*)malloc(results_count * dimensions * sizeof(float));
     ASSERT(vectors, "Failed to allocate memory");
 
     // Add multiple vectors with SAME key
