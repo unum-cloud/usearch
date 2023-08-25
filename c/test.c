@@ -188,7 +188,7 @@ void test_remove_vector(size_t collection_size, size_t dimensions) {
     for (size_t i = 0; i < collection_size; i++) {
         usearch_key_t key = i;
         usearch_remove(idx, key, &error);
-        ASSERT(error, "Currently, Remove is not supported");
+        ASSERT(!error, "Currently, Remove is not supported");
     }
 
     free(data);
