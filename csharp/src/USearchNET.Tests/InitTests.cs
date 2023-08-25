@@ -28,6 +28,62 @@ public class InitTests
     }
 
     [Fact]
+    public void AddDoubleVectorsUnderSameKeySucceeds()
+    {
+        using (var index = new USearchIndex(MetricKind.Cos, ScalarKind.Float64, 3, multi: true))
+        {
+            index.Add(1, new double[] { 1.0, 2.0, 3.0 });
+            index.Add(2, new double[] { 1.0, 2.0, 3.0 });
+            index.Add(3, new double[] { 1.0, 2.0, 3.0 });
+            index.Add(1, new double[] { 1.0, 2.0, 3.0 });
+            index.Add(2, new double[] { 1.0, 2.0, 3.0 });
+            Assert.True(index.Contains(1));
+            Assert.True(index.Contains(2));
+            Assert.True(index.Contains(3));
+            Assert.Equal((uint)5, index.Size());
+        }
+    }
+
+    [Fact(Skip = "bug with userch_get in C99 interface: return always 1")]
+    // [Fact]
+    public void ItCanGetMultipleDoubleVectorsForSingleKey()
+    {
+        using (var index = new USearchIndex(MetricKind.Cos, ScalarKind.Float64, 3, multi: true))
+        {
+            index.Add(
+                new ulong[] { 1, 2, 3, 2 },
+                new double[][] {
+                    new double[] { 1.0, 6.0, 11.0 },
+                    new double[] { 2.0, 7.0, 12.0 },
+                    new double[] { 3.0, 8.0, 13.0 },
+                    new double[] { 5.0, 10.0, 15.0 }
+                }
+            );
+            // index.Add(1, new double[] { 1.0, 6.0, 11.0 });
+            // index.Add(2, new double[] { 2.0, 7.0, 12.0 });
+            // index.Add(3, new double[] { 3.0, 8.0, 13.0 });
+            // index.Add(2, new double[] { 5.0, 10.0, 15.0 });
+            Assert.True(index.Contains(1));
+            Assert.True(index.Contains(2));
+            Assert.True(index.Contains(3));
+            Assert.Equal((uint)4, index.Size());
+            Assert.Equal(2, index.Count(2));
+
+            int foundVectorsCount = index.Get(2, 2, out double[,] retrievedVectors);
+            Assert.Equal(2, foundVectorsCount);
+            for (int i = 0; i < foundVectorsCount; i++)
+            {
+                for (int j = 0; j < 3; j++)
+                {
+                    Console.Write(retrievedVectors[i, j]);
+                    Console.Write(" ");
+                }
+                Console.WriteLine();
+            }
+        }
+    }
+
+    [Fact]
     public void AddFloatVectorSucceeds()
     {
         using (var index = new USearchIndex(MetricKind.Cos, ScalarKind.Float32, 3))
@@ -36,6 +92,23 @@ public class InitTests
             Assert.Equal((uint)1, index.Size());
             Assert.True(index.Contains(1));
             Assert.False(index.Contains(2));
+        }
+    }
+
+    [Fact]
+    public void AddFloatVectorsUnderSameKeySucceeds()
+    {
+        using (var index = new USearchIndex(MetricKind.Cos, ScalarKind.Float32, 3, multi: true))
+        {
+            index.Add(1, new float[] { 1.0f, 2.0f, 3.0f });
+            index.Add(2, new float[] { 1.0f, 2.0f, 3.0f });
+            index.Add(3, new float[] { 1.0f, 2.0f, 3.0f });
+            index.Add(1, new float[] { 1.0f, 2.0f, 3.0f });
+            index.Add(2, new float[] { 1.0f, 2.0f, 3.0f });
+            Assert.True(index.Contains(1));
+            Assert.True(index.Contains(2));
+            Assert.True(index.Contains(3));
+            Assert.Equal((uint)5, index.Size());
         }
     }
 
@@ -49,7 +122,7 @@ public class InitTests
             Assert.Equal((uint)1, index.Size());
             Assert.True(index.Contains(1));
             Assert.False(index.Contains(2));
-            Assert.True(index.Get(1, out float[] retrievedVector));
+            Assert.True(index.Get(1, out float[] retrievedVector) == 1);
             Assert.NotNull(retrievedVector);
             bool areEqual = inputVector
                 .Zip(retrievedVector, (a, b) => (a, b))
@@ -69,7 +142,7 @@ public class InitTests
             Assert.Equal((uint)1, index.Size());
             Assert.True(index.Contains(1));
             Assert.False(index.Contains(2));
-            Assert.True(index.Get(1, out double[] retrievedVector));
+            Assert.True(index.Get(1, out double[] retrievedVector) == 1);
             Assert.NotNull(retrievedVector);
             bool areEqual = inputVector
                 .Zip(retrievedVector, (a, b) => (a, b))
@@ -79,8 +152,7 @@ public class InitTests
         }
     }
 
-    // TODO return back this test when std::runtime_error wont be thrown from USearch lib
-    [Fact(Skip = "This test is temporarily disabled because of hanging.")]
+    [Fact]
     public void ItThrowsException_AddAddWithSameKeyAndGetVector()
     {
         using (var index = new USearchIndex(MetricKind.Cos, ScalarKind.Float32, 3))
@@ -107,7 +179,7 @@ public class InitTests
             Assert.False(index.Contains(key));
             index.Add(key, vector);
             Assert.True(index.Contains(key));
-            Assert.True(index.Get(key, out float[] retrievedVector));
+            Assert.True(index.Get(key, out float[] retrievedVector) == 1);
             Assert.Equal(vector, retrievedVector);
         }
     }
@@ -126,18 +198,17 @@ public class InitTests
             Assert.False(index.Contains(key));
             index.Add(key, vector);
             Assert.True(index.Contains(key));
-            Assert.True(index.Get(key, out float[] retrievedVector));
+            Assert.True(index.Get(key, out float[] retrievedVector) == 1);
             Assert.Equal(vector, retrievedVector);
         }
     }
 
-    //[Fact(Skip = "This test is temporarily disabled because of hanging.")]
     [Fact]
     public void TestGetKeyThatNotExist()
     {
         using (var index = new USearchIndex(MetricKind.Cos, ScalarKind.Float32, 2))
         {
-            Assert.False(index.Get(1, out float[] retrievedVector));
+            Assert.True(index.Get(1, out float[] retrievedVector) == 0);
             Assert.False(index.Contains(1));
         }
     }
@@ -206,4 +277,19 @@ public class InitTests
             Assert.Contains(2UL, keys);
         }
     }
+
+    [Fact]
+    public void ItCanRenameKey()
+    {
+        using (var index = new USearchIndex(MetricKind.L2sq, ScalarKind.Float32, 2))
+        {
+            index.Add(1, new float[] { 0.9f, 0.9f });
+            index.Add(2, new float[] { 0.8f, 0.8f });
+            index.Rename(1, 3);
+            Assert.False(index.Contains(1));
+            Assert.True(index.Contains(2));
+            Assert.True(index.Contains(3));
+        }
+    }
+
 }

@@ -30,7 +30,7 @@ namespace USearchNET
     // TODO implement custom metric delegate following microsoft guides:
     // 1) https://learn.microsoft.com/en-us/dotnet/standard/native-interop/best-practices
     // 2) https://learn.microsoft.com/en-us/dotnet/framework/interop/marshalling-a-delegate-as-a-callback-method
-    // public delegate float usearch_metric_t(IntPtr a, IntPtr b);
+    // public delegate float CustomMetricFunction(IntPtr a, IntPtr b);
 
     [StructLayout(LayoutKind.Sequential)]
     public struct IndexOptions
@@ -43,6 +43,9 @@ namespace USearchNET
         public ulong expansion_add;
         public ulong expansion_search;
 
+        [MarshalAs(UnmanagedType.Bool)]
+        public bool multi;
+
         public IndexOptions(
             MetricKind metric_kind = MetricKind.Unknown,
             IntPtr metric = default,
@@ -50,7 +53,8 @@ namespace USearchNET
             ulong dimensions = 0,
             ulong connectivity = 0,
             ulong expansion_add = 0,
-            ulong expansion_search = 0
+            ulong expansion_search = 0,
+            bool multi = false
         )
         {
             this.metric_kind = metric_kind;
@@ -60,6 +64,7 @@ namespace USearchNET
             this.connectivity = connectivity;
             this.expansion_add = expansion_add;
             this.expansion_search = expansion_search;
+            this.multi = multi;
         }
     }
 

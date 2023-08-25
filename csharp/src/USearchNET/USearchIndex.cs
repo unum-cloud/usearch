@@ -4,7 +4,6 @@ using static USearchNET.NativeMethods;
 
 namespace USearchNET
 {
-
     public class USearchIndex : IDisposable
     {
         private IntPtr _index;
@@ -17,8 +16,9 @@ namespace USearchNET
             ulong dimensions,
             ulong connectivity = 0,
             ulong expansionAdd = 0,
-            ulong expansionSearch = 0
-        // CustomDistanceFunction? customMetric = null
+            ulong expansionSearch = 0,
+            bool multi = false
+        //CustomDistanceFunction? customMetric = null
         )
         {
             IndexOptions initOptions = new IndexOptions
@@ -29,7 +29,8 @@ namespace USearchNET
                 dimensions = dimensions,
                 connectivity = connectivity,
                 expansion_add = expansionAdd,
-                expansion_search = expansionSearch
+                expansion_search = expansionSearch,
+                multi = multi
             };
 
             this._index = usearch_init(ref initOptions, out IntPtr error);
@@ -106,6 +107,13 @@ namespace USearchNET
             return result;
         }
 
+        public int Count(ulong key)
+        {
+            int count = checked((int)usearch_count(this._index, key, out IntPtr error));
+            HandleError(error);
+            return count;
+        }
+
         private void IncreaseCapacity(ulong size)
         {
             usearch_reserve(this._index, (UIntPtr)(this.Size() + size), out IntPtr error);
@@ -155,43 +163,81 @@ namespace USearchNET
             }
         }
 
-        public bool Get(ulong key, out float[] vector)
+        public int Get(ulong key, out float[] vector)
         {
             vector = new float[this._cachedDimensions];
-            bool success = usearch_get(this._index, key, vector, ScalarKind.Float32, out IntPtr error);
+            int foundVectorsCount = checked((int)usearch_get(this._index, key, (UIntPtr)1, vector, ScalarKind.Float32, out IntPtr error));
             HandleError(error);
-            if (!success)
+            if (foundVectorsCount < 1)
             {
                 vector = null;
             }
 
-            return success;
+            return foundVectorsCount;
         }
 
-        public bool Get(ulong key, out double[] vector)
+        public int Get(ulong key, int count, out float[,] vectors)
+        {
+            throw new NotImplementedException("Feature not available: Waiting for resolution of C99 interface bug.");
+            // var flattenVectors = new float[count * (int)this._cachedDimensions];
+            // int foundVectorsCount = checked((int)usearch_get(this._index, key, (UIntPtr)count, flattenVectors, ScalarKind.Float32, out IntPtr error));
+            // HandleError(error);
+            // if (foundVectorsCount < 1)
+            // {
+            //     vectors = null;
+            // }
+            // else
+            // {
+            //     vectors = new float[count, (int)this._cachedDimensions];
+            //     Buffer.BlockCopy(flattenVectors, 0, vectors, 0, count * sizeof(float));
+            // }
+
+            // return foundVectorsCount;
+        }
+
+        public int Get(ulong key, out double[] vector)
         {
             vector = new double[this._cachedDimensions];
-            bool success = usearch_get(this._index, key, vector, ScalarKind.Float64, out IntPtr error);
+            int foundVectorsCount = checked((int)usearch_get(this._index, key, (UIntPtr)1, vector, ScalarKind.Float64, out IntPtr error));
             HandleError(error);
-            if (!success)
+            if (foundVectorsCount < 1)
             {
                 vector = null;
             }
 
-            return success;
+            return foundVectorsCount;
         }
 
-        private int Search<T>(T[] queryVector, int resultsLimit, out ulong[] keys, out float[] distances, ScalarKind scalarKind)
+        public int Get(ulong key, int count, out double[,] vectors)
         {
-            keys = new ulong[resultsLimit];
-            distances = new float[resultsLimit];
+            throw new NotImplementedException("Feature not available: Waiting for resolution of C99 interface bug.");
+            // var flattenVectors = new double[count * (int)this._cachedDimensions];
+            // int foundVectorsCount = checked((int)usearch_get(this._index, key, (UIntPtr)count, flattenVectors, ScalarKind.Float64, out IntPtr error));
+            // HandleError(error);
+            // if (foundVectorsCount < 1)
+            // {
+            //     vectors = null;
+            // }
+            // else
+            // {
+            //     vectors = new double[count, (int)this._cachedDimensions];
+            //     Buffer.BlockCopy(flattenVectors, 0, vectors, 0, count * sizeof(double));
+            // }
+
+            // return foundVectorsCount;
+        }
+
+        private int Search<T>(T[] queryVector, int count, out ulong[] keys, out float[] distances, ScalarKind scalarKind)
+        {
+            keys = new ulong[count];
+            distances = new float[count];
 
             GCHandle handle = GCHandle.Alloc(queryVector, GCHandleType.Pinned);
             int matches = 0;
             try
             {
                 IntPtr queryVectorPtr = handle.AddrOfPinnedObject();
-                matches = checked((int)usearch_search(this._index, queryVectorPtr, scalarKind, (UIntPtr)resultsLimit, keys, distances, out IntPtr error));
+                matches = checked((int)usearch_search(this._index, queryVectorPtr, scalarKind, (UIntPtr)count, keys, distances, out IntPtr error));
                 HandleError(error);
             }
             finally
@@ -199,7 +245,7 @@ namespace USearchNET
                 handle.Free();
             }
 
-            if (matches < resultsLimit)
+            if (matches < count)
             {
                 Array.Resize(ref keys, (int)matches);
                 Array.Resize(ref distances, (int)matches);
@@ -208,21 +254,28 @@ namespace USearchNET
             return matches;
         }
 
-        public int Search(float[] queryVector, int resultsLimit, out ulong[] keys, out float[] distances)
+        public int Search(float[] queryVector, int count, out ulong[] keys, out float[] distances)
         {
-            return this.Search(queryVector, resultsLimit, out keys, out distances, ScalarKind.Float32);
+            return this.Search(queryVector, count, out keys, out distances, ScalarKind.Float32);
         }
 
-        public int Search(double[] queryVector, int resultsLimit, out ulong[] keys, out float[] distances)
+        public int Search(double[] queryVector, int count, out ulong[] keys, out float[] distances)
         {
-            return this.Search(queryVector, resultsLimit, out keys, out distances, ScalarKind.Float64);
+            return this.Search(queryVector, count, out keys, out distances, ScalarKind.Float64);
         }
 
-        public bool Remove(ulong key)
+        public int Remove(ulong key)
         {
-            bool success = usearch_remove(this._index, key, out IntPtr error);
+            int removedCount = checked((int)usearch_remove(this._index, key, out IntPtr error));
             HandleError(error);
-            return success;
+            return removedCount;
+        }
+
+        public int Rename(ulong keyFrom, ulong keyTo)
+        {
+            int foundVectorsCount = checked((int)usearch_rename(this._index, keyFrom, keyTo, out IntPtr error));
+            HandleError(error);
+            return foundVectorsCount;
         }
 
         private static void HandleError(IntPtr error)
