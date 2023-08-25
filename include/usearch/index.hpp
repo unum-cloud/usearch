@@ -2625,22 +2625,27 @@ class index_gt {
     template <typename progress_at = dummy_progress_t>
     serialization_result_t save(output_file_t file, progress_at&& progress = {}) const noexcept {
 
-        serialization_result_t result = file.open_if_not();
-        if (result)
-            stream(
+        serialization_result_t io_result = file.open_if_not();
+        if (!io_result)
+            return io_result;
+
+        serialization_result_t stream_result = stream(
                 [&](void* buffer, std::size_t length) {
-                    result = file.write(buffer, length);
-                    return !!result;
+                io_result = file.write(buffer, length);
+                return !!io_result;
                 },
                 std::forward<progress_at>(progress));
-        return result;
+
+        if (!stream_result)
+            return stream_result;
+        return io_result;
     }
 
     /**
      *  @brief  Saves serialized binary index representation to a stream.
      */
     template <typename output_callback_at, typename progress_at = dummy_progress_t>
-    serialization_result_t stream(output_callback_at&& callback, progress_at&& progress = {}) const noexcept {
+    serialization_result_t stream(output_callback_at&& output, progress_at&& progress = {}) const noexcept {
 
         serialization_result_t result;
 
@@ -2651,8 +2656,8 @@ class index_gt {
         header.connectivity_base = config_.connectivity_base;
         header.max_level = max_level_;
         header.entry_slot = entry_slot_;
-        if (!callback(&header, sizeof(header)))
-            return result.failed("Failed to serialize into stream");
+        if (!output(&header, sizeof(header)))
+            return result.failed("Failed to serialize the header into stream");
 
         // Export the number of levels per node
         // That is both enough to estimate the overall memory consumption,
@@ -2660,15 +2665,15 @@ class index_gt {
         for (std::size_t i = 0; i != header.size; ++i) {
             node_t node = node_at_(i);
             level_t level = node.level();
-            if (!callback(&level, sizeof(level)))
-                return result.failed("Failed to serialize into stream");
+            if (!output(&level, sizeof(level)))
+                return result.failed("Failed to serialize nodes levels into stream");
         }
 
         // After that dump the nodes themselves
         for (std::size_t i = 0; i != header.size; ++i) {
             span_bytes_t node_bytes = node_bytes_(node_at_(i));
-            if (!callback(node_bytes.data(), node_bytes.size()))
-                return result.failed("Failed to serialize into stream");
+            if (!output(node_bytes.data(), node_bytes.size()))
+                return result.failed("Failed to serialize nodes into stream");
             progress(i, header.size);
         }
 
@@ -2693,19 +2698,39 @@ class index_gt {
     template <typename progress_at = dummy_progress_t>
     serialization_result_t load(input_file_t file, progress_at&& progress = {}) noexcept {
 
+        serialization_result_t io_result = file.open_if_not();
+        if (!io_result)
+            return io_result;
+
+        serialization_result_t stream_result = pull(
+            [&](void* buffer, std::size_t length) {
+                io_result = file.read(buffer, length);
+                return !!io_result;
+            },
+            std::forward<progress_at>(progress));
+
+        if (!stream_result)
+            return stream_result;
+        return io_result;
+    }
+
+    /**
+     *  @brief  Symmetric to `stream`, pulls data from a stream.
+     */
+    template <typename input_callback_at, typename progress_at = dummy_progress_t>
+    serialization_result_t pull(input_callback_at&& input, progress_at&& progress = {}) noexcept {
+
+        serialization_result_t result;
+
         // Remove previously stored objects
         reset();
 
-        serialization_result_t result = file.open_if_not();
-        if (!result)
-            return result;
-
         // Pull basic metadata
         index_serialized_header_t header;
-        result = file.read(&header, sizeof(header));
-        if (!result)
-            return result;
+        if (!input(&header, sizeof(header)))
+            return result.failed("Failed to pull the header from the stream");
 
+        // We are loading an empty index, no more work to do
         if (!header.size) {
             reset();
             return result;
@@ -2716,9 +2741,8 @@ class index_gt {
         buffer_gt<level_t, levels_allocator_t> levels(header.size);
         if (!levels)
             return result.failed("Out of memory");
-        result = file.read(levels, header.size * sizeof(level_t));
-        if (!result)
-            return result;
+        if (!input(levels, header.size * sizeof(level_t)))
+            return result.failed("Failed to pull nodes levels from the stream");
 
         // Submit metadata
         config_.connectivity = header.connectivity;
@@ -2737,10 +2761,9 @@ class index_gt {
         // Load the nodes
         for (std::size_t i = 0; i != header.size; ++i) {
             span_bytes_t node_bytes = node_malloc_(levels[i]);
-            result = file.read(node_bytes.data(), node_bytes.size());
-            if (!result) {
+            if (!input(node_bytes.data(), node_bytes.size())) {
                 reset();
-                return result;
+                return result.failed("Failed to pull nodes from the stream");
             }
             nodes_[i] = node_t{node_bytes.data()};
             progress(i, header.size);

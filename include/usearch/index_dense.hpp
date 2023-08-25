@@ -820,10 +820,32 @@ class index_dense_gt {
      */
     serialization_result_t load(input_file_t file, serialization_config_t config = {}) {
 
-        serialization_result_t result = file.open_if_not();
-        if (!result)
-            return result;
+        serialization_result_t io_result = file.open_if_not();
+        if (!io_result)
+            return io_result;
 
+        serialization_result_t stream_result = pull(
+            [&](void* buffer, std::size_t length) {
+                io_result = file.read(buffer, length);
+                return !!io_result;
+            },
+            config);
+
+        if (!stream_result)
+            return stream_result;
+        return io_result;
+    }
+
+    /**
+     *  @brief Parses the index from file to RAM.
+     *  @param[in] path The path to the file.
+     *  @param[in] config Configuration parameters for imports.
+     *  @return Outcome descriptor explicitly convertible to boolean.
+     */
+    template <typename input_callback_at>
+    serialization_result_t pull(input_callback_at&& input, serialization_config_t config = {}) {
+
+        serialization_result_t result;
         std::uint64_t matrix_rows = 0;
         std::uint64_t matrix_cols = 0;
 
@@ -832,16 +854,14 @@ class index_dense_gt {
             // Save the matrix size
             if (!config.use_64_bit_dimensions) {
                 std::uint32_t dimensions[2];
-                result = file.read(&dimensions, sizeof(dimensions));
-                if (!result)
-                    return result;
+                if (!input(&dimensions, sizeof(dimensions)))
+                    return result.failed("Failed to read 32-bit dimensions of the matrix");
                 matrix_rows = dimensions[0];
                 matrix_cols = dimensions[1];
             } else {
                 std::uint64_t dimensions[2];
-                result = file.read(&dimensions, sizeof(dimensions));
-                if (!result)
-                    return result;
+                if (!input(&dimensions, sizeof(dimensions)))
+                    return result.failed("Failed to read 64-bit dimensions of the matrix");
                 matrix_rows = dimensions[0];
                 matrix_cols = dimensions[1];
             }
@@ -849,9 +869,8 @@ class index_dense_gt {
             vectors_lookup_.resize(matrix_rows);
             for (std::uint64_t slot = 0; slot != matrix_rows; ++slot) {
                 byte_t* vector = vectors_tape_allocator_.allocate(matrix_cols);
-                result = file.read(vector, matrix_cols);
-                if (!result)
-                    return result;
+                if (!input(vector, matrix_cols))
+                    return result.failed("Failed to read vectors");
                 vectors_lookup_[slot] = vector;
             }
         }
@@ -859,9 +878,8 @@ class index_dense_gt {
         // Load metadata and choose the right metric
         {
             index_dense_head_buffer_t buffer;
-            result = file.read(buffer, sizeof(buffer));
-            if (!result)
-                return result;
+            if (!input(buffer, sizeof(buffer)))
+                return result.failed("Failed to read the index ");
 
             index_dense_head_t head{buffer};
             if (std::memcmp(buffer, default_magic(), std::strlen(default_magic())) != 0)
@@ -882,7 +900,7 @@ class index_dense_gt {
         }
 
         // Pull the actual proximity graph
-        result = typed_->load(std::move(file));
+        result = typed_->pull(std::forward<input_callback_at>(input));
         if (!result)
             return result;
         if (typed_->size() != static_cast<std::size_t>(matrix_rows))
