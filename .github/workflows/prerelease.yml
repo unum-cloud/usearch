@@ -208,7 +208,7 @@ jobs:
         shell: bash
 
       - name: Build and test
-      - run: dotnet test -c Release
+        run: dotnet test -c Release
         shell: bash
         working-directory: ${{ github.workspace }}/csharp/
 
