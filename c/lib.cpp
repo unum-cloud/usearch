@@ -54,7 +54,7 @@ add_result_t add_(index_dense_t* index, usearch_key_t key, void const* vector, s
     }
 }
 
-bool get_(index_dense_t* index, usearch_key_t key, size_t count, void* vector, scalar_kind_t kind) {
+std::size_t get_(index_dense_t* index, usearch_key_t key, size_t count, void* vector, scalar_kind_t kind) {
     switch (kind) {
     case scalar_kind_t::f32_k: return index->get(key, (f32_t*)vector, count);
     case scalar_kind_t::f64_k: return index->get(key, (f64_t*)vector, count);

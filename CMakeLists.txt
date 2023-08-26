@@ -113,6 +113,7 @@ if(USEARCH_INSTALL)
 endif()
 
 if(${USEARCH_BUILD_TEST} OR ${USEARCH_BUILD_BENCHMARK})
+    add_subdirectory(c)
     add_subdirectory(cpp)
 endif()
 
