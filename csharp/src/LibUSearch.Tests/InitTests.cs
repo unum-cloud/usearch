@@ -1,8 +1,10 @@
+﻿using Cloud.Unum.USearch;
+
 namespace LibUsearch.Tests;
 
 public class InitTests
 {
-    // Epsilon for real values comparings
+    // Epsilon for real values comparisons
     private const float Epsilon = 0.000001f;
 
     [Fact]
@@ -52,13 +54,12 @@ public class InitTests
             Assert.True(index.Get(1, out float[] retrievedVector));
             Assert.NotNull(retrievedVector);
             bool areEqual = inputVector
-                                    .Zip(retrievedVector, (a, b) => (a, b))
-                                    .All(pair => Math.Abs(pair.a - pair.b) <= Epsilon);
+                .Zip(retrievedVector, (a, b) => (a, b))
+                .All(pair => Math.Abs(pair.a - pair.b) <= Epsilon);
 
             Assert.True(areEqual);
         }
     }
-
 
     [Fact]
     public void AddGetDoubleVectorSucceeds()
@@ -73,13 +74,12 @@ public class InitTests
             Assert.True(index.Get(1, out double[] retrievedVector));
             Assert.NotNull(retrievedVector);
             bool areEqual = inputVector
-                                    .Zip(retrievedVector, (a, b) => (a, b))
-                                    .All(pair => Math.Abs(pair.a - pair.b) <= Epsilon);
+                .Zip(retrievedVector, (a, b) => (a, b))
+                .All(pair => Math.Abs(pair.a - pair.b) <= Epsilon);
 
             Assert.True(areEqual);
         }
     }
-
 
     // TODO return back this test when std::runtime_error wont be thrown from USearch lib
     [Fact(Skip = "This test is temporarily disabled because of hanging.")]
@@ -91,7 +91,7 @@ public class InitTests
             float[] vector1 = { 1.0f, 2.0f, 33.3f };
             index.Add(key, vector1);
             float[] vector2 = { 3.0f, 4.0f, 34.2f };
-            Assert.Throws<USearchIndex.USearchException>(() => index.Add(key, vector2));
+            Assert.Throws<USearchException>(() => index.Add(key, vector2));
         }
     }
 
