@@ -68,6 +68,8 @@ jobs:
         make -C ./build_release -j
     - name: Run tests
       run: ./build_release/test
+      env:
+        USEARCH_BUILD_TEST: 1
       
       
   test_python_311:
