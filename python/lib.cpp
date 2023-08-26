@@ -770,6 +770,14 @@ template <typename index_at> typename index_at::stats_t compute_stats(index_at c
 template <typename index_at> typename index_at::stats_t compute_level_stats(index_at const &index, std::size_t level) { return index.stats(level); }
 // clang-format on
 
+template <typename index_at> std::vector<typename index_at::stats_t> compute_levels_stats(index_at const& index) {
+    using stats_t = typename index_at::stats_t;
+    std::size_t max_level = index.max_level();
+    std::vector<stats_t> result(max_level + 1);
+    index.stats(result.data(), max_level);
+    return result;
+}
+
 template <typename internal_at, typename external_at = internal_at, typename index_at = void>
 static py::tuple get_typed_vectors_for_keys(index_at const& index, py::buffer keys) {
 
@@ -1155,7 +1163,8 @@ PYBIND11_MODULE(compiled, m) {
     i_stats.def_readonly("allocated_bytes", &punned_index_stats_t::allocated_bytes);
 
     i.def_property_readonly("max_level", &max_level<dense_index_py_t>);
-    i.def_property_readonly("levels_stats", &compute_stats<dense_index_py_t>);
+    i.def_property_readonly("stats", &compute_stats<dense_index_py_t>);
+    i.def_property_readonly("levels_stats", &compute_levels_stats<dense_index_py_t>);
     i.def("level_stats", &compute_level_stats<dense_index_py_t>, py::arg("level"));
 
     auto is = py::class_<dense_indexes_py_t>(m, "Indexes");

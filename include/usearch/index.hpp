@@ -2591,6 +2591,40 @@ class index_gt {
         return result;
     }
 
+    stats_t stats(stats_t* stats_per_level, std::size_t max_level) const noexcept {
+
+        std::size_t head_bytes = node_head_bytes_();
+        for (std::size_t i = 0; i != size(); ++i) {
+            node_t node = node_at_(i);
+
+            stats_per_level[0].nodes++;
+            stats_per_level[0].edges += neighbors_(node, 0).size();
+            stats_per_level[0].allocated_bytes += pre_.neighbors_base_bytes + head_bytes;
+
+            level_t node_level = static_cast<level_t>(node.level());
+            for (level_t l = 1; l <= (std::min)(node_level, static_cast<level_t>(max_level)); ++l) {
+                stats_per_level[l].nodes++;
+                stats_per_level[l].edges += neighbors_(node, l).size();
+                stats_per_level[l].allocated_bytes += pre_.neighbors_bytes;
+            }
+        }
+
+        // The `max_edges` parameter can be inferred from `nodes`
+        stats_per_level[0].max_edges = stats_per_level[0].nodes * config_.connectivity_base;
+        for (std::size_t l = 1; l <= max_level; ++l)
+            stats_per_level[l].max_edges = stats_per_level[l].nodes * config_.connectivity;
+
+        // Aggregate stats across levels
+        stats_t result{};
+        for (std::size_t l = 0; l <= max_level; ++l)
+            result.nodes += stats_per_level[l].nodes,                         //
+                result.edges += stats_per_level[l].edges,                     //
+                result.allocated_bytes += stats_per_level[l].allocated_bytes, //
+                result.max_edges += stats_per_level[l].max_edges;             //
+
+        return result;
+    }
+
     /**
      *  @brief  A relatively accurate lower bound on the amount of memory consumed by the system.
      *          In practice it's error will be below 10%.
@@ -2630,11 +2664,11 @@ class index_gt {
             return io_result;
 
         serialization_result_t stream_result = stream(
-                [&](void* buffer, std::size_t length) {
+            [&](void* buffer, std::size_t length) {
                 io_result = file.write(buffer, length);
                 return !!io_result;
-                },
-                std::forward<progress_at>(progress));
+            },
+            std::forward<progress_at>(progress));
 
         if (!stream_result)
             return stream_result;

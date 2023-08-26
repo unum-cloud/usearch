@@ -1049,11 +1049,26 @@ class Index:
         return self._compiled.max_level + 1
 
     @property
-    def levels_stats(self) -> _CompiledIndexStats:
+    def stats(self) -> _CompiledIndexStats:
         """Get the accumulated statistics for the entire multi-level graph.
 
         :return: Statistics for the entire multi-level graph.
         :rtype: _CompiledIndexStats
+
+        Statistics:
+            - ``nodes`` (int): The number of nodes in that level.
+            - ``edges`` (int): The number of edges in that level.
+            - ``max_edges`` (int): The maximum possible number of edges in that level.
+            - ``allocated_bytes`` (int): The amount of allocated memory for that level.
+        """
+        return self._compiled.stats
+
+    @property
+    def levels_stats(self) -> List[_CompiledIndexStats]:
+        """Get the accumulated statistics for every level graph.
+
+        :return: Statistics for every level graph.
+        :rtype: List[_CompiledIndexStats]
 
         Statistics:
             - ``nodes`` (int): The number of nodes in that level.

@@ -501,6 +501,9 @@ class index_dense_gt {
 
     stats_t stats() const { return typed_->stats(); }
     stats_t stats(std::size_t level) const { return typed_->stats(level); }
+    stats_t stats(stats_t* stats_per_level, std::size_t max_level) const {
+        return typed_->stats(stats_per_level, max_level);
+    }
 
     dynamic_allocator_t const& allocator() const { return typed_->dynamic_allocator(); }
     key_t const& free_key() const { return free_key_; }
@@ -717,22 +720,28 @@ class index_dense_gt {
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
     serialization_result_t save(output_file_t file, serialization_config_t config = {}) const {
-        serialization_result_t result = file.open_if_not();
-        if (result)
-            stream(
-                [&](void* buffer, std::size_t length) {
-                    result = file.write(buffer, length);
-                    return !!result;
-                },
-                config);
-        return result;
+
+        serialization_result_t io_result = file.open_if_not();
+        if (!io_result)
+            return io_result;
+
+        serialization_result_t stream_result = stream(
+            [&](void* buffer, std::size_t length) {
+                io_result = file.write(buffer, length);
+                return !!io_result;
+            },
+            config);
+
+        if (!stream_result)
+            return stream_result;
+        return io_result;
     }
 
     /**
      *  @brief  Saves serialized binary index representation to a stream.
      */
     template <typename output_callback_at, typename progress_at = dummy_progress_t>
-    serialization_result_t stream(output_callback_at&& callback, serialization_config_t config = {}) const {
+    serialization_result_t stream(output_callback_at&& output, serialization_config_t config = {}) const {
 
         serialization_result_t result;
         std::uint64_t matrix_rows = 0;
@@ -745,7 +754,7 @@ class index_dense_gt {
                 std::uint32_t dimensions[2];
                 dimensions[0] = static_cast<std::uint32_t>(typed_->size());
                 dimensions[1] = static_cast<std::uint32_t>(metric_.bytes_per_vector());
-                if (!callback(&dimensions, sizeof(dimensions)))
+                if (!output(&dimensions, sizeof(dimensions)))
                     return result.failed("Failed to serialize into stream");
                 matrix_rows = dimensions[0];
                 matrix_cols = dimensions[1];
@@ -753,7 +762,7 @@ class index_dense_gt {
                 std::uint64_t dimensions[2];
                 dimensions[0] = static_cast<std::uint64_t>(typed_->size());
                 dimensions[1] = static_cast<std::uint64_t>(metric_.bytes_per_vector());
-                if (!callback(&dimensions, sizeof(dimensions)))
+                if (!output(&dimensions, sizeof(dimensions)))
                     return result.failed("Failed to serialize into stream");
                 matrix_rows = dimensions[0];
                 matrix_cols = dimensions[1];
@@ -762,7 +771,7 @@ class index_dense_gt {
             // Dump the vectors one after another
             for (std::uint64_t i = 0; i != matrix_rows; ++i) {
                 byte_t* vector = vectors_lookup_[i];
-                if (!callback(vector, matrix_cols))
+                if (!output(vector, matrix_cols))
                     return result.failed("Failed to serialize into stream");
             }
         }
@@ -791,12 +800,12 @@ class index_dense_gt {
             head.dimensions = dimensions();
             head.multi = multi();
 
-            if (!callback(&buffer, sizeof(buffer)))
+            if (!output(&buffer, sizeof(buffer)))
                 return result.failed("Failed to serialize into stream");
         }
 
         // Save the actual proximity graph
-        return typed_->stream(std::forward<output_callback_at>(callback));
+        return typed_->stream(std::forward<output_callback_at>(output));
     }
 
     /**

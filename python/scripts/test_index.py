@@ -126,8 +126,11 @@ def test_index_stats(batch_size):
     index.add(keys, vectors, threads=threads)
 
     assert index.max_level >= 0
-    assert index.levels_stats.nodes >= batch_size
+    assert index.stats.nodes >= batch_size
+    assert index.levels_stats[0].nodes == batch_size
     assert index.level_stats(0).nodes == batch_size
+
+    assert index.levels_stats[index.max_level].nodes > 0
 
 
 @pytest.mark.parametrize("ndim", [1, 3, 8, 32, 256, 4096])
