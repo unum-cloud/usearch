@@ -1,7 +1,7 @@
-
-
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
+
+namespace Cloud.Unum.USearch;
 
 public enum MetricKind : uint
 {
@@ -44,22 +44,21 @@ public struct IndexOptions
     public ulong expansion_search;
 
     public IndexOptions(
-        MetricKind metric_kind = MetricKind.Unknown,
+        MetricKind metricKind = MetricKind.Unknown,
         IntPtr metric = default,
         ScalarKind quantization = ScalarKind.Unknown,
         ulong dimensions = 0,
         ulong connectivity = 0,
-        ulong expansion_add = 0,
-        ulong expansion_search = 0
+        ulong expansionAdd = 0,
+        ulong expansionSearch = 0
     )
     {
-        this.metric_kind = metric_kind;
+        this.metric_kind = metricKind;
         this.metric = metric;
         this.quantization = quantization;
         this.dimensions = dimensions;
         this.connectivity = connectivity;
-        this.expansion_add = expansion_add;
-        this.expansion_search = expansion_search;
+        this.expansion_add = expansionAdd;
+        this.expansion_search = expansionSearch;
     }
 }
-

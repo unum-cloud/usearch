@@ -1,11 +1,12 @@
 ﻿using System.Runtime.InteropServices;
-
-using usearch_index_t = System.IntPtr;
-using usearch_key_t = System.UInt64;
+using size_t = System.UIntPtr;
 using usearch_distance_t = System.Single;
 using usearch_error_t = System.IntPtr;
-using size_t = System.UIntPtr;
+using usearch_index_t = System.IntPtr;
+using usearch_key_t = System.UInt64;
 using void_ptr_t = System.IntPtr;
+
+namespace Cloud.Unum.USearch;
 
 internal static class NativeMethods
 {
@@ -95,7 +96,6 @@ internal static class NativeMethods
         [Out] usearch_distance_t[] found_distances,
         out usearch_error_t error
     );
-
 
     [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
