@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project>
+
+  <PropertyGroup>
+    <LangVersion>10</LangVersion>
+  </PropertyGroup>
+
   <PropertyGroup>
     <Configuration Condition="'$(Configuration)'==''">Debug</Configuration>
     <Platform Condition="'$(Platform)'==''">AnyCPU</Platform>

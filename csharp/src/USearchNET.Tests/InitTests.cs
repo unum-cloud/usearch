@@ -1,8 +1,8 @@
-namespace USearchNET.Tests;
+namespace Cloud.Unum.USearch.Tests;
 
 public class InitTests
 {
-    // Epsilon for real values comparison
+    // Epsilon for real values comparisons
     private const float Epsilon = 0.000001f;
 
     [Fact]
@@ -71,15 +71,7 @@ public class InitTests
 
             int foundVectorsCount = index.Get(2, 2, out double[,] retrievedVectors);
             Assert.Equal(2, foundVectorsCount);
-            for (int i = 0; i < foundVectorsCount; i++)
-            {
-                for (int j = 0; j < 3; j++)
-                {
-                    Console.Write(retrievedVectors[i, j]);
-                    Console.Write(" ");
-                }
-                Console.WriteLine();
-            }
+
         }
     }
 

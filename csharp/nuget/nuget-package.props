@@ -25,7 +25,7 @@
     <None Include="$(CSharpDir)nuget\NUGET.md" Pack="true" PackagePath=""/>
   </ItemGroup>
 
-    <!-- Package validation https://learn.microsoft.com/en-us/dotnet/fundamentals/package-validation/overview?WT.mc_id=DT-MVP-5003978 -->
+  <!-- Package validation https://learn.microsoft.com/en-us/dotnet/fundamentals/package-validation/overview?WT.mc_id=DT-MVP-5003978 -->
   <PropertyGroup Condition="'$(IsPackable)' == 'true'">
     <EnablePackageValidation Condition="'$(EnablePackageValidation)' == ''">true</EnablePackageValidation>
   </PropertyGroup>
