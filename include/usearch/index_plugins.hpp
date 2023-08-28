@@ -55,6 +55,7 @@ struct uuid_t {
 };
 
 class f16_bits_t;
+class i8_converted_t;
 
 #if USEARCH_USE_NATIVE_F16
 #if defined(USEARCH_DEFINED_ARM)
@@ -363,7 +364,7 @@ class f16_bits_t {
     inline operator float() const noexcept { return f16_to_f32(uint16_); }
     inline explicit operator bool() const noexcept { return f16_to_f32(uint16_) > 0.5f; }
 
-    inline f16_bits_t(i8_t) noexcept;
+    inline f16_bits_t(i8_converted_t) noexcept;
     inline f16_bits_t(bool v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(float v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(double v) noexcept : uint16_(f32_to_f16(v)) {}
@@ -977,6 +978,8 @@ class i8_converted_t {
     inline i8_converted_t(double v)
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
 };
+
+f16_bits_t::f16_bits_t(i8_converted_t v) noexcept : uint16_(f32_to_f16(v)) {}
 
 template <> struct cast_gt<i8_t, f16_t> : public cast_gt<i8_converted_t, f16_t> {};
 template <> struct cast_gt<i8_t, f32_t> : public cast_gt<i8_converted_t, f32_t> {};
