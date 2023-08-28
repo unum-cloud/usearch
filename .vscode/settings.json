@@ -167,5 +167,4 @@
         "editor.defaultFormatter": "golang.go"
     },
     "dotnet.defaultSolution": "csharp/Cloud.Unum.USearch.sln",
-    "editor.formatOnType": true,
 }
