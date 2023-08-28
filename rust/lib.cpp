@@ -9,14 +9,13 @@ using add_result_t = typename index_t::add_result_t;
 using search_result_t = typename index_t::search_result_t;
 using labeling_result_t = typename index_t::labeling_result_t;
 
-template <typename scalar_at>
-Matches search_(index_dense_t& index, rust::Slice<scalar_at const> const& vec, size_t count) {
+template <typename scalar_at> Matches search_(index_dense_t& index, scalar_at const* vec, size_t count) {
     Matches matches;
     matches.keys.reserve(count);
     matches.distances.reserve(count);
     for (size_t i = 0; i != count; ++i)
         matches.keys.push_back(0), matches.distances.push_back(0);
-    search_result_t result = index.search(vec.data(), count);
+    search_result_t result = index.search(vec, count);
     result.error.raise();
     count = result.dump_to(matches.keys.data(), matches.distances.data());
     matches.keys.truncate(count);
@@ -26,15 +25,19 @@ Matches search_(index_dense_t& index, rust::Slice<scalar_at const> const& vec, s
 
 Index::Index(std::unique_ptr<index_t> index) : index_(std::move(index)) {}
 
+// clang-format off
 void Index::add(key_t key, rust::Slice<float const> vec) const { index_->add(key, vec.data()).error.raise(); }
 void Index::add_i8(key_t key, rust::Slice<int8_t const> vec) const { index_->add(key, vec.data()).error.raise(); }
+void Index::add_f16(key_t key, rust::Slice<uint16_t const> vec) const { index_->add(key, (f16_t const*)vec.data()).error.raise(); }
 void Index::add_f32(key_t key, rust::Slice<float const> vec) const { index_->add(key, vec.data()).error.raise(); }
 void Index::add_f64(key_t key, rust::Slice<double const> vec) const { index_->add(key, vec.data()).error.raise(); }
 
-Matches Index::search(rust::Slice<float const> vec, size_t count) const { return search_(*index_, vec, count); }
-Matches Index::search_i8(rust::Slice<int8_t const> vec, size_t count) const { return search_(*index_, vec, count); }
-Matches Index::search_f32(rust::Slice<float const> vec, size_t count) const { return search_(*index_, vec, count); }
-Matches Index::search_f64(rust::Slice<double const> vec, size_t count) const { return search_(*index_, vec, count); }
+Matches Index::search(rust::Slice<float const> vec, size_t count) const { return search_(*index_, vec.data(), count); }
+Matches Index::search_i8(rust::Slice<int8_t const> vec, size_t count) const { return search_(*index_, vec.data(), count); }
+Matches Index::search_f16(rust::Slice<uint16_t const> vec, size_t count) const { return search_(*index_, (f16_t const*)vec.data(), count); }
+Matches Index::search_f32(rust::Slice<float const> vec, size_t count) const { return search_(*index_, vec.data(), count); }
+Matches Index::search_f64(rust::Slice<double const> vec, size_t count) const { return search_(*index_, vec.data(), count); }
+// clang-format on
 
 bool Index::remove(key_t key) const {
     labeling_result_t result = index_->remove(key);

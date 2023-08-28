@@ -84,6 +84,7 @@ pub mod ffi {
         pub fn add(self: &Index, key: u64, vector: &[f32]) -> Result<()>;
 
         pub fn add_i8(self: &Index, key: u64, vector: &[i8]) -> Result<()>;
+        pub fn add_f16(self: &Index, key: u64, vector: &[u16]) -> Result<()>;
         pub fn add_f32(self: &Index, key: u64, vector: &[f32]) -> Result<()>;
         pub fn add_f64(self: &Index, key: u64, vector: &[f64]) -> Result<()>;
 
@@ -100,6 +101,7 @@ pub mod ffi {
         pub fn search(self: &Index, query: &[f32], count: usize) -> Result<Matches>;
 
         pub fn search_i8(self: &Index, query: &[i8], count: usize) -> Result<Matches>;
+        pub fn search_f16(self: &Index, query: &[u16], count: usize) -> Result<Matches>;
         pub fn search_f32(self: &Index, query: &[f32], count: usize) -> Result<Matches>;
         pub fn search_f64(self: &Index, query: &[f64], count: usize) -> Result<Matches>;
 
