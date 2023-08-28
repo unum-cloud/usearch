@@ -5,9 +5,9 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{3A93FBE3-99F5-4179-88AB-E8A887C4E85C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "USearchNET", "src\USearchNET\USearchNET.csproj", "{8828F7DE-3AB9-4CAE-BFFA-3EA9355BD976}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cloud.Unum.USearch", "src\Cloud.Unum.USearch\Cloud.Unum.USearch.csproj", "{8828F7DE-3AB9-4CAE-BFFA-3EA9355BD976}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "USearchNET.Tests", "src\USearchNET.Tests\USearchNET.Tests.csproj", "{F7F5E1D6-25DD-4FE8-ABE9-B05E7449B2A9}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cloud.Unum.USearch.Tests", "src\Cloud.Unum.USearch.Tests\Cloud.Unum.USearch.Tests.csproj", "{F7F5E1D6-25DD-4FE8-ABE9-B05E7449B2A9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -1,3 +1,5 @@
+using Cloud.Unum.USearch;
+
 namespace Cloud.Unum.USearch.Tests;
 
 public class InitTests

@@ -42,7 +42,7 @@ To pack specify `PACKAGE_VERSION` and run:
 
 To publish, set `PACKAGE_VERSION`, `NUGET_APIKEY`, and `NUGET_SERVER`, then run:
 
-    dotnet nuget push "./packages/USearch.NET.${PACKAGE_VERSION}.nupkg" -k ${NUGET_APIKEY} -s ${NUGET_SERVER}
+    dotnet nuget push "./packages/Cloud.Unum.USearch.${PACKAGE_VERSION}.nupkg" -k ${NUGET_APIKEY} -s ${NUGET_SERVER}
 
 ## Using script
 

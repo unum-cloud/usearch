@@ -6,7 +6,7 @@
     <Authors>Unum</Authors>
     <Company>Unum</Company>
     <PackageTags>USearch Vector Search Disk-based Multi-Modal Semantic-Search Molecular-Search</PackageTags>
-    <PackageId>USearch.NET</PackageId>
+    <PackageId>Cloud.Unum.USearch</PackageId>
 
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageProjectUrl>https://github.com/unum-cloud/usearch</PackageProjectUrl>

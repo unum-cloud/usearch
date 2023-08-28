@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\USearchNET\USearchNET.csproj" />
+    <ProjectReference Include="..\Cloud.Unum.USearch\Cloud.Unum.USearch.csproj" />
   </ItemGroup>
 
   <Target Name="PlaceNativeLibrary" AfterTargets="Build">

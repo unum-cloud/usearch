@@ -3,14 +3,14 @@
 ## Installation
 
 ```sh
-dotnet add package USearch.NET -s https://apiint.nugettest.org/v3/index.json
+dotnet add package Cloud.Unum.USearch -s https://apiint.nugettest.org/v3/index.json
 ```
 
 ## Quickstart
 
 ```C#
 using System.Diagnostics;
-using USearchNET;
+using Cloud.Unum.USearch;
 
 using var index = new USearchIndex(
     metricKind: MetricKind.Cos, //Choose cosine metric

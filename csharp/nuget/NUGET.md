@@ -1,4 +1,4 @@
-**USearch.NET** is a wrapper for the USearch vector search engine, offering fast searches, multiple metrics, and features like SIMD-optimized metrics.
+**Cloud.Unum.USearch** is a wrapper for the USearch vector search engine, offering fast searches, multiple metrics, and features like SIMD-optimized metrics.
 
 **Supported metrics**: Euclidean, Angular, Jaccard, Hamming, Haversine, User-Defined Metrics
 
