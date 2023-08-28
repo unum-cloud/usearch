@@ -47,12 +47,23 @@ size_t Index::dimensions() const { return index_->dimensions(); }
 size_t Index::connectivity() const { return index_->connectivity(); }
 size_t Index::size() const { return index_->size(); }
 size_t Index::capacity() const { return index_->capacity(); }
+size_t Index::serialized_length() const { return index_->serialized_length(); }
 
-void Index::save(rust::Str path) const { index_->save(std::string(path).c_str()); }
-void Index::load(rust::Str path) const { index_->load(std::string(path).c_str()); }
-void Index::view(rust::Str path) const { index_->view(std::string(path).c_str()); }
+void Index::save(rust::Str path) const { index_->save(output_file_t(std::string(path).c_str())).error.raise(); }
+void Index::load(rust::Str path) const { index_->load(input_file_t(std::string(path).c_str())).error.raise(); }
+void Index::view(rust::Str path) const { index_->view(memory_mapped_file_t(std::string(path).c_str())).error.raise(); }
 
-scalar_kind_t quantization(rust::Str quant) { return scalar_kind_from_name(quant.data(), quant.size()); }
+void Index::save_to_buffer(rust::Slice<uint8_t> buffer) const {
+    index_->save(memory_mapped_file_t((byte_t*)buffer.data(), buffer.size())).error.raise();
+}
+
+void Index::load_from_buffer(rust::Slice<uint8_t const> buffer) const {
+    index_->load(memory_mapped_file_t((byte_t*)buffer.data(), buffer.size())).error.raise();
+}
+
+void Index::view_from_buffer(rust::Slice<uint8_t const> buffer) const {
+    index_->view(memory_mapped_file_t((byte_t*)buffer.data(), buffer.size())).error.raise();
+}
 
 std::unique_ptr<Index> wrap(index_t&& index) {
     std::unique_ptr<index_t> punned_ptr;
