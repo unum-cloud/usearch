@@ -272,7 +272,7 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
 
   build_csharp:
-    name: Build USearch libraries
+    name: Build NuGet
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -314,7 +314,7 @@ jobs:
   publish_csharp:
     name: Publish C#
     runs-on: ubuntu-latest
-    needs: [build_usearch_libs]
+    needs: [build_csharp]
     env:
       USEARCH_LIBS: ${{ github.workspace }}/csharp/lib
       NUGET_DIR: ${{ github.workspace }}/csharp/packages
@@ -350,7 +350,7 @@ jobs:
     name: Build Docs
     runs-on: ubuntu-22.04
     if: ${{ always() }}
-    needs: [publish_python, publish_javascript, publish_rust, publish_java, publish_swift, publish_docker]
+    needs: [publish_python, publish_javascript, publish_rust, publish_java, publish_swift, publish_docker, publish_csharp]
     permissions:
       contents: write
     steps:
