@@ -857,7 +857,7 @@ class growing_hash_set_gt {
     std::size_t size() const noexcept { return count_; }
 
     void clear() noexcept {
-        std::memset(slots_, 0xFF, capacity_ * sizeof(element_t));
+        std::memset((void*)slots_, 0xFF, capacity_ * sizeof(element_t));
         count_ = 0;
     }
 
@@ -930,7 +930,7 @@ class growing_hash_set_gt {
         if (!new_slots)
             return false;
 
-        std::memset(new_slots, 0xFF, new_capacity * sizeof(element_t));
+        std::memset((void*)new_slots, 0xFF, new_capacity * sizeof(element_t));
         std::size_t new_count = count_;
         if (count_) {
             for (std::size_t old_index = 0; old_index != capacity_; ++old_index) {
