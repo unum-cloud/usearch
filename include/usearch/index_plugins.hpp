@@ -54,8 +54,8 @@ struct uuid_t {
     std::uint8_t octets[16];
 };
 
-class i8_bits_t;
 class f16_bits_t;
+class i8_converted_t;
 
 #if USEARCH_USE_NATIVE_F16
 #if defined(USEARCH_DEFINED_ARM)
@@ -149,7 +149,7 @@ template <typename scalar_at> scalar_kind_t scalar_kind() noexcept {
         return scalar_kind_t::f32_k;
     if (std::is_same<scalar_at, f16_t>())
         return scalar_kind_t::f16_k;
-    if (std::is_same<scalar_at, i8_bits_t>())
+    if (std::is_same<scalar_at, i8_t>())
         return scalar_kind_t::i8_k;
     if (std::is_same<scalar_at, u64_t>())
         return scalar_kind_t::u64_k;
@@ -364,7 +364,7 @@ class f16_bits_t {
     inline operator float() const noexcept { return f16_to_f32(uint16_); }
     inline explicit operator bool() const noexcept { return f16_to_f32(uint16_) > 0.5f; }
 
-    inline f16_bits_t(i8_bits_t) noexcept;
+    inline f16_bits_t(i8_converted_t) noexcept;
     inline f16_bits_t(bool v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(float v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(double v) noexcept : uint16_(f32_to_f16(v)) {}
@@ -402,45 +402,6 @@ class f16_bits_t {
         return *this;
     }
 };
-
-/**
- *  @brief  Numeric type for uniformly-distributed floating point
- *          values within [-1,1] range, quantized to integers [-100,100].
- */
-class i8_bits_t {
-    std::int8_t int8_{};
-
-  public:
-    constexpr static float divisor_k = 100.f;
-    constexpr static std::int8_t min_k = -100;
-    constexpr static std::int8_t max_k = 100;
-
-    inline i8_bits_t() noexcept : int8_(0) {}
-    inline i8_bits_t(bool v) noexcept : int8_(v ? max_k : 0) {}
-
-    inline i8_bits_t(i8_bits_t&&) = default;
-    inline i8_bits_t& operator=(i8_bits_t&&) = default;
-    inline i8_bits_t(i8_bits_t const&) = default;
-    inline i8_bits_t& operator=(i8_bits_t const&) = default;
-
-    inline operator float() const noexcept { return float(int8_) / divisor_k; }
-    inline operator f16_t() const noexcept { return float(int8_) / divisor_k; }
-    inline operator double() const noexcept { return double(int8_) / divisor_k; }
-    inline explicit operator bool() const noexcept { return int8_ > (max_k / 2); }
-    inline explicit operator std::int8_t() const noexcept { return int8_; }
-    inline explicit operator std::int16_t() const noexcept { return int8_; }
-    inline explicit operator std::int32_t() const noexcept { return int8_; }
-    inline explicit operator std::int64_t() const noexcept { return int8_; }
-
-    inline i8_bits_t(f16_t v)
-        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
-    inline i8_bits_t(float v)
-        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
-    inline i8_bits_t(double v)
-        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
-};
-
-inline f16_bits_t::f16_bits_t(i8_bits_t v) noexcept : f16_bits_t(float(v)) {}
 
 /**
  *  @brief  An STL-based executor or a "thread-pool" for parallel execution.
@@ -953,7 +914,7 @@ template <> struct cast_gt<f16_bits_t, f16_bits_t> {
     bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
 };
 
-template <> struct cast_gt<i8_bits_t, i8_bits_t> {
+template <> struct cast_gt<i8_t, i8_t> {
     bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
 };
 
@@ -980,6 +941,53 @@ template <typename to_scalar_at> struct cast_gt<b1x8_t, to_scalar_at> {
         return true;
     }
 };
+
+/**
+ *  @brief  Numeric type for uniformly-distributed floating point
+ *          values within [-1,1] range, quantized to integers [-100,100].
+ */
+class i8_converted_t {
+    std::int8_t int8_{};
+
+  public:
+    constexpr static float divisor_k = 100.f;
+    constexpr static std::int8_t min_k = -100;
+    constexpr static std::int8_t max_k = 100;
+
+    inline i8_converted_t() noexcept : int8_(0) {}
+    inline i8_converted_t(bool v) noexcept : int8_(v ? max_k : 0) {}
+
+    inline i8_converted_t(i8_converted_t&&) = default;
+    inline i8_converted_t& operator=(i8_converted_t&&) = default;
+    inline i8_converted_t(i8_converted_t const&) = default;
+    inline i8_converted_t& operator=(i8_converted_t const&) = default;
+
+    inline operator float() const noexcept { return float(int8_) / divisor_k; }
+    inline operator f16_t() const noexcept { return float(int8_) / divisor_k; }
+    inline operator double() const noexcept { return double(int8_) / divisor_k; }
+    inline explicit operator bool() const noexcept { return int8_ > (max_k / 2); }
+    inline explicit operator std::int8_t() const noexcept { return int8_; }
+    inline explicit operator std::int16_t() const noexcept { return int8_; }
+    inline explicit operator std::int32_t() const noexcept { return int8_; }
+    inline explicit operator std::int64_t() const noexcept { return int8_; }
+
+    inline i8_converted_t(f16_t v)
+        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
+    inline i8_converted_t(float v)
+        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
+    inline i8_converted_t(double v)
+        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
+};
+
+f16_bits_t::f16_bits_t(i8_converted_t v) noexcept : uint16_(f32_to_f16(v)) {}
+
+template <> struct cast_gt<i8_t, f16_t> : public cast_gt<i8_converted_t, f16_t> {};
+template <> struct cast_gt<i8_t, f32_t> : public cast_gt<i8_converted_t, f32_t> {};
+template <> struct cast_gt<i8_t, f64_t> : public cast_gt<i8_converted_t, f64_t> {};
+
+template <> struct cast_gt<f16_t, i8_t> : public cast_gt<f16_t, i8_converted_t> {};
+template <> struct cast_gt<f32_t, i8_t> : public cast_gt<f32_t, i8_converted_t> {};
+template <> struct cast_gt<f64_t, i8_t> : public cast_gt<f64_t, i8_converted_t> {};
 
 /**
  *  @brief  Inner (Dot) Product distance.
@@ -1205,10 +1213,10 @@ template <typename scalar_at = float, typename result_at = float> struct metric_
 };
 
 struct cos_i8_t {
-    using scalar_t = i8_bits_t;
+    using scalar_t = i8_t;
     using result_t = f32_t;
 
-    inline result_t operator()(i8_bits_t const* a, i8_bits_t const* b, std::size_t dim) const noexcept {
+    inline result_t operator()(i8_t const* a, i8_t const* b, std::size_t dim) const noexcept {
         std::int32_t ab{}, a2{}, b2{};
 #if USEARCH_USE_OPENMP
 #pragma omp simd reduction(+ : ab, a2, b2)
@@ -1229,10 +1237,10 @@ struct cos_i8_t {
 };
 
 struct l2sq_i8_t {
-    using scalar_t = i8_bits_t;
+    using scalar_t = i8_t;
     using result_t = f32_t;
 
-    inline result_t operator()(i8_bits_t const* a, i8_bits_t const* b, std::size_t dim) const noexcept {
+    inline result_t operator()(i8_t const* a, i8_t const* b, std::size_t dim) const noexcept {
         std::int32_t ab_deltas_sq{};
 #if USEARCH_USE_OPENMP
 #pragma omp simd reduction(+ : ab_deltas_sq)
@@ -1431,7 +1439,6 @@ class metric_punned_t {
     static metric_punned_t haversine_metric_(scalar_kind_t scalar_kind) {
         std::size_t bytes_per_vector = 2u * bits_per_scalar(scalar_kind) / CHAR_BIT;
         switch (scalar_kind) {
-        case scalar_kind_t::i8_k: return {to_stl_<metric_haversine_gt<i8_bits_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::haversine_k, scalar_kind_t::i8_k, isa_kind_t::auto_k};
         case scalar_kind_t::f16_k: return {to_stl_<metric_haversine_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::haversine_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
         case scalar_kind_t::f32_k: return {to_stl_<metric_haversine_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::haversine_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
         case scalar_kind_t::f64_k: return {to_stl_<metric_haversine_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::haversine_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
@@ -1441,7 +1448,7 @@ class metric_punned_t {
 
     static metric_punned_t pearson_metric_(std::size_t bytes_per_vector, scalar_kind_t scalar_kind) {
         switch (scalar_kind) {
-        case scalar_kind_t::i8_k: return {to_stl_<metric_pearson_gt<i8_bits_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::i8_k, isa_kind_t::auto_k};
+        case scalar_kind_t::i8_k: return {to_stl_<metric_pearson_gt<i8_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::i8_k, isa_kind_t::auto_k};
         case scalar_kind_t::f16_k: return {to_stl_<metric_pearson_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
         case scalar_kind_t::f32_k: return {to_stl_<metric_pearson_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
         case scalar_kind_t::f64_k: return {to_stl_<metric_pearson_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};

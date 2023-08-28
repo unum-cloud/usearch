@@ -22,7 +22,16 @@ class Index {
     void reserve(size_t) const;
 
     void add(key_t key, rust::Slice<float const> vector) const;
+    void add_i8(key_t key, rust::Slice<int8_t const> vector) const;
+    void add_f16(key_t key, rust::Slice<uint16_t const> vector) const;
+    void add_f32(key_t key, rust::Slice<float const> vector) const;
+    void add_f64(key_t key, rust::Slice<double const> vector) const;
+
     Matches search(rust::Slice<float const> vector, size_t count) const;
+    Matches search_i8(rust::Slice<int8_t const> vector, size_t count) const;
+    Matches search_f16(rust::Slice<uint16_t const> vector, size_t count) const;
+    Matches search_f32(rust::Slice<float const> vector, size_t count) const;
+    Matches search_f64(rust::Slice<double const> vector, size_t count) const;
 
     bool remove(key_t key) const;
     bool contains(key_t key) const;

@@ -48,7 +48,7 @@ add_result_t add_(index_dense_t* index, usearch_key_t key, void const* vector, s
     case scalar_kind_t::f32_k: return index->add(key, (f32_t const*)vector);
     case scalar_kind_t::f64_k: return index->add(key, (f64_t const*)vector);
     case scalar_kind_t::f16_k: return index->add(key, (f16_t const*)vector);
-    case scalar_kind_t::i8_k: return index->add(key, (i8_bits_t const*)vector);
+    case scalar_kind_t::i8_k: return index->add(key, (i8_t const*)vector);
     case scalar_kind_t::b1x8_k: return index->add(key, (b1x8_t const*)vector);
     default: return add_result_t{}.failed("Unknown scalar kind!");
     }
@@ -59,7 +59,7 @@ std::size_t get_(index_dense_t* index, usearch_key_t key, size_t count, void* ve
     case scalar_kind_t::f32_k: return index->get(key, (f32_t*)vector, count);
     case scalar_kind_t::f64_k: return index->get(key, (f64_t*)vector, count);
     case scalar_kind_t::f16_k: return index->get(key, (f16_t*)vector, count);
-    case scalar_kind_t::i8_k: return index->get(key, (i8_bits_t*)vector, count);
+    case scalar_kind_t::i8_k: return index->get(key, (i8_t*)vector, count);
     case scalar_kind_t::b1x8_k: return index->get(key, (b1x8_t*)vector, count);
     default: return search_result_t().failed("Unknown scalar kind!");
     }
@@ -70,7 +70,7 @@ search_result_t search_(index_dense_t* index, void const* vector, scalar_kind_t 
     case scalar_kind_t::f32_k: return index->search((f32_t const*)vector, n);
     case scalar_kind_t::f64_k: return index->search((f64_t const*)vector, n);
     case scalar_kind_t::f16_k: return index->search((f16_t const*)vector, n);
-    case scalar_kind_t::i8_k: return index->search((i8_bits_t const*)vector, n);
+    case scalar_kind_t::i8_k: return index->search((i8_t const*)vector, n);
     case scalar_kind_t::b1x8_k: return index->search((b1x8_t const*)vector, n);
     default: return search_result_t().failed("Unknown scalar kind!");
     }
