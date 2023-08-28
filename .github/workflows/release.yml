@@ -294,7 +294,7 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           where cl
-          cl /EHsc /std:c++14 /O2 /LD /Fe:libusearch_c.dll lib.cpp /I. /I../include/ /I../fp16/include/ /I../robin-map/include/
+          cl /EHsc /std:c++14 /O2 /LD /Fe:libusearch_c.dll lib.cpp /I. /I../include/ /I../fp16/include/
         working-directory: ${{ github.workspace }}/c
         shell: cmd
 
