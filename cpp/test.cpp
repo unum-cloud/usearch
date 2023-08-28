@@ -118,7 +118,7 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     }
 
     // Search again over mapped index
-    // file_head_result_t head = index_dense_metadata("tmp.usearch");
+    // file_head_result_t head = index_dense_metadata_from_path("tmp.usearch");
     // expect(head.size == 3);
     index.view("tmp.usearch");
     matched_count = index.search(vector_first, 5, args...).dump_to(matched_keys, matched_distances);
@@ -140,7 +140,7 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
 
     // Check metadata
     if constexpr (punned_ak) {
-        index_dense_metadata_result_t meta = index_dense_metadata("tmp.usearch");
+        index_dense_metadata_result_t meta = index_dense_metadata_from_path("tmp.usearch");
         expect(bool(meta));
     }
 }

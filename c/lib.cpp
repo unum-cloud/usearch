@@ -54,7 +54,7 @@ add_result_t add_(index_dense_t* index, usearch_key_t key, void const* vector, s
     }
 }
 
-bool get_(index_dense_t* index, usearch_key_t key, size_t count, void* vector, scalar_kind_t kind) {
+std::size_t get_(index_dense_t* index, usearch_key_t key, size_t count, void* vector, scalar_kind_t kind) {
     switch (kind) {
     case scalar_kind_t::f32_k: return index->get(key, (f32_t*)vector, count);
     case scalar_kind_t::f64_k: return index->get(key, (f64_t*)vector, count);
@@ -103,6 +103,11 @@ USEARCH_EXPORT void usearch_free(usearch_index_t index, usearch_error_t*) {
     delete reinterpret_cast<index_dense_t*>(index);
 }
 
+USEARCH_EXPORT size_t usearch_serialized_length(usearch_index_t index, usearch_error_t*) {
+    assert(index);
+    return reinterpret_cast<index_dense_t*>(index)->serialized_length();
+}
+
 USEARCH_EXPORT void usearch_save(usearch_index_t index, char const* path, usearch_error_t* error) {
 
     assert(index && path && error);
@@ -123,6 +128,35 @@ USEARCH_EXPORT void usearch_view(usearch_index_t index, char const* path, usearc
 
     assert(index && path && error);
     serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->view(path);
+    if (!result)
+        *error = result.error.release();
+}
+
+USEARCH_EXPORT void usearch_save_buffer(usearch_index_t index, void* buffer, size_t length, usearch_error_t* error) {
+
+    assert(index && buffer && length && error);
+    memory_mapped_file_t memory_map((byte_t*)buffer, length);
+    serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->save(std::move(memory_map));
+    if (!result)
+        *error = result.error.release();
+}
+
+USEARCH_EXPORT void usearch_load_buffer(usearch_index_t index, void const* buffer, size_t length,
+                                        usearch_error_t* error) {
+
+    assert(index && buffer && length && error);
+    memory_mapped_file_t memory_map((byte_t*)buffer, length);
+    serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->load(std::move(memory_map));
+    if (!result)
+        *error = result.error.release();
+}
+
+USEARCH_EXPORT void usearch_view_buffer(usearch_index_t index, void const* buffer, size_t length,
+                                        usearch_error_t* error) {
+
+    assert(index && buffer && length && error);
+    memory_mapped_file_t memory_map((byte_t*)buffer, length);
+    serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->view(std::move(memory_map));
     if (!result)
         *error = result.error.release();
 }

@@ -21,14 +21,21 @@ from typing import (
 import numpy as np
 from tqdm import tqdm
 
-from usearch.compiled import Index as _CompiledIndex
-from usearch.compiled import Indexes as _CompiledIndexes
-from usearch.compiled import IndexStats as _CompiledIndexStats
-
-from usearch.compiled import index_dense_metadata as _index_dense_metadata
-from usearch.compiled import exact_search as _exact_search
-from usearch.compiled import MetricKind, ScalarKind, MetricSignature
+# Precompiled symbols that won't be exposed directly:
 from usearch.compiled import (
+    Index as _CompiledIndex,
+    Indexes as _CompiledIndexes,
+    IndexStats as _CompiledIndexStats,
+    index_dense_metadata_from_path as _index_dense_metadata_from_path,
+    index_dense_metadata_from_buffer as _index_dense_metadata_from_buffer,
+    exact_search as _exact_search,
+)
+
+# Precompiled symbols that will be exposed
+from usearch.compiled import (
+    MetricKind,
+    ScalarKind,
+    MetricSignature,
     DEFAULT_CONNECTIVITY,
     DEFAULT_EXPANSION_ADD,
     DEFAULT_EXPANSION_SEARCH,
@@ -59,6 +66,10 @@ VectorOrVectorsLike = Union[np.ndarray, Iterable[np.ndarray], memoryview]
 DTypeLike = Union[str, ScalarKind]
 
 MetricLike = Union[str, MetricKind, CompiledMetric]
+
+NoneType = type(None)
+
+PathOrBuffer = Union[str, os.PathLike, bytes]
 
 
 def _normalize_dtype(dtype, metric: MetricKind = MetricKind.Cos) -> ScalarKind:
@@ -559,28 +570,37 @@ class Index:
                 self._compiled.load(path)
 
     @staticmethod
-    def metadata(path: os.PathLike) -> Optional[dict]:
-        path = os.fspath(path)
-        if not os.path.exists(path):
-            return None
+    def metadata(path_or_buffer: PathOrBuffer) -> Optional[dict]:
         try:
-            return _index_dense_metadata(path)
-        except Exception:
-            return None
+            if isinstance(path_or_buffer, bytearray):
+                path_or_buffer = bytes(path_or_buffer)
+            if isinstance(path_or_buffer, bytes):
+                return _index_dense_metadata_from_buffer(path_or_buffer)
+            else:
+                path_or_buffer = os.fspath(path_or_buffer)
+                if not os.path.exists(path_or_buffer):
+                    return None
+                return _index_dense_metadata_from_path(path_or_buffer)
+        except Exception as e:
+            raise e
 
     @staticmethod
-    def restore(path: os.PathLike, view: bool = False) -> Optional[Index]:
-        path = os.fspath(path)
-        meta = Index.metadata(path)
+    def restore(path_or_buffer: PathOrBuffer, view: bool = False) -> Optional[Index]:
+        meta = Index.metadata(path_or_buffer)
         if not meta:
             return None
-        return Index(
+
+        index = Index(
             ndim=meta["dimensions"],
             dtype=meta["kind_scalar"],
             metric=meta["kind_metric"],
-            path=path,
-            view=view,
         )
+
+        if view:
+            index.view(path_or_buffer)
+        else:
+            index.load(path_or_buffer)
+        return index
 
     def __len__(self) -> int:
         return self._compiled.__len__()
@@ -838,6 +858,10 @@ class Index:
         return self._compiled.ndim
 
     @property
+    def serialized_length(self) -> int:
+        return self._compiled.serialized_length
+
+    @property
     def metric(self) -> Union[MetricKind, CompiledMetric]:
         return self._metric_jit if self._metric_jit else self._metric_kind
 
@@ -895,23 +919,34 @@ class Index:
     def expansion_search(self, v: int):
         self._compiled.expansion_search = v
 
-    def save(self, path: Optional[os.PathLike] = None):
-        path = path if path else self.path
-        if path is None:
-            raise Exception("Define `path` argument")
-        self._compiled.save(os.fspath(path))
+    def save(self, path_or_buffer: Union[str, os.PathLike, NoneType] = None) -> Optional[bytes]:
+        path_or_buffer = path_or_buffer if path_or_buffer else self.path
+        if path_or_buffer is None:
+            return self._compiled.save_index_to_buffer()
+        else:
+            self._compiled.save_index_to_path(os.fspath(path_or_buffer))
 
-    def load(self, path: Optional[os.PathLike] = None):
-        path = path if path else self.path
-        if path is None:
-            raise Exception("Define `path` argument")
-        self._compiled.load(os.fspath(path))
+    def load(self, path_or_buffer: Union[str, os.PathLike, bytes, NoneType] = None):
+        path_or_buffer = path_or_buffer if path_or_buffer else self.path
+        if path_or_buffer is None:
+            raise Exception("Define the source")
+        if isinstance(path_or_buffer, bytearray):
+            path_or_buffer = bytes(path_or_buffer)
+        if isinstance(path_or_buffer, bytes):
+            self._compiled.load_index_from_buffer(path_or_buffer)
+        else:
+            self._compiled.load_index_from_path(os.fspath(path_or_buffer))
 
-    def view(self, path: Optional[os.PathLike] = None):
-        path = path if path else self.path
-        if path is None:
-            raise Exception("Define `path` argument")
-        self._compiled.view(os.fspath(path))
+    def view(self, path_or_buffer: Union[str, os.PathLike, bytes, bytearray, NoneType] = None):
+        path_or_buffer = path_or_buffer if path_or_buffer else self.path
+        if path_or_buffer is None:
+            raise Exception("Define the source")
+        if isinstance(path_or_buffer, bytearray):
+            path_or_buffer = bytes(path_or_buffer)
+        if isinstance(path_or_buffer, bytes):
+            self._compiled.view_index_from_buffer(path_or_buffer)
+        else:
+            self._compiled.view_index_from_path(os.fspath(path_or_buffer))
 
     def clear(self):
         """Erases all the vectors from the index, preserving the space for future insertions."""
@@ -1049,11 +1084,26 @@ class Index:
         return self._compiled.max_level + 1
 
     @property
-    def levels_stats(self) -> _CompiledIndexStats:
+    def stats(self) -> _CompiledIndexStats:
         """Get the accumulated statistics for the entire multi-level graph.
 
         :return: Statistics for the entire multi-level graph.
         :rtype: _CompiledIndexStats
+
+        Statistics:
+            - ``nodes`` (int): The number of nodes in that level.
+            - ``edges`` (int): The number of edges in that level.
+            - ``max_edges`` (int): The maximum possible number of edges in that level.
+            - ``allocated_bytes`` (int): The amount of allocated memory for that level.
+        """
+        return self._compiled.stats
+
+    @property
+    def levels_stats(self) -> List[_CompiledIndexStats]:
+        """Get the accumulated statistics for every level graph.
+
+        :return: Statistics for every level graph.
+        :rtype: List[_CompiledIndexStats]
 
         Statistics:
             - ``nodes`` (int): The number of nodes in that level.
