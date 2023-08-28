@@ -32,10 +32,15 @@ class Index {
     size_t connectivity() const;
     size_t size() const;
     size_t capacity() const;
+    size_t serialized_length() const;
 
     void save(rust::Str path) const;
     void load(rust::Str path) const;
     void view(rust::Str path) const;
+
+    void save_to_buffer(rust::Slice<uint8_t> buffer) const;
+    void load_from_buffer(rust::Slice<uint8_t const> buffer) const;
+    void view_from_buffer(rust::Slice<uint8_t const> buffer) const;
 
   private:
     std::unique_ptr<index_dense_t> index_;
