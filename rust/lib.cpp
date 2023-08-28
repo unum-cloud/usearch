@@ -11,34 +11,16 @@ using labeling_result_t = typename index_t::labeling_result_t;
 
 Index::Index(std::unique_ptr<index_t> index) : index_(std::move(index)) {}
 
-void Index::add_in_thread(key_t key, rust::Slice<float const> vector, size_t thread) const {
-    index_update_config_t config;
-    config.thread = thread;
-    config.expansion = index_->expansion_add();
-    index_->add(key, vector.data(), config).error.raise();
-}
-
-Matches Index::search_in_thread(rust::Slice<float const> vector, size_t count, size_t thread) const {
-    Matches matches;
-    matches.keys.reserve(count);
-    matches.distances.reserve(count);
-    for (size_t i = 0; i != count; ++i)
-        matches.keys.push_back(0), matches.distances.push_back(0);
-    index_search_config_t config;
-    config.thread = thread;
-    config.expansion = index_->expansion_search();
-    search_result_t result = index_->search(vector.data(), count, config);
-    result.error.raise();
-    count = result.dump_to(matches.keys.data(), matches.distances.data());
-    matches.keys.truncate(count);
-    matches.distances.truncate(count);
-    return matches;
-}
-
 void Index::add(key_t key, rust::Slice<float const> vector) const { index_->add(key, vector.data()).error.raise(); }
 
 bool Index::remove(key_t key) const {
     labeling_result_t result = index_->remove(key);
+    result.error.raise();
+    return result.completed;
+}
+
+bool Index::rename(key_t from, key_t to) const {
+    labeling_result_t result = index_->rename(from, to);
     result.error.raise();
     return result.completed;
 }
@@ -65,12 +47,23 @@ size_t Index::dimensions() const { return index_->dimensions(); }
 size_t Index::connectivity() const { return index_->connectivity(); }
 size_t Index::size() const { return index_->size(); }
 size_t Index::capacity() const { return index_->capacity(); }
+size_t Index::serialized_length() const { return index_->serialized_length(); }
 
-void Index::save(rust::Str path) const { index_->save(std::string(path).c_str()); }
-void Index::load(rust::Str path) const { index_->load(std::string(path).c_str()); }
-void Index::view(rust::Str path) const { index_->view(std::string(path).c_str()); }
+void Index::save(rust::Str path) const { index_->save(output_file_t(std::string(path).c_str())).error.raise(); }
+void Index::load(rust::Str path) const { index_->load(input_file_t(std::string(path).c_str())).error.raise(); }
+void Index::view(rust::Str path) const { index_->view(memory_mapped_file_t(std::string(path).c_str())).error.raise(); }
 
-scalar_kind_t quantization(rust::Str quant) { return scalar_kind_from_name(quant.data(), quant.size()); }
+void Index::save_to_buffer(rust::Slice<uint8_t> buffer) const {
+    index_->save(memory_mapped_file_t((byte_t*)buffer.data(), buffer.size())).error.raise();
+}
+
+void Index::load_from_buffer(rust::Slice<uint8_t const> buffer) const {
+    index_->load(memory_mapped_file_t((byte_t*)buffer.data(), buffer.size())).error.raise();
+}
+
+void Index::view_from_buffer(rust::Slice<uint8_t const> buffer) const {
+    index_->view(memory_mapped_file_t((byte_t*)buffer.data(), buffer.size())).error.raise();
+}
 
 std::unique_ptr<Index> wrap(index_t&& index) {
     std::unique_ptr<index_t> punned_ptr;

@@ -111,13 +111,13 @@ jobs:
       - uses: actions/setup-python@v3
       
       - name: Setup Docker
-        if: matrix.os != 'windows-2022'
+        if: matrix.os == 'ubuntu-20.04'
         uses: crazy-max/ghaction-setup-docker@v1.0.0
         with:
           version: 23.0.1
 
       - name: Setup QEMU
-        if: matrix.os != 'windows-2022'
+        if: matrix.os == 'ubuntu-20.04'
         uses: docker/setup-qemu-action@v2.1.0
 
       - name: Install CIBuildWheel
@@ -270,44 +270,87 @@ jobs:
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-  
-  publish_wasm:
-    name: WASM Build
-    needs: versioning
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
 
+  build_usearch_libs:
+    name: Build USearch libraries
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
-    - uses: actions/checkout@v3
-      with:
-        ref: 'main'  
-    - run: git submodule update --init --recursive
-    
-    - name: Prepare WASM Environment
-      run: |
-        git clone https://github.com/emscripten-core/emsdk.git
-        ./emsdk/emsdk install latest
-    
-    - name: Build USearch WASM by Emscripten
-      run: |
-        ./emsdk/emsdk activate latest && source ./emsdk/emsdk_env.sh
-        emcmake cmake -DUSEARCH_BUILD_TEST=0 -DUSEARCH_BUILD_BENCHMARK=0 -DUSEARCH_BUILD_WASM=1 -B ./build && emmake make -C ./build
+      - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
 
-    - name: Trigger Wasmer.io CLI
-      run: |
-        curl https://get.wasmer.io -sSfL | sh
-        source ~/.wasmer/wasmer.sh
-        wasmer login "${{ secrets.WASMER_TOKEN }}"
-        wasmer publish
+      - name: Ubuntu/macOS build usearch shared obj
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+        run: ./build_lib.sh
+        working-directory: ${{ github.workspace }}/csharp/eng
 
+      - name: Windows MSVC build usearch dll
+        if: matrix.os == 'windows-latest'
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          where cl
+          cl /EHsc /std:c++14 /O2 /LD /Fe:libusearch_c.dll lib.cpp /I. /I../include/ /I../fp16/include/ /I../robin-map/include/
+        working-directory: ${{ github.workspace }}/c
+        shell: cmd
+
+      - name: Windows copy dll
+        if: matrix.os == 'windows-latest'
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
+          cp "${GITHUB_WORKSPACE}/c/libusearch_c.dll" "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
+        shell: bash
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: usearch-libs
+          path: ${{ github.workspace }}/csharp/lib/**/*
+
+  publish_csharp:
+    name: Publish C#
+    runs-on: ubuntu-latest
+    needs: [build_usearch_libs]
+    env:
+      USEARCH_LIBS: ${{ github.workspace }}/csharp/lib
+      NUGET_DIR: ${{ github.workspace }}/csharp/packages
+      # NUGET_SOURCE: https://apiint.nugettest.org/v3/index.json
+      NUGET_SOURCE: https://api.nuget.org/v3/index.json
+      SOLUTION_DIR: ${{ github.workspace }}/csharp
+    steps:
+      - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
+        
+      - name: Download usearch libs artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: usearch-libs
+          path: ${{ env.USEARCH_LIBS }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 7.0.x     
+
+      - name: Pack project
+        run: |
+          VERSION_CONTENT=$(< VERSION)
+          dotnet pack "${{ env.SOLUTION_DIR }}" -c Release -p:Version="$VERSION_CONTENT" --output ${{ env.NUGET_DIR }}
+        working-directory: ${{ github.workspace }}
+
+      - name: Publish NuGet packages
+        run: |
+          dotnet nuget push "${{  env.NUGET_DIR }}/*.nupkg" --api-key "${{ secrets.NUGET_APIKEY }}" --source "${{ env.NUGET_SOURCE }}"
 
   build_docs:
     name: Build Docs
     runs-on: ubuntu-22.04
     if: ${{ always() }}
-    needs: [publish_python, publish_javascript, publish_rust, publish_java, publish_swift, publish_docker, publish_wasm]
+    needs: [publish_python, publish_javascript, publish_rust, publish_java, publish_swift, publish_docker]
     permissions:
       contents: write
     steps:
@@ -319,7 +362,7 @@ jobs:
         run: |
               sudo apt update && 
               sudo apt install -y doxygen graphviz dia git && 
-              pip install sphinx sphinx-js breathe furo m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery && 
+              pip install sphinx==5.3.0 sphinx-js==3.2.1 breathe==4.35.0 furo==2023.3.27 m2r2==0.3.3.post2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery==4.1 && 
               npm install -g jsdoc
       - name: Install USearch from PyPi
         run: pip install usearch

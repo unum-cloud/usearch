@@ -51,8 +51,10 @@ target/
 .swiftpm
 
 # C# builds
-[Bb]in/
-[Oo]bj/
+csharp/**/[Bb]in/
+csharp/**/[Oo]bj/
+csharp/lib
+csharp/packages
 
 # Prerequisites
 *.d

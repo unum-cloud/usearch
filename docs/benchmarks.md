@@ -19,13 +19,13 @@ The default values vary drastically.
 Below are the performance numbers for a benchmark running on the 64 cores of AWS `c7g.metal` "Graviton 3"-based instances.
 The main columns are:
 
-- **Add**: Number of insertion Queries Per Second.
-- **Search**: Number search Queries Per Second.
-- **Recall @1**: How often does approximate search yield the exact best match?
+- __Add__: Number of insertion Queries Per Second.
+- __Search__: Number search Queries Per Second.
+- __Recall @1__: How often does approximate search yield the exact best match?
 
 ### Different "connectivity"
 
-| Vectors    | Connectivity | EF @ A | EF @ S | **Add**, QPS | **Search**, QPS | **Recall @1** |
+| Vectors    | Connectivity | EF @ A | EF @ S | __Add__, QPS | __Search__, QPS | __Recall @1__ |
 | :--------- | :----------: | :----: | :----: | :----------: | :-------------: | ------------: |
 | `f32` x256 |      16      |  128   |   64   |    75'640    |     131'654     |         99.3% |
 | `f32` x256 |      12      |  128   |   64   |    81'747    |     149'728     |         99.0% |
@@ -33,7 +33,7 @@ The main columns are:
 
 ### Different "expansion factors"
 
-| Vectors    | Connectivity | EF @ A | EF @ S | **Add**, QPS | **Search**, QPS | **Recall @1** |
+| Vectors    | Connectivity | EF @ A | EF @ S | __Add__, QPS | __Search__, QPS | __Recall @1__ |
 | :--------- | :----------: | :----: | :----: | :----------: | :-------------: | ------------: |
 | `f32` x256 |      16      |  128   |   64   |    75'640    |     131'654     |         99.3% |
 | `f32` x256 |      16      |   64   |   32   |   128'644    |     228'422     |         97.2% |
@@ -41,7 +41,7 @@ The main columns are:
 
 ### Different vectors "quantization"
 
-| Vectors      | Connectivity | EF @ A | EF @ S | **Add**, QPS | **Search**, QPS | **Recall @1** |
+| Vectors      | Connectivity | EF @ A | EF @ S | __Add__, QPS | __Search__, QPS | __Recall @1__ |
 | :----------- | :----------: | :----: | :----: | :----------: | :-------------: | ------------: |
 | `f32` x256   |      16      |  128   |   64   |    87'995    |     171'856     |         99.1% |
 | `f16` x256   |      16      |  128   |   64   |    87'270    |     153'788     |         98.4% |
@@ -189,6 +189,14 @@ mkdir -p datasets/deep_1B/ && \
     wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/base.10M.fbin -P datasets/deep_1B/ &&
     wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/query.public.10K.fbin -P datasets/deep_1B/ &&
     wget -nc https://storage.yandexcloud.net/yandex-research/ann-datasets/DEEP/groundtruth.public.10K.ibin -P datasets/deep_1B/
+```
+
+### Arxiv with E5
+
+```sh
+mkdir -p datasets/arxiv_2M/ && \
+    wget -nc https://huggingface.co/datasets/unum-cloud/ann-arxiv-2m/resolve/main/abstract.e5-base-v2.fbin -P datasets/arxiv_2M/ &&
+    wget -nc https://huggingface.co/datasets/unum-cloud/ann-arxiv-2m/resolve/main/title.e5-base-v2.fbin -P datasets/arxiv_2M/
 ```
 
 ## Profiling

@@ -6,6 +6,9 @@
 #include <thread>  // `std::thread`
 #include <vector>  // `std::vector`
 
+#include <atomic> // `std::atomic`
+#include <thread> // `std::thread`
+
 #include <usearch/index.hpp> // `expected_gt` and macros
 
 #if USEARCH_USE_OPENMP
@@ -30,7 +33,6 @@
 #include <fp16/fp16.h>
 #endif
 #else
-#define USEARCH_USE_NATIVE_F16 0
 #include <fp16/fp16.h>
 #endif
 
@@ -196,6 +198,9 @@ inline char const* isa_name(isa_kind_t isa_kind) noexcept {
 }
 
 inline bool hardware_supports(isa_kind_t isa_kind) noexcept {
+
+    // On Linux Arm machines the `getauxval` can be queried to check
+    // if SVE extensions are available. Arm Neon has no separate capability check.
 #if defined(USEARCH_DEFINED_ARM) && defined(USEARCH_DEFINED_LINUX)
     unsigned long capabilities = getauxval(AT_HWCAP);
     switch (isa_kind) {
@@ -205,11 +210,26 @@ inline bool hardware_supports(isa_kind_t isa_kind) noexcept {
     }
 #endif
 
+    // When compiling with GCC, one may use the "built-ins", including ones
+    // designed for CPU capability detection.
 #if defined(USEARCH_DEFINED_X86) && defined(USEARCH_DEFINED_GCC)
     __builtin_cpu_init();
     switch (isa_kind) {
     case isa_kind_t::avx2_k: return __builtin_cpu_supports("avx2");
     case isa_kind_t::avx512_k: return __builtin_cpu_supports("avx512f");
+    default: return false;
+    }
+#endif
+
+    // On Apple we can expect Arm devices to support Neon extesions,
+    // and the x86 machines to support AVX2 extensions.
+#if defined(USEARCH_DEFINED_APPLE)
+    switch (isa_kind) {
+#if defined(USEARCH_DEFINED_ARM)
+    case isa_kind_t::neon_k: return true;
+#else
+    case isa_kind_t::avx2_k: return true;
+#endif
     default: return false;
     }
 #endif
@@ -429,6 +449,20 @@ inline f16_bits_t::f16_bits_t(i8_bits_t v) noexcept : f16_bits_t(float(v)) {}
 class executor_stl_t {
     std::size_t threads_count_{};
 
+    struct jthread_t {
+        std::thread native_;
+
+        jthread_t() = default;
+        jthread_t(jthread_t&&) = default;
+        jthread_t(jthread_t const&) = delete;
+        template <typename callable_at> jthread_t(callable_at&& func) : native_([=]() { func(); }) {}
+
+        ~jthread_t() {
+            if (native_.joinable())
+                native_.join();
+        }
+    };
+
   public:
     /**
      *  @param threads_count The number of threads to be used for parallel execution.
@@ -442,18 +476,19 @@ class executor_stl_t {
     std::size_t size() const noexcept { return threads_count_; }
 
     /**
-     *  @brief Executes tasks in bulk using the specified thread-aware function.
+     *  @brief Executes a fixed number of tasks using the specified thread-aware function.
      *  @param tasks                 The total number of tasks to be executed.
      *  @param thread_aware_function The thread-aware function to be called for each thread index and task index.
      *  @throws If an exception occurs during execution of the thread-aware function.
      */
     template <typename thread_aware_function_at>
-    void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
-        std::vector<std::thread> threads_pool;
+    void fixed(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
+        std::vector<jthread_t> threads_pool;
         std::size_t tasks_per_thread = tasks;
-        if (threads_count_ > 1) {
-            tasks_per_thread = (tasks / threads_count_) + ((tasks % threads_count_) != 0);
-            for (std::size_t thread_idx = 1; thread_idx < threads_count_; ++thread_idx) {
+        std::size_t threads_count = (std::min)(threads_count_, tasks);
+        if (threads_count > 1) {
+            tasks_per_thread = (tasks / threads_count) + ((tasks % threads_count) != 0);
+            for (std::size_t thread_idx = 1; thread_idx < threads_count; ++thread_idx) {
                 threads_pool.emplace_back([=]() {
                     for (std::size_t task_idx = thread_idx * tasks_per_thread;
                          task_idx < (std::min)(tasks, thread_idx * tasks_per_thread + tasks_per_thread); ++task_idx)
@@ -463,8 +498,37 @@ class executor_stl_t {
         }
         for (std::size_t task_idx = 0; task_idx < (std::min)(tasks, tasks_per_thread); ++task_idx)
             thread_aware_function(0, task_idx);
-        for (std::thread& thread : threads_pool)
-            thread.join();
+    }
+
+    /**
+     *  @brief Executes limited number of tasks using the specified thread-aware function.
+     *  @param tasks                 The upper bound on the number of tasks.
+     *  @param thread_aware_function The thread-aware function to be called for each thread index and task index.
+     *  @throws If an exception occurs during execution of the thread-aware function.
+     */
+    template <typename thread_aware_function_at>
+    void dynamic(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
+        std::vector<jthread_t> threads_pool;
+        std::size_t tasks_per_thread = tasks;
+        std::size_t threads_count = (std::min)(threads_count_, tasks);
+        std::atomic_bool stop{false};
+        if (threads_count > 1) {
+            tasks_per_thread = (tasks / threads_count) + ((tasks % threads_count) != 0);
+            for (std::size_t thread_idx = 1; thread_idx < threads_count; ++thread_idx) {
+                threads_pool.emplace_back([=, &stop]() {
+                    for (std::size_t task_idx = thread_idx * tasks_per_thread;
+                         task_idx < (std::min)(tasks, thread_idx * tasks_per_thread + tasks_per_thread) &&
+                         !stop.load(std::memory_order_relaxed);
+                         ++task_idx)
+                        if (!thread_aware_function(thread_idx, task_idx))
+                            stop.store(true, std::memory_order_relaxed);
+                });
+            }
+        }
+        for (std::size_t task_idx = 0;
+             task_idx < (std::min)(tasks, tasks_per_thread) && !stop.load(std::memory_order_relaxed); ++task_idx)
+            if (!thread_aware_function(0, task_idx))
+                stop.store(true, std::memory_order_relaxed);
     }
 
     /**
@@ -473,15 +537,13 @@ class executor_stl_t {
      *  @throws If an exception occurs during execution of the thread-aware function.
      */
     template <typename thread_aware_function_at>
-    void execute_bulk(thread_aware_function_at&& thread_aware_function) noexcept(false) {
+    void parallel(thread_aware_function_at&& thread_aware_function) noexcept(false) {
         if (threads_count_ == 1)
             return thread_aware_function(0);
-        std::vector<std::thread> threads_pool;
+        std::vector<jthread_t> threads_pool;
         for (std::size_t thread_idx = 1; thread_idx < threads_count_; ++thread_idx)
             threads_pool.emplace_back([=]() { thread_aware_function(thread_idx); });
         thread_aware_function(0);
-        for (std::thread& thread : threads_pool)
-            thread.join();
     }
 };
 
@@ -512,10 +574,38 @@ class executor_openmp_t {
      *  @throws If an exception occurs during execution of the thread-aware function.
      */
     template <typename thread_aware_function_at>
-    void execute_bulk(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
-#pragma omp parallel for schedule(dynamic)
+    void fixed(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
+#pragma omp parallel for schedule(dynamic, 1)
         for (std::size_t i = 0; i != tasks; ++i) {
             thread_aware_function(omp_get_thread_num(), i);
+        }
+    }
+
+    /**
+     *  @brief Executes tasks in bulk using the specified thread-aware function.
+     *  @param tasks                 The total number of tasks to be executed.
+     *  @param thread_aware_function The thread-aware function to be called for each thread index and task index.
+     *  @throws If an exception occurs during execution of the thread-aware function.
+     */
+    template <typename thread_aware_function_at>
+    void dynamic(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
+        // OpenMP cancellation points are not yet available on most platforms, and require
+        // the `OMP_CANCELLATION` environment variable to be set.
+        // http://jakascorner.com/blog/2016/08/omp-cancel.html
+        // if (omp_get_cancellation()) {
+        // #pragma omp parallel for schedule(dynamic, 1)
+        //     for (std::size_t i = 0; i != tasks; ++i) {
+        // #pragma omp cancellation point for
+        //         if (!thread_aware_function(omp_get_thread_num(), i)) {
+        // #pragma omp cancel for
+        //         }
+        //     }
+        // }
+        std::atomic_bool stop{false};
+#pragma omp parallel for schedule(dynamic, 1) shared(stop)
+        for (std::size_t i = 0; i != tasks; ++i) {
+            if (!stop.load(std::memory_order_relaxed) && !thread_aware_function(omp_get_thread_num(), i))
+                stop.store(true, std::memory_order_relaxed);
         }
     }
 
@@ -525,7 +615,7 @@ class executor_openmp_t {
      *  @throws If an exception occurs during execution of the thread-aware function.
      */
     template <typename thread_aware_function_at>
-    void execute_bulk(thread_aware_function_at&& thread_aware_function) noexcept(false) {
+    void parallel(thread_aware_function_at&& thread_aware_function) noexcept(false) {
 #pragma omp parallel
         { thread_aware_function(omp_get_thread_num()); }
     }
@@ -579,6 +669,34 @@ class aligned_allocator_gt {
 
 using aligned_allocator_t = aligned_allocator_gt<>;
 
+class page_allocator_t {
+  public:
+    static constexpr std::size_t page_size() { return 4096; }
+
+    /**
+     *  @brief Allocates an @b uninitialized block of memory of the specified size.
+     *  @param count_bytes The number of bytes to allocate.
+     *  @return A pointer to the allocated memory block, or `nullptr` if allocation fails.
+     */
+    byte_t* allocate(std::size_t count_bytes) const noexcept {
+        count_bytes = divide_round_up(count_bytes, page_size()) * page_size();
+#if defined(USEARCH_DEFINED_WINDOWS)
+        return (byte_t*)(::VirtualAlloc(NULL, count_bytes, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+#else
+        return (byte_t*)mmap(NULL, count_bytes, PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+#endif
+    }
+
+    void deallocate(byte_t* page_pointer, std::size_t count_bytes) const noexcept {
+#if defined(USEARCH_DEFINED_WINDOWS)
+        ::VirtualFree(page_pointer, 0, MEM_RELEASE);
+#else
+        count_bytes = divide_round_up(count_bytes, page_size()) * page_size();
+        munmap(page_pointer, count_bytes);
+#endif
+    }
+};
+
 /**
  *  @brief  Memory-mapping allocator designed for "alloc many, free at once" usage patterns.
  *          @b Thread-safe, @b except constructors and destructors.
@@ -628,15 +746,11 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
     void reset() noexcept {
         byte_t* last_arena = last_arena_;
         while (last_arena) {
-            byte_t* previous_arena;
+            byte_t* previous_arena = nullptr;
             std::memcpy(&previous_arena, last_arena, sizeof(byte_t*));
-            std::size_t last_cap;
+            std::size_t last_cap = 0;
             std::memcpy(&last_cap, last_arena + sizeof(byte_t*), sizeof(std::size_t));
-#if defined(USEARCH_DEFINED_WINDOWS)
-            ::VirtualFree(last_arena, 0, MEM_RELEASE);
-#else
-            munmap(last_arena, last_cap);
-#endif
+            page_allocator_t{}.deallocate(last_arena, last_cap);
             last_arena = previous_arena;
         }
 
@@ -670,22 +784,12 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
      */
     inline byte_t* allocate(std::size_t count_bytes) noexcept {
         std::size_t extended_bytes = divide_round_up<alignment_ak>(count_bytes) * alignment_ak;
-        // Check if the requested allocation size is absurd
-        if (extended_bytes > min_capacity())
-            return nullptr;
-
         std::unique_lock<std::mutex> lock(mutex_);
-        if (!last_arena_ || (last_usage_ + extended_bytes > last_capacity_)) {
-            std::size_t new_cap = last_capacity_ * capacity_multiplier();
-#if defined(USEARCH_DEFINED_WINDOWS)
-            byte_t* new_arena = (byte_t*)(::VirtualAlloc(NULL, new_cap, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
-            if (new_arena == nullptr)
-                return nullptr;
-#else
-            byte_t* new_arena = (byte_t*)mmap(NULL, new_cap, PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+        if (!last_arena_ || (last_usage_ + extended_bytes >= last_capacity_)) {
+            std::size_t new_cap = (std::max)(last_capacity_, ceil2(extended_bytes)) * capacity_multiplier();
+            byte_t* new_arena = page_allocator_t{}.allocate(new_cap);
             if (!new_arena)
                 return nullptr;
-#endif
             std::memcpy(new_arena, &last_arena_, sizeof(byte_t*));
             std::memcpy(new_arena + sizeof(byte_t*), &new_cap, sizeof(std::size_t));
 
@@ -734,6 +838,94 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
 };
 
 using memory_mapping_allocator_t = memory_mapping_allocator_gt<>;
+
+/**
+ *  @brief  C++11 userspace implementation of an oversimplified `std::shared_mutex`,
+ *          that assumes rare interleaving of shared and unique locks. It's not fair,
+ *          but requires only a single 32-bit atomic integer to work.
+ */
+class unfair_shared_mutex_t {
+    /** Any positive integer describes the number of concurrent readers */
+    enum state_t : std::int32_t {
+        idle_k = 0,
+        writing_k = -1,
+    };
+    std::atomic<std::int32_t> state_{idle_k};
+
+  public:
+    inline void lock() noexcept {
+        std::int32_t raw;
+    relock:
+        raw = idle_k;
+        if (!state_.compare_exchange_weak(raw, writing_k, std::memory_order_acquire, std::memory_order_relaxed)) {
+            std::this_thread::yield();
+            goto relock;
+        }
+    }
+
+    inline void unlock() noexcept { state_.store(idle_k, std::memory_order_release); }
+
+    inline void lock_shared() noexcept {
+        std::int32_t raw;
+    relock_shared:
+        raw = state_.load(std::memory_order_acquire);
+        // Spin while it's uniquely locked
+        if (raw == writing_k) {
+            std::this_thread::yield();
+            goto relock_shared;
+        }
+        // Try incrementing the counter
+        if (!state_.compare_exchange_weak(raw, raw + 1, std::memory_order_acquire, std::memory_order_relaxed)) {
+            std::this_thread::yield();
+            goto relock_shared;
+        }
+    }
+
+    inline void unlock_shared() noexcept { state_.fetch_sub(1, std::memory_order_release); }
+
+    /**
+     *  @brief Try upgrades the current `lock_shared()` to a unique `lock()` state.
+     */
+    inline bool try_escalate() noexcept {
+        std::int32_t one_read = 1;
+        return state_.compare_exchange_weak(one_read, writing_k, std::memory_order_acquire, std::memory_order_relaxed);
+    }
+
+    /**
+     *  @brief Escalates current lock potentially loosing control in the middle.
+     *  It's a shortcut for `try_escalate`-`unlock_shared`-`lock` trio.
+     */
+    inline void unsafe_escalate() noexcept {
+        if (!try_escalate()) {
+            unlock_shared();
+            lock();
+        }
+    }
+
+    /**
+     *  @brief Upgrades the current `lock_shared()` to a unique `lock()` state.
+     */
+    inline void escalate() noexcept {
+        while (!try_escalate())
+            std::this_thread::yield();
+    }
+
+    /**
+     *  @brief De-escalation of a previously escalated state.
+     */
+    inline void de_escalate() noexcept {
+        std::int32_t one_read = 1;
+        state_.store(one_read, std::memory_order_release);
+    }
+};
+
+template <typename mutex_at = unfair_shared_mutex_t> class shared_lock_gt {
+    mutex_at& mutex_;
+
+  public:
+    inline explicit shared_lock_gt(mutex_at& m) noexcept : mutex_(m) { mutex_.lock_shared(); }
+    inline ~shared_lock_gt() noexcept { mutex_.unlock_shared(); }
+};
 
 /**
  *  @brief  Utility class used to cast arrays of one scalar type to another,

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 using static Cloud.Unum.USearch.NativeMethods;
 
@@ -8,7 +8,7 @@ public class USearchIndex : IDisposable
 {
     private IntPtr _index;
     private bool _disposedValue = false;
-    private readonly ulong _cachedDimensions;
+    private ulong _cachedDimensions;
 
     public USearchIndex(
         MetricKind metricKind,
@@ -16,8 +16,9 @@ public class USearchIndex : IDisposable
         ulong dimensions,
         ulong connectivity = 0,
         ulong expansionAdd = 0,
-        ulong expansionSearch = 0
-        // CustomDistanceFunction? customMetric = null
+        ulong expansionSearch = 0,
+        bool multi = false
+    //CustomDistanceFunction? customMetric = null
     )
     {
         IndexOptions initOptions = new IndexOptions
@@ -28,20 +29,13 @@ public class USearchIndex : IDisposable
             dimensions = dimensions,
             connectivity = connectivity,
             expansion_add = expansionAdd,
-            expansion_search = expansionSearch
+            expansion_search = expansionSearch,
+            multi = multi
         };
 
         this._index = usearch_init(ref initOptions, out IntPtr error);
         HandleError(error);
         this._cachedDimensions = dimensions;
-    }
-
-    public USearchIndex(IndexOptions options)
-    {
-        IndexOptions initOptions = options;
-        this._index = usearch_init(ref initOptions, out IntPtr error);
-        HandleError(error);
-        this._cachedDimensions = options.dimensions;
     }
 
     public USearchIndex(string path, bool view = false)
@@ -105,6 +99,28 @@ public class USearchIndex : IDisposable
         return result;
     }
 
+    public int Count(ulong key)
+    {
+        int count = checked((int)usearch_count(this._index, key, out IntPtr error));
+        HandleError(error);
+        return count;
+    }
+
+    private void IncreaseCapacity(ulong size)
+    {
+        usearch_reserve(this._index, (UIntPtr)(this.Size() + size), out IntPtr error);
+        HandleError(error);
+    }
+
+    private void CheckIncreaseCapacity(ulong size_increase)
+    {
+        ulong size_demand = this.Size() + size_increase;
+        if (this.Capacity() < size_demand)
+        {
+            this.IncreaseCapacity(size_increase);
+        }
+    }
+
     public void Add(ulong key, float[] vector)
     {
         this.CheckIncreaseCapacity(1);
@@ -119,7 +135,7 @@ public class USearchIndex : IDisposable
         HandleError(error);
     }
 
-    public void AddMany(ulong[] keys, float[][] vectors)
+    public void Add(ulong[] keys, float[][] vectors)
     {
         this.CheckIncreaseCapacity((ulong)vectors.Length);
         for (int i = 0; i < vectors.Length; i++)
@@ -129,7 +145,7 @@ public class USearchIndex : IDisposable
         }
     }
 
-    public void AddMany(ulong[] keys, double[][] vectors)
+    public void Add(ulong[] keys, double[][] vectors)
     {
         this.CheckIncreaseCapacity((ulong)vectors.Length);
         for (int i = 0; i < vectors.Length; i++)
@@ -139,75 +155,87 @@ public class USearchIndex : IDisposable
         }
     }
 
-    public bool Get(ulong key, out float[] vector)
+    public int Get(ulong key, out float[] vector)
     {
         vector = new float[this._cachedDimensions];
-        bool success = usearch_get(this._index, key, vector, ScalarKind.Float32, out IntPtr error);
+        int foundVectorsCount = checked((int)usearch_get(this._index, key, (UIntPtr)1, vector, ScalarKind.Float32, out IntPtr error));
         HandleError(error);
-        if (!success)
+        if (foundVectorsCount < 1)
         {
             vector = null;
         }
 
-        return success;
+        return foundVectorsCount;
     }
 
-    public bool Get(ulong key, out double[] vector)
+    public int Get(ulong key, int count, out float[][] vectors)
+    {
+        var flattenVectors = new float[count * (int)this._cachedDimensions];
+        int foundVectorsCount = checked((int)usearch_get(this._index, key, (UIntPtr)count, flattenVectors, ScalarKind.Float32, out IntPtr error));
+        HandleError(error);
+        if (foundVectorsCount < 1)
+        {
+            vectors = null;
+        }
+        else
+        {
+            vectors = new float[foundVectorsCount][];
+            for (int i = 0; i < foundVectorsCount; i++)
+            {
+                vectors[i] = new float[this._cachedDimensions];
+                Array.Copy(flattenVectors, i * (int)this._cachedDimensions, vectors[i], 0, (int)this._cachedDimensions);
+            }
+        }
+
+        return foundVectorsCount;
+    }
+
+    public int Get(ulong key, out double[] vector)
     {
         vector = new double[this._cachedDimensions];
-        bool success = usearch_get(this._index, key, vector, ScalarKind.Float64, out IntPtr error);
+        int foundVectorsCount = checked((int)usearch_get(this._index, key, (UIntPtr)1, vector, ScalarKind.Float64, out IntPtr error));
         HandleError(error);
-        if (!success)
+        if (foundVectorsCount < 1)
         {
             vector = null;
         }
 
-        return success;
+        return foundVectorsCount;
     }
 
-    public int Search(float[] queryVector, int resultsLimit, out ulong[] keys, out float[] distances)
+    public int Get(ulong key, int count, out double[][] vectors)
     {
-        return this.Search(queryVector, resultsLimit, out keys, out distances, ScalarKind.Float32);
-    }
-
-    public int Search(double[] queryVector, int resultsLimit, out ulong[] keys, out float[] distances)
-    {
-        return this.Search(queryVector, resultsLimit, out keys, out distances, ScalarKind.Float64);
-    }
-
-    public bool Remove(ulong key)
-    {
-        bool success = usearch_remove(this._index, key, out IntPtr error);
+        var flattenVectors = new double[count * (int)this._cachedDimensions];
+        int foundVectorsCount = checked((int)usearch_get(this._index, key, (UIntPtr)count, flattenVectors, ScalarKind.Float64, out IntPtr error));
         HandleError(error);
-        return success;
-    }
-
-    private void IncreaseCapacity(ulong size)
-    {
-        usearch_reserve(this._index, (UIntPtr)(this.Size() + size), out IntPtr error);
-        HandleError(error);
-    }
-
-    private void CheckIncreaseCapacity(ulong sizeIncrease)
-    {
-        ulong sizeDemand = this.Size() + sizeIncrease;
-        if (this.Capacity() < sizeDemand)
+        if (foundVectorsCount < 1)
         {
-            this.IncreaseCapacity(sizeIncrease);
+            vectors = null;
         }
+        else
+        {
+            vectors = new double[foundVectorsCount][];
+            for (int i = 0; i < foundVectorsCount; i++)
+            {
+                vectors[i] = new double[this._cachedDimensions];
+                Array.Copy(flattenVectors, i * (int)this._cachedDimensions, vectors[i], 0, (int)this._cachedDimensions);
+            }
+        }
+
+        return foundVectorsCount;
     }
 
-    private int Search<T>(T[] queryVector, int resultsLimit, out ulong[] keys, out float[] distances, ScalarKind scalarKind)
+    private int Search<T>(T[] queryVector, int count, out ulong[] keys, out float[] distances, ScalarKind scalarKind)
     {
-        keys = new ulong[resultsLimit];
-        distances = new float[resultsLimit];
+        keys = new ulong[count];
+        distances = new float[count];
 
         GCHandle handle = GCHandle.Alloc(queryVector, GCHandleType.Pinned);
         int matches = 0;
         try
         {
             IntPtr queryVectorPtr = handle.AddrOfPinnedObject();
-            matches = checked((int)usearch_search(this._index, queryVectorPtr, scalarKind, (UIntPtr)resultsLimit, keys, distances, out IntPtr error));
+            matches = checked((int)usearch_search(this._index, queryVectorPtr, scalarKind, (UIntPtr)count, keys, distances, out IntPtr error));
             HandleError(error);
         }
         finally
@@ -215,7 +243,7 @@ public class USearchIndex : IDisposable
             handle.Free();
         }
 
-        if (matches < resultsLimit)
+        if (matches < count)
         {
             Array.Resize(ref keys, (int)matches);
             Array.Resize(ref distances, (int)matches);
@@ -224,11 +252,34 @@ public class USearchIndex : IDisposable
         return matches;
     }
 
+    public int Search(float[] queryVector, int count, out ulong[] keys, out float[] distances)
+    {
+        return this.Search(queryVector, count, out keys, out distances, ScalarKind.Float32);
+    }
+
+    public int Search(double[] queryVector, int count, out ulong[] keys, out float[] distances)
+    {
+        return this.Search(queryVector, count, out keys, out distances, ScalarKind.Float64);
+    }
+
+    public int Remove(ulong key)
+    {
+        int removedCount = checked((int)usearch_remove(this._index, key, out IntPtr error));
+        HandleError(error);
+        return removedCount;
+    }
+
+    public int Rename(ulong keyFrom, ulong keyTo)
+    {
+        int foundVectorsCount = checked((int)usearch_rename(this._index, keyFrom, keyTo, out IntPtr error));
+        HandleError(error);
+        return foundVectorsCount;
+    }
+
     private static void HandleError(IntPtr error)
     {
         if (error != IntPtr.Zero)
         {
-            Console.WriteLine($"Error {error}");
             throw new USearchException($"USearch operation failed: {Marshal.PtrToStringAnsi(error)}");
         }
     }
@@ -259,4 +310,6 @@ public class USearchIndex : IDisposable
     }
 
     ~USearchIndex() => this.Dispose(false);
+
+
 }

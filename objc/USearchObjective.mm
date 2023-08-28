@@ -128,7 +128,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't add to index"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 }
@@ -141,7 +141,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't find in index"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 
@@ -155,7 +155,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't add to index"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 }
@@ -168,7 +168,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't find in index"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 
@@ -182,7 +182,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't add to index"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 }
@@ -195,7 +195,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't find in index"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 
@@ -224,7 +224,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't remove an entry"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 }
@@ -234,7 +234,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't rename the entry"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 }
@@ -252,7 +252,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't save to disk"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 }
@@ -270,7 +270,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't load from disk"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 }
@@ -288,7 +288,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't view from disk"
-                                       reason:[NSString stringWithUTF8String:result.error.what()]
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
                                      userInfo:nil];
     }
 }

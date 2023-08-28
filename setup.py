@@ -13,7 +13,7 @@ macros_args = [
 ]
 
 if sys.platform == "linux":
-    compile_args.append("-std=c++11")
+    compile_args.append("-std=c++17")
     compile_args.append("-O3")  # Maximize performance
     compile_args.append("-g")  # Simplify debugging
     compile_args.append("-Wno-unknown-pragmas")
@@ -26,18 +26,18 @@ if sys.platform == "darwin":
     # MacOS 10.15 or higher is needed for `aligned_alloc` support.
     # https://github.com/unum-cloud/usearch/actions/runs/4975434891/jobs/8902603392
     compile_args.append("-mmacosx-version-min=10.15")
-    compile_args.append("-std=c++11")
+    compile_args.append("-std=c++17")
     compile_args.append("-O3")  # Maximize performance
     compile_args.append("-g")  # Simplify debugging
     compile_args.append("-Wno-unknown-pragmas")
 
-    # Linking OpenMP requires additional preparion in CIBuildWheel
+    # Linking OpenMP requires additional preparation in CIBuildWheel
     # macros_args.append(("USEARCH_USE_OPENMP", "1"))
     # compile_args.append("-Xpreprocessor -fopenmp")
     # link_args.append("-Xpreprocessor -lomp")
 
 if sys.platform == "win32":
-    compile_args.append("/std:c++14")
+    compile_args.append("/std:c++17")
     compile_args.append("/O2")
 
 ext_modules = [
@@ -90,11 +90,10 @@ setup(
         "Topic :: Database :: Database Engines/Servers",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
-    include_dirs=["include", "fp16/include", "robin-map/include", "simsimd/include"],
+    include_dirs=["include", "fp16/include", "simsimd/include"],
     ext_modules=ext_modules,
     install_requires=[
         "numpy",
-        "pandas",
         "tqdm",
         'ucall; python_version >= "3.9"',
     ],

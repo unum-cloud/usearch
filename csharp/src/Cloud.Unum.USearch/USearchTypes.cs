@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 
 namespace Cloud.Unum.USearch;
@@ -30,7 +30,7 @@ public enum ScalarKind : uint
 // TODO implement custom metric delegate following microsoft guides:
 // 1) https://learn.microsoft.com/en-us/dotnet/standard/native-interop/best-practices
 // 2) https://learn.microsoft.com/en-us/dotnet/framework/interop/marshalling-a-delegate-as-a-callback-method
-// public delegate float usearch_metric_t(IntPtr a, IntPtr b);
+// public delegate float CustomMetricFunction(IntPtr a, IntPtr b);
 
 [StructLayout(LayoutKind.Sequential)]
 public struct IndexOptions
@@ -43,6 +43,9 @@ public struct IndexOptions
     public ulong expansion_add;
     public ulong expansion_search;
 
+    [MarshalAs(UnmanagedType.Bool)]
+    public bool multi;
+
     public IndexOptions(
         MetricKind metricKind = MetricKind.Unknown,
         IntPtr metric = default,
@@ -50,7 +53,8 @@ public struct IndexOptions
         ulong dimensions = 0,
         ulong connectivity = 0,
         ulong expansionAdd = 0,
-        ulong expansionSearch = 0
+        ulong expansionSearch = 0,
+        bool multi = false
     )
     {
         this.metric_kind = metricKind;
@@ -60,5 +64,7 @@ public struct IndexOptions
         this.connectivity = connectivity;
         this.expansion_add = expansionAdd;
         this.expansion_search = expansionSearch;
+        this.multi = multi;
     }
 }
+

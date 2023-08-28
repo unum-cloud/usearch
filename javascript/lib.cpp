@@ -106,7 +106,7 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
         std::string quantization_str = params.Get("quantization").As<Napi::String>().Utf8Value();
         expected_gt<scalar_kind_t> expected = scalar_kind_from_name(quantization_str.c_str(), quantization_str.size());
         if (!expected) {
-            Napi::TypeError::New(env, expected.error.what()).ThrowAsJavaScriptException();
+            Napi::TypeError::New(env, expected.error.release()).ThrowAsJavaScriptException();
             return;
         }
         quantization = *expected;
@@ -118,7 +118,7 @@ Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
         std::string metric_str = params.Get("metric").As<Napi::String>().Utf8Value();
         expected_gt<metric_kind_t> expected = metric_from_name(metric_str.c_str(), metric_str.size());
         if (!expected) {
-            Napi::TypeError::New(env, expected.error.what()).ThrowAsJavaScriptException();
+            Napi::TypeError::New(env, expected.error.release()).ThrowAsJavaScriptException();
             return;
         }
         metric_kind = *expected;
@@ -154,7 +154,10 @@ void Index::Save(Napi::CallbackInfo const& ctx) {
 
     try {
         std::string path = ctx[0].As<Napi::String>();
-        native_->save(path.c_str());
+        auto result = native_->save(path.c_str());
+        if (!result)
+            return Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
+
     } catch (...) {
         Napi::TypeError::New(env, "Serialization failed").ThrowAsJavaScriptException();
     }
@@ -171,7 +174,10 @@ void Index::Load(Napi::CallbackInfo const& ctx) {
 
     try {
         std::string path = ctx[0].As<Napi::String>();
-        native_->load(path.c_str());
+        auto result = native_->load(path.c_str());
+        if (!result)
+            return Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
+
     } catch (...) {
         Napi::TypeError::New(env, "Loading failed").ThrowAsJavaScriptException();
     }
@@ -188,7 +194,10 @@ void Index::View(Napi::CallbackInfo const& ctx) {
 
     try {
         std::string path = ctx[0].As<Napi::String>();
-        native_->view(path.c_str());
+        auto result = native_->view(path.c_str());
+        if (!result)
+            return Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
+
     } catch (...) {
         Napi::TypeError::New(env, "Memory-mapping failed").ThrowAsJavaScriptException();
     }
@@ -216,7 +225,10 @@ void Index::Add(Napi::CallbackInfo const& ctx) {
             return Napi::TypeError::New(env, "Wrong number of dimensions").ThrowAsJavaScriptException();
 
         try {
-            native_->add(key, vector);
+            auto result = native_->add(key, vector);
+            if (!result)
+                return Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
+
         } catch (std::bad_alloc const&) {
             return Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
         } catch (...) {
@@ -234,7 +246,8 @@ void Index::Add(Napi::CallbackInfo const& ctx) {
                 .ThrowAsJavaScriptException();
 
         if (native_->size() + length >= native_->capacity())
-            native_->reserve(ceil2(native_->size() + length));
+            if (!native_->reserve(ceil2(native_->size() + length)))
+                return Napi::TypeError::New(env, "Out of memory!").ThrowAsJavaScriptException();
 
         for (std::size_t i = 0; i < length; i++) {
             Napi::Value key_js = keys_js[i];
@@ -280,7 +293,14 @@ Napi::Value Index::Search(Napi::CallbackInfo const& ctx) {
     static_assert(std::is_same<std::uint64_t, key_t>::value, "Matches.key interface expects BigUint64Array");
     Napi::Float32Array distances_js = Napi::Float32Array::New(env, wanted);
     try {
-        std::uint64_t count = native_->search(vector, wanted).dump_to(matches_js.Data(), distances_js.Data());
+
+        auto result = native_->search(vector, wanted);
+        if (!result) {
+            Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
+            return {};
+        }
+
+        std::uint64_t count = result.dump_to(matches_js.Data(), distances_js.Data());
         Napi::Object result_js = Napi::Object::New(env);
         result_js.Set("keys", matches_js);
         result_js.Set("distances", distances_js);
@@ -313,7 +333,7 @@ Napi::Value Index::Remove(Napi::CallbackInfo const& ctx) {
     try {
         auto result = native_->remove(key);
         if (!result) {
-            Napi::TypeError::New(env, "Removal has failed").ThrowAsJavaScriptException();
+            Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
             return {};
         }
         return Napi::Boolean::New(env, result.completed);

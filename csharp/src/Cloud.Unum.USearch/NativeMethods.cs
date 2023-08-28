@@ -1,9 +1,10 @@
 ﻿using System.Runtime.InteropServices;
-using size_t = System.UIntPtr;
-using usearch_distance_t = System.Single;
-using usearch_error_t = System.IntPtr;
+
 using usearch_index_t = System.IntPtr;
 using usearch_key_t = System.UInt64;
+using usearch_distance_t = System.Single;
+using usearch_error_t = System.IntPtr;
+using size_t = System.UIntPtr;
 using void_ptr_t = System.IntPtr;
 
 namespace Cloud.Unum.USearch;
@@ -65,11 +66,14 @@ internal static class NativeMethods
     public static extern bool usearch_contains(usearch_index_t index, usearch_key_t key, out usearch_error_t error);
 
     [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern size_t usearch_count(usearch_index_t index, usearch_key_t key, out usearch_error_t error);
+
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
     public static extern size_t usearch_search(
         usearch_index_t index,
         void_ptr_t query_vector,
         ScalarKind query_kind,
-        size_t results_limit,
+        size_t count,
         [Out] usearch_key_t[] found_keys,
         [Out] usearch_distance_t[] found_distances,
         out usearch_error_t error
@@ -80,7 +84,7 @@ internal static class NativeMethods
         usearch_index_t index,
         [In] float[] query_vector,
         ScalarKind query_kind,
-        size_t results_limit,
+        size_t count,
         [Out] usearch_key_t[] found_keys,
         [Out] usearch_distance_t[] found_distances,
         out usearch_error_t error
@@ -91,33 +95,36 @@ internal static class NativeMethods
         usearch_index_t index,
         [In] double[] query_vector,
         ScalarKind query_kind,
-        size_t results_limit,
+        size_t count,
         [Out] usearch_key_t[] found_keys,
         [Out] usearch_distance_t[] found_distances,
         out usearch_error_t error
     );
 
+
     [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
-    [return: MarshalAs(UnmanagedType.I1)]
-    public static extern bool usearch_get(
+    public static extern size_t usearch_get(
         usearch_index_t index,
         usearch_key_t key,
+        size_t count,
         [Out] float[] vector,
         ScalarKind vector_kind,
         out usearch_error_t error
     );
 
     [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
-    [return: MarshalAs(UnmanagedType.I1)]
-    public static extern bool usearch_get(
+    public static extern size_t usearch_get(
         usearch_index_t index,
         usearch_key_t key,
+        size_t count,
         [Out] double[] vector,
         ScalarKind vector_kind,
         out usearch_error_t error
     );
 
     [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
-    [return: MarshalAs(UnmanagedType.I1)]
-    public static extern bool usearch_remove(usearch_index_t index, usearch_key_t key, out usearch_error_t error);
+    public static extern size_t usearch_remove(usearch_index_t index, usearch_key_t key, out usearch_error_t error);
+
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern size_t usearch_rename(usearch_index_t index, usearch_key_t key_from, usearch_key_t key_to, out usearch_error_t error);
 }
