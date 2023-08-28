@@ -178,8 +178,6 @@ def test_index_save_load_restore_copy(ndim, quantization, batch_size):
     assert len(deserialized_index) == len(index)
     assert set(np.array(deserialized_index.keys)) == set(np.array(index.keys))
     if batch_size > 0:
-        print("a", deserialized_index.get(keys))
-        print("b", index.get(keys))
         assert np.allclose(
             np.vstack(deserialized_index.get(keys)), np.vstack(index.get(keys))
         )

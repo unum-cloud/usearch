@@ -671,12 +671,15 @@ using aligned_allocator_t = aligned_allocator_gt<>;
 
 class page_allocator_t {
   public:
+    static constexpr std::size_t page_size() { return 4096; }
+
     /**
      *  @brief Allocates an @b uninitialized block of memory of the specified size.
      *  @param count_bytes The number of bytes to allocate.
      *  @return A pointer to the allocated memory block, or `nullptr` if allocation fails.
      */
     byte_t* allocate(std::size_t count_bytes) const noexcept {
+        count_bytes = divide_round_up(count_bytes, page_size()) * page_size();
 #if defined(USEARCH_DEFINED_WINDOWS)
         return (byte_t*)(::VirtualAlloc(NULL, count_bytes, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
 #else
@@ -688,6 +691,7 @@ class page_allocator_t {
 #if defined(USEARCH_DEFINED_WINDOWS)
         ::VirtualFree(page_pointer, 0, MEM_RELEASE);
 #else
+        count_bytes = divide_round_up(count_bytes, page_size()) * page_size();
         munmap(page_pointer, count_bytes);
 #endif
     }
@@ -780,14 +784,9 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
      */
     inline byte_t* allocate(std::size_t count_bytes) noexcept {
         std::size_t extended_bytes = divide_round_up<alignment_ak>(count_bytes) * alignment_ak;
-        // Check if the requested allocation size is absurd
-        if (extended_bytes > min_capacity())
-            return nullptr;
-
         std::unique_lock<std::mutex> lock(mutex_);
-        if (!last_arena_ || (last_usage_ + extended_bytes > last_capacity_)) {
-            std::size_t new_cap = last_capacity_ * capacity_multiplier();
-            new_cap = divide_round_up(new_cap, 4096);
+        if (!last_arena_ || (last_usage_ + extended_bytes >= last_capacity_)) {
+            std::size_t new_cap = (std::max)(last_capacity_, ceil2(extended_bytes)) * capacity_multiplier();
             byte_t* new_arena = page_allocator_t{}.allocate(new_cap);
             if (!new_arena)
                 return nullptr;
