@@ -273,6 +273,7 @@ jobs:
 
   build_csharp:
     name: Build NuGet
+    needs: versioning
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -282,6 +283,8 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: 'main'  
       - run: git submodule update --init --recursive
 
       - name: Ubuntu/macOS build usearch shared obj
@@ -344,7 +347,7 @@ jobs:
 
       - name: Publish NuGet packages
         run: |
-          dotnet nuget push "${{  env.NUGET_DIR }}/*.nupkg" --api-key "${{ secrets.NUGET_APIKEY }}" --source "${{ env.NUGET_SOURCE }}"
+          dotnet nuget push "${{  env.NUGET_DIR }}/*.nupkg" --api-key "${{ secrets.NUGET_API }}" --source "${{ env.NUGET_SOURCE }}"
 
   build_docs:
     name: Build Docs
