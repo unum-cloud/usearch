@@ -154,10 +154,10 @@ struct index_dense_metadata_result_t {
 };
 
 /**
- *  @brief  Extracts metadata from pre-constructed index on disk,
+ *  @brief  Extracts metadata from a pre-constructed index on disk,
  *          without loading it or mapping the whole binary file.
  */
-inline index_dense_metadata_result_t index_dense_metadata(char const* file_path) noexcept {
+inline index_dense_metadata_result_t index_dense_metadata_from_path(char const* file_path) noexcept {
     index_dense_metadata_result_t result;
     std::unique_ptr<std::FILE, int (*)(std::FILE*)> file(std::fopen(file_path, "rb"), &std::fclose);
     if (!file)
@@ -210,6 +210,56 @@ inline index_dense_metadata_result_t index_dense_metadata(char const* file_path)
             return result.failed(std::feof(file.get()) ? "End of file reached!" : std::strerror(errno));
 
         // Check if it starts with 64-bit
+        result.config.exclude_vectors = false;
+        result.config.use_64_bit_dimensions = true;
+        if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
+            return result;
+    }
+
+    return result.failed("Not a dense USearch index!");
+}
+
+/**
+ *  @brief  Extracts metadata from a pre-constructed index serialized into an in-memory buffer.
+ */
+inline index_dense_metadata_result_t index_dense_metadata_from_buffer(memory_mapped_file_t file,
+                                                                      std::size_t offset = 0) noexcept {
+    index_dense_metadata_result_t result;
+
+    // Read the header
+    if (offset + sizeof(index_dense_head_buffer_t) >= file.size())
+        return result.failed("End of file reached!");
+
+    byte_t* const file_data = file.data() + offset;
+    std::size_t const file_size = file.size() - offset;
+    std::memcpy(&result.head_buffer, file_data, sizeof(index_dense_head_buffer_t));
+
+    // Check if the file immediately starts with the index, instead of vectors
+    result.config.exclude_vectors = true;
+    if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
+        return result;
+
+    // Check if it starts with 32-bit
+    std::uint32_t dimensions_u32[2]{0};
+    std::memcpy(dimensions_u32, result.head_buffer, sizeof(dimensions_u32));
+    std::size_t offset_if_u32 = std::size_t(dimensions_u32[0]) * dimensions_u32[1] + sizeof(dimensions_u32);
+
+    std::uint64_t dimensions_u64[2]{0};
+    std::memcpy(dimensions_u64, result.head_buffer, sizeof(dimensions_u64));
+    std::size_t offset_if_u64 = std::size_t(dimensions_u64[0]) * dimensions_u64[1] + sizeof(dimensions_u64);
+
+    // Check if it starts with 32-bit
+    if (offset_if_u32 + sizeof(index_dense_head_buffer_t) < file_size) {
+        std::memcpy(&result.head_buffer, file_data + offset_if_u32, sizeof(index_dense_head_buffer_t));
+        result.config.exclude_vectors = false;
+        result.config.use_64_bit_dimensions = false;
+        if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
+            return result;
+    }
+
+    // Check if it starts with 64-bit
+    if (offset_if_u64 + sizeof(index_dense_head_buffer_t) < file_size) {
+        std::memcpy(&result.head_buffer, file_data + offset_if_u64, sizeof(index_dense_head_buffer_t));
         result.config.exclude_vectors = false;
         result.config.use_64_bit_dimensions = true;
         if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
@@ -454,7 +504,7 @@ class index_dense_gt {
     }
 
     static index_dense_gt make(char const* path, bool view = false) {
-        index_dense_metadata_result_t meta = index_dense_metadata(path);
+        index_dense_metadata_result_t meta = index_dense_metadata_from_path(path);
         if (!meta)
             return {};
         metric_punned_t metric(meta.head.dimensions, meta.head.kind_metric, meta.head.kind_scalar);
@@ -512,7 +562,7 @@ class index_dense_gt {
      *  @brief  A relatively accurate lower bound on the amount of memory consumed by the system.
      *          In practice it's error will be below 10%.
      *
-     *  @see    `stream_length` for the length of the binary serialized representation.
+     *  @see    `serialized_length` for the length of the binary serialized representation.
      */
     std::size_t memory_usage() const {
         return                                          //
@@ -714,34 +764,10 @@ class index_dense_gt {
     }
 
     /**
-     *  @brief Saves the index to a file.
-     *  @param[in] path The path to the file.
-     *  @param[in] config Configuration parameters for exports.
-     *  @return Outcome descriptor explicitly convertible to boolean.
-     */
-    serialization_result_t save(output_file_t file, serialization_config_t config = {}) const {
-
-        serialization_result_t io_result = file.open_if_not();
-        if (!io_result)
-            return io_result;
-
-        serialization_result_t stream_result = stream(
-            [&](void* buffer, std::size_t length) {
-                io_result = file.write(buffer, length);
-                return !!io_result;
-            },
-            config);
-
-        if (!stream_result)
-            return stream_result;
-        return io_result;
-    }
-
-    /**
      *  @brief  Saves serialized binary index representation to a stream.
      */
     template <typename output_callback_at, typename progress_at = dummy_progress_t>
-    serialization_result_t stream(output_callback_at&& output, serialization_config_t config = {}) const {
+    serialization_result_t save_to_stream(output_callback_at&& output, serialization_config_t config = {}) const {
 
         serialization_result_t result;
         std::uint64_t matrix_rows = 0;
@@ -805,44 +831,20 @@ class index_dense_gt {
         }
 
         // Save the actual proximity graph
-        return typed_->stream(std::forward<output_callback_at>(output));
+        return typed_->save_to_stream(std::forward<output_callback_at>(output));
     }
 
     /**
      *  @brief  Estimate the binary length (in bytes) of the serialized index.
      */
-    std::size_t stream_length(serialization_config_t config = {}) const noexcept {
+    std::size_t serialized_length(serialization_config_t config = {}) const noexcept {
         std::size_t dimensions_length = 0;
         std::size_t matrix_length = 0;
         if (!config.exclude_vectors) {
             dimensions_length = config.use_64_bit_dimensions ? sizeof(std::uint64_t) * 2 : sizeof(std::uint32_t) * 2;
             matrix_length = typed_->size() * metric_.bytes_per_vector();
         }
-        return dimensions_length + matrix_length + sizeof(index_dense_head_buffer_t) + typed_->stream_length();
-    }
-
-    /**
-     *  @brief Parses the index from file to RAM.
-     *  @param[in] path The path to the file.
-     *  @param[in] config Configuration parameters for imports.
-     *  @return Outcome descriptor explicitly convertible to boolean.
-     */
-    serialization_result_t load(input_file_t file, serialization_config_t config = {}) {
-
-        serialization_result_t io_result = file.open_if_not();
-        if (!io_result)
-            return io_result;
-
-        serialization_result_t stream_result = pull(
-            [&](void* buffer, std::size_t length) {
-                io_result = file.read(buffer, length);
-                return !!io_result;
-            },
-            config);
-
-        if (!stream_result)
-            return stream_result;
-        return io_result;
+        return dimensions_length + matrix_length + sizeof(index_dense_head_buffer_t) + typed_->serialized_length();
     }
 
     /**
@@ -852,8 +854,12 @@ class index_dense_gt {
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
     template <typename input_callback_at>
-    serialization_result_t pull(input_callback_at&& input, serialization_config_t config = {}) {
+    serialization_result_t load_from_stream(input_callback_at&& input, serialization_config_t config = {}) {
 
+        // Discard all previous memory allocations of `vectors_tape_allocator_`
+        reset();
+
+        // Infer the new index size
         serialization_result_t result;
         std::uint64_t matrix_rows = 0;
         std::uint64_t matrix_cols = 0;
@@ -909,7 +915,7 @@ class index_dense_gt {
         }
 
         // Pull the actual proximity graph
-        result = typed_->pull(std::forward<input_callback_at>(input));
+        result = typed_->load_from_stream(std::forward<input_callback_at>(input));
         if (!result)
             return result;
         if (typed_->size() != static_cast<std::size_t>(matrix_rows))
@@ -927,10 +933,14 @@ class index_dense_gt {
      */
     serialization_result_t view(memory_mapped_file_t file, std::size_t offset = 0, serialization_config_t config = {}) {
 
+        // Discard all previous memory allocations of `vectors_tape_allocator_`
+        reset();
+
         serialization_result_t result = file.open_if_not();
         if (!result)
             return result;
 
+        // Infer the new index size
         std::uint64_t matrix_rows = 0;
         std::uint64_t matrix_cols = 0;
         span_punned_t vectors_buffer;
@@ -1001,6 +1011,109 @@ class index_dense_gt {
 
         reindex_keys_();
         return result;
+    }
+
+    /**
+     *  @brief Saves the index to a file.
+     *  @param[in] path The path to the file.
+     *  @param[in] config Configuration parameters for exports.
+     *  @return Outcome descriptor explicitly convertible to boolean.
+     */
+    serialization_result_t save(output_file_t file, serialization_config_t config = {}) const {
+
+        serialization_result_t io_result = file.open_if_not();
+        if (!io_result)
+            return io_result;
+
+        serialization_result_t stream_result = save_to_stream(
+            [&](void const* buffer, std::size_t length) {
+                io_result = file.write(buffer, length);
+                return !!io_result;
+            },
+            config);
+
+        if (!stream_result)
+            return stream_result;
+        return io_result;
+    }
+
+    /**
+     *  @brief  Memory-maps the serialized binary index representation from disk,
+     *          @b without copying data into RAM, and fetching it on-demand.
+     */
+    serialization_result_t save(memory_mapped_file_t file, std::size_t offset = 0,
+                                serialization_config_t config = {}) const {
+
+        serialization_result_t io_result = file.open_if_not();
+        if (!io_result)
+            return io_result;
+
+        serialization_result_t stream_result = save_to_stream(
+            [&](void const* buffer, std::size_t length) {
+                if (offset + length >= file.size())
+                    return false;
+                std::memcpy(file.data() + offset, buffer, length);
+                offset += length;
+                return true;
+            },
+            config);
+
+        return stream_result;
+    }
+
+    /**
+     *  @brief Parses the index from file to RAM.
+     *  @param[in] path The path to the file.
+     *  @param[in] config Configuration parameters for imports.
+     *  @return Outcome descriptor explicitly convertible to boolean.
+     */
+    serialization_result_t load(input_file_t file, serialization_config_t config = {}) {
+
+        serialization_result_t io_result = file.open_if_not();
+        if (!io_result)
+            return io_result;
+
+        serialization_result_t stream_result = load_from_stream(
+            [&](void* buffer, std::size_t length) {
+                io_result = file.read(buffer, length);
+                return !!io_result;
+            },
+            config);
+
+        if (!stream_result)
+            return stream_result;
+        return io_result;
+    }
+
+    /**
+     *  @brief  Memory-maps the serialized binary index representation from disk,
+     *          @b without copying data into RAM, and fetching it on-demand.
+     */
+    serialization_result_t load(memory_mapped_file_t file, std::size_t offset = 0, serialization_config_t config = {}) {
+
+        serialization_result_t io_result = file.open_if_not();
+        if (!io_result)
+            return io_result;
+
+        serialization_result_t stream_result = load_from_stream(
+            [&](void* buffer, std::size_t length) {
+                if (offset + length >= file.size())
+                    return false;
+                std::memcpy(buffer, file.data() + offset, length);
+                offset += length;
+                return true;
+            },
+            config);
+
+        return stream_result;
+    }
+
+    serialization_result_t save(char const* file_path, serialization_config_t config = {}) const {
+        return save(output_file_t(file_path), config);
+    }
+
+    serialization_result_t load(char const* file_path, serialization_config_t config = {}) {
+        return load(input_file_t(file_path), config);
     }
 
     /**
@@ -1516,6 +1629,8 @@ class index_dense_gt {
 
         result.computed_distances = computed_distances;
         result.visited_members = visited_members;
+
+        (void)progress;
         return result;
     }
 
@@ -1688,11 +1803,6 @@ class index_dense_gt {
 
         result.mean /= result.count;
         return result;
-    }
-
-    compressed_slot_t lookup_id_(key_t key) const {
-        shared_lock_t lock(slot_lookup_mutex_);
-        return slot_lookup_.at(key);
     }
 
     void reindex_keys_() {

@@ -1353,7 +1353,7 @@ class output_file_t {
             return result.failed(std::strerror(errno));
         return result;
     }
-    serialization_result_t write(void* begin, std::size_t length) noexcept {
+    serialization_result_t write(void const* begin, std::size_t length) noexcept {
         serialization_result_t result;
         std::size_t written = std::fwrite(begin, length, 1, file_);
         if (!written)
@@ -1440,6 +1440,7 @@ class memory_mapped_file_t {
 
   public:
     explicit operator bool() const noexcept { return ptr_ != nullptr; }
+    byte_t* data() noexcept { return reinterpret_cast<byte_t*>(ptr_); }
     byte_t const* data() const noexcept { return reinterpret_cast<byte_t const*>(ptr_); }
     std::size_t size() const noexcept { return static_cast<std::size_t>(length_); }
 
@@ -2540,6 +2541,8 @@ class index_gt {
         // Normalize stats
         result.computed_distances = context.computed_distances_count - result.computed_distances;
         result.visited_members = context.iteration_cycles - result.visited_members;
+
+        (void)predicate;
         return result;
     }
 
@@ -2629,7 +2632,7 @@ class index_gt {
      *  @brief  A relatively accurate lower bound on the amount of memory consumed by the system.
      *          In practice it's error will be below 10%.
      *
-     *  @see    `stream_length` for the length of the binary serialized representation.
+     *  @see    `serialized_length` for the length of the binary serialized representation.
      */
     std::size_t memory_usage(std::size_t allocator_entry_bytes = default_allocator_entry_bytes()) const noexcept {
         std::size_t total = 0;
@@ -2654,32 +2657,20 @@ class index_gt {
 #pragma region Serialization
 
     /**
-     *  @brief  Saves serialized binary index representation to a file, generally on disk.
+     *  @brief  Estimate the binary length (in bytes) of the serialized index.
      */
-    template <typename progress_at = dummy_progress_t>
-    serialization_result_t save(output_file_t file, progress_at&& progress = {}) const noexcept {
-
-        serialization_result_t io_result = file.open_if_not();
-        if (!io_result)
-            return io_result;
-
-        serialization_result_t stream_result = stream(
-            [&](void* buffer, std::size_t length) {
-                io_result = file.write(buffer, length);
-                return !!io_result;
-            },
-            std::forward<progress_at>(progress));
-
-        if (!stream_result)
-            return stream_result;
-        return io_result;
+    std::size_t serialized_length() const noexcept {
+        std::size_t neighbors_length = 0;
+        for (std::size_t i = 0; i != size(); ++i)
+            neighbors_length += node_bytes_(node_at_(i).level()) + sizeof(level_t);
+        return sizeof(index_serialized_header_t) + neighbors_length;
     }
 
     /**
      *  @brief  Saves serialized binary index representation to a stream.
      */
     template <typename output_callback_at, typename progress_at = dummy_progress_t>
-    serialization_result_t stream(output_callback_at&& output, progress_at&& progress = {}) const noexcept {
+    serialization_result_t save_to_stream(output_callback_at&& output, progress_at&& progress = {}) const noexcept {
 
         serialization_result_t result;
 
@@ -2715,44 +2706,10 @@ class index_gt {
     }
 
     /**
-     *  @brief  Estimate the binary length (in bytes) of the serialized index.
-     */
-    std::size_t stream_length() const noexcept {
-        std::size_t neighbors_length = 0;
-        for (std::size_t i = 0; i != size(); ++i)
-            neighbors_length += node_bytes_(node_at_(i).level()) + sizeof(level_t);
-        return sizeof(index_serialized_header_t) + neighbors_length;
-    }
-
-    /**
-     *  @brief  Loads the serialized binary index representation from disk to RAM.
-     *          Adjusts the configuration properties of the constructed index to
-     *          match the settings in the file.
-     */
-    template <typename progress_at = dummy_progress_t>
-    serialization_result_t load(input_file_t file, progress_at&& progress = {}) noexcept {
-
-        serialization_result_t io_result = file.open_if_not();
-        if (!io_result)
-            return io_result;
-
-        serialization_result_t stream_result = pull(
-            [&](void* buffer, std::size_t length) {
-                io_result = file.read(buffer, length);
-                return !!io_result;
-            },
-            std::forward<progress_at>(progress));
-
-        if (!stream_result)
-            return stream_result;
-        return io_result;
-    }
-
-    /**
-     *  @brief  Symmetric to `stream`, pulls data from a stream.
+     *  @brief  Symmetric to `save_from_stream`, pulls data from a stream.
      */
     template <typename input_callback_at, typename progress_at = dummy_progress_t>
-    serialization_result_t pull(input_callback_at&& input, progress_at&& progress = {}) noexcept {
+    serialization_result_t load_from_stream(input_callback_at&& input, progress_at&& progress = {}) noexcept {
 
         serialization_result_t result;
 
@@ -2803,6 +2760,113 @@ class index_gt {
             progress(i, header.size);
         }
         return {};
+    }
+
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t save(char const* file_path, progress_at&& progress = {}) const noexcept {
+        return save(output_file_t(file_path), std::forward<progress_at>(progress));
+    }
+
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t load(char const* file_path, progress_at&& progress = {}) noexcept {
+        return load(input_file_t(file_path), std::forward<progress_at>(progress));
+    }
+
+    /**
+     *  @brief  Saves serialized binary index representation to a file, generally on disk.
+     */
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t save(output_file_t file, progress_at&& progress = {}) const noexcept {
+
+        serialization_result_t io_result = file.open_if_not();
+        if (!io_result)
+            return io_result;
+
+        serialization_result_t stream_result = save_to_stream(
+            [&](void* buffer, std::size_t length) {
+                io_result = file.write(buffer, length);
+                return !!io_result;
+            },
+            std::forward<progress_at>(progress));
+
+        if (!stream_result)
+            return stream_result;
+        return io_result;
+    }
+
+    /**
+     *  @brief  Memory-maps the serialized binary index representation from disk,
+     *          @b without copying data into RAM, and fetching it on-demand.
+     */
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t save(memory_mapped_file_t file, std::size_t offset = 0,
+                                progress_at&& progress = {}) const noexcept {
+
+        serialization_result_t io_result = file.open_if_not();
+        if (!io_result)
+            return io_result;
+
+        serialization_result_t stream_result = save_to_stream(
+            [&](void* buffer, std::size_t length) {
+                if (offset + length >= file.size())
+                    return false;
+                std::memcpy(file.data() + offset, buffer, length);
+                offset += length;
+                return true;
+            },
+            std::forward<progress_at>(progress));
+
+        return stream_result;
+    }
+
+    /**
+     *  @brief  Loads the serialized binary index representation from disk to RAM.
+     *          Adjusts the configuration properties of the constructed index to
+     *          match the settings in the file.
+     */
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t load(input_file_t file, progress_at&& progress = {}) noexcept {
+
+        serialization_result_t io_result = file.open_if_not();
+        if (!io_result)
+            return io_result;
+
+        serialization_result_t stream_result = load_from_stream(
+            [&](void* buffer, std::size_t length) {
+                io_result = file.read(buffer, length);
+                return !!io_result;
+            },
+            std::forward<progress_at>(progress));
+
+        if (!stream_result)
+            return stream_result;
+        return io_result;
+    }
+
+    /**
+     *  @brief  Loads the serialized binary index representation from disk to RAM.
+     *          Adjusts the configuration properties of the constructed index to
+     *          match the settings in the file.
+     */
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t load(memory_mapped_file_t file, std::size_t offset = 0,
+                                progress_at&& progress = {}) noexcept {
+
+        serialization_result_t io_result = file.open_if_not();
+        if (!io_result)
+            return io_result;
+
+        serialization_result_t stream_result = load_from_stream(
+            [&](void* buffer, std::size_t length) {
+                if (offset + length >= file.size())
+                    return false;
+                std::memcpy(buffer, file.data() + offset, length);
+                offset += length;
+                return true;
+            },
+            std::forward<progress_at>(progress));
+
+        return stream_result;
     }
 
     /**
@@ -3579,7 +3643,6 @@ static join_result_t join(               //
     config.max_proposals = (std::min)(men.size(), config.max_proposals);
 
     using distance_t = typename men_at::distance_t;
-    using dynamic_allocator_t = typename men_at::dynamic_allocator_t;
     using dynamic_allocator_traits_t = typename men_at::dynamic_allocator_traits_t;
     using man_key_t = typename men_at::key_t;
     using woman_key_t = typename women_at::key_t;
