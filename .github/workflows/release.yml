@@ -271,6 +271,81 @@ jobs:
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
 
+  build_csharp:
+    name: Build USearch libraries
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
+
+      - name: Ubuntu/macOS build usearch shared obj
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+        run: ./build_lib.sh
+        working-directory: ${{ github.workspace }}/csharp/eng
+
+      - name: Windows MSVC build usearch dll
+        if: matrix.os == 'windows-latest'
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          where cl
+          cl /EHsc /std:c++14 /O2 /LD /Fe:libusearch_c.dll lib.cpp /I. /I../include/ /I../fp16/include/ /I../robin-map/include/
+        working-directory: ${{ github.workspace }}/c
+        shell: cmd
+
+      - name: Windows copy dll
+        if: matrix.os == 'windows-latest'
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
+          cp "${GITHUB_WORKSPACE}/c/libusearch_c.dll" "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
+        shell: bash
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: usearch-libs
+          path: ${{ github.workspace }}/csharp/lib/**/*
+
+  publish_csharp:
+    name: Publish C#
+    runs-on: ubuntu-latest
+    needs: [build_usearch_libs]
+    env:
+      USEARCH_LIBS: ${{ github.workspace }}/csharp/lib
+      NUGET_DIR: ${{ github.workspace }}/csharp/packages
+      # NUGET_SOURCE: https://apiint.nugettest.org/v3/index.json
+      NUGET_SOURCE: https://api.nuget.org/v3/index.json
+      SOLUTION_DIR: ${{ github.workspace }}/csharp
+    steps:
+      - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
+        
+      - name: Download usearch libs artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: usearch-libs
+          path: ${{ env.USEARCH_LIBS }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 7.0.x     
+
+      - name: Pack project
+        run: |
+          VERSION_CONTENT=$(< VERSION)
+          dotnet pack "${{ env.SOLUTION_DIR }}" -c Release -p:Version="$VERSION_CONTENT" --output ${{ env.NUGET_DIR }}
+        working-directory: ${{ github.workspace }}
+
+      - name: Publish NuGet packages
+        run: |
+          dotnet nuget push "${{  env.NUGET_DIR }}/*.nupkg" --api-key "${{ secrets.NUGET_APIKEY }}" --source "${{ env.NUGET_SOURCE }}"
+
   build_docs:
     name: Build Docs
     runs-on: ubuntu-22.04

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+    <Version Condition="'$(Version)' == ''">0.0.2</Version>
+
+    <Authors>Unum</Authors>
+    <Company>Unum</Company>
+    <PackageTags>USearch Vector Search Disk-based Multi-Modal Semantic-Search Molecular-Search</PackageTags>
+    <PackageId>Cloud.Unum.USearch</PackageId>
+
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageProjectUrl>https://github.com/unum-cloud/usearch</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/unum-cloud/usearch</RepositoryUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+
+    <PackageIcon>unum.png</PackageIcon>
+    <PackageIconUrl>unum.png</PackageIconUrl>
+    <PackageReadmeFile>NUGET.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(NativeLibDir)runtimes\**\*.*" Pack="true" PackagePath="runtimes" />
+    <None Include="$(RepoRoot)LICENSE" Pack="true" PackagePath=""/>
+    <None Include="$(RepoRoot)assets\unum.png" Pack="true" PackagePath=""/>
+    <None Include="$(CSharpDir)nuget\NUGET.md" Pack="true" PackagePath=""/>
+  </ItemGroup>
+
+  <!-- Package validation https://learn.microsoft.com/en-us/dotnet/fundamentals/package-validation/overview?WT.mc_id=DT-MVP-5003978 -->
+  <PropertyGroup Condition="'$(IsPackable)' == 'true'">
+    <EnablePackageValidation Condition="'$(EnablePackageValidation)' == ''">true</EnablePackageValidation>
+  </PropertyGroup>
+
+</Project>
