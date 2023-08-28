@@ -572,15 +572,17 @@ class Index:
     @staticmethod
     def metadata(path_or_buffer: PathOrBuffer) -> Optional[dict]:
         try:
+            if isinstance(path_or_buffer, bytearray):
+                path_or_buffer = bytes(path_or_buffer)
             if isinstance(path_or_buffer, bytes):
-                return _index_dense_metadata_from_buffer(path)
+                return _index_dense_metadata_from_buffer(path_or_buffer)
             else:
-                path = os.fspath(path)
-                if not os.path.exists(path):
+                path_or_buffer = os.fspath(path_or_buffer)
+                if not os.path.exists(path_or_buffer):
                     return None
-                return _index_dense_metadata_from_path(path)
-        except Exception:
-            return None
+                return _index_dense_metadata_from_path(path_or_buffer)
+        except Exception as e:
+            raise e
 
     @staticmethod
     def restore(path_or_buffer: PathOrBuffer, view: bool = False) -> Optional[Index]:
@@ -917,30 +919,34 @@ class Index:
     def expansion_search(self, v: int):
         self._compiled.expansion_search = v
 
-    def save(self, to: Union[str, os.PathLike, NoneType] = None) -> Optional[bytes]:
-        to = to if to else self.path
-        if to is None:
+    def save(self, path_or_buffer: Union[str, os.PathLike, NoneType] = None) -> Optional[bytes]:
+        path_or_buffer = path_or_buffer if path_or_buffer else self.path
+        if path_or_buffer is None:
             return self._compiled.save_index_to_buffer()
         else:
-            self._compiled.save_index_to_path(os.fspath(to))
+            self._compiled.save_index_to_path(os.fspath(path_or_buffer))
 
-    def load(self, from_: Union[str, os.PathLike, bytes, NoneType] = None):
-        from_ = from_ if from_ else self.path
-        if from_ is None:
+    def load(self, path_or_buffer: Union[str, os.PathLike, bytes, NoneType] = None):
+        path_or_buffer = path_or_buffer if path_or_buffer else self.path
+        if path_or_buffer is None:
             raise Exception("Define the source")
-        if isinstance(from_, bytes):
-            self._compiled.load_index_from_buffer(from_)
+        if isinstance(path_or_buffer, bytearray):
+            path_or_buffer = bytes(path_or_buffer)
+        if isinstance(path_or_buffer, bytes):
+            self._compiled.load_index_from_buffer(path_or_buffer)
         else:
-            self._compiled.load_index_from_path(os.fspath(from_))
+            self._compiled.load_index_from_path(os.fspath(path_or_buffer))
 
-    def view(self, from_: Union[str, os.PathLike, bytes, bytearray, NoneType] = None):
-        from_ = from_ if from_ else self.path
-        if from_ is None:
+    def view(self, path_or_buffer: Union[str, os.PathLike, bytes, bytearray, NoneType] = None):
+        path_or_buffer = path_or_buffer if path_or_buffer else self.path
+        if path_or_buffer is None:
             raise Exception("Define the source")
-        if isinstance(from_, bytes):
-            self._compiled.view_index_from_buffer(from_)
+        if isinstance(path_or_buffer, bytearray):
+            path_or_buffer = bytes(path_or_buffer)
+        if isinstance(path_or_buffer, bytes):
+            self._compiled.view_index_from_buffer(path_or_buffer)
         else:
-            self._compiled.view_index_from_path(os.fspath(from_))
+            self._compiled.view_index_from_path(os.fspath(path_or_buffer))
 
     def clear(self):
         """Erases all the vectors from the index, preserving the space for future insertions."""

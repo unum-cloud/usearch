@@ -807,7 +807,7 @@ template <typename index_at> py::object save_index_to_buffer(index_at const& ind
         throw std::runtime_error("Could not allocate bytearray object");
 
     // Resize the bytearray object to the desired length
-    if (PyByteArray_Resize(byte_array, serialized_length) != 0) {
+    if (PyByteArray_Resize(byte_array, static_cast<Py_ssize_t>(serialized_length)) != 0) {
         Py_XDECREF(byte_array);
         throw std::runtime_error("Could not resize bytearray object");
     }

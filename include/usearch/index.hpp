@@ -2808,7 +2808,7 @@ class index_gt {
 
         serialization_result_t stream_result = save_to_stream(
             [&](void* buffer, std::size_t length) {
-                if (offset + length >= file.size())
+                if (offset + length > file.size())
                     return false;
                 std::memcpy(file.data() + offset, buffer, length);
                 offset += length;
@@ -2858,7 +2858,7 @@ class index_gt {
 
         serialization_result_t stream_result = load_from_stream(
             [&](void* buffer, std::size_t length) {
-                if (offset + length >= file.size())
+                if (offset + length > file.size())
                     return false;
                 std::memcpy(buffer, file.data() + offset, length);
                 offset += length;
