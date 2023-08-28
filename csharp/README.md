@@ -3,17 +3,17 @@
 ## Installation
 
 ```sh
-dotnet add package Cloud.Unum.USearch -s https://apiint.nugettest.org/v3/index.json
+dotnet add package Cloud.Unum.USearch
 ```
 
 ## Quickstart
 
-```C#
+```csharp
 using System.Diagnostics;
 using Cloud.Unum.USearch;
 
 using var index = new USearchIndex(
-    metricKind: MetricKind.Cos, //Choose cosine metric
+    metricKind: MetricKind.Cos, // Choose cosine metric
     quantization: ScalarKind.Float32, // Only quantization to Float32, Float64 is currently supported
     dimensions: 3,  // Define the number of dimensions in input vectors
     connectivity: 16, // How frequent should the connections in the graph be, optional
@@ -29,14 +29,11 @@ Trace.Assert(index.Size() == 1);
 Trace.Assert(matches == 1);
 Trace.Assert(keys[0] == 42);
 Trace.Assert(distances[0] <= 0.001f);
-// USearchIndex obj created with "using statement" and implements IDisposable,
-// otherwise call it explicitly:
-// index.Dispose();
 ```
 
 ## Serialization
 
-```C#
+```csharp
 index.Save("index.usearch")
 
 // Copy the whole index into memory
@@ -55,7 +52,7 @@ Trace.Assert(indexLoaded.Contains(42));
 
 Adding a batch of entries is identical to adding a single vector.
 
-```C#
+```csharp
 using var index = new USearchIndex(MetricKind.Cos, ScalarKind.Float32, dimensions: 3);
 
 // Generate keys and random vectors
