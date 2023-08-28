@@ -31,6 +31,9 @@ __pycache__
 dist/
 wheelhouse/
 
+# Python Environments
+venv/
+
 # JS wrappers
 package-lock.json
 node_modules/
@@ -39,13 +42,19 @@ node_modules/
 Cargo.lock
 target/
 
-# Java binings
+# Java bindings
 .gradle
 *.class
 
 # ObjC and Swift
 .build
 .swiftpm
+
+# C# builds
+csharp/**/[Bb]in/
+csharp/**/[Oo]bj/
+csharp/lib
+csharp/packages
 
 # Prerequisites
 *.d
@@ -82,3 +91,4 @@ target/
 *.exe
 *.out
 *.app
+
