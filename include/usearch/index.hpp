@@ -2906,7 +2906,7 @@ class index_gt {
         config_.connectivity_base = header.connectivity_base;
         pre_ = precompute_(config_);
         misaligned_ptr_gt<level_t> levels{(byte_t*)file.data() + offset + sizeof(header)};
-        offsets[0] = offset + sizeof(header) + sizeof(level_t) * header.size;
+        offsets[0u] = offset + sizeof(header) + sizeof(level_t) * header.size;
         for (std::size_t i = 1; i < header.size; ++i)
             offsets[i] = offsets[i - 1] + node_bytes_(levels[i - 1]);
 

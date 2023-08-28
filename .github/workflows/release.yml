@@ -275,7 +275,7 @@ jobs:
     name: Build Docs
     runs-on: ubuntu-22.04
     if: ${{ always() }}
-    needs: [publish_python, publish_javascript, publish_rust, publish_java, publish_swift, publish_docker, publish_wasm]
+    needs: [publish_python, publish_javascript, publish_rust, publish_java, publish_swift, publish_docker]
     permissions:
       contents: write
     steps:
@@ -287,7 +287,7 @@ jobs:
         run: |
               sudo apt update && 
               sudo apt install -y doxygen graphviz dia git && 
-              pip install sphinx==7.1.2 sphinx-js breathe furo m2r2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery && 
+              pip install sphinx==5.3.0 sphinx-js==3.2.1 breathe==4.35.0 furo==2023.3.27 m2r2==0.3.3.post2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery==4.1 && 
               npm install -g jsdoc
       - name: Install USearch from PyPi
         run: pip install usearch
