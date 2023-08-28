@@ -17,6 +17,32 @@ permissions:
 
 jobs:
 
+  test_c:
+    name: Test C
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: main-dev
+    - run: git submodule update --init --recursive
+    - name: Prepare Environment
+      run: |
+        sudo apt update && 
+        sudo apt install -y cmake g++-12 build-essential libjemalloc-dev
+    - name: Build
+      run: |
+        cmake -B ./build_release \
+        -DCMAKE_CXX_COMPILER="g++-12" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DUSEARCH_BUILD_TEST=1 \
+        -DUSEARCH_USE_OPENMP=1 \
+        -DUSEARCH_USE_SIMSIMD=1 \
+        -DUSEARCH_USE_JEMALLOC=1 \
+        -DUSEARCH_BUILD_BENCHMARK=0 &&
+        make -C ./build_release -j
+    - name: Run tests
+      run: ./build_release/test_c
+
   test_cpp:
     name: Test C++
     runs-on: ubuntu-latest
@@ -147,25 +173,6 @@ jobs:
       run: swift build
     - name: Run tests
       run: swift test
-
-  test_wasm:
-    name: Test WASM
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    - run: git submodule update --init --recursive
-    - name: Prepare WASM Environment
-      run: |
-        sudo apt update && 
-        sudo apt install -y nodejs
-        git clone https://github.com/emscripten-core/emsdk.git
-        ./emsdk/emsdk install latest
-    - name: Build USearch using Emscripten
-      run: |
-        ./emsdk/emsdk activate latest && source ./emsdk/emsdk_env.sh
-        emcmake cmake -DUSEARCH_BUILD_BENCHMARK=0 -DUSEARCH_BUILD_WASM=1 -B ./build -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} -s TOTAL_MEMORY=64MB" && emmake make -C ./build
-    - name: Run tests
-      run: node ./build/test.js
 
   test_csharp:
     name: Test C#

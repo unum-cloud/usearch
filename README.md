@@ -53,6 +53,7 @@ Linux • MacOS • Windows • iOS • Docker • WebAssembly
 - ✅ Space-efficient point-clouds with `uint40_t`, accommodating 4B+ size.
 - ✅ Compatible with OpenMP and custom "executors", for fine-grained control over CPU utilization.
 - ✅ Heterogeneous lookups, renaming/relabeling, and on-the-fly deletions.
+- ✅ Near-real-time [clustering and sub-clusterings](#clustering) for Tens or Millions of clusters.
 - ✅ [Semantic Search](#usearch--ai--multi-modal-semantic-search) and [Joins](#joins).
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/index.hpp
@@ -108,10 +109,10 @@ Comparing the performance of FAISS against USearch on 1 Million 96-dimensional v
 
 |              | FAISS, `f32` | USearch, `f32` | USearch, `f16` |     USearch, `i8` |
 | :----------- | -----------: | -------------: | -------------: | ----------------: |
-| Batch Insert |       16 K/s |         73 K/s |        100 K/s | 104 K/s **+550%** |
-| Batch Search |       82 K/s |        103 K/s |        113 K/s |  134 K/s **+63%** |
-| Bulk Insert  |       76 K/s |        105 K/s |        115 K/s | 202 K/s **+165%** |
-| Bulk Search  |      118 K/s |        174 K/s |        173 K/s | 304 K/s **+157%** |
+| Batch Insert |       16 K/s |         73 K/s |        100 K/s | 104 K/s __+550%__ |
+| Batch Search |       82 K/s |        103 K/s |        113 K/s |  134 K/s __+63%__ |
+| Bulk Insert  |       76 K/s |        105 K/s |        115 K/s | 202 K/s __+165%__ |
+| Bulk Search  |      118 K/s |        174 K/s |        173 K/s | 304 K/s __+157%__ |
 | Recall @ 10  |          99% |          99.2% |          99.1% |             99.2% |
 
 > HNSW was configured with identical hyper-parameters:
@@ -122,7 +123,6 @@ Comparing the performance of FAISS against USearch on 1 Million 96-dimensional v
 > Jump to the [Performance Tuning][benchmarking] section to read about the effects of those hyper-parameters.
 
 [benchmarking]: https://github.com/unum-cloud/usearch/blob/main/docs/benchmarks.md
-
 
 ## User-Defined Functions
 
@@ -152,10 +152,16 @@ Instead, we have focused on high-precision arithmetic over low-precision downcas
 The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f32_t`, `f16_t`, `f64_t`, and `i8_t` representations, even if the hardware doesn't natively support it.
 Continuing the topic of memory efficiency, we provide a `uint40_t` to allow collection with over 4B+ vectors without allocating 8 bytes for every neighbor reference in the proximity graph.
 
-## Serving `Index` from Disk
+## Serialization & Serving `Index` from Disk
 
-With USearch, you can serve indexes from external memory, enabling you to optimize your server choices for indexing speed and serving costs.
-This can result in **20x cost reduction** on AWS and other public clouds.
+USearch supports multiple forms of serialization:
+
+- Into a __file__ defined with a path.
+- Into a __stream__ defined with a callback, serializing or reconstructing incrementally.
+- Into a __buffer__ of fixed length, or a memory-mapped file, that supports random access.
+
+The latter allows you to serve indexes from external memory, enabling you to optimize your server choices for indexing speed and serving costs.
+This can result in __20x cost reduction__ on AWS and other public clouds.
 
 ```py
 index.save("index.usearch")
@@ -186,10 +192,10 @@ many_in_many: BatchMatches = search(vectors, vectors, 50, MetricKind.L2sq, exact
 ```
 
 By passing the `exact=True` argument, the system bypasses indexing altogether and performs a brute-force search through the entire dataset using SIMD-optimized similarity metrics from [SimSIMD](https://github.com/ashvardanian/simsimd).
-When compared to FAISS's `IndexFlatL2` in Google Colab, **[USearch may offer up to a 20x performance improvement](https://github.com/unum-cloud/usearch/issues/176#issuecomment-1666650778)**:
+When compared to FAISS's `IndexFlatL2` in Google Colab, __[USearch may offer up to a 20x performance improvement](https://github.com/unum-cloud/usearch/issues/176#issuecomment-1666650778)__:
 
-- `faiss.IndexFlatL2`: **55.3 ms**.
-- `usearch.index.search`: **2.54 ms**.
+- `faiss.IndexFlatL2`: __55.3 ms__.
+- `usearch.index.search`: __2.54 ms__.
 
 ## `Indexes` for Multi-Index Lookups
 
@@ -207,6 +213,36 @@ multi_index = Indexes(
 )
 multi_index.search(...)
 ```
+
+## Clustering
+
+Once the index is constructed, it can be used to cluster entries much faster.
+In essense, the `Index` itself can be seen as a clustering, and it allows iterative deepening.
+
+```py
+clustering = index.cluster(
+    min_count=10, # Optional
+    max_count=15, # Optional
+    threads=..., # Optional
+)
+
+# Get the clusters and their sizes
+centroid_keys, sizes = clustering.centroids_popularity
+
+# Use Matplotlib draw a histogram
+clustering.plot_centroids_popularity()
+
+# Export a NetworkX graph of the clusters
+g = clustering.network
+
+# Get members of a specific cluster
+first_members = clustering.members_of(centroid_keys[0])
+
+# Deepen into that cluster spliting it into more parts, all same arguments supported
+sub_clustering = clustering.subcluster(min_count=..., max_count=...)
+```
+
+Using Scikit-Learn, on a 1 Million point dataset, one may expect queries to take anywhere from minutes to hours, depending on the number of clusters you want to highlight. For 50'000 clusters the performance difference between USearch and conventional clustering methods may easily reach 100x.
 
 ## Joins, One-to-One, One-to-Many, and Many-to-Many Mappings
 
@@ -325,6 +361,10 @@ matches = index.search(fingerprints, 10)
 
 [smiles]: https://en.wikipedia.org/wiki/Simplified_molecular-input_line-entry_system
 [rdkit-fingerprints]: https://www.rdkit.org/docs/RDKit_Book.html#additional-information-about-the-fingerprints
+
+### USearch + POI Coordinates = GIS Applications... on iOS?
+
+With Objective-C and iOS bindings, USearch can be easily used in mobile applications
 
 
 ## Integrations

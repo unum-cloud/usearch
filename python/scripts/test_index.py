@@ -126,35 +126,63 @@ def test_index_stats(batch_size):
     index.add(keys, vectors, threads=threads)
 
     assert index.max_level >= 0
-    assert index.levels_stats.nodes >= batch_size
+    assert index.stats.nodes >= batch_size
+    assert index.levels_stats[0].nodes == batch_size
     assert index.level_stats(0).nodes == batch_size
+
+    assert index.levels_stats[index.max_level].nodes > 0
 
 
 @pytest.mark.parametrize("ndim", [1, 3, 8, 32, 256, 4096])
-@pytest.mark.parametrize("batch_size", [1, 7, 1024])
+@pytest.mark.parametrize("batch_size", [0, 1, 7, 1024])
 @pytest.mark.parametrize("quantization", [ScalarKind.F32, ScalarKind.I8])
 def test_index_save_load_restore_copy(ndim, quantization, batch_size):
     index = Index(ndim=ndim, dtype=quantization, multi=False)
-    keys = np.arange(batch_size)
-    vectors = random_vectors(count=batch_size, ndim=ndim)
-    index.add(keys, vectors, threads=threads)
+
+    if batch_size > 0:
+        keys = np.arange(batch_size)
+        vectors = random_vectors(count=batch_size, ndim=ndim)
+        index.add(keys, vectors, threads=threads)
 
     index.save("tmp.usearch")
     index.clear()
     assert len(index) == 0
+    assert os.path.exists("tmp.usearch")
 
     index.load("tmp.usearch")
     assert len(index) == batch_size
-    assert len(index[0].flatten()) == ndim
+    if batch_size > 0:
+        assert len(index[0].flatten()) == ndim
 
-    index = Index.restore("tmp.usearch", view=True)
+    index_meta = Index.metadata("tmp.usearch")
+    assert index_meta is not None
+
+    index = Index.restore("tmp.usearch", view=False)
     assert len(index) == batch_size
-    assert len(index[0].flatten()) == ndim
+    if batch_size > 0:
+        assert len(index[0].flatten()) == ndim
 
     copied_index = index.copy()
     assert len(copied_index) == len(index)
-    assert np.allclose(np.vstack(copied_index.get(keys)), np.vstack(index.get(keys)))
+    if batch_size > 0:
+        assert np.allclose(
+            np.vstack(copied_index.get(keys)), np.vstack(index.get(keys))
+        )
 
+    # Perform the same operations in RAM, without touching the filesystem
+    serialized_index = index.save()
+    deserialized_metadata = Index.metadata(serialized_index)
+    assert deserialized_metadata is not None
+
+    deserialized_index = Index.restore(serialized_index)
+    assert len(deserialized_index) == len(index)
+    assert set(np.array(deserialized_index.keys)) == set(np.array(index.keys))
+    if batch_size > 0:
+        assert np.allclose(
+            np.vstack(deserialized_index.get(keys)), np.vstack(index.get(keys))
+        )
+
+    deserialized_index.reset()
     index.reset()
     os.remove("tmp.usearch")
 

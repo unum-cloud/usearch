@@ -407,7 +407,7 @@ class SearchTask:
 
         return TaskResult(
             search_per_second=self.queries.shape[0] / dt,
-            recall_at_one=results.recall_first(self.neighbors[:, 0].flatten()),
+            recall_at_one=results.mean_recall(self.neighbors[:, 0].flatten()),
         )
 
     def slices(self, batch_size: int) -> List[SearchTask]:

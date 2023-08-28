@@ -857,7 +857,7 @@ class growing_hash_set_gt {
     std::size_t size() const noexcept { return count_; }
 
     void clear() noexcept {
-        std::memset(slots_, 0xFF, capacity_ * sizeof(element_t));
+        std::memset((void*)slots_, 0xFF, capacity_ * sizeof(element_t));
         count_ = 0;
     }
 
@@ -930,7 +930,7 @@ class growing_hash_set_gt {
         if (!new_slots)
             return false;
 
-        std::memset(new_slots, 0xFF, new_capacity * sizeof(element_t));
+        std::memset((void*)new_slots, 0xFF, new_capacity * sizeof(element_t));
         std::size_t new_count = count_;
         if (count_) {
             for (std::size_t old_index = 0; old_index != capacity_; ++old_index) {
@@ -1353,7 +1353,7 @@ class output_file_t {
             return result.failed(std::strerror(errno));
         return result;
     }
-    serialization_result_t write(void* begin, std::size_t length) noexcept {
+    serialization_result_t write(void const* begin, std::size_t length) noexcept {
         serialization_result_t result;
         std::size_t written = std::fwrite(begin, length, 1, file_);
         if (!written)
@@ -1440,6 +1440,7 @@ class memory_mapped_file_t {
 
   public:
     explicit operator bool() const noexcept { return ptr_ != nullptr; }
+    byte_t* data() noexcept { return reinterpret_cast<byte_t*>(ptr_); }
     byte_t const* data() const noexcept { return reinterpret_cast<byte_t const*>(ptr_); }
     std::size_t size() const noexcept { return static_cast<std::size_t>(length_); }
 
@@ -2540,6 +2541,8 @@ class index_gt {
         // Normalize stats
         result.computed_distances = context.computed_distances_count - result.computed_distances;
         result.visited_members = context.iteration_cycles - result.visited_members;
+
+        (void)predicate;
         return result;
     }
 
@@ -2591,11 +2594,45 @@ class index_gt {
         return result;
     }
 
+    stats_t stats(stats_t* stats_per_level, std::size_t max_level) const noexcept {
+
+        std::size_t head_bytes = node_head_bytes_();
+        for (std::size_t i = 0; i != size(); ++i) {
+            node_t node = node_at_(i);
+
+            stats_per_level[0].nodes++;
+            stats_per_level[0].edges += neighbors_(node, 0).size();
+            stats_per_level[0].allocated_bytes += pre_.neighbors_base_bytes + head_bytes;
+
+            level_t node_level = static_cast<level_t>(node.level());
+            for (level_t l = 1; l <= (std::min)(node_level, static_cast<level_t>(max_level)); ++l) {
+                stats_per_level[l].nodes++;
+                stats_per_level[l].edges += neighbors_(node, l).size();
+                stats_per_level[l].allocated_bytes += pre_.neighbors_bytes;
+            }
+        }
+
+        // The `max_edges` parameter can be inferred from `nodes`
+        stats_per_level[0].max_edges = stats_per_level[0].nodes * config_.connectivity_base;
+        for (std::size_t l = 1; l <= max_level; ++l)
+            stats_per_level[l].max_edges = stats_per_level[l].nodes * config_.connectivity;
+
+        // Aggregate stats across levels
+        stats_t result{};
+        for (std::size_t l = 0; l <= max_level; ++l)
+            result.nodes += stats_per_level[l].nodes,                         //
+                result.edges += stats_per_level[l].edges,                     //
+                result.allocated_bytes += stats_per_level[l].allocated_bytes, //
+                result.max_edges += stats_per_level[l].max_edges;             //
+
+        return result;
+    }
+
     /**
      *  @brief  A relatively accurate lower bound on the amount of memory consumed by the system.
      *          In practice it's error will be below 10%.
      *
-     *  @see    `stream_length` for the length of the binary serialized representation.
+     *  @see    `serialized_length` for the length of the binary serialized representation.
      */
     std::size_t memory_usage(std::size_t allocator_entry_bytes = default_allocator_entry_bytes()) const noexcept {
         std::size_t total = 0;
@@ -2620,27 +2657,20 @@ class index_gt {
 #pragma region Serialization
 
     /**
-     *  @brief  Saves serialized binary index representation to a file, generally on disk.
+     *  @brief  Estimate the binary length (in bytes) of the serialized index.
      */
-    template <typename progress_at = dummy_progress_t>
-    serialization_result_t save(output_file_t file, progress_at&& progress = {}) const noexcept {
-
-        serialization_result_t result = file.open_if_not();
-        if (result)
-            stream(
-                [&](void* buffer, std::size_t length) {
-                    result = file.write(buffer, length);
-                    return !!result;
-                },
-                std::forward<progress_at>(progress));
-        return result;
+    std::size_t serialized_length() const noexcept {
+        std::size_t neighbors_length = 0;
+        for (std::size_t i = 0; i != size(); ++i)
+            neighbors_length += node_bytes_(node_at_(i).level()) + sizeof(level_t);
+        return sizeof(index_serialized_header_t) + neighbors_length;
     }
 
     /**
      *  @brief  Saves serialized binary index representation to a stream.
      */
     template <typename output_callback_at, typename progress_at = dummy_progress_t>
-    serialization_result_t stream(output_callback_at&& callback, progress_at&& progress = {}) const noexcept {
+    serialization_result_t save_to_stream(output_callback_at&& output, progress_at&& progress = {}) const noexcept {
 
         serialization_result_t result;
 
@@ -2651,8 +2681,8 @@ class index_gt {
         header.connectivity_base = config_.connectivity_base;
         header.max_level = max_level_;
         header.entry_slot = entry_slot_;
-        if (!callback(&header, sizeof(header)))
-            return result.failed("Failed to serialize into stream");
+        if (!output(&header, sizeof(header)))
+            return result.failed("Failed to serialize the header into stream");
 
         // Export the number of levels per node
         // That is both enough to estimate the overall memory consumption,
@@ -2660,15 +2690,15 @@ class index_gt {
         for (std::size_t i = 0; i != header.size; ++i) {
             node_t node = node_at_(i);
             level_t level = node.level();
-            if (!callback(&level, sizeof(level)))
-                return result.failed("Failed to serialize into stream");
+            if (!output(&level, sizeof(level)))
+                return result.failed("Failed to serialize nodes levels into stream");
         }
 
         // After that dump the nodes themselves
         for (std::size_t i = 0; i != header.size; ++i) {
             span_bytes_t node_bytes = node_bytes_(node_at_(i));
-            if (!callback(node_bytes.data(), node_bytes.size()))
-                return result.failed("Failed to serialize into stream");
+            if (!output(node_bytes.data(), node_bytes.size()))
+                return result.failed("Failed to serialize nodes into stream");
             progress(i, header.size);
         }
 
@@ -2676,36 +2706,22 @@ class index_gt {
     }
 
     /**
-     *  @brief  Estimate the binary length (in bytes) of the serialized index.
+     *  @brief  Symmetric to `save_from_stream`, pulls data from a stream.
      */
-    std::size_t stream_length() const noexcept {
-        std::size_t neighbors_length = 0;
-        for (std::size_t i = 0; i != size(); ++i)
-            neighbors_length += node_bytes_(node_at_(i).level()) + sizeof(level_t);
-        return sizeof(index_serialized_header_t) + neighbors_length;
-    }
+    template <typename input_callback_at, typename progress_at = dummy_progress_t>
+    serialization_result_t load_from_stream(input_callback_at&& input, progress_at&& progress = {}) noexcept {
 
-    /**
-     *  @brief  Loads the serialized binary index representation from disk to RAM.
-     *          Adjusts the configuration properties of the constructed index to
-     *          match the settings in the file.
-     */
-    template <typename progress_at = dummy_progress_t>
-    serialization_result_t load(input_file_t file, progress_at&& progress = {}) noexcept {
+        serialization_result_t result;
 
         // Remove previously stored objects
         reset();
 
-        serialization_result_t result = file.open_if_not();
-        if (!result)
-            return result;
-
         // Pull basic metadata
         index_serialized_header_t header;
-        result = file.read(&header, sizeof(header));
-        if (!result)
-            return result;
+        if (!input(&header, sizeof(header)))
+            return result.failed("Failed to pull the header from the stream");
 
+        // We are loading an empty index, no more work to do
         if (!header.size) {
             reset();
             return result;
@@ -2716,9 +2732,8 @@ class index_gt {
         buffer_gt<level_t, levels_allocator_t> levels(header.size);
         if (!levels)
             return result.failed("Out of memory");
-        result = file.read(levels, header.size * sizeof(level_t));
-        if (!result)
-            return result;
+        if (!input(levels, header.size * sizeof(level_t)))
+            return result.failed("Failed to pull nodes levels from the stream");
 
         // Submit metadata
         config_.connectivity = header.connectivity;
@@ -2737,15 +2752,121 @@ class index_gt {
         // Load the nodes
         for (std::size_t i = 0; i != header.size; ++i) {
             span_bytes_t node_bytes = node_malloc_(levels[i]);
-            result = file.read(node_bytes.data(), node_bytes.size());
-            if (!result) {
+            if (!input(node_bytes.data(), node_bytes.size())) {
                 reset();
-                return result;
+                return result.failed("Failed to pull nodes from the stream");
             }
             nodes_[i] = node_t{node_bytes.data()};
             progress(i, header.size);
         }
         return {};
+    }
+
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t save(char const* file_path, progress_at&& progress = {}) const noexcept {
+        return save(output_file_t(file_path), std::forward<progress_at>(progress));
+    }
+
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t load(char const* file_path, progress_at&& progress = {}) noexcept {
+        return load(input_file_t(file_path), std::forward<progress_at>(progress));
+    }
+
+    /**
+     *  @brief  Saves serialized binary index representation to a file, generally on disk.
+     */
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t save(output_file_t file, progress_at&& progress = {}) const noexcept {
+
+        serialization_result_t io_result = file.open_if_not();
+        if (!io_result)
+            return io_result;
+
+        serialization_result_t stream_result = save_to_stream(
+            [&](void* buffer, std::size_t length) {
+                io_result = file.write(buffer, length);
+                return !!io_result;
+            },
+            std::forward<progress_at>(progress));
+
+        if (!stream_result)
+            return stream_result;
+        return io_result;
+    }
+
+    /**
+     *  @brief  Memory-maps the serialized binary index representation from disk,
+     *          @b without copying data into RAM, and fetching it on-demand.
+     */
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t save(memory_mapped_file_t file, std::size_t offset = 0,
+                                progress_at&& progress = {}) const noexcept {
+
+        serialization_result_t io_result = file.open_if_not();
+        if (!io_result)
+            return io_result;
+
+        serialization_result_t stream_result = save_to_stream(
+            [&](void* buffer, std::size_t length) {
+                if (offset + length > file.size())
+                    return false;
+                std::memcpy(file.data() + offset, buffer, length);
+                offset += length;
+                return true;
+            },
+            std::forward<progress_at>(progress));
+
+        return stream_result;
+    }
+
+    /**
+     *  @brief  Loads the serialized binary index representation from disk to RAM.
+     *          Adjusts the configuration properties of the constructed index to
+     *          match the settings in the file.
+     */
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t load(input_file_t file, progress_at&& progress = {}) noexcept {
+
+        serialization_result_t io_result = file.open_if_not();
+        if (!io_result)
+            return io_result;
+
+        serialization_result_t stream_result = load_from_stream(
+            [&](void* buffer, std::size_t length) {
+                io_result = file.read(buffer, length);
+                return !!io_result;
+            },
+            std::forward<progress_at>(progress));
+
+        if (!stream_result)
+            return stream_result;
+        return io_result;
+    }
+
+    /**
+     *  @brief  Loads the serialized binary index representation from disk to RAM.
+     *          Adjusts the configuration properties of the constructed index to
+     *          match the settings in the file.
+     */
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t load(memory_mapped_file_t file, std::size_t offset = 0,
+                                progress_at&& progress = {}) noexcept {
+
+        serialization_result_t io_result = file.open_if_not();
+        if (!io_result)
+            return io_result;
+
+        serialization_result_t stream_result = load_from_stream(
+            [&](void* buffer, std::size_t length) {
+                if (offset + length > file.size())
+                    return false;
+                std::memcpy(buffer, file.data() + offset, length);
+                offset += length;
+                return true;
+            },
+            std::forward<progress_at>(progress));
+
+        return stream_result;
     }
 
     /**
@@ -2785,7 +2906,7 @@ class index_gt {
         config_.connectivity_base = header.connectivity_base;
         pre_ = precompute_(config_);
         misaligned_ptr_gt<level_t> levels{(byte_t*)file.data() + offset + sizeof(header)};
-        offsets[0] = offset + sizeof(header) + sizeof(level_t) * header.size;
+        offsets[0u] = offset + sizeof(header) + sizeof(level_t) * header.size;
         for (std::size_t i = 1; i < header.size; ++i)
             offsets[i] = offsets[i - 1] + node_bytes_(levels[i - 1]);
 
@@ -3522,7 +3643,6 @@ static join_result_t join(               //
     config.max_proposals = (std::min)(men.size(), config.max_proposals);
 
     using distance_t = typename men_at::distance_t;
-    using dynamic_allocator_t = typename men_at::dynamic_allocator_t;
     using dynamic_allocator_traits_t = typename men_at::dynamic_allocator_traits_t;
     using man_key_t = typename men_at::key_t;
     using woman_key_t = typename women_at::key_t;

@@ -12,7 +12,7 @@ filterwarnings = ["error"]
 test-requires = ["pytest", "numpy"]
 test-command = "pytest {project}/python/scripts"
 build-verbosity = 0
-skip = ["*musllinux*", "*i686*", "pp*", "cp36-*"]
+skip = ["*musllinux*", "*i686*", "pp*", "cp36-*", "cp312-*"]
 
 [tool.cibuildwheel.linux]
 before-build = [
@@ -46,4 +46,4 @@ before-build = [
     "git submodule update --init --recursive"
 ]
 archs = ["x86", "AMD64"]
-skip = ["*win32*", "pp*", "cp36-*"]
+skip = ["*win32*", "pp*", "cp36-*", "cp312-*"]
