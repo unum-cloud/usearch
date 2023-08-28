@@ -46,34 +46,51 @@ public class InitTests
         }
     }
 
-    [Fact(Skip = "bug with userch_get in C99 interface: return always 1")]
-    // [Fact]
+    [Fact]
+    public void ItCanGetMultipleFloatVectorsForSingleKey()
+    {
+        using (var index = new USearchIndex(MetricKind.Cos, ScalarKind.Float32, 3, multi: true))
+        {
+            var inputVectors = new float[][] {
+                    new float[] { 1.0f, 6.0f, 11.0f },
+                    new float[] { 2.0f, 7.0f, 12.0f },
+                    new float[] { 3.0f, 8.0f, 13.0f },
+                    new float[] { 5.0f, 10.0f, 15.0f }
+            };
+            index.Add(
+                new ulong[] { 2, 2, 2, 2 },
+                inputVectors
+            );
+            Assert.True(index.Contains(2));
+            Assert.Equal((uint)4, index.Size());
+            Assert.Equal(4, index.Count(2));
+
+            int foundVectorsCount = index.Get(2, 3, out float[][] retrievedVectors);
+            Assert.Equal(3, foundVectorsCount);
+        }
+    }
+
+    [Fact]
     public void ItCanGetMultipleDoubleVectorsForSingleKey()
     {
         using (var index = new USearchIndex(MetricKind.Cos, ScalarKind.Float64, 3, multi: true))
         {
+            var inputVectors = new double[][] {
+                new double[] { 1.0, 6.0, 11.0 },
+                new double[] { 2.0, 7.0, 12.0 },
+                new double[] { 3.0, 8.0, 13.0 },
+                new double[] { 5.0, 10.0, 15.0 }
+            };
             index.Add(
-                new ulong[] { 1, 2, 3, 2 },
-                new double[][] {
-                    new double[] { 1.0, 6.0, 11.0 },
-                    new double[] { 2.0, 7.0, 12.0 },
-                    new double[] { 3.0, 8.0, 13.0 },
-                    new double[] { 5.0, 10.0, 15.0 }
-                }
+                new ulong[] { 2, 2, 2, 2 },
+                inputVectors
             );
-            // index.Add(1, new double[] { 1.0, 6.0, 11.0 });
-            // index.Add(2, new double[] { 2.0, 7.0, 12.0 });
-            // index.Add(3, new double[] { 3.0, 8.0, 13.0 });
-            // index.Add(2, new double[] { 5.0, 10.0, 15.0 });
-            Assert.True(index.Contains(1));
             Assert.True(index.Contains(2));
-            Assert.True(index.Contains(3));
             Assert.Equal((uint)4, index.Size());
-            Assert.Equal(2, index.Count(2));
+            Assert.Equal(4, index.Count(2));
 
-            int foundVectorsCount = index.Get(2, 2, out double[,] retrievedVectors);
-            Assert.Equal(2, foundVectorsCount);
-
+            int foundVectorsCount = index.Get(2, 3, out double[][] retrievedVectors);
+            Assert.Equal(3, foundVectorsCount);
         }
     }
 

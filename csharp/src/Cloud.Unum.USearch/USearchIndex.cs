@@ -168,23 +168,26 @@ public class USearchIndex : IDisposable
         return foundVectorsCount;
     }
 
-    public int Get(ulong key, int count, out float[,] vectors)
+    public int Get(ulong key, int count, out float[][] vectors)
     {
-        throw new NotImplementedException("Feature not available: Waiting for resolution of C99 interface bug.");
-        // var flattenVectors = new float[count * (int)this._cachedDimensions];
-        // int foundVectorsCount = checked((int)usearch_get(this._index, key, (UIntPtr)count, flattenVectors, ScalarKind.Float32, out IntPtr error));
-        // HandleError(error);
-        // if (foundVectorsCount < 1)
-        // {
-        //     vectors = null;
-        // }
-        // else
-        // {
-        //     vectors = new float[count, (int)this._cachedDimensions];
-        //     Buffer.BlockCopy(flattenVectors, 0, vectors, 0, count * sizeof(float));
-        // }
+        var flattenVectors = new float[count * (int)this._cachedDimensions];
+        int foundVectorsCount = checked((int)usearch_get(this._index, key, (UIntPtr)count, flattenVectors, ScalarKind.Float32, out IntPtr error));
+        HandleError(error);
+        if (foundVectorsCount < 1)
+        {
+            vectors = null;
+        }
+        else
+        {
+            vectors = new float[foundVectorsCount][];
+            for (int i = 0; i < foundVectorsCount; i++)
+            {
+                vectors[i] = new float[this._cachedDimensions];
+                Array.Copy(flattenVectors, i * (int)this._cachedDimensions, vectors[i], 0, (int)this._cachedDimensions);
+            }
+        }
 
-        // return foundVectorsCount;
+        return foundVectorsCount;
     }
 
     public int Get(ulong key, out double[] vector)
@@ -200,23 +203,26 @@ public class USearchIndex : IDisposable
         return foundVectorsCount;
     }
 
-    public int Get(ulong key, int count, out double[,] vectors)
+    public int Get(ulong key, int count, out double[][] vectors)
     {
-        throw new NotImplementedException("Feature not available: Waiting for resolution of C99 interface bug.");
-        // var flattenVectors = new double[count * (int)this._cachedDimensions];
-        // int foundVectorsCount = checked((int)usearch_get(this._index, key, (UIntPtr)count, flattenVectors, ScalarKind.Float64, out IntPtr error));
-        // HandleError(error);
-        // if (foundVectorsCount < 1)
-        // {
-        //     vectors = null;
-        // }
-        // else
-        // {
-        //     vectors = new double[count, (int)this._cachedDimensions];
-        //     Buffer.BlockCopy(flattenVectors, 0, vectors, 0, count * sizeof(double));
-        // }
+        var flattenVectors = new double[count * (int)this._cachedDimensions];
+        int foundVectorsCount = checked((int)usearch_get(this._index, key, (UIntPtr)count, flattenVectors, ScalarKind.Float64, out IntPtr error));
+        HandleError(error);
+        if (foundVectorsCount < 1)
+        {
+            vectors = null;
+        }
+        else
+        {
+            vectors = new double[foundVectorsCount][];
+            for (int i = 0; i < foundVectorsCount; i++)
+            {
+                vectors[i] = new double[this._cachedDimensions];
+                Array.Copy(flattenVectors, i * (int)this._cachedDimensions, vectors[i], 0, (int)this._cachedDimensions);
+            }
+        }
 
-        // return foundVectorsCount;
+        return foundVectorsCount;
     }
 
     private int Search<T>(T[] queryVector, int count, out ulong[] keys, out float[] distances, ScalarKind scalarKind)
@@ -274,7 +280,6 @@ public class USearchIndex : IDisposable
     {
         if (error != IntPtr.Zero)
         {
-            Console.WriteLine($"Error {error}");
             throw new USearchException($"USearch operation failed: {Marshal.PtrToStringAnsi(error)}");
         }
     }
