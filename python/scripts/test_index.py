@@ -161,6 +161,14 @@ def test_index_save_load_restore_copy(ndim, quantization, batch_size):
     index.reset()
     os.remove("tmp.usearch")
 
+    # Perform the same operations in RAM, without touching the filesystem
+    serialized_index = index.save()
+    deserialized_index = Index.restore(serialized_index)
+    assert len(deserialized_index) == len(index)
+    assert np.allclose(
+        np.vstack(deserialized_index.get(keys)), np.vstack(index.get(keys))
+    )
+
 
 @pytest.mark.parametrize("batch_size", [32])
 def test_index_contains_remove_rename(batch_size):
