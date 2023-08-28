@@ -28,6 +28,7 @@ Euclidean • Angular • Bitwise • Haversine • User-Defined Metrics
 <a href="https://unum-cloud.github.io/usearch/c">C 99</a> •
 <a href="https://unum-cloud.github.io/usearch/objective-c">Objective-C</a> •
 <a href="https://unum-cloud.github.io/usearch/swift">Swift</a> •
+<a href="https://unum-cloud.github.io/usearch/csharp">C#</a> •
 <a href="https://unum-cloud.github.io/usearch/golang">GoLang</a> •
 <a href="https://unum-cloud.github.io/usearch/wolfram">Wolfram</a>
 <br/>
@@ -38,6 +39,8 @@ Linux • MacOS • Windows • iOS • Docker • WebAssembly
 <a href="https://pypi.org/project/usearch/"> <img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/usearch?label=pypi%20downloads"> </a>
 <a href="https://www.npmjs.com/package/usearch"> <img alt="npm" src="https://img.shields.io/npm/dy/usearch?label=npm%20dowloads"> </a>
 <a href="https://crates.io/crates/usearch"> <img alt="Crates.io" src="https://img.shields.io/crates/d/usearch?label=crate%20downloads"> </a>
+<a href="https://www.nuget.org/packages/Cloud.Unum.USearch"> <img alt="Nuget" src="https://img.shields.io/nuget/dt/Cloud.Unum.USearch?style=social&label=NuGet"> </a>
+<a href="https://hub.docker.com/r/unum/usearch"> <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/unum/usearch?style=social&label=Docker"> </a>
 <img alt="GitHub code size in bytes" src="https://img.shields.io/github/languages/code-size/unum-cloud/usearch">
 </div>
 
