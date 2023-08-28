@@ -669,6 +669,31 @@ class aligned_allocator_gt {
 
 using aligned_allocator_t = aligned_allocator_gt<>;
 
+class page_allocator_t {
+  public:
+    /**
+     *  @brief Allocates an @b uninitialized block of memory of the specified size.
+     *  @param count_bytes The number of bytes to allocate.
+     *  @return A pointer to the allocated memory block, or `nullptr` if allocation fails.
+     */
+    byte_t* allocate(std::size_t count_bytes) const noexcept {
+        count_bytes = divide_round_up(count_bytes, 4096);
+#if defined(USEARCH_DEFINED_WINDOWS)
+        return (byte_t*)(::VirtualAlloc(NULL, count_bytes, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+#else
+        return (byte_t*)mmap(NULL, count_bytes, PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+#endif
+    }
+
+    void deallocate(byte_t* page_pointer, std::size_t count_bytes) const noexcept {
+#if defined(USEARCH_DEFINED_WINDOWS)
+        ::VirtualFree(page_pointer, 0, MEM_RELEASE);
+#else
+        munmap(page_pointer, count_bytes);
+#endif
+    }
+};
+
 /**
  *  @brief  Memory-mapping allocator designed for "alloc many, free at once" usage patterns.
  *          @b Thread-safe, @b except constructors and destructors.
@@ -722,11 +747,7 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
             std::memcpy(&previous_arena, last_arena, sizeof(byte_t*));
             std::size_t last_cap;
             std::memcpy(&last_cap, last_arena + sizeof(byte_t*), sizeof(std::size_t));
-#if defined(USEARCH_DEFINED_WINDOWS)
-            ::VirtualFree(last_arena, 0, MEM_RELEASE);
-#else
-            munmap(last_arena, last_cap);
-#endif
+            page_allocator_t{}.deallocate(last_arena, last_cap);
             last_arena = previous_arena;
         }
 
@@ -767,15 +788,9 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
         std::unique_lock<std::mutex> lock(mutex_);
         if (!last_arena_ || (last_usage_ + extended_bytes > last_capacity_)) {
             std::size_t new_cap = last_capacity_ * capacity_multiplier();
-#if defined(USEARCH_DEFINED_WINDOWS)
-            byte_t* new_arena = (byte_t*)(::VirtualAlloc(NULL, new_cap, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
-            if (new_arena == nullptr)
-                return nullptr;
-#else
-            byte_t* new_arena = (byte_t*)mmap(NULL, new_cap, PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+            byte_t* new_arena = page_allocator_t{}.allocate(new_cap);
             if (!new_arena)
                 return nullptr;
-#endif
             std::memcpy(new_arena, &last_arena_, sizeof(byte_t*));
             std::memcpy(new_arena + sizeof(byte_t*), &new_cap, sizeof(std::size_t));
 
