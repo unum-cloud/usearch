@@ -271,7 +271,7 @@ jobs:
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
 
-  build_usearch_libs:
+  build_csharp:
     name: Build USearch libraries
     strategy:
       matrix:
