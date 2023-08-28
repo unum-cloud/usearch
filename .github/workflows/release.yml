@@ -272,6 +272,7 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
 
   build_usearch_libs:
+    name: Build USearch libraries
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -311,6 +312,7 @@ jobs:
           path: ${{ github.workspace }}/csharp/lib/**/*
 
   publish_csharp:
+    name: Publish C#
     runs-on: ubuntu-latest
     needs: [build_usearch_libs]
     env:
