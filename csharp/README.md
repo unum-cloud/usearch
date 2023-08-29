@@ -40,7 +40,7 @@ index.Save("index.usearch")
 using var indexLoaded = new USearchIndex("index.usearch");
 
 // Or view from disk without loading in memory
-// using var indexLoaded = new USearchIndex("index.usearch", view: True);
+// using var indexLoaded = new USearchIndex("index.usearch", view: true);
 
 Trace.Assert(indexLoaded.Size() == 1);
 Trace.Assert(indexLoaded.Dimensions() == 3);
