@@ -347,7 +347,7 @@ jobs:
 
       - name: Publish NuGet packages
         run: |
-          dotnet nuget push "${{  env.NUGET_DIR }}/*.nupkg" --api-key "${{ secrets.NUGET_API }}" --source "${{ env.NUGET_SOURCE }}"
+          dotnet nuget push "${{  env.NUGET_DIR }}/*.nupkg" --api-key "${{ secrets.NUGET_API }}" --source "${{ env.NUGET_SOURCE }}" --skip-duplicate
 
   build_docs:
     name: Build Docs
