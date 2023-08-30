@@ -222,9 +222,6 @@ jobs:
   test_golang:
     name: Test Golang
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: ["linux/amd64", "linux/arm64"]
     steps:
     - uses: actions/checkout@v3
       with:
@@ -240,7 +237,8 @@ jobs:
     - name: Build library
       run: |
         cd golang && make -C ../c libusearch_c.so
-        mv ../c/libusearch_c.so libusearch.a
+        sudo mv ../c/libusearch_c.so /usr/local/lib/libusearch.a
+        sudo mv ../c/usearch.h /usr/local/include/usearch.h
 
     - name: Run test
       run: |
