@@ -220,7 +220,7 @@ jobs:
         working-directory: ${{ github.workspace }}/csharp/
 
   test_golang:
-    name: Create Debian package for ${{ matrix.arch }}
+    name: Test Golang
     runs-on: ubuntu-latest
     strategy:
       matrix:
