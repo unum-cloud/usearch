@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
+import sys
 import re
 
-# Read the content of the input file
-file_path = 'usearch-wasm.c'
+if len(sys.argv) > 1:
+    file_path = sys.argv[1]
+else:
+    file_path = 'usearch-wasm.c'
 
+# Read the content of the input file
 with open(file_path, 'r') as input_file:
     content = input_file.read()
 

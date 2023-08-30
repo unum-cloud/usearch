@@ -7,6 +7,7 @@ extern "C" {
 #ifndef USEARCH_EXPORT
 #define USEARCH_EXPORT
 #endif
+#include <cstddef>
 #include <stdbool.h> // `bool`
 #include <stdint.h>  // `size_t`
 
