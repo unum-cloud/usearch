@@ -1,11 +1,15 @@
 # USearch for GoLang
 
 ## Installation
+
 Download and install from latest release debian package for appropiate architecture
 
-	wget https://github.com/unum-cloud/usearch/releases/download/<release_tag>/usearch_<arch>_<usearch_version>.deb
-	dpkg -i usearch_<arch>_<usearch_version>.deb
+```
+wget https://github.com/unum-cloud/usearch/releases/download/<release_tag>/usearch_<arch>_<usearch_version>.deb
+dpkg -i usearch_<arch>_<usearch_version>.deb
+```
 ## Quickstart
+
 1. Create go.mod file
 
 	```
