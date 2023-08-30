@@ -2,15 +2,17 @@
 
 ## Installation
 
-Download and install from latest release debian package for appropiate architecture
+Download and install from the Debian package from the latest release.
+Substitute `<release_tag>`, `<arch>`, and `<usearch_version>` with your settings.
 
 ```
 wget https://github.com/unum-cloud/usearch/releases/download/<release_tag>/usearch_<arch>_<usearch_version>.deb
 dpkg -i usearch_<arch>_<usearch_version>.deb
 ```
+
 ## Quickstart
 
-1. Create go.mod file
+1. Create a `go.mod` file:
 
 	```
 	module usearch_example
@@ -18,7 +20,7 @@ dpkg -i usearch_<arch>_<usearch_version>.deb
 	go <go_version>
 	```
 
-2. Create example.go
+2. Create an `example.go`:
 
 	```golang
 	package main
@@ -58,12 +60,13 @@ dpkg -i usearch_<arch>_<usearch_version>.deb
 	}
 	```
 
-3. Get USearch
+3. Get USearch:
+
 	```
 	go get github.com/unum-cloud/usearch/golang
 	```
 
-4. Run
+4. Run:
 
 	```
 	go run example.go
