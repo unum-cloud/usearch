@@ -110,28 +110,26 @@ jobs:
         ref: 'main'
     - run: git submodule update --init --recursive
 
-    - name: Set up Qemu
+    - name: Setup QEMU
       uses: docker/setup-qemu-action@v2
 
-    - name: Set up Docker Buildx
+    - name: Setup Docker
       uses: docker/setup-buildx-action@v2
-      with:
-        driver-opts: env.BUILDKIT_STEP_LOG_MAX_SIZE=10485760
 
-    - name: Get docker daemon ip
+    - name: Get Docker daemon ip
       id: dockerip
       run: |
         docker_ip=$(ip addr show docker0 | grep -Po 'inet \K[\d.]+') && \
         echo "docker_ip=$docker_ip" >> "$GITHUB_OUTPUT"
         
-    - name: Set new password for runner user
+    - name: Set runner user password
       id: userpass
       run: |
         user_pass="1122"
         echo "runner:$user_pass" | sudo chpasswd
         echo "user_pass=$user_pass" >> "$GITHUB_OUTPUT"
           
-    - name: Build usearch library
+    - name: Build library
       run: |
         docker buildx create --use
         docker buildx build \
@@ -144,7 +142,7 @@ jobs:
     - name: Clear Docker buildx cache
       run: docker buildx prune --all --force
 
-    - name: Upload archive to release assets
+    - name: Upload archive
       uses: xresloader/upload-to-github-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -174,7 +172,7 @@ jobs:
       with:
         go-version: '^1.19.0'
 
-    - name: Setuo mingw
+    - name: Setup Mingw
       uses: egor-tensin/setup-mingw@v2
       with:
         platform: ${{ matrix.arch }}
@@ -186,7 +184,7 @@ jobs:
         version=$(cat VERSION)
         echo "version=$version" >> $GITHUB_OUTPUT
         
-    - name: Build usearch library
+    - name: Build library
       run: |
         cd c/ && g++ -std=c++11 -o libusearch.dll -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -I ../robin-map/include/ -shared && cd ..
         cp c/libusearch.dll golang/libusearch.dll && cp c/usearch.h golang/usearch.h
@@ -200,7 +198,8 @@ jobs:
       run: |
         cd golang/
         tar -cvf usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar .\libusearch.dll .\usearch.h
-    - name: Upload archive to release assets
+
+    - name: Upload archive
       uses: xresloader/upload-to-github-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -221,23 +220,24 @@ jobs:
       with:
         persist-credentials: false
         ref: 'main'
-
     - run: git submodule update --init --recursive
     
     - uses: actions/setup-go@v4
       with:
         go-version: '^1.21.0'
 
-    - name: Get usearch version
+    - name: Get version
       id: version
       run: |
         version=$(cat VERSION)
         echo "version=$version" >> $GITHUB_OUTPUT
-    - name: Build usearch library
+
+    - name: Build library
       run: |
         cd c/ && clang++ -std=c++11 -o libusearch.so -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -I ../robin-map/include/ -shared -target ${{ matrix.arch }}-apple-macos11 && cd ..
         cp c/usearch.h golang/
         cp c/libusearch.so golang/libusearch.so
+
     - name: Golang test
       run: |
         cd golang/
@@ -248,7 +248,8 @@ jobs:
       run: |
         cd golang/
         zip -r usearch_macOS_${{ matrix.arch }}_${{ steps.version.outputs.version }}.zip libusearch.so usearch.h 
-    - name: Upload archive to release assets
+
+    - name: Upload archive
       uses: xresloader/upload-to-github-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
