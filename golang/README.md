@@ -54,7 +54,12 @@ Download and install from latest release debian package for appropiate architect
 	}
 	```
 
-3. Run
+3. Get USearch
+	```
+	go get github.com/unum-cloud/usearch/golang
+	```
+
+4. Run
 
 	```
 	go run example.go
