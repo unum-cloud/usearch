@@ -99,6 +99,7 @@ jobs:
   create_linux_deb_package:
     name: Create Debian package for Linux on ${{ matrix.arch }}
     runs-on: ubuntu-latest
+    needs: versioning
     strategy:
       matrix:
         arch: ["linux/amd64", "linux/arm64"]
@@ -155,6 +156,7 @@ jobs:
   create_windows_dll_library:
     name: Create Dll library For Windows ${{ matrix.arch }}
     runs-on: windows-latest
+    needs: versioning
     strategy:
       matrix:
         arch: [x64, x86]
@@ -210,6 +212,7 @@ jobs:
   create_macOS_library:
     name: Create Shared Library For MacOS ${{ matrix.arch }}
     runs-on: macOS-latest
+    needs: versioning
     strategy:
       matrix:
         arch: [arm64, x86_64]
