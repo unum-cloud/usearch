@@ -6,9 +6,8 @@ import (
 )
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../c/
-#cgo LDFLAGS: -L${SRCDIR}/. -Wl,-rpath,$SRCDIR/. -lusearch_c
-#include <usearch.h>
+#cgo LDFLAGS: -L. -lusearch
+#include "usearch.h"
 #include <stdlib.h>
 */
 import "C"
@@ -91,6 +90,8 @@ type IndexConfig struct {
 	ExpansionAdd uint
 	// The @b optional expansion factor used for index construction during search operations.
 	ExpansionSearch uint
+	// The @b optional multi flag.
+	Multi bool
 }
 
 func DefaultConfig(dimensions uint) IndexConfig {
@@ -101,6 +102,7 @@ func DefaultConfig(dimensions uint) IndexConfig {
 	c.Connectivity = 0
 	c.ExpansionAdd = 0
 	c.ExpansionSearch = 0
+	c.Multi = false
 	return c
 }
 
@@ -114,16 +116,18 @@ func NewIndex(conf IndexConfig) (index *Index, err error) {
 	index = &Index{config: conf}
 
 	conf = index.config
-	dimensions := C.ulong(conf.Dimensions)
-	connectivity := C.ulong(conf.Connectivity)
-	expansion_add := C.ulong(conf.ExpansionAdd)
-	expansion_search := C.ulong(conf.ExpansionSearch)
+	dimensions := C.size_t(conf.Dimensions)
+	connectivity := C.size_t(conf.Connectivity)
+	expansion_add := C.size_t(conf.ExpansionAdd)
+	expansion_search := C.size_t(conf.ExpansionSearch)
+	multi := C.bool(conf.Multi)
 
 	options := C.struct_usearch_init_options_t{}
 	options.dimensions = dimensions
 	options.connectivity = connectivity
 	options.expansion_add = expansion_add
 	options.expansion_search = expansion_search
+	options.multi = multi
 
 	// Map the metric kind to a C enum
 	switch conf.Metric {
@@ -281,21 +285,21 @@ func (index *Index) Contains(key Key) (found bool, err error) {
 	return found, nil
 }
 
-func (index *Index) Get(key Key) (vector []float32, err error) {
+func (index *Index) Get(key Key, count uint) (vectors []float32, err error) {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
 	}
 
-	vector = make([]float32, index.config.Dimensions)
+	vectors = make([]float32, index.config.Dimensions * count)
 	var errorMessage *C.char
-	found := bool(C.usearch_get((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (C.usearch_key_t)(key), unsafe.Pointer(&vector[0]), C.usearch_scalar_f32_k, (*C.usearch_error_t)(&errorMessage)))
+	found := uint(C.usearch_get((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (C.usearch_key_t)(key), (C.size_t)(count), unsafe.Pointer(&vectors[0]), C.usearch_scalar_f32_k, (*C.usearch_error_t)(&errorMessage)))
 	if errorMessage != nil {
 		return nil, errors.New(C.GoString(errorMessage))
 	}
-	if !found {
+	if found == 0 {
 		return nil, nil
 	}
-	return vector, nil
+	return vectors, nil
 }
 
 // Performs k-Approximate Nearest Neighbors Search for closest vectors to query.

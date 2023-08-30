@@ -14,6 +14,7 @@ Overview
    java/index
    c/index
    swift/index
+   csharp/index
    golang/index
    wolfram/index
 

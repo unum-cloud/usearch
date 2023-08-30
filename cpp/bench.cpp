@@ -291,7 +291,7 @@ void index_many(index_at& index, std::size_t n, vector_id_at const* ids, real_at
         config.thread = omp_get_thread_num();
 #endif
         float_span_t vector{vectors + dims * i, dims};
-        index.add(ids[i], vector, config);
+        index.add(ids[i], vector, config.thread);
         printer.progress++;
         if (config.thread == 0)
             printer.refresh();
@@ -315,7 +315,7 @@ void search_many( //
         config.thread = omp_get_thread_num();
 #endif
         float_span_t vector{vectors + dims * i, dims};
-        index.search(vector, wanted, config).dump_to(ids + wanted * i, distances + wanted * i);
+        index.search(vector, wanted, config.thread).dump_to(ids + wanted * i, distances + wanted * i);
         printer.progress++;
         if (config.thread == 0)
             printer.refresh();

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>10</LangVersion>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)'==''">Debug</Configuration>
+    <Platform Condition="'$(Platform)'==''">AnyCPU</Platform>
+
+    <TargetArchitecture Condition="'$(TargetArchitecture)' == ''">$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)</TargetArchitecture>
+    <TargetArchitecture>$(TargetArchitecture.ToLower())</TargetArchitecture>
+
+    <TargetOS Condition="$([MSBuild]::IsOSPlatform('Windows'))">win</TargetOS>
+    <TargetOS Condition="$([MSBuild]::IsOSPlatform('Linux'))">linux</TargetOS>
+    <TargetOS Condition="$([MSBuild]::IsOSPlatform('OSX'))">osx</TargetOS>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <RepoRoot Condition="'$(RepoRoot)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)\..\'))</RepoRoot>
+    <CSharpDir>$(RepoRoot)csharp\</CSharpDir>
+    <NativeLibBuildScriptsDir>$(CSharpDir)eng\</NativeLibBuildScriptsDir>
+    <NativeLibDir>$(CSharpDir)lib\</NativeLibDir>
+    <PackageOutputPath>$(CSharpDir)packages</PackageOutputPath>
+  </PropertyGroup>
+
+
+</Project>

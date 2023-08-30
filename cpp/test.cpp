@@ -39,30 +39,22 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     index.reserve(10);
     index.add(key_first, vector_first, args...);
 
-    if constexpr (punned_ak) {
-        auto result = index.add(key_first, vector_first, args...);
-        expect(!result);
-        result.error.release();
-    }
-
     // Default approximate search
-    key_t matched_labels[10] = {0};
+    key_t matched_keys[10] = {0};
     distance_t matched_distances[10] = {0};
-    std::size_t matched_count = index.search(vector_first, 5, args...).dump_to(matched_labels, matched_distances);
+    std::size_t matched_count = index.search(vector_first, 5, args...).dump_to(matched_keys, matched_distances);
 
     expect(matched_count == 1);
-    expect(matched_labels[0] == key_first);
+    expect(matched_keys[0] == key_first);
     expect(std::abs(matched_distances[0]) < 0.01);
 
     // Add more entries
-    index_search_config_t search_config;
-    search_config.exact = true;
     index.add(key_second, vector_second, args...);
     index.add(key_third, vector_third, args...);
     expect(index.size() == 3);
 
     // Perform exact search
-    matched_count = index.search(vector_first, 5, args..., search_config).dump_to(matched_labels, matched_distances);
+    matched_count = index.search(vector_first, 5, args...).dump_to(matched_keys, matched_distances);
 
     // Validate scans
     std::size_t count = 0;
@@ -73,6 +65,9 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     }
     expect((count == 3));
     expect((index.stats(0).nodes == 3));
+
+    // Check if clustering endpoint compiles
+    index.cluster(vector_first, 0, args...);
 
     // Try removals and replacements
     if constexpr (punned_ak) {
@@ -87,9 +82,9 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     // Search again over reconstructed index
     index.save("tmp.usearch");
     index.load("tmp.usearch");
-    matched_count = index.search(vector_first, 5, args...).dump_to(matched_labels, matched_distances);
+    matched_count = index.search(vector_first, 5, args...).dump_to(matched_keys, matched_distances);
     expect(matched_count == 3);
-    expect(matched_labels[0] == key_first);
+    expect(matched_keys[0] == key_first);
     expect(std::abs(matched_distances[0]) < 0.01);
 
     if constexpr (punned_ak) {
@@ -102,18 +97,33 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     executor_default_t executor;
     index.reserve({vectors.size(), executor.size()});
     executor.fixed(vectors.size() - 3, [&](std::size_t thread, std::size_t task) {
-        index_update_config_t config;
-        config.thread = thread;
-        index.add(key_max - task - 3, vectors[task + 3].data(), args..., config);
+        if constexpr (punned_ak) {
+            index.add(key_max - task - 3, vectors[task + 3].data(), args...);
+        } else {
+            index_update_config_t config;
+            config.thread = thread;
+            index.add(key_max - task - 3, vectors[task + 3].data(), args..., config);
+        }
     });
 
+    // Check for duplicates
+    if constexpr (punned_ak) {
+        index.reserve({vectors.size() + 1u, executor.size()});
+        auto result = index.add(key_first, vector_first, args...);
+        expect(!!result == index.multi());
+        result.error.release();
+
+        std::size_t first_key_count = index.count(key_first);
+        expect(first_key_count == (1ul + index.multi()));
+    }
+
     // Search again over mapped index
-    // file_head_result_t head = index_dense_metadata("tmp.usearch");
+    // file_head_result_t head = index_dense_metadata_from_path("tmp.usearch");
     // expect(head.size == 3);
     index.view("tmp.usearch");
-    matched_count = index.search(vector_first, 5, args...).dump_to(matched_labels, matched_distances);
+    matched_count = index.search(vector_first, 5, args...).dump_to(matched_keys, matched_distances);
     expect(matched_count == 3);
-    expect(matched_labels[0] == key_first);
+    expect(matched_keys[0] == key_first);
     expect(std::abs(matched_distances[0]) < 0.01);
 
     if constexpr (punned_ak) {
@@ -130,7 +140,7 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
 
     // Check metadata
     if constexpr (punned_ak) {
-        index_dense_metadata_result_t meta = index_dense_metadata("tmp.usearch");
+        index_dense_metadata_result_t meta = index_dense_metadata_from_path("tmp.usearch");
         expect(bool(meta));
     }
 }
@@ -182,13 +192,16 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     }
 
     // Type-punned:
-    for (std::size_t connectivity : {3, 13, 50}) {
-        std::printf("- punned with connectivity %zu \n", connectivity);
-        using index_t = index_dense_gt<key_t, slot_t>;
-        metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
-        index_config_t config(connectivity);
-        index_t index = index_t::make(metric, config);
-        test_cosine<true>(index, matrix);
+    for (bool multi : {false, true}) {
+        for (std::size_t connectivity : {3, 13, 50}) {
+            std::printf("- punned with connectivity %zu \n", connectivity);
+            using index_t = index_dense_gt<key_t, slot_t>;
+            metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
+            index_dense_config_t config(connectivity);
+            config.multi = multi;
+            index_t index = index_t::make(metric, config);
+            test_cosine<true>(index, matrix);
+        }
     }
 }
 
@@ -210,9 +223,7 @@ template <typename key_at, typename slot_at> void test_tanimoto(std::size_t dime
 
     index.reserve({batch_size + index.size(), executor.size()});
     executor.fixed(batch_size, [&](std::size_t thread, std::size_t task) {
-        index_update_config_t config;
-        config.thread = thread;
-        index.add(task + 25000, scalars.data() + index.scalar_words() * task, config);
+        index.add(task + 25000, scalars.data() + index.scalar_words() * task, thread);
     });
 }
 

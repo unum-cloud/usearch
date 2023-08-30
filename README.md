@@ -1,7 +1,7 @@
 <h1 align="center">USearch</h1>
 <h3 align="center">
-Smaller & Faster Single-File<br/>
-Vector Search Engine<br/>
+Faster & Smaller Single-File<br/>
+Search Engine for Vectors & Texts<br/>
 </h3>
 <br/>
 
@@ -18,7 +18,7 @@ Vector Search Engine<br/>
 </p>
 
 <p align="center">
-Euclidean • Angular • Jaccard • Hamming • Haversine • User-Defined Metrics
+Euclidean • Angular • Bitwise • Haversine • User-Defined Metrics
 <br/>
 <a href="https://unum-cloud.github.io/usearch/cpp">C++ 11</a> •
 <a href="https://unum-cloud.github.io/usearch/python">Python 3</a> •
@@ -28,11 +28,21 @@ Euclidean • Angular • Jaccard • Hamming • Haversine • User-Defined Met
 <a href="https://unum-cloud.github.io/usearch/c">C 99</a> •
 <a href="https://unum-cloud.github.io/usearch/objective-c">Objective-C</a> •
 <a href="https://unum-cloud.github.io/usearch/swift">Swift</a> •
+<a href="https://unum-cloud.github.io/usearch/csharp">C#</a> •
 <a href="https://unum-cloud.github.io/usearch/golang">GoLang</a> •
 <a href="https://unum-cloud.github.io/usearch/wolfram">Wolfram</a>
 <br/>
-Linux • MacOS • Windows • Docker • WebAssembly
+Linux • MacOS • Windows • iOS • Docker • WebAssembly
 </p>
+
+<div align="center">
+<a href="https://pypi.org/project/usearch/"> <img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/usearch?label=pypi%20downloads"> </a>
+<a href="https://www.npmjs.com/package/usearch"> <img alt="npm" src="https://img.shields.io/npm/dy/usearch?label=npm%20dowloads"> </a>
+<a href="https://crates.io/crates/usearch"> <img alt="Crates.io" src="https://img.shields.io/crates/d/usearch?label=crate%20downloads"> </a>
+<a href="https://www.nuget.org/packages/Cloud.Unum.USearch"> <img alt="Nuget" src="https://img.shields.io/nuget/dt/Cloud.Unum.USearch?style=social&label=NuGet"> </a>
+<a href="https://hub.docker.com/r/unum/usearch"> <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/unum/usearch?style=social&label=Docker"> </a>
+<img alt="GitHub code size in bytes" src="https://img.shields.io/github/languages/code-size/unum-cloud/usearch">
+</div>
 
 ---
 
@@ -42,10 +52,11 @@ Linux • MacOS • Windows • Docker • WebAssembly
 - ✅ Variable dimensionality vectors for unique applications, including search over compressed data.
 - ✅ Bitwise Tanimoto and Sorensen coefficients for [Genomics and Chemistry applications](#usearch--rdkit--molecular-search).
 - ✅ Hardware-agnostic `f16` & `i8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
-- ✅ [View large indexes from disk](#disk-based-indexes) without loading into RAM.
+- ✅ [View large indexes from disk](#serving-index-from-disk) without loading into RAM.
 - ✅ Space-efficient point-clouds with `uint40_t`, accommodating 4B+ size.
 - ✅ Compatible with OpenMP and custom "executors", for fine-grained control over CPU utilization.
 - ✅ Heterogeneous lookups, renaming/relabeling, and on-the-fly deletions.
+- ✅ Near-real-time [clustering and sub-clusterings](#clustering) for Tens or Millions of clusters.
 - ✅ [Semantic Search](#usearch--ai--multi-modal-semantic-search) and [Joins](#joins).
 
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/index.hpp
@@ -57,14 +68,15 @@ FAISS is a widely recognized standard for high-performance vector search engines
 USearch and FAISS both employ the same HNSW algorithm, but they differ significantly in their design principles.
 USearch is compact and broadly compatible without sacrificing performance, with a primary focus on user-defined metrics and fewer dependencies.
 
-|                    | FAISS                         | USearch                            |
-| :----------------- | :---------------------------- | :--------------------------------- |
-| Implementation     | 84 K [SLOC][sloc] in `faiss/` | 3 K [SLOC][sloc] in `usearch/`     |
-| Supported metrics  | 9 fixed metrics               | Any User-Defined metrics           |
-| Supported ID types | `uint32_t`, `uint64_t`        | `uint32_t`, `uint40_t`, `uint64_t` |
-| Dependencies       | BLAS, OpenMP                  | None                               |
-| Bindings           | SWIG                          | Native                             |
-| Acceleration       | Learned Quantization          | Downcasting                        |
+|                     | FAISS                         | USearch                            |
+| :------------------ | :---------------------------- | :--------------------------------- |
+| Implementation      | 84 K [SLOC][sloc] in `faiss/` | 3 K [SLOC][sloc] in `usearch/`     |
+| Supported metrics   | 9 fixed metrics               | Any User-Defined metrics           |
+| Supported languages | C++, Python                   | 10 languages                       |
+| Supported ID types  | `uint32_t`, `uint64_t`        | `uint32_t`, `uint40_t`, `uint64_t` |
+| Dependencies        | BLAS, OpenMP                  | None                               |
+| Bindings            | SWIG                          | Native                             |
+| Acceleration        | Learned Quantization          | Downcasting                        |
 
 [sloc]: https://en.wikipedia.org/wiki/Source_lines_of_code
 
@@ -96,6 +108,25 @@ assert matches[0].distance <= 0.001
 assert np.allclose(index[42], vector)
 ```
 
+Comparing the performance of FAISS against USearch on 1 Million 96-dimensional vectors from the famous Deep1B dataset, once can expect the following numbers on modern AWS `c7g.metal` instances.
+
+|              | FAISS, `f32` | USearch, `f32` | USearch, `f16` |     USearch, `i8` |
+| :----------- | -----------: | -------------: | -------------: | ----------------: |
+| Batch Insert |       16 K/s |         73 K/s |        100 K/s | 104 K/s __+550%__ |
+| Batch Search |       82 K/s |        103 K/s |        113 K/s |  134 K/s __+63%__ |
+| Bulk Insert  |       76 K/s |        105 K/s |        115 K/s | 202 K/s __+165%__ |
+| Bulk Search  |      118 K/s |        174 K/s |        173 K/s | 304 K/s __+157%__ |
+| Recall @ 10  |          99% |          99.2% |          99.1% |             99.2% |
+
+> HNSW was configured with identical hyper-parameters:
+> connectivity `M=16`,
+> expansion @ construction `efConstruction=128`,
+> and expansion @ search `ef=64`.
+> Batch size is 256.
+> Jump to the [Performance Tuning][benchmarking] section to read about the effects of those hyper-parameters.
+
+[benchmarking]: https://github.com/unum-cloud/usearch/blob/main/docs/benchmarks.md
+
 ## User-Defined Functions
 
 While most vector search packages concentrate on just a couple of metrics - "Inner Product distance" and "Euclidean distance," USearch extends this list to include any user-defined metrics.
@@ -124,30 +155,16 @@ Instead, we have focused on high-precision arithmetic over low-precision downcas
 The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f32_t`, `f16_t`, `f64_t`, and `i8_t` representations, even if the hardware doesn't natively support it.
 Continuing the topic of memory efficiency, we provide a `uint40_t` to allow collection with over 4B+ vectors without allocating 8 bytes for every neighbor reference in the proximity graph.
 
-|              | FAISS, `f32` | USearch, `f32` | USearch, `f16` |     USearch, `i8` |
-| :----------- | -----------: | -------------: | -------------: | ----------------: |
-| Batch Insert |       16 K/s |         73 K/s |        100 K/s | 104 K/s **+550%** |
-| Batch Search |       82 K/s |        103 K/s |        113 K/s |  134 K/s **+63%** |
-| Bulk Insert  |       76 K/s |        105 K/s |        115 K/s | 202 K/s **+165%** |
-| Bulk Search  |      118 K/s |        174 K/s |        173 K/s | 304 K/s **+157%** |
-| Recall @ 10  |          99% |          99.2% |          99.1% |             99.2% |
+## Serialization & Serving `Index` from Disk
 
-> Dataset: 1M vectors sample of the Deep1B dataset.
-> Hardware: `c7g.metal` AWS instance with 64 cores and DDR5 memory.
-> HNSW was configured with identical hyper-parameters:
-> connectivity `M=16`,
-> expansion @ construction `efConstruction=128`,
-> and expansion @ search `ef=64`.
-> Batch size is 256.
-> Both libraries were compiled for the target architecture.
-> Jump to the [Performance Tuning][benchmarking] section to read about the effects of those hyper-parameters.
+USearch supports multiple forms of serialization:
 
-[benchmarking]: https://github.com/unum-cloud/usearch/blob/main/docs/benchmarks.md
+- Into a __file__ defined with a path.
+- Into a __stream__ defined with a callback, serializing or reconstructing incrementally.
+- Into a __buffer__ of fixed length, or a memory-mapped file, that supports random access.
 
-## Disk-based Indexes
-
-With USearch, you can serve indexes from external memory, enabling you to optimize your server choices for indexing speed and serving costs.
-This can result in **20x cost reduction** on AWS and other public clouds.
+The latter allows you to serve indexes from external memory, enabling you to optimize your server choices for indexing speed and serving costs.
+This can result in __20x cost reduction__ on AWS and other public clouds.
 
 ```py
 index.save("index.usearch")
@@ -159,7 +176,7 @@ other_view = Index(ndim=..., metric=CompiledMetric(...))
 other_view.view("index.usearch")
 ```
 
-## Exact, Approximate, and Multi-Index Lookups
+## Exact vs. Approximate Search
 
 Approximate search methods, such as HNSW, are predominantly used when an exact brute-force search becomes too resource-intensive.
 This typically occurs when you have millions of entries in a collection.
@@ -178,10 +195,12 @@ many_in_many: BatchMatches = search(vectors, vectors, 50, MetricKind.L2sq, exact
 ```
 
 By passing the `exact=True` argument, the system bypasses indexing altogether and performs a brute-force search through the entire dataset using SIMD-optimized similarity metrics from [SimSIMD](https://github.com/ashvardanian/simsimd).
-When compared to FAISS's `IndexFlatL2` in Google Colab, **[USearch may offer up to a 20x performance improvement](https://github.com/unum-cloud/usearch/issues/176#issuecomment-1666650778)**:
+When compared to FAISS's `IndexFlatL2` in Google Colab, __[USearch may offer up to a 20x performance improvement](https://github.com/unum-cloud/usearch/issues/176#issuecomment-1666650778)__:
 
-- `faiss.IndexFlatL2`: **55.3 ms**.
-- `usearch.index.search`: **2.54 ms**.
+- `faiss.IndexFlatL2`: __55.3 ms__.
+- `usearch.index.search`: __2.54 ms__.
+
+## `Indexes` for Multi-Index Lookups
 
 For larger workloads targeting billions or even trillions of vectors, parallel multi-index lookups become invaluable.
 These lookups prevent the need to construct a single, massive index, allowing users to query multiple smaller ones instead.
@@ -197,6 +216,36 @@ multi_index = Indexes(
 )
 multi_index.search(...)
 ```
+
+## Clustering
+
+Once the index is constructed, it can be used to cluster entries much faster.
+In essense, the `Index` itself can be seen as a clustering, and it allows iterative deepening.
+
+```py
+clustering = index.cluster(
+    min_count=10, # Optional
+    max_count=15, # Optional
+    threads=..., # Optional
+)
+
+# Get the clusters and their sizes
+centroid_keys, sizes = clustering.centroids_popularity
+
+# Use Matplotlib draw a histogram
+clustering.plot_centroids_popularity()
+
+# Export a NetworkX graph of the clusters
+g = clustering.network
+
+# Get members of a specific cluster
+first_members = clustering.members_of(centroid_keys[0])
+
+# Deepen into that cluster spliting it into more parts, all same arguments supported
+sub_clustering = clustering.subcluster(min_count=..., max_count=...)
+```
+
+Using Scikit-Learn, on a 1 Million point dataset, one may expect queries to take anywhere from minutes to hours, depending on the number of clusters you want to highlight. For 50'000 clusters the performance difference between USearch and conventional clustering methods may easily reach 100x.
 
 ## Joins, One-to-One, One-to-Many, and Many-to-Many Mappings
 
@@ -229,7 +278,7 @@ Broader functionality is ported per request.
 | Add, search             |   ✅    |    ✅     |   ✅   |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
 | Save, load, view        |   ✅    |    ✅     |   ✅   |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
 | User-defined metrics    |   ✅    |    ✅     |   ✅   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
-| Joins                    |   ✅    |    ✅     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
+| Joins                   |   ✅    |    ✅     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 | Variable-length vectors |   ✅    |    ❌     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 | 4B+ capacities          |   ✅    |    ❌     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 
@@ -237,8 +286,10 @@ Broader functionality is ported per request.
 
 ### USearch + AI = Multi-Modal Semantic Search
 
+[![USearch Semantic Image Search](https://github.com/ashvardanian/usearch-images/raw/main/assets/usearch-images-slow.gif)](https://github.com/ashvardanian/usearch-images)
+
 AI has a growing number of applications, but one of the coolest classic ideas is to use it for Semantic Search.
-One can take an encoder model, like the multi-modal UForm, and a web-programming framework, like UCall, and build a text-to-image search platform in just 20 lines of Python.
+One can take an encoder model, like the multi-modal [UForm](https://github.com/unum-cloud/uform), and a web-programming framework, like UCall, and build a text-to-image search platform in just 20 lines of Python.
 
 ```python
 import ucall
@@ -268,13 +319,14 @@ def search(query: str) -> np.ndarray:
 server.run()
 ```
 
+A more complete [demo with Streamlit is available on GitHub](https://github.com/ashvardanian/usearch-images).
 We have pre-processed some commonly used datasets, cleaned the images, produced the vectors, and pre-built the index.
 
-| Dataset                                |            Modalities | Images |                              Download |
-| :------------------------------------- | --------------------: | -----: | ------------------------------------: |
-| [Unsplash 25K][unsplash-25k-origin]    | Images & Descriptions |   25 K | [HuggingFace / Unum][unsplash-25k-hf] |
-| [Conceptual Captions 3M][cc-3m-origin] | Images & Descriptions |    3 M |        [HuggingFace / Unum][cc-3m-hf] |
-| [Arxiv 2M][arxiv-2m-origin]            |    Titles & Abstracts |    2 M |     [HuggingFace / Unum][arxiv-2m-hf] |
+| Dataset                             |            Modalities | Images |                              Download |
+| :---------------------------------- | --------------------: | -----: | ------------------------------------: |
+| [Unsplash][unsplash-25k-origin]     | Images & Descriptions |   25 K | [HuggingFace / Unum][unsplash-25k-hf] |
+| [Conceptual Captions][cc-3m-origin] | Images & Descriptions |    3 M |        [HuggingFace / Unum][cc-3m-hf] |
+| [Arxiv][arxiv-2m-origin]            |    Titles & Abstracts |    2 M |     [HuggingFace / Unum][arxiv-2m-hf] |
 
 [unsplash-25k-origin]: https://github.com/unsplash/datasets
 [cc-3m-origin]: https://huggingface.co/datasets/conceptual_captions
@@ -316,13 +368,21 @@ matches = index.search(fingerprints, 10)
 [smiles]: https://en.wikipedia.org/wiki/Simplified_molecular-input_line-entry_system
 [rdkit-fingerprints]: https://www.rdkit.org/docs/RDKit_Book.html#additional-information-about-the-fingerprints
 
+### USearch + POI Coordinates = GIS Applications... on iOS?
+
+[![USearch Maps with SwiftUI](https://github.com/ashvardanian/SwiftVectorSearch/raw/main/USearch+SwiftUI.gif)](https://github.com/ashvardanian/SwiftVectorSearch)
+
+With Objective-C and Swift iOS bindings, USearch can be easily used in mobile applications.
+The [SwiftVectorSearch](https://github.com/ashvardanian/SwiftVectorSearch) project illustrates how to build a dynamic, real-time search system on iOS.
+In this example, we use 2-dimensional vectors—encoded as latitude and longitude—to find the closest Points of Interest (POIs) on a map.
+The search is based on the Haversine distance metric, but can easily be extended to support high-dimensional vectors.
 
 ## Integrations
 
-- [x] GPT-Cache.
-- [x] LangChain.
-- [ ] ClickHouse.
-- [ ] Microsoft Semantic Kernel.
+- [x] GPTCache: [Python](https://github.com/zilliztech/GPTCache/releases/tag/0.1.29).
+- [x] LangChain: [Python](https://github.com/langchain-ai/langchain/releases/tag/v0.0.257) and [JavaScipt](https://github.com/hwchase17/langchainjs/releases/tag/0.0.125).
+- [x] ClickHouse: [C++](https://github.com/ClickHouse/ClickHouse/pull/53447).
+- [x] Microsoft Semantic Kernel: [Python](https://github.com/microsoft/semantic-kernel/releases/tag/python-0.3.9.dev) and C#.
 
 ## Citations
 
@@ -332,8 +392,8 @@ doi = {10.5281/zenodo.7949416},
 author = {Vardanian, Ash},
 title = {{USearch by Unum Cloud}},
 url = {https://github.com/unum-cloud/usearch},
-version = {0.13.0},
-year = {2022}
+version = {1.0.0},
+year = {2022},
 month = jun,
 }
 ```

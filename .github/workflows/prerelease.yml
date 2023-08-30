@@ -17,6 +17,32 @@ permissions:
 
 jobs:
 
+  test_c:
+    name: Test C
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: main-dev
+    - run: git submodule update --init --recursive
+    - name: Prepare Environment
+      run: |
+        sudo apt update && 
+        sudo apt install -y cmake g++-12 build-essential libjemalloc-dev
+    - name: Build
+      run: |
+        cmake -B ./build_release \
+        -DCMAKE_CXX_COMPILER="g++-12" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DUSEARCH_BUILD_TEST=1 \
+        -DUSEARCH_USE_OPENMP=1 \
+        -DUSEARCH_USE_SIMSIMD=1 \
+        -DUSEARCH_USE_JEMALLOC=1 \
+        -DUSEARCH_BUILD_BENCHMARK=0 &&
+        make -C ./build_release -j
+    - name: Run tests
+      run: ./build_release/test_c
+
   test_cpp:
     name: Test C++
     runs-on: ubuntu-latest
@@ -66,7 +92,7 @@ jobs:
       - name: Build locally
         run: python -m pip install .
       - name: Test with PyTest
-        run: pytest python/scripts/test.py
+        run: pytest python/scripts/
 
 
   test_python_37:
@@ -95,7 +121,7 @@ jobs:
         run: python -m pip install .
 
       - name: Test with PyTest
-        run: pytest python/scripts/test.py
+        run: pytest python/scripts/
 
 
   test_javascript:
@@ -121,22 +147,6 @@ jobs:
       with:
           toolchain: stable
           override: true
-
-  test_golang:
-    name: Test GoLang
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    - run: git submodule update --init --recursive
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.15'
-    - name: Build C library for cGo
-      run: |
-        make -C ./c libusearch_c.so
-        mv ./c/libusearch_c.so ./golang/libusearch_c.so
-        cd golang && ls && go test -v
 
   test_java:
     name: Test Java
@@ -164,24 +174,50 @@ jobs:
     - name: Run tests
       run: swift test
 
-  test_wasm:
-    name: Test WASM
-    runs-on: ubuntu-latest
+  test_csharp:
+    name: Test C#
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        dotnet-version: ['7.0.x']
     steps:
-    - uses: actions/checkout@v3
-    - run: git submodule update --init --recursive
-    - name: Prepare WASM Environment
-      run: |
-        sudo apt update && 
-        sudo apt install -y nodejs
-        git clone https://github.com/emscripten-core/emsdk.git
-        ./emsdk/emsdk install latest
-    - name: Build USearch using Emscripten
-      run: |
-        ./emsdk/emsdk activate latest && source ./emsdk/emsdk_env.sh
-        emcmake cmake -DUSEARCH_BUILD_BENCHMARK=0 -DUSEARCH_BUILD_WASM=1 -B ./build -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} -s TOTAL_MEMORY=64MB" && emmake make -C ./build
-    - name: Run tests
-      run: node ./build/test.js
+      - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
+      - name: Setup .NET ${{ matrix.dotnet-version }}
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+
+      - name: Ubuntu/macOS build native lib
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+        run: ./build_lib.sh
+        shell: bash
+        working-directory: ${{ github.workspace }}/csharp/eng/
+
+      # Use cl.exe https://www.appveyor.com/docs/lang/cpp/#visual-studio-2017
+      # There is no support for c++11
+      - name: Windows MSVC build
+        if: matrix.os == 'windows-latest'
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          where cl
+          cl /EHsc /std:c++14 /O2 /LD /Fe:libusearch_c.dll lib.cpp /I. /I../include/ /I../fp16/include/
+        working-directory: ${{ github.workspace }}/c
+        shell: cmd
+
+      - name: Windows move dll to lib dir
+        if: matrix.os == 'windows-latest'
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
+          mv "${GITHUB_WORKSPACE}/c/libusearch_c.dll" "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
+        shell: bash
+
+      - name: Build and test
+        run: dotnet test -c Release
+        shell: bash
+        working-directory: ${{ github.workspace }}/csharp/
 
   build_docker:
     name: Test Docker Image

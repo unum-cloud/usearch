@@ -23,7 +23,15 @@ export class Index {
      * @param {bigint} expansion_add
      * @param {bigint} expansion_search
      */
-    constructor(...args);
+    constructor(
+        dimensions: bigint,
+        metric: string,
+        quantization: string,
+        capacity: bigint,
+        connectivity: bigint,
+        expansion_add: bigint,
+        expansion_search: bigint
+    );
 
     /**
      * Returns the dimensionality of vectors.
