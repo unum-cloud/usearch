@@ -136,7 +136,7 @@ jobs:
         --platform ${{ matrix.arch }} \
         --build-arg docker_ip=${{ steps.dockerip.outputs.docker_ip }} \
         --build-arg user_pass=${{ steps.userpass.outputs.user_pass }} \
-        --file ./Dockerfile.libs \
+        --file .github/workflows/Dockerfile.libs \
         --tag unum/ustore-deps:latest \
         --load .
     - name: Clear Docker buildx cache
