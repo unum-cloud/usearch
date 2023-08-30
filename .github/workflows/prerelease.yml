@@ -219,6 +219,34 @@ jobs:
         shell: bash
         working-directory: ${{ github.workspace }}/csharp/
 
+  test_golang:
+    name: Create Debian package for ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: ["linux/amd64", "linux/arm64"]
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        persist-credentials: false
+        ref: 'main-dev'
+    - run: git submodule update --init --recursive
+
+    - name: Prepare Environment
+      run: |
+        sudo apt update && 
+        sudo apt install -y cmake g++-12 build-essential libjemalloc-dev
+          
+    - name: Build library
+      run: |
+        cd golang && make -C ../c libusearch_c.so
+        mv ../c/libusearch_c.so libusearch.a
+
+    - name: Run test
+      run: |
+        cd golang
+        go test -v
+
   build_docker:
     name: Test Docker Image
     runs-on: ubuntu-latest
