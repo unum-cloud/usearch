@@ -1260,17 +1260,16 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct met
         result_t lat_a = a[0], lon_a = a[1];
         result_t lat_b = b[0], lon_b = b[1];
 
-        result_t lat_delta = angle_to_radians<result_t>(lat_b - lat_a);
-        result_t lon_delta = angle_to_radians<result_t>(lon_b - lon_a);
+        result_t lat_delta = angle_to_radians<result_t>(lat_b - lat_a) / 2;
+        result_t lon_delta = angle_to_radians<result_t>(lon_b - lon_a) / 2;
 
         result_t converted_lat_a = angle_to_radians<result_t>(lat_a);
         result_t converted_lat_b = angle_to_radians<result_t>(lat_b);
 
-        result_t x = //
-            square(std::sin(lat_delta / 2.f)) +
-            std::cos(converted_lat_a) * std::cos(converted_lat_b) * square(std::sin(lon_delta / 2.f));
+        result_t x = square(std::sin(lat_delta)) + //
+                     std::cos(converted_lat_a) * std::cos(converted_lat_b) * square(std::sin(lon_delta));
 
-        return std::atan2(std::sqrt(x), std::sqrt(1.f - x));
+        return 2 * std::asin(std::sqrt(x));
     }
 };
 
