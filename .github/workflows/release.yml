@@ -14,6 +14,7 @@ permissions:
   contents: write
   pages: write
   id-token: write
+  packages: write
 
 jobs:
 
@@ -319,11 +320,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build_csharp]
     env:
+      SOLUTION: ${{ github.workspace }}/csharp
       USEARCH_LIBS: ${{ github.workspace }}/csharp/lib
-      NUGET_DIR: ${{ github.workspace }}/csharp/packages
+      NUGET_PACKAGES: ${{ github.workspace }}/csharp/packages
       # NUGET_SOURCE: https://apiint.nugettest.org/v3/index.json
       NUGET_SOURCE: https://api.nuget.org/v3/index.json
-      SOLUTION_DIR: ${{ github.workspace }}/csharp
+      GITHUB_PACKAGES_SOURCE: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
     steps:
       - uses: actions/checkout@v3
       - run: git submodule update --init --recursive
@@ -342,12 +344,17 @@ jobs:
       - name: Pack project
         run: |
           VERSION_CONTENT=$(< VERSION)
-          dotnet pack "${{ env.SOLUTION_DIR }}" -c Release -p:Version="$VERSION_CONTENT" --output ${{ env.NUGET_DIR }}
+          dotnet pack "${{ env.SOLUTION }}" -c Release -p:Version="$VERSION_CONTENT" --output ${{ env.NUGET_PACKAGES }}
         working-directory: ${{ github.workspace }}
 
-      - name: Publish NuGet packages
-        run: |
-          dotnet nuget push "${{  env.NUGET_DIR }}/*.nupkg" --api-key "${{ secrets.NUGET_API }}" --source "${{ env.NUGET_SOURCE }}" --skip-duplicate
+      - name: Publish to NuGet
+        run: dotnet nuget push "${{ env.NUGET_PACKAGES }}/*.nupkg" --api-key "${{ secrets.NUGET_API }}" --source "${{ env.NUGET_SOURCE }}" --skip-duplicate
+
+      - name: Prepare publish to GitHub Registry
+        run: dotnet nuget add source --username ${{ github.repository_owner }} --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --name github "${{ env.GITHUB_PACKAGES_SOURCE }}"
+
+      - name: Publish to GitHub Registry
+        run: dotnet nuget push "${{ env.NUGET_PACKAGES }}/*.nupkg"  --api-key "${{ secrets.GITHUB_TOKEN }}" --source "github" --skip-duplicate
 
   build_docs:
     name: Build Docs
