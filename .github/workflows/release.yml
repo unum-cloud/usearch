@@ -257,14 +257,14 @@ jobs:
         replacebody: false
         body: |
             ## Hashes
-            * `${{ steps.hashes.outputs.asset_name_1 }}` : `${{ steps.hashes.outputs.asset_hash_1 }}`
-            * `${{ steps.hashes.outputs.asset_name_2 }}` : `${{ steps.hashes.outputs.asset_hash_2 }}`
-            * `${{ steps.hashes.outputs.asset_name_3 }}` : `${{ steps.hashes.outputs.asset_hash_3 }}`
-            * `${{ steps.hashes.outputs.asset_name_4 }}` : `${{ steps.hashes.outputs.asset_hash_4 }}`
-            * `${{ steps.hashes.outputs.asset_name_5 }}` : `${{ steps.hashes.outputs.asset_hash_5 }}`
-            * `${{ steps.hashes.outputs.asset_name_6 }}` : `${{ steps.hashes.outputs.asset_hash_6 }}`
-            * `${{ steps.hashes.outputs.asset_name_7 }}` : `${{ steps.hashes.outputs.asset_hash_7 }}`
-            * `${{ steps.hashes.outputs.asset_name_8 }}` : `${{ steps.hashes.outputs.asset_hash_8 }}`
+            * ${{ steps.hashes.outputs.asset_name_1 }} : `${{ steps.hashes.outputs.asset_hash_1 }}`
+            * ${{ steps.hashes.outputs.asset_name_2 }} : `${{ steps.hashes.outputs.asset_hash_2 }}`
+            * ${{ steps.hashes.outputs.asset_name_3 }} : `${{ steps.hashes.outputs.asset_hash_3 }}`
+            * ${{ steps.hashes.outputs.asset_name_4 }} : `${{ steps.hashes.outputs.asset_hash_4 }}`
+            * ${{ steps.hashes.outputs.asset_name_5 }} : `${{ steps.hashes.outputs.asset_hash_5 }}`
+            * ${{ steps.hashes.outputs.asset_name_6 }} : `${{ steps.hashes.outputs.asset_hash_6 }}`
+            * ${{ steps.hashes.outputs.asset_name_7 }} : `${{ steps.hashes.outputs.asset_hash_7 }}`
+            * ${{ steps.hashes.outputs.asset_name_8 }} : `${{ steps.hashes.outputs.asset_hash_8 }}`
 
 
   build_wheels:
