@@ -29,7 +29,7 @@ jobs:
 
 
   rebase:
-    name: Rebase Development Branch
+    name: Rebase Dev. Branch
     needs: versioning
     runs-on: ubuntu-latest
     steps:
@@ -52,8 +52,8 @@ jobs:
           force: True
 
 
-  publish_hashes:
-    name: Add hashes to release notes
+  publish_checksums:
+    name: Compute Assets Checksums
     runs-on: ubuntu-latest
     needs: versioning
     steps:
@@ -97,7 +97,7 @@ jobs:
 
 
   build_wheels:
-    name: Build Wheels for ${{ matrix.os }}
+    name: Build Python
     needs: versioning
     runs-on: ${{ matrix.os }}
     strategy:
@@ -272,7 +272,7 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
 
   build_csharp:
-    name: Build NuGet
+    name: Build C#
     needs: versioning
     strategy:
       matrix:
