@@ -1,12 +1,11 @@
 #pragma once
 #include <stdlib.h> // `aligned_alloc`
 
-#include <functional>    // `std::function`
-#include <numeric>       // `std::iota`
-#include <shared_mutex>  // `std::shared_mutex`
-#include <thread>        // `std::thread`
-#include <unordered_set> // `std::unordered_multiset`
-#include <vector>        // `std::vector`
+#include <functional>   // `std::function`
+#include <numeric>      // `std::iota`
+#include <shared_mutex> // `std::shared_mutex`
+#include <thread>       // `std::thread`
+#include <vector>       // `std::vector`
 
 #include <usearch/index.hpp>
 #include <usearch/index_plugins.hpp>
@@ -399,7 +398,7 @@ class index_dense_gt {
     };
 
     /// @brief Multi-Map from keys to IDs, and allocated vectors.
-    std::unordered_multiset<key_and_slot_t, lookup_key_hash_t, lookup_key_same_t> slot_lookup_;
+    flat_hash_multi_set_gt<key_and_slot_t, lookup_key_hash_t, lookup_key_same_t> slot_lookup_;
 
     /// @brief Mutex, controlling concurrent access to `slot_lookup_`.
     mutable shared_mutex_t slot_lookup_mutex_;
@@ -584,31 +583,31 @@ class index_dense_gt {
 
     // clang-format off
     add_result_t add(key_t key, b1x8_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_b1x8); }
-    add_result_t add(key_t key, i8_bits_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_i8); }
+    add_result_t add(key_t key, i8_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_i8); }
     add_result_t add(key_t key, f16_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_f16); }
     add_result_t add(key_t key, f32_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_f32); }
     add_result_t add(key_t key, f64_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_f64); }
 
     search_result_t search(b1x8_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, thread, exact, casts_.from_b1x8); }
-    search_result_t search(i8_bits_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, thread, exact, casts_.from_i8); }
+    search_result_t search(i8_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, thread, exact, casts_.from_i8); }
     search_result_t search(f16_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, thread, exact, casts_.from_f16); }
     search_result_t search(f32_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, thread, exact, casts_.from_f32); }
     search_result_t search(f64_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, thread, exact, casts_.from_f64); }
 
     std::size_t get(key_t key, b1x8_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_b1x8); }
-    std::size_t get(key_t key, i8_bits_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_i8); }
+    std::size_t get(key_t key, i8_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_i8); }
     std::size_t get(key_t key, f16_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f16); }
     std::size_t get(key_t key, f32_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f32); }
     std::size_t get(key_t key, f64_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f64); }
 
     cluster_result_t cluster(b1x8_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_b1x8); }
-    cluster_result_t cluster(i8_bits_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_i8); }
+    cluster_result_t cluster(i8_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_i8); }
     cluster_result_t cluster(f16_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_f16); }
     cluster_result_t cluster(f32_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_f32); }
     cluster_result_t cluster(f64_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_f64); }
 
     aggregated_distances_t distance_between(key_t key, b1x8_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_b1x8); }
-    aggregated_distances_t distance_between(key_t key, i8_bits_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_i8); }
+    aggregated_distances_t distance_between(key_t key, i8_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_i8); }
     aggregated_distances_t distance_between(key_t key, f16_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_f16); }
     aggregated_distances_t distance_between(key_t key, f32_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_f32); }
     aggregated_distances_t distance_between(key_t key, f64_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_f64); }
@@ -1122,7 +1121,7 @@ class index_dense_gt {
      */
     bool contains(key_t key) const {
         shared_lock_t lock(slot_lookup_mutex_);
-        return slot_lookup_.find(key_and_slot_t::any_slot(key)) != slot_lookup_.end();
+        return slot_lookup_.contains(key_and_slot_t::any_slot(key));
     }
 
     /**
@@ -1176,7 +1175,7 @@ class index_dense_gt {
             free_keys_.push(slot);
             typed_->at(slot).key = free_key_;
         }
-        slot_lookup_.erase(matching_slots.first, matching_slots.second);
+        slot_lookup_.erase(key);
         result.completed = matching_count;
 
         return result;
@@ -1212,14 +1211,15 @@ class index_dense_gt {
             // - present in `free_keys_`
             // - missing in the `slot_lookup_`
             // - marked in the `typed_` index with a `free_key_`
+            matching_count = 0;
             for (auto slots_it = matching_slots.first; slots_it != matching_slots.second; ++slots_it) {
                 compressed_slot_t slot = (*slots_it).slot;
                 free_keys_.push(slot);
                 typed_->at(slot).key = free_key_;
+                ++matching_count;
             }
 
-            matching_count = std::distance(matching_slots.first, matching_slots.second);
-            slot_lookup_.erase(matching_slots.first, matching_slots.second);
+            slot_lookup_.erase(key);
             result.completed += matching_count;
         }
 
@@ -1238,20 +1238,18 @@ class index_dense_gt {
         labeling_result_t result;
         unique_lock_t lookup_lock(slot_lookup_mutex_);
 
-        if (!multi() && slot_lookup_.count(key_and_slot_t::any_slot(to)))
+        if (!multi() && slot_lookup_.contains(key_and_slot_t::any_slot(to)))
             return result.failed("Renaming impossible, the key is already in use");
 
         // The `from` may map to multiple entries
         while (true) {
-            auto slots_it = slot_lookup_.find(key_and_slot_t::any_slot(from));
-            if (slots_it == slot_lookup_.end())
+            key_and_slot_t key_and_slot_removed;
+            if (!slot_lookup_.pop_first(key_and_slot_t::any_slot(from), key_and_slot_removed))
                 break;
 
-            compressed_slot_t slot = (*slots_it).slot;
-            key_and_slot_t key_and_slot{to, slot};
-            slot_lookup_.erase(slots_it);
-            slot_lookup_.insert(key_and_slot);
-            typed_->at(slot).key = to;
+            key_and_slot_t key_and_slot_replacing{to, key_and_slot_removed.slot};
+            slot_lookup_.try_emplace(key_and_slot_replacing); // This can't fail
+            typed_->at(key_and_slot_removed.slot).key = to;
             ++result.completed;
         }
 
@@ -1266,11 +1264,18 @@ class index_dense_gt {
      */
     void export_keys(key_t* keys, std::size_t offset, std::size_t limit) const {
         shared_lock_t lock(slot_lookup_mutex_);
-        auto it = slot_lookup_.begin();
         offset = (std::min)(offset, slot_lookup_.size());
-        std::advance(it, offset);
-        for (; it != slot_lookup_.end() && limit; ++it, ++keys, --limit)
-            *keys = (*it).key;
+        slot_lookup_.for_each([&](key_and_slot_t const& key_and_slot) {
+            if (offset) {
+                --offset;
+                return;
+            }
+            if (limit) {
+                *keys = key_and_slot.key;
+                ++keys;
+                --limit;
+            }
+        });
     }
 
     struct copy_result_t {
@@ -1693,7 +1698,7 @@ class index_dense_gt {
         bool reuse_node = free_slot != default_free_value<compressed_slot_t>();
         auto on_success = [&](member_ref_t member) {
             unique_lock_t slot_lock(slot_lookup_mutex_);
-            slot_lookup_.insert(key_and_slot_t{key, static_cast<compressed_slot_t>(member.slot)});
+            slot_lookup_.try_emplace(key_and_slot_t{key, static_cast<compressed_slot_t>(member.slot)});
             if (copy_vector) {
                 if (!reuse_node)
                     vectors_lookup_[member.slot] = vectors_tape_allocator_.allocate(metric_.bytes_per_vector());
@@ -1827,7 +1832,7 @@ class index_dense_gt {
             if (member.key == free_key_)
                 free_keys_.push(static_cast<compressed_slot_t>(i));
             else
-                slot_lookup_.insert(key_and_slot_t{key_t(member.key), static_cast<compressed_slot_t>(i)});
+                slot_lookup_.try_emplace(key_and_slot_t{key_t(member.key), static_cast<compressed_slot_t>(i)});
         }
     }
 
@@ -1872,13 +1877,13 @@ class index_dense_gt {
         casts_t result;
 
         result.from_b1x8 = cast_gt<b1x8_t, to_scalar_at>{};
-        result.from_i8 = cast_gt<i8_bits_t, to_scalar_at>{};
+        result.from_i8 = cast_gt<i8_t, to_scalar_at>{};
         result.from_f16 = cast_gt<f16_t, to_scalar_at>{};
         result.from_f32 = cast_gt<f32_t, to_scalar_at>{};
         result.from_f64 = cast_gt<f64_t, to_scalar_at>{};
 
         result.to_b1x8 = cast_gt<to_scalar_at, b1x8_t>{};
-        result.to_i8 = cast_gt<to_scalar_at, i8_bits_t>{};
+        result.to_i8 = cast_gt<to_scalar_at, i8_t>{};
         result.to_f16 = cast_gt<to_scalar_at, f16_t>{};
         result.to_f32 = cast_gt<to_scalar_at, f32_t>{};
         result.to_f64 = cast_gt<to_scalar_at, f64_t>{};
@@ -1891,7 +1896,7 @@ class index_dense_gt {
         case scalar_kind_t::f64_k: return make_casts_<f64_t>();
         case scalar_kind_t::f32_k: return make_casts_<f32_t>();
         case scalar_kind_t::f16_k: return make_casts_<f16_t>();
-        case scalar_kind_t::i8_k: return make_casts_<i8_bits_t>();
+        case scalar_kind_t::i8_k: return make_casts_<i8_t>();
         case scalar_kind_t::b1x8_k: return make_casts_<b1x8_t>();
         default: return {};
         }

@@ -28,6 +28,7 @@ Euclidean • Angular • Bitwise • Haversine • User-Defined Metrics
 <a href="https://unum-cloud.github.io/usearch/c">C 99</a> •
 <a href="https://unum-cloud.github.io/usearch/objective-c">Objective-C</a> •
 <a href="https://unum-cloud.github.io/usearch/swift">Swift</a> •
+<a href="https://unum-cloud.github.io/usearch/csharp">C#</a> •
 <a href="https://unum-cloud.github.io/usearch/golang">GoLang</a> •
 <a href="https://unum-cloud.github.io/usearch/wolfram">Wolfram</a>
 <br/>
@@ -38,6 +39,8 @@ Linux • MacOS • Windows • iOS • Docker • WebAssembly
 <a href="https://pypi.org/project/usearch/"> <img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/usearch?label=pypi%20downloads"> </a>
 <a href="https://www.npmjs.com/package/usearch"> <img alt="npm" src="https://img.shields.io/npm/dy/usearch?label=npm%20dowloads"> </a>
 <a href="https://crates.io/crates/usearch"> <img alt="Crates.io" src="https://img.shields.io/crates/d/usearch?label=crate%20downloads"> </a>
+<a href="https://www.nuget.org/packages/Cloud.Unum.USearch"> <img alt="Nuget" src="https://img.shields.io/nuget/dt/Cloud.Unum.USearch?style=social&label=NuGet"> </a>
+<a href="https://hub.docker.com/r/unum/usearch"> <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/unum/usearch?style=social&label=Docker"> </a>
 <img alt="GitHub code size in bytes" src="https://img.shields.io/github/languages/code-size/unum-cloud/usearch">
 </div>
 
@@ -283,8 +286,10 @@ Broader functionality is ported per request.
 
 ### USearch + AI = Multi-Modal Semantic Search
 
+[![USearch Semantic Image Search](https://github.com/ashvardanian/usearch-images/raw/main/assets/usearch-images-slow.gif)](https://github.com/ashvardanian/usearch-images)
+
 AI has a growing number of applications, but one of the coolest classic ideas is to use it for Semantic Search.
-One can take an encoder model, like the multi-modal UForm, and a web-programming framework, like UCall, and build a text-to-image search platform in just 20 lines of Python.
+One can take an encoder model, like the multi-modal [UForm](https://github.com/unum-cloud/uform), and a web-programming framework, like UCall, and build a text-to-image search platform in just 20 lines of Python.
 
 ```python
 import ucall
@@ -314,13 +319,14 @@ def search(query: str) -> np.ndarray:
 server.run()
 ```
 
+A more complete [demo with Streamlit is available on GitHub](https://github.com/ashvardanian/usearch-images).
 We have pre-processed some commonly used datasets, cleaned the images, produced the vectors, and pre-built the index.
 
-| Dataset                                |            Modalities | Images |                              Download |
-| :------------------------------------- | --------------------: | -----: | ------------------------------------: |
-| [Unsplash 25K][unsplash-25k-origin]    | Images & Descriptions |   25 K | [HuggingFace / Unum][unsplash-25k-hf] |
-| [Conceptual Captions 3M][cc-3m-origin] | Images & Descriptions |    3 M |        [HuggingFace / Unum][cc-3m-hf] |
-| [Arxiv 2M][arxiv-2m-origin]            |    Titles & Abstracts |    2 M |     [HuggingFace / Unum][arxiv-2m-hf] |
+| Dataset                             |            Modalities | Images |                              Download |
+| :---------------------------------- | --------------------: | -----: | ------------------------------------: |
+| [Unsplash][unsplash-25k-origin]     | Images & Descriptions |   25 K | [HuggingFace / Unum][unsplash-25k-hf] |
+| [Conceptual Captions][cc-3m-origin] | Images & Descriptions |    3 M |        [HuggingFace / Unum][cc-3m-hf] |
+| [Arxiv][arxiv-2m-origin]            |    Titles & Abstracts |    2 M |     [HuggingFace / Unum][arxiv-2m-hf] |
 
 [unsplash-25k-origin]: https://github.com/unsplash/datasets
 [cc-3m-origin]: https://huggingface.co/datasets/conceptual_captions
@@ -364,15 +370,19 @@ matches = index.search(fingerprints, 10)
 
 ### USearch + POI Coordinates = GIS Applications... on iOS?
 
-With Objective-C and iOS bindings, USearch can be easily used in mobile applications
+[![USearch Maps with SwiftUI](https://github.com/ashvardanian/SwiftVectorSearch/raw/main/USearch+SwiftUI.gif)](https://github.com/ashvardanian/SwiftVectorSearch)
 
+With Objective-C and Swift iOS bindings, USearch can be easily used in mobile applications.
+The [SwiftVectorSearch](https://github.com/ashvardanian/SwiftVectorSearch) project illustrates how to build a dynamic, real-time search system on iOS.
+In this example, we use 2-dimensional vectors—encoded as latitude and longitude—to find the closest Points of Interest (POIs) on a map.
+The search is based on the Haversine distance metric, but can easily be extended to support high-dimensional vectors.
 
 ## Integrations
 
 - [x] GPTCache: [Python](https://github.com/zilliztech/GPTCache/releases/tag/0.1.29).
 - [x] LangChain: [Python](https://github.com/langchain-ai/langchain/releases/tag/v0.0.257) and [JavaScipt](https://github.com/hwchase17/langchainjs/releases/tag/0.0.125).
 - [x] ClickHouse: [C++](https://github.com/ClickHouse/ClickHouse/pull/53447).
-- [ ] Microsoft Semantic Kernel: [Python](https://github.com/microsoft/semantic-kernel/pull/2358) and C#.
+- [x] Microsoft Semantic Kernel: [Python](https://github.com/microsoft/semantic-kernel/releases/tag/python-0.3.9.dev) and C#.
 
 ## Citations
 

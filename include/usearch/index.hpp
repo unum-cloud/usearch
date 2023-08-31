@@ -409,7 +409,10 @@ template <typename allocator_at = std::allocator<byte_t>> class bitset_gt {
     ~bitset_gt() noexcept { reset(); }
 
     explicit operator bool() const noexcept { return slots_; }
-    void clear() noexcept { std::memset(slots_, 0, count_ * sizeof(compressed_slot_t)); }
+    void clear() noexcept {
+        if (slots_)
+            std::memset(slots_, 0, count_ * sizeof(compressed_slot_t));
+    }
 
     void reset() noexcept {
         if (slots_)
@@ -857,7 +860,8 @@ class growing_hash_set_gt {
     std::size_t size() const noexcept { return count_; }
 
     void clear() noexcept {
-        std::memset((void*)slots_, 0xFF, capacity_ * sizeof(element_t));
+        if (slots_)
+            std::memset((void*)slots_, 0xFF, capacity_ * sizeof(element_t));
         count_ = 0;
     }
 

@@ -29,7 +29,7 @@ jobs:
 
 
   rebase:
-    name: Rebase Development Branch
+    name: Rebase Dev. Branch
     needs: versioning
     runs-on: ubuntu-latest
     steps:
@@ -52,8 +52,8 @@ jobs:
           force: True
 
 
-  publish_hashes:
-    name: Add hashes to release notes
+  publish_checksums:
+    name: Compute Assets Checksums
     runs-on: ubuntu-latest
     needs: versioning
     steps:
@@ -96,8 +96,64 @@ jobs:
             * Source code (tar.gz) : `${{ steps.hashes.outputs.tar_hash }}`
 
 
+  create_deb_packages_linux:
+    name: Create deb package for Linux on ${{ matrix.arch }}
+    needs: versioning
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: ["linux/amd64", "linux/arm64"]
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        persist-credentials: false
+        ref: 'main'
+    - run: git submodule update --init --recursive
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Get docker daemon IP
+      id: dockerip
+      run: |
+        docker_ip=$(ip addr show docker0 | grep -Po 'inet \K[\d.]+') && \
+        echo "docker_ip=$docker_ip" >> "$GITHUB_OUTPUT"
+
+    - name: Set new password for runner user
+      id: userpass
+      run: |
+        user_pass="1122"
+        echo "runner:$user_pass" | sudo chpasswd
+        echo "user_pass=$user_pass" >> "$GITHUB_OUTPUT"
+          
+    - name: Build Usearch lib
+      run: |
+        docker buildx create --use
+        docker buildx build \
+        --platform ${{ matrix.arch }} \
+        --build-arg docker_ip=${{ steps.dockerip.outputs.docker_ip }} \
+        --build-arg user_pass=${{ steps.userpass.outputs.user_pass }} \
+        --file .github/workflows/Dockerfile.libs \
+        --tag unum/ustore-deps:latest \
+        --load .
+
+    - name: Clear Docker buildx cache
+      run: docker buildx prune --all --force
+
+    - name: Upload archive to release Assets
+      uses: xresloader/upload-to-github-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        file: "*.deb"
+        update_latest_release: true
+
+
   build_wheels:
-    name: Build Wheels for ${{ matrix.os }}
+    name: Build Python
     needs: versioning
     runs-on: ${{ matrix.os }}
     strategy:
@@ -271,11 +327,89 @@ jobs:
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
 
+  build_csharp:
+    name: Build C#
+    needs: versioning
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: 'main'  
+      - run: git submodule update --init --recursive
+
+      - name: Ubuntu/macOS build usearch shared obj
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+        run: ./build_lib.sh
+        working-directory: ${{ github.workspace }}/csharp/eng
+
+      - name: Windows MSVC build usearch dll
+        if: matrix.os == 'windows-latest'
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          where cl
+          cl /EHsc /std:c++14 /O2 /LD /Fe:libusearch_c.dll lib.cpp /I. /I../include/ /I../fp16/include/
+        working-directory: ${{ github.workspace }}/c
+        shell: cmd
+
+      - name: Windows copy dll
+        if: matrix.os == 'windows-latest'
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
+          cp "${GITHUB_WORKSPACE}/c/libusearch_c.dll" "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
+        shell: bash
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: usearch-libs
+          path: ${{ github.workspace }}/csharp/lib/**/*
+
+  publish_csharp:
+    name: Publish C#
+    runs-on: ubuntu-latest
+    needs: [build_csharp]
+    env:
+      USEARCH_LIBS: ${{ github.workspace }}/csharp/lib
+      NUGET_DIR: ${{ github.workspace }}/csharp/packages
+      # NUGET_SOURCE: https://apiint.nugettest.org/v3/index.json
+      NUGET_SOURCE: https://api.nuget.org/v3/index.json
+      SOLUTION_DIR: ${{ github.workspace }}/csharp
+    steps:
+      - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
+        
+      - name: Download usearch libs artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: usearch-libs
+          path: ${{ env.USEARCH_LIBS }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 7.0.x     
+
+      - name: Pack project
+        run: |
+          VERSION_CONTENT=$(< VERSION)
+          dotnet pack "${{ env.SOLUTION_DIR }}" -c Release -p:Version="$VERSION_CONTENT" --output ${{ env.NUGET_DIR }}
+        working-directory: ${{ github.workspace }}
+
+      - name: Publish NuGet packages
+        run: |
+          dotnet nuget push "${{  env.NUGET_DIR }}/*.nupkg" --api-key "${{ secrets.NUGET_API }}" --source "${{ env.NUGET_SOURCE }}"
+
   build_docs:
     name: Build Docs
     runs-on: ubuntu-22.04
     if: ${{ always() }}
-    needs: [publish_python, publish_javascript, publish_rust, publish_java, publish_swift, publish_docker]
+    needs: [publish_python, publish_javascript, publish_rust, publish_java, publish_swift, publish_docker, publish_csharp]
     permissions:
       contents: write
     steps:

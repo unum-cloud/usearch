@@ -111,6 +111,7 @@
         "Availible",
         "bidict",
         "BLAS",
+        "Cdecl",
         "cflags",
         "citerator",
         "downcasted",
@@ -126,6 +127,7 @@
         "hnswlib",
         "ibin",
         "jaccard",
+        "libusearch",
         "longlong",
         "memmap",
         "Napi",
@@ -146,7 +148,8 @@
         "uninitialize",
         "unumusearch",
         "usearch",
-        "usecases"
+        "usecases",
+        "Xunit"
     ],
     "autoDocstring.docstringFormat": "sphinx",
     "java.configuration.updateBuildConfiguration": "interactive",
@@ -163,4 +166,5 @@
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "golang.go"
     },
+    "dotnet.defaultSolution": "csharp/Cloud.Unum.USearch.sln",
 }

@@ -174,6 +174,51 @@ jobs:
     - name: Run tests
       run: swift test
 
+  test_csharp:
+    name: Test C#
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        dotnet-version: ['7.0.x']
+    steps:
+      - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
+      - name: Setup .NET ${{ matrix.dotnet-version }}
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+
+      - name: Ubuntu/macOS build native lib
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+        run: ./build_lib.sh
+        shell: bash
+        working-directory: ${{ github.workspace }}/csharp/eng/
+
+      # Use cl.exe https://www.appveyor.com/docs/lang/cpp/#visual-studio-2017
+      # There is no support for c++11
+      - name: Windows MSVC build
+        if: matrix.os == 'windows-latest'
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          where cl
+          cl /EHsc /std:c++14 /O2 /LD /Fe:libusearch_c.dll lib.cpp /I. /I../include/ /I../fp16/include/
+        working-directory: ${{ github.workspace }}/c
+        shell: cmd
+
+      - name: Windows move dll to lib dir
+        if: matrix.os == 'windows-latest'
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
+          mv "${GITHUB_WORKSPACE}/c/libusearch_c.dll" "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
+        shell: bash
+
+      - name: Build and test
+        run: dotnet test -c Release
+        shell: bash
+        working-directory: ${{ github.workspace }}/csharp/
+
   build_docker:
     name: Test Docker Image
     runs-on: ubuntu-latest
