@@ -46,26 +46,26 @@ record init-options {
   expansion-search: size,
 }
 
-init: func(options: init-options, error: error) -> index
+init: func(options: init-options) -> expected<index, error>
 
-release: func(index: index, error: error)
-save: func(index: index, path: string, error: error)
-load: func(index: index, path: string, error: error)
-view: func(index: index, path: string, error: error)
+release: func(index: index) -> error
+save: func(index: index, path: string) -> error
+load: func(index: index, path: string) -> error
+view: func(index: index, path: string) -> error
 
-size: func(index: index, error: error) -> size
-capacity: func(index: index, error: error) -> size
-dimensions: func(index: index, error: error) -> size
-connectivity: func(index: index, error: error) -> size
+size: func(index: index) -> expected<size, error>
+capacity: func(index: index) -> expected<size, error>
+dimensions: func(index: index) -> expected<size, error>
+connectivity: func(index: index) -> expected<size, error>
 
-reserve: func(index: index, capacity: size, error: error)
+reserve: func(index: index, capacity: size) -> error
 
-add: func(index: index, key: key, array: vector, vector-kind: scalar-kind, error: error)
+add: func(index: index, key: key, array: vector, vector-kind: scalar-kind) -> error
 
-contains: func(index: index, key: key, error: error) -> bool
+contains: func(index: index, key: key) -> expected<bool, error>
 
-search: func(index: index, array: vector, kind: scalar-kind, results-limit: size, found-labels: keys, found-distances: distances, error: error) -> size
+search: func(index: index, array: vector, kind: scalar-kind, results-limit: size, found-labels: keys, found-distances: distances) -> expected<size, error>
 
-get: func(index: index, key: key, array: vector, vector-kind: scalar-kind, error: error) -> bool
+get: func(index: index, key: key, array: vector, vector-kind: scalar-kind) -> expected<bool, error>
 
-remove: func(index: index, key: key, error: error) -> bool
+remove: func(index: index, key: key) -> expected<bool, error>
