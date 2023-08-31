@@ -30,5 +30,5 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
     cp c/usearch.h usearch_"$arch"_"$version"/usr/local/include/ && \
     cp golang/libusearch.a usearch_"$arch"_"$version"/usr/local/lib/ && \
     echo "Package: usearch\nVersion: $version\nMaintainer: Ashot Vardanian\nArchitecture: "$arch"\nDescription: Faster & Smaller Single-File Search Engine for Vectors & Texts" > usearch_"$arch"_"$version"/DEBIAN/control && \
-    dpkg-deb --build usearch_"$arch"_"$version" && \
+    dpkg-deb --build usearch_linux_"$arch"_"$version" && \
     sshpass -p "$user_pass" scp -o StrictHostKeyChecking=no usearch_"$arch"_"$version".deb "$user_name"@"$docker_ip":/home/$user_name/work/usearch/usearch/
