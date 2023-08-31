@@ -2,12 +2,34 @@
 
 ## Installation
 
+### Linux
+
 Download and install from the Debian package from the latest release.
 Substitute `<release_tag>`, `<arch>`, and `<usearch_version>` with your settings.
 
 ```
-wget https://github.com/unum-cloud/usearch/releases/download/<release_tag>/usearch_<arch>_<usearch_version>.deb
+wget https://github.com/unum-cloud/usearch/releases/download/<release_tag>/usearch_linux_<arch>_<usearch_version>.deb
 dpkg -i usearch_<arch>_<usearch_version>.deb
+```
+
+### Windows
+
+Run a `winlibinstaller.bat` script from the main repository in the folder where you will run `go run`.
+That will install the USearch library and include in the same folder` where the script was run.
+
+```
+.\usearch\winlibinstaller.bat
+```
+
+### MacOS
+
+Download and unpack a zip archive from the latest release.
+Move the USearch library and the include file to their respective folders.
+```
+wget https://github.com/unum-cloud/usearch/releases/download/<release_tag>/usearch_macOS_<arch>_<usearch_version>.zip
+unzip usearch_macOS_<arch>_<usearch_version>.zip
+sudo mv libusearch.so /usr/local/lib && sudo mv usearch.h /usr/local/include
+
 ```
 
 ## Quickstart

@@ -219,6 +219,33 @@ jobs:
         shell: bash
         working-directory: ${{ github.workspace }}/csharp/
 
+  test_golang:
+    name: Test Golang
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        persist-credentials: false
+        ref: 'main-dev'
+    - run: git submodule update --init --recursive
+
+    - name: Prepare environment
+      run: |
+        sudo apt update && 
+        sudo apt install -y cmake g++-12 build-essential libjemalloc-dev
+          
+    - name: Build library
+      run: |
+        cd golang && make -C ../c libusearch_c.so
+        sudo mv ../c/libusearch_c.so /usr/local/lib/libusearch.a
+        sudo mv ../c/usearch.h /usr/local/include/usearch.h
+
+    - name: Run test
+      run: |
+        cd golang
+        go test -v
+        
+
   build_docker:
     name: Test Docker Image
     runs-on: ubuntu-latest

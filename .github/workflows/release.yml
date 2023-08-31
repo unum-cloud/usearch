@@ -52,10 +52,172 @@ jobs:
           force: True
 
 
+  create_linux_deb_package:
+    name: Create Debian Package for ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    needs: versioning
+    strategy:
+      matrix:
+        arch: ["linux/amd64", "linux/arm64"]
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        persist-credentials: false
+        ref: 'main'
+    - run: git submodule update --init --recursive
+
+    - name: Setup QEMU
+      uses: docker/setup-qemu-action@v2
+
+    - name: Setup Docker
+      uses: docker/setup-buildx-action@v2
+
+    - name: Get Docker daemon IP
+      id: dockerip
+      run: |
+        docker_ip=$(ip addr show docker0 | grep -Po 'inet \K[\d.]+') && \
+        echo "docker_ip=$docker_ip" >> "$GITHUB_OUTPUT"
+        
+    - name: Set runner user password
+      id: userpass
+      run: |
+        user_pass="1122"
+        echo "runner:$user_pass" | sudo chpasswd
+        echo "user_pass=$user_pass" >> "$GITHUB_OUTPUT"
+          
+    - name: Build library
+      run: |
+        docker buildx create --use
+        docker buildx build \
+        --platform ${{ matrix.arch }} \
+        --build-arg docker_ip=${{ steps.dockerip.outputs.docker_ip }} \
+        --build-arg user_pass=${{ steps.userpass.outputs.user_pass }} \
+        --file .github/workflows/Dockerfile.libs \
+        --tag unum/ustore-deps:latest \
+        --load .
+    - name: Clear Docker buildx cache
+      run: docker buildx prune --all --force
+
+    - name: Upload archive
+      uses: xresloader/upload-to-github-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        file: "*.deb"
+        update_latest_release: true
+
+
+  create_windows_dll_library:
+    name: Create Dll Library for Windows ${{ matrix.arch }}
+    runs-on: windows-latest
+    needs: versioning
+    strategy:
+      matrix:
+        arch: [x64, x86]
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        persist-credentials: false
+        ref: 'main'
+    - run: git submodule update --init --recursive
+    
+    - name: Setup Cmake
+      uses: jwlawson/actions-setup-cmake@v1.13
+    
+    - uses: actions/setup-go@v4
+      with:
+        go-version: '^1.19.0'
+
+    - name: Setup Mingw
+      uses: egor-tensin/setup-mingw@v2
+      with:
+        platform: ${{ matrix.arch }}
+
+    - name: Get version
+      id: set_version
+      shell: bash
+      run: |
+        version=$(cat VERSION)
+        echo "version=$version" >> $GITHUB_OUTPUT
+        
+    - name: Build library
+      run: |
+        cd c/ && g++ -std=c++11 -o libusearch.dll -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared && cd ..
+        cp c/libusearch.dll golang/libusearch.dll && cp c/usearch.h golang/usearch.h
+    
+    - name: Golang test
+      run: |
+        cd golang/ && go test -v
+      if: ${{ matrix.arch == 'x64' }}
+
+    - name: Compress library
+      run: |
+        cd golang/
+        tar -cvf usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar .\libusearch.dll .\usearch.h
+
+    - name: Upload archive
+      uses: xresloader/upload-to-github-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        file: "golang/usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar"
+        update_latest_release: true
+
+
+  create_macos_library:
+    name: Create Library for MacOS ${{ matrix.arch }}
+    runs-on: macOS-latest
+    needs: versioning
+    strategy:
+      matrix:
+        arch: [arm64, x86_64]
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        persist-credentials: false
+        ref: 'main'
+    - run: git submodule update --init --recursive
+    
+    - uses: actions/setup-go@v4
+      with:
+        go-version: '^1.21.0'
+
+    - name: Get version
+      id: version
+      run: |
+        version=$(cat VERSION)
+        echo "version=$version" >> $GITHUB_OUTPUT
+
+    - name: Build library
+      run: |
+        cd c/ && clang++ -std=c++11 -o libusearch.so -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared -target ${{ matrix.arch }}-apple-macos11 && cd ..
+        cp c/usearch.h golang/
+        cp c/libusearch.so golang/libusearch.so
+
+    - name: Golang test
+      run: |
+        cd golang/
+        go test -v
+      if: ${{ matrix.arch == 'x86_64' }}
+
+    - name: Compress library
+      run: |
+        cd golang/
+        zip -r usearch_macOS_${{ matrix.arch }}_${{ steps.version.outputs.version }}.zip libusearch.so usearch.h 
+
+    - name: Upload archive
+      uses: xresloader/upload-to-github-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        file: "golang/*.zip"
+        update_latest_release: true
+
+
   publish_hashes:
     name: Add hashes to release notes
     runs-on: ubuntu-latest
-    needs: versioning
+    needs: [versioning, create_linux_deb_package, create_windows_dll_library, create_macos_library]
     steps:
     - name: Get last release ID
       id: last_release
@@ -94,62 +256,6 @@ jobs:
             ## Hashes
             * Source code (zip) : `${{ steps.hashes.outputs.zip_hash }}` 
             * Source code (tar.gz) : `${{ steps.hashes.outputs.tar_hash }}`
-
-
-  create_deb_packages_linux:
-    name: Create deb package for Linux on ${{ matrix.arch }}
-    needs: versioning
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: ["linux/amd64", "linux/arm64"]
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        persist-credentials: false
-        ref: 'main'
-    - run: git submodule update --init --recursive
-
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v2
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
-
-    - name: Get docker daemon IP
-      id: dockerip
-      run: |
-        docker_ip=$(ip addr show docker0 | grep -Po 'inet \K[\d.]+') && \
-        echo "docker_ip=$docker_ip" >> "$GITHUB_OUTPUT"
-
-    - name: Set new password for runner user
-      id: userpass
-      run: |
-        user_pass="1122"
-        echo "runner:$user_pass" | sudo chpasswd
-        echo "user_pass=$user_pass" >> "$GITHUB_OUTPUT"
-          
-    - name: Build Usearch lib
-      run: |
-        docker buildx create --use
-        docker buildx build \
-        --platform ${{ matrix.arch }} \
-        --build-arg docker_ip=${{ steps.dockerip.outputs.docker_ip }} \
-        --build-arg user_pass=${{ steps.userpass.outputs.user_pass }} \
-        --file .github/workflows/Dockerfile.libs \
-        --tag unum/ustore-deps:latest \
-        --load .
-
-    - name: Clear Docker buildx cache
-      run: docker buildx prune --all --force
-
-    - name: Upload archive to release Assets
-      uses: xresloader/upload-to-github-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        file: "*.deb"
-        update_latest_release: true
 
 
   build_wheels:
