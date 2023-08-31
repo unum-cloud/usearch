@@ -239,12 +239,14 @@ jobs:
     - name: Calculate source hashes
       id: hashes
       run: |
-        source_zip_path=$(find $GITHUB_WORKSPACE/downloads -name "*.zip")
-        zip_hash=$(sha256sum "$source_zip_path" | awk '{print $1}')
-        source_tar_path=$(find $GITHUB_WORKSPACE/downloads -name "*.tar.gz" ! -name "docs.tar.gz")
-        tar_hash=$(sha256sum "$source_tar_path" | awk '{print $1}')
-        echo "zip_hash=$zip_hash" >> $GITHUB_OUTPUT
-        echo "tar_hash=$tar_hash" >> $GITHUB_OUTPUT
+        i=1
+        cd $GITHUB_WORKSPACE/downloads
+        for asset_name in $(ls); do
+          asset_hash=$(sha256sum $asset_name | awk '{print $1}')
+          echo "asset_name_$i=$asset_name" >> $GITHUB_OUTPUT
+          echo "asset_hash_$i=$asset_hash" >> $GITHUB_OUTPUT
+          i=$((i+1))
+        done
           
     - name: Upload hashes to release
       uses: irongut/EditRelease@v1.2.0
@@ -255,8 +257,14 @@ jobs:
         replacebody: false
         body: |
             ## Hashes
-            * Source code (zip) : `${{ steps.hashes.outputs.zip_hash }}` 
-            * Source code (tar.gz) : `${{ steps.hashes.outputs.tar_hash }}`
+            * `${{ steps.hashes.outputs.asset_name_1 }}` : `${{ steps.hashes.outputs.asset_hash_1 }}`
+            * `${{ steps.hashes.outputs.asset_name_2 }}` : `${{ steps.hashes.outputs.asset_hash_2 }}`
+            * `${{ steps.hashes.outputs.asset_name_3 }}` : `${{ steps.hashes.outputs.asset_hash_3 }}`
+            * `${{ steps.hashes.outputs.asset_name_4 }}` : `${{ steps.hashes.outputs.asset_hash_4 }}`
+            * `${{ steps.hashes.outputs.asset_name_5 }}` : `${{ steps.hashes.outputs.asset_hash_5 }}`
+            * `${{ steps.hashes.outputs.asset_name_6 }}` : `${{ steps.hashes.outputs.asset_hash_6 }}`
+            * `${{ steps.hashes.outputs.asset_name_7 }}` : `${{ steps.hashes.outputs.asset_hash_7 }}`
+            * `${{ steps.hashes.outputs.asset_name_8 }}` : `${{ steps.hashes.outputs.asset_hash_8 }}`
 
 
   build_wheels:
