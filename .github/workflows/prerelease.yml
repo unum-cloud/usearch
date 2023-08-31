@@ -229,7 +229,7 @@ jobs:
         ref: 'main-dev'
     - run: git submodule update --init --recursive
 
-    - name: Prepare Environment
+    - name: Prepare environment
       run: |
         sudo apt update && 
         sudo apt install -y cmake g++-12 build-essential libjemalloc-dev
@@ -244,6 +244,7 @@ jobs:
       run: |
         cd golang
         go test -v
+        
 
   build_docker:
     name: Test Docker Image
