@@ -186,7 +186,7 @@ jobs:
         
     - name: Build library
       run: |
-        cd c/ && g++ -std=c++11 -o libusearch.dll -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -I ../robin-map/include/ -shared && cd ..
+        cd c/ && g++ -std=c++11 -o libusearch.dll -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared && cd ..
         cp c/libusearch.dll golang/libusearch.dll && cp c/usearch.h golang/usearch.h
     
     - name: Golang test
@@ -234,7 +234,7 @@ jobs:
 
     - name: Build library
       run: |
-        cd c/ && clang++ -std=c++11 -o libusearch.so -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -I ../robin-map/include/ -shared -target ${{ matrix.arch }}-apple-macos11 && cd ..
+        cd c/ && clang++ -std=c++11 -o libusearch.so -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared -target ${{ matrix.arch }}-apple-macos11 && cd ..
         cp c/usearch.h golang/
         cp c/libusearch.so golang/libusearch.so
 
