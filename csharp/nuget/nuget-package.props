@@ -15,14 +15,14 @@
 
     <PackageIcon>unum.png</PackageIcon>
     <PackageIconUrl>unum.png</PackageIconUrl>
-    <PackageReadmeFile>NUGET.md</PackageReadmeFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
     <None Include="$(NativeLibDir)runtimes\**\*.*" Pack="true" PackagePath="runtimes" />
     <None Include="$(RepoRoot)LICENSE" Pack="true" PackagePath=""/>
     <None Include="$(RepoRoot)assets\unum.png" Pack="true" PackagePath=""/>
-    <None Include="$(CSharpDir)nuget\NUGET.md" Pack="true" PackagePath=""/>
+    <None Include="$(RepoRoot)README.md" Pack="true" PackagePath=""/>
   </ItemGroup>
 
   <!-- Package validation https://learn.microsoft.com/en-us/dotnet/fundamentals/package-validation/overview?WT.mc_id=DT-MVP-5003978 -->
