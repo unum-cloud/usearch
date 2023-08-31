@@ -14,11 +14,10 @@ dpkg -i usearch_<arch>_<usearch_version>.deb
 
 #### Windows
 
-Download and run a bat script from the from the main repository.
+Run a `winlibinstaller.bat` script from the main repository.
 That will install the USearch library in the same folder` where the script was run.
 
 ```
-wget https://github.com/unum-cloud/usearch/blob/main/winlibinstaller.bat
 .\winlibinstaller.bat
 ```
 
