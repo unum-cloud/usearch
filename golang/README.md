@@ -15,7 +15,7 @@ dpkg -i usearch_<arch>_<usearch_version>.deb
 #### Windows
 
 Download and run a bat script from the from the main repository.
-That will install the USearch library in the same folder` where the script was run
+That will install the USearch library in the same folder` where the script was run.
 
 ```
 wget https://github.com/unum-cloud/usearch/blob/main/winlibinstaller.bat
@@ -24,7 +24,7 @@ wget https://github.com/unum-cloud/usearch/blob/main/winlibinstaller.bat
 
 #### MacOS
 
-Download and extract a tar archive script from the latest release.
+Download and unpack a zip archive from the latest release.
 Move the USearch library and the include file to their respective folders.
 ```
 wget https://github.com/unum-cloud/usearch/releases/download/<release_tag>/usearch_macOS_<arch>_<usearch_version>.zip
