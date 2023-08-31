@@ -1133,22 +1133,23 @@ class Index:
     @property
     def specs(self) -> Dict[str, Union[str, int, bool]]:
         return {
-            "Class": "usearch.Index",
-            "Connectivity": self.connectivity,
-            "Size": self.size,
-            "Dimensions": self.ndim,
-            "Expansion@Add": self.expansion_add,
-            "Expansion@Search": self.expansion_search,
-            "OpenMP": USES_OPENMP,
-            "SimSIMD": USES_SIMSIMD,
-            "NativeF16": USES_NATIVE_F16,
-            "JIT": self.jit,
-            "DType": self.dtype,
-            "Path": self.path,
+            "type": "usearch.Index",
+            "ndim": self.ndim,
+            "connectivity": self.connectivity,
+            "expansion_add": self.expansion_add,
+            "expansion_search": self.expansion_search,
+            "size": self.size,
+            "jit": self.jit,
+            "hardware_acceleration": self.hardware_acceleration,
+            "dtype": self.dtype,
+            "path": self.path,
+            "compiled_with_openmp": USES_OPENMP,
+            "compiled_with_simsimd": USES_SIMSIMD,
+            "compiled_with_native_f16": USES_NATIVE_F16,
         }
 
     def __repr__(self) -> str:
-        f = "usearch.Index({} x {}, {}, connectivity: {}, expansion: {} & {}, {} vectors in {} levels)"
+        f = "usearch.Index({} x {}, {}, connectivity: {}, expansion: {} & {}, {:,} vectors in {} levels, {} hardware accerlation)"
         return f.format(
             self.dtype,
             self.ndim,
@@ -1158,6 +1159,7 @@ class Index:
             self.expansion_search,
             len(self),
             self.nlevels,
+            self.hardware_acceleration,
         )
 
     def _repr_pretty_(self, printer, cycle) -> str:
