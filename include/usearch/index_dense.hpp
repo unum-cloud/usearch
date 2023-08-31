@@ -1,12 +1,11 @@
 #pragma once
 #include <stdlib.h> // `aligned_alloc`
 
-#include <functional>    // `std::function`
-#include <numeric>       // `std::iota`
-#include <shared_mutex>  // `std::shared_mutex`
-#include <thread>        // `std::thread`
-#include <unordered_set> // `std::unordered_multiset`
-#include <vector>        // `std::vector`
+#include <functional>   // `std::function`
+#include <numeric>      // `std::iota`
+#include <shared_mutex> // `std::shared_mutex`
+#include <thread>       // `std::thread`
+#include <vector>       // `std::vector`
 
 #include <usearch/index.hpp>
 #include <usearch/index_plugins.hpp>
@@ -399,7 +398,7 @@ class index_dense_gt {
     };
 
     /// @brief Multi-Map from keys to IDs, and allocated vectors.
-    std::unordered_multiset<key_and_slot_t, lookup_key_hash_t, lookup_key_same_t> slot_lookup_;
+    flat_hash_multi_set_gt<key_and_slot_t, lookup_key_hash_t, lookup_key_same_t> slot_lookup_;
 
     /// @brief Mutex, controlling concurrent access to `slot_lookup_`.
     mutable shared_mutex_t slot_lookup_mutex_;
@@ -1122,7 +1121,7 @@ class index_dense_gt {
      */
     bool contains(key_t key) const {
         shared_lock_t lock(slot_lookup_mutex_);
-        return slot_lookup_.find(key_and_slot_t::any_slot(key)) != slot_lookup_.end();
+        return slot_lookup_.contains(key_and_slot_t::any_slot(key));
     }
 
     /**
@@ -1176,7 +1175,7 @@ class index_dense_gt {
             free_keys_.push(slot);
             typed_->at(slot).key = free_key_;
         }
-        slot_lookup_.erase(matching_slots.first, matching_slots.second);
+        slot_lookup_.erase(key);
         result.completed = matching_count;
 
         return result;
@@ -1212,14 +1211,15 @@ class index_dense_gt {
             // - present in `free_keys_`
             // - missing in the `slot_lookup_`
             // - marked in the `typed_` index with a `free_key_`
+            matching_count = 0;
             for (auto slots_it = matching_slots.first; slots_it != matching_slots.second; ++slots_it) {
                 compressed_slot_t slot = (*slots_it).slot;
                 free_keys_.push(slot);
                 typed_->at(slot).key = free_key_;
+                ++matching_count;
             }
 
-            matching_count = std::distance(matching_slots.first, matching_slots.second);
-            slot_lookup_.erase(matching_slots.first, matching_slots.second);
+            slot_lookup_.erase(key);
             result.completed += matching_count;
         }
 
@@ -1238,20 +1238,18 @@ class index_dense_gt {
         labeling_result_t result;
         unique_lock_t lookup_lock(slot_lookup_mutex_);
 
-        if (!multi() && slot_lookup_.count(key_and_slot_t::any_slot(to)))
+        if (!multi() && slot_lookup_.contains(key_and_slot_t::any_slot(to)))
             return result.failed("Renaming impossible, the key is already in use");
 
         // The `from` may map to multiple entries
         while (true) {
-            auto slots_it = slot_lookup_.find(key_and_slot_t::any_slot(from));
-            if (slots_it == slot_lookup_.end())
+            key_and_slot_t key_and_slot_removed;
+            if (!slot_lookup_.pop_first(key_and_slot_t::any_slot(from), key_and_slot_removed))
                 break;
 
-            compressed_slot_t slot = (*slots_it).slot;
-            key_and_slot_t key_and_slot{to, slot};
-            slot_lookup_.erase(slots_it);
-            slot_lookup_.insert(key_and_slot);
-            typed_->at(slot).key = to;
+            key_and_slot_t key_and_slot_replacing{to, key_and_slot_removed.slot};
+            slot_lookup_.try_emplace(key_and_slot_replacing); // This can't fail
+            typed_->at(key_and_slot_removed.slot).key = to;
             ++result.completed;
         }
 
@@ -1266,11 +1264,18 @@ class index_dense_gt {
      */
     void export_keys(key_t* keys, std::size_t offset, std::size_t limit) const {
         shared_lock_t lock(slot_lookup_mutex_);
-        auto it = slot_lookup_.begin();
         offset = (std::min)(offset, slot_lookup_.size());
-        std::advance(it, offset);
-        for (; it != slot_lookup_.end() && limit; ++it, ++keys, --limit)
-            *keys = (*it).key;
+        slot_lookup_.for_each([&](key_and_slot_t const& key_and_slot) {
+            if (offset) {
+                --offset;
+                return;
+            }
+            if (limit) {
+                *keys = key_and_slot.key;
+                ++keys;
+                --limit;
+            }
+        });
     }
 
     struct copy_result_t {
@@ -1693,7 +1698,7 @@ class index_dense_gt {
         bool reuse_node = free_slot != default_free_value<compressed_slot_t>();
         auto on_success = [&](member_ref_t member) {
             unique_lock_t slot_lock(slot_lookup_mutex_);
-            slot_lookup_.insert(key_and_slot_t{key, static_cast<compressed_slot_t>(member.slot)});
+            slot_lookup_.try_emplace(key_and_slot_t{key, static_cast<compressed_slot_t>(member.slot)});
             if (copy_vector) {
                 if (!reuse_node)
                     vectors_lookup_[member.slot] = vectors_tape_allocator_.allocate(metric_.bytes_per_vector());
@@ -1827,7 +1832,7 @@ class index_dense_gt {
             if (member.key == free_key_)
                 free_keys_.push(static_cast<compressed_slot_t>(i));
             else
-                slot_lookup_.insert(key_and_slot_t{key_t(member.key), static_cast<compressed_slot_t>(i)});
+                slot_lookup_.try_emplace(key_and_slot_t{key_t(member.key), static_cast<compressed_slot_t>(i)});
         }
     }
 
