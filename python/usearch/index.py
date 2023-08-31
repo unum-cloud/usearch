@@ -562,12 +562,11 @@ class Index:
         )
 
         self.path = path
-        if path and os.path.exists(path):
-            path = os.fspath(path)
+        if path is not None:
             if view:
-                self._compiled.view(path)
+                self.view(path)
             else:
-                self._compiled.load(path)
+                self.load(path)
 
     @staticmethod
     def metadata(path_or_buffer: PathOrBuffer) -> Optional[dict]:
@@ -919,7 +918,9 @@ class Index:
     def expansion_search(self, v: int):
         self._compiled.expansion_search = v
 
-    def save(self, path_or_buffer: Union[str, os.PathLike, NoneType] = None) -> Optional[bytes]:
+    def save(
+        self, path_or_buffer: Union[str, os.PathLike, NoneType] = None
+    ) -> Optional[bytes]:
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
         if path_or_buffer is None:
             return self._compiled.save_index_to_buffer()
@@ -937,7 +938,9 @@ class Index:
         else:
             self._compiled.load_index_from_path(os.fspath(path_or_buffer))
 
-    def view(self, path_or_buffer: Union[str, os.PathLike, bytes, bytearray, NoneType] = None):
+    def view(
+        self, path_or_buffer: Union[str, os.PathLike, bytes, bytearray, NoneType] = None
+    ):
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
         if path_or_buffer is None:
             raise Exception("Define the source")
