@@ -15,7 +15,7 @@ dpkg -i usearch_<arch>_<usearch_version>.deb
 #### Windows
 
 Run a `winlibinstaller.bat` script from the main repository in the folder where you will run `go run`.
-That will install the USearch library in the same folder` where the script was run.
+That will install the USearch library and include in the same folder` where the script was run.
 
 ```
 .\usearch\winlibinstaller.bat
