@@ -48,7 +48,7 @@ jobs:
       - name: Push changes
         uses: CasperWA/push-protected@v2
         with:
-          token: ${{ secrets.SEMANTIC_REBASE_TOKEN }}
+          token: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
           branch: main-dev
           unprotect_reviews: True
           force: True
