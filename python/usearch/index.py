@@ -471,6 +471,7 @@ class Index:
         multi: bool = False,
         path: Optional[os.PathLike] = None,
         view: bool = False,
+        enable_key_lookups: bool = True,
     ) -> None:
         """Construct the index and compiles the functions, if requested (expensive).
 
@@ -556,6 +557,7 @@ class Index:
             expansion_add=expansion_add,
             expansion_search=expansion_search,
             multi=multi,
+            enable_key_lookups=enable_key_lookups,
             metric_kind=self._metric_kind,
             metric_pointer=self._metric_pointer,
             metric_signature=self._metric_signature,

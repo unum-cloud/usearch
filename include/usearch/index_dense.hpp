@@ -92,6 +92,17 @@ struct index_dense_config_t : public index_config_t {
     bool exclude_vectors = false;
     bool multi = false;
 
+    /**
+     *  @brief  Allows you to reduce RAM consumption by avoiding
+     *          reverse-indexing keys-to-vectors, and only keeping
+     *          the vectors-to-keys mappings.
+     *
+     *  ! This configuration parameter doesn't affect the serialized file,
+     *  ! and is not preserved between runs. Makes sense for small vector
+     *  ! representations that fit ina  single cache line.
+     */
+    bool enable_key_lookups = true;
+
     index_dense_config_t(index_config_t base) noexcept : index_config_t(base) {}
 
     index_dense_config_t(                                  //
@@ -1820,18 +1831,22 @@ class index_dense_gt {
             count_removed += member.key == free_key_;
         }
 
+        if (!count_removed && !config_.enable_key_lookups)
+            return;
+
         // Pull entries from the underlying `typed_` into either
         // into `slot_lookup_`, or `free_keys_` if they are unused.
         unique_lock_t lock(slot_lookup_mutex_);
         slot_lookup_.clear();
-        slot_lookup_.reserve(count_total - count_removed);
+        if (config_.enable_key_lookups)
+            slot_lookup_.reserve(count_total - count_removed);
         free_keys_.clear();
         free_keys_.reserve(count_removed);
         for (std::size_t i = 0; i != typed_->size(); ++i) {
             member_cref_t member = typed_->at(i);
             if (member.key == free_key_)
                 free_keys_.push(static_cast<compressed_slot_t>(i));
-            else
+            else if (config_.enable_key_lookups)
                 slot_lookup_.try_emplace(key_and_slot_t{key_t(member.key), static_cast<compressed_slot_t>(i)});
         }
     }
