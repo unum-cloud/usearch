@@ -41,8 +41,9 @@ jobs:
 
       - name: Perform rebase
         run: |
+          git fetch origin main
           git checkout main-dev
-          git rebase main
+          git rebase origin/main
           
       - name: Push changes
         uses: CasperWA/push-protected@v2
