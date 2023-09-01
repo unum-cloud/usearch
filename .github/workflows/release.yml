@@ -30,7 +30,7 @@ jobs:
 
 
   rebase:
-    name: Rebase Development Branch
+    name: Rebase Dev. Branch
     needs: versioning
     runs-on: ubuntu-latest
     steps:
