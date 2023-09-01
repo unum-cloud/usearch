@@ -1,13 +1,10 @@
-// #define USEARCH_EXPORT EMSCRIPTEN_KEEPALIVE
-// #define EMSCRIPTEN_KEEPALIVE
-
-#include <emscripten/emscripten.h>
-
-#include <usearch.h>
-
 #include <lib.cpp>
 
+#ifdef USEARCH_USE_EMSCRIPTEN
+#include <emscripten/emscripten.h>
 #define USEARCH_EXPORT EMSCRIPTEN_KEEPALIVE
+#endif // USEARCH_USE_EMSCRIPTEN
+
 #include "usearch-wasm.h"
 
 #pragma region - Results and error converters
