@@ -1272,7 +1272,7 @@ struct dummy_executor_t {
  *  @brief  An example of what a USearch-compatible key-to-key mapping should look like.
  *
  *  This is particularly helpful for "Semantic Joins", where we map entries of one collection
- *  to entries of another. In assymetric setups, where A -> B is needed, but B -> A is not,
+ *  to entries of another. In asymmetric setups, where A -> B is needed, but B -> A is not,
  *  this can be passed to minimize memory usage.
  */
 struct dummy_key_to_key_mapping_t {
@@ -1284,7 +1284,7 @@ struct dummy_key_to_key_mapping_t {
 
 /**
  *  @brief  Checks if the provided object has a dummy type, emulating an interface,
- *          but performaing no real computation.
+ *          but performing no real computation.
  */
 template <typename object_at> static constexpr bool is_dummy() {
     using object_t = typename std::remove_all_extents<object_at>::type;
@@ -2504,7 +2504,7 @@ class index_gt {
     }
 
     /**
-     *  @brief Identifies the closest cluster to the gived ::query. Thread-safe.
+     *  @brief Identifies the closest cluster to the given ::query. Thread-safe.
      *
      *  @param[in] query Content that will be compared against other entries in the index.
      *  @param[in] level The index level to target. Higher means lower resolution.

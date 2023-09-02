@@ -83,7 +83,7 @@ USearch is compact and broadly compatible without sacrificing performance, with 
 Base functionality is identical to FAISS, and the interface must be familiar if you have ever investigated Approximate Nearest Neighbors search:
 
 ```py
-$ pip install usearch numpy
+$ pip install usearch
 
 import numpy as np
 from usearch.index import Index
