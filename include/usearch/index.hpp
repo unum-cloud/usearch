@@ -1513,6 +1513,8 @@ class memory_mapped_file_t {
 #else
         int descriptor = open(path_, O_RDONLY);
 #endif
+        if (descriptor < 0)
+            return result.failed(std::strerror(errno));
 
         // Estimate the file size
         struct stat file_stat;
