@@ -65,6 +65,7 @@ setup(
     package_dir={"usearch": "python/usearch"},
     description="Smaller & Faster Single-File Vector Search Engine from Unum",
     author="Ash Vardanian",
+    author_email="info@unum.cloud",
     long_description=long_description,
     long_description_content_type="text/markdown",
     license="Apache-2.0",
