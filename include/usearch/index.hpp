@@ -1272,7 +1272,7 @@ struct dummy_executor_t {
  *  @brief  An example of what a USearch-compatible key-to-key mapping should look like.
  *
  *  This is particularly helpful for "Semantic Joins", where we map entries of one collection
- *  to entries of another. In assymetric setups, where A -> B is needed, but B -> A is not,
+ *  to entries of another. In asymmetric setups, where A -> B is needed, but B -> A is not,
  *  this can be passed to minimize memory usage.
  */
 struct dummy_key_to_key_mapping_t {
@@ -1284,16 +1284,16 @@ struct dummy_key_to_key_mapping_t {
 
 /**
  *  @brief  Checks if the provided object has a dummy type, emulating an interface,
- *          but performaing no real computation.
+ *          but performing no real computation.
  */
 template <typename object_at> static constexpr bool is_dummy() {
     using object_t = typename std::remove_all_extents<object_at>::type;
-    return std::is_same<object_t, dummy_predicate_t>::value || //
-           std::is_same<object_t, dummy_callback_t>::value ||  //
-           std::is_same<object_t, dummy_progress_t>::value ||  //
-           std::is_same<object_t, dummy_prefetch_t>::value ||  //
-           std::is_same<object_t, dummy_executor_t>::value ||  //
-           std::is_same<object_t, dummy_key_to_key_mapping_t>::value;
+    return std::is_same<typename std::decay<object_t>::type, dummy_predicate_t>::value || //
+           std::is_same<typename std::decay<object_t>::type, dummy_callback_t>::value ||  //
+           std::is_same<typename std::decay<object_t>::type, dummy_progress_t>::value ||  //
+           std::is_same<typename std::decay<object_t>::type, dummy_prefetch_t>::value ||  //
+           std::is_same<typename std::decay<object_t>::type, dummy_executor_t>::value ||  //
+           std::is_same<typename std::decay<object_t>::type, dummy_key_to_key_mapping_t>::value;
 }
 
 template <typename, typename at> struct has_reset_gt {
@@ -1513,6 +1513,8 @@ class memory_mapped_file_t {
 #else
         int descriptor = open(path_, O_RDONLY);
 #endif
+        if (descriptor < 0)
+            return result.failed(std::strerror(errno));
 
         // Estimate the file size
         struct stat file_stat;
@@ -2502,7 +2504,7 @@ class index_gt {
     }
 
     /**
-     *  @brief Identifies the closest cluster to the gived ::query. Thread-safe.
+     *  @brief Identifies the closest cluster to the given ::query. Thread-safe.
      *
      *  @param[in] query Content that will be compared against other entries in the index.
      *  @param[in] level The index level to target. Higher means lower resolution.
@@ -3325,7 +3327,7 @@ class index_gt {
         visits.clear();
 
         // Optional prefetching
-        if (!std::is_same<prefetch_at, dummy_prefetch_t>::value)
+        if (!std::is_same<typename std::decay<prefetch_at>::type, dummy_prefetch_t>::value)
             prefetch(citerator_at(closest_slot), citerator_at(closest_slot + 1));
 
         distance_t closest_dist = context.measure(query, citerator_at(closest_slot), metric);
@@ -3337,7 +3339,7 @@ class index_gt {
                 neighbors_ref_t closest_neighbors = neighbors_non_base_(node_at_(closest_slot), level);
 
                 // Optional prefetching
-                if (!std::is_same<prefetch_at, dummy_prefetch_t>::value) {
+                if (!std::is_same<typename std::decay<prefetch_at>::type, dummy_prefetch_t>::value) {
                     candidates_range_t missing_candidates{*this, closest_neighbors, visits};
                     prefetch(missing_candidates.begin(), missing_candidates.end());
                 }
@@ -3379,7 +3381,7 @@ class index_gt {
             return false;
 
         // Optional prefetching
-        if (!std::is_same<prefetch_at, dummy_prefetch_t>::value)
+        if (!std::is_same<typename std::decay<prefetch_at>::type, dummy_prefetch_t>::value)
             prefetch(citerator_at(start_slot), citerator_at(start_slot + 1));
 
         distance_t radius = context.measure(query, citerator_at(start_slot), metric);
@@ -3404,7 +3406,7 @@ class index_gt {
             neighbors_ref_t candidate_neighbors = neighbors_(candidate_ref, level);
 
             // Optional prefetching
-            if (!std::is_same<prefetch_at, dummy_prefetch_t>::value) {
+            if (!std::is_same<typename std::decay<prefetch_at>::type, dummy_prefetch_t>::value) {
                 candidates_range_t missing_candidates{*this, candidate_neighbors, visits};
                 prefetch(missing_candidates.begin(), missing_candidates.end());
             }
@@ -3453,7 +3455,7 @@ class index_gt {
             return false;
 
         // Optional prefetching
-        if (!std::is_same<prefetch_at, dummy_prefetch_t>::value)
+        if (!std::is_same<typename std::decay<prefetch_at>::type, dummy_prefetch_t>::value)
             prefetch(citerator_at(start_slot), citerator_at(start_slot + 1));
 
         distance_t radius = context.measure(query, citerator_at(start_slot), metric);
@@ -3473,7 +3475,7 @@ class index_gt {
             neighbors_ref_t candidate_neighbors = neighbors_base_(node_at_(candidate.slot));
 
             // Optional prefetching
-            if (!std::is_same<prefetch_at, dummy_prefetch_t>::value) {
+            if (!std::is_same<typename std::decay<prefetch_at>::type, dummy_prefetch_t>::value) {
                 candidates_range_t missing_candidates{*this, candidate_neighbors, visits};
                 prefetch(missing_candidates.begin(), missing_candidates.end());
             }
