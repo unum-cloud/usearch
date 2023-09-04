@@ -157,7 +157,7 @@ metric_t wrap_user_defined_metric(                                              
     case scalar_kind_t::b1x8_k:
         return wrap_typed_user_defined_metric<b1x8_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
     case scalar_kind_t::i8_k:
-        return wrap_typed_user_defined_metric<i8_bits_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
+        return wrap_typed_user_defined_metric<i8_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
     case scalar_kind_t::f16_k:
         return wrap_typed_user_defined_metric<f16_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
     case scalar_kind_t::f32_k:
@@ -286,7 +286,7 @@ static void add_many_to_index(                            //
     // clang-format off
     switch (numpy_string_to_kind(vectors_info.format)) {
     case scalar_kind_t::b1x8_k: add_typed_to_index<b1x8_t>(index, keys_info, vectors_info, force_copy, threads); break;
-    case scalar_kind_t::i8_k: add_typed_to_index<i8_bits_t>(index, keys_info, vectors_info, force_copy, threads); break;
+    case scalar_kind_t::i8_k: add_typed_to_index<i8_t>(index, keys_info, vectors_info, force_copy, threads); break;
     case scalar_kind_t::f16_k: add_typed_to_index<f16_t>(index, keys_info, vectors_info, force_copy, threads); break;
     case scalar_kind_t::f32_k: add_typed_to_index<f32_t>(index, keys_info, vectors_info, force_copy, threads); break;
     case scalar_kind_t::f64_k: add_typed_to_index<f64_t>(index, keys_info, vectors_info, force_copy, threads); break;
@@ -455,7 +455,7 @@ static py::tuple search_many_in_index( //
     // clang-format off
     switch (numpy_string_to_kind(vectors_info.format)) {
     case scalar_kind_t::b1x8_k: search_typed<b1x8_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
-    case scalar_kind_t::i8_k: search_typed<i8_bits_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
+    case scalar_kind_t::i8_k: search_typed<i8_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
     case scalar_kind_t::f16_k: search_typed<f16_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
     case scalar_kind_t::f32_k: search_typed<f32_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
     case scalar_kind_t::f64_k: search_typed<f64_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
@@ -574,7 +574,7 @@ static py::tuple search_many_brute_force(    //
     // clang-format off
     switch (dataset_kind) {
     case scalar_kind_t::b1x8_k: search_typed_brute_force<b1x8_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py); break;
-    case scalar_kind_t::i8_k: search_typed_brute_force<i8_bits_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py); break;
+    case scalar_kind_t::i8_k: search_typed_brute_force<i8_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py); break;
     case scalar_kind_t::f16_k: search_typed_brute_force<f16_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py); break;
     case scalar_kind_t::f32_k: search_typed_brute_force<f32_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py); break;
     case scalar_kind_t::f64_k: search_typed_brute_force<f64_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py); break;
@@ -651,7 +651,7 @@ static py::tuple cluster_vectors(        //
     // clang-format off
     switch (numpy_string_to_kind(queries_info.format)) {
     case scalar_kind_t::b1x8_k: cluster_result = index.cluster(queries_begin.as<b1x8_t const>(), queries_end.as<b1x8_t const>(), config, keys_ptr, distances_ptr, executor); break;
-    case scalar_kind_t::i8_k: cluster_result = index.cluster(queries_begin.as<i8_bits_t const>(), queries_end.as<i8_bits_t const>(), config, keys_ptr, distances_ptr, executor); break;
+    case scalar_kind_t::i8_k: cluster_result = index.cluster(queries_begin.as<i8_t const>(), queries_end.as<i8_t const>(), config, keys_ptr, distances_ptr, executor); break;
     case scalar_kind_t::f16_k: cluster_result = index.cluster(queries_begin.as<f16_t const>(), queries_end.as<f16_t const>(), config, keys_ptr, distances_ptr, executor); break;
     case scalar_kind_t::f32_k: cluster_result = index.cluster(queries_begin.as<f32_t const>(), queries_end.as<f32_t const>(), config, keys_ptr, distances_ptr, executor); break;
     case scalar_kind_t::f64_k: cluster_result = index.cluster(queries_begin.as<f64_t const>(), queries_end.as<f64_t const>(), config, keys_ptr, distances_ptr, executor); break;
@@ -773,16 +773,87 @@ static void compact_index(dense_index_py_t& index, std::size_t threads, progress
     index.compact(executor_default_t{threads}, progress_t{progress});
 }
 
+static py::dict index_metadata(index_dense_metadata_result_t const& meta) {
+    py::dict result;
+    result["matrix_included"] = !meta.config.exclude_vectors;
+    result["matrix_uses_64_bit_dimensions"] = meta.config.use_64_bit_dimensions;
+
+    index_dense_head_t const& head = meta.head;
+    result["version"] = std::to_string(head.version_major) + "." + //
+                        std::to_string(head.version_minor) + "." + //
+                        std::to_string(head.version_patch);
+
+    result["kind_metric"] = metric_kind_t(head.kind_metric);
+    result["kind_scalar"] = scalar_kind_t(head.kind_scalar);
+    result["kind_key"] = scalar_kind_t(head.kind_key);
+    result["kind_compressed_slot"] = scalar_kind_t(head.kind_compressed_slot);
+
+    result["count_present"] = std::uint64_t(head.count_present);
+    result["count_deleted"] = std::uint64_t(head.count_deleted);
+    result["dimensions"] = std::uint64_t(head.dimensions);
+
+    return result;
+}
+
 // clang-format off
-template <typename index_at> void save_index(index_at const& index, std::string const& path, progress_func_t const& progress) { index.save(path.c_str(), {}, progress_t{progress}).error.raise(); }
-template <typename index_at> void load_index(index_at& index, std::string const& path, progress_func_t const& progress) { index.load(path.c_str(), {}, progress_t{progress}).error.raise(); }
-template <typename index_at> void view_index(index_at& index, std::string const& path, progress_func_t const& progress) { index.view(path.c_str(), 0, {}, progress_t{progress}).error.raise(); }
+template <typename index_at> void save_index_to_path(index_at const& index, std::string const& path, progress_func_t const& progress) { index.save(path.c_str(), {}, progress_t{progress}).error.raise(); }
+template <typename index_at> void load_index_from_path(index_at& index, std::string const& path, progress_func_t const& progress) { index.load(path.c_str(), {}, progress_t{progress}).error.raise(); }
+template <typename index_at> void view_index_from_path(index_at& index, std::string const& path, progress_func_t const& progress) { index.view(path.c_str(), 0, {}, progress_t{progress}).error.raise(); }
 template <typename index_at> void reset_index(index_at& index) { index.reset(); }
 template <typename index_at> void clear_index(index_at& index) { index.clear(); }
 template <typename index_at> std::size_t max_level(index_at const &index) { return index.max_level(); }
+template <typename index_at> std::size_t serialized_length(index_at const &index) { return index.serialized_length(); }
 template <typename index_at> typename index_at::stats_t compute_stats(index_at const &index) { return index.stats(); }
 template <typename index_at> typename index_at::stats_t compute_level_stats(index_at const &index, std::size_t level) { return index.stats(level); }
 // clang-format on
+
+template <typename py_bytes_at> memory_mapped_file_t memory_map_from_bytes(py_bytes_at&& bytes) {
+    py::buffer_info info(py::buffer(bytes).request());
+    return {(byte_t*)(info.ptr), static_cast<std::size_t>(info.size)};
+}
+
+template <typename index_at> py::object save_index_to_buffer(index_at const& index, progress_func_t const& progress) {
+    std::size_t serialized_length = index.serialized_length();
+
+    // Create an empty bytearray object using CPython API
+    PyObject* byte_array = PyByteArray_FromStringAndSize(nullptr, 0);
+    if (!byte_array)
+        throw std::runtime_error("Could not allocate bytearray object");
+
+    // Resize the bytearray object to the desired length
+    if (PyByteArray_Resize(byte_array, static_cast<Py_ssize_t>(serialized_length)) != 0) {
+        Py_XDECREF(byte_array);
+        throw std::runtime_error("Could not resize bytearray object");
+    }
+
+    char* buffer = PyByteArray_AS_STRING(byte_array);
+    memory_mapped_file_t memory_map((byte_t*)buffer, serialized_length);
+    serialization_result_t result = index.save(std::move(memory_map), progress_t{progress});
+
+    if (!result) {
+        Py_XDECREF(byte_array);
+        result.error.raise();
+    }
+
+    return py::reinterpret_steal<py::object>(byte_array);
+}
+
+template <typename index_at>
+void load_index_from_buffer(index_at& index, py::bytes const& buffer, progress_func_t const& progress) {
+    index.load(memory_map_from_bytes(buffer), progress_t{progress}).error.raise();
+}
+template <typename index_at>
+void view_index_from_buffer(index_at& index, py::bytes const& buffer, progress_func_t const& progress) {
+    index.view(memory_map_from_bytes(buffer), progress_t{progress}).error.raise();
+}
+
+template <typename index_at> std::vector<typename index_at::stats_t> compute_levels_stats(index_at const& index) {
+    using stats_t = typename index_at::stats_t;
+    std::size_t max_level = index.max_level();
+    std::vector<stats_t> result(max_level + 1);
+    index.stats(result.data(), max_level);
+    return result;
+}
 
 template <typename internal_at, typename external_at = internal_at, typename index_at = void>
 static py::tuple get_typed_vectors_for_keys(index_at const& index, py::buffer keys) {
@@ -821,7 +892,7 @@ template <typename index_at> py::tuple get_many(index_at const& index, py::buffe
     else if (scalar_kind == scalar_kind_t::f16_k)
         return get_typed_vectors_for_keys<f16_t, std::uint16_t>(index, keys);
     else if (scalar_kind == scalar_kind_t::i8_k)
-        return get_typed_vectors_for_keys<i8_bits_t, std::int8_t>(index, keys);
+        return get_typed_vectors_for_keys<i8_t, std::int8_t>(index, keys);
     else if (scalar_kind == scalar_kind_t::b1x8_k)
         return get_typed_vectors_for_keys<b1x8_t, std::uint8_t>(index, keys);
     else
@@ -879,30 +950,16 @@ PYBIND11_MODULE(compiled, m) {
         .value("I16", scalar_kind_t::i16_k)
         .value("I8", scalar_kind_t::i8_k);
 
-    m.def("index_dense_metadata", [](std::string const& path) -> py::dict {
-        index_dense_metadata_result_t meta = index_dense_metadata(path.c_str());
+    m.def("index_dense_metadata_from_path", [](std::string const& path) -> py::dict {
+        index_dense_metadata_result_t meta = index_dense_metadata_from_path(path.c_str());
         forward_error(meta);
+        return index_metadata(meta);
+    });
 
-        index_dense_head_t const& head = meta.head;
-
-        py::dict result;
-        result["matrix_included"] = !meta.config.exclude_vectors;
-        result["matrix_uses_64_bit_dimensions"] = meta.config.use_64_bit_dimensions;
-
-        result["version"] = std::to_string(head.version_major) + "." + //
-                            std::to_string(head.version_minor) + "." + //
-                            std::to_string(head.version_patch);
-
-        result["kind_metric"] = metric_kind_t(head.kind_metric);
-        result["kind_scalar"] = scalar_kind_t(head.kind_scalar);
-        result["kind_key"] = scalar_kind_t(head.kind_key);
-        result["kind_compressed_slot"] = scalar_kind_t(head.kind_compressed_slot);
-
-        result["count_present"] = std::uint64_t(head.count_present);
-        result["count_deleted"] = std::uint64_t(head.count_deleted);
-        result["dimensions"] = std::uint64_t(head.dimensions);
-
-        return result;
+    m.def("index_dense_metadata_from_buffer", [](py::bytes const& buffer) -> py::dict {
+        index_dense_metadata_result_t meta = index_dense_metadata_from_buffer(memory_map_from_bytes(buffer));
+        forward_error(meta);
+        return index_metadata(meta);
     });
 
     m.def("exact_search", &search_many_brute_force,                        //
@@ -1048,8 +1105,9 @@ PYBIND11_MODULE(compiled, m) {
                             [](dense_index_py_t const& index) -> std::size_t { return index.metric().dimensions(); });
     i.def_property_readonly( //
         "dtype", [](dense_index_py_t const& index) -> scalar_kind_t { return index.scalar_kind(); });
-    i.def_property_readonly( //
-        "memory_usage", [](dense_index_py_t const& index) -> std::size_t { return index.memory_usage(); });
+
+    i.def_property_readonly("serialized_length", &dense_index_py_t::serialized_length);
+    i.def_property_readonly("memory_usage", &dense_index_py_t::memory_usage);
 
     i.def_property("expansion_add", &dense_index_py_t::expansion_add, &dense_index_py_t::change_expansion_add);
     i.def_property("expansion_search", &dense_index_py_t::expansion_search, &dense_index_py_t::change_expansion_search);
@@ -1152,9 +1210,16 @@ PYBIND11_MODULE(compiled, m) {
         },
         py::arg("offset"));
 
-    i.def("save", &save_index<dense_index_py_t>, py::arg("path"), py::arg("progress") = nullptr);
-    i.def("load", &load_index<dense_index_py_t>, py::arg("path"), py::arg("progress") = nullptr);
-    i.def("view", &view_index<dense_index_py_t>, py::arg("path"), py::arg("progress") = nullptr);
+    i.def("save_index_to_path", &save_index_to_path<dense_index_py_t>, py::arg("path"), py::arg("progress") = nullptr);
+    i.def("load_index_from_path", &load_index_from_path<dense_index_py_t>, py::arg("path"),
+          py::arg("progress") = nullptr);
+    i.def("view_index_from_path", &view_index_from_path<dense_index_py_t>, py::arg("path"),
+          py::arg("progress") = nullptr);
+
+    i.def("save_index_to_buffer", &save_index_to_buffer<dense_index_py_t>, py::arg("progress") = nullptr);
+    i.def("load_index_from_buffer", &load_index_from_buffer<dense_index_py_t>, py::arg("progress") = nullptr);
+    i.def("view_index_from_buffer", &view_index_from_buffer<dense_index_py_t>, py::arg("progress") = nullptr);
+
     i.def("reset", &reset_index<dense_index_py_t>);
     i.def("clear", &clear_index<dense_index_py_t>);
     i.def("copy", &copy_index, py::kw_only(), py::arg("copy") = true);
@@ -1170,7 +1235,8 @@ PYBIND11_MODULE(compiled, m) {
     i_stats.def_readonly("allocated_bytes", &punned_index_stats_t::allocated_bytes);
 
     i.def_property_readonly("max_level", &max_level<dense_index_py_t>);
-    i.def_property_readonly("levels_stats", &compute_stats<dense_index_py_t>);
+    i.def_property_readonly("stats", &compute_stats<dense_index_py_t>);
+    i.def_property_readonly("levels_stats", &compute_levels_stats<dense_index_py_t>);
     i.def("level_stats", &compute_level_stats<dense_index_py_t>, py::arg("level"));
 
     auto is = py::class_<dense_indexes_py_t>(m, "Indexes");

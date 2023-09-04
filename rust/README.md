@@ -11,7 +11,7 @@ cargo add usearch
 ```rust
 
 let options = IndexOptions {
-            dimensions: 5,
+            dimensions: 3,
             metric: MetricKind::IP,
             quantization: ScalarKind::F16,
             connectivity: 0,
@@ -36,7 +36,7 @@ assert_eq!(index.size(), 2);
 
 // Read back the tags
 let results = index.search(&first, 10).unwrap();
-assert_eq!(results.count, 2);
+assert_eq!(results.keys.len(), 2);
 ```
 
 ## Multi-Threading

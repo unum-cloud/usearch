@@ -110,6 +110,12 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
 USEARCH_EXPORT void usearch_free(usearch_index_t, usearch_error_t* error);
 
 /**
+ *  @brief Reports expected file size after serialization.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT size_t usearch_serialized_length(usearch_index_t, usearch_error_t* error);
+
+/**
  *  @brief Saves the index to a file.
  *  @param[in] path The file path where the index will be saved.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
@@ -124,11 +130,32 @@ USEARCH_EXPORT void usearch_save(usearch_index_t, char const* path, usearch_erro
 USEARCH_EXPORT void usearch_load(usearch_index_t, char const* path, usearch_error_t* error);
 
 /**
- *  @brief Creates a view of the index from a file without loading it into memory.
+ *  @brief Creates a view of the index from a file without copying it into memory.
  *  @param[in] path The file path from where the view will be created.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
 USEARCH_EXPORT void usearch_view(usearch_index_t, char const* path, usearch_error_t* error);
+
+/**
+ *  @brief Saves the index to an in-memory buffer.
+ *  @param[in] buffer The in-memory continuous buffer where the index will be saved.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT void usearch_save_buffer(usearch_index_t, void* buffer, size_t length, usearch_error_t* error);
+
+/**
+ *  @brief Loads the index from an in-memory buffer.
+ *  @param[in] buffer The in-memory continuous buffer from where the index will be loaded.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT void usearch_load_buffer(usearch_index_t, void const* buffer, size_t length, usearch_error_t* error);
+
+/**
+ *  @brief Creates a view of the index from an in-memory buffer without copying it into memory.
+ *  @param[in] buffer The in-memory continuous buffer from where the view will be created.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT void usearch_view_buffer(usearch_index_t, void const* buffer, size_t length, usearch_error_t* error);
 
 USEARCH_EXPORT size_t usearch_size(usearch_index_t, usearch_error_t* error);
 USEARCH_EXPORT size_t usearch_capacity(usearch_index_t, usearch_error_t* error);
