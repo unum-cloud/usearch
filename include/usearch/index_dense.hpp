@@ -764,33 +764,12 @@ class index_dense_gt {
     }
 
     /**
-     *  @brief Saves the index to a file.
-     *  @param[in] path The path to the file.
-     *  @param[in] config Configuration parameters for exports.
-     *  @return Outcome descriptor explicitly convertible to boolean.
-     */
-    template <typename progress_at = dummy_progress_t>
-    serialization_result_t save(output_file_t file,                 //
-                                serialization_config_t config = {}, //
-                                progress_at&& progress = {}) const {
-        serialization_result_t result = file.open_if_not();
-        if (result)
-            stream(
-                [&](void* buffer, std::size_t length) {
-                    result = file.write(buffer, length);
-                    return !!result;
-                },
-                config, std::forward<progress_at>(progress));
-        return result;
-    }
-
-    /**
      *  @brief  Saves serialized binary index representation to a stream.
      */
     template <typename output_callback_at, typename progress_at = dummy_progress_t>
-    serialization_result_t stream(output_callback_at&& output,        //
-                                  serialization_config_t config = {}, //
-                                  progress_at&& progress = {}) const {
+    serialization_result_t save_to_stream(output_callback_at&& output,        //
+                                          serialization_config_t config = {}, //
+                                          progress_at&& progress = {}) const {
 
         serialization_result_t result;
         std::uint64_t matrix_rows = 0;

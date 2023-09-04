@@ -2710,7 +2710,7 @@ class index_gt {
         // After that dump the nodes themselves
         for (std::size_t i = 0; i != header.size; ++i) {
             span_bytes_t node_bytes = node_bytes_(node_at_(i));
-            if (!callback(node_bytes.data(), node_bytes.size()))
+            if (!output(node_bytes.data(), node_bytes.size()))
                 return result.failed("Failed to serialize into stream");
             if (!progress(++processed, total))
                 return result.failed("Terminated by user");
