@@ -7,10 +7,7 @@ from pybind11.setup_helpers import Pybind11Extension
 
 compile_args = []
 link_args = []
-macros_args = [
-    ("USEARCH_USE_NATIVE_F16", "0"),
-    ("USEARCH_USE_SIMSIMD", "0"),
-]
+macros_args = []
 
 if sys.platform == "linux":
     compile_args.append("-std=c++17")
@@ -18,6 +15,8 @@ if sys.platform == "linux":
     compile_args.append("-g")  # Simplify debugging
     compile_args.append("-Wno-unknown-pragmas")
 
+    macros_args.append(("USEARCH_USE_NATIVE_F16", "0"))
+    macros_args.append(("USEARCH_USE_SIMSIMD", "1"))
     macros_args.append(("USEARCH_USE_OPENMP", "1"))
     compile_args.append("-fopenmp")
     link_args.append("-lgomp")

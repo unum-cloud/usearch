@@ -49,11 +49,26 @@ else()
     target_compile_features(${USEARCH_TARGET_NAME} INTERFACE cxx_std_11)
 endif()
 
+# Core compilation settings affecting "index.hpp"
 target_compile_definitions(
     ${USEARCH_TARGET_NAME}
     INTERFACE
     $<$<NOT:$<BOOL:${JSON_GlobalUDLs}>>:USEARCH_USE_OPENMP=0>
 )
+
+# Supplementary compilation settings affecting "index_plugins.hpp"
+target_compile_definitions(
+    ${USEARCH_TARGET_NAME}
+    INTERFACE
+    $<$<NOT:$<BOOL:${JSON_GlobalUDLs}>>:USEARCH_USE_NATIVE_F16=0>
+)
+
+target_compile_definitions(
+    ${USEARCH_TARGET_NAME}
+    INTERFACE
+    $<$<NOT:$<BOOL:${JSON_GlobalUDLs}>>:USEARCH_USE_SIMSIMD=0>
+)
+
 target_include_directories(
     ${USEARCH_TARGET_NAME}
     ${USEARCH_SYSTEM_INCLUDE} INTERFACE
