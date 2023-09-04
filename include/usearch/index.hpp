@@ -3111,6 +3111,9 @@ class index_gt {
                 do_tasks = progress(processed.load(), nodes_count);
             return do_tasks.load();
         });
+
+        // At the end report the latest numbers, because the reporter thread may be finished earlier
+        progress(processed.load(), nodes_count);
     }
 
   private:
