@@ -1026,7 +1026,9 @@ class index_dense_gt {
      *  @param[in] config Configuration parameters for exports.
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
-    serialization_result_t save(output_file_t file, serialization_config_t config = {}) const {
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t save(output_file_t file, serialization_config_t config = {},
+                                progress_at&& progress = {}) const {
 
         serialization_result_t io_result = file.open_if_not();
         if (!io_result)
@@ -1037,7 +1039,7 @@ class index_dense_gt {
                 io_result = file.write(buffer, length);
                 return !!io_result;
             },
-            config);
+            config, std::forward<progress_at>(progress));
 
         if (!stream_result)
             return stream_result;
@@ -1048,8 +1050,11 @@ class index_dense_gt {
      *  @brief  Memory-maps the serialized binary index representation from disk,
      *          @b without copying data into RAM, and fetching it on-demand.
      */
-    serialization_result_t save(memory_mapped_file_t file, std::size_t offset = 0,
-                                serialization_config_t config = {}) const {
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t save(memory_mapped_file_t file,          //
+                                std::size_t offset = 0,             //
+                                serialization_config_t config = {}, //
+                                progress_at&& progress = {}) const {
 
         serialization_result_t io_result = file.open_if_not();
         if (!io_result)
@@ -1063,7 +1068,7 @@ class index_dense_gt {
                 offset += length;
                 return true;
             },
-            config);
+            config, std::forward<progress_at>(progress));
 
         return stream_result;
     }
@@ -1074,7 +1079,8 @@ class index_dense_gt {
      *  @param[in] config Configuration parameters for imports.
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
-    serialization_result_t load(input_file_t file, serialization_config_t config = {}) {
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t load(input_file_t file, serialization_config_t config = {}, progress_at&& progress = {}) {
 
         serialization_result_t io_result = file.open_if_not();
         if (!io_result)
@@ -1085,7 +1091,7 @@ class index_dense_gt {
                 io_result = file.read(buffer, length);
                 return !!io_result;
             },
-            config);
+            config, std::forward<progress_at>(progress));
 
         if (!stream_result)
             return stream_result;
@@ -1096,7 +1102,11 @@ class index_dense_gt {
      *  @brief  Memory-maps the serialized binary index representation from disk,
      *          @b without copying data into RAM, and fetching it on-demand.
      */
-    serialization_result_t load(memory_mapped_file_t file, std::size_t offset = 0, serialization_config_t config = {}) {
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t load(memory_mapped_file_t file,          //
+                                std::size_t offset = 0,             //
+                                serialization_config_t config = {}, //
+                                progress_at&& progress = {}) {
 
         serialization_result_t io_result = file.open_if_not();
         if (!io_result)
@@ -1110,17 +1120,23 @@ class index_dense_gt {
                 offset += length;
                 return true;
             },
-            config);
+            config, std::forward<progress_at>(progress));
 
         return stream_result;
     }
 
-    serialization_result_t save(char const* file_path, serialization_config_t config = {}) const {
-        return save(output_file_t(file_path), config);
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t save(char const* file_path,              //
+                                serialization_config_t config = {}, //
+                                progress_at&& progress = {}) const {
+        return save(output_file_t(file_path), config, std::forward<progress_at>(progress));
     }
 
-    serialization_result_t load(char const* file_path, serialization_config_t config = {}) {
-        return load(input_file_t(file_path), config);
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t load(char const* file_path,              //
+                                serialization_config_t config = {}, //
+                                progress_at&& progress = {}) {
+        return load(input_file_t(file_path), config, std::forward<progress_at>(progress));
     }
 
     /**

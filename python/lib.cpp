@@ -828,7 +828,7 @@ template <typename index_at> py::object save_index_to_buffer(index_at const& ind
 
     char* buffer = PyByteArray_AS_STRING(byte_array);
     memory_mapped_file_t memory_map((byte_t*)buffer, serialized_length);
-    serialization_result_t result = index.save(std::move(memory_map), progress_t{progress});
+    serialization_result_t result = index.save(std::move(memory_map), {}, {}, progress_t{progress});
 
     if (!result) {
         Py_XDECREF(byte_array);
@@ -840,11 +840,11 @@ template <typename index_at> py::object save_index_to_buffer(index_at const& ind
 
 template <typename index_at>
 void load_index_from_buffer(index_at& index, py::bytes const& buffer, progress_func_t const& progress) {
-    index.load(memory_map_from_bytes(buffer), progress_t{progress}).error.raise();
+    index.load(memory_map_from_bytes(buffer), {}, {}, progress_t{progress}).error.raise();
 }
 template <typename index_at>
 void view_index_from_buffer(index_at& index, py::bytes const& buffer, progress_func_t const& progress) {
-    index.view(memory_map_from_bytes(buffer), progress_t{progress}).error.raise();
+    index.view(memory_map_from_bytes(buffer), {}, {}, progress_t{progress}).error.raise();
 }
 
 template <typename index_at> std::vector<typename index_at::stats_t> compute_levels_stats(index_at const& index) {
@@ -1217,8 +1217,10 @@ PYBIND11_MODULE(compiled, m) {
           py::arg("progress") = nullptr);
 
     i.def("save_index_to_buffer", &save_index_to_buffer<dense_index_py_t>, py::arg("progress") = nullptr);
-    i.def("load_index_from_buffer", &load_index_from_buffer<dense_index_py_t>, py::arg("progress") = nullptr);
-    i.def("view_index_from_buffer", &view_index_from_buffer<dense_index_py_t>, py::arg("progress") = nullptr);
+    i.def("load_index_from_buffer", &load_index_from_buffer<dense_index_py_t>, py::arg("buffer"),
+          py::arg("progress") = nullptr);
+    i.def("view_index_from_buffer", &view_index_from_buffer<dense_index_py_t>, py::arg("buffer"),
+          py::arg("progress") = nullptr);
 
     i.def("reset", &reset_index<dense_index_py_t>);
     i.def("clear", &clear_index<dense_index_py_t>);
