@@ -41,6 +41,12 @@
 #endif
 
 #if USEARCH_USE_SIMSIMD
+#if __linux__
+#define SIMSIMD_TARGET_ARM_NEON 1
+#define SIMSIMD_TARGET_X86_AVX2 1
+#define SIMSIMD_TARGET_ARM_SVE 1
+#define SIMSIMD_TARGET_X86_AVX512 1
+#endif
 #include <simsimd/simsimd.h>
 #endif
 
@@ -600,9 +606,7 @@ class aligned_allocator_gt {
     using size_type = std::size_t;
     using pointer = element_at*;
     using const_pointer = element_at const*;
-    template <typename other_element_at> struct rebind {
-        using other = aligned_allocator_gt<other_element_at>;
-    };
+    template <typename other_element_at> struct rebind { using other = aligned_allocator_gt<other_element_at>; };
 
     constexpr std::size_t alignment() const { return alignment_ak; }
 
@@ -1384,24 +1388,36 @@ class metric_punned_t {
     // clang-format off
     static metric_punned_t ip_metric_f32_(std::size_t bytes_per_vector) {
         #if USEARCH_USE_SIMSIMD
-        if (hardware_supports(isa_kind_t::sve_k)) return {pun_stl_<f32_t>([=](f32_t const* a, f32_t const* b) { return simsimd_dot_f32_sve(a, b, bytes_per_vector / 4); }), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f32_k, isa_kind_t::sve_k};
+        #if SIMSIMD_TARGET_ARM_NEON
         if (hardware_supports(isa_kind_t::neon_k) && bytes_per_vector % 16 == 0) return {pun_stl_<f32_t>([=](f32_t const* a, f32_t const* b) { return simsimd_dot_f32x4_neon(a, b, bytes_per_vector / 4); }), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f32_k, isa_kind_t::neon_k};
+        #endif
+        #if SIMSIMD_TARGET_ARM_SVE
+        if (hardware_supports(isa_kind_t::sve_k)) return {pun_stl_<f32_t>([=](f32_t const* a, f32_t const* b) { return simsimd_dot_f32_sve(a, b, bytes_per_vector / 4); }), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f32_k, isa_kind_t::sve_k};
+        #endif
+        #if SIMSIMD_TARGET_X86_AVX2
         if (hardware_supports(isa_kind_t::avx2_k) && bytes_per_vector % 16 == 0) return {pun_stl_<f32_t>([=](f32_t const* a, f32_t const* b) { return simsimd_dot_f32x4_avx2(a, b, bytes_per_vector / 4); }), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f32_k, isa_kind_t::avx2_k};
+        #endif
         #endif
         return {to_stl_<metric_ip_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
     }
 
     static metric_punned_t cos_metric_f16_(std::size_t bytes_per_vector) {
         #if USEARCH_USE_SIMSIMD
+        #if SIMSIMD_TARGET_X86_AVX512
         if (hardware_supports(isa_kind_t::avx512_k) && bytes_per_vector % 32 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_cos_f16x16_avx512(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::avx512_k};
+        #endif
+        #if SIMSIMD_TARGET_ARM_NEON
         if (hardware_supports(isa_kind_t::neon_k) && bytes_per_vector % 8 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_cos_f16x4_neon(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::neon_k};
+        #endif
         #endif
         return {to_stl_<metric_cos_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
     }
 
     static metric_punned_t cos_metric_i8_(std::size_t bytes_per_vector) {
         #if USEARCH_USE_SIMSIMD
+        #if SIMSIMD_TARGET_ARM_NEON
         if (hardware_supports(isa_kind_t::neon_k) && bytes_per_vector % 16 == 0) return {pun_stl_<int8_t>([=](int8_t const* a, int8_t const* b) { return simsimd_cos_i8x16_neon(a, b, bytes_per_vector); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::i8_k, isa_kind_t::neon_k};
+        #endif
         #endif
         return {to_stl_<cos_i8_t>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::i8_k, isa_kind_t::auto_k};
     }
