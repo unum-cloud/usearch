@@ -221,9 +221,14 @@ inline bool hardware_supports(isa_kind_t isa_kind) noexcept {
 #if defined(USEARCH_DEFINED_X86) && defined(USEARCH_DEFINED_GCC)
     __builtin_cpu_init();
     switch (isa_kind) {
-    case isa_kind_t::avx2_k: return __builtin_cpu_supports("avx2");
+        // Half-precision is only supported in newer versions of GCC
+#if __GNUC__ > 11 || (__GNUC__ == 11 && __GNUC_MINOR__ >= 0)
     case isa_kind_t::avx2f16_k: return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("f16c");
+#endif
+#if __GNUC__ > 12 || (__GNUC__ == 12 && __GNUC_MINOR__ >= 0)
     case isa_kind_t::avx512f16_k: return __builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512fp16");
+#endif
+    case isa_kind_t::avx2_k: return __builtin_cpu_supports("avx2");
     case isa_kind_t::avx512_k: return __builtin_cpu_supports("avx512f");
     default: return false;
     }
