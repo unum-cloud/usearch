@@ -42,12 +42,8 @@
 
 #if USEARCH_USE_SIMSIMD
 #if __linux__
-#define SIMSIMD_TARGET_ARM_NEON 1
-#define SIMSIMD_TARGET_X86_AVX2 1
-#define SIMSIMD_TARGET_ARM_SVE 1
-#define SIMSIMD_TARGET_X86_AVX512 1
-#endif
 #include <simsimd/simsimd.h>
+#endif
 #endif
 
 namespace unum {
@@ -133,7 +129,9 @@ enum class isa_kind_t {
     neon_k,
     sve_k,
     avx2_k,
+    avx2f16_k,
     avx512_k,
+    avx512f16_k,
 };
 
 enum class prefetching_kind_t {
@@ -199,6 +197,8 @@ inline char const* isa_name(isa_kind_t isa_kind) noexcept {
     case isa_kind_t::sve_k: return "sve";
     case isa_kind_t::avx2_k: return "avx2";
     case isa_kind_t::avx512_k: return "avx512";
+    case isa_kind_t::avx2f16_k: return "avx2+f16";
+    case isa_kind_t::avx512f16_k: return "avx512+f16";
     default: return "";
     }
 }
@@ -221,6 +221,13 @@ inline bool hardware_supports(isa_kind_t isa_kind) noexcept {
 #if defined(USEARCH_DEFINED_X86) && defined(USEARCH_DEFINED_GCC)
     __builtin_cpu_init();
     switch (isa_kind) {
+        // Half-precision is only supported in newer versions of GCC
+#if __GNUC__ > 11 || (__GNUC__ == 11 && __GNUC_MINOR__ >= 0)
+    case isa_kind_t::avx2f16_k: return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("f16c");
+#endif
+#if __GNUC__ > 12 || (__GNUC__ == 12 && __GNUC_MINOR__ >= 0)
+    case isa_kind_t::avx512f16_k: return __builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512fp16");
+#endif
     case isa_kind_t::avx2_k: return __builtin_cpu_supports("avx2");
     case isa_kind_t::avx512_k: return __builtin_cpu_supports("avx512f");
     default: return false;
@@ -1404,14 +1411,35 @@ class metric_punned_t {
     static metric_punned_t cos_metric_f16_(std::size_t bytes_per_vector) {
         #if USEARCH_USE_SIMSIMD
         #if SIMSIMD_TARGET_X86_AVX512
-        if (hardware_supports(isa_kind_t::avx512_k) && bytes_per_vector % 32 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_cos_f16x16_avx512(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::avx512_k};
+        if (hardware_supports(isa_kind_t::avx512f16_k) && bytes_per_vector % 32 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_cos_f16x16_avx512(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::avx512f16_k};
+        #endif
+        #if SIMSIMD_TARGET_X86_AVX2
+        if (hardware_supports(isa_kind_t::avx2f16_k) && bytes_per_vector % 16 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_cos_f16x8_avx2(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::avx2f16_k};
         #endif
         #if SIMSIMD_TARGET_ARM_NEON
         if (hardware_supports(isa_kind_t::neon_k) && bytes_per_vector % 8 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_cos_f16x4_neon(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::neon_k};
         #endif
+        #if SIMSIMD_TARGET_ARM_SVE
+        if (hardware_supports(isa_kind_t::sve_k)) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_cos_f16_sve(a, b, bytes_per_vector / 4); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::sve_k};
+        #endif
         #endif
         return {to_stl_<metric_cos_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
     }
+
+    static metric_punned_t l2sq_metric_f16_(std::size_t bytes_per_vector) {
+        #if USEARCH_USE_SIMSIMD
+        #if SIMSIMD_TARGET_X86_AVX512
+        if (hardware_supports(isa_kind_t::avx512f16_k) && bytes_per_vector % 32 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_l2sq_f16x16_avx512(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::avx512f16_k};
+        #endif
+        #if SIMSIMD_TARGET_X86_AVX2
+        if (hardware_supports(isa_kind_t::avx2f16_k) && bytes_per_vector % 16 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_l2sq_f16x8_avx2(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::avx2f16_k};
+        #endif
+        #if SIMSIMD_TARGET_ARM_SVE
+        if (hardware_supports(isa_kind_t::sve_k)) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_l2sq_f16_sve(a, b, bytes_per_vector / 4); }), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f16_k, isa_kind_t::sve_k};
+        #endif
+        #endif
+        return {to_stl_<metric_l2sq_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
+    }    
 
     static metric_punned_t cos_metric_i8_(std::size_t bytes_per_vector) {
         #if USEARCH_USE_SIMSIMD
@@ -1435,7 +1463,7 @@ class metric_punned_t {
     static metric_punned_t l2sq_metric_(std::size_t bytes_per_vector, scalar_kind_t scalar_kind) {
         switch (scalar_kind) {
         case scalar_kind_t::i8_k: return {to_stl_<l2sq_i8_t>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::i8_k, isa_kind_t::auto_k};
-        case scalar_kind_t::f16_k: return {to_stl_<metric_l2sq_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
+        case scalar_kind_t::f16_k: return l2sq_metric_f16_(bytes_per_vector);
         case scalar_kind_t::f32_k: return {to_stl_<metric_l2sq_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
         case scalar_kind_t::f64_k: return {to_stl_<metric_l2sq_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
         default: return {};
