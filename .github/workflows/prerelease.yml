@@ -76,7 +76,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04, macOS-11, windows-2022]
+        os: [ubuntu-22.04, macOS-11, windows-2022]
         python-version: ["3.11"]
 
     steps:
@@ -90,8 +90,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pytest numpy
+      - name: Build locally on Ubuntu
+        run: |
+          export CC=/usr/bin/gcc-12
+          export CXX=/usr/bin/g++-12
+          export LD_LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:$LD_LIBRARY_PATH
+          python -m pip install .
+        if: ${{ matrix.os == 'ubuntu-22.04' }}
       - name: Build locally
         run: python -m pip install .
+        if: ${{ matrix.os != 'ubuntu-22.04' }}
       - name: Test with PyTest
         run: pytest python/scripts/
 
@@ -102,7 +110,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04]
+        os: [ubuntu-22.04]
         python-version: ["3.7"]
 
     steps:
@@ -120,7 +128,12 @@ jobs:
           pip install pytest numpy
 
       - name: Build locally
-        run: python -m pip install .
+        run: |
+          export CC=/usr/bin/gcc-12
+          export CXX=/usr/bin/g++-12
+          export LD_LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:$LD_LIBRARY_PATH
+          python -m pip install .
+        if: ${{ matrix.os == 'ubuntu-22.04' }}
 
       - name: Test with PyTest
         run: pytest python/scripts/
