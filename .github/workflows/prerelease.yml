@@ -74,6 +74,7 @@ jobs:
     name: Test Python
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-20.04, macOS-11, windows-2022]
         python-version: ["3.11"]
@@ -99,6 +100,7 @@ jobs:
     name: Test Python 3.7
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-20.04]
         python-version: ["3.7"]
