@@ -28,6 +28,7 @@ Euclidean • Angular • Bitwise • Haversine • User-Defined Metrics
 <a href="https://unum-cloud.github.io/usearch/c">C 99</a> •
 <a href="https://unum-cloud.github.io/usearch/objective-c">Objective-C</a> •
 <a href="https://unum-cloud.github.io/usearch/swift">Swift</a> •
+<a href="https://unum-cloud.github.io/usearch/csharp">C#</a> •
 <a href="https://unum-cloud.github.io/usearch/golang">GoLang</a> •
 <a href="https://unum-cloud.github.io/usearch/wolfram">Wolfram</a>
 <br/>
@@ -38,6 +39,8 @@ Linux • MacOS • Windows • iOS • Docker • WebAssembly
 <a href="https://pypi.org/project/usearch/"> <img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/usearch?label=pypi%20downloads"> </a>
 <a href="https://www.npmjs.com/package/usearch"> <img alt="npm" src="https://img.shields.io/npm/dy/usearch?label=npm%20dowloads"> </a>
 <a href="https://crates.io/crates/usearch"> <img alt="Crates.io" src="https://img.shields.io/crates/d/usearch?label=crate%20downloads"> </a>
+<a href="https://www.nuget.org/packages/Cloud.Unum.USearch"> <img alt="Nuget" src="https://img.shields.io/nuget/dt/Cloud.Unum.USearch?style=social&label=NuGet"> </a>
+<a href="https://hub.docker.com/r/unum/usearch"> <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/unum/usearch?style=social&label=Docker"> </a>
 <img alt="GitHub code size in bytes" src="https://img.shields.io/github/languages/code-size/unum-cloud/usearch">
 </div>
 
@@ -80,7 +83,7 @@ USearch is compact and broadly compatible without sacrificing performance, with 
 Base functionality is identical to FAISS, and the interface must be familiar if you have ever investigated Approximate Nearest Neighbors search:
 
 ```py
-$ pip install usearch numpy
+$ pip install usearch
 
 import numpy as np
 from usearch.index import Index
@@ -109,10 +112,10 @@ Comparing the performance of FAISS against USearch on 1 Million 96-dimensional v
 
 |              | FAISS, `f32` | USearch, `f32` | USearch, `f16` |     USearch, `i8` |
 | :----------- | -----------: | -------------: | -------------: | ----------------: |
-| Batch Insert |       16 K/s |         73 K/s |        100 K/s | 104 K/s **+550%** |
-| Batch Search |       82 K/s |        103 K/s |        113 K/s |  134 K/s **+63%** |
-| Bulk Insert  |       76 K/s |        105 K/s |        115 K/s | 202 K/s **+165%** |
-| Bulk Search  |      118 K/s |        174 K/s |        173 K/s | 304 K/s **+157%** |
+| Batch Insert |       16 K/s |         73 K/s |        100 K/s | 104 K/s __+550%__ |
+| Batch Search |       82 K/s |        103 K/s |        113 K/s |  134 K/s __+63%__ |
+| Bulk Insert  |       76 K/s |        105 K/s |        115 K/s | 202 K/s __+165%__ |
+| Bulk Search  |      118 K/s |        174 K/s |        173 K/s | 304 K/s __+157%__ |
 | Recall @ 10  |          99% |          99.2% |          99.1% |             99.2% |
 
 > HNSW was configured with identical hyper-parameters:
@@ -152,10 +155,16 @@ Instead, we have focused on high-precision arithmetic over low-precision downcas
 The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f32_t`, `f16_t`, `f64_t`, and `i8_t` representations, even if the hardware doesn't natively support it.
 Continuing the topic of memory efficiency, we provide a `uint40_t` to allow collection with over 4B+ vectors without allocating 8 bytes for every neighbor reference in the proximity graph.
 
-## Serving `Index` from Disk
+## Serialization & Serving `Index` from Disk
 
-With USearch, you can serve indexes from external memory, enabling you to optimize your server choices for indexing speed and serving costs.
-This can result in **20x cost reduction** on AWS and other public clouds.
+USearch supports multiple forms of serialization:
+
+- Into a __file__ defined with a path.
+- Into a __stream__ defined with a callback, serializing or reconstructing incrementally.
+- Into a __buffer__ of fixed length, or a memory-mapped file, that supports random access.
+
+The latter allows you to serve indexes from external memory, enabling you to optimize your server choices for indexing speed and serving costs.
+This can result in __20x cost reduction__ on AWS and other public clouds.
 
 ```py
 index.save("index.usearch")
@@ -186,10 +195,10 @@ many_in_many: BatchMatches = search(vectors, vectors, 50, MetricKind.L2sq, exact
 ```
 
 By passing the `exact=True` argument, the system bypasses indexing altogether and performs a brute-force search through the entire dataset using SIMD-optimized similarity metrics from [SimSIMD](https://github.com/ashvardanian/simsimd).
-When compared to FAISS's `IndexFlatL2` in Google Colab, **[USearch may offer up to a 20x performance improvement](https://github.com/unum-cloud/usearch/issues/176#issuecomment-1666650778)**:
+When compared to FAISS's `IndexFlatL2` in Google Colab, __[USearch may offer up to a 20x performance improvement](https://github.com/unum-cloud/usearch/issues/176#issuecomment-1666650778)__:
 
-- `faiss.IndexFlatL2`: **55.3 ms**.
-- `usearch.index.search`: **2.54 ms**.
+- `faiss.IndexFlatL2`: __55.3 ms__.
+- `usearch.index.search`: __2.54 ms__.
 
 ## `Indexes` for Multi-Index Lookups
 
@@ -277,8 +286,10 @@ Broader functionality is ported per request.
 
 ### USearch + AI = Multi-Modal Semantic Search
 
+[![USearch Semantic Image Search](https://github.com/ashvardanian/usearch-images/raw/main/assets/usearch-images-slow.gif)](https://github.com/ashvardanian/usearch-images)
+
 AI has a growing number of applications, but one of the coolest classic ideas is to use it for Semantic Search.
-One can take an encoder model, like the multi-modal UForm, and a web-programming framework, like UCall, and build a text-to-image search platform in just 20 lines of Python.
+One can take an encoder model, like the multi-modal [UForm](https://github.com/unum-cloud/uform), and a web-programming framework, like UCall, and build a text-to-image search platform in just 20 lines of Python.
 
 ```python
 import ucall
@@ -308,13 +319,14 @@ def search(query: str) -> np.ndarray:
 server.run()
 ```
 
+A more complete [demo with Streamlit is available on GitHub](https://github.com/ashvardanian/usearch-images).
 We have pre-processed some commonly used datasets, cleaned the images, produced the vectors, and pre-built the index.
 
-| Dataset                                |            Modalities | Images |                              Download |
-| :------------------------------------- | --------------------: | -----: | ------------------------------------: |
-| [Unsplash 25K][unsplash-25k-origin]    | Images & Descriptions |   25 K | [HuggingFace / Unum][unsplash-25k-hf] |
-| [Conceptual Captions 3M][cc-3m-origin] | Images & Descriptions |    3 M |        [HuggingFace / Unum][cc-3m-hf] |
-| [Arxiv 2M][arxiv-2m-origin]            |    Titles & Abstracts |    2 M |     [HuggingFace / Unum][arxiv-2m-hf] |
+| Dataset                             |            Modalities | Images |                              Download |
+| :---------------------------------- | --------------------: | -----: | ------------------------------------: |
+| [Unsplash][unsplash-25k-origin]     | Images & Descriptions |   25 K | [HuggingFace / Unum][unsplash-25k-hf] |
+| [Conceptual Captions][cc-3m-origin] | Images & Descriptions |    3 M |        [HuggingFace / Unum][cc-3m-hf] |
+| [Arxiv][arxiv-2m-origin]            |    Titles & Abstracts |    2 M |     [HuggingFace / Unum][arxiv-2m-hf] |
 
 [unsplash-25k-origin]: https://github.com/unsplash/datasets
 [cc-3m-origin]: https://huggingface.co/datasets/conceptual_captions
@@ -358,15 +370,19 @@ matches = index.search(fingerprints, 10)
 
 ### USearch + POI Coordinates = GIS Applications... on iOS?
 
-With Objective-C and iOS bindings, USearch can be easily used in mobile applications
+[![USearch Maps with SwiftUI](https://github.com/ashvardanian/SwiftVectorSearch/raw/main/USearch+SwiftUI.gif)](https://github.com/ashvardanian/SwiftVectorSearch)
 
+With Objective-C and Swift iOS bindings, USearch can be easily used in mobile applications.
+The [SwiftVectorSearch](https://github.com/ashvardanian/SwiftVectorSearch) project illustrates how to build a dynamic, real-time search system on iOS.
+In this example, we use 2-dimensional vectors—encoded as latitude and longitude—to find the closest Points of Interest (POIs) on a map.
+The search is based on the Haversine distance metric, but can easily be extended to support high-dimensional vectors.
 
 ## Integrations
 
 - [x] GPTCache: [Python](https://github.com/zilliztech/GPTCache/releases/tag/0.1.29).
 - [x] LangChain: [Python](https://github.com/langchain-ai/langchain/releases/tag/v0.0.257) and [JavaScipt](https://github.com/hwchase17/langchainjs/releases/tag/0.0.125).
 - [x] ClickHouse: [C++](https://github.com/ClickHouse/ClickHouse/pull/53447).
-- [ ] Microsoft Semantic Kernel: [Python](https://github.com/microsoft/semantic-kernel/pull/2358) and C#.
+- [x] Microsoft Semantic Kernel: [Python](https://github.com/microsoft/semantic-kernel/releases/tag/python-0.3.9.dev) and C#.
 
 ## Citations
 
