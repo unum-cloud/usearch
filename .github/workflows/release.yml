@@ -219,7 +219,7 @@ jobs:
   publish_hashes:
     name: Add hashes to release notes
     runs-on: ubuntu-latest
-    needs: [versioning, create_linux_deb_package, create_windows_dll_library, create_macos_library]
+    needs: [versioning, create_linux_deb_package, create_windows_dll_library, create_macos_library, deploy_docs_pages]
     steps:
     - name: Get last release ID
       id: last_release
@@ -266,6 +266,7 @@ jobs:
             * ${{ steps.hashes.outputs.asset_name_6 }} : `${{ steps.hashes.outputs.asset_hash_6 }}`
             * ${{ steps.hashes.outputs.asset_name_7 }} : `${{ steps.hashes.outputs.asset_hash_7 }}`
             * ${{ steps.hashes.outputs.asset_name_8 }} : `${{ steps.hashes.outputs.asset_hash_8 }}`
+            * ${{ steps.hashes.outputs.asset_name_9 }} : `${{ steps.hashes.outputs.asset_hash_9 }}`
 
 
   build_wheels:
