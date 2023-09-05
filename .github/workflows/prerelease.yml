@@ -148,7 +148,10 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
-      - run: npm install
+      - run: |
+          export CC=/usr/bin/gcc-12
+          export CXX=/usr/bin/g++-12
+          npm install
       - run: npm ci
       - run: npm test
 
@@ -176,7 +179,10 @@ jobs:
     - name: Setup Gradle
       uses: gradle/gradle-build-action@v2.4.2
     - name: Execute Gradle build
-      run: gradle clean build
+      run:
+        export CC=/usr/bin/gcc-12
+        export CXX=/usr/bin/g++-12
+        gradle clean build
 
   test_swift:
     name: Test ObjC & Swift
@@ -251,7 +257,10 @@ jobs:
           
     - name: Build library
       run: |
-        cd golang && make -C ../c libusearch_c.so
+        cd golang/
+        export CC=/usr/bin/gcc-12
+        export CXX=/usr/bin/g++-12
+        make -C ../c libusearch_c.so
         sudo mv ../c/libusearch_c.so /usr/local/lib/libusearch.a
         sudo mv ../c/usearch.h /usr/local/include/usearch.h
 
