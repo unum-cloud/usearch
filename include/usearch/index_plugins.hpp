@@ -251,7 +251,7 @@ inline bool hardware_supports(isa_kind_t isa_kind) noexcept {
 
     // Check for AVX512FP16 (Function ID 7, EDX register)
     // https://github.com/llvm/llvm-project/blob/50598f0ff44f3a4e75706f8c53f3380fe7faa896/clang/lib/Headers/cpuid.h#L198C9-L198C23
-    bool supports_avx512fp = check_cpu_feature(1 << 23, 7, 3);
+    bool supports_avx512fp16 = check_cpu_feature(1 << 23, 7, 3);
 
     switch (isa_kind) {
     case isa_kind_t::avx2f16_k: return supports_avx2 && supports_f16c;
