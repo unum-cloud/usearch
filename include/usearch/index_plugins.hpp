@@ -217,19 +217,47 @@ inline bool hardware_supports(isa_kind_t isa_kind) noexcept {
 #endif
 
     // When compiling with GCC, one may use the "built-ins", including ones
-    // designed for CPU capability detection.
-#if defined(USEARCH_DEFINED_X86) && defined(USEARCH_DEFINED_GCC)
-    __builtin_cpu_init();
+    // designed for CPU capability detection, but they are not fully compatible with Clang.
+    // So instead I've decided to add a pinch of inline assembly.
+#if defined(USEARCH_DEFINED_X86)
+    auto check_cpu_feature = [](std::uint64_t feature_mask, int function_id, int register_id) -> bool {
+        std::uint32_t eax, ebx, ecx, edx;
+        // Execute CPUID instruction and store results in eax, ebx, ecx, edx
+        // Setting %ecx to 0 as well
+        __asm__ volatile("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(function_id), "c"(0));
+        std::uint32_t register_value;
+        switch (register_id) {
+        case 0: register_value = eax; break;
+        case 1: register_value = ebx; break;
+        case 2: register_value = ecx; break;
+        case 3: register_value = edx; break;
+        default: return false;
+        }
+
+        return (register_value & feature_mask) != 0;
+    };
+
+    // Check for AVX2 (Function ID 7, EBX register)
+    // https://github.com/llvm/llvm-project/blob/50598f0ff44f3a4e75706f8c53f3380fe7faa896/clang/lib/Headers/cpuid.h#L148
+    bool supports_avx2 = check_cpu_feature(1 << 5, 7, 1);
+
+    // Check for F16C (Function ID 1, ECX register)
+    // https://github.com/llvm/llvm-project/blob/50598f0ff44f3a4e75706f8c53f3380fe7faa896/clang/lib/Headers/cpuid.h#L107
+    bool supports_f16c = check_cpu_feature(1 << 29, 1, 2);
+
+    // Check for AVX512F (Function ID 7, EBX register)
+    // https://github.com/llvm/llvm-project/blob/50598f0ff44f3a4e75706f8c53f3380fe7faa896/clang/lib/Headers/cpuid.h#L155
+    bool supports_avx512f = check_cpu_feature(1 << 16, 7, 1);
+
+    // Check for AVX512FP16 (Function ID 7, EDX register)
+    // https://github.com/llvm/llvm-project/blob/50598f0ff44f3a4e75706f8c53f3380fe7faa896/clang/lib/Headers/cpuid.h#L198C9-L198C23
+    bool supports_avx512fp16 = check_cpu_feature(1 << 23, 7, 3);
+
     switch (isa_kind) {
-        // Half-precision is only supported in newer versions of GCC
-#if __GNUC__ > 11 || (__GNUC__ == 11 && __GNUC_MINOR__ >= 0)
-    case isa_kind_t::avx2f16_k: return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("f16c");
-#endif
-#if __GNUC__ > 12 || (__GNUC__ == 12 && __GNUC_MINOR__ >= 0)
-    case isa_kind_t::avx512f16_k: return __builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512fp16");
-#endif
-    case isa_kind_t::avx2_k: return __builtin_cpu_supports("avx2");
-    case isa_kind_t::avx512_k: return __builtin_cpu_supports("avx512f");
+    case isa_kind_t::avx2f16_k: return supports_avx2 && supports_f16c;
+    case isa_kind_t::avx512f16_k: return supports_avx512fp16 && supports_avx512f;
+    case isa_kind_t::avx2_k: return supports_avx2;
+    case isa_kind_t::avx512_k: return supports_avx512f;
     default: return false;
     }
 #endif
@@ -1426,6 +1454,21 @@ class metric_punned_t {
         return {to_stl_<metric_cos_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
     }
 
+    static metric_punned_t ip_metric_f16_(std::size_t bytes_per_vector) {
+        #if USEARCH_USE_SIMSIMD
+        #if SIMSIMD_TARGET_X86_AVX512
+        if (hardware_supports(isa_kind_t::avx512f16_k) && bytes_per_vector % 32 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_dot_f16x16_avx512(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f16_k, isa_kind_t::avx512f16_k};
+        #endif
+        #if SIMSIMD_TARGET_X86_AVX2
+        if (hardware_supports(isa_kind_t::avx2f16_k) && bytes_per_vector % 16 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_dot_f16x8_avx2(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f16_k, isa_kind_t::avx2f16_k};
+        #endif
+        #if SIMSIMD_TARGET_ARM_NEON
+        if (hardware_supports(isa_kind_t::neon_k) && bytes_per_vector % 8 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_dot_f16x4_neon(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f16_k, isa_kind_t::neon_k};
+        #endif
+        #endif
+        return {to_stl_<metric_cos_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
+    }
+
     static metric_punned_t l2sq_metric_f16_(std::size_t bytes_per_vector) {
         #if USEARCH_USE_SIMSIMD
         #if SIMSIMD_TARGET_X86_AVX512
@@ -1446,6 +1489,9 @@ class metric_punned_t {
         #if SIMSIMD_TARGET_ARM_NEON
         if (hardware_supports(isa_kind_t::neon_k) && bytes_per_vector % 16 == 0) return {pun_stl_<int8_t>([=](int8_t const* a, int8_t const* b) { return simsimd_cos_i8x16_neon(a, b, bytes_per_vector); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::i8_k, isa_kind_t::neon_k};
         #endif
+        #if SIMSIMD_TARGET_X86_AVX2
+        if (hardware_supports(isa_kind_t::avx2_k) && bytes_per_vector % 32 == 0) return {pun_stl_<int8_t>([=](int8_t const* a, int8_t const* b) { return simsimd_cos_i8x32_avx2(a, b, bytes_per_vector); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::i8_k, isa_kind_t::avx2_k};
+        #endif
         #endif
         return {to_stl_<cos_i8_t>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::i8_k, isa_kind_t::auto_k};
     }
@@ -1453,7 +1499,7 @@ class metric_punned_t {
     static metric_punned_t ip_metric_(std::size_t bytes_per_vector, scalar_kind_t scalar_kind) {        
         switch (scalar_kind) { // The two most common numeric types for the most common metric have optimized versions
         case scalar_kind_t::f32_k: return ip_metric_f32_(bytes_per_vector);
-        case scalar_kind_t::f16_k: return cos_metric_f16_(bytes_per_vector); // Dot-product accumulates error, Cosine-distance normalizes it
+        case scalar_kind_t::f16_k: return ip_metric_f16_(bytes_per_vector);
         case scalar_kind_t::i8_k:  return cos_metric_i8_(bytes_per_vector);
         case scalar_kind_t::f64_k: return {to_stl_<metric_ip_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
         default: return {};
