@@ -1,4 +1,5 @@
 from __future__ import annotations
+from inspect import signature
 
 # The purpose of this file is to provide Pythonic wrapper on top
 # the native precompiled CPython module. It improves compatibility
@@ -70,6 +71,13 @@ MetricLike = Union[str, MetricKind, CompiledMetric]
 NoneType = type(None)
 
 PathOrBuffer = Union[str, os.PathLike, bytes]
+
+
+def _match_signature(func: Callable[[Any], Any], arg_types: list[type], ret_type: type) -> bool:
+    assert callable(func), "Not callable"
+    sig = signature(func)
+    param_types = [param.annotation for param in sig.parameters.values()]
+    return param_types == arg_types and sig.return_annotation == ret_type
 
 
 def _normalize_dtype(dtype, metric: MetricKind = MetricKind.Cos) -> ScalarKind:
@@ -148,6 +156,7 @@ def _search_in_compiled(
 ) -> Union[Matches, BatchMatches]:
     #
     assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
+    assert not kwargs["progress"] or _match_signature(progress, [int, int], bool), "Invalid callback signature"
     assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
     if vectors.ndim == 1:
         vectors = vectors.reshape(1, len(vectors))
@@ -192,7 +201,9 @@ def _add_to_compiled(
     log: Union[str, bool],
     progress: Callable[[int, int], bool],
 ) -> Union[int, np.ndarray]:
+    #
     assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
+    assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
     assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
     if vectors.ndim == 1:
         vectors = vectors.reshape(1, len(vectors))
@@ -893,6 +904,8 @@ class Index:
     def save(
         self, path_or_buffer: Union[str, os.PathLike, NoneType] = None, progress: Callable[[int, int], bool] = None
     ) -> Optional[bytes]:
+        assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
+
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
         if path_or_buffer is None:
             return self._compiled.save_index_to_buffer(progress)
@@ -900,6 +913,8 @@ class Index:
             self._compiled.save_index_to_path(os.fspath(path_or_buffer), progress)
 
     def load(self, path_or_buffer: Union[str, os.PathLike, bytes, NoneType] = None, progress: Callable[[int, int], bool] = None):
+        assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
+
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
         if path_or_buffer is None:
             raise Exception("Define the source")
@@ -913,6 +928,8 @@ class Index:
     def view(
         self, path_or_buffer: Union[str, os.PathLike, bytes, bytearray, NoneType] = None, progress: Callable[[int, int], bool] = None
     ):
+        assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
+
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
         if path_or_buffer is None:
             raise Exception("Define the source")
@@ -970,6 +987,8 @@ class Index:
         :return: Mapping from keys of `self` to keys of `other`
         :rtype: Dict[Key, Key]
         """
+        assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
+
         return self._compiled.join(
             other=other._compiled,
             max_proposals=max_proposals,
@@ -1005,6 +1024,8 @@ class Index:
         :return: Matches for one or more queries
         :rtype: Union[Matches, BatchMatches]
         """
+        assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
+
         if min_count is None:
             min_count = 0
         if max_count is None:
@@ -1250,6 +1271,7 @@ def search(
     :return: Matches for one or more queries
     :rtype: Union[Matches, BatchMatches]
     """
+    assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
     assert dataset.ndim == 2, "Dataset must be a matrix, with a vector in each row"
 
     if not exact:
