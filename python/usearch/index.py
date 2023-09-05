@@ -9,6 +9,7 @@ import os
 import math
 from dataclasses import dataclass
 from typing import (
+    Any,
     Optional,
     Union,
     NamedTuple,
@@ -73,8 +74,12 @@ NoneType = type(None)
 
 PathOrBuffer = Union[str, os.PathLike, bytes]
 
+ProgressCallback = Callable[[int, int], bool]
 
-def _match_signature(func: Callable[[Any], Any], arg_types: list[type], ret_type: type) -> bool:
+
+def _match_signature(
+    func: Callable[[Any], Any], arg_types: List[type], ret_type: type
+) -> bool:
     assert callable(func), "Not callable"
     sig = signature(func)
     param_types = [param.annotation for param in sig.parameters.values()]
@@ -161,12 +166,16 @@ def _search_in_compiled(
     vectors: np.ndarray,
     *,
     log: Union[str, bool],
+    progress: Optional[ProgressCallback],
     **kwargs,
 ) -> Union[Matches, BatchMatches]:
     #
     assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
-    assert not kwargs["progress"] or _match_signature(progress, [int, int], bool), "Invalid callback signature"
     assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
+    assert not progress or _match_signature(
+        progress, [int, int], bool
+    ), "Invalid callback"
+
     if vectors.ndim == 1:
         vectors = vectors.reshape(1, len(vectors))
     count_vectors = vectors.shape[0]
@@ -185,14 +194,11 @@ def _search_in_compiled(
             unit="vector",
         )
 
-        progress = kwargs["progress"]
         def update_progress_bar(processed: int, total: int) -> bool:
             pbar.update(processed - pbar.n)
-            # Forward
             return progress if progress else True
 
-        kwargs["progress"] = update_progress_bar
-        tuple_ = compiled_callable(vectors, **kwargs)
+        tuple_ = compiled_callable(vectors, progress=update_progress_bar, **kwargs)
         pbar.close()
     else:
         tuple_ = compiled_callable(vectors, **kwargs)
@@ -208,11 +214,13 @@ def _add_to_compiled(
     copy: bool,
     threads: int,
     log: Union[str, bool],
-    progress: Callable[[int, int], bool],
+    progress: Optional[ProgressCallback],
 ) -> Union[int, np.ndarray]:
     #
     assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
-    assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
+    assert not progress or _match_signature(
+        progress, [int, int], bool
+    ), "Invalid callback"
     assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
     if vectors.ndim == 1:
         vectors = vectors.reshape(1, len(vectors))
@@ -242,10 +250,15 @@ def _add_to_compiled(
 
         def update_progress_bar(processed: int, total: int) -> bool:
             pbar.update(processed - pbar.n)
-            # Forward
             return progress(processed, total) if progress else True
 
-        compiled.add_many(keys, vectors, copy=copy, threads=threads, progress=update_progress_bar)
+        compiled.add_many(
+            keys,
+            vectors,
+            copy=copy,
+            threads=threads,
+            progress=update_progress_bar,
+        )
         pbar.close()
     else:
         compiled.add_many(keys, vectors, copy=copy, threads=threads, progress=progress)
@@ -608,7 +621,7 @@ class Index:
         copy: bool = True,
         threads: int = 0,
         log: Union[str, bool] = False,
-        progress: Callable[[int, int], bool] = None,
+        progress: Optional[ProgressCallback] = None,
     ) -> Union[int, np.ndarray]:
         """Inserts one or move vectors into the index.
 
@@ -635,7 +648,7 @@ class Index:
         :param log: Whether to print the progress bar
         :type log: Union[str, bool], defaults to False
         :param progress: Callback to report stats of the progress and control it
-        :type progress: Callable[[int, int], bool], defaults to None
+        :type progress: Optional[ProgressCallback], defaults to None
         :return: Inserted key or keys
         :type: Union[int, np.ndarray]
         """
@@ -658,7 +671,7 @@ class Index:
         threads: int = 0,
         exact: bool = False,
         log: Union[str, bool] = False,
-        progress: Callable[[int, int], bool] = None,
+        progress: Optional[ProgressCallback] = None,
     ) -> Union[Matches, BatchMatches]:
         """
         Performs approximate nearest neighbors search for one or more queries.
@@ -674,7 +687,7 @@ class Index:
         :param log: Whether to print the progress bar, default to False
         :type log: Union[str, bool], optional
         :param progress: Callback to report stats of the progress and control it
-        :type progress: Callable[[int, int], bool], defaults to None
+        :type progress: Optional[ProgressCallback], defaults to None
         :return: Matches for one or more queries
         :rtype: Union[Matches, BatchMatches]
         """
@@ -915,9 +928,13 @@ class Index:
         self._compiled.expansion_search = v
 
     def save(
-        self, path_or_buffer: Union[str, os.PathLike, NoneType] = None, progress: Callable[[int, int], bool] = None
+        self,
+        path_or_buffer: Union[str, os.PathLike, NoneType] = None,
+        progress: Optional[ProgressCallback] = None,
     ) -> Optional[bytes]:
-        assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
+        assert not progress or _match_signature(
+            progress, [int, int], bool
+        ), "Invalid callback signature"
 
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
         if path_or_buffer is None:
@@ -925,8 +942,14 @@ class Index:
         else:
             self._compiled.save_index_to_path(os.fspath(path_or_buffer), progress)
 
-    def load(self, path_or_buffer: Union[str, os.PathLike, bytes, NoneType] = None, progress: Callable[[int, int], bool] = None):
-        assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
+    def load(
+        self,
+        path_or_buffer: Union[str, os.PathLike, bytes, NoneType] = None,
+        progress: Optional[ProgressCallback] = None,
+    ):
+        assert not progress or _match_signature(
+            progress, [int, int], bool
+        ), "Invalid callback signature"
 
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
         if path_or_buffer is None:
@@ -939,9 +962,13 @@ class Index:
             self._compiled.load_index_from_path(os.fspath(path_or_buffer), progress)
 
     def view(
-        self, path_or_buffer: Union[str, os.PathLike, bytes, bytearray, NoneType] = None, progress: Callable[[int, int], bool] = None
+        self,
+        path_or_buffer: Union[str, os.PathLike, bytes, bytearray, NoneType] = None,
+        progress: Optional[ProgressCallback] = None,
     ):
-        assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
+        assert not progress or _match_signature(
+            progress, [int, int], bool
+        ), "Invalid callback signature"
 
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
         if path_or_buffer is None:
@@ -982,7 +1009,7 @@ class Index:
         other: Index,
         max_proposals: int = 0,
         exact: bool = False,
-        progress: Callable[[int, int], bool] = None,
+        progress: Optional[ProgressCallback] = None,
     ) -> Dict[Key, Key]:
         """Performs "Semantic Join" or pairwise matching between `self` & `other` index.
         Is different from `search`, as no collisions are allowed in resulting pairs.
@@ -996,11 +1023,13 @@ class Index:
         :param exact: Controls if underlying `search` should be exact, defaults to False
         :type exact: bool, optional
         :param progress: Callback to report stats of the progress and control it
-        :type progress: Callable[[int, int], bool], defaults to None
+        :type progress: Optional[ProgressCallback], defaults to None
         :return: Mapping from keys of `self` to keys of `other`
         :rtype: Dict[Key, Key]
         """
-        assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
+        assert not progress or _match_signature(
+            progress, [int, int], bool
+        ), "Invalid callback signature"
 
         return self._compiled.join(
             other=other._compiled,
@@ -1018,7 +1047,7 @@ class Index:
         max_count: Optional[int] = None,
         threads: int = 0,
         log: Union[str, bool] = False,
-        progress: Callable[[int, int], bool] = None,
+        progress: Optional[ProgressCallback] = None,
     ) -> Clustering:
         """
         Clusters already indexed or provided `vectors`, mapping them to various centroids.
@@ -1033,11 +1062,13 @@ class Index:
         :param log: Whether to print the progress bar
         :type log: Union[str, bool], defaults to False
         :param progress: Callback to report stats of the progress and control it
-        :type progress: Callable[[int, int], bool], defaults to None
+        :type progress: Optional[ProgressCallback], defaults to None
         :return: Matches for one or more queries
         :rtype: Union[Matches, BatchMatches]
         """
-        assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
+        assert not progress or _match_signature(
+            progress, [int, int], bool
+        ), "Invalid callback signature"
 
         if min_count is None:
             min_count = 0
@@ -1230,7 +1261,7 @@ class Indexes:
         *,
         threads: int = 0,
         exact: bool = False,
-        progress: Callable[[int, int], bool] = None,
+        progress: Optional[ProgressCallback] = None,
     ):
         return _search_in_compiled(
             self._compiled.search_many,
@@ -1254,7 +1285,7 @@ def search(
     exact: bool = False,
     threads: int = 0,
     log: Union[str, bool] = False,
-    progress: Callable[[int, int], bool] = None,
+    progress: Optional[ProgressCallback] = None,
 ) -> Union[Matches, BatchMatches]:
     """Shortcut for search, that can avoid index construction. Particularly useful for
     tiny datasets, where brute-force exact search works fast enough.
@@ -1280,11 +1311,13 @@ def search(
     :param log: Whether to print the progress bar, default to False
     :type log: Union[str, bool], optional
     :param progress: Callback to report stats of the progress and control it
-    :type progress: Callable[[int, int], bool], defaults to None
+    :type progress: Optional[ProgressCallback], defaults to None
     :return: Matches for one or more queries
     :rtype: Union[Matches, BatchMatches]
     """
-    assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
+    assert not progress or _match_signature(
+        progress, [int, int], bool
+    ), "Invalid callback signature"
     assert dataset.ndim == 2, "Dataset must be a matrix, with a vector in each row"
 
     if not exact:
