@@ -30,6 +30,7 @@ from usearch.compiled import (
     index_dense_metadata_from_path as _index_dense_metadata_from_path,
     index_dense_metadata_from_buffer as _index_dense_metadata_from_buffer,
     exact_search as _exact_search,
+    hardware_acceleration as _hardware_acceleration,
 )
 
 # Precompiled symbols that will be exposed
@@ -80,9 +81,17 @@ def _match_signature(func: Callable[[Any], Any], arg_types: list[type], ret_type
     return param_types == arg_types and sig.return_annotation == ret_type
 
 
-def _normalize_dtype(dtype, metric: MetricKind = MetricKind.Cos) -> ScalarKind:
+def _normalize_dtype(
+    dtype,
+    ndim: int = 0,
+    metric: MetricKind = MetricKind.Cos,
+) -> ScalarKind:
     if dtype is None or dtype == "":
-        return ScalarKind.B1 if metric in MetricKindBitwise else ScalarKind.F32
+        if metric in MetricKindBitwise:
+            return ScalarKind.B1
+        if _hardware_acceleration(dtype=ScalarKind.F16, ndim=ndim, metric_kind=metric):
+            return ScalarKind.F16
+        return ScalarKind.F32
 
     if isinstance(dtype, ScalarKind):
         return dtype
@@ -474,8 +483,12 @@ class Index:
         :type dtype: Optional[DTypeLike], defaults to None
             For continuous metrics can be: f16, f32, f64, or i8.
             For bitwise metrics it's implementation-defined, and can't change.
+            If nothing is provided, the optimal data type is selected based on the metric
+            kind and hardware support.
             Example: you can use the `f16` index with `f32` vectors in Euclidean space,
-            which will be automatically downcasted.
+            which will be automatically downcasted. Moreover, if `dtype=None` is passed,
+            and hardware supports `f16` SIMD-instructions, this choice will be done for you.
+            You can later double-check the used representation with `index.dtype`.
 
         :param connectivity: Connections per node in HNSW
         :type connectivity: Optional[int], defaults to None
@@ -531,7 +544,7 @@ class Index:
             )
 
         # Validate, that the right scalar type is defined
-        dtype = _normalize_dtype(dtype, self._metric_kind)
+        dtype = _normalize_dtype(dtype, ndim, self._metric_kind)
         self._compiled = _CompiledIndex(
             ndim=ndim,
             dtype=dtype,
