@@ -1019,6 +1019,17 @@ PYBIND11_MODULE(compiled, m) {
           py::arg("progress") = nullptr                                    //
     );
 
+    m.def(
+        "hardware_acceleration",
+        [](scalar_kind_t scalar_kind, std::size_t dimensions, metric_kind_t metric_kind) -> bool {
+            return metric_t(dimensions, metric_kind, scalar_kind).isa_kind() != isa_kind_t::auto_k;
+        },
+        py::kw_only(),                                //
+        py::arg("dtype") = scalar_kind_t::f32_k,      //
+        py::arg("ndim") = 0,                          //
+        py::arg("metric_kind") = metric_kind_t::cos_k //
+    );
+
     auto i = py::class_<dense_index_py_t, std::shared_ptr<dense_index_py_t>>(m, "Index");
 
     i.def(py::init(&make_index),                                           //
