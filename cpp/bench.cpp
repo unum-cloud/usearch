@@ -372,6 +372,7 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
                 executor, [&](std::size_t progress, std::size_t total) {
                     if (progress % 1000 == 0)
                         printer.print(progress, total);
+                    return true;
                 });
             join_attempts = result.visited_members;
         }
