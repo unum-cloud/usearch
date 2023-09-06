@@ -1021,8 +1021,8 @@ PYBIND11_MODULE(compiled, m) {
 
     m.def(
         "hardware_acceleration",
-        [](scalar_kind_t scalar_kind, std::size_t dimensions, metric_kind_t metric_kind) -> bool {
-            return metric_t(dimensions, metric_kind, scalar_kind).isa_kind() != isa_kind_t::auto_k;
+        [](scalar_kind_t scalar_kind, std::size_t dimensions, metric_kind_t metric_kind) -> py::str {
+            return isa_name(metric_t(dimensions, metric_kind, scalar_kind).isa_kind());
         },
         py::kw_only(),                                //
         py::arg("dtype") = scalar_kind_t::f32_k,      //

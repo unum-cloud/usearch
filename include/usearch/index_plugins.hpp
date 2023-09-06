@@ -41,7 +41,15 @@
 #endif
 
 #if USEARCH_USE_SIMSIMD
-#if __linux__
+#if defined(USEARCH_DEFINED_LINUX)
+#define SIMSIMD_TARGET_X86_AVX2 1
+#define SIMSIMD_TARGET_X86_AVX512 1
+#define SIMSIMD_TARGET_ARM_NEON 1
+#define SIMSIMD_TARGET_ARM_SVE 1
+#include <simsimd/simsimd.h>
+#elif defined(USEARCH_DEFINED_APPLE)
+#define SIMSIMD_TARGET_X86_AVX2 1
+#define SIMSIMD_TARGET_ARM_NEON 1
 #include <simsimd/simsimd.h>
 #endif
 #endif
