@@ -77,7 +77,11 @@
                     "conanfile.py",
                     "package.json",
                     "Cargo.toml",
-                    "wasmer.toml"
+                    "wasmer.toml",
+                    "./include/usearch/index.hpp",
+                    "README.md",
+                    "./csharp/nuget/nuget-package.props",
+                    "CITATION.cff"
                 ],
                 "message": "Build: Released ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
             }
