@@ -18,6 +18,21 @@ public class InitTests
     }
 
     [Fact]
+    public void InitializedWithIndexOptionsAndDisposedSucceeds()
+    {
+        var indexOptions = new IndexOptions(
+            metricKind: MetricKind.Cos,
+            dimensions: 3,
+            quantization: ScalarKind.Float32
+        );
+        using (var index = new USearchIndex(indexOptions))
+        {
+            Assert.NotNull(index);
+            Assert.Equal((uint)3, index.Dimensions());
+        }
+    }
+
+    [Fact]
     public void AddDoubleVectorSucceeds()
     {
         using (var index = new USearchIndex(MetricKind.Cos, ScalarKind.Float64, 3))
