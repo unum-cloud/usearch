@@ -27,7 +27,8 @@ public enum ScalarKind : uint
     Byte1,
 }
 
-// TODO implement custom metric delegate following microsoft guides:
+// TODO: implement custom metric delegate
+// Microsoft guides links:
 // 1) https://learn.microsoft.com/en-us/dotnet/standard/native-interop/best-practices
 // 2) https://learn.microsoft.com/en-us/dotnet/framework/interop/marshalling-a-delegate-as-a-callback-method
 // public delegate float CustomMetricFunction(IntPtr a, IntPtr b);
@@ -58,7 +59,7 @@ public struct IndexOptions
     )
     {
         this.metric_kind = metricKind;
-        this.metric = metric;
+        this.metric = default; // TODO: Use actual metric param, when support is added for custom metric delegate
         this.quantization = quantization;
         this.dimensions = dimensions;
         this.connectivity = connectivity;
