@@ -1041,8 +1041,10 @@ class index_dense_gt {
             },
             config, std::forward<progress_at>(progress));
 
-        if (!stream_result)
+        if (!stream_result) {
+            io_result.error.release();
             return stream_result;
+        }
         return io_result;
     }
 
@@ -1093,8 +1095,10 @@ class index_dense_gt {
             },
             config, std::forward<progress_at>(progress));
 
-        if (!stream_result)
+        if (!stream_result) {
+            io_result.error.release();
             return stream_result;
+        }
         return io_result;
     }
 
