@@ -1,4 +1,5 @@
 from __future__ import annotations
+from inspect import signature
 
 # The purpose of this file is to provide Pythonic wrapper on top
 # the native precompiled CPython module. It improves compatibility
@@ -8,6 +9,7 @@ import os
 import math
 from dataclasses import dataclass
 from typing import (
+    Any,
     Optional,
     Union,
     NamedTuple,
@@ -29,6 +31,7 @@ from usearch.compiled import (
     index_dense_metadata_from_path as _index_dense_metadata_from_path,
     index_dense_metadata_from_buffer as _index_dense_metadata_from_buffer,
     exact_search as _exact_search,
+    hardware_acceleration as _hardware_acceleration,
 )
 
 # Precompiled symbols that will be exposed
@@ -71,10 +74,29 @@ NoneType = type(None)
 
 PathOrBuffer = Union[str, os.PathLike, bytes]
 
+ProgressCallback = Callable[[int, int], bool]
 
-def _normalize_dtype(dtype, metric: MetricKind = MetricKind.Cos) -> ScalarKind:
+
+def _match_signature(
+    func: Callable[[Any], Any], arg_types: List[type], ret_type: type
+) -> bool:
+    assert callable(func), "Not callable"
+    sig = signature(func)
+    param_types = [param.annotation for param in sig.parameters.values()]
+    return param_types == arg_types and sig.return_annotation == ret_type
+
+
+def _normalize_dtype(
+    dtype,
+    ndim: int = 0,
+    metric: MetricKind = MetricKind.Cos,
+) -> ScalarKind:
     if dtype is None or dtype == "":
-        return ScalarKind.B1 if metric in MetricKindBitwise else ScalarKind.F32
+        if metric in MetricKindBitwise:
+            return ScalarKind.B1
+        if _hardware_acceleration(dtype=ScalarKind.F16, ndim=ndim, metric_kind=metric):
+            return ScalarKind.F16
+        return ScalarKind.F32
 
     if isinstance(dtype, ScalarKind):
         return dtype
@@ -144,12 +166,16 @@ def _search_in_compiled(
     vectors: np.ndarray,
     *,
     log: Union[str, bool],
-    batch_size: int,
+    progress: Optional[ProgressCallback],
     **kwargs,
 ) -> Union[Matches, BatchMatches]:
     #
     assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
     assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
+    assert not progress or _match_signature(
+        progress, [int, int], bool
+    ), "Invalid callback"
+
     if vectors.ndim == 1:
         vectors = vectors.reshape(1, len(vectors))
     count_vectors = vectors.shape[0]
@@ -159,42 +185,25 @@ def _search_in_compiled(
     ) -> Union[BatchMatches, Matches]:
         return batch_matches[0] if count_vectors == 1 else batch_matches
 
-    if log and batch_size == 0:
-        batch_size = int(math.ceil(count_vectors / 100))
-
-    if batch_size:
-        tasks = [
-            vectors[start_row : start_row + batch_size, :]
-            for start_row in range(0, count_vectors, batch_size)
-        ]
-        tasks_matches = []
+    # Create progress bar if needed
+    if log:
         name = log if isinstance(log, str) else "Search"
         pbar = tqdm(
-            tasks,
             desc=name,
             total=count_vectors,
             unit="vector",
-            disable=log is False,
         )
-        for vectors in tasks:
-            tuple_ = compiled_callable(vectors, **kwargs)
-            tasks_matches.append(BatchMatches(*tuple_))
-            pbar.update(vectors.shape[0])
 
+        def update_progress_bar(processed: int, total: int) -> bool:
+            pbar.update(processed - pbar.n)
+            return progress if progress else True
+
+        tuple_ = compiled_callable(vectors, progress=update_progress_bar, **kwargs)
         pbar.close()
-        return distil_batch(
-            BatchMatches(
-                keys=np.vstack([m.keys for m in tasks_matches]),
-                distances=np.vstack([m.distances for m in tasks_matches]),
-                counts=np.concatenate([m.counts for m in tasks_matches], axis=None),
-                visited_members=sum([m.visited_members for m in tasks_matches]),
-                computed_distances=sum([m.computed_distances for m in tasks_matches]),
-            )
-        )
-
     else:
         tuple_ = compiled_callable(vectors, **kwargs)
-        return distil_batch(BatchMatches(*tuple_))
+
+    return distil_batch(BatchMatches(*tuple_))
 
 
 def _add_to_compiled(
@@ -205,9 +214,13 @@ def _add_to_compiled(
     copy: bool,
     threads: int,
     log: Union[str, bool],
-    batch_size: int,
+    progress: Optional[ProgressCallback],
 ) -> Union[int, np.ndarray]:
+    #
     assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
+    assert not progress or _match_signature(
+        progress, [int, int], bool
+    ), "Invalid callback"
     assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
     if vectors.ndim == 1:
         vectors = vectors.reshape(1, len(vectors))
@@ -226,37 +239,29 @@ def _add_to_compiled(
 
     assert len(keys) == count_vectors
 
-    # If logging is requested, and batch size is undefined, set it to grow 1% at a time:
-    if log and batch_size == 0:
-        batch_size = int(math.ceil(count_vectors / 100))
-
-    # Split into batches and log progress, if needed
-    if batch_size:
-        keys = [
-            keys[start_row : start_row + batch_size]
-            for start_row in range(0, count_vectors, batch_size)
-        ]
-        vectors = [
-            vectors[start_row : start_row + batch_size, :]
-            for start_row in range(0, count_vectors, batch_size)
-        ]
-        tasks = zip(keys, vectors)
+    # Create progress bar if needed
+    if log:
         name = log if isinstance(log, str) else "Add"
         pbar = tqdm(
-            tasks,
             desc=name,
             total=count_vectors,
             unit="vector",
-            disable=log is False,
         )
-        for keys, vectors in tasks:
-            compiled.add_many(keys, vectors, copy=copy, threads=threads)
-            pbar.update(len(keys))
 
+        def update_progress_bar(processed: int, total: int) -> bool:
+            pbar.update(processed - pbar.n)
+            return progress(processed, total) if progress else True
+
+        compiled.add_many(
+            keys,
+            vectors,
+            copy=copy,
+            threads=threads,
+            progress=update_progress_bar,
+        )
         pbar.close()
-
     else:
-        compiled.add_many(keys, vectors, copy=copy, threads=threads)
+        compiled.add_many(keys, vectors, copy=copy, threads=threads, progress=progress)
 
     return keys
 
@@ -492,8 +497,12 @@ class Index:
         :type dtype: Optional[DTypeLike], defaults to None
             For continuous metrics can be: f16, f32, f64, or i8.
             For bitwise metrics it's implementation-defined, and can't change.
+            If nothing is provided, the optimal data type is selected based on the metric
+            kind and hardware support.
             Example: you can use the `f16` index with `f32` vectors in Euclidean space,
-            which will be automatically downcasted.
+            which will be automatically downcasted. Moreover, if `dtype=None` is passed,
+            and hardware supports `f16` SIMD-instructions, this choice will be done for you.
+            You can later double-check the used representation with `index.dtype`.
 
         :param connectivity: Connections per node in HNSW
         :type connectivity: Optional[int], defaults to None
@@ -549,7 +558,7 @@ class Index:
             )
 
         # Validate, that the right scalar type is defined
-        dtype = _normalize_dtype(dtype, self._metric_kind)
+        dtype = _normalize_dtype(dtype, ndim, self._metric_kind)
         self._compiled = _CompiledIndex(
             ndim=ndim,
             dtype=dtype,
@@ -614,7 +623,7 @@ class Index:
         copy: bool = True,
         threads: int = 0,
         log: Union[str, bool] = False,
-        batch_size: int = 0,
+        progress: Optional[ProgressCallback] = None,
     ) -> Union[int, np.ndarray]:
         """Inserts one or move vectors into the index.
 
@@ -640,8 +649,8 @@ class Index:
         :type threads: int, defaults to 0
         :param log: Whether to print the progress bar
         :type log: Union[str, bool], defaults to False
-        :param batch_size: Number of vectors to process at once
-        :type batch_size: int, defaults to 0
+        :param progress: Callback to report stats of the progress and control it
+        :type progress: Optional[ProgressCallback], defaults to None
         :return: Inserted key or keys
         :type: Union[int, np.ndarray]
         """
@@ -652,7 +661,7 @@ class Index:
             copy=copy,
             threads=threads,
             log=log,
-            batch_size=batch_size,
+            progress=progress,
         )
 
     def search(
@@ -664,7 +673,7 @@ class Index:
         threads: int = 0,
         exact: bool = False,
         log: Union[str, bool] = False,
-        batch_size: int = 0,
+        progress: Optional[ProgressCallback] = None,
     ) -> Union[Matches, BatchMatches]:
         """
         Performs approximate nearest neighbors search for one or more queries.
@@ -679,8 +688,8 @@ class Index:
         :type exact: bool, defaults to False
         :param log: Whether to print the progress bar, default to False
         :type log: Union[str, bool], optional
-        :param batch_size: Number of vectors to process at once
-        :type batch_size: int, defaults to 0
+        :param progress: Callback to report stats of the progress and control it
+        :type progress: Optional[ProgressCallback], defaults to None
         :return: Matches for one or more queries
         :rtype: Union[Matches, BatchMatches]
         """
@@ -690,11 +699,11 @@ class Index:
             vectors,
             # Batch scheduling:
             log=log,
-            batch_size=batch_size,
             # Search constraints:
             count=count,
             exact=exact,
             threads=threads,
+            progress=progress,
         )
 
     def contains(self, keys: KeyOrKeysLike) -> Union[bool, np.ndarray]:
@@ -921,37 +930,57 @@ class Index:
         self._compiled.expansion_search = v
 
     def save(
-        self, path_or_buffer: Union[str, os.PathLike, NoneType] = None
+        self,
+        path_or_buffer: Union[str, os.PathLike, NoneType] = None,
+        progress: Optional[ProgressCallback] = None,
     ) -> Optional[bytes]:
+        assert not progress or _match_signature(
+            progress, [int, int], bool
+        ), "Invalid callback signature"
+
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
         if path_or_buffer is None:
-            return self._compiled.save_index_to_buffer()
+            return self._compiled.save_index_to_buffer(progress)
         else:
-            self._compiled.save_index_to_path(os.fspath(path_or_buffer))
+            self._compiled.save_index_to_path(os.fspath(path_or_buffer), progress)
 
-    def load(self, path_or_buffer: Union[str, os.PathLike, bytes, NoneType] = None):
+    def load(
+        self,
+        path_or_buffer: Union[str, os.PathLike, bytes, NoneType] = None,
+        progress: Optional[ProgressCallback] = None,
+    ):
+        assert not progress or _match_signature(
+            progress, [int, int], bool
+        ), "Invalid callback signature"
+
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
         if path_or_buffer is None:
             raise Exception("Define the source")
         if isinstance(path_or_buffer, bytearray):
             path_or_buffer = bytes(path_or_buffer)
         if isinstance(path_or_buffer, bytes):
-            self._compiled.load_index_from_buffer(path_or_buffer)
+            self._compiled.load_index_from_buffer(path_or_buffer, progress)
         else:
-            self._compiled.load_index_from_path(os.fspath(path_or_buffer))
+            self._compiled.load_index_from_path(os.fspath(path_or_buffer), progress)
 
     def view(
-        self, path_or_buffer: Union[str, os.PathLike, bytes, bytearray, NoneType] = None
+        self,
+        path_or_buffer: Union[str, os.PathLike, bytes, bytearray, NoneType] = None,
+        progress: Optional[ProgressCallback] = None,
     ):
+        assert not progress or _match_signature(
+            progress, [int, int], bool
+        ), "Invalid callback signature"
+
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
         if path_or_buffer is None:
             raise Exception("Define the source")
         if isinstance(path_or_buffer, bytearray):
             path_or_buffer = bytes(path_or_buffer)
         if isinstance(path_or_buffer, bytes):
-            self._compiled.view_index_from_buffer(path_or_buffer)
+            self._compiled.view_index_from_buffer(path_or_buffer, progress)
         else:
-            self._compiled.view_index_from_path(os.fspath(path_or_buffer))
+            self._compiled.view_index_from_path(os.fspath(path_or_buffer), progress)
 
     def clear(self):
         """Erases all the vectors from the index, preserving the space for future insertions."""
@@ -982,6 +1011,7 @@ class Index:
         other: Index,
         max_proposals: int = 0,
         exact: bool = False,
+        progress: Optional[ProgressCallback] = None,
     ) -> Dict[Key, Key]:
         """Performs "Semantic Join" or pairwise matching between `self` & `other` index.
         Is different from `search`, as no collisions are allowed in resulting pairs.
@@ -994,13 +1024,20 @@ class Index:
         :type max_proposals: int, optional
         :param exact: Controls if underlying `search` should be exact, defaults to False
         :type exact: bool, optional
+        :param progress: Callback to report stats of the progress and control it
+        :type progress: Optional[ProgressCallback], defaults to None
         :return: Mapping from keys of `self` to keys of `other`
         :rtype: Dict[Key, Key]
         """
+        assert not progress or _match_signature(
+            progress, [int, int], bool
+        ), "Invalid callback signature"
+
         return self._compiled.join(
             other=other._compiled,
             max_proposals=max_proposals,
             exact=exact,
+            progress=progress,
         )
 
     def cluster(
@@ -1012,7 +1049,7 @@ class Index:
         max_count: Optional[int] = None,
         threads: int = 0,
         log: Union[str, bool] = False,
-        batch_size: int = 0,
+        progress: Optional[ProgressCallback] = None,
     ) -> Clustering:
         """
         Clusters already indexed or provided `vectors`, mapping them to various centroids.
@@ -1026,11 +1063,15 @@ class Index:
         :type threads: int, defaults to 0
         :param log: Whether to print the progress bar
         :type log: Union[str, bool], defaults to False
-        :param batch_size: Number of vectors to process at once, defaults to 0
-        :type batch_size: int, defaults to 0
+        :param progress: Callback to report stats of the progress and control it
+        :type progress: Optional[ProgressCallback], defaults to None
         :return: Matches for one or more queries
         :rtype: Union[Matches, BatchMatches]
         """
+        assert not progress or _match_signature(
+            progress, [int, int], bool
+        ), "Invalid callback signature"
+
         if min_count is None:
             min_count = 0
         if max_count is None:
@@ -1043,6 +1084,7 @@ class Index:
                 min_count=min_count,
                 max_count=max_count,
                 threads=threads,
+                progress=progress,
             )
         else:
             if keys is None:
@@ -1055,6 +1097,7 @@ class Index:
                 min_count=min_count,
                 max_count=max_count,
                 threads=threads,
+                progress=progress,
             )
 
         batch_matches = BatchMatches(*results)
@@ -1222,17 +1265,18 @@ class Indexes:
         *,
         threads: int = 0,
         exact: bool = False,
+        progress: Optional[ProgressCallback] = None,
     ):
         return _search_in_compiled(
             self._compiled.search_many,
             vectors,
             # Batch scheduling:
             log=False,
-            batch_size=None,
             # Search constraints:
             count=count,
             exact=exact,
             threads=threads,
+            progress=progress,
         )
 
 
@@ -1245,7 +1289,7 @@ def search(
     exact: bool = False,
     threads: int = 0,
     log: Union[str, bool] = False,
-    batch_size: int = 0,
+    progress: Optional[ProgressCallback] = None,
 ) -> Union[Matches, BatchMatches]:
     """Shortcut for search, that can avoid index construction. Particularly useful for
     tiny datasets, where brute-force exact search works fast enough.
@@ -1270,12 +1314,14 @@ def search(
     :type exact: bool, optional
     :param log: Whether to print the progress bar, default to False
     :type log: Union[str, bool], optional
-    :param batch_size: Number of vectors to process at once, defaults to 0
-    :type batch_size: int, optional
-
+    :param progress: Callback to report stats of the progress and control it
+    :type progress: Optional[ProgressCallback], defaults to None
     :return: Matches for one or more queries
     :rtype: Union[Matches, BatchMatches]
     """
+    assert not progress or _match_signature(
+        progress, [int, int], bool
+    ), "Invalid callback signature"
     assert dataset.ndim == 2, "Dataset must be a matrix, with a vector in each row"
 
     if not exact:
@@ -1289,14 +1335,14 @@ def search(
             dataset,
             threads=threads,
             log=log,
-            batch_size=batch_size,
+            progress=progress,
         )
         return index.search(
             query,
             count,
             threads=threads,
             log=log,
-            batch_size=batch_size,
+            progress=progress,
         )
 
     metric = _normalize_metric(metric)
@@ -1320,8 +1366,8 @@ def search(
             dataset,
             query,
             metric_kind=metric_kind,
-            metric_pointer=metric_pointer,
             metric_signature=metric_signature,
+            metric_pointer=metric_pointer,
             **kwargs,
         )
 
@@ -1330,8 +1376,8 @@ def search(
         query,
         # Batch scheduling:
         log=log,
-        batch_size=batch_size,
         # Search constraints:
         count=count,
         threads=threads,
+        progress=progress,
     )

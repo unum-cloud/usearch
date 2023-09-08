@@ -777,7 +777,9 @@ class index_dense_gt {
      *  @brief  Saves serialized binary index representation to a stream.
      */
     template <typename output_callback_at, typename progress_at = dummy_progress_t>
-    serialization_result_t save_to_stream(output_callback_at&& output, serialization_config_t config = {}) const {
+    serialization_result_t save_to_stream(output_callback_at&& output,        //
+                                          serialization_config_t config = {}, //
+                                          progress_at&& progress = {}) const {
 
         serialization_result_t result;
         std::uint64_t matrix_rows = 0;
@@ -841,7 +843,7 @@ class index_dense_gt {
         }
 
         // Save the actual proximity graph
-        return typed_->save_to_stream(std::forward<output_callback_at>(output));
+        return typed_->save_to_stream(std::forward<output_callback_at>(output), std::forward<progress_at>(progress));
     }
 
     /**
@@ -863,8 +865,10 @@ class index_dense_gt {
      *  @param[in] config Configuration parameters for imports.
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
-    template <typename input_callback_at>
-    serialization_result_t load_from_stream(input_callback_at&& input, serialization_config_t config = {}) {
+    template <typename input_callback_at, typename progress_at = dummy_progress_t>
+    serialization_result_t load_from_stream(input_callback_at&& input,          //
+                                            serialization_config_t config = {}, //
+                                            progress_at&& progress = {}) {
 
         // Discard all previous memory allocations of `vectors_tape_allocator_`
         reset();
@@ -925,7 +929,7 @@ class index_dense_gt {
         }
 
         // Pull the actual proximity graph
-        result = typed_->load_from_stream(std::forward<input_callback_at>(input));
+        result = typed_->load_from_stream(std::forward<input_callback_at>(input), std::forward<progress_at>(progress));
         if (!result)
             return result;
         if (typed_->size() != static_cast<std::size_t>(matrix_rows))
@@ -941,7 +945,10 @@ class index_dense_gt {
      *  @param[in] config Configuration parameters for imports.
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
-    serialization_result_t view(memory_mapped_file_t file, std::size_t offset = 0, serialization_config_t config = {}) {
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t view(memory_mapped_file_t file,                                  //
+                                std::size_t offset = 0, serialization_config_t config = {}, //
+                                progress_at&& progress = {}) {
 
         // Discard all previous memory allocations of `vectors_tape_allocator_`
         reset();
@@ -1007,7 +1014,7 @@ class index_dense_gt {
         }
 
         // Pull the actual proximity graph
-        result = typed_->view(std::move(file), offset);
+        result = typed_->view(std::move(file), offset, std::forward<progress_at>(progress));
         if (!result)
             return result;
         if (typed_->size() != static_cast<std::size_t>(matrix_rows))
@@ -1029,7 +1036,9 @@ class index_dense_gt {
      *  @param[in] config Configuration parameters for exports.
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
-    serialization_result_t save(output_file_t file, serialization_config_t config = {}) const {
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t save(output_file_t file, serialization_config_t config = {},
+                                progress_at&& progress = {}) const {
 
         serialization_result_t io_result = file.open_if_not();
         if (!io_result)
@@ -1040,10 +1049,12 @@ class index_dense_gt {
                 io_result = file.write(buffer, length);
                 return !!io_result;
             },
-            config);
+            config, std::forward<progress_at>(progress));
 
-        if (!stream_result)
+        if (!stream_result) {
+            io_result.error.release();
             return stream_result;
+        }
         return io_result;
     }
 
@@ -1051,8 +1062,11 @@ class index_dense_gt {
      *  @brief  Memory-maps the serialized binary index representation from disk,
      *          @b without copying data into RAM, and fetching it on-demand.
      */
-    serialization_result_t save(memory_mapped_file_t file, std::size_t offset = 0,
-                                serialization_config_t config = {}) const {
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t save(memory_mapped_file_t file,          //
+                                std::size_t offset = 0,             //
+                                serialization_config_t config = {}, //
+                                progress_at&& progress = {}) const {
 
         serialization_result_t io_result = file.open_if_not();
         if (!io_result)
@@ -1066,7 +1080,7 @@ class index_dense_gt {
                 offset += length;
                 return true;
             },
-            config);
+            config, std::forward<progress_at>(progress));
 
         return stream_result;
     }
@@ -1077,7 +1091,8 @@ class index_dense_gt {
      *  @param[in] config Configuration parameters for imports.
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
-    serialization_result_t load(input_file_t file, serialization_config_t config = {}) {
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t load(input_file_t file, serialization_config_t config = {}, progress_at&& progress = {}) {
 
         serialization_result_t io_result = file.open_if_not();
         if (!io_result)
@@ -1088,10 +1103,12 @@ class index_dense_gt {
                 io_result = file.read(buffer, length);
                 return !!io_result;
             },
-            config);
+            config, std::forward<progress_at>(progress));
 
-        if (!stream_result)
+        if (!stream_result) {
+            io_result.error.release();
             return stream_result;
+        }
         return io_result;
     }
 
@@ -1099,7 +1116,11 @@ class index_dense_gt {
      *  @brief  Memory-maps the serialized binary index representation from disk,
      *          @b without copying data into RAM, and fetching it on-demand.
      */
-    serialization_result_t load(memory_mapped_file_t file, std::size_t offset = 0, serialization_config_t config = {}) {
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t load(memory_mapped_file_t file,          //
+                                std::size_t offset = 0,             //
+                                serialization_config_t config = {}, //
+                                progress_at&& progress = {}) {
 
         serialization_result_t io_result = file.open_if_not();
         if (!io_result)
@@ -1113,17 +1134,23 @@ class index_dense_gt {
                 offset += length;
                 return true;
             },
-            config);
+            config, std::forward<progress_at>(progress));
 
         return stream_result;
     }
 
-    serialization_result_t save(char const* file_path, serialization_config_t config = {}) const {
-        return save(output_file_t(file_path), config);
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t save(char const* file_path,              //
+                                serialization_config_t config = {}, //
+                                progress_at&& progress = {}) const {
+        return save(output_file_t(file_path), config, std::forward<progress_at>(progress));
     }
 
-    serialization_result_t load(char const* file_path, serialization_config_t config = {}) {
-        return load(input_file_t(file_path), config);
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t load(char const* file_path,              //
+                                serialization_config_t config = {}, //
+                                progress_at&& progress = {}) {
+        return load(input_file_t(file_path), config, std::forward<progress_at>(progress));
     }
 
     /**
