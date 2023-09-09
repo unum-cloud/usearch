@@ -649,7 +649,9 @@ class aligned_allocator_gt {
     using size_type = std::size_t;
     using pointer = element_at*;
     using const_pointer = element_at const*;
-    template <typename other_element_at> struct rebind { using other = aligned_allocator_gt<other_element_at>; };
+    template <typename other_element_at> struct rebind {
+        using other = aligned_allocator_gt<other_element_at>;
+    };
 
     constexpr std::size_t alignment() const { return alignment_ak; }
 
@@ -1628,23 +1630,20 @@ class flat_hash_multi_set_gt {
     std::size_t capacity() const noexcept { return capacity_slots_; }
 
     flat_hash_multi_set_gt() noexcept {}
+    ~flat_hash_multi_set_gt() noexcept { reset(); }
 
-    ~flat_hash_multi_set_gt() noexcept {
-        clear(); // Clear all elements
-        if (data_)
-            allocator_t{}.deallocate(data_, buckets_ * bytes_per_bucket());
-        buckets_ = 0;
-        populated_slots_ = 0;
-        capacity_slots_ = 0;
-    }
+    flat_hash_multi_set_gt(flat_hash_multi_set_gt const& other) {
 
-    // Copy constructor
-    flat_hash_multi_set_gt(const flat_hash_multi_set_gt& other) {
+        // On Windows allocating a zero-size array would fail
+        if (!other.buckets_) {
+            reset();
+            return;
+        }
+
         // Allocate new memory
         data_ = (char*)allocator_t{}.allocate(other.buckets_ * bytes_per_bucket());
-        if (!data_) {
+        if (!data_)
             throw std::bad_alloc();
-        }
 
         // Copy metadata
         buckets_ = other.buckets_;
@@ -1664,23 +1663,27 @@ class flat_hash_multi_set_gt {
         }
     }
 
-    // Copy assignment operator
-    flat_hash_multi_set_gt& operator=(const flat_hash_multi_set_gt& other) {
-        if (this == &other) {
-            return *this; // handle self-assignment
+    flat_hash_multi_set_gt& operator=(flat_hash_multi_set_gt const& other) {
+
+        // On Windows allocating a zero-size array would fail
+        if (!other.buckets_) {
+            reset();
+            return *this;
         }
+
+        // Handle self-assignment
+        if (this == &other)
+            return *this;
 
         // Clear existing data
         clear();
-        if (data_) {
+        if (data_)
             allocator_t{}.deallocate(data_, buckets_ * bytes_per_bucket());
-        }
 
         // Allocate new memory
         data_ = (char*)allocator_t{}.allocate(other.buckets_ * bytes_per_bucket());
-        if (!data_) {
+        if (!data_)
             throw std::bad_alloc();
-        }
 
         // Copy metadata
         buckets_ = other.buckets_;
@@ -1715,8 +1718,17 @@ class flat_hash_multi_set_gt {
         populated_slots_ = 0;
     }
 
+    void reset() noexcept {
+        clear(); // Clear all elements
+        if (data_)
+            allocator_t{}.deallocate(data_, buckets_ * bytes_per_bucket());
+        buckets_ = 0;
+        populated_slots_ = 0;
+        capacity_slots_ = 0;
+    }
+
     bool try_reserve(std::size_t capacity) noexcept {
-        if (capacity * 3u < capacity_slots_ * 2u)
+        if (capacity * 3u <= capacity_slots_ * 2u)
             return true;
 
         // Calculate new sizes
@@ -1757,7 +1769,8 @@ class flat_hash_multi_set_gt {
         }
 
         // Deallocate old data and update pointers and sizes
-        allocator_t{}.deallocate(data_, buckets_ * bytes_per_bucket());
+        if (data_)
+            allocator_t{}.deallocate(data_, buckets_ * bytes_per_bucket());
         data_ = new_data;
         buckets_ = new_buckets;
         capacity_slots_ = new_slots;
@@ -1797,8 +1810,8 @@ class flat_hash_multi_set_gt {
 
         reference operator*() { return parent_->slot_ref(index_).element; }
         pointer operator->() { return &parent_->slot_ref(index_).element; }
-        bool operator!=(const equal_iterator_gt& other) const { return !(*this == other); }
-        bool operator==(const equal_iterator_gt& other) const {
+        bool operator!=(equal_iterator_gt const& other) const { return !(*this == other); }
+        bool operator==(equal_iterator_gt const& other) const {
             return index_ == other.index_ && parent_ == other.parent_;
         }
 
@@ -1812,12 +1825,17 @@ class flat_hash_multi_set_gt {
     template <typename query_at>
     std::pair<equal_iterator_gt<query_at>, equal_iterator_gt<query_at>>
     equal_range(query_at const& query) const noexcept {
-        hash_t hasher;
+
         equals_t equals;
+        auto this_ptr = const_cast<flat_hash_multi_set_gt*>(this);
+        auto end = equal_iterator_gt<query_at>(capacity_slots_, this_ptr, query, equals);
+        if (!capacity_slots_)
+            return {end, end};
+
+        hash_t hasher;
         std::size_t hash_value = hasher(query);
         std::size_t slot_index = hash_value & (capacity_slots_ - 1);
         std::size_t const start_index = slot_index;
-
         std::size_t first_equal_index = capacity_slots_;
 
         // Linear probing to find the first equal element
@@ -1837,12 +1855,14 @@ class flat_hash_multi_set_gt {
             slot_index = (slot_index + 1) & (capacity_slots_ - 1);
         } while (slot_index != start_index);
 
-        return {
-            equal_iterator_gt<query_at>(first_equal_index, const_cast<flat_hash_multi_set_gt*>(this), query, equals),
-            equal_iterator_gt<query_at>(capacity_slots_, const_cast<flat_hash_multi_set_gt*>(this), query, equals)};
+        return {equal_iterator_gt<query_at>(first_equal_index, this_ptr, query, equals), end};
     }
 
     template <typename similar_at> bool pop_first(similar_at&& query, element_t& popped_value) noexcept {
+
+        if (!capacity_slots_)
+            return false;
+
         hash_t hasher;
         equals_t equals;
         std::size_t hash_value = hasher(query);
@@ -1873,13 +1893,16 @@ class flat_hash_multi_set_gt {
     }
 
     template <typename similar_at> std::size_t erase(similar_at&& query) noexcept {
+
+        if (!capacity_slots_)
+            return 0;
+
         hash_t hasher;
         equals_t equals;
         std::size_t hash_value = hasher(query);
         std::size_t slot_index = hash_value & (capacity_slots_ - 1); // Assuming capacity_slots_ is a power of 2
         std::size_t start_index = slot_index;                        // To detect loop in probing
-
-        std::size_t count = 0; // Count of elements removed
+        std::size_t count = 0;                                       // Count of elements removed
 
         // Linear probing to find all matches
         do {
@@ -1904,6 +1927,10 @@ class flat_hash_multi_set_gt {
     }
 
     template <typename similar_at> element_t const* find(similar_at&& query) const noexcept {
+
+        if (!capacity_slots_)
+            return nullptr;
+
         hash_t hasher;
         equals_t equals;
         std::size_t hash_value = hasher(query);
@@ -1952,12 +1979,15 @@ class flat_hash_multi_set_gt {
     }
 
     template <typename similar_at> std::size_t count(similar_at&& query) const noexcept {
+
+        if (!capacity_slots_)
+            return 0;
+
         hash_t hasher;
         equals_t equals;
         std::size_t hash_value = hasher(query);
         std::size_t slot_index = hash_value & (capacity_slots_ - 1);
         std::size_t start_index = slot_index; // To detect loop in probing
-
         std::size_t count = 0;
 
         // Linear probing to find the range
@@ -1979,6 +2009,10 @@ class flat_hash_multi_set_gt {
     }
 
     template <typename similar_at> bool contains(similar_at&& query) const noexcept {
+
+        if (!capacity_slots_)
+            return false;
+
         hash_t hasher;
         equals_t equals;
         std::size_t hash_value = hasher(query);

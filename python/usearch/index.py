@@ -988,6 +988,8 @@ class Index:
 
     def reset(self):
         """Erases all members from index, closing files, and returning RAM to OS."""
+        if not hasattr(self, "_compiled"):
+            return
         self._compiled.reset()
 
     def __del__(self):
@@ -1177,6 +1179,8 @@ class Index:
 
     @property
     def specs(self) -> Dict[str, Union[str, int, bool]]:
+        if not hasattr(self, "_compiled"):
+            return "usearch.Index(failed)"
         return {
             "type": "usearch.Index",
             "ndim": self.ndim,
@@ -1194,6 +1198,8 @@ class Index:
         }
 
     def __repr__(self) -> str:
+        if not hasattr(self, "_compiled"):
+            return "usearch.Index(failed)"
         f = "usearch.Index({} x {}, {}, connectivity: {}, expansion: {} & {}, {:,} vectors in {} levels, {} hardware accerlation)"
         return f.format(
             self.dtype,
@@ -1208,6 +1214,8 @@ class Index:
         )
 
     def _repr_pretty_(self, printer, cycle) -> str:
+        if not hasattr(self, "_compiled"):
+            return "usearch.Index(failed)"
         level_stats = [
             f"--- {i}. {self.level_stats(i).nodes:,} nodes" for i in range(self.nlevels)
         ]
