@@ -74,8 +74,9 @@ jobs:
     name: Test Python
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-20.04, macOS-11, windows-2022]
+        os: [ubuntu-22.04, macOS-11, windows-2022]
         python-version: ["3.11"]
 
     steps:
@@ -89,8 +90,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pytest numpy
+      - name: Build locally on Ubuntu
+        run: |
+          export CC=/usr/bin/gcc-12
+          export CXX=/usr/bin/g++-12
+          export LD_LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:$LD_LIBRARY_PATH
+          python -m pip install .
+        if: ${{ matrix.os == 'ubuntu-22.04' }}
       - name: Build locally
         run: python -m pip install .
+        if: ${{ matrix.os != 'ubuntu-22.04' }}
       - name: Test with PyTest
         run: pytest python/scripts/
 
@@ -99,8 +108,9 @@ jobs:
     name: Test Python 3.7
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-20.04]
+        os: [ubuntu-22.04]
         python-version: ["3.7"]
 
     steps:
@@ -118,7 +128,12 @@ jobs:
           pip install pytest numpy
 
       - name: Build locally
-        run: python -m pip install .
+        run: |
+          export CC=/usr/bin/gcc-12
+          export CXX=/usr/bin/g++-12
+          export LD_LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:$LD_LIBRARY_PATH
+          python -m pip install .
+        if: ${{ matrix.os == 'ubuntu-22.04' }}
 
       - name: Test with PyTest
         run: pytest python/scripts/
@@ -133,7 +148,10 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
-      - run: npm install
+      - run: |
+          export CC=/usr/bin/gcc-12
+          export CXX=/usr/bin/g++-12
+          npm install
       - run: npm ci
       - run: npm test
 
@@ -161,7 +179,10 @@ jobs:
     - name: Setup Gradle
       uses: gradle/gradle-build-action@v2.4.2
     - name: Execute Gradle build
-      run: gradle clean build
+      run:
+        export CC=/usr/bin/gcc-12
+        export CXX=/usr/bin/g++-12
+        gradle clean build
 
   test_swift:
     name: Test ObjC & Swift
@@ -218,6 +239,36 @@ jobs:
         run: dotnet test -c Release
         shell: bash
         working-directory: ${{ github.workspace }}/csharp/
+
+  test_golang:
+    name: Test Golang
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        persist-credentials: false
+        ref: 'main-dev'
+    - run: git submodule update --init --recursive
+
+    - name: Prepare environment
+      run: |
+        sudo apt update && 
+        sudo apt install -y cmake g++-12 build-essential libjemalloc-dev
+          
+    - name: Build library
+      run: |
+        cd golang/
+        export CC=/usr/bin/gcc-12
+        export CXX=/usr/bin/g++-12
+        make -C ../c libusearch_c.so
+        sudo mv ../c/libusearch_c.so /usr/local/lib/libusearch.a
+        sudo mv ../c/usearch.h /usr/local/include/usearch.h
+
+    - name: Run test
+      run: |
+        cd golang
+        go test -v
+        
 
   build_docker:
     name: Test Docker Image

@@ -39,8 +39,8 @@ Linux • MacOS • Windows • iOS • Docker • WebAssembly
 <a href="https://pypi.org/project/usearch/"> <img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/usearch?label=pypi%20downloads"> </a>
 <a href="https://www.npmjs.com/package/usearch"> <img alt="npm" src="https://img.shields.io/npm/dy/usearch?label=npm%20dowloads"> </a>
 <a href="https://crates.io/crates/usearch"> <img alt="Crates.io" src="https://img.shields.io/crates/d/usearch?label=crate%20downloads"> </a>
-<a href="https://www.nuget.org/packages/Cloud.Unum.USearch"> <img alt="Nuget" src="https://img.shields.io/nuget/dt/Cloud.Unum.USearch?style=social&label=NuGet"> </a>
-<a href="https://hub.docker.com/r/unum/usearch"> <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/unum/usearch?style=social&label=Docker"> </a>
+<a href="https://www.nuget.org/packages/Cloud.Unum.USearch"> <img alt="Nuget" src="https://img.shields.io/nuget/dt/Cloud.Unum.USearch?label=NuGet"> </a>
+<a href="https://hub.docker.com/r/unum/usearch"> <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/unum/usearch?label=Docker"> </a>
 <img alt="GitHub code size in bytes" src="https://img.shields.io/github/languages/code-size/unum-cloud/usearch">
 </div>
 
@@ -83,7 +83,7 @@ USearch is compact and broadly compatible without sacrificing performance, with 
 Base functionality is identical to FAISS, and the interface must be familiar if you have ever investigated Approximate Nearest Neighbors search:
 
 ```py
-$ pip install usearch numpy
+$ pip install usearch
 
 import numpy as np
 from usearch.index import Index
@@ -392,7 +392,7 @@ doi = {10.5281/zenodo.7949416},
 author = {Vardanian, Ash},
 title = {{USearch by Unum Cloud}},
 url = {https://github.com/unum-cloud/usearch},
-version = {1.0.0},
+version = {2.3.2},
 year = {2022},
 month = jun,
 }

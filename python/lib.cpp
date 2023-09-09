@@ -21,6 +21,7 @@
 
 #define _CRT_SECURE_NO_WARNINGS
 #define PY_SSIZE_T_CLEAN
+#include <pybind11/functional.h>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -54,6 +55,18 @@ using dense_search_result_t = typename index_dense_t::search_result_t;
 using dense_labeling_result_t = typename index_dense_t::labeling_result_t;
 using dense_cluster_result_t = typename index_dense_t::cluster_result_t;
 using dense_clustering_result_t = typename index_dense_t::clustering_result_t;
+
+using progress_func_t = std::function<bool(std::size_t /*processed*/, std::size_t /*total*/)>;
+
+struct progress_t {
+    inline progress_t(progress_func_t const& func) : func_(func ? func : &dummy_progress) {}
+    inline bool operator()(std::size_t processed, std::size_t total) const noexcept { return func_(processed, total); }
+
+  private:
+    static inline bool dummy_progress(std::size_t /*processed*/, std::size_t /*total*/) { return true; }
+
+    progress_func_t func_;
+};
 
 struct dense_index_py_t : public index_dense_t {
     using native_t = index_dense_t;
@@ -164,10 +177,12 @@ static dense_index_py_t make_index(      //
     metric_kind_t metric_kind,           //
     metric_signature_t metric_signature, //
     std::uintptr_t metric_uintptr,       //
-    bool multi) {
+    bool multi,                          //
+    bool enable_key_lookups) {
 
     index_dense_config_t config(connectivity, expansion_add, expansion_search);
     config.multi = multi;
+    config.enable_key_lookups = enable_key_lookups;
 
     metric_t metric =  //
         metric_uintptr //
@@ -208,12 +223,17 @@ template <typename scalar_at>
 static void add_typed_to_index(                                            //
     dense_index_py_t& index,                                               //
     py::buffer_info const& keys_info, py::buffer_info const& vectors_info, //
-    bool force_copy, std::size_t threads) {
+    bool force_copy, std::size_t threads,                                  //
+    progress_func_t const& progress) {
 
     Py_ssize_t vectors_count = vectors_info.shape[0];
     byte_t const* vectors_data = reinterpret_cast<byte_t const*>(vectors_info.ptr);
     byte_t const* keys_data = reinterpret_cast<byte_t const*>(keys_info.ptr);
     atomic_error_t atomic_error{nullptr};
+
+    // Progress status
+    progress_t progress_{progress};
+    std::atomic<std::size_t> processed{0};
 
     executor_default_t{threads}.dynamic(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
         dense_key_t key = *reinterpret_cast<dense_key_t const*>(keys_data + task_idx * keys_info.strides[0]);
@@ -225,11 +245,17 @@ static void add_typed_to_index(                                            //
         }
 
         // We don't want to check for signals from multiple threads
+        ++processed;
         if (thread_idx == 0)
-            if (PyErr_CheckSignals() != 0)
+            if (PyErr_CheckSignals() != 0 || !progress_(processed.load(), vectors_count)) {
+                atomic_error.store("Operation has been terminated");
                 return false;
+            }
         return true;
     });
+
+    // At the end report the latest numbers, because the reporter thread may be finished earlier
+    progress_(processed.load(), vectors_count);
 
     // Raise the error from a single thread
     auto error = atomic_error.load();
@@ -242,7 +268,8 @@ static void add_typed_to_index(                                            //
 template <typename index_at>
 static void add_many_to_index(                            //
     index_at& index, py::buffer keys, py::buffer vectors, //
-    bool force_copy, std::size_t threads) {
+    bool force_copy, std::size_t threads,                 //
+    progress_func_t const& progress) {
 
     py::buffer_info keys_info = keys.request();
     py::buffer_info vectors_info = vectors.request();
@@ -272,11 +299,11 @@ static void add_many_to_index(                            //
 
     // clang-format off
     switch (numpy_string_to_kind(vectors_info.format)) {
-    case scalar_kind_t::b1x8_k: add_typed_to_index<b1x8_t>(index, keys_info, vectors_info, force_copy, threads); break;
-    case scalar_kind_t::i8_k: add_typed_to_index<i8_t>(index, keys_info, vectors_info, force_copy, threads); break;
-    case scalar_kind_t::f16_k: add_typed_to_index<f16_t>(index, keys_info, vectors_info, force_copy, threads); break;
-    case scalar_kind_t::f32_k: add_typed_to_index<f32_t>(index, keys_info, vectors_info, force_copy, threads); break;
-    case scalar_kind_t::f64_k: add_typed_to_index<f64_t>(index, keys_info, vectors_info, force_copy, threads); break;
+    case scalar_kind_t::b1x8_k: add_typed_to_index<b1x8_t>(index, keys_info, vectors_info, force_copy, threads, progress); break;
+    case scalar_kind_t::i8_k: add_typed_to_index<i8_t>(index, keys_info, vectors_info, force_copy, threads, progress); break;
+    case scalar_kind_t::f16_k: add_typed_to_index<f16_t>(index, keys_info, vectors_info, force_copy, threads, progress); break;
+    case scalar_kind_t::f32_k: add_typed_to_index<f32_t>(index, keys_info, vectors_info, force_copy, threads, progress); break;
+    case scalar_kind_t::f64_k: add_typed_to_index<f64_t>(index, keys_info, vectors_info, force_copy, threads, progress); break;
     default: throw std::invalid_argument("Incompatible scalars in the vectors matrix: " + vectors_info.format);
     }
     // clang-format on
@@ -287,7 +314,8 @@ static void search_typed(                                   //
     dense_index_py_t& index, py::buffer_info& vectors_info, //
     std::size_t wanted, bool exact, std::size_t threads,    //
     py::array_t<dense_key_t>& keys_py, py::array_t<distance_t>& distances_py, py::array_t<Py_ssize_t>& counts_py,
-    std::atomic<std::size_t>& stats_visited_members, std::atomic<std::size_t>& stats_computed_distances) {
+    std::atomic<std::size_t>& stats_visited_members, std::atomic<std::size_t>& stats_computed_distances,
+    progress_func_t const& progress) {
 
     auto keys_py2d = keys_py.template mutable_unchecked<2>();
     auto distances_py2d = distances_py.template mutable_unchecked<2>();
@@ -300,6 +328,10 @@ static void search_typed(                                   //
         threads = std::thread::hardware_concurrency();
     if (!index.reserve(index_limits_t(index.size(), threads)))
         throw std::invalid_argument("Out of memory!");
+
+    // Progress status
+    progress_t progress_{progress};
+    std::atomic<std::size_t> processed{0};
 
     atomic_error_t atomic_error{nullptr};
     executor_default_t{threads}.dynamic(vectors_count, [&](std::size_t thread_idx, std::size_t task_idx) {
@@ -317,11 +349,17 @@ static void search_typed(                                   //
         stats_computed_distances += result.computed_distances;
 
         // We don't want to check for signals from multiple threads
+        ++processed;
         if (thread_idx == 0)
-            if (PyErr_CheckSignals() != 0)
+            if (PyErr_CheckSignals() != 0 || !progress_(processed.load(), vectors_count)) {
+                atomic_error.store("Operation has been terminated");
                 return false;
+            }
         return true;
     });
+
+    // At the end report the latest numbers, because the reporter thread may be finished earlier
+    progress_(processed.load(), vectors_count);
 
     // Raise the error from a single thread
     auto error = atomic_error.load();
@@ -336,7 +374,8 @@ static void search_typed(                                       //
     dense_indexes_py_t& indexes, py::buffer_info& vectors_info, //
     std::size_t wanted, bool exact, std::size_t threads,        //
     py::array_t<dense_key_t>& keys_py, py::array_t<distance_t>& distances_py, py::array_t<Py_ssize_t>& counts_py,
-    std::atomic<std::size_t>& stats_visited_members, std::atomic<std::size_t>& stats_computed_distances) {
+    std::atomic<std::size_t>& stats_visited_members, std::atomic<std::size_t>& stats_computed_distances,
+    progress_func_t const& progress) {
 
     auto keys_py2d = keys_py.template mutable_unchecked<2>();
     auto distances_py2d = distances_py.template mutable_unchecked<2>();
@@ -353,6 +392,10 @@ static void search_typed(                                       //
     bitset_t query_mutexes(static_cast<std::size_t>(vectors_count));
     if (!query_mutexes)
         throw std::bad_alloc();
+
+    // Progress status
+    progress_t progress_{progress};
+    std::atomic<std::size_t> processed{0};
 
     atomic_error_t atomic_error{nullptr};
     executor_default_t{threads}.dynamic(indexes.shards_.size(), [&](std::size_t thread_idx, std::size_t task_idx) {
@@ -388,12 +431,18 @@ static void search_typed(                                       //
             stats_computed_distances += result.computed_distances;
 
             // We don't want to check for signals from multiple threads
+            ++processed;
             if (thread_idx == 0)
-                if (PyErr_CheckSignals() != 0)
+                if (PyErr_CheckSignals() != 0 || !progress_(processed.load(), indexes.shards_.size())) {
+                    atomic_error.store("Operation has been terminated");
                     return false;
+                }
             return true;
         }
     });
+
+    // At the end report the latest numbers, because the reporter thread may be finished earlier
+    progress_(processed.load(), indexes.shards_.size());
 
     // Raise the error from a single thread
     auto error = atomic_error.load();
@@ -416,7 +465,8 @@ static void search_typed(                                       //
  */
 template <typename index_at>
 static py::tuple search_many_in_index( //
-    index_at& index, py::buffer vectors, std::size_t wanted, bool exact, std::size_t threads) {
+    index_at& index, py::buffer vectors, std::size_t wanted, bool exact, std::size_t threads,
+    progress_func_t const& progress) {
 
     if (wanted == 0)
         return py::tuple(5);
@@ -441,11 +491,11 @@ static py::tuple search_many_in_index( //
 
     // clang-format off
     switch (numpy_string_to_kind(vectors_info.format)) {
-    case scalar_kind_t::b1x8_k: search_typed<b1x8_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
-    case scalar_kind_t::i8_k: search_typed<i8_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
-    case scalar_kind_t::f16_k: search_typed<f16_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
-    case scalar_kind_t::f32_k: search_typed<f32_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
-    case scalar_kind_t::f64_k: search_typed<f64_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances); break;
+    case scalar_kind_t::b1x8_k: search_typed<b1x8_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances, progress); break;
+    case scalar_kind_t::i8_k: search_typed<i8_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances, progress); break;
+    case scalar_kind_t::f16_k: search_typed<f16_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances, progress); break;
+    case scalar_kind_t::f32_k: search_typed<f32_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances, progress); break;
+    case scalar_kind_t::f64_k: search_typed<f64_t>(index, vectors_info, wanted, exact, threads, keys_py, distances_py, counts_py, stats_visited_members, stats_computed_distances, progress); break;
     default: throw std::invalid_argument("Incompatible scalars in the query matrix: " + vectors_info.format);
     }
     // clang-format on
@@ -463,7 +513,8 @@ template <typename scalar_at>
 static void search_typed_brute_force(                                //
     py::buffer_info& dataset_info, py::buffer_info& queries_info,    //
     std::size_t wanted, std::size_t threads, metric_t const& metric, //
-    py::array_t<dense_key_t>& keys_py, py::array_t<distance_t>& distances_py, py::array_t<Py_ssize_t>& counts_py) {
+    py::array_t<dense_key_t>& keys_py, py::array_t<distance_t>& distances_py, py::array_t<Py_ssize_t>& counts_py,
+    progress_func_t const& progress) {
 
     auto keys_py2d = keys_py.template mutable_unchecked<2>();
     auto distances_py2d = distances_py.template mutable_unchecked<2>();
@@ -484,6 +535,10 @@ static void search_typed_brute_force(                                //
     bitset_t query_mutexes(static_cast<std::size_t>(queries_count));
     if (!query_mutexes)
         throw std::bad_alloc();
+
+    // Progress status
+    progress_t progress_{progress};
+    std::atomic<std::size_t> processed{0};
 
     executor_default_t{threads}.dynamic(tasks_count, [&](std::size_t thread_idx, std::size_t task_idx) {
         //
@@ -514,11 +569,15 @@ static void search_typed_brute_force(                                //
         }
 
         // We don't want to check for signals from multiple threads
+        ++processed;
         if (thread_idx == 0)
-            if (PyErr_CheckSignals() != 0)
+            if (PyErr_CheckSignals() != 0 || !progress_(processed.load(), tasks_count))
                 return false;
         return true;
     });
+
+    // At the end report the latest numbers, because the reporter thread may be finished earlier
+    progress_(processed.load(), tasks_count);
 }
 
 static py::tuple search_many_brute_force(    //
@@ -526,7 +585,8 @@ static py::tuple search_many_brute_force(    //
     std::size_t wanted, std::size_t threads, //
     metric_kind_t metric_kind,               //
     metric_signature_t metric_signature,     //
-    std::uintptr_t metric_uintptr) {
+    std::uintptr_t metric_uintptr,           //
+    progress_func_t const& progress) {
 
     if (wanted == 0)
         return py::tuple(5);
@@ -560,11 +620,11 @@ static py::tuple search_many_brute_force(    //
 
     // clang-format off
     switch (dataset_kind) {
-    case scalar_kind_t::b1x8_k: search_typed_brute_force<b1x8_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py); break;
-    case scalar_kind_t::i8_k: search_typed_brute_force<i8_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py); break;
-    case scalar_kind_t::f16_k: search_typed_brute_force<f16_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py); break;
-    case scalar_kind_t::f32_k: search_typed_brute_force<f32_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py); break;
-    case scalar_kind_t::f64_k: search_typed_brute_force<f64_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py); break;
+    case scalar_kind_t::b1x8_k: search_typed_brute_force<b1x8_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py, progress); break;
+    case scalar_kind_t::i8_k: search_typed_brute_force<i8_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py, progress); break;
+    case scalar_kind_t::f16_k: search_typed_brute_force<f16_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py, progress); break;
+    case scalar_kind_t::f32_k: search_typed_brute_force<f32_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py, progress); break;
+    case scalar_kind_t::f64_k: search_typed_brute_force<f64_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py, progress); break;
     default: throw std::invalid_argument("Incompatible vector types: " + dataset_info.format);
     }
     // clang-format on
@@ -603,7 +663,7 @@ template <typename scalar_at> struct rows_lookup_gt {
 template <typename index_at>
 static py::tuple cluster_vectors(        //
     index_at& index, py::buffer queries, //
-    std::size_t min_count, std::size_t max_count, std::size_t threads) {
+    std::size_t min_count, std::size_t max_count, std::size_t threads, progress_func_t const& progress) {
 
     if (index.limits().threads_search < threads)
         throw std::invalid_argument("Can't use that many threads!");
@@ -637,11 +697,11 @@ static py::tuple cluster_vectors(        //
 
     // clang-format off
     switch (numpy_string_to_kind(queries_info.format)) {
-    case scalar_kind_t::b1x8_k: cluster_result = index.cluster(queries_begin.as<b1x8_t const>(), queries_end.as<b1x8_t const>(), config, keys_ptr, distances_ptr, executor); break;
-    case scalar_kind_t::i8_k: cluster_result = index.cluster(queries_begin.as<i8_t const>(), queries_end.as<i8_t const>(), config, keys_ptr, distances_ptr, executor); break;
-    case scalar_kind_t::f16_k: cluster_result = index.cluster(queries_begin.as<f16_t const>(), queries_end.as<f16_t const>(), config, keys_ptr, distances_ptr, executor); break;
-    case scalar_kind_t::f32_k: cluster_result = index.cluster(queries_begin.as<f32_t const>(), queries_end.as<f32_t const>(), config, keys_ptr, distances_ptr, executor); break;
-    case scalar_kind_t::f64_k: cluster_result = index.cluster(queries_begin.as<f64_t const>(), queries_end.as<f64_t const>(), config, keys_ptr, distances_ptr, executor); break;
+    case scalar_kind_t::b1x8_k: cluster_result = index.cluster(queries_begin.as<b1x8_t const>(), queries_end.as<b1x8_t const>(), config, keys_ptr, distances_ptr, executor, progress_t{progress}); break;
+    case scalar_kind_t::i8_k: cluster_result = index.cluster(queries_begin.as<i8_t const>(), queries_end.as<i8_t const>(), config, keys_ptr, distances_ptr, executor, progress_t{progress}); break;
+    case scalar_kind_t::f16_k: cluster_result = index.cluster(queries_begin.as<f16_t const>(), queries_end.as<f16_t const>(), config, keys_ptr, distances_ptr, executor, progress_t{progress}); break;
+    case scalar_kind_t::f32_k: cluster_result = index.cluster(queries_begin.as<f32_t const>(), queries_end.as<f32_t const>(), config, keys_ptr, distances_ptr, executor, progress_t{progress}); break;
+    case scalar_kind_t::f64_k: cluster_result = index.cluster(queries_begin.as<f64_t const>(), queries_end.as<f64_t const>(), config, keys_ptr, distances_ptr, executor, progress_t{progress}); break;
     default: throw std::invalid_argument("Incompatible scalars in the query matrix: " + queries_info.format);
     }
     // clang-format on
@@ -677,7 +737,7 @@ static py::tuple cluster_vectors(        //
 template <typename index_at>
 static py::tuple cluster_keys(                            //
     index_at& index, py::array_t<dense_key_t> queries_py, //
-    std::size_t min_count, std::size_t max_count, std::size_t threads) {
+    std::size_t min_count, std::size_t max_count, std::size_t threads, progress_func_t const& progress) {
 
     if (index.limits().threads_search < threads)
         throw std::invalid_argument("Can't use that many threads!");
@@ -701,7 +761,7 @@ static py::tuple cluster_keys(                            //
     config.max_clusters = max_count;
 
     dense_clustering_result_t cluster_result =
-        index.cluster(queries_begin, queries_end, config, keys_ptr, distances_ptr, executor);
+        index.cluster(queries_begin, queries_end, config, keys_ptr, distances_ptr, executor, progress_t{progress});
     cluster_result.error.raise();
 
     // Those would be set to 1 for all entries, in case of success
@@ -721,7 +781,8 @@ static py::tuple cluster_keys(                            //
 
 static std::unordered_map<dense_key_t, dense_key_t> join_index( //
     dense_index_py_t const& a, dense_index_py_t const& b,       //
-    std::size_t max_proposals, bool exact) {
+    std::size_t max_proposals, bool exact,                      //
+    progress_func_t const& progress) {
 
     std::unordered_map<dense_key_t, dense_key_t> a_to_b;
     dummy_key_to_key_mapping_t b_to_a;
@@ -733,7 +794,7 @@ static std::unordered_map<dense_key_t, dense_key_t> join_index( //
     config.expansion = (std::max)(a.expansion_search(), b.expansion_search());
     std::size_t threads = (std::min)(a.limits().threads(), b.limits().threads());
     executor_default_t executor{threads};
-    join_result_t result = a.join(b, config, a_to_b, b_to_a, executor);
+    join_result_t result = a.join(b, config, a_to_b, b_to_a, executor, progress_t{progress});
     forward_error(result);
 
     return a_to_b;
@@ -749,14 +810,14 @@ static dense_index_py_t copy_index(dense_index_py_t const& index, bool force_cop
     return std::move(result.index);
 }
 
-static void compact_index(dense_index_py_t& index, std::size_t threads) {
+static void compact_index(dense_index_py_t& index, std::size_t threads, progress_func_t const& progress) {
 
     if (!threads)
         threads = std::thread::hardware_concurrency();
     if (!index.reserve(index_limits_t(index.size(), threads)))
         throw std::invalid_argument("Out of memory!");
 
-    index.compact(executor_default_t{threads});
+    index.compact(executor_default_t{threads}, progress_t{progress});
 }
 
 static py::dict index_metadata(index_dense_metadata_result_t const& meta) {
@@ -782,9 +843,9 @@ static py::dict index_metadata(index_dense_metadata_result_t const& meta) {
 }
 
 // clang-format off
-template <typename index_at> void save_index_to_path(index_at const& index, std::string const& path) { index.save(path.c_str()).error.raise(); }
-template <typename index_at> void load_index_from_path(index_at& index, std::string const& path) { index.load(path.c_str()).error.raise(); }
-template <typename index_at> void view_index_from_path(index_at& index, std::string const& path) { index.view(path.c_str()).error.raise(); }
+template <typename index_at> void save_index_to_path(index_at const& index, std::string const& path, progress_func_t const& progress) { index.save(path.c_str(), {}, progress_t{progress}).error.raise(); }
+template <typename index_at> void load_index_from_path(index_at& index, std::string const& path, progress_func_t const& progress) { index.load(path.c_str(), {}, progress_t{progress}).error.raise(); }
+template <typename index_at> void view_index_from_path(index_at& index, std::string const& path, progress_func_t const& progress) { index.view(path.c_str(), 0, {}, progress_t{progress}).error.raise(); }
 template <typename index_at> void reset_index(index_at& index) { index.reset(); }
 template <typename index_at> void clear_index(index_at& index) { index.clear(); }
 template <typename index_at> std::size_t max_level(index_at const &index) { return index.max_level(); }
@@ -798,7 +859,7 @@ template <typename py_bytes_at> memory_mapped_file_t memory_map_from_bytes(py_by
     return {(byte_t*)(info.ptr), static_cast<std::size_t>(info.size)};
 }
 
-template <typename index_at> py::object save_index_to_buffer(index_at const& index) {
+template <typename index_at> py::object save_index_to_buffer(index_at const& index, progress_func_t const& progress) {
     std::size_t serialized_length = index.serialized_length();
 
     // Create an empty bytearray object using CPython API
@@ -814,7 +875,7 @@ template <typename index_at> py::object save_index_to_buffer(index_at const& ind
 
     char* buffer = PyByteArray_AS_STRING(byte_array);
     memory_mapped_file_t memory_map((byte_t*)buffer, serialized_length);
-    serialization_result_t result = index.save(std::move(memory_map));
+    serialization_result_t result = index.save(std::move(memory_map), {}, {}, progress_t{progress});
 
     if (!result) {
         Py_XDECREF(byte_array);
@@ -824,11 +885,13 @@ template <typename index_at> py::object save_index_to_buffer(index_at const& ind
     return py::reinterpret_steal<py::object>(byte_array);
 }
 
-template <typename index_at> void load_index_from_buffer(index_at& index, py::bytes const& buffer) {
-    index.load(memory_map_from_bytes(buffer)).error.raise();
+template <typename index_at>
+void load_index_from_buffer(index_at& index, py::bytes const& buffer, progress_func_t const& progress) {
+    index.load(memory_map_from_bytes(buffer), {}, {}, progress_t{progress}).error.raise();
 }
-template <typename index_at> void view_index_from_buffer(index_at& index, py::bytes const& buffer) {
-    index.view(memory_map_from_bytes(buffer)).error.raise();
+template <typename index_at>
+void view_index_from_buffer(index_at& index, py::bytes const& buffer, progress_func_t const& progress) {
+    index.view(memory_map_from_bytes(buffer), {}, {}, progress_t{progress}).error.raise();
 }
 
 template <typename index_at> std::vector<typename index_at::stats_t> compute_levels_stats(index_at const& index) {
@@ -954,7 +1017,19 @@ PYBIND11_MODULE(compiled, m) {
           py::arg("threads") = 0,                                          //
           py::arg("metric_kind") = metric_kind_t::cos_k,                   //
           py::arg("metric_signature") = metric_signature_t::array_array_k, //
-          py::arg("metric_pointer") = 0                                    //
+          py::arg("metric_pointer") = 0,                                   //
+          py::arg("progress") = nullptr                                    //
+    );
+
+    m.def(
+        "hardware_acceleration",
+        [](scalar_kind_t scalar_kind, std::size_t dimensions, metric_kind_t metric_kind) -> py::str {
+            return isa_name(metric_t(dimensions, metric_kind, scalar_kind).isa_kind());
+        },
+        py::kw_only(),                                //
+        py::arg("dtype") = scalar_kind_t::f32_k,      //
+        py::arg("ndim") = 0,                          //
+        py::arg("metric_kind") = metric_kind_t::cos_k //
     );
 
     auto i = py::class_<dense_index_py_t, std::shared_ptr<dense_index_py_t>>(m, "Index");
@@ -969,7 +1044,8 @@ PYBIND11_MODULE(compiled, m) {
           py::arg("metric_kind") = metric_kind_t::cos_k,                   //
           py::arg("metric_signature") = metric_signature_t::array_array_k, //
           py::arg("metric_pointer") = 0,                                   //
-          py::arg("multi") = false                                         //
+          py::arg("multi") = false,                                        //
+          py::arg("enable_key_lookups") = true                             //
     );
 
     i.def(                                                //
@@ -978,7 +1054,8 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("vectors"),                               //
         py::kw_only(),                                    //
         py::arg("copy") = true,                           //
-        py::arg("threads") = 0                            //
+        py::arg("threads") = 0,                           //
+        py::arg("progress") = nullptr                     //
     );
 
     i.def(                                                      //
@@ -986,7 +1063,8 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("queries"),                                     //
         py::arg("count") = 10,                                  //
         py::arg("exact") = false,                               //
-        py::arg("threads") = 0                                  //
+        py::arg("threads") = 0,                                 //
+        py::arg("progress") = nullptr                           //
     );
 
     i.def(                                                     //
@@ -994,7 +1072,8 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("queries"),                                    //
         py::arg("min_count") = 0,                              //
         py::arg("max_count") = 0,                              //
-        py::arg("threads") = 0                                 //
+        py::arg("threads") = 0,                                //
+        py::arg("progress") = nullptr                          //
     );
 
     i.def(                                               //
@@ -1002,7 +1081,8 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("queries"),                              //
         py::arg("min_count") = 0,                        //
         py::arg("max_count") = 0,                        //
-        py::arg("threads") = 0                           //
+        py::arg("threads") = 0,                          //
+        py::arg("progress") = nullptr                    //
     );
 
     i.def(
@@ -1194,19 +1274,24 @@ PYBIND11_MODULE(compiled, m) {
         },
         py::arg("offset"));
 
-    i.def("save_index_to_path", &save_index_to_path<dense_index_py_t>);
-    i.def("load_index_from_path", &load_index_from_path<dense_index_py_t>);
-    i.def("view_index_from_path", &view_index_from_path<dense_index_py_t>);
+    i.def("save_index_to_path", &save_index_to_path<dense_index_py_t>, py::arg("path"), py::arg("progress") = nullptr);
+    i.def("load_index_from_path", &load_index_from_path<dense_index_py_t>, py::arg("path"),
+          py::arg("progress") = nullptr);
+    i.def("view_index_from_path", &view_index_from_path<dense_index_py_t>, py::arg("path"),
+          py::arg("progress") = nullptr);
 
-    i.def("save_index_to_buffer", &save_index_to_buffer<dense_index_py_t>);
-    i.def("load_index_from_buffer", &load_index_from_buffer<dense_index_py_t>);
-    i.def("view_index_from_buffer", &view_index_from_buffer<dense_index_py_t>);
+    i.def("save_index_to_buffer", &save_index_to_buffer<dense_index_py_t>, py::arg("progress") = nullptr);
+    i.def("load_index_from_buffer", &load_index_from_buffer<dense_index_py_t>, py::arg("buffer"),
+          py::arg("progress") = nullptr);
+    i.def("view_index_from_buffer", &view_index_from_buffer<dense_index_py_t>, py::arg("buffer"),
+          py::arg("progress") = nullptr);
 
     i.def("reset", &reset_index<dense_index_py_t>);
     i.def("clear", &clear_index<dense_index_py_t>);
     i.def("copy", &copy_index, py::kw_only(), py::arg("copy") = true);
-    i.def("compact", &compact_index);
-    i.def("join", &join_index, py::arg("other"), py::arg("max_proposals") = 0, py::arg("exact") = false);
+    i.def("compact", &compact_index, py::arg("threads"), py::arg("progress") = nullptr);
+    i.def("join", &join_index, py::arg("other"), py::arg("max_proposals") = 0, py::arg("exact") = false,
+          py::arg("progress") = nullptr);
 
     using punned_index_stats_t = typename dense_index_py_t::stats_t;
     auto i_stats = py::class_<punned_index_stats_t>(m, "IndexStats");
@@ -1231,6 +1316,7 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("query"),                                         //
         py::arg("count") = 10,                                    //
         py::arg("exact") = false,                                 //
-        py::arg("threads") = 0                                    //
+        py::arg("threads") = 0,                                   //
+        py::arg("progress") = nullptr                             //
     );
 }

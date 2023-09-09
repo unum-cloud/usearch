@@ -24,6 +24,7 @@ Overview
 
    compilation
    benchmarks
+   format
 
 .. toctree:: 
    :hidden:

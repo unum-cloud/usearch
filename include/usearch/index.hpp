@@ -9,9 +9,9 @@
 #ifndef UNUM_USEARCH_HPP
 #define UNUM_USEARCH_HPP
 
-#define USEARCH_VERSION_MAJOR 0
-#define USEARCH_VERSION_MINOR 0
-#define USEARCH_VERSION_PATCH 0
+#define USEARCH_VERSION_MAJOR 2
+#define USEARCH_VERSION_MINOR 3
+#define USEARCH_VERSION_PATCH 2
 
 // Inferring C++ version
 // https://stackoverflow.com/a/61552074
@@ -1212,9 +1212,10 @@ struct dummy_callback_t {
  *
  *  This is particularly helpful when handling long-running tasks, like serialization,
  *  saving, and loading from disk, or index-level joins.
+ *  The reporter checks return value to continue or stop the process, `false` means need to stop.
  */
 struct dummy_progress_t {
-    inline void operator()(std::size_t, std::size_t) const noexcept {}
+    inline bool operator()(std::size_t /*processed*/, std::size_t /*total*/) const noexcept { return true; }
 };
 
 /**
@@ -1272,7 +1273,7 @@ struct dummy_executor_t {
  *  @brief  An example of what a USearch-compatible key-to-key mapping should look like.
  *
  *  This is particularly helpful for "Semantic Joins", where we map entries of one collection
- *  to entries of another. In assymetric setups, where A -> B is needed, but B -> A is not,
+ *  to entries of another. In asymmetric setups, where A -> B is needed, but B -> A is not,
  *  this can be passed to minimize memory usage.
  */
 struct dummy_key_to_key_mapping_t {
@@ -1284,16 +1285,16 @@ struct dummy_key_to_key_mapping_t {
 
 /**
  *  @brief  Checks if the provided object has a dummy type, emulating an interface,
- *          but performaing no real computation.
+ *          but performing no real computation.
  */
 template <typename object_at> static constexpr bool is_dummy() {
     using object_t = typename std::remove_all_extents<object_at>::type;
-    return std::is_same<object_t, dummy_predicate_t>::value || //
-           std::is_same<object_t, dummy_callback_t>::value ||  //
-           std::is_same<object_t, dummy_progress_t>::value ||  //
-           std::is_same<object_t, dummy_prefetch_t>::value ||  //
-           std::is_same<object_t, dummy_executor_t>::value ||  //
-           std::is_same<object_t, dummy_key_to_key_mapping_t>::value;
+    return std::is_same<typename std::decay<object_t>::type, dummy_predicate_t>::value || //
+           std::is_same<typename std::decay<object_t>::type, dummy_callback_t>::value ||  //
+           std::is_same<typename std::decay<object_t>::type, dummy_progress_t>::value ||  //
+           std::is_same<typename std::decay<object_t>::type, dummy_prefetch_t>::value ||  //
+           std::is_same<typename std::decay<object_t>::type, dummy_executor_t>::value ||  //
+           std::is_same<typename std::decay<object_t>::type, dummy_key_to_key_mapping_t>::value;
 }
 
 template <typename, typename at> struct has_reset_gt {
@@ -1361,7 +1362,7 @@ class output_file_t {
         serialization_result_t result;
         std::size_t written = std::fwrite(begin, length, 1, file_);
         if (!written)
-            result.failed(std::strerror(errno));
+            return result.failed(std::strerror(errno));
         return result;
     }
     void close() noexcept {
@@ -1403,7 +1404,7 @@ class input_file_t {
         serialization_result_t result;
         std::size_t read = std::fread(begin, length, 1, file_);
         if (!read)
-            result.failed(std::feof(file_) ? "End of file reached!" : std::strerror(errno));
+            return result.failed(std::feof(file_) ? "End of file reached!" : std::strerror(errno));
         return result;
     }
     void close() noexcept {
@@ -2504,7 +2505,7 @@ class index_gt {
     }
 
     /**
-     *  @brief Identifies the closest cluster to the gived ::query. Thread-safe.
+     *  @brief Identifies the closest cluster to the given ::query. Thread-safe.
      *
      *  @param[in] query Content that will be compared against other entries in the index.
      *  @param[in] level The index level to target. Higher means lower resolution.
@@ -2690,6 +2691,10 @@ class index_gt {
         if (!output(&header, sizeof(header)))
             return result.failed("Failed to serialize the header into stream");
 
+        // Progress status
+        std::size_t processed = 0;
+        std::size_t const total = 2 * header.size;
+
         // Export the number of levels per node
         // That is both enough to estimate the overall memory consumption,
         // and to be able to estimate the offsets of every entry in the file.
@@ -2697,15 +2702,18 @@ class index_gt {
             node_t node = node_at_(i);
             level_t level = node.level();
             if (!output(&level, sizeof(level)))
-                return result.failed("Failed to serialize nodes levels into stream");
+                return result.failed("Failed to serialize into stream");
+            if (!progress(++processed, total))
+                return result.failed("Terminated by user");
         }
 
         // After that dump the nodes themselves
         for (std::size_t i = 0; i != header.size; ++i) {
             span_bytes_t node_bytes = node_bytes_(node_at_(i));
             if (!output(node_bytes.data(), node_bytes.size()))
-                return result.failed("Failed to serialize nodes into stream");
-            progress(i, header.size);
+                return result.failed("Failed to serialize into stream");
+            if (!progress(++processed, total))
+                return result.failed("Terminated by user");
         }
 
         return {};
@@ -2763,7 +2771,8 @@ class index_gt {
                 return result.failed("Failed to pull nodes from the stream");
             }
             nodes_[i] = node_t{node_bytes.data()};
-            progress(i, header.size);
+            if (!progress(i + 1, header.size))
+                return result.failed("Terminated by user");
         }
         return {};
     }
@@ -2936,7 +2945,8 @@ class index_gt {
         // Rapidly address all the nodes
         for (std::size_t i = 0; i != header.size; ++i) {
             nodes_[i] = node_t{(byte_t*)file.data() + offsets[i]};
-            progress(i, header.size);
+            if (!progress(i + 1, header.size))
+                return result.failed("Terminated by user");
         }
         viewed_file_ = std::move(file);
         return {};
@@ -2986,8 +2996,13 @@ class index_gt {
         using slot_level_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<slot_level_t>;
         buffer_gt<slot_level_t, slot_level_allocator_t> slots_and_levels(size());
 
+        // Progress status
+        std::atomic<bool> do_tasks{true};
+        std::atomic<std::size_t> processed{0};
+        std::size_t const total = 3 * slots_and_levels.size();
+
         // For every bottom level node, determine its parent cluster
-        executor.fixed(slots_and_levels.size(), [&](std::size_t thread_idx, std::size_t old_slot) {
+        executor.dynamic(slots_and_levels.size(), [&](std::size_t thread_idx, std::size_t old_slot) {
             context_t& context = contexts_[thread_idx];
             std::size_t cluster = search_for_one_( //
                 values[citerator_at(old_slot)],    //
@@ -2997,7 +3012,13 @@ class index_gt {
                                           static_cast<compressed_slot_t>(old_slot), //
                                           static_cast<compressed_slot_t>(cluster),  //
                                           node_at_(old_slot).level()};
+            ++processed;
+            if (thread_idx == 0)
+                do_tasks = progress(processed.load(), total);
+            return do_tasks.load();
         });
+        if (!do_tasks.load())
+            return;
 
         // Where the actual permutation happens:
         std::sort(slots_and_levels.begin(), slots_and_levels.end(), [](slot_level_t const& a, slot_level_t const& b) {
@@ -3027,8 +3048,8 @@ class index_gt {
                     neighbor = static_cast<compressed_slot_t>(old_slot_to_new[compressed_slot_t(neighbor)]);
 
             reordered_nodes[new_slot] = new_node;
-
-            progress(new_slot, slots_and_levels.size());
+            if (!progress(++processed, total))
+                return;
         }
 
         for (std::size_t new_slot = 0; new_slot != slots_and_levels.size(); ++new_slot) {
@@ -3036,6 +3057,8 @@ class index_gt {
             slot_transition(node_at_(old_slot).ckey(),                //
                             static_cast<compressed_slot_t>(old_slot), //
                             static_cast<compressed_slot_t>(new_slot));
+            if (!progress(++processed, total))
+                return;
         }
 
         nodes_ = std::move(reordered_nodes);
@@ -3064,9 +3087,13 @@ class index_gt {
         executor_at&& executor = executor_at{}, //
         progress_at&& progress = progress_at{}) noexcept {
 
+        // Progress status
+        std::atomic<bool> do_tasks{true};
+        std::atomic<std::size_t> processed{0};
+
         // Erase all the incoming links
         std::size_t nodes_count = size();
-        executor.fixed(nodes_count, [&](std::size_t, std::size_t node_idx) {
+        executor.dynamic(nodes_count, [&](std::size_t thread_idx, std::size_t node_idx) {
             node_t node = node_at_(node_idx);
             for (level_t level = 0; level <= node.level(); ++level) {
                 neighbors_ref_t neighbors = neighbors_(node, level);
@@ -3079,8 +3106,14 @@ class index_gt {
                         neighbors.push_back(neighbor_slot);
                 }
             }
-            progress(node_idx, nodes_count);
+            ++processed;
+            if (thread_idx == 0)
+                do_tasks = progress(processed.load(), nodes_count);
+            return do_tasks.load();
         });
+
+        // At the end report the latest numbers, because the reporter thread may be finished earlier
+        progress(processed.load(), nodes_count);
     }
 
   private:
@@ -3327,7 +3360,7 @@ class index_gt {
         visits.clear();
 
         // Optional prefetching
-        if (!std::is_same<prefetch_at, dummy_prefetch_t>::value)
+        if (!std::is_same<typename std::decay<prefetch_at>::type, dummy_prefetch_t>::value)
             prefetch(citerator_at(closest_slot), citerator_at(closest_slot + 1));
 
         distance_t closest_dist = context.measure(query, citerator_at(closest_slot), metric);
@@ -3339,7 +3372,7 @@ class index_gt {
                 neighbors_ref_t closest_neighbors = neighbors_non_base_(node_at_(closest_slot), level);
 
                 // Optional prefetching
-                if (!std::is_same<prefetch_at, dummy_prefetch_t>::value) {
+                if (!std::is_same<typename std::decay<prefetch_at>::type, dummy_prefetch_t>::value) {
                     candidates_range_t missing_candidates{*this, closest_neighbors, visits};
                     prefetch(missing_candidates.begin(), missing_candidates.end());
                 }
@@ -3381,7 +3414,7 @@ class index_gt {
             return false;
 
         // Optional prefetching
-        if (!std::is_same<prefetch_at, dummy_prefetch_t>::value)
+        if (!std::is_same<typename std::decay<prefetch_at>::type, dummy_prefetch_t>::value)
             prefetch(citerator_at(start_slot), citerator_at(start_slot + 1));
 
         distance_t radius = context.measure(query, citerator_at(start_slot), metric);
@@ -3406,7 +3439,7 @@ class index_gt {
             neighbors_ref_t candidate_neighbors = neighbors_(candidate_ref, level);
 
             // Optional prefetching
-            if (!std::is_same<prefetch_at, dummy_prefetch_t>::value) {
+            if (!std::is_same<typename std::decay<prefetch_at>::type, dummy_prefetch_t>::value) {
                 candidates_range_t missing_candidates{*this, candidate_neighbors, visits};
                 prefetch(missing_candidates.begin(), missing_candidates.end());
             }
@@ -3455,7 +3488,7 @@ class index_gt {
             return false;
 
         // Optional prefetching
-        if (!std::is_same<prefetch_at, dummy_prefetch_t>::value)
+        if (!std::is_same<typename std::decay<prefetch_at>::type, dummy_prefetch_t>::value)
             prefetch(citerator_at(start_slot), citerator_at(start_slot + 1));
 
         distance_t radius = context.measure(query, citerator_at(start_slot), metric);
@@ -3475,7 +3508,7 @@ class index_gt {
             neighbors_ref_t candidate_neighbors = neighbors_base_(node_at_(candidate.slot));
 
             // Optional prefetching
-            if (!std::is_same<prefetch_at, dummy_prefetch_t>::value) {
+            if (!std::is_same<typename std::decay<prefetch_at>::type, dummy_prefetch_t>::value) {
                 candidates_range_t missing_candidates{*this, candidate_neighbors, visits};
                 prefetch(missing_candidates.begin(), missing_candidates.end());
             }
@@ -3710,7 +3743,10 @@ static join_result_t join(               //
                 passed_rounds = ++rounds;
                 total_rounds = passed_rounds + free_men.size();
             }
-            progress(passed_rounds, total_rounds);
+            if (thread_idx == 0 && !progress(passed_rounds, total_rounds)) {
+                atomic_error.store("Terminated by user");
+                break;
+            }
             while (men_locks.atomic_set(free_man_slot))
                 ;
 
