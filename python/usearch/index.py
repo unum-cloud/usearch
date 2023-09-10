@@ -476,6 +476,7 @@ class Index:
         multi: bool = False,
         path: Optional[os.PathLike] = None,
         view: bool = False,
+        enable_key_lookups: bool = True,
     ) -> None:
         """Construct the index and compiles the functions, if requested (expensive).
 
@@ -565,6 +566,7 @@ class Index:
             expansion_add=expansion_add,
             expansion_search=expansion_search,
             multi=multi,
+            enable_key_lookups=enable_key_lookups,
             metric_kind=self._metric_kind,
             metric_pointer=self._metric_pointer,
             metric_signature=self._metric_signature,
@@ -986,6 +988,8 @@ class Index:
 
     def reset(self):
         """Erases all members from index, closing files, and returning RAM to OS."""
+        if not hasattr(self, "_compiled"):
+            return
         self._compiled.reset()
 
     def __del__(self):
@@ -1175,23 +1179,28 @@ class Index:
 
     @property
     def specs(self) -> Dict[str, Union[str, int, bool]]:
+        if not hasattr(self, "_compiled"):
+            return "usearch.Index(failed)"
         return {
-            "Class": "usearch.Index",
-            "Connectivity": self.connectivity,
-            "Size": self.size,
-            "Dimensions": self.ndim,
-            "Expansion@Add": self.expansion_add,
-            "Expansion@Search": self.expansion_search,
-            "OpenMP": USES_OPENMP,
-            "SimSIMD": USES_SIMSIMD,
-            "NativeF16": USES_NATIVE_F16,
-            "JIT": self.jit,
-            "DType": self.dtype,
-            "Path": self.path,
+            "type": "usearch.Index",
+            "ndim": self.ndim,
+            "connectivity": self.connectivity,
+            "expansion_add": self.expansion_add,
+            "expansion_search": self.expansion_search,
+            "size": self.size,
+            "jit": self.jit,
+            "hardware_acceleration": self.hardware_acceleration,
+            "dtype": self.dtype,
+            "path": self.path,
+            "compiled_with_openmp": USES_OPENMP,
+            "compiled_with_simsimd": USES_SIMSIMD,
+            "compiled_with_native_f16": USES_NATIVE_F16,
         }
 
     def __repr__(self) -> str:
-        f = "usearch.Index({} x {}, {}, connectivity: {}, expansion: {} & {}, {} vectors in {} levels)"
+        if not hasattr(self, "_compiled"):
+            return "usearch.Index(failed)"
+        f = "usearch.Index({} x {}, {}, connectivity: {}, expansion: {} & {}, {:,} vectors in {} levels, {} hardware accerlation)"
         return f.format(
             self.dtype,
             self.ndim,
@@ -1201,9 +1210,12 @@ class Index:
             self.expansion_search,
             len(self),
             self.nlevels,
+            self.hardware_acceleration,
         )
 
     def _repr_pretty_(self, printer, cycle) -> str:
+        if not hasattr(self, "_compiled"):
+            return "usearch.Index(failed)"
         level_stats = [
             f"--- {i}. {self.level_stats(i).nodes:,} nodes" for i in range(self.nlevels)
         ]

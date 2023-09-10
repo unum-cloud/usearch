@@ -649,7 +649,9 @@ class aligned_allocator_gt {
     using size_type = std::size_t;
     using pointer = element_at*;
     using const_pointer = element_at const*;
-    template <typename other_element_at> struct rebind { using other = aligned_allocator_gt<other_element_at>; };
+    template <typename other_element_at> struct rebind {
+        using other = aligned_allocator_gt<other_element_at>;
+    };
 
     constexpr std::size_t alignment() const { return alignment_ak; }
 
@@ -1315,17 +1317,16 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct met
         result_t lat_a = a[0], lon_a = a[1];
         result_t lat_b = b[0], lon_b = b[1];
 
-        result_t lat_delta = angle_to_radians<result_t>(lat_b - lat_a);
-        result_t lon_delta = angle_to_radians<result_t>(lon_b - lon_a);
+        result_t lat_delta = angle_to_radians<result_t>(lat_b - lat_a) / 2;
+        result_t lon_delta = angle_to_radians<result_t>(lon_b - lon_a) / 2;
 
         result_t converted_lat_a = angle_to_radians<result_t>(lat_a);
         result_t converted_lat_b = angle_to_radians<result_t>(lat_b);
 
-        result_t x = //
-            square(std::sin(lat_delta / 2.f)) +
-            std::cos(converted_lat_a) * std::cos(converted_lat_b) * square(std::sin(lon_delta / 2.f));
+        result_t x = square(std::sin(lat_delta)) + //
+                     std::cos(converted_lat_a) * std::cos(converted_lat_b) * square(std::sin(lon_delta));
 
-        return std::atan2(std::sqrt(x), std::sqrt(1.f - x));
+        return 2 * std::asin(std::sqrt(x));
     }
 };
 
@@ -1554,6 +1555,514 @@ class metric_punned_t {
         }
     }
     // clang-format on
+};
+
+/**
+ *  @brief  C++11 Multi-Hash-Set with Linear Probing.
+ *
+ *  - Allows multiple equivalent values,
+ *  - Supports transparent hashing and equality operator.
+ *  - Doesn't throw exceptions, if forbidden.
+ *  - Doesn't need reserving a value for deletions.
+ *
+ *  @section Layout
+ *
+ *  For every slot we store 2 extra bits for 3 possible states: empty, populated, or deleted.
+ */
+template <typename element_at, typename hash_at, typename equals_at, typename allocator_at = std::allocator<char>>
+class flat_hash_multi_set_gt {
+  public:
+    using element_t = element_at;
+    using hash_t = hash_at;
+    using equals_t = equals_at;
+    using allocator_t = allocator_at;
+
+    static constexpr std::size_t slots_per_bucket() { return 64; }
+    static constexpr std::size_t bytes_per_bucket() {
+        return slots_per_bucket() * sizeof(element_t) + sizeof(bucket_header_t);
+    }
+
+  private:
+    struct bucket_header_t {
+        std::uint64_t populated{};
+        std::uint64_t deleted{};
+    };
+    char* data_ = nullptr;
+    std::size_t buckets_ = 0;
+    std::size_t populated_slots_ = 0;
+    /// @brief  Number of slots
+    std::size_t capacity_slots_ = 0;
+
+    struct slot_ref_t {
+        bucket_header_t& header;
+        std::uint64_t mask;
+        element_t& element;
+    };
+
+    slot_ref_t slot_ref(char* data, std::size_t slot_index) const noexcept {
+        std::size_t bucket_index = slot_index / slots_per_bucket();
+        std::size_t in_bucket_index = slot_index % slots_per_bucket();
+        auto bucket_pointer = data + bytes_per_bucket() * bucket_index;
+        auto slot_pointer = bucket_pointer + sizeof(bucket_header_t) + sizeof(element_t) * in_bucket_index;
+        return {
+            *reinterpret_cast<bucket_header_t*>(bucket_pointer),
+            std::uint64_t(1ull) << in_bucket_index,
+            *reinterpret_cast<element_t*>(slot_pointer),
+        };
+    }
+
+    slot_ref_t slot_ref(std::size_t slot_index) const noexcept { return slot_ref(data_, slot_index); }
+
+    bool populate_slot(slot_ref_t slot, element_t const& new_element) {
+        if (slot.header.populated & slot.mask) {
+            slot.element = new_element;
+            slot.header.deleted &= ~slot.mask;
+            return false;
+        } else {
+            new (&slot.element) element_t(new_element);
+            slot.header.populated |= slot.mask;
+            return true;
+        }
+    }
+
+  public:
+    std::size_t size() const noexcept { return populated_slots_; }
+    std::size_t capacity() const noexcept { return capacity_slots_; }
+
+    flat_hash_multi_set_gt() noexcept {}
+    ~flat_hash_multi_set_gt() noexcept { reset(); }
+
+    flat_hash_multi_set_gt(flat_hash_multi_set_gt const& other) {
+
+        // On Windows allocating a zero-size array would fail
+        if (!other.buckets_) {
+            reset();
+            return;
+        }
+
+        // Allocate new memory
+        data_ = (char*)allocator_t{}.allocate(other.buckets_ * bytes_per_bucket());
+        if (!data_)
+            throw std::bad_alloc();
+
+        // Copy metadata
+        buckets_ = other.buckets_;
+        populated_slots_ = other.populated_slots_;
+        capacity_slots_ = other.capacity_slots_;
+
+        // Initialize new buckets to empty
+        std::memset(data_, 0, buckets_ * bytes_per_bucket());
+
+        // Copy elements and bucket headers
+        for (std::size_t i = 0; i < capacity_slots_; ++i) {
+            slot_ref_t old_slot = other.slot_ref(i);
+            if ((old_slot.header.populated & old_slot.mask) && !(old_slot.header.deleted & old_slot.mask)) {
+                slot_ref_t new_slot = slot_ref(i);
+                populate_slot(new_slot, old_slot.element);
+            }
+        }
+    }
+
+    flat_hash_multi_set_gt& operator=(flat_hash_multi_set_gt const& other) {
+
+        // On Windows allocating a zero-size array would fail
+        if (!other.buckets_) {
+            reset();
+            return *this;
+        }
+
+        // Handle self-assignment
+        if (this == &other)
+            return *this;
+
+        // Clear existing data
+        clear();
+        if (data_)
+            allocator_t{}.deallocate(data_, buckets_ * bytes_per_bucket());
+
+        // Allocate new memory
+        data_ = (char*)allocator_t{}.allocate(other.buckets_ * bytes_per_bucket());
+        if (!data_)
+            throw std::bad_alloc();
+
+        // Copy metadata
+        buckets_ = other.buckets_;
+        populated_slots_ = other.populated_slots_;
+        capacity_slots_ = other.capacity_slots_;
+
+        // Initialize new buckets to empty
+        std::memset(data_, 0, buckets_ * bytes_per_bucket());
+
+        // Copy elements and bucket headers
+        for (std::size_t i = 0; i < capacity_slots_; ++i) {
+            slot_ref_t old_slot = other.slot_ref(i);
+            if ((old_slot.header.populated & old_slot.mask) && !(old_slot.header.deleted & old_slot.mask)) {
+                slot_ref_t new_slot = slot_ref(i);
+                populate_slot(new_slot, old_slot.element);
+            }
+        }
+
+        return *this;
+    }
+
+    void clear() noexcept {
+        // Call the destructors
+        for (std::size_t i = 0; i < capacity_slots_; ++i) {
+            slot_ref_t slot = slot_ref(i);
+            if ((slot.header.populated & slot.mask) & (~slot.header.deleted & slot.mask))
+                slot.element.~element_t();
+        }
+
+        // Reset populated slots count
+        std::memset(data_, 0, buckets_ * bytes_per_bucket());
+        populated_slots_ = 0;
+    }
+
+    void reset() noexcept {
+        clear(); // Clear all elements
+        if (data_)
+            allocator_t{}.deallocate(data_, buckets_ * bytes_per_bucket());
+        buckets_ = 0;
+        populated_slots_ = 0;
+        capacity_slots_ = 0;
+    }
+
+    bool try_reserve(std::size_t capacity) noexcept {
+        if (capacity * 3u <= capacity_slots_ * 2u)
+            return true;
+
+        // Calculate new sizes
+        std::size_t new_slots = ceil2((capacity * 3ul) / 2ul);
+        std::size_t new_buckets = divide_round_up<slots_per_bucket()>(new_slots);
+        new_slots = new_buckets * slots_per_bucket(); // This must be a power of two!
+        std::size_t new_bytes = new_buckets * bytes_per_bucket();
+
+        // Allocate new memory
+        char* new_data = (char*)allocator_t{}.allocate(new_bytes);
+        if (!new_data)
+            return false;
+
+        // Initialize new buckets to empty
+        std::memset(new_data, 0, new_bytes);
+
+        // Rehash and copy existing elements to new_data
+        hash_t hasher;
+        for (std::size_t i = 0; i < capacity_slots_; ++i) {
+            slot_ref_t old_slot = slot_ref(i);
+            if ((~old_slot.header.populated & old_slot.mask) | (old_slot.header.deleted & old_slot.mask))
+                continue;
+
+            // Rehash
+            std::size_t hash_value = hasher(old_slot.element);
+            std::size_t new_slot_index = hash_value & (new_slots - 1);
+
+            // Linear probing to find an empty slot in new_data
+            while (true) {
+                slot_ref_t new_slot = slot_ref(new_data, new_slot_index);
+                if (!(new_slot.header.populated & new_slot.mask) || (new_slot.header.deleted & new_slot.mask)) {
+                    populate_slot(new_slot, std::move(old_slot.element));
+                    new_slot.header.populated |= new_slot.mask;
+                    break;
+                }
+                new_slot_index = (new_slot_index + 1) & (new_slots - 1);
+            }
+        }
+
+        // Deallocate old data and update pointers and sizes
+        if (data_)
+            allocator_t{}.deallocate(data_, buckets_ * bytes_per_bucket());
+        data_ = new_data;
+        buckets_ = new_buckets;
+        capacity_slots_ = new_slots;
+
+        return true;
+    }
+
+    template <typename query_at> class equal_iterator_gt {
+      public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = element_t;
+        using difference_type = std::ptrdiff_t;
+        using pointer = element_t*;
+        using reference = element_t&;
+
+        equal_iterator_gt(std::size_t index, flat_hash_multi_set_gt* parent, const query_at& query,
+                          const equals_t& equals)
+            : index_(index), parent_(parent), query_(query), equals_(equals) {}
+
+        // Pre-increment
+        equal_iterator_gt& operator++() {
+            do {
+                ++index_;
+                if (index_ >= parent_->capacity_slots_) {
+                    break;
+                }
+            } while (!equals_(parent_->slot_ref(index_).element, query_) ||
+                     !(parent_->slot_ref(index_).header.populated & parent_->slot_ref(index_).mask));
+            return *this;
+        }
+
+        equal_iterator_gt operator++(int) {
+            equal_iterator_gt temp = *this;
+            ++(*this);
+            return temp;
+        }
+
+        reference operator*() { return parent_->slot_ref(index_).element; }
+        pointer operator->() { return &parent_->slot_ref(index_).element; }
+        bool operator!=(equal_iterator_gt const& other) const { return !(*this == other); }
+        bool operator==(equal_iterator_gt const& other) const {
+            return index_ == other.index_ && parent_ == other.parent_;
+        }
+
+      private:
+        std::size_t index_;
+        flat_hash_multi_set_gt* parent_;
+        query_at query_;  // Store the query object
+        equals_t equals_; // Store the equals functor
+    };
+
+    template <typename query_at>
+    std::pair<equal_iterator_gt<query_at>, equal_iterator_gt<query_at>>
+    equal_range(query_at const& query) const noexcept {
+
+        equals_t equals;
+        auto this_ptr = const_cast<flat_hash_multi_set_gt*>(this);
+        auto end = equal_iterator_gt<query_at>(capacity_slots_, this_ptr, query, equals);
+        if (!capacity_slots_)
+            return {end, end};
+
+        hash_t hasher;
+        std::size_t hash_value = hasher(query);
+        std::size_t slot_index = hash_value & (capacity_slots_ - 1);
+        std::size_t const start_index = slot_index;
+        std::size_t first_equal_index = capacity_slots_;
+
+        // Linear probing to find the first equal element
+        do {
+            slot_ref_t slot = slot_ref(slot_index);
+            if (slot.header.populated & ~slot.header.deleted & slot.mask) {
+                if (equals(slot.element, query)) {
+                    first_equal_index = slot_index;
+                    break;
+                }
+            }
+            // Stop if we find an empty slot
+            else if (~slot.header.populated & slot.mask)
+                break;
+
+            // Move to the next slot
+            slot_index = (slot_index + 1) & (capacity_slots_ - 1);
+        } while (slot_index != start_index);
+
+        return {equal_iterator_gt<query_at>(first_equal_index, this_ptr, query, equals), end};
+    }
+
+    template <typename similar_at> bool pop_first(similar_at&& query, element_t& popped_value) noexcept {
+
+        if (!capacity_slots_)
+            return false;
+
+        hash_t hasher;
+        equals_t equals;
+        std::size_t hash_value = hasher(query);
+        std::size_t slot_index = hash_value & (capacity_slots_ - 1); // Assuming capacity_slots_ is a power of 2
+        std::size_t start_index = slot_index;                        // To detect loop in probing
+
+        // Linear probing to find the first match
+        do {
+            slot_ref_t slot = slot_ref(slot_index);
+            if (slot.header.populated & slot.mask) {
+                if ((~slot.header.deleted & slot.mask) && equals(slot.element, query)) {
+                    // Found a match, mark as deleted
+                    slot.header.deleted |= slot.mask;
+                    --populated_slots_;
+                    popped_value = slot.element;
+                    return true; // Successfully removed
+                }
+            } else {
+                // Stop if we find an empty slot
+                break;
+            }
+
+            // Move to the next slot
+            slot_index = (slot_index + 1) & (capacity_slots_ - 1); // Assuming capacity_slots_ is a power of 2
+        } while (slot_index != start_index);
+
+        return false; // No match found
+    }
+
+    template <typename similar_at> std::size_t erase(similar_at&& query) noexcept {
+
+        if (!capacity_slots_)
+            return 0;
+
+        hash_t hasher;
+        equals_t equals;
+        std::size_t hash_value = hasher(query);
+        std::size_t slot_index = hash_value & (capacity_slots_ - 1); // Assuming capacity_slots_ is a power of 2
+        std::size_t start_index = slot_index;                        // To detect loop in probing
+        std::size_t count = 0;                                       // Count of elements removed
+
+        // Linear probing to find all matches
+        do {
+            slot_ref_t slot = slot_ref(slot_index);
+            if (slot.header.populated & slot.mask) {
+                if ((~slot.header.deleted & slot.mask) && equals(slot.element, query)) {
+                    // Found a match, mark as deleted
+                    slot.header.deleted |= slot.mask;
+                    --populated_slots_;
+                    ++count; // Increment count of elements removed
+                }
+            } else {
+                // Stop if we find an empty slot
+                break;
+            }
+
+            // Move to the next slot
+            slot_index = (slot_index + 1) & (capacity_slots_ - 1); // Assuming capacity_slots_ is a power of 2
+        } while (slot_index != start_index);
+
+        return count; // Return the number of elements removed
+    }
+
+    template <typename similar_at> element_t const* find(similar_at&& query) const noexcept {
+
+        if (!capacity_slots_)
+            return nullptr;
+
+        hash_t hasher;
+        equals_t equals;
+        std::size_t hash_value = hasher(query);
+        std::size_t slot_index = hash_value & (capacity_slots_ - 1); // Assuming capacity_slots_ is a power of 2
+        std::size_t start_index = slot_index;                        // To detect loop in probing
+
+        // Linear probing to find the first match
+        do {
+            slot_ref_t slot = slot_ref(slot_index);
+            if (slot.header.populated & slot.mask) {
+                if ((~slot.header.deleted & slot.mask) && equals(slot.element, query))
+                    return &slot.element; // Found a match, return pointer to the element
+            } else {
+                // Stop if we find an empty slot
+                break;
+            }
+
+            // Move to the next slot
+            slot_index = (slot_index + 1) & (capacity_slots_ - 1); // Assuming capacity_slots_ is a power of 2
+        } while (slot_index != start_index);
+
+        return nullptr; // No match found
+    }
+
+    element_t const* end() const noexcept { return nullptr; }
+
+    template <typename func_at> void for_each(func_at&& func) const {
+        for (std::size_t bucket_index = 0; bucket_index < buckets_; ++bucket_index) {
+            auto bucket_pointer = data_ + bytes_per_bucket() * bucket_index;
+            bucket_header_t& header = *reinterpret_cast<bucket_header_t*>(bucket_pointer);
+            std::uint64_t populated = header.populated;
+            std::uint64_t deleted = header.deleted;
+
+            // Iterate through slots in the bucket
+            for (std::size_t in_bucket_index = 0; in_bucket_index < slots_per_bucket(); ++in_bucket_index) {
+                std::uint64_t mask = std::uint64_t(1ull) << in_bucket_index;
+
+                // Check if the slot is populated and not deleted
+                if ((populated & ~deleted) & mask) {
+                    auto slot_pointer = bucket_pointer + sizeof(bucket_header_t) + sizeof(element_t) * in_bucket_index;
+                    element_t const& element = *reinterpret_cast<element_t const*>(slot_pointer);
+                    func(element);
+                }
+            }
+        }
+    }
+
+    template <typename similar_at> std::size_t count(similar_at&& query) const noexcept {
+
+        if (!capacity_slots_)
+            return 0;
+
+        hash_t hasher;
+        equals_t equals;
+        std::size_t hash_value = hasher(query);
+        std::size_t slot_index = hash_value & (capacity_slots_ - 1);
+        std::size_t start_index = slot_index; // To detect loop in probing
+        std::size_t count = 0;
+
+        // Linear probing to find the range
+        do {
+            slot_ref_t slot = slot_ref(slot_index);
+            if ((slot.header.populated & slot.mask) && (~slot.header.deleted & slot.mask)) {
+                if (equals(slot.element, query))
+                    ++count;
+            } else if (~slot.header.populated & slot.mask) {
+                // Stop if we find an empty slot
+                break;
+            }
+
+            // Move to the next slot
+            slot_index = (slot_index + 1) & (capacity_slots_ - 1);
+        } while (slot_index != start_index);
+
+        return count;
+    }
+
+    template <typename similar_at> bool contains(similar_at&& query) const noexcept {
+
+        if (!capacity_slots_)
+            return false;
+
+        hash_t hasher;
+        equals_t equals;
+        std::size_t hash_value = hasher(query);
+        std::size_t slot_index = hash_value & (capacity_slots_ - 1);
+        std::size_t start_index = slot_index; // To detect loop in probing
+
+        // Linear probing to find the first match
+        do {
+            slot_ref_t slot = slot_ref(slot_index);
+            if (slot.header.populated & slot.mask) {
+                if ((~slot.header.deleted & slot.mask) && equals(slot.element, query))
+                    return true; // Found a match, exit early
+            } else
+                // Stop if we find an empty slot
+                break;
+
+            // Move to the next slot
+            slot_index = (slot_index + 1) & (capacity_slots_ - 1);
+        } while (slot_index != start_index);
+
+        return false; // No match found
+    }
+
+    void reserve(std::size_t capacity) {
+        if (!try_reserve(capacity))
+            throw std::bad_alloc();
+    }
+
+    bool try_emplace(element_t const& element) noexcept {
+        // Check if we need to resize
+        if (populated_slots_ * 3u >= capacity_slots_ * 2u)
+            if (!try_reserve(populated_slots_ + 1))
+                return false;
+
+        hash_t hasher;
+        std::size_t hash_value = hasher(element);
+        std::size_t slot_index = hash_value & (capacity_slots_ - 1);
+
+        // Linear probing
+        while (true) {
+            slot_ref_t slot = slot_ref(slot_index);
+            if ((~slot.header.populated & slot.mask) | (slot.header.deleted & slot.mask)) {
+                // Found an empty or deleted slot
+                populated_slots_ += populate_slot(slot, element);
+                return true;
+            }
+            // Move to the next slot
+            slot_index = (slot_index + 1) & (capacity_slots_ - 1);
+        }
+    }
 };
 
 } // namespace usearch

@@ -215,9 +215,8 @@ jobs:
         file: "golang/*.zip"
         update_latest_release: true
 
-
-  publish_hashes:
-    name: Add hashes to release notes
+  publish_checksums:
+    name: Compute Assets Checksums
     runs-on: ubuntu-latest
     needs: [versioning, create_linux_deb_package, create_windows_dll_library, create_macos_library, deploy_docs_pages]
     steps:
@@ -270,7 +269,7 @@ jobs:
 
 
   build_wheels:
-    name: Build Wheels for ${{ matrix.os }}
+    name: Build Python
     needs: versioning
     runs-on: ${{ matrix.os }}
     strategy:
@@ -445,7 +444,7 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
 
   build_csharp:
-    name: Build NuGet
+    name: Build C#
     needs: versioning
     strategy:
       matrix:
