@@ -177,10 +177,12 @@ static dense_index_py_t make_index(      //
     metric_kind_t metric_kind,           //
     metric_signature_t metric_signature, //
     std::uintptr_t metric_uintptr,       //
-    bool multi) {
+    bool multi,                          //
+    bool enable_key_lookups) {
 
     index_dense_config_t config(connectivity, expansion_add, expansion_search);
     config.multi = multi;
+    config.enable_key_lookups = enable_key_lookups;
 
     metric_t metric =  //
         metric_uintptr //
@@ -1042,7 +1044,8 @@ PYBIND11_MODULE(compiled, m) {
           py::arg("metric_kind") = metric_kind_t::cos_k,                   //
           py::arg("metric_signature") = metric_signature_t::array_array_k, //
           py::arg("metric_pointer") = 0,                                   //
-          py::arg("multi") = false                                         //
+          py::arg("multi") = false,                                        //
+          py::arg("enable_key_lookups") = true                             //
     );
 
     i.def(                                                //

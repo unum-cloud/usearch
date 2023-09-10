@@ -36,6 +36,13 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     scalar_t const* vector_third = vectors[2].data();
     std::size_t dimensions = vectors[0].size();
 
+    // Try checking the empty state
+    if constexpr (punned_ak) {
+        expect(!index.contains(key_first));
+        expect(!index.get(key_first, (f32_t*)nullptr, 1));
+    }
+
+    // Add data
     index.reserve(10);
     index.add(key_first, vector_first, args...);
 

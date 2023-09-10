@@ -81,7 +81,18 @@ pub mod ffi {
         ///
         /// * `key` - The key associated with the vector.
         /// * `vector` - A slice containing the vector data.
-        pub fn add(self: &Index, key: u64, vector: &[f32]) -> Result<()>;
+        fn add<T>(self: &Index, key: u64, vector: &[T]) -> Result<()> {
+            // Use type-based dispatch
+            if std::any::TypeId::of::<T>() == std::any::TypeId::of::<i8>() {
+                add_i8(key, unsafe { std::mem::transmute::<&[T], &[i8]>(vector) })
+            } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
+                add_f32(key, unsafe { std::mem::transmute::<&[T], &[f32]>(vector) })
+            } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
+                add_f64(key, unsafe { std::mem::transmute::<&[T], &[f64]>(vector) })
+            } else {
+                Err(Box::new("Unsupported type"))
+            }
+        }
 
         pub fn add_i8(self: &Index, key: u64, vector: &[i8]) -> Result<()>;
         pub fn add_f16(self: &Index, key: u64, vector: &[u16]) -> Result<()>;
@@ -98,7 +109,18 @@ pub mod ffi {
         /// # Returns
         ///
         /// A `Result` containing the matches found.
-        pub fn search(self: &Index, query: &[f32], count: usize) -> Result<Matches>;
+        pub fn search<T>(self: &Index, query: &[T], count: usize) -> Result<Matches> {
+            // Use type-based dispatch
+            if std::any::TypeId::of::<T>() == std::any::TypeId::of::<i8>() {
+                search_i8(unsafe { std::mem::transmute::<&[T], &[i8]>(query) }, count)
+            } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f32>() {
+                search_f32(unsafe { std::mem::transmute::<&[T], &[f32]>(query) }, count)
+            } else if std::any::TypeId::of::<T>() == std::any::TypeId::of::<f64>() {
+                search_f64(unsafe { std::mem::transmute::<&[T], &[f64]>(query) }, count)
+            } else {
+                Err(Box::new("Unsupported type"))
+            }
+        }
 
         pub fn search_i8(self: &Index, query: &[i8], count: usize) -> Result<Matches>;
         pub fn search_f16(self: &Index, query: &[u16], count: usize) -> Result<Matches>;
