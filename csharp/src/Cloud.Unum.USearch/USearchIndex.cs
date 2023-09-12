@@ -21,7 +21,7 @@ public class USearchIndex : IDisposable
     //CustomDistanceFunction? customMetric = null
     )
     {
-        IndexOptions initOptions = new IndexOptions
+        IndexOptions initOptions = new()
         {
             metric_kind = metricKind,
             metric = default,
@@ -38,9 +38,16 @@ public class USearchIndex : IDisposable
         this._cachedDimensions = dimensions;
     }
 
+    public USearchIndex(IndexOptions options)
+    {
+        this._index = usearch_init(ref options, out IntPtr error);
+        HandleError(error);
+        this._cachedDimensions = options.dimensions;
+    }
+
     public USearchIndex(string path, bool view = false)
     {
-        IndexOptions initOptions = new IndexOptions();
+        IndexOptions initOptions = new();
         this._index = usearch_init(ref initOptions, out IntPtr error);
         HandleError(error);
 
