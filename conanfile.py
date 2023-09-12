@@ -3,11 +3,13 @@ from conans import ConanFile
 
 class USearchConan(ConanFile):
 
-    name = 'USearch'
+    name = 'usearch'
     version = '2.4.0'
     license = 'Apache 2.0'
-    url = 'https://github.com/unum-cloud/usearch'
+    url = 'https://github.com/conan-io/conan-center-index'
     description = 'Smaller & Faster Single-File Vector Search Engine from Unum'
+    homepage = 'https://github.com/unum-cloud/usearch'
+    topics = 'vector-search'
 
     # No settings/options are necessary, this is header only
     # Potentially add unit-tests in the future:
