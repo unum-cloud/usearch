@@ -215,10 +215,96 @@ jobs:
         file: "golang/*.zip"
         update_latest_release: true
 
+
+  wasm_c_library:
+    name: WASM builds for C libraries on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    needs: versioning
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, macOS-11, windows-2022]
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        persist-credentials: false
+        ref: 'main'
+    - run: git submodule update --init --recursive
+
+    - name: Get version
+      id: version
+      run: |
+        version=$(cat VERSION)
+        echo "version=$version" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Build library on Ubuntu
+      run: |
+        export WASI_VERSION=20
+        export WASI_VERSION_FULL=${WASI_VERSION}.0
+        wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sdk-${WASI_VERSION_FULL}-linux.tar.gz
+        tar xf wasi-sdk-${WASI_VERSION_FULL}-linux.tar.gz
+        rm -rf wasi-sdk-${WASI_VERSION_FULL}-linux.tar.gz
+        export WASI_SDK_PATH=/home/runner/work/usearch/usearch/wasi-sdk-${WASI_VERSION_FULL}
+        archs=("x86_64" "arm64")
+        cd ./c
+        for arch in "${archs[@]}"
+        do
+          ../wasi-sdk-20.0/bin/clang++ --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot -o libusearch.so -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared --target=wasm32-wasi-threads  -Wl,--no-entry -nostdlib -D_WASI_EMULATED_MMAN -march="$arch"
+          tar -czvf usearch_wasm_linux_"$arch"_${{ steps.version.outputs.version }}.tar.gz libusearch.so
+          mv usearch_wasm_linux_"$arch"_${{ steps.version.outputs.version }}.tar.gz ../ && rm -rf libusearch.so
+        done
+      if: matrix.os == 'ubuntu-22.04'
+
+    - name: Build library on MacOS
+      run: |
+        export WASI_VERSION=20
+        export WASI_VERSION_FULL=${WASI_VERSION}.0
+        wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sdk-${WASI_VERSION_FULL}-macos.tar.gz
+        tar xf wasi-sdk-${WASI_VERSION_FULL}-macos.tar.gz
+        rm -rf wasi-sdk-${WASI_VERSION_FULL}-macos.tar.gz
+        export WASI_SDK_PATH=/Users/runner/work/usearch/usearch/wasi-sdk-${WASI_VERSION_FULL}
+        archs=("x86_64" "arm64")
+        cd ./c 
+        for arch in "${archs[@]}"
+        do
+          ../wasi-sdk-20.0/bin/clang++ --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot -o libusearch.so -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared --target=wasm32-wasi-threads  -Wl,--no-entry -nostdlib -D_WASI_EMULATED_MMAN -march="$arch"
+          zip -r usearch_wasm_macos_"$arch"_${{ steps.version.outputs.version }}.zip libusearch.so
+          mv usearch_wasm_macos_"$arch"_${{ steps.version.outputs.version }}.zip ../ && rm -rf libusearch.so
+        done
+      if: matrix.os == 'macOS-11'
+
+    - name: Build library on Windows
+      run: |
+        export WASI_VERSION=20
+        export WASI_VERSION_FULL=${WASI_VERSION}.0
+        curl -LOJ https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sdk-${WASI_VERSION_FULL}.m-mingw.tar.gz
+        tar xf wasi-sdk-${WASI_VERSION_FULL}.m-mingw.tar.gz
+        rm -rf wasi-sdk-${WASI_VERSION_FULL}.m-mingw.tar.gz
+        export WASI_SDK_PATH=/d/a/usearch/usearch/wasi-sdk-${WASI_VERSION_FULL}+m
+        archs=("x64" "x86")
+        cd ./c 
+        for arch in "${archs[@]}"
+        do
+          ../wasi-sdk-20.0+m/bin/clang++ --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot -o libusearch.so -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared --target=wasm32-wasi-threads  -Wl,--no-entry -nostdlib -D_WASI_EMULATED_MMAN -march="$arch"
+          tar -cvf usearch_wasm_windows_"$arch"_${{ steps.version.outputs.version }}.tar.gz libusearch.so
+          mv usearch_wasm_windows_"$arch"_${{ steps.version.outputs.version }}.tar.gz ../ && rm -rf libusearch.so
+        done
+      shell: bash
+      if: matrix.os == 'windows-2022'
+
+    - name: Upload archive
+      uses: xresloader/upload-to-github-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        file: "*.zip;*.tar.gz"
+        update_latest_release: true
+        
+
   publish_checksums:
     name: Compute Assets Checksums
     runs-on: ubuntu-latest
-    needs: [versioning, create_linux_deb_package, create_windows_dll_library, create_macos_library, deploy_docs_pages]
+    needs: [versioning, create_linux_deb_package, create_windows_dll_library, create_macos_library, deploy_docs_pages, wasm_c_library]
     steps:
     - name: Get last release ID
       id: last_release
@@ -266,6 +352,12 @@ jobs:
             * ${{ steps.hashes.outputs.asset_name_7 }} : `${{ steps.hashes.outputs.asset_hash_7 }}`
             * ${{ steps.hashes.outputs.asset_name_8 }} : `${{ steps.hashes.outputs.asset_hash_8 }}`
             * ${{ steps.hashes.outputs.asset_name_9 }} : `${{ steps.hashes.outputs.asset_hash_9 }}`
+            * ${{ steps.hashes.outputs.asset_name_10 }} : `${{ steps.hashes.outputs.asset_hash_10 }}`
+            * ${{ steps.hashes.outputs.asset_name_11 }} : `${{ steps.hashes.outputs.asset_hash_11 }}`
+            * ${{ steps.hashes.outputs.asset_name_12 }} : `${{ steps.hashes.outputs.asset_hash_12 }}`
+            * ${{ steps.hashes.outputs.asset_name_13 }} : `${{ steps.hashes.outputs.asset_hash_13 }}`
+            * ${{ steps.hashes.outputs.asset_name_14 }} : `${{ steps.hashes.outputs.asset_hash_14 }}`
+            * ${{ steps.hashes.outputs.asset_name_15 }} : `${{ steps.hashes.outputs.asset_hash_15 }}`
 
 
   build_wheels:

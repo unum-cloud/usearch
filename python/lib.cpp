@@ -608,9 +608,9 @@ static py::tuple search_many_brute_force(    //
     if (dataset_kind != queries_kind)
         throw std::invalid_argument("The types of vectors don't match!");
 
-    py::array_t<dense_key_t> keys_py({dataset_count, static_cast<Py_ssize_t>(wanted)});
-    py::array_t<distance_t> distances_py({dataset_count, static_cast<Py_ssize_t>(wanted)});
-    py::array_t<Py_ssize_t> counts_py(dataset_count);
+    py::array_t<dense_key_t> keys_py({queries_count, static_cast<Py_ssize_t>(wanted)});
+    py::array_t<distance_t> distances_py({queries_count, static_cast<Py_ssize_t>(wanted)});
+    py::array_t<Py_ssize_t> counts_py(queries_count);
 
     std::size_t dimensions = static_cast<std::size_t>(queries_dimensions);
     metric_t metric =  //

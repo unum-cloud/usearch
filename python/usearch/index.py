@@ -1200,7 +1200,7 @@ class Index:
     def __repr__(self) -> str:
         if not hasattr(self, "_compiled"):
             return "usearch.Index(failed)"
-        f = "usearch.Index({} x {}, {}, connectivity: {}, expansion: {} & {}, {:,} vectors in {} levels, {} hardware accerlation)"
+        f = "usearch.Index({} x {}, {}, connectivity: {}, expansion: {} & {}, {:,} vectors in {} levels, {} hardware acceleration)"
         return f.format(
             self.dtype,
             self.ndim,

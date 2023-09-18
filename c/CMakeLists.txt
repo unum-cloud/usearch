@@ -45,7 +45,7 @@ if (${USEARCH_LOOKUP_LABEL})
     target_compile_definitions(usearch_c PRIVATE USEARCH_LOOKUP_LABEL=1)
 endif()
 
-if(${USEARCH_BUILD_TEST})
+if(${USEARCH_BUILD_CTEST})
     add_executable(test_c "${CMAKE_CURRENT_SOURCE_DIR}/test.c")
     target_link_libraries(test_c usearch_c)
     set_target_properties(test_c PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
