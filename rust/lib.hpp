@@ -8,7 +8,7 @@
 struct Matches;
 struct IndexOptions;
 
-class Index {
+class NativeIndex {
   public:
     using metric_t = unum::usearch::metric_punned_t;
     using distance_t = unum::usearch::distance_punned_t;
@@ -17,25 +17,29 @@ class Index {
     using search_result_t = typename index_dense_t::search_result_t;
     using key_t = typename index_dense_t::key_t;
 
-    Index(std::unique_ptr<index_dense_t> index);
+    NativeIndex(std::unique_ptr<index_dense_t> index);
 
     void reserve(size_t) const;
 
-    void add(key_t key, rust::Slice<float const> vector) const;
     void add_i8(key_t key, rust::Slice<int8_t const> vector) const;
     void add_f16(key_t key, rust::Slice<uint16_t const> vector) const;
     void add_f32(key_t key, rust::Slice<float const> vector) const;
     void add_f64(key_t key, rust::Slice<double const> vector) const;
 
-    Matches search(rust::Slice<float const> vector, size_t count) const;
     Matches search_i8(rust::Slice<int8_t const> vector, size_t count) const;
     Matches search_f16(rust::Slice<uint16_t const> vector, size_t count) const;
     Matches search_f32(rust::Slice<float const> vector, size_t count) const;
     Matches search_f64(rust::Slice<double const> vector, size_t count) const;
 
-    bool remove(key_t key) const;
+    size_t get_i8(key_t key, rust::Slice<int8_t> vector) const;
+    size_t get_f16(key_t key, rust::Slice<uint16_t> vector) const;
+    size_t get_f32(key_t key, rust::Slice<float> vector) const;
+    size_t get_f64(key_t key, rust::Slice<double> vector) const;
+
+    size_t count(key_t key) const;
+    size_t remove(key_t key) const;
+    size_t rename(key_t from, key_t to) const;
     bool contains(key_t key) const;
-    bool rename(key_t from, key_t to) const;
 
     size_t dimensions() const;
     size_t connectivity() const;
@@ -55,4 +59,4 @@ class Index {
     std::unique_ptr<index_dense_t> index_;
 };
 
-std::unique_ptr<Index> new_index(IndexOptions const& options);
+std::unique_ptr<NativeIndex> new_native_index(IndexOptions const& options);
