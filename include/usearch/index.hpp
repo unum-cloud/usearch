@@ -10,7 +10,7 @@
 #define UNUM_USEARCH_HPP
 
 #define USEARCH_VERSION_MAJOR 2
-#define USEARCH_VERSION_MINOR 4
+#define USEARCH_VERSION_MINOR 5
 #define USEARCH_VERSION_PATCH 0
 
 // Inferring C++ version
