@@ -1,14 +1,17 @@
 #pragma once
 #include <stdlib.h> // `aligned_alloc`
 
-#include <functional>   // `std::function`
-#include <numeric>      // `std::iota`
-#include <shared_mutex> // `std::shared_mutex`
-#include <thread>       // `std::thread`
-#include <vector>       // `std::vector`
+#include <functional> // `std::function`
+#include <numeric>    // `std::iota`
+#include <thread>     // `std::thread`
+#include <vector>     // `std::vector`
 
 #include <usearch/index.hpp>
 #include <usearch/index_plugins.hpp>
+
+#if defined(USEARCH_DEFINED_CPP17)
+#include <shared_mutex> // `std::shared_mutex`
+#endif
 
 namespace unum {
 namespace usearch {
@@ -383,7 +386,11 @@ class index_dense_gt {
     /// @brief Mutex, controlling concurrent access to `available_threads_`.
     mutable std::mutex available_threads_mutex_;
 
+#if defined(USEARCH_DEFINED_CPP17)
+    using shared_mutex_t = std::shared_mutex;
+#else
     using shared_mutex_t = unfair_shared_mutex_t;
+#endif
     using shared_lock_t = shared_lock_gt<shared_mutex_t>;
     using unique_lock_t = std::unique_lock<shared_mutex_t>;
 

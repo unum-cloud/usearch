@@ -12,8 +12,11 @@ macros_args = []
 if sys.platform == "linux":
     compile_args.append("-std=c++17")
     compile_args.append("-O3")  # Maximize performance
-    compile_args.append("-g")  # Simplify debugging
     compile_args.append("-Wno-unknown-pragmas")
+    compile_args.append("-fdiagnostics-color=always")
+
+    # Simplify debugging, but the normal `-g` may make builds much longer!
+    compile_args.append("-g1")
 
     macros_args.append(("USEARCH_USE_NATIVE_F16", "0"))
     macros_args.append(("USEARCH_USE_SIMSIMD", "1"))
@@ -27,8 +30,11 @@ if sys.platform == "darwin":
     compile_args.append("-mmacosx-version-min=10.15")
     compile_args.append("-std=c++17")
     compile_args.append("-O3")  # Maximize performance
-    compile_args.append("-g")  # Simplify debugging
+    compile_args.append("-fcolor-diagnostics")
     compile_args.append("-Wno-unknown-pragmas")
+
+    # Simplify debugging, but the normal `-g` may make builds much longer!
+    compile_args.append("-g1")
 
     # Linking OpenMP requires additional preparation in CIBuildWheel
     # macros_args.append(("USEARCH_USE_OPENMP", "1"))
