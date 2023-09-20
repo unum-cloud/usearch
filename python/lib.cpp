@@ -526,22 +526,26 @@ static void search_typed_brute_force(                                //
     byte_t const* dataset_data = reinterpret_cast<byte_t const*>(dataset_info.ptr);
     byte_t const* queries_data = reinterpret_cast<byte_t const*>(queries_info.ptr);
     for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx)
-        counts_py1d(query_idx) = 0;
+        counts_py1d(query_idx) = wanted;
 
     if (!threads)
         threads = std::thread::hardware_concurrency();
 
     std::size_t tasks_count = static_cast<std::size_t>(dataset_count * queries_count);
-    bitset_t query_mutexes(static_cast<std::size_t>(queries_count));
-    if (!query_mutexes)
-        throw std::bad_alloc();
 
     // Progress status
     progress_t progress_{progress};
     std::atomic<std::size_t> processed{0};
 
+    // Allocate temporary memory to store the distance matrix
+    // Previous version didn't need temporary memory, but the performance was much lower
+    struct dense_key_and_distance_t {
+        u32_t offset;
+        f32_t distance;
+    };
+    std::vector<dense_key_and_distance_t> keys_and_distances(tasks_count);
+
     executor_default_t{threads}.dynamic(tasks_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-        //
         std::size_t dataset_idx = task_idx / queries_count;
         std::size_t query_idx = task_idx % queries_count;
 
@@ -549,24 +553,7 @@ static void search_typed_brute_force(                                //
         byte_t const* query = queries_data + query_idx * queries_info.strides[0];
         distance_t distance = metric(dataset, query);
 
-        {
-            auto lock = query_mutexes.lock(query_idx);
-            dense_key_t* keys = &keys_py2d(query_idx, 0);
-            distance_t* distances = &distances_py2d(query_idx, 0);
-            std::size_t& matches = reinterpret_cast<std::size_t&>(counts_py1d(query_idx));
-            if (matches == wanted)
-                if (distances[wanted - 1] <= distance)
-                    return true;
-
-            std::size_t offset = std::lower_bound(distances, distances + matches, distance) - distances;
-
-            std::size_t count_worse = matches - offset - (wanted == matches);
-            std::memmove(keys + offset + 1, keys + offset, count_worse * sizeof(dense_key_t));
-            std::memmove(distances + offset + 1, distances + offset, count_worse * sizeof(distance_t));
-            keys[offset] = static_cast<dense_key_t>(dataset_idx);
-            distances[offset] = distance;
-            matches += matches != wanted;
-        }
+        keys_and_distances[task_idx] = {static_cast<u32_t>(query_idx), static_cast<f32_t>(distance)};
 
         // We don't want to check for signals from multiple threads
         ++processed;
@@ -574,6 +561,20 @@ static void search_typed_brute_force(                                //
             if (PyErr_CheckSignals() != 0 || !progress_(processed.load(), tasks_count))
                 return false;
         return true;
+    });
+
+    // Partial-sort every query result
+    executor_default_t{threads}.fixed(queries_count, [&](std::size_t, std::size_t query_idx) {
+        auto start = keys_and_distances.data() + query_idx * dataset_count;
+        std::partial_sort(start, start + wanted, start + dataset_count,
+                          [](dense_key_and_distance_t const& a, dense_key_and_distance_t const& b) {
+                              return a.distance < b.distance;
+                          });
+
+        dense_key_t* keys = &keys_py2d(query_idx, 0);
+        distance_t* distances = &distances_py2d(query_idx, 0);
+        for (std::size_t i = 0; i != wanted; ++i)
+            keys[i] = static_cast<dense_key_t>(start[i].offset), distances[i] = start[i].distance;
     });
 
     // At the end report the latest numbers, because the reporter thread may be finished earlier
@@ -602,6 +603,8 @@ static py::tuple search_many_brute_force(    //
     Py_ssize_t queries_dimensions = queries_info.shape[1];
     if (dataset_dimensions != queries_dimensions)
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
+    if (wanted > dataset_count)
+        throw std::invalid_argument("You can't request more matches than in the dataset!");
 
     scalar_kind_t dataset_kind = numpy_string_to_kind(dataset_info.format);
     scalar_kind_t queries_kind = numpy_string_to_kind(queries_info.format);

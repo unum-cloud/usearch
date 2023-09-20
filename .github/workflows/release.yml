@@ -591,8 +591,10 @@ jobs:
       GITHUB_PACKAGES_SOURCE: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: 'main'  
       - run: git submodule update --init --recursive
-        
+          
       - name: Download usearch libs artifact
         uses: actions/download-artifact@v3
         with:
@@ -606,8 +608,7 @@ jobs:
 
       - name: Pack project
         run: |
-          VERSION_CONTENT=$(< VERSION)
-          dotnet pack "${{ env.SOLUTION }}" -c Release -p:Version="$VERSION_CONTENT" --output ${{ env.NUGET_PACKAGES }}
+          dotnet pack "${{ env.SOLUTION }}" -c Release --output ${{ env.NUGET_PACKAGES }}
         working-directory: ${{ github.workspace }}
 
       - name: Publish to NuGet

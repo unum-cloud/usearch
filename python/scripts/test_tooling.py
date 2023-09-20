@@ -56,13 +56,13 @@ def test_exact_search(rows: int, cols: int):
     :param int cols: The number of columns in the matrix.
     """
     original = np.random.rand(rows, cols)
-    matches: BatchMatches = search(original, original, 10, exact=True)
+    matches: BatchMatches = search(original, original, min(10, rows), exact=True)
     top_matches = (
         [int(m.keys[0]) for m in matches] if rows > 1 else int(matches.keys[0])
     )
     assert np.all(top_matches == np.arange(rows))
 
-    matches: Matches = search(original, original[0], 10, exact=True)
+    matches: Matches = search(original, original[0], min(10, rows), exact=True)
     top_match = int(matches.keys[0])
     assert top_match == 0
 

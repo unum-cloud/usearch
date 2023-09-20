@@ -872,6 +872,10 @@ class Index:
         return self._compiled.serialized_length
 
     @property
+    def metric_kind(self) -> Union[MetricKind, CompiledMetric]:
+        return self._metric_jit if self._metric_jit.kind else self._metric_kind
+
+    @property
     def metric(self) -> Union[MetricKind, CompiledMetric]:
         return self._metric_jit if self._metric_jit else self._metric_kind
 
@@ -1190,6 +1194,7 @@ class Index:
             "size": self.size,
             "jit": self.jit,
             "hardware_acceleration": self.hardware_acceleration,
+            "metric_kind": self.metric_kind,
             "dtype": self.dtype,
             "path": self.path,
             "compiled_with_openmp": USES_OPENMP,
@@ -1204,7 +1209,7 @@ class Index:
         return f.format(
             self.dtype,
             self.ndim,
-            self.metric,
+            self.metric_kind,
             self.connectivity,
             self.expansion_add,
             self.expansion_search,
@@ -1225,7 +1230,7 @@ class Index:
                 "- config",
                 f"-- data type: {self.dtype}",
                 f"-- dimensions: {self.ndim}",
-                f"-- metric: {self.metric}",
+                f"-- metric: {self.metric_kind}",
                 f"-- connectivity: {self.connectivity}",
                 f"-- expansion on addition:{self.expansion_add} candidates",
                 f"-- expansion on search: {self.expansion_search} candidates",
@@ -1233,7 +1238,7 @@ class Index:
                 f"-- uses OpenMP: {USES_OPENMP}",
                 f"-- uses SimSIMD: {USES_SIMSIMD}",
                 f"-- supports half-precision: {USES_NATIVE_F16}",
-                f"-- uses hardware acceletion: {self.hardware_acceleration}",
+                f"-- uses hardware acceleration: {self.hardware_acceleration}",
                 "- state",
                 f"-- size: {self.size:,} vectors",
                 f"-- memory usage: {self.memory_usage:,} bytes",
