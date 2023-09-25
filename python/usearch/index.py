@@ -180,7 +180,7 @@ def _search_in_compiled(
         vectors = vectors.reshape(1, len(vectors))
     count_vectors = vectors.shape[0]
 
-    def distil_batch(
+    def distill_batch(
         batch_matches: BatchMatches,
     ) -> Union[BatchMatches, Matches]:
         return batch_matches[0] if count_vectors == 1 else batch_matches
@@ -188,22 +188,22 @@ def _search_in_compiled(
     # Create progress bar if needed
     if log:
         name = log if isinstance(log, str) else "Search"
-        pbar = tqdm(
+        progress_bar = tqdm(
             desc=name,
             total=count_vectors,
             unit="vector",
         )
 
         def update_progress_bar(processed: int, total: int) -> bool:
-            pbar.update(processed - pbar.n)
+            progress_bar.update(processed - progress_bar.n)
             return progress if progress else True
 
         tuple_ = compiled_callable(vectors, progress=update_progress_bar, **kwargs)
-        pbar.close()
+        progress_bar.close()
     else:
         tuple_ = compiled_callable(vectors, **kwargs)
 
-    return distil_batch(BatchMatches(*tuple_))
+    return distill_batch(BatchMatches(*tuple_))
 
 
 def _add_to_compiled(
