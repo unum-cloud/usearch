@@ -11,7 +11,7 @@ from usearch.index import Match, Matches, BatchMatches, Index, Indexes
 
 
 dimensions = [3, 97, 256]
-batch_sizes = [1, 77]
+batch_sizes = [1, 77, 100]
 
 
 @pytest.mark.parametrize("rows", batch_sizes)
@@ -56,15 +56,16 @@ def test_exact_search(rows: int, cols: int):
     :param int cols: The number of columns in the matrix.
     """
     original = np.random.rand(rows, cols)
+    keys = np.arange(rows)
     matches: BatchMatches = search(original, original, min(10, rows), exact=True)
     top_matches = (
         [int(m.keys[0]) for m in matches] if rows > 1 else int(matches.keys[0])
     )
-    assert np.all(top_matches == np.arange(rows))
+    assert np.all(top_matches == keys)
 
-    matches: Matches = search(original, original[0], min(10, rows), exact=True)
+    matches: Matches = search(original, original[-1], min(10, rows), exact=True)
     top_match = int(matches.keys[0])
-    assert top_match == 0
+    assert top_match == keys[-1]
 
 
 def test_matches_creation_and_methods():

@@ -532,49 +532,69 @@ static void search_typed_brute_force(                                //
         threads = std::thread::hardware_concurrency();
 
     std::size_t tasks_count = static_cast<std::size_t>(dataset_count * queries_count);
+    executor_default_t executor{threads};
 
     // Progress status
     progress_t progress_{progress};
     std::atomic<std::size_t> processed{0};
 
-    // Allocate temporary memory to store the distance matrix
-    // Previous version didn't need temporary memory, but the performance was much lower
     struct dense_key_and_distance_t {
         u32_t offset;
         f32_t distance;
     };
-    std::vector<dense_key_and_distance_t> keys_and_distances(tasks_count);
+    auto less = [](dense_key_and_distance_t const& a, dense_key_and_distance_t const& b) {
+        return a.distance < b.distance;
+    };
 
-    executor_default_t{threads}.dynamic(tasks_count, [&](std::size_t thread_idx, std::size_t task_idx) {
-        std::size_t dataset_idx = task_idx / queries_count;
-        std::size_t query_idx = task_idx % queries_count;
-
+    // Allocate temporary memory to store the distance matrix
+    // Previous version didn't need temporary memory, but the performance was much lower.
+    // In the new design we keep two buffers - original and transposed, as in-place transpositions
+    // of non-rectangular matrixes is expensive.
+    std::vector<dense_key_and_distance_t> keys_and_distances(tasks_count * 2);
+    dense_key_and_distance_t* keys_and_distances_per_dataset = keys_and_distances.data();
+    dense_key_and_distance_t* keys_and_distances_per_query = keys_and_distances_per_dataset + tasks_count;
+    executor.dynamic(dataset_count, [&](std::size_t thread_idx, std::size_t dataset_idx) {
         byte_t const* dataset = dataset_data + dataset_idx * dataset_info.strides[0];
+        for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx) {
         byte_t const* query = queries_data + query_idx * queries_info.strides[0];
         distance_t distance = metric(dataset, query);
-
-        keys_and_distances[task_idx] = {static_cast<u32_t>(query_idx), static_cast<f32_t>(distance)};
+            std::size_t task_idx = dataset_idx * queries_count + query_idx;
+            keys_and_distances_per_dataset[task_idx].offset = static_cast<u32_t>(dataset_idx);
+            keys_and_distances_per_dataset[task_idx].distance = static_cast<f32_t>(distance);
+        }
 
         // We don't want to check for signals from multiple threads
-        ++processed;
+        processed += queries_count;
         if (thread_idx == 0)
             if (PyErr_CheckSignals() != 0 || !progress_(processed.load(), tasks_count))
                 return false;
         return true;
     });
+    if (processed.load() != tasks_count)
+        return;
+
+    // Transpose in a single thread to avoid contention writing into the same memory buffers
+    for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx) {
+        for (std::size_t dataset_idx = 0; dataset_idx != dataset_count; ++dataset_idx) {
+            std::size_t from_idx = queries_count * dataset_idx + query_idx;
+            std::size_t to_idx = dataset_count * query_idx + dataset_idx;
+            keys_and_distances_per_query[to_idx] = keys_and_distances_per_dataset[from_idx];
+        }
+    }
 
     // Partial-sort every query result
-    executor_default_t{threads}.fixed(queries_count, [&](std::size_t, std::size_t query_idx) {
-        auto start = keys_and_distances.data() + query_idx * dataset_count;
-        std::partial_sort(start, start + wanted, start + dataset_count,
-                          [](dense_key_and_distance_t const& a, dense_key_and_distance_t const& b) {
-                              return a.distance < b.distance;
-                          });
-
+    executor.fixed(queries_count, [&](std::size_t, std::size_t query_idx) {
         dense_key_t* keys = &keys_py2d(query_idx, 0);
         distance_t* distances = &distances_py2d(query_idx, 0);
+        auto start = keys_and_distances_per_query + dataset_count * query_idx;
+        if (wanted > 1) {
+            std::partial_sort(start, start + wanted, start + dataset_count, less);
         for (std::size_t i = 0; i != wanted; ++i)
             keys[i] = static_cast<dense_key_t>(start[i].offset), distances[i] = start[i].distance;
+        } else {
+            auto max_it = std::max_element(start, start + dataset_count, less);
+            keys[0] = static_cast<dense_key_t>(max_it->offset), distances[0] = max_it->distance;
+        }
     });
 
     // At the end report the latest numbers, because the reporter thread may be finished earlier
