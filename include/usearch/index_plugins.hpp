@@ -1602,7 +1602,7 @@ class flat_hash_multi_set_gt {
         auto slot_pointer = bucket_pointer + sizeof(bucket_header_t) + sizeof(element_t) * in_bucket_index;
         return {
             *reinterpret_cast<bucket_header_t*>(bucket_pointer),
-            std::uint64_t(1ull) << in_bucket_index,
+            static_cast<std::uint64_t>(1ull) << in_bucket_index,
             *reinterpret_cast<element_t*>(slot_pointer),
         };
     }
