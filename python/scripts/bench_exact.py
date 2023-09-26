@@ -2,7 +2,7 @@ from time import time
 
 from usearch.index import search, MetricKind, ScalarKind
 from usearch.compiled import hardware_acceleration
-from faiss import IndexFlatL2, knn
+from faiss import knn, METRIC_L2
 import numpy as np
 import fire
 
@@ -36,7 +36,7 @@ def run(
     print("USearch: ", time() - start)
 
     start = time()
-    _ = knn(x, x[:q], k)[1]
+    _ = knn(x[:q], x, k, metric=METRIC_L2)[1]
     print("FAISS:   ", time() - start)
 
 
