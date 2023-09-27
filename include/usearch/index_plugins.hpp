@@ -1330,17 +1330,28 @@ using distance_punned_t = float;
 using span_punned_t = span_gt<byte_t const>;
 
 /**
- *  @brief  Type-punned metric class, that can wrap an existing STL `std::function`.
- *          Additional annotation is useful for
+ *  @brief  The signature of the user-defined function.
+ *          Can be just two array pointers, precompiled for a specific array length,
+ *          or include one or two array sizes as 64-bit unsigned integers.
+ */
+enum class metric_punned_signature_t {
+    array_array_k = 0,
+    array_array_size_k,
+};
+
+/**
+ *  @brief  Type-punned metric class, which unlike STL's `std::function` avoids any memory allocations.
+ *          It also provides additional APIs to check, if SIMD hardware-acceleration is available.
  */
 class metric_punned_t {
   public:
     using scalar_t = byte_t;
     using result_t = distance_punned_t;
-    using stl_function_t = std::function<float(byte_t const*, byte_t const*)>;
 
   private:
-    stl_function_t stl_function_;
+    using raw_ptr_t = result_t (*)(size_t, size_t, size_t, size_t);
+    raw_ptr_t raw_ptr_ = nullptr;
+
     std::size_t dimensions_ = 0;
     metric_kind_t metric_kind_ = metric_kind_t::unknown_k;
     scalar_kind_t scalar_kind_ = scalar_kind_t::unknown_k;
@@ -1349,32 +1360,39 @@ class metric_punned_t {
   public:
     /**
      *  @brief  Computes the distance between two vectors of fixed length.
-     *  ! The only relevant function in the object. Everything else is just dynamic dispatch.
+     *
+     * This is the only relevant function in the object. Everything else is just dynamic dispatch logic.
      */
-    inline result_t operator()(byte_t const* a, byte_t const* b) const noexcept { return stl_function_(a, b); }
-
-    inline metric_punned_t() = default;
-    inline metric_punned_t(metric_punned_t const&) = default;
-    inline metric_punned_t& operator=(metric_punned_t const&) = default;
-
-    inline metric_punned_t( //
-        stl_function_t stl_function, std::size_t dimensions = 0, metric_kind_t metric_kind = metric_kind_t::unknown_k,
-        scalar_kind_t scalar_kind = scalar_kind_t::unknown_k, isa_kind_t isa_kind = isa_kind_t::auto_k)
-        : stl_function_(stl_function), dimensions_(dimensions), metric_kind_(metric_kind), scalar_kind_(scalar_kind),
-          isa_kind_(isa_kind) {}
-
-    inline metric_punned_t( //
-        std::size_t dimensions, metric_kind_t metric_kind = metric_kind_t::cos_k,
-        scalar_kind_t scalar_kind = scalar_kind_t::f32_k) {
-        std::size_t bytes_per_vector = divide_round_up<CHAR_BIT>(dimensions * bits_per_scalar(scalar_kind));
-        *this = make_(bytes_per_vector, metric_kind, scalar_kind);
-        dimensions_ = dimensions;
+    inline result_t operator()(byte_t const* a, byte_t const* b) const noexcept {
+        size_t raw_arg1_ = reinterpret_cast<size_t>(a);
+        size_t raw_arg2_ = reinterpret_cast<size_t>(b);
+        size_t raw_arg3_ = dimensions_;
+        size_t raw_arg4_ = dimensions_;
+        return raw_ptr_(raw_arg1_, raw_arg2_, raw_arg3_, raw_arg4_);
     }
 
-    std::size_t dimensions() const noexcept { return dimensions_; }
-    metric_kind_t metric_kind() const noexcept { return metric_kind_; }
-    scalar_kind_t scalar_kind() const noexcept { return scalar_kind_; }
-    isa_kind_t isa_kind() const noexcept { return isa_kind_; }
+    inline metric_punned_t() noexcept = default;
+    inline metric_punned_t(metric_punned_t const&) noexcept = default;
+    inline metric_punned_t& operator=(metric_punned_t const&) noexcept = default;
+    inline metric_punned_t(                                //
+        std::size_t dimensions,                            //
+        metric_kind_t metric_kind = metric_kind_t::l2sq_k, //
+        scalar_kind_t scalar_kind = scalar_kind_t::f32_k) noexcept
+        : dimensions_(dimensions), metric_kind_(metric_kind), scalar_kind_(scalar_kind), isa_kind_(isa_kind_t::auto_k) {
+        reset_();
+    }
+
+    inline metric_punned_t(                                                                            //
+        std::size_t dimensions,                                                                        //
+        std::uintptr_t metric_uintptr, metric_kind_t metric_kind, metric_punned_signature_t signature, //
+        scalar_kind_t scalar_kind) noexcept
+        : raw_ptr_(reinterpret_cast<raw_ptr_t>(metric_uintptr)), dimensions_(dimensions), metric_kind_(metric_kind),
+          scalar_kind_(scalar_kind) {}
+
+    inline std::size_t dimensions() const noexcept { return dimensions_; }
+    inline metric_kind_t metric_kind() const noexcept { return metric_kind_; }
+    inline scalar_kind_t scalar_kind() const noexcept { return scalar_kind_; }
+    inline isa_kind_t isa_kind() const noexcept { return isa_kind_; }
 
     inline std::size_t bytes_per_vector() const noexcept {
         return divide_round_up<CHAR_BIT>(dimensions_ * bits_per_scalar(scalar_kind_));
@@ -1385,172 +1403,285 @@ class metric_punned_t {
     }
 
   private:
-    static metric_punned_t make_(std::size_t bytes_per_vector, metric_kind_t metric_kind, scalar_kind_t scalar_kind) {
-
-        switch (metric_kind) {
-        case metric_kind_t::ip_k: return ip_metric_(bytes_per_vector, scalar_kind);
-        case metric_kind_t::cos_k: return cos_metric_(bytes_per_vector, scalar_kind);
-        case metric_kind_t::l2sq_k: return l2sq_metric_(bytes_per_vector, scalar_kind);
-        case metric_kind_t::pearson_k: return pearson_metric_(bytes_per_vector, scalar_kind);
-        case metric_kind_t::haversine_k: return haversine_metric_(scalar_kind);
-
-        case metric_kind_t::hamming_k:
-            return {to_stl_<metric_hamming_gt<b1x8_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::hamming_k,
-                    scalar_kind_t::b1x8_k, isa_kind_t::auto_k};
-
+    void reset_() noexcept {
+        switch (metric_kind_) {
+        case metric_kind_t::ip_k: return reset_ip_metric_();
+        case metric_kind_t::cos_k: return reset_cos_metric_();
+        case metric_kind_t::l2sq_k: return reset_l2sq_metric_();
+        case metric_kind_t::pearson_k: return reset_pearson_metric_();
+        case metric_kind_t::haversine_k: return reset_haversine_metric_();
         case metric_kind_t::jaccard_k: // Equivalent to Tanimoto
-        case metric_kind_t::tanimoto_k:
-            return {to_stl_<metric_tanimoto_gt<b1x8_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::tanimoto_k,
-                    scalar_kind_t::b1x8_k, isa_kind_t::auto_k};
-
-        case metric_kind_t::sorensen_k:
-            return {to_stl_<metric_sorensen_gt<b1x8_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::sorensen_k,
-                    scalar_kind_t::b1x8_k, isa_kind_t::auto_k};
-
-        default: return {};
+        case metric_kind_t::tanimoto_k: raw_ptr_ = &equidimensional_<metric_tanimoto_gt<b1x8_t>>; break;
+        case metric_kind_t::hamming_k: raw_ptr_ = &equidimensional_<metric_hamming_gt<b1x8_t>>; break;
+        case metric_kind_t::sorensen_k: raw_ptr_ = &equidimensional_<metric_sorensen_gt<b1x8_t>>; break;
+        default: return;
         }
     }
 
-    template <typename typed_at> static stl_function_t to_stl_(std::size_t bytes) {
+    template <typename typed_at>
+    inline static result_t equidimensional_(size_t a, size_t b, std::size_t a_dimensions, size_t _) noexcept {
         using scalar_t = typename typed_at::scalar_t;
-        return [=](byte_t const* a, byte_t const* b) -> result_t {
-            return typed_at{}((scalar_t const*)a, (scalar_t const*)b, bytes / sizeof(scalar_t));
-        };
+        return typed_at{}((scalar_t const*)a, (scalar_t const*)b, a_dimensions);
     }
 
-    template <typename scalar_at>
-    static stl_function_t pun_stl_(std::function<result_t(scalar_at const*, scalar_at const*)> typed) {
-        return [=](byte_t const* a, byte_t const* b) -> result_t {
-            return typed((scalar_at const*)a, (scalar_at const*)b);
-        };
+    bool reset_if_(isa_kind_t isa, raw_ptr_t function_ptr, bool additional_condition = true) noexcept {
+        if (hardware_supports(isa) && additional_condition) {
+            raw_ptr_ = function_ptr;
+            isa_kind_ = isa;
+            return true;
+        } else
+            return false;
     }
 
     // clang-format off
-    static metric_punned_t ip_metric_f32_(std::size_t bytes_per_vector) {
+    void reset_ip_metric_f32_() noexcept {
         #if USEARCH_USE_SIMSIMD
         #if SIMSIMD_TARGET_ARM_NEON
-        if (hardware_supports(isa_kind_t::neon_k) && bytes_per_vector % 16 == 0) return {pun_stl_<f32_t>([=](f32_t const* a, f32_t const* b) { return simsimd_dot_f32x4_neon(a, b, bytes_per_vector / 4); }), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f32_k, isa_kind_t::neon_k};
-        #endif
-        #if SIMSIMD_TARGET_ARM_SVE
-        if (hardware_supports(isa_kind_t::sve_k)) return {pun_stl_<f32_t>([=](f32_t const* a, f32_t const* b) { return simsimd_dot_f32_sve(a, b, bytes_per_vector / 4); }), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f32_k, isa_kind_t::sve_k};
-        #endif
-        #if SIMSIMD_TARGET_X86_AVX2
-        if (hardware_supports(isa_kind_t::avx2_k) && bytes_per_vector % 16 == 0) return {pun_stl_<f32_t>([=](f32_t const* a, f32_t const* b) { return simsimd_dot_f32x4_avx2(a, b, bytes_per_vector / 4); }), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f32_k, isa_kind_t::avx2_k};
+        if (reset_if_(isa_kind_t::neon_k, &simsimd_dot_f32x4_neon, bytes_per_vector % 16 == 0)) return;
+        #elif SIMSIMD_TARGET_ARM_SVE
+        if (reset_if_(isa_kind_t::sve_k, &simsimd_dot_f32_sve)) return;
+        #elif SIMSIMD_TARGET_X86_AVX2
+        if (reset_if_(isa_kind_t::avx2_k, &simsimd_dot_f32x4_avx2, bytes_per_vector % 16 == 0)) return;
         #endif
         #endif
-        return {to_stl_<metric_ip_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
+        raw_ptr_ = &equidimensional_<metric_ip_gt<f32_t>>;
     }
 
-    static metric_punned_t cos_metric_f16_(std::size_t bytes_per_vector) {
+    void reset_cos_metric_f16_() noexcept {
         #if USEARCH_USE_SIMSIMD
         #if SIMSIMD_TARGET_X86_AVX512
-        if (hardware_supports(isa_kind_t::avx512f16_k) && bytes_per_vector % 32 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_cos_f16x16_avx512(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::avx512f16_k};
-        #endif
-        #if SIMSIMD_TARGET_X86_AVX2
-        if (hardware_supports(isa_kind_t::avx2f16_k) && bytes_per_vector % 16 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_cos_f16x8_avx2(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::avx2f16_k};
-        #endif
-        #if SIMSIMD_TARGET_ARM_NEON
-        if (hardware_supports(isa_kind_t::neon_k) && bytes_per_vector % 8 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_cos_f16x4_neon(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::neon_k};
-        #endif
-        #if SIMSIMD_TARGET_ARM_SVE
-        if (hardware_supports(isa_kind_t::sve_k)) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_cos_f16_sve(a, b, bytes_per_vector / 4); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::sve_k};
+        if (reset_if_(isa_kind_t::avx512f16_k), &simsimd_cos_f16x16_avx512, bytes_per_vector % 32 == 0) return;
+        #elif SIMSIMD_TARGET_X86_AVX2
+        if (reset_if_(isa_kind_t::avx2f16_k), &simsimd_cos_f16x8_avx2, bytes_per_vector % 16 == 0) return;
+        #elif SIMSIMD_TARGET_ARM_NEON
+        if (reset_if_(isa_kind_t::neon_k), &simsimd_cos_f16x4_neon, bytes_per_vector % 8 == 0) return;
+        #elif SIMSIMD_TARGET_ARM_SVE
+        if (reset_if_(isa_kind_t::sve_k, &simsimd_cos_f16_sve)) return;
         #endif
         #endif
-        return {to_stl_<metric_cos_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
+        raw_ptr_ = &equidimensional_<metric_cos_gt<f16_t, f32_t>>;
     }
 
-    static metric_punned_t ip_metric_f16_(std::size_t bytes_per_vector) {
+    void reset_ip_metric_f16_() noexcept {
         #if USEARCH_USE_SIMSIMD
         #if SIMSIMD_TARGET_X86_AVX512
-        if (hardware_supports(isa_kind_t::avx512f16_k) && bytes_per_vector % 32 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_dot_f16x16_avx512(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f16_k, isa_kind_t::avx512f16_k};
-        #endif
-        #if SIMSIMD_TARGET_X86_AVX2
-        if (hardware_supports(isa_kind_t::avx2f16_k) && bytes_per_vector % 16 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_dot_f16x8_avx2(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f16_k, isa_kind_t::avx2f16_k};
-        #endif
-        #if SIMSIMD_TARGET_ARM_NEON
-        if (hardware_supports(isa_kind_t::neon_k) && bytes_per_vector % 8 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_dot_f16x4_neon(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f16_k, isa_kind_t::neon_k};
+        if (reset_if_(isa_kind_t::avx512f16_k), &simsimd_dot_f16x16_avx512, bytes_per_vector % 32 == 0) return;
+        #elif SIMSIMD_TARGET_X86_AVX2
+        if (reset_if_(isa_kind_t::avx2f16_k), &simsimd_dot_f16x8_avx2, bytes_per_vector % 16 == 0) return;
+        #elif SIMSIMD_TARGET_ARM_NEON
+        if (reset_if_(isa_kind_t::neon_k), &simsimd_dot_f16x4_neon, bytes_per_vector % 8 == 0) return;
         #endif
         #endif
-        return {to_stl_<metric_cos_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
+        raw_ptr_ = &equidimensional_<metric_cos_gt<f16_t, f32_t>>;
     }
 
-    static metric_punned_t l2sq_metric_f16_(std::size_t bytes_per_vector) {
+    void reset_l2sq_metric_f16_() noexcept {
         #if USEARCH_USE_SIMSIMD
         #if SIMSIMD_TARGET_X86_AVX512
-        if (hardware_supports(isa_kind_t::avx512f16_k) && bytes_per_vector % 32 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_l2sq_f16x16_avx512(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::avx512f16_k};
-        #endif
-        #if SIMSIMD_TARGET_X86_AVX2
-        if (hardware_supports(isa_kind_t::avx2f16_k) && bytes_per_vector % 16 == 0) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_l2sq_f16x8_avx2(a, b, bytes_per_vector / 2); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f16_k, isa_kind_t::avx2f16_k};
-        #endif
-        #if SIMSIMD_TARGET_ARM_SVE
-        if (hardware_supports(isa_kind_t::sve_k)) return {pun_stl_<simsimd_f16_t>([=](simsimd_f16_t const* a, simsimd_f16_t const* b) { return simsimd_l2sq_f16_sve(a, b, bytes_per_vector / 4); }), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f16_k, isa_kind_t::sve_k};
+        if (reset_if_(isa_kind_t::avx512f16_k), &simsimd_l2sq_f16x16_avx512, bytes_per_vector % 32 == 0) return;
+        #elif SIMSIMD_TARGET_X86_AVX2
+        if (reset_if_(isa_kind_t::avx2f16_k), &simsimd_l2sq_f16x8_avx2, bytes_per_vector % 16 == 0) return;
+        #elif SIMSIMD_TARGET_ARM_SVE
+        if (reset_if_(isa_kind_t::sve_k, &simsimd_l2sq_f16_sve)) return;
         #endif
         #endif
-        return {to_stl_<metric_l2sq_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
-    }    
+        raw_ptr_ = &equidimensional_<metric_l2sq_gt<f16_t, f32_t>>;
+    }
 
-    static metric_punned_t cos_metric_i8_(std::size_t bytes_per_vector) {
+    void reset_cos_metric_i8_() noexcept {
         #if USEARCH_USE_SIMSIMD
         #if SIMSIMD_TARGET_ARM_NEON
-        if (hardware_supports(isa_kind_t::neon_k) && bytes_per_vector % 16 == 0) return {pun_stl_<int8_t>([=](int8_t const* a, int8_t const* b) { return simsimd_cos_i8x16_neon(a, b, bytes_per_vector); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::i8_k, isa_kind_t::neon_k};
+        if (reset_if_(isa_kind_t::neon_k), &simsimd_cos_i8x16_neon, bytes_per_vector % 16 == 0) return;
+        #elif SIMSIMD_TARGET_X86_AVX2
+        if (reset_if_(isa_kind_t::avx2_k), &simsimd_cos_i8x32_avx2, bytes_per_vector % 32 == 0) return;
         #endif
-        #if SIMSIMD_TARGET_X86_AVX2
-        if (hardware_supports(isa_kind_t::avx2_k) && bytes_per_vector % 32 == 0) return {pun_stl_<int8_t>([=](int8_t const* a, int8_t const* b) { return simsimd_cos_i8x32_avx2(a, b, bytes_per_vector); }), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::i8_k, isa_kind_t::avx2_k};
         #endif
-        #endif
-        return {to_stl_<cos_i8_t>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::i8_k, isa_kind_t::auto_k};
-    }
-
-    static metric_punned_t ip_metric_(std::size_t bytes_per_vector, scalar_kind_t scalar_kind) {        
-        switch (scalar_kind) { // The two most common numeric types for the most common metric have optimized versions
-        case scalar_kind_t::f32_k: return ip_metric_f32_(bytes_per_vector);
-        case scalar_kind_t::f16_k: return ip_metric_f16_(bytes_per_vector);
-        case scalar_kind_t::i8_k:  return cos_metric_i8_(bytes_per_vector);
-        case scalar_kind_t::f64_k: return {to_stl_<metric_ip_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::ip_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
-        default: return {};
-        }
-    }
-
-    static metric_punned_t l2sq_metric_(std::size_t bytes_per_vector, scalar_kind_t scalar_kind) {
-        switch (scalar_kind) {
-        case scalar_kind_t::i8_k: return {to_stl_<l2sq_i8_t>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::i8_k, isa_kind_t::auto_k};
-        case scalar_kind_t::f16_k: return l2sq_metric_f16_(bytes_per_vector);
-        case scalar_kind_t::f32_k: return {to_stl_<metric_l2sq_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
-        case scalar_kind_t::f64_k: return {to_stl_<metric_l2sq_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::l2sq_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
-        default: return {};
-        }
-    }
-
-    static metric_punned_t cos_metric_(std::size_t bytes_per_vector, scalar_kind_t scalar_kind) {
-        switch (scalar_kind) {
-        case scalar_kind_t::i8_k: return cos_metric_i8_(bytes_per_vector);
-        case scalar_kind_t::f16_k: return cos_metric_f16_(bytes_per_vector);
-        case scalar_kind_t::f32_k: return {to_stl_<metric_cos_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
-        case scalar_kind_t::f64_k: return {to_stl_<metric_cos_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::cos_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
-        default: return {};
-        }
-    }
-
-    static metric_punned_t haversine_metric_(scalar_kind_t scalar_kind) {
-        std::size_t bytes_per_vector = 2u * bits_per_scalar(scalar_kind) / CHAR_BIT;
-        switch (scalar_kind) {
-        case scalar_kind_t::f16_k: return {to_stl_<metric_haversine_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::haversine_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
-        case scalar_kind_t::f32_k: return {to_stl_<metric_haversine_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::haversine_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
-        case scalar_kind_t::f64_k: return {to_stl_<metric_haversine_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::haversine_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
-        default: return {};
-        }
-    }
-
-    static metric_punned_t pearson_metric_(std::size_t bytes_per_vector, scalar_kind_t scalar_kind) {
-        switch (scalar_kind) {
-        case scalar_kind_t::i8_k: return {to_stl_<metric_pearson_gt<i8_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::i8_k, isa_kind_t::auto_k};
-        case scalar_kind_t::f16_k: return {to_stl_<metric_pearson_gt<f16_t, f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::f16_k, isa_kind_t::auto_k};
-        case scalar_kind_t::f32_k: return {to_stl_<metric_pearson_gt<f32_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::f32_k, isa_kind_t::auto_k};
-        case scalar_kind_t::f64_k: return {to_stl_<metric_pearson_gt<f64_t>>(bytes_per_vector), bytes_per_vector, metric_kind_t::pearson_k, scalar_kind_t::f64_k, isa_kind_t::auto_k};
-        default: return {};
-        }
+        raw_ptr_ = &equidimensional_<cos_i8_t>;
     }
     // clang-format on
+
+    void reset_ip_metric_() noexcept {
+        switch (scalar_kind_) { // The two most common numeric types for the most common metric have optimized versions
+        case scalar_kind_t::f32_k: return reset_ip_metric_f32_();
+        case scalar_kind_t::f16_k: return reset_ip_metric_f16_();
+        case scalar_kind_t::i8_k: return reset_cos_metric_i8_();
+        case scalar_kind_t::f64_k: raw_ptr_ = &equidimensional_<metric_ip_gt<f64_t>>; break;
+        default: return;
+        }
+    }
+
+    void reset_l2sq_metric_() noexcept {
+        switch (scalar_kind_) {
+        case scalar_kind_t::i8_k: raw_ptr_ = &equidimensional_<l2sq_i8_t>; break;
+        case scalar_kind_t::f16_k: return reset_l2sq_metric_f16_();
+        case scalar_kind_t::f32_k: raw_ptr_ = &equidimensional_<metric_l2sq_gt<f32_t>>; break;
+        case scalar_kind_t::f64_k: raw_ptr_ = &equidimensional_<metric_l2sq_gt<f64_t>>; break;
+        default: return;
+        }
+    }
+
+    void reset_cos_metric_() noexcept {
+        switch (scalar_kind_) {
+        case scalar_kind_t::i8_k: return reset_cos_metric_i8_();
+        case scalar_kind_t::f16_k: return reset_cos_metric_f16_();
+        case scalar_kind_t::f32_k: raw_ptr_ = &equidimensional_<metric_cos_gt<f32_t>>; break;
+        case scalar_kind_t::f64_k: raw_ptr_ = &equidimensional_<metric_cos_gt<f64_t>>; break;
+        default: return;
+        }
+    }
+
+    void reset_haversine_metric_() noexcept {
+        switch (scalar_kind_) {
+        case scalar_kind_t::f16_k: raw_ptr_ = &equidimensional_<metric_haversine_gt<f16_t, f32_t>>; break;
+        case scalar_kind_t::f32_k: raw_ptr_ = &equidimensional_<metric_haversine_gt<f32_t>>; break;
+        case scalar_kind_t::f64_k: raw_ptr_ = &equidimensional_<metric_haversine_gt<f64_t>>; break;
+        default: return;
+        }
+    }
+
+    void reset_pearson_metric_() noexcept {
+        switch (scalar_kind_) {
+        case scalar_kind_t::i8_k: raw_ptr_ = &equidimensional_<metric_pearson_gt<i8_t, f32_t>>; break;
+        case scalar_kind_t::f16_k: raw_ptr_ = &equidimensional_<metric_pearson_gt<f16_t, f32_t>>; break;
+        case scalar_kind_t::f32_k: raw_ptr_ = &equidimensional_<metric_pearson_gt<f32_t>>; break;
+        case scalar_kind_t::f64_k: raw_ptr_ = &equidimensional_<metric_pearson_gt<f64_t>>; break;
+        default: return;
+        }
+    }
+};
+
+/**
+ *  @brief  View over a potentially-strided memory buffer, containing a row-major matrix.
+ */
+template <typename scalar_at> //
+class vectors_view_gt {
+    using scalar_t = scalar_at;
+
+    scalar_t const* begin_{};
+    std::size_t dimensions_{};
+    std::size_t count_{};
+    std::size_t stride_bytes_{};
+
+  public:
+    vectors_view_gt() noexcept = default;
+    vectors_view_gt(vectors_view_gt const&) noexcept = default;
+    vectors_view_gt& operator=(vectors_view_gt const&) noexcept = default;
+
+    vectors_view_gt(scalar_t const* begin, std::size_t dimensions, std::size_t count = 1) noexcept
+        : vectors_view_gt(begin, dimensions, count, dimensions * sizeof(scalar_at)) {}
+
+    vectors_view_gt(scalar_t const* begin, std::size_t dimensions, std::size_t count, std::size_t stride_bytes) noexcept
+        : begin_(begin), dimensions_(dimensions), count_(count), stride_bytes_(stride_bytes) {}
+
+    std::size_t size() const noexcept { return count_; }
+    std::size_t dimensions() const noexcept { return dimensions_; }
+    std::size_t stride() const noexcept { return stride_bytes_; }
+    scalar_t const* data() const noexcept { return begin_; }
+    scalar_t const* at(std::size_t i) const noexcept {
+        return reinterpret_cast<scalar_t const*>(reinterpret_cast<byte_t const*>(begin_) + i * stride_bytes_);
+    }
+};
+
+/**
+ *  @brief  Helper-structure for exact search operations.
+ *          Perfect if you have @b <1M vectors and @b <100 queries per call.
+ *
+ *  Uses a 3-step procedure to minimize:
+ *  - cache-misses on vector lookups,
+ *  - multi-threaded contention on concurrent writes.
+ */
+class exact_search_t {
+
+    struct offset_and_distance_t {
+        u32_t offset;
+        f32_t distance;
+    };
+    static_assert(sizeof(offset_and_distance_t) == sizeof(std::uint64_t));
+
+    inline static bool smaller_distance(offset_and_distance_t a, offset_and_distance_t b) noexcept {
+        return a.distance < b.distance;
+    }
+
+    std::vector<offset_and_distance_t> keys_and_distances;
+
+  public:
+    template <typename scalar_at, typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
+    vectors_view_gt<offset_and_distance_t> operator()(                                                         //
+        metric_punned_t const& metric, vectors_view_gt<scalar_at> dataset, vectors_view_gt<scalar_at> queries, //
+        std::size_t wanted, executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
+        return operator()(                                                                     //
+            metric,                                                                            //
+            reinterpret_cast<byte_t const*>(dataset.data()), dataset.size(), dataset.stride(), //
+            reinterpret_cast<byte_t const*>(queries.data()), queries.size(), queries.stride(), //
+            wanted, executor, progress);
+    }
+
+    template <typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
+    vectors_view_gt<offset_and_distance_t> operator()(                                     //
+        metric_punned_t const& metric,                                                     //
+        byte_t const* dataset_data, std::size_t dataset_count, std::size_t dataset_stride, //
+        byte_t const* queries_data, std::size_t queries_count, std::size_t queries_stride, //
+        std::size_t wanted, executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
+
+        // Allocate temporary memory to store the distance matrix
+        // Previous version didn't need temporary memory, but the performance was much lower.
+        // In the new design we keep two buffers - original and transposed, as in-place transpositions
+        // of non-rectangular matrixes is expensive.
+        std::size_t tasks_count = dataset_count * queries_count;
+        keys_and_distances.resize(tasks_count * 2);
+        offset_and_distance_t* keys_and_distances_per_dataset = keys_and_distances.data();
+        offset_and_distance_t* keys_and_distances_per_query = keys_and_distances_per_dataset + tasks_count;
+
+        // §1. Compute distances in a data-parallel fashion
+        std::atomic<std::size_t> processed{0};
+        executor.dynamic(dataset_count, [&](std::size_t thread_idx, std::size_t dataset_idx) {
+            byte_t const* dataset = dataset_data + dataset_idx * dataset_stride;
+            for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx) {
+                byte_t const* query = queries_data + query_idx * queries_stride;
+                auto distance = metric(dataset, query);
+                std::size_t task_idx = queries_count * dataset_idx + query_idx;
+                keys_and_distances_per_dataset[task_idx].offset = static_cast<u32_t>(dataset_idx);
+                keys_and_distances_per_dataset[task_idx].distance = static_cast<f32_t>(distance);
+            }
+
+            // It's more efficient in this case to report progress from a single thread
+            processed += queries_count;
+            if (thread_idx == 0)
+                if (!progress(processed.load(), tasks_count))
+                    return false;
+            return true;
+        });
+        if (processed.load() != tasks_count)
+            return {};
+
+        // §2. Transpose in a single thread to avoid contention writing into the same memory buffers
+        for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx) {
+            for (std::size_t dataset_idx = 0; dataset_idx != dataset_count; ++dataset_idx) {
+                std::size_t from_idx = queries_count * dataset_idx + query_idx;
+                std::size_t to_idx = dataset_count * query_idx + dataset_idx;
+                keys_and_distances_per_query[to_idx] = keys_and_distances_per_dataset[from_idx];
+            }
+        }
+
+        // §3. Partial-sort every query result
+        executor.fixed(queries_count, [&](std::size_t, std::size_t query_idx) {
+            auto start = keys_and_distances_per_query + dataset_count * query_idx;
+            if (wanted > 1) {
+                // TODO: Consider alternative sorting approaches
+                // radix_sort(start, start + dataset_count, wanted);
+                // std::sort(start, start + dataset_count, &smaller_distance);
+                std::partial_sort(start, start + wanted, start + dataset_count, &smaller_distance);
+            } else {
+                auto min_it = std::min_element(start, start + dataset_count, &smaller_distance);
+                if (min_it != start)
+                    std::swap(*min_it, *start);
+            }
+        });
+
+        // At the end report the latest numbers, because the reporter thread may be finished earlier
+        progress(tasks_count, tasks_count);
+        return {keys_and_distances_per_query, wanted, queries_count, dataset_count * sizeof(offset_and_distance_t)};
+    }
 };
 
 /**

@@ -1,9 +1,12 @@
 /**
  * @brief A trivial test.
  */
-#include <algorithm>
+#include <algorithm> // `std::shuffle`
+#include <cassert>   // `assert`
+#include <random>    // `std::default_random_engine`
 #include <stdexcept>
 #include <unordered_map>
+#include <vector> // for std::vector
 
 #include <usearch/index.hpp>
 #include <usearch/index_dense.hpp>
@@ -234,6 +237,26 @@ template <typename key_at, typename slot_at> void test_tanimoto(std::size_t dime
     });
 }
 
+void test_exact_search(std::size_t dataset_count, std::size_t queries_count, std::size_t wanted_count) {
+    std::size_t dimensions = 10;
+    metric_punned_t metric(dimensions, metric_kind_t::cos_k);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dis(0.0, 1.0);
+    std::vector<float> dataset(dataset_count * dimensions);
+    std::generate(dataset.begin(), dataset.end(), [&] { return dis(gen); });
+
+    exact_search_t search;
+    auto results = search(                                                        //
+        metric,                                                                   //
+        (byte_t const*)dataset.data(), dataset_count, dimensions * sizeof(float), //
+        (byte_t const*)dataset.data(), queries_count, dimensions * sizeof(float), wanted_count);
+
+    for (std::size_t i = 0; i < results.size(); ++i)
+        assert(results.at(i)[0].offset == i); // Validate the top match
+}
+
 template <typename index_at> void test_sets(index_at&& index) {
 
     using index_t = typename std::remove_reference<index_at>::type;
@@ -271,6 +294,11 @@ template <typename index_at> void test_sets_moved(index_config_t const& config) 
 }
 
 int main(int, char**) {
+
+    for (std::size_t dataset_count : {10, 100})
+        for (std::size_t queries_count : {1, 10})
+            for (std::size_t wanted_count : {1, 5})
+                test_exact_search(dataset_count, queries_count, wanted_count);
 
     for (std::size_t collection_size : {10, 500})
         for (std::size_t dimensions : {97, 256}) {

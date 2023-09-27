@@ -135,18 +135,6 @@ struct alignas(32) persisted_matrix_gt {
     std::size_t size_bytes() const noexcept { return rows * row_size_bytes(); }
 };
 
-template <typename scalar_at> //
-struct vectors_view_gt {
-    using scalar_t = scalar_at;
-
-    scalar_t const* begin_{};
-    std::size_t count_{};
-    std::size_t stride_{};
-
-    std::size_t size() const noexcept { return count_; }
-    scalar_t const* at(std::size_t i) const noexcept { return begin_ + i * stride_; }
-};
-
 template <typename scalar_at, typename vector_id_at> //
 struct persisted_dataset_gt {
     using scalar_t = scalar_at;

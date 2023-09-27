@@ -58,24 +58,13 @@ def test_index_numba(ndim: int, batch_size: int):
             c += a_array[i] * b_array[i]
         return 1 - c
 
-    @cfunc(signature_four_args)
-    def python_inner_product_four_args(a, a_ndim, b, b_ndim):
-        a_array = carray(a, a_ndim)
-        b_array = carray(b, b_ndim)
-        c = 0.0
-        for i in range(a_ndim):
-            c += a_array[i] * b_array[i]
-        return 1 - c
-
     functions = [
         python_inner_product_two_args,
         python_inner_product_three_args,
-        python_inner_product_four_args,
     ]
     signatures = [
         MetricSignature.ArrayArray,
         MetricSignature.ArrayArraySize,
-        MetricSignature.ArraySizeArraySize,
     ]
     for function, signature in zip(functions, signatures):
         metric = CompiledMetric(
@@ -133,12 +122,12 @@ def test_index_cppyy(ndim: int, batch_size: int):
     functions = [
         cppyy.gbl.inner_product_two_args,
         cppyy.gbl.inner_product_three_args,
-        cppyy.gbl.inner_product_four_args,
+        # cppyy.gbl.inner_product_four_args,
     ]
     signatures = [
         MetricSignature.ArrayArray,
         MetricSignature.ArrayArraySize,
-        MetricSignature.ArraySizeArraySize,
+        # MetricSignature.ArraySizeArraySize,
     ]
     for function, signature in zip(functions, signatures):
         metric = CompiledMetric(
