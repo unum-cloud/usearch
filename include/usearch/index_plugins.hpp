@@ -1349,7 +1349,8 @@ class metric_punned_t {
     using result_t = distance_punned_t;
 
   private:
-    using raw_ptr_t = result_t (*)(size_t, size_t, size_t, size_t);
+    using punned_arg_t = std::size_t;
+    using raw_ptr_t = result_t (*)(punned_arg_t, punned_arg_t, punned_arg_t, punned_arg_t);
     raw_ptr_t raw_ptr_ = nullptr;
 
     std::size_t dimensions_ = 0;
@@ -1364,10 +1365,10 @@ class metric_punned_t {
      * This is the only relevant function in the object. Everything else is just dynamic dispatch logic.
      */
     inline result_t operator()(byte_t const* a, byte_t const* b) const noexcept {
-        size_t raw_arg1_ = reinterpret_cast<size_t>(a);
-        size_t raw_arg2_ = reinterpret_cast<size_t>(b);
-        size_t raw_arg3_ = dimensions_;
-        size_t raw_arg4_ = dimensions_;
+        punned_arg_t raw_arg1_ = reinterpret_cast<punned_arg_t>(a);
+        punned_arg_t raw_arg2_ = reinterpret_cast<punned_arg_t>(b);
+        punned_arg_t raw_arg3_ = dimensions_;
+        punned_arg_t raw_arg4_ = dimensions_;
         return raw_ptr_(raw_arg1_, raw_arg2_, raw_arg3_, raw_arg4_);
     }
 
@@ -1382,12 +1383,17 @@ class metric_punned_t {
         reset_();
     }
 
-    inline metric_punned_t(                                                                            //
-        std::size_t dimensions,                                                                        //
-        std::uintptr_t metric_uintptr, metric_kind_t metric_kind, metric_punned_signature_t signature, //
+    inline metric_punned_t(                                                 //
+        std::size_t dimensions,                                             //
+        std::uintptr_t metric_uintptr, metric_punned_signature_t signature, //
+        metric_kind_t metric_kind,                                          //
         scalar_kind_t scalar_kind) noexcept
         : raw_ptr_(reinterpret_cast<raw_ptr_t>(metric_uintptr)), dimensions_(dimensions), metric_kind_(metric_kind),
-          scalar_kind_(scalar_kind) {}
+          scalar_kind_(scalar_kind) {
+
+        // We don't need to explicitly parse signature, as all of them are compatible.
+        (void)signature;
+    }
 
     inline std::size_t dimensions() const noexcept { return dimensions_; }
     inline metric_kind_t metric_kind() const noexcept { return metric_kind_; }
@@ -1419,8 +1425,11 @@ class metric_punned_t {
     }
 
     template <typename typed_at>
-    inline static result_t equidimensional_(size_t a, size_t b, std::size_t a_dimensions, size_t _) noexcept {
+    inline static result_t equidimensional_( //
+        punned_arg_t a, punned_arg_t b,      //
+        punned_arg_t a_dimensions, punned_arg_t b_dimensions) noexcept {
         using scalar_t = typename typed_at::scalar_t;
+        (void)b_dimensions;
         return typed_at{}((scalar_t const*)a, (scalar_t const*)b, a_dimensions);
     }
 
@@ -1573,6 +1582,7 @@ class vectors_view_gt {
     vectors_view_gt(scalar_t const* begin, std::size_t dimensions, std::size_t count, std::size_t stride_bytes) noexcept
         : begin_(begin), dimensions_(dimensions), count_(count), stride_bytes_(stride_bytes) {}
 
+    explicit operator bool() const noexcept { return begin_; }
     std::size_t size() const noexcept { return count_; }
     std::size_t dimensions() const noexcept { return dimensions_; }
     std::size_t stride() const noexcept { return stride_bytes_; }
@@ -1581,6 +1591,13 @@ class vectors_view_gt {
         return reinterpret_cast<scalar_t const*>(reinterpret_cast<byte_t const*>(begin_) + i * stride_bytes_);
     }
 };
+
+struct exact_offset_and_distance_t {
+    u32_t offset;
+    f32_t distance;
+};
+
+using exact_search_results_t = vectors_view_gt<exact_offset_and_distance_t>;
 
 /**
  *  @brief  Helper-structure for exact search operations.
@@ -1592,23 +1609,19 @@ class vectors_view_gt {
  */
 class exact_search_t {
 
-    struct offset_and_distance_t {
-        u32_t offset;
-        f32_t distance;
-    };
-    static_assert(sizeof(offset_and_distance_t) == sizeof(std::uint64_t));
-
-    inline static bool smaller_distance(offset_and_distance_t a, offset_and_distance_t b) noexcept {
+    inline static bool smaller_distance(exact_offset_and_distance_t a, exact_offset_and_distance_t b) noexcept {
         return a.distance < b.distance;
     }
 
-    std::vector<offset_and_distance_t> keys_and_distances;
+    using keys_and_distances_t = buffer_gt<exact_offset_and_distance_t>;
+    keys_and_distances_t keys_and_distances;
 
   public:
     template <typename scalar_at, typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
-    vectors_view_gt<offset_and_distance_t> operator()(                                                         //
-        metric_punned_t const& metric, vectors_view_gt<scalar_at> dataset, vectors_view_gt<scalar_at> queries, //
-        std::size_t wanted, executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
+    exact_search_results_t operator()(                                          //
+        vectors_view_gt<scalar_at> dataset, vectors_view_gt<scalar_at> queries, //
+        std::size_t wanted, metric_punned_t const& metric,                      //
+        executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
         return operator()(                                                                     //
             metric,                                                                            //
             reinterpret_cast<byte_t const*>(dataset.data()), dataset.size(), dataset.stride(), //
@@ -1617,20 +1630,24 @@ class exact_search_t {
     }
 
     template <typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
-    vectors_view_gt<offset_and_distance_t> operator()(                                     //
-        metric_punned_t const& metric,                                                     //
+    exact_search_results_t operator()(                                                     //
         byte_t const* dataset_data, std::size_t dataset_count, std::size_t dataset_stride, //
         byte_t const* queries_data, std::size_t queries_count, std::size_t queries_stride, //
-        std::size_t wanted, executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
+        std::size_t wanted, metric_punned_t const& metric, executor_at&& executor = executor_at{},
+        progress_at&& progress = progress_at{}) {
 
         // Allocate temporary memory to store the distance matrix
         // Previous version didn't need temporary memory, but the performance was much lower.
         // In the new design we keep two buffers - original and transposed, as in-place transpositions
         // of non-rectangular matrixes is expensive.
         std::size_t tasks_count = dataset_count * queries_count;
-        keys_and_distances.resize(tasks_count * 2);
-        offset_and_distance_t* keys_and_distances_per_dataset = keys_and_distances.data();
-        offset_and_distance_t* keys_and_distances_per_query = keys_and_distances_per_dataset + tasks_count;
+        if (keys_and_distances.size() < tasks_count * 2)
+            keys_and_distances = keys_and_distances_t(tasks_count * 2);
+        if (keys_and_distances.size() < tasks_count * 2)
+            return {};
+
+        exact_offset_and_distance_t* keys_and_distances_per_dataset = keys_and_distances.data();
+        exact_offset_and_distance_t* keys_and_distances_per_query = keys_and_distances_per_dataset + tasks_count;
 
         // §1. Compute distances in a data-parallel fashion
         std::atomic<std::size_t> processed{0};
@@ -1680,7 +1697,8 @@ class exact_search_t {
 
         // At the end report the latest numbers, because the reporter thread may be finished earlier
         progress(tasks_count, tasks_count);
-        return {keys_and_distances_per_query, wanted, queries_count, dataset_count * sizeof(offset_and_distance_t)};
+        return {keys_and_distances_per_query, wanted, queries_count,
+                dataset_count * sizeof(exact_offset_and_distance_t)};
     }
 };
 

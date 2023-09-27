@@ -122,7 +122,7 @@ static dense_index_py_t make_index(             //
 
     metric_t metric =  //
         metric_uintptr //
-            ? metric_t(dimensions, metric_uintptr, metric_kind, metric_signature, scalar_kind)
+            ? metric_t(dimensions, metric_uintptr, metric_signature, metric_kind, scalar_kind)
             : metric_t(dimensions, metric_kind, scalar_kind);
     return index_dense_t::make(metric, config);
 }
@@ -481,7 +481,7 @@ static py::tuple search_many_brute_force(       //
     std::size_t dimensions = static_cast<std::size_t>(queries_dimensions);
     metric_t metric =  //
         metric_uintptr //
-            ? metric_t(dimensions, metric_uintptr, metric_kind, metric_signature, queries_kind)
+            ? metric_t(dimensions, metric_uintptr, metric_signature, metric_kind, queries_kind)
             : metric_t(dimensions, metric_kind, queries_kind);
 
     py::array_t<dense_key_t> keys_py({static_cast<Py_ssize_t>(queries_count), static_cast<Py_ssize_t>(wanted)});
@@ -501,24 +501,27 @@ static py::tuple search_many_brute_force(       //
         threads = std::thread::hardware_concurrency();
 
     // Dispatch brute-force search
+    progress_t progress{progress_func};
     executor_default_t executor{threads};
     exact_search_t search;
-    progress_t progress{progress_func};
 
-    auto offsets_and_distances = search(             //
-        metric,                                      //
-        dataset_data, dataset_count, dataset_stride, //
-        queries_data, queries_count, queries_stride, //
-        wanted, executor,
+    exact_search_results_t offsets_and_distances = search( //
+        dataset_data, dataset_count, dataset_stride,       //
+        queries_data, queries_count, queries_stride,       //
+        wanted, metric, executor,
         [&](std::size_t passed, std::size_t total) { return PyErr_CheckSignals() == 0 && progress(passed, total); });
+
+    if (!offsets_and_distances)
+        throw std::bad_alloc();
 
     // Export the results
     for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx) {
-        dense_key_t* keys = &keys_py2d(query_idx, 0);
-        distance_t* distances = &distances_py2d(query_idx, 0);
-        auto start = offsets_and_distances.at(query_idx);
+        dense_key_t* query_keys = &keys_py2d(query_idx, 0);
+        distance_t* query_distances = &distances_py2d(query_idx, 0);
+        auto query_result = offsets_and_distances.at(query_idx);
         for (std::size_t i = 0; i != wanted; ++i)
-            keys[i] = static_cast<dense_key_t>(start[i].offset), distances[i] = start[i].distance;
+            query_keys[i] = static_cast<dense_key_t>(query_result[i].offset),
+            query_distances[i] = query_result[i].distance;
     }
 
     py::tuple results(5);
@@ -1075,7 +1078,7 @@ PYBIND11_MODULE(compiled, m) {
             std::size_t dimensions = index.dimensions();
             metric_t metric =  //
                 metric_uintptr //
-                    ? metric_t(dimensions, metric_uintptr, metric_kind, metric_signature, scalar_kind)
+                    ? metric_t(dimensions, metric_uintptr, metric_signature, metric_kind, scalar_kind)
                     : metric_t(dimensions, metric_kind, scalar_kind);
             index.change_metric(std::move(metric));
         },
