@@ -1352,6 +1352,8 @@ class metric_punned_t {
     using punned_arg_t = std::size_t;
     using raw_ptr_t = result_t (*)(punned_arg_t, punned_arg_t, punned_arg_t, punned_arg_t);
     raw_ptr_t raw_ptr_ = nullptr;
+    punned_arg_t raw_arg3_ = 0;
+    punned_arg_t raw_arg4_ = 0;
 
     std::size_t dimensions_ = 0;
     metric_kind_t metric_kind_ = metric_kind_t::unknown_k;
@@ -1362,14 +1364,10 @@ class metric_punned_t {
     /**
      *  @brief  Computes the distance between two vectors of fixed length.
      *
-     * This is the only relevant function in the object. Everything else is just dynamic dispatch logic.
+     *  ! This is the only relevant function in the object. Everything else is just dynamic dispatch logic.
      */
     inline result_t operator()(byte_t const* a, byte_t const* b) const noexcept {
-        punned_arg_t raw_arg1_ = reinterpret_cast<punned_arg_t>(a);
-        punned_arg_t raw_arg2_ = reinterpret_cast<punned_arg_t>(b);
-        punned_arg_t raw_arg3_ = dimensions_;
-        punned_arg_t raw_arg4_ = dimensions_;
-        return raw_ptr_(raw_arg1_, raw_arg2_, raw_arg3_, raw_arg4_);
+        return raw_ptr_(reinterpret_cast<punned_arg_t>(a), reinterpret_cast<punned_arg_t>(b), raw_arg3_, raw_arg4_);
     }
 
     inline metric_punned_t() noexcept = default;
@@ -1379,7 +1377,8 @@ class metric_punned_t {
         std::size_t dimensions,                            //
         metric_kind_t metric_kind = metric_kind_t::l2sq_k, //
         scalar_kind_t scalar_kind = scalar_kind_t::f32_k) noexcept
-        : dimensions_(dimensions), metric_kind_(metric_kind), scalar_kind_(scalar_kind), isa_kind_(isa_kind_t::auto_k) {
+        : raw_arg3_(dimensions), raw_arg4_(dimensions), dimensions_(dimensions), metric_kind_(metric_kind),
+          scalar_kind_(scalar_kind), isa_kind_(isa_kind_t::auto_k) {
         reset_();
     }
 
@@ -1417,9 +1416,18 @@ class metric_punned_t {
         case metric_kind_t::pearson_k: return reset_pearson_metric_();
         case metric_kind_t::haversine_k: return reset_haversine_metric_();
         case metric_kind_t::jaccard_k: // Equivalent to Tanimoto
-        case metric_kind_t::tanimoto_k: raw_ptr_ = &equidimensional_<metric_tanimoto_gt<b1x8_t>>; break;
-        case metric_kind_t::hamming_k: raw_ptr_ = &equidimensional_<metric_hamming_gt<b1x8_t>>; break;
-        case metric_kind_t::sorensen_k: raw_ptr_ = &equidimensional_<metric_sorensen_gt<b1x8_t>>; break;
+        case metric_kind_t::tanimoto_k:
+            raw_ptr_ = &equidimensional_<metric_tanimoto_gt<b1x8_t>>,
+            raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_) * CHAR_BIT;
+            break;
+        case metric_kind_t::hamming_k:
+            raw_ptr_ = &equidimensional_<metric_hamming_gt<b1x8_t>>,
+            raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_) * CHAR_BIT;
+            break;
+        case metric_kind_t::sorensen_k:
+            raw_ptr_ = &equidimensional_<metric_sorensen_gt<b1x8_t>>,
+            raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_) * CHAR_BIT;
+            break;
         default: return;
         }
     }
