@@ -2,8 +2,8 @@
 
 ## Installation
 
-To use in a C++ project simply copy the `include/usearch/index.hpp` header into your project.
-Alternatively fetch it with CMake:
+To use in a C++ project, copy the `include/usearch/*` headers into your project.
+Alternatively, fetch it with CMake:
 
 ```cmake
 FetchContent_Declare(usearch GIT_REPOSITORY https://github.com/unum-cloud/usearch.git)
@@ -12,13 +12,17 @@ FetchContent_MakeAvailable(usearch)
 
 ## Quickstart
 
-Once included, the low-level C++11 interface is as simple as it gets: `reserve()`, `add()`, `search()`, `size()`, `capacity()`, `save()`, `load()`, `view()`.
-This covers 90% of use-cases.
+Once included, the high-level C++11 interface is as simple as it gets: `reserve()`, `add()`, `search()`, `size()`, `capacity()`, `save()`, `load()`, `view()`.
+This covers 90% of use cases.
 
-```c++
+```cpp
 using namespace unum::usearch;
 
-index_gt<metric_cos_gt<float>> index;
+metric_punned_t metric(256, metric_kind_t::l2sq_k, scalar_kind_t::f32_k);
+
+// If you plan to store more than 4 Billion entries - use `index_dense_big_t`.
+// Or directly instantiate the template variant you need - `index_dense_gt<key_t, internal_id_t>`.
+index_dense_t index = index_dense_t::make(metric);
 float vec[3] = {0.1, 0.3, 0.2};
 
 index.reserve(10);
@@ -30,10 +34,19 @@ for (std::size_t i = 0; i != results.size(); ++i)
 ```
 
 The `add` is thread-safe for concurrent index construction.
+It also has an overload for different vector types, casting them under the hood.
+The same applies to the `search`, `get`, `cluster`, and `distance_between` functions.
+
+```cpp
+double vec_double[3] = {0.1, 0.3, 0.2};
+_Float16 vec_half[3] = {0.1, 0.3, 0.2};
+index.add(43, {&vec_double[0], 3});
+index.add(44, {&vec_half[0], 3});
+```
 
 ## Serialization
 
-```c++
+```cpp
 index.save("index.usearch");
 index.load("index.usearch"); // Copying from disk
 index.view("index.usearch"); // Memory-mapping from disk
@@ -44,21 +57,12 @@ index.view("index.usearch"); // Memory-mapping from disk
 For advanced users, more compile-time abstractions are available.
 
 ```cpp
-template <typename metric_at = metric_ip_gt<float>,            //
-          typename key_at = std::size_t,              // `uint32_t`, `uuid_t`...
-          typename id_at = std::uint32_t,               // `uint40_t`, `uint64_t`...
-          typename scalar_at = float,                   // `double`, `half`, `char`...
-          typename allocator_at = std::allocator<char>> //
+template <typename distance_at = default_distance_t,              // `float`
+          typename key_at = default_key_t,                        // `int64_t`, `uuid_t`
+          typename compressed_slot_at = default_slot_t,           // `uint32_t`, `uint40_t`
+          typename dynamic_allocator_at = std::allocator<byte_t>, //
+          typename tape_allocator_at = dynamic_allocator_at>      //
 class index_gt;
-```
-
-You may want to use a custom memory allocator or a rare scalar type, but most often, you would start by defining a custom similarity measure.
-The function object should have the following signature to support different-length vectors.
-
-```cpp
-struct custom_metric_t {
-    T operator()(T const* a, T const* b, std::size_t a_length, std::size_t b_length) const;
-};
 ```
 
 The following distances are pre-packaged:
@@ -81,7 +85,7 @@ Instead of spawning additional threads within USearch, we focus on the thread sa
 ```cpp
 #pragma omp parallel for
     for (std::size_t i = 0; i < n; ++i)
-        native.add(key, span_t{vector, dims}, index_update_config_t { .thread = omp_get_thread_num() });
+        native.add(key, span_t{vector, dims});
 ```
 
 During initialization, we allocate enough temporary memory for all the cores on the machine.
