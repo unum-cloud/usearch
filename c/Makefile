@@ -25,7 +25,7 @@ USEARCH_USE_OPENMP ?= 1
 USEARCH_USE_SIMSIMD ?= 1
 
 C_FLAGS = -std=c99
-CXX_FLAGS = -std=c++11 -Wall -Wextra -Wno-conversion -Wno-unknown-pragmas -pedantic -O3
+CXX_FLAGS = -std=c++11 -Wall -Wextra -Wno-conversion -Wno-unknown-pragmas -pedantic -O3 -fPIC
 
 CXX_FLAGS += -DUSEARCH_USE_OPENMP=$(USEARCH_USE_OPENMP)
 CXX_FLAGS += -DUSEARCH_USE_SIMSIMD=$(USEARCH_USE_SIMSIMD)
@@ -46,11 +46,11 @@ libusearch_c.a: $(OBJS)
 
 # Builds the shared library for Linux.
 libusearch_c.so: $(OBJS)
-	$(CXX) $(CXX_FLAGS) $(HEADER_INCLUDES) -shared -fPIC $^ -o $@
+	$(CXX) $(CXX_FLAGS) $(HEADER_INCLUDES) -shared $^ -o $@
 
 # Builds the shared library for macOS.
 libusearch_c.dylib: $(OBJS)
-	$(CXX) $(CXX_FLAGS) $(HEADER_INCLUDES) -dynamiclib -fPIC $^ -o $@
+	$(CXX) $(CXX_FLAGS) $(HEADER_INCLUDES) -dynamiclib $^ -o $@
 
 # Compiles the test executable.
 test_c: test.c libusearch_c.a
