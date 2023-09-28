@@ -45,7 +45,6 @@ function (setup_target TARGET_NAME)
                     -O3
                     -g>
                     -ffast-math
-                    -ffinite-math-only
                     -fsanitize=address
                     -fsanitize=leak
                     -fsanitize=alignment
@@ -76,7 +75,6 @@ function (setup_target TARGET_NAME)
                     $<$<CONFIG:DEBUG>:-g
                     $<$<CONFIG:RELWITHDEBINFO>:-O3
                     -ffast-math
-                    -ffinite-math-only
                     -fsanitize=address
                     -fsanitize=leak
                     -fsanitize=alignment

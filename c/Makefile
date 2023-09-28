@@ -19,8 +19,8 @@
 
 CC ?= gcc
 CXX ?= g++
-C_FLAGS = -std=c99 -O3 -fPIC
-CXX_FLAGS = -std=c++11 -Wall -Wextra -Wno-conversion -Wno-unknown-pragmas -pedantic -O3 -fPIC
+C_FLAGS = -std=c99 -fPIC -O3 -ffast-math
+CXX_FLAGS = -std=c++11 -Wall -Wextra -Wno-conversion -Wno-unknown-pragmas -pedantic -fPIC -O3 -ffast-math
 
 # Preset USEARCH_USE_OPENMP and USEARCH_USE_SIMSIMD, if not provided
 USEARCH_USE_SIMSIMD ?= 1

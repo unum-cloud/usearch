@@ -12,6 +12,7 @@ macros_args = []
 if sys.platform == "linux":
     compile_args.append("-std=c++17")
     compile_args.append("-O3")  # Maximize performance
+    compile_args.append("-ffast-math")  # Maximize floating-point performance
     compile_args.append("-Wno-unknown-pragmas")
     compile_args.append("-fdiagnostics-color=always")
 
@@ -30,6 +31,7 @@ if sys.platform == "darwin":
     compile_args.append("-mmacosx-version-min=10.15")
     compile_args.append("-std=c++17")
     compile_args.append("-O3")  # Maximize performance
+    compile_args.append("-ffast-math")  # Maximize floating-point performance
     compile_args.append("-fcolor-diagnostics")
     compile_args.append("-Wno-unknown-pragmas")
 
@@ -44,6 +46,8 @@ if sys.platform == "darwin":
 if sys.platform == "win32":
     compile_args.append("/std:c++17")
     compile_args.append("/O2")
+    compile_args.append("/fp:fast")  # Enable fast math for MSVC
+    compile_args.append("/W1")  # Reduce warnings verbosity
 
 ext_modules = [
     Pybind11Extension(
