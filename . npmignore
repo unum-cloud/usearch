@@ -1,0 +1,13 @@
+node_modules/
+.vscode/
+build/
+csharp/
+golang/
+java/
+objc/
+rust/
+swift/
+wolfram/
+python/
+docs/
+wasm/
