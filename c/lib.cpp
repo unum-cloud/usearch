@@ -87,12 +87,12 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
     metric_kind_t metric_kind = to_native_metric(options->metric_kind);
     scalar_kind_t scalar_kind = to_native_scalar(options->quantization);
 
-    auto metric_lambda = [options](byte_t const* a, byte_t const* b) -> usearch_distance_t {
-        return options->metric((void const*)a, (void const*)b);
-    };
     metric_punned_t metric = //
-        options->metric ? metric_punned_t(metric_lambda, options->dimensions, metric_kind, scalar_kind)
-                        : metric_punned_t(options->dimensions, metric_kind, scalar_kind);
+        !options->metric ? metric_punned_t(options->dimensions, metric_kind, scalar_kind)
+                         : metric_punned_t(options->dimensions,                               //
+                                           reinterpret_cast<std::uintptr_t>(options->metric), //
+                                           metric_punned_signature_t::array_array_k,          //
+                                           metric_kind, scalar_kind);
 
     index_dense_t index = index_dense_t::make(metric, config);
     index_dense_t* result_ptr = new index_dense_t(std::move(index));
@@ -235,13 +235,56 @@ USEARCH_EXPORT size_t usearch_remove(usearch_index_t index, usearch_key_t key, u
     return result.completed;
 }
 
-USEARCH_EXPORT size_t usearch_rename(usearch_index_t index, usearch_key_t from, usearch_key_t to,
-                                     usearch_error_t* error) {
+USEARCH_EXPORT size_t usearch_rename( //
+    usearch_index_t index, usearch_key_t from, usearch_key_t to, usearch_error_t* error) {
 
     assert(index && error);
     labeling_result_t result = reinterpret_cast<index_dense_t*>(index)->rename(from, to);
     if (!result)
         *error = result.error.release();
     return result.completed;
+}
+
+USEARCH_EXPORT usearch_distance_t usearch_distance(       //
+    void const* vector_first, void const* vector_second,  //
+    usearch_scalar_kind_t scalar_kind, size_t dimensions, //
+    usearch_metric_kind_t metric_kind, usearch_error_t* error) {
+
+    (void)error;
+    metric_punned_t metric(dimensions, to_native_metric(metric_kind), to_native_scalar(scalar_kind));
+    return metric((byte_t const*)vector_first, (byte_t const*)vector_second);
+}
+
+USEARCH_EXPORT void usearch_brute_force(                              //
+    void const* dataset, size_t dataset_count, size_t dataset_stride, //
+    void const* queries, size_t queries_count, size_t queries_stride, //
+    usearch_scalar_kind_t scalar_kind, size_t dimensions,             //
+    usearch_metric_kind_t metric_kind, size_t count, size_t threads,  //
+    usearch_key_t* keys, size_t keys_stride,                          //
+    usearch_distance_t* distances, size_t distances_stride,           //
+    usearch_error_t* error) {
+
+    metric_punned_t metric(dimensions, to_native_metric(metric_kind), to_native_scalar(scalar_kind));
+    executor_default_t executor(threads);
+    static exact_search_t search;
+    exact_search_results_t result = search(                    //
+        (byte_t const*)dataset, dataset_count, dataset_stride, //
+        (byte_t const*)queries, queries_count, queries_stride, //
+        count, metric);
+
+    if (!result) {
+        *error = "Out of memory, allocating a temporary buffer for batch results";
+        return;
+    }
+
+    // Export results into the output buffer
+    for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx) {
+        auto query_result = result.at(query_idx);
+        auto query_keys = (usearch_key_t*)((byte_t*)keys + query_idx * keys_stride);
+        auto query_distances = (usearch_distance_t*)((byte_t*)distances + query_idx * distances_stride);
+        for (std::size_t i = 0; i != count; ++i)
+            query_keys[i] = static_cast<usearch_key_t>(query_result[i].offset),
+            query_distances[i] = static_cast<usearch_distance_t>(query_result[i].distance);
+    }
 }
 }

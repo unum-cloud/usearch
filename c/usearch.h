@@ -241,6 +241,48 @@ USEARCH_EXPORT size_t usearch_remove(usearch_index_t, usearch_key_t key, usearch
  */
 USEARCH_EXPORT size_t usearch_rename(usearch_index_t, usearch_key_t from, usearch_key_t to, usearch_error_t* error);
 
+/**
+ *  @brief Computes the distance between two equi-dimensional vectors.
+ *  @param[in] vector_first The first vector for comparison.
+ *  @param[in] vector_second The second vector for comparison.
+ *  @param[in] scalar_kind The scalar type used in the vectors.
+ *  @param[in] dimensions The number of dimensions in each vector.
+ *  @param[in] metric_kind The metric kind used for distance calculation between vectors.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ *  @return Distance between given vectors.
+ */
+USEARCH_EXPORT usearch_distance_t usearch_distance(       //
+    void const* vector_first, void const* vector_second,  //
+    usearch_scalar_kind_t scalar_kind, size_t dimensions, //
+    usearch_metric_kind_t metric_kind, usearch_error_t* error);
+
+/**
+ *  @brief Multi-threaded exact nearest neighbors search for equi-dimensional vectors.
+ *  @param[in] dataset Pointer to the first scalar of the dataset matrix.
+ *  @param[in] queries Pointer to the first scalar of the queries matrix.
+ *  @param[in] dataset_size Number of vectors in the `dataset`.
+ *  @param[in] queries_size Number of vectors in the `queries` set.
+ *  @param[in] dataset_stride Number of bytes between starts of consecutive vectors in `dataset`.
+ *  @param[in] queries_stride Number of bytes between starts of consecutive vectors in `queries`.
+ *  @param[in] scalar_kind The scalar type used in the vectors.
+ *  @param[in] dimensions The number of dimensions in each vector.
+ *  @param[in] metric_kind The metric kind used for distance calculation between vectors.
+ *  @param[in] count Upper bound on the number of neighbors to search, the "k" in "kANN".
+ *  @param[in] threads Upper bound for the number of CPU threads to use.
+ *  @param[out] keys Output buffer for up to `count` nearest neighbors keys.
+ *  @param[out] distances Output buffer for up to `count` distances to nearest neighbors.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ *  @return Number of found matches.
+ */
+USEARCH_EXPORT void usearch_brute_force(                             //
+    void const* dataset, size_t dataset_size, size_t dataset_stride, //
+    void const* queries, size_t queries_size, size_t queries_stride, //
+    usearch_scalar_kind_t scalar_kind, size_t dimensions,            //
+    usearch_metric_kind_t metric_kind, size_t count, size_t threads, //
+    usearch_key_t* keys, size_t keys_stride,                         //
+    usearch_distance_t* distances, size_t distances_stride,          //
+    usearch_error_t* error);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1,13 +1,17 @@
 # This CMake file is heavily inspired by following `usearch` CMake:
 # https://github.com/nlohmann/json/blob/develop/CMakeLists.txt
 cmake_minimum_required(VERSION 3.1)
-project(usearch VERSION 0.6.0 LANGUAGES C CXX)
+project(
+    usearch
+    VERSION 0.6.0
+    LANGUAGES C CXX
+)
 
 # Determine if USearch is built as a subproject (using `add_subdirectory`) or if it is the main project
 set(USEARCH_IS_MAIN_PROJECT OFF)
 if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     set(USEARCH_IS_MAIN_PROJECT ON)
-endif()
+endif ()
 
 # Options
 option(USEARCH_INSTALL "Install CMake targets" OFF)
@@ -28,17 +32,19 @@ endif ()
 
 # Configuration
 include(GNUInstallDirs)
-set(USEARCH_TARGET_NAME               ${PROJECT_NAME})
-set(USEARCH_CONFIG_INSTALL_DIR        "${CMAKE_INSTALL_DATADIR}/cmake/${PROJECT_NAME}" CACHE INTERNAL "")
-set(USEARCH_INCLUDE_INSTALL_DIR       "${CMAKE_INSTALL_INCLUDEDIR}")
-set(USEARCH_TARGETS_EXPORT_NAME       "${PROJECT_NAME}Targets")
-set(USEARCH_CMAKE_CONFIG_TEMPLATE     "cmake/config.cmake.in")
-set(USEARCH_CMAKE_CONFIG_DIR          "${CMAKE_CURRENT_BINARY_DIR}")
+set(USEARCH_TARGET_NAME ${PROJECT_NAME})
+set(USEARCH_CONFIG_INSTALL_DIR
+    "${CMAKE_INSTALL_DATADIR}/cmake/${PROJECT_NAME}"
+    CACHE INTERNAL ""
+)
+set(USEARCH_INCLUDE_INSTALL_DIR "${CMAKE_INSTALL_INCLUDEDIR}")
+set(USEARCH_TARGETS_EXPORT_NAME "${PROJECT_NAME}Targets")
+set(USEARCH_CMAKE_CONFIG_TEMPLATE "cmake/config.cmake.in")
+set(USEARCH_CMAKE_CONFIG_DIR "${CMAKE_CURRENT_BINARY_DIR}")
 set(USEARCH_CMAKE_VERSION_CONFIG_FILE "${USEARCH_CMAKE_CONFIG_DIR}/${PROJECT_NAME}ConfigVersion.cmake")
 set(USEARCH_CMAKE_PROJECT_CONFIG_FILE "${USEARCH_CMAKE_CONFIG_DIR}/${PROJECT_NAME}Config.cmake")
 set(USEARCH_CMAKE_PROJECT_TARGETS_FILE "${USEARCH_CMAKE_CONFIG_DIR}/${PROJECT_NAME}Targets.cmake")
-set(USEARCH_PKGCONFIG_INSTALL_DIR      "${CMAKE_INSTALL_DATADIR}/pkgconfig")
-
+set(USEARCH_PKGCONFIG_INSTALL_DIR "${CMAKE_INSTALL_DATADIR}/pkgconfig")
 
 # Define our header-only library
 add_library(${USEARCH_TARGET_NAME} INTERFACE)
@@ -46,66 +52,38 @@ add_library(${PROJECT_NAME}::${USEARCH_TARGET_NAME} ALIAS ${USEARCH_TARGET_NAME}
 set(USEARCH_INCLUDE_BUILD_DIR "${PROJECT_SOURCE_DIR}/include/")
 if (${CMAKE_VERSION} VERSION_LESS "3.8.0")
     target_compile_features(${USEARCH_TARGET_NAME} INTERFACE cxx_range_for)
-else()
+else ()
     target_compile_features(${USEARCH_TARGET_NAME} INTERFACE cxx_std_11)
-endif()
+endif ()
 
 # Core compilation settings affecting "index.hpp"
-target_compile_definitions(
-    ${USEARCH_TARGET_NAME}
-    INTERFACE
-    $<$<NOT:$<BOOL:${JSON_GlobalUDLs}>>:USEARCH_USE_OPENMP=0>
-)
+target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${JSON_GlobalUDLs}>>:USEARCH_USE_OPENMP=0>)
 
 # Supplementary compilation settings affecting "index_plugins.hpp"
 target_compile_definitions(
-    ${USEARCH_TARGET_NAME}
-    INTERFACE
-    $<$<NOT:$<BOOL:${JSON_GlobalUDLs}>>:USEARCH_USE_NATIVE_F16=0>
+    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${JSON_GlobalUDLs}>>:USEARCH_USE_NATIVE_F16=0>
 )
 
-target_compile_definitions(
-    ${USEARCH_TARGET_NAME}
-    INTERFACE
-    $<$<NOT:$<BOOL:${JSON_GlobalUDLs}>>:USEARCH_USE_SIMSIMD=0>
-)
+target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${JSON_GlobalUDLs}>>:USEARCH_USE_SIMSIMD=0>)
 
 target_include_directories(
-    ${USEARCH_TARGET_NAME}
-    ${USEARCH_SYSTEM_INCLUDE} INTERFACE
-    $<BUILD_INTERFACE:${USEARCH_INCLUDE_BUILD_DIR}>
-    $<INSTALL_INTERFACE:include>
+    ${USEARCH_TARGET_NAME} ${USEARCH_SYSTEM_INCLUDE} INTERFACE $<BUILD_INTERFACE:${USEARCH_INCLUDE_BUILD_DIR}>
+                                                               $<INSTALL_INTERFACE:include>
 )
 
 # Install a pkg-config file, so other tools can find this
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/pkg-config.pc.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc"
-)
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/pkg-config.pc.in" "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc")
 
-# Install a custom package version config file instead of
-# write_basic_package_version_file to ensure that it's architecture-independent
-# https://github.com/nlohmann/json/issues/1697
+# Install a custom package version config file instead of write_basic_package_version_file to ensure that it's
+# architecture-independent https://github.com/nlohmann/json/issues/1697
 include(CMakePackageConfigHelpers)
-configure_file(
-    "cmake/usearchConfigVersion.cmake.in"
-    ${USEARCH_CMAKE_VERSION_CONFIG_FILE}
-    @ONLY
-)
-configure_file(
-    ${USEARCH_CMAKE_CONFIG_TEMPLATE}
-    ${USEARCH_CMAKE_PROJECT_CONFIG_FILE}
-    @ONLY
-)
+configure_file("cmake/usearchConfigVersion.cmake.in" ${USEARCH_CMAKE_VERSION_CONFIG_FILE} @ONLY)
+configure_file(${USEARCH_CMAKE_CONFIG_TEMPLATE} ${USEARCH_CMAKE_PROJECT_CONFIG_FILE} @ONLY)
 
-if(USEARCH_INSTALL)
-    install(
-        DIRECTORY ${USEARCH_INCLUDE_BUILD_DIR}
-        DESTINATION ${USEARCH_INCLUDE_INSTALL_DIR}
-    )
-    install(
-        FILES ${USEARCH_CMAKE_PROJECT_CONFIG_FILE} ${USEARCH_CMAKE_VERSION_CONFIG_FILE}
-        DESTINATION ${USEARCH_CONFIG_INSTALL_DIR}
+if (USEARCH_INSTALL)
+    install(DIRECTORY ${USEARCH_INCLUDE_BUILD_DIR} DESTINATION ${USEARCH_INCLUDE_INSTALL_DIR})
+    install(FILES ${USEARCH_CMAKE_PROJECT_CONFIG_FILE} ${USEARCH_CMAKE_VERSION_CONFIG_FILE}
+            DESTINATION ${USEARCH_CONFIG_INSTALL_DIR}
     )
     export(
         TARGETS ${USEARCH_TARGET_NAME}
@@ -115,31 +93,29 @@ if(USEARCH_INSTALL)
     install(
         TARGETS ${USEARCH_TARGET_NAME}
         EXPORT ${USEARCH_TARGETS_EXPORT_NAME}
-        INCLUDES DESTINATION ${USEARCH_INCLUDE_INSTALL_DIR}
+        INCLUDES
+        DESTINATION ${USEARCH_INCLUDE_INSTALL_DIR}
     )
     install(
         EXPORT ${USEARCH_TARGETS_EXPORT_NAME}
         NAMESPACE ${PROJECT_NAME}::
         DESTINATION ${USEARCH_CONFIG_INSTALL_DIR}
     )
-    install(
-        FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc"
-        DESTINATION ${USEARCH_PKGCONFIG_INSTALL_DIR}
-    )
-endif()
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc" DESTINATION ${USEARCH_PKGCONFIG_INSTALL_DIR})
+endif ()
 
-if(${USEARCH_BUILD_TEST} OR ${USEARCH_BUILD_BENCHMARK})
+if (${USEARCH_BUILD_TEST} OR ${USEARCH_BUILD_BENCHMARK})
     add_subdirectory(cpp)
-endif()
+endif ()
 
-if(${USEARCH_BUILD_WOLFRAM})
+if (${USEARCH_BUILD_WOLFRAM})
     add_subdirectory(wolfram)
-endif()
+endif ()
 
-if(${USEARCH_BUILD_WASM})
+if (${USEARCH_BUILD_WASM})
     add_subdirectory(wasm)
-endif()
+endif ()
 
 if (${USEARCH_BUILD_CLIB} OR ${USEARCH_BUILD_CTEST})
     add_subdirectory(c)
-endif()
+endif ()
