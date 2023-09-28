@@ -10,7 +10,7 @@ if (NOT CMAKE_BUILD_TYPE)
 endif ()
 
 # Find required packages
-if (APPLE)
+if (CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin")
     set(CMAKE_THREAD_LIBS_INIT "-lpthread")
     set(CMAKE_HAVE_THREADS_LIBRARY 1)
     set(CMAKE_USE_WIN32_THREADS_INIT 0)
@@ -41,6 +41,11 @@ function (setup_target TARGET_NAME)
             ${TARGET_NAME}
             PRIVATE $<$<CONFIG:RELEASE>:-O3>
                     $<$<CONFIG:DEBUG>:-g
+                    $<$<CONFIG:RELWITHDEBINFO>:
+                    -O3
+                    -g>
+                    -ffast-math
+                    -ffinite-math-only
                     -fsanitize=address
                     -fsanitize=leak
                     -fsanitize=alignment
@@ -49,8 +54,6 @@ function (setup_target TARGET_NAME)
                     -Wextra
                     -Wno-conversion
                     -Wno-unknown-pragmas>
-                    $<$<CONFIG:RELWITHDEBINFO>:-O3
-                    -g>
                     -march=native
                     -fmax-errors=1
                     -pedantic
@@ -59,7 +62,11 @@ function (setup_target TARGET_NAME)
         )
 
         if (USEARCH_USE_OPENMP)
-            target_compile_options(${TARGET_NAME} PRIVATE -fopenmp)
+            target_link_libraries(${TARGET_NAME} PRIVATE OpenMP::OpenMP_CXX)
+        endif ()
+
+        if (CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin")
+            target_link_libraries(${TARGET_NAME} PRIVATE Threads::Threads)
         endif ()
 
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -67,12 +74,14 @@ function (setup_target TARGET_NAME)
             ${TARGET_NAME}
             PRIVATE $<$<CONFIG:RELEASE>:-O3>
                     $<$<CONFIG:DEBUG>:-g
+                    $<$<CONFIG:RELWITHDEBINFO>:-O3
+                    -ffast-math
+                    -ffinite-math-only
                     -fsanitize=address
                     -fsanitize=leak
                     -fsanitize=alignment
                     -fsanitize=undefined
                     -Wfatal-errors>
-                    $<$<CONFIG:RELWITHDEBINFO>:-O3
                     -g>
                     -pedantic
                     -fcolor-diagnostics
@@ -80,11 +89,15 @@ function (setup_target TARGET_NAME)
         )
 
         if (USEARCH_USE_OPENMP)
-            target_compile_options(${TARGET_NAME} PRIVATE -fopenmp)
+            target_link_libraries(${TARGET_NAME} PRIVATE OpenMP::OpenMP_CXX)
         endif ()
 
-        if (APPLE)
-            target_link_libraries(${TARGET_NAME} PRIVATE "-framework CoreFoundation" "-framework Security" "pthread")
+        if (CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin")
+            target_link_libraries(
+                ${TARGET_NAME} PRIVATE "-framework CoreFoundation" "-framework Security" Threads::Threads
+            )
+        else ()
+            target_link_libraries(${TARGET_NAME} PRIVATE Threads::Threads)
         endif ()
 
     elseif (CMAKE_CXX_COMPILER_ID STREQUAL "NVIDIA" OR CMAKE_CXX_COMPILER_ID STREQUAL "NVHPC")
@@ -105,6 +118,7 @@ function (setup_target TARGET_NAME)
     endif ()
 
     target_include_directories(${TARGET_NAME} PRIVATE ${USEARCH_PUNNED_INCLUDE_DIRS})
+    set_target_properties(${TARGET_NAME} PROPERTIES CXX_STANDARD 17)
 
 endfunction ()
 
