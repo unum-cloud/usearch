@@ -249,9 +249,9 @@ void test_exact_search(std::size_t dataset_count, std::size_t queries_count, std
 
     exact_search_t search;
     auto results = search(                                                        //
-        metric,                                                                   //
         (byte_t const*)dataset.data(), dataset_count, dimensions * sizeof(float), //
-        (byte_t const*)dataset.data(), queries_count, dimensions * sizeof(float), wanted_count);
+        (byte_t const*)dataset.data(), queries_count, dimensions * sizeof(float), //
+        wanted_count, metric);
 
     for (std::size_t i = 0; i < results.size(); ++i)
         assert(results.at(i)[0].offset == i); // Validate the top match
