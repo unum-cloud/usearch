@@ -38,10 +38,16 @@ if sys.platform == "darwin":
     # Simplify debugging, but the normal `-g` may make builds much longer!
     compile_args.append("-g1")
 
-    # Linking OpenMP requires additional preparation in CIBuildWheel
-    # macros_args.append(("USEARCH_USE_OPENMP", "1"))
-    # compile_args.append("-Xpreprocessor -fopenmp")
-    # link_args.append("-Xpreprocessor -lomp")
+    # Linking OpenMP requires additional preparation in CIBuildWheel.
+    # We must install `brew install llvm` ahead of time.
+    # import subprocess as cli
+    # llvm_base = cli.check_output(["brew", "--prefix", "llvm"]).strip().decode("utf-8")
+    # if len(llvm_base):
+    #     compile_args.append(f"-I{llvm_base}/include")
+    #     compile_args.append("-Xpreprocessor -fopenmp")
+    #     link_args.append(f"-L{llvm_base}/lib")
+    #     link_args.append("-lomp")
+    #     macros_args.append(("USEARCH_USE_OPENMP", "1"))
 
 if sys.platform == "win32":
     compile_args.append("/std:c++17")
