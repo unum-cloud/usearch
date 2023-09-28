@@ -1418,18 +1418,15 @@ class metric_punned_t {
         case metric_kind_t::jaccard_k: // Equivalent to Tanimoto
         case metric_kind_t::tanimoto_k:
             raw_ptr_ = &equidimensional_<metric_tanimoto_gt<b1x8_t>>,
-            raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_ * CHAR_BIT),
-            scalar_kind_ = scalar_kind_t::b1x8_k;
+            raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_), scalar_kind_ = scalar_kind_t::b1x8_k;
             break;
         case metric_kind_t::hamming_k:
             raw_ptr_ = &equidimensional_<metric_hamming_gt<b1x8_t>>,
-            raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_ * CHAR_BIT),
-            scalar_kind_ = scalar_kind_t::b1x8_k;
+            raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_), scalar_kind_ = scalar_kind_t::b1x8_k;
             break;
         case metric_kind_t::sorensen_k:
             raw_ptr_ = &equidimensional_<metric_sorensen_gt<b1x8_t>>,
-            raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_ * CHAR_BIT),
-            scalar_kind_ = scalar_kind_t::b1x8_k;
+            raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_), scalar_kind_ = scalar_kind_t::b1x8_k;
             break;
         default: return;
         }
