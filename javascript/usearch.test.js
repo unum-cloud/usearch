@@ -42,5 +42,4 @@ test('Batch operations', () => {
 
     assert.deepEqual(results.keys, new BigUint64Array([ 15n, 16n ]), 'keys should be 15 and 16');
     assert.deepEqual(results.distances, new Float32Array([ 45, 130 ]), 'distances should be 45 and 130');
-    
 });
