@@ -13,15 +13,16 @@ Linux:
 
 ```sh
 sudo apt-get update
-sudo apt-get install cmake g++-12 build-essential libjemalloc-dev
+sudo apt-get install cmake build-essential libjemalloc-dev
 cmake -B ./build_release \
-    -DCMAKE_CXX_COMPILER="g++-12" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DUSEARCH_BUILD_TEST=1 \
     -DUSEARCH_USE_OPENMP=1 \
     -DUSEARCH_USE_SIMSIMD=1 \
     -DUSEARCH_USE_JEMALLOC=1 \
+    -DUSEARCH_BUILD_TEST=1 \
     -DUSEARCH_BUILD_BENCHMARK=1 \
+    -DUSEARCH_BUILD_CTEST=1 \
+    -DUSEARCH_BUILD_CLIB=1 \
     && \
     make -C ./build_release -j
 ```
@@ -53,7 +54,7 @@ cppcheck --enable=all --force --suppress=cstyleCast --suppress=unusedFunction \
 Testing:
 
 ```sh
-cmake -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make -C ./build_debug && ./build_debug/test
+cmake -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make -C ./build_debug && ./build_debug/test_cpp
 ```
 
 ## Python 3
@@ -85,7 +86,7 @@ cibuildwheel --platform linux
 Node.JS:
 
 ```sh
-npm install && node javascript/test.js
+npm install && node --test ./javascript/usearch.test.js
 npm publish
 ```
 
@@ -124,7 +125,7 @@ javac -h . Index.java
 
 # Ubuntu:
 g++ -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
-g++ -shared -fPIC -o libusearch.so cloud_unum_usearch_Index.o -lc
+g++ -shared -fPIC -o libusearch_c_shared.so cloud_unum_usearch_Index.o -lc
 
 # Windows
 g++ -c -I%JAVA_HOME%\include -I%JAVA_HOME%\include\win32 cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
@@ -155,7 +156,13 @@ There are a few ways to compile the C 99 USearch SDK.
 Using the Makefile:
 
 ```sh
-make -C ./c libusearch_c.so
+make -C ./c libusearch_c_shared.so
+```
+
+With options:
+
+```sh
+make USEARCH_USE_OPENMP=1 USEARCH_USE_SIMSIMD=1 -C ./c libusearch_c_shared.so
 ```
 
 Using CMake:
@@ -164,20 +171,13 @@ Using CMake:
 cmake -B ./build_release -DUSEARCH_BUILD_CLIB=1 && make -C ./build_release -j
 ```
 
-Linux:
-
-```sh
-g++ -std=c++11 -shared -fPIC c/lib.cpp -I ./include/  -I ./fp16/include/ -o libusearch_c.so
-```
-
-
 ## GoLang
 
 GoLang bindings are based on C.
 So one should first compile the C library, link it with GoLang, and only then run tests.
 
 ```sh
-make -C ./c libusearch_c.so && mv ./c/libusearch_c.so ./golang/libusearch_c.so 
+make -C ./c libusearch_c_shared.so && mv ./c/libusearch_c_shared.so ./golang/libusearch_c_shared.so 
 cd golang && go test -v ; cd ..
 ```
 

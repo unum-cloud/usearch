@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,12 +5,11 @@
 
 #include "usearch.h"
 
-#define ASSERT(must_be_true, message)           \
-    if (!(must_be_true)) {                      \
-        printf("Assert: %s\n", message);        \
-        exit(-1);                               \
+#define ASSERT(must_be_true, message)                                                                                  \
+    if (!(must_be_true)) {                                                                                             \
+        printf("Assert: %s\n", message);                                                                               \
+        exit(-1);                                                                                                      \
     }
-
 
 float* create_vectors(size_t count, size_t dimensions) {
     float* data = (float*)malloc(count * dimensions * sizeof(float));
@@ -122,8 +120,9 @@ void test_find_vector(size_t collection_size, size_t dimensions) {
 
     // Find the vectors
     for (size_t i = 0; i < collection_size; i++) {
-        const void *query_vector = data + i * dimensions;
-        size_t found_count = usearch_search(idx, query_vector, usearch_scalar_f32_k, results_count, keys, distances, &error);
+        const void* query_vector = data + i * dimensions;
+        size_t found_count =
+            usearch_search(idx, query_vector, usearch_scalar_f32_k, results_count, keys, distances, &error);
         ASSERT(!error, error);
         ASSERT(found_count = results_count, "Vector is missing");
     }

@@ -2,11 +2,11 @@
 # Makefile for the USearch C Library
 #
 # Main Targets:
-#   - libusearch_c.a       : Builds the static library.
-#   - libusearch_c.so      : Builds the shared library for Linux.
-#   - libusearch_c.dylib   : Builds the shared library for macOS.
-#   - test_c               : Compiles the test executable.
-#   - clean                : Removes generated files.
+#   - libusearch_c_static.a        : Builds the static library.
+#   - libusearch_c_dynamic.so      : Builds the shared library for Linux.
+#   - libusearch_c_dynamic.dylib   : Builds the shared library for macOS.
+#   - test_c               		   : Compiles the test executable.
+#   - clean                		   : Removes generated files.
 #
 # Macros:
 #   - USEARCH_USE_OPENMP   : Enables OpenMP support. Default is 1.
@@ -42,35 +42,35 @@ CXX_FLAGS += -DUSEARCH_USE_SIMSIMD=$(USEARCH_USE_SIMSIMD)
 SRCS = lib.cpp
 OBJS = $(SRCS:.cpp=.o)
 LIBS = -L. -lusearch_c
-HEADER_INCLUDES = -I.  -I ../include/  -I ../fp16/include/ -I ../simsimd/include/
+USEARCH_HEADER_INCLUDES = -I.  -I ../include/  -I ../fp16/include/ -I ../simsimd/include/
 
 # Default target
 .PHONY: all
-all: libusearch_c.a libusearch_c.so libusearch_c.dylib test_c
+all: libusearch_c_static.a libusearch_c_dynamic.so libusearch_c_dynamic.dylib test_c
 
 # Builds the static library.
-libusearch_c.a: $(OBJS)
+libusearch_c_static.a: $(OBJS)
 	ar rcs $@ $^
 
 # Builds the shared library for Linux.
-libusearch_c.so: $(OBJS)
-	$(CXX) $(CXX_FLAGS) $(HEADER_INCLUDES) -shared $^ -o $@
+libusearch_c_dynamic.so: $(OBJS)
+	$(CXX) $(CXX_FLAGS) $(USEARCH_HEADER_INCLUDES) -shared $^ -o $@
 
 # Builds the shared library for macOS.
-libusearch_c.dylib: $(OBJS)
-	$(CXX) $(CXX_FLAGS) $(HEADER_INCLUDES) -dynamiclib $^ -o $@
+libusearch_c_dynamic.dylib: $(OBJS)
+	$(CXX) $(CXX_FLAGS) $(USEARCH_HEADER_INCLUDES) -dynamiclib $^ -o $@
 
 # Compiles the test executable.
-test_c: test.c libusearch_c.a
+test_c: test.c libusearch_c_static.a
 	$(CC) $(C_FLAGS) $< $(LIBS) -Wl,-rpath,. -o $@
 
 # Compiles source files to object files.
 %.o: %.cpp
-	$(CXX) $(CXX_FLAGS) $(HEADER_INCLUDES) -c $< -o $@
+	$(CXX) $(CXX_FLAGS) $(USEARCH_HEADER_INCLUDES) -c $< -o $@
 
 # Removes generated files.
 .PHONY: clean
 clean:
 	rm -f *.o *.a *.so *.dylib test_c
 
-.PHONY: libusearch_c.a libusearch_c.so libusearch_c.dylib test_c
+.PHONY: libusearch_c_static.a libusearch_c_dynamic.so libusearch_c_dynamic.dylib test_c

@@ -12,7 +12,7 @@ C_DIR="${REPO_ROOT}c/"
 CSHARP_DIR="${REPO_ROOT}csharp/"
 BUILD_ARTIFACTS_DIR="${CSHARP_DIR}lib/"
 
-LIB_FILE="libusearch_c"
+LIB_FILE="libusearch_c_dynamic"
 
 # Determine the architecture type (only x64 is supported)
 ARCH_TYPE="$(uname -m)"

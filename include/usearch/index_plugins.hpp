@@ -1,4 +1,6 @@
 #pragma once
+#define __STDC_WANT_IEC_60559_TYPES_EXT__
+#include <float.h>  // `_Float16`
 #include <stdlib.h> // `aligned_alloc`
 
 #include <cstring> // `std::strncmp`
