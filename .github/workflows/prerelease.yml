@@ -33,11 +33,12 @@ jobs:
       run: |
         cmake -B ./build_release \
         -DCMAKE_BUILD_TYPE=Release \
-        -DUSEARCH_BUILD_CLIB=1 \
-        -DUSEARCH_BUILD_CTEST=1 \
         -DUSEARCH_USE_OPENMP=1 \
         -DUSEARCH_USE_SIMSIMD=1 \
         -DUSEARCH_USE_JEMALLOC=1 \
+        -DUSEARCH_USE_NATIVE_F16=0 \
+        -DUSEARCH_BUILD_CLIB=1 \
+        -DUSEARCH_BUILD_CTEST=1 \
         -DUSEARCH_BUILD_BENCHMARK=0 &&
         make -C ./build_release -j
     - name: Run tests
@@ -59,10 +60,11 @@ jobs:
       run: |
         cmake -B ./build_release \
         -DCMAKE_BUILD_TYPE=Release \
-        -DUSEARCH_BUILD_TEST=1 \
         -DUSEARCH_USE_OPENMP=1 \
         -DUSEARCH_USE_SIMSIMD=1 \
         -DUSEARCH_USE_JEMALLOC=1 \
+        -DUSEARCH_USE_NATIVE_F16=0 \
+        -DUSEARCH_BUILD_TEST=1 \
         -DUSEARCH_BUILD_BENCHMARK=0 &&
         make -C ./build_release -j
     - name: Run tests
@@ -223,7 +225,7 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           where cl
-          cl /EHsc /std:c++14 /O2 /LD /Fe:libusearch_c_shared.dll lib.cpp /I. /I../include/ /I../fp16/include/
+          cl /EHsc /std:c++14 /O2 /LD /Fe:libusearch_c.dll lib.cpp /I. /I../include/ /I../fp16/include/
         working-directory: ${{ github.workspace }}/c
         shell: cmd
 
@@ -231,7 +233,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           mkdir -p "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
-          mv "${GITHUB_WORKSPACE}/c/libusearch_c_shared.dll" "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
+          mv "${GITHUB_WORKSPACE}/c/libusearch_c.dll" "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
         shell: bash
 
       - name: Build and test
@@ -252,15 +254,13 @@ jobs:
     - name: Prepare environment
       run: |
         sudo apt update && 
-        sudo apt install -y cmake g++-12 build-essential libjemalloc-dev
+        sudo apt install -y cmake build-essential libjemalloc-dev
           
     - name: Build library
       run: |
         cd golang/
-        export CC=/usr/bin/gcc-12
-        export CXX=/usr/bin/g++-12
-        make -C ../c libusearch_c_shared.so
-        sudo mv ../c/libusearch_c_shared.so /usr/local/lib/libusearch_c_static.a
+        make USEARCH_USE_OPENMP=0 USEARCH_USE_NATIVE_F16=0 USEARCH_USE_SIMSIMD=1 -C ../c libusearch_c.so
+        sudo mv ../c/libusearch_c.so /usr/local/lib/libusearch_c.a
         sudo mv ../c/usearch.h /usr/local/include/usearch.h
 
     - name: Run test

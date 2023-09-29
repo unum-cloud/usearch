@@ -125,7 +125,7 @@ javac -h . Index.java
 
 # Ubuntu:
 g++ -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
-g++ -shared -fPIC -o libusearch_c_shared.so cloud_unum_usearch_Index.o -lc
+g++ -shared -fPIC -o libusearch_c.so cloud_unum_usearch_Index.o -lc
 
 # Windows
 g++ -c -I%JAVA_HOME%\include -I%JAVA_HOME%\include\win32 cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
@@ -156,13 +156,13 @@ There are a few ways to compile the C 99 USearch SDK.
 Using the Makefile:
 
 ```sh
-make -C ./c libusearch_c_shared.so
+make -C ./c libusearch_c.so
 ```
 
 With options:
 
 ```sh
-make USEARCH_USE_OPENMP=1 USEARCH_USE_SIMSIMD=1 -C ./c libusearch_c_shared.so
+make USEARCH_USE_OPENMP=1 USEARCH_USE_SIMSIMD=1 -C ./c libusearch_c.so
 ```
 
 Using CMake:
@@ -177,7 +177,7 @@ GoLang bindings are based on C.
 So one should first compile the C library, link it with GoLang, and only then run tests.
 
 ```sh
-make -C ./c libusearch_c_shared.so && mv ./c/libusearch_c_shared.so ./golang/libusearch_c_shared.so 
+make -C ./c libusearch_c.so && mv ./c/libusearch_c.so ./golang/libusearch_c.so 
 cd golang && go test -v ; cd ..
 ```
 

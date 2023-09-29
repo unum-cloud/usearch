@@ -29,7 +29,7 @@ Move the USearch library and the include file to their respective folders.
 ```sh
 wget https://github.com/unum-cloud/usearch/releases/download/<release_tag>/usearch_macOS_<arch>_<usearch_version>.zip
 unzip usearch_macOS_<arch>_<usearch_version>.zip
-sudo mv libusearch_c_shared.so /usr/local/lib && sudo mv usearch.h /usr/local/include
+sudo mv libusearch_c.so /usr/local/lib && sudo mv usearch.h /usr/local/include
 
 ```
 

@@ -82,8 +82,8 @@ test {
 jar {
     dependsOn("usearchSharedLibrary")
     into("usearch") {
-        from("$buildDir/libs/usearch/shared/libusearch_shared.dylib")
-        from("$buildDir/libs/usearch/shared/libusearch_shared.so")
+        from("$buildDir/libs/usearch/shared/libusearch.dylib")
+        from("$buildDir/libs/usearch/shared/libusearch.so")
     }
 }
 

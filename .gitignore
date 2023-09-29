@@ -18,7 +18,6 @@ build_debug
 _deps
 CMakeCache.txt
 CMakeFiles
-Makefile
 cmake_install.cmake
 
 # Profiling with GProf and `perf` on Linux

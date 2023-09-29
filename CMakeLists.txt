@@ -19,6 +19,7 @@ option(USEARCH_INSTALL "Install CMake targets" OFF)
 option(USEARCH_USE_OPENMP "Use OpenMP for a thread pool" OFF)
 option(USEARCH_USE_SIMSIMD "Use SimSIMD hardware-accelerated metrics" OFF)
 option(USEARCH_USE_JEMALLOC "Use JeMalloc for faster memory allocations" OFF)
+option(USEARCH_USE_NATIVE_F16 "Use native half-precision types" OFF)
 
 option(USEARCH_BUILD_TEST "Compile a native unit test in C++" ${USEARCH_IS_MAIN_PROJECT})
 option(USEARCH_BUILD_BENCHMARK "Compile a native benchmark in C++" ${USEARCH_IS_MAIN_PROJECT})
@@ -62,14 +63,18 @@ else ()
 endif ()
 
 # Core compilation settings affecting "index.hpp"
-target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${JSON_GlobalUDLs}>>:USEARCH_USE_OPENMP=0>)
+target_compile_definitions(
+    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${USEARCH_USE_OPENMP}>>:USEARCH_USE_OPENMP=0>
+)
 
 # Supplementary compilation settings affecting "index_plugins.hpp"
 target_compile_definitions(
-    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${JSON_GlobalUDLs}>>:USEARCH_USE_NATIVE_F16=0>
+    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${USEARCH_USE_NATIVE_F16}>>:USEARCH_USE_NATIVE_F16=0>
 )
 
-target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${JSON_GlobalUDLs}>>:USEARCH_USE_SIMSIMD=0>)
+target_compile_definitions(
+    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${USEARCH_USE_SIMSIMD}>>:USEARCH_USE_SIMSIMD=0>
+)
 
 target_include_directories(
     ${USEARCH_TARGET_NAME} ${USEARCH_SYSTEM_INCLUDE} INTERFACE $<BUILD_INTERFACE:${USEARCH_INCLUDE_BUILD_DIR}>
@@ -250,6 +255,16 @@ function (setup_target TARGET_NAME)
     set_target_properties(${TARGET_NAME} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
     set_target_properties(${TARGET_NAME} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
     set_target_properties(${TARGET_NAME} PROPERTIES CXX_STANDARD 17)
+
+    # Core compilation settings affecting "index.hpp"
+    target_compile_definitions(${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_OPENMP}>>:USEARCH_USE_OPENMP=0>)
+
+    # Supplementary compilation settings affecting "index_plugins.hpp"
+    target_compile_definitions(
+        ${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_NATIVE_F16}>>:USEARCH_USE_NATIVE_F16=0>
+    )
+
+    target_compile_definitions(${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_SIMSIMD}>>:USEARCH_USE_SIMSIMD=0>)
 
 endfunction ()
 

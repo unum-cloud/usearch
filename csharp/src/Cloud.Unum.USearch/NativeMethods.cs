@@ -11,7 +11,7 @@ namespace Cloud.Unum.USearch;
 
 internal static class NativeMethods
 {
-    private const string LibraryName = "libusearch_c_dynamic";
+    private const string LibraryName = "libusearch_c";
 
     [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
     public static extern usearch_index_t usearch_init(ref IndexOptions options, out usearch_error_t error);

@@ -3,7 +3,7 @@
 ## Installation
 
 The simplest form to integrate is to copy the contents of `usearch/c/` into your project.
-To build the library `libusearch_c_static` and `libusearch_c_dynamic`, pass enable the `USEARCH_BUILD_CLIB` CMake option:
+To build the library `libusearch_static_c` and `libusearch_c`, pass enable the `USEARCH_BUILD_CLIB` CMake option:
 
 ```bash
 cmake -DUSEARCH_BUILD_CLIB=1 -DUSEARCH_BUILD_CTEST=1 -DUSEARCH_BUILD_STATIC=0 -DUSEARCH_BUILD_TEST=0 -DUSEARCH_BUILD_BENCHMARK=0 ..

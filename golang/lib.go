@@ -6,7 +6,7 @@ import (
 )
 
 /*
-#cgo LDFLAGS: -L. -lusearch
+#cgo LDFLAGS: -L. -lusearch_c
 #include "usearch.h"
 #include <stdlib.h>
 */

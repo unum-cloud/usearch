@@ -21,20 +21,18 @@
 #include <sys/auxv.h> // `getauxval()`
 #endif
 
-#if defined(USEARCH_DEFINED_ARM)
-#include <arm_fp16.h> // `__fp16`
-#endif
-
 #if !defined(USEARCH_USE_NATIVE_F16)
 #if defined(__AVX512F__)
 #define USEARCH_USE_NATIVE_F16 1
 #elif defined(USEARCH_DEFINED_ARM)
+#include <arm_fp16.h> // `__fp16`
 #define USEARCH_USE_NATIVE_F16 1
 #else
 #define USEARCH_USE_NATIVE_F16 0
-#include <fp16/fp16.h>
 #endif
-#else
+#endif
+
+#if !USEARCH_USE_NATIVE_F16
 #include <fp16/fp16.h>
 #endif
 
