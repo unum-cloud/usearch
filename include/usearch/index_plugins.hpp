@@ -1441,9 +1441,12 @@ class metric_punned_t {
         return typed_at{}((scalar_t const*)a, (scalar_t const*)b, a_dimensions);
     }
 
-    bool reset_if_(isa_kind_t isa, raw_ptr_t function_ptr, bool additional_condition = true) noexcept {
-        if (hardware_supports(isa) && additional_condition) {
-            raw_ptr_ = function_ptr;
+    template <typename scalar_at>
+    bool reset_if_(isa_kind_t isa, result_t (*function_ptr)(scalar_at, scalar_at, size_t),
+                   bool second_condition = true) noexcept {
+        raw_ptr_t punned_ptr = reinterpret_cast<raw_ptr_t>(function_ptr);
+        if (hardware_supports(isa) && second_condition) {
+            raw_ptr_ = punned_ptr;
             isa_kind_ = isa;
             return true;
         } else
@@ -1454,11 +1457,11 @@ class metric_punned_t {
     void reset_ip_metric_f32_() noexcept {
         #if USEARCH_USE_SIMSIMD
         #if SIMSIMD_TARGET_ARM_NEON
-        if (reset_if_(isa_kind_t::neon_k, &simsimd_dot_f32x4_neon, bytes_per_vector % 16 == 0)) return;
+        if (reset_if_(isa_kind_t::neon_k, &simsimd_dot_f32x4_neon, dimensions_ % 4 == 0)) return;
         #elif SIMSIMD_TARGET_ARM_SVE
         if (reset_if_(isa_kind_t::sve_k, &simsimd_dot_f32_sve)) return;
         #elif SIMSIMD_TARGET_X86_AVX2
-        if (reset_if_(isa_kind_t::avx2_k, &simsimd_dot_f32x4_avx2, bytes_per_vector % 16 == 0)) return;
+        if (reset_if_(isa_kind_t::avx2_k, &simsimd_dot_f32x4_avx2, dimensions_ % 4 == 0)) return;
         #endif
         #endif
         raw_ptr_ = &equidimensional_<metric_ip_gt<f32_t>>;
@@ -1467,11 +1470,11 @@ class metric_punned_t {
     void reset_cos_metric_f16_() noexcept {
         #if USEARCH_USE_SIMSIMD
         #if SIMSIMD_TARGET_X86_AVX512
-        if (reset_if_(isa_kind_t::avx512f16_k), &simsimd_cos_f16x16_avx512, bytes_per_vector % 32 == 0) return;
+        if (reset_if_(isa_kind_t::avx512f16_k, &simsimd_cos_f16x16_avx512, dimensions_ % 16 == 0)) return;
         #elif SIMSIMD_TARGET_X86_AVX2
-        if (reset_if_(isa_kind_t::avx2f16_k), &simsimd_cos_f16x8_avx2, bytes_per_vector % 16 == 0) return;
+        if (reset_if_(isa_kind_t::avx2f16_k, &simsimd_cos_f16x8_avx2, dimensions_ % 8 == 0)) return;
         #elif SIMSIMD_TARGET_ARM_NEON
-        if (reset_if_(isa_kind_t::neon_k), &simsimd_cos_f16x4_neon, bytes_per_vector % 8 == 0) return;
+        if (reset_if_(isa_kind_t::neon_k, &simsimd_cos_f16x4_neon, dimensions_ % 4 == 0)) return;
         #elif SIMSIMD_TARGET_ARM_SVE
         if (reset_if_(isa_kind_t::sve_k, &simsimd_cos_f16_sve)) return;
         #endif
@@ -1482,11 +1485,11 @@ class metric_punned_t {
     void reset_ip_metric_f16_() noexcept {
         #if USEARCH_USE_SIMSIMD
         #if SIMSIMD_TARGET_X86_AVX512
-        if (reset_if_(isa_kind_t::avx512f16_k), &simsimd_dot_f16x16_avx512, bytes_per_vector % 32 == 0) return;
+        if (reset_if_(isa_kind_t::avx512f16_k, &simsimd_dot_f16x16_avx512, dimensions_ % 16 == 0)) return;
         #elif SIMSIMD_TARGET_X86_AVX2
-        if (reset_if_(isa_kind_t::avx2f16_k), &simsimd_dot_f16x8_avx2, bytes_per_vector % 16 == 0) return;
+        if (reset_if_(isa_kind_t::avx2f16_k, &simsimd_dot_f16x8_avx2, dimensions_ % 8 == 0)) return;
         #elif SIMSIMD_TARGET_ARM_NEON
-        if (reset_if_(isa_kind_t::neon_k), &simsimd_dot_f16x4_neon, bytes_per_vector % 8 == 0) return;
+        if (reset_if_(isa_kind_t::neon_k, &simsimd_dot_f16x4_neon, dimensions_ % 4 == 0)) return;
         #endif
         #endif
         raw_ptr_ = &equidimensional_<metric_cos_gt<f16_t, f32_t>>;
@@ -1495,9 +1498,9 @@ class metric_punned_t {
     void reset_l2sq_metric_f16_() noexcept {
         #if USEARCH_USE_SIMSIMD
         #if SIMSIMD_TARGET_X86_AVX512
-        if (reset_if_(isa_kind_t::avx512f16_k), &simsimd_l2sq_f16x16_avx512, bytes_per_vector % 32 == 0) return;
+        if (reset_if_(isa_kind_t::avx512f16_k, &simsimd_l2sq_f16x16_avx512, dimensions_ % 16 == 0)) return;
         #elif SIMSIMD_TARGET_X86_AVX2
-        if (reset_if_(isa_kind_t::avx2f16_k), &simsimd_l2sq_f16x8_avx2, bytes_per_vector % 16 == 0) return;
+        if (reset_if_(isa_kind_t::avx2f16_k, &simsimd_l2sq_f16x8_avx2, dimensions_ % 8 == 0)) return;
         #elif SIMSIMD_TARGET_ARM_SVE
         if (reset_if_(isa_kind_t::sve_k, &simsimd_l2sq_f16_sve)) return;
         #endif
@@ -1508,9 +1511,9 @@ class metric_punned_t {
     void reset_cos_metric_i8_() noexcept {
         #if USEARCH_USE_SIMSIMD
         #if SIMSIMD_TARGET_ARM_NEON
-        if (reset_if_(isa_kind_t::neon_k), &simsimd_cos_i8x16_neon, bytes_per_vector % 16 == 0) return;
+        if (reset_if_(isa_kind_t::neon_k, &simsimd_cos_i8x16_neon, dimensions_ % 16 == 0)) return;
         #elif SIMSIMD_TARGET_X86_AVX2
-        if (reset_if_(isa_kind_t::avx2_k), &simsimd_cos_i8x32_avx2, bytes_per_vector % 32 == 0) return;
+        if (reset_if_(isa_kind_t::avx2_k, &simsimd_cos_i8x32_avx2, dimensions_ % 32 == 0)) return;
         #endif
         #endif
         raw_ptr_ = &equidimensional_<cos_i8_t>;
