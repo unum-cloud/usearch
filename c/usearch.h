@@ -274,7 +274,7 @@ USEARCH_EXPORT usearch_distance_t usearch_distance(       //
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  *  @return Number of found matches.
  */
-USEARCH_EXPORT void usearch_brute_force(                             //
+USEARCH_EXPORT void usearch_exact_search(                            //
     void const* dataset, size_t dataset_size, size_t dataset_stride, //
     void const* queries, size_t queries_size, size_t queries_stride, //
     usearch_scalar_kind_t scalar_kind, size_t dimensions,            //

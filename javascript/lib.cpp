@@ -373,6 +373,71 @@ Napi::Value Index::Contains(Napi::CallbackInfo const& ctx) {
     }
 }
 
-Napi::Object InitAll(Napi::Env env, Napi::Object exports) { return Index::Init(env, exports); }
+Napi::Value ExactSearch(Napi::CallbackInfo const& info) {
+    Napi::Env env = info.Env();
+
+    // Validate the number of arguments and their types.
+    if (info.Length() < 5) {
+        Napi::TypeError::New(env, "Wrong number of arguments").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    // Dataset
+    if (!info[0].IsTypedArray()) {
+        Napi::TypeError::New(env, "Dataset should be a TypedArray").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+    Napi::TypedArray dataset = info[0].As<Napi::TypedArray>();
+
+    // Queries
+    if (!info[1].IsTypedArray()) {
+        Napi::TypeError::New(env, "Queries should be a TypedArray").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+    Napi::TypedArray queries = info[1].As<Napi::TypedArray>();
+
+    // Dimensions
+    if (!info[2].IsBigInt()) {
+        Napi::TypeError::New(env, "Dimensions should be a BigInt").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+    std::uint64_t dimensions = info[2].As<Napi::BigInt>().Uint64Value();
+
+    // Count
+    if (!info[3].IsBigInt()) {
+        Napi::TypeError::New(env, "Count should be a BigInt").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+    std::uint64_t count = info[3].As<Napi::BigInt>().Uint64Value();
+
+    // Metric
+    if (!info[4].IsString()) {
+        Napi::TypeError::New(env, "Metric should be a string").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+    std::string metric_str = info[4].As<Napi::String>().Utf8Value();
+    metric_punned_t metric(dimensions, metric_kind_t::cos_k); // Adjust as needed based on the metric_str
+
+    // Perform exact search
+    exact_search_t search;
+    auto results = search(                                                                               //
+        (byte_t const*)dataset.Data(), dataset.ElementLength() / dimensions, dimensions * sizeof(float), //
+        (byte_t const*)queries.Data(), queries.ElementLength() / dimensions, dimensions * sizeof(float), //
+        count, metric);
+
+    // Construct the result object
+    Napi::Object result = Napi::Object::New(env);
+
+    result.Set("keys", /* TODO: populate keys */);
+    result.Set("distances", /* TODO: populate distances */);
+    result.Set("count", Napi::BigInt::New(env, results.size()));
+
+    return result;
+}
+
+Napi::Object InitAll(Napi::Env env, Napi::Object exports) {
+    exports.Set("exactSearch", Napi::Function::New(env, ExactSearch));
+    return Index::Init(env, exports);
+}
 
 NODE_API_MODULE(usearch, InitAll)
