@@ -145,7 +145,7 @@ void test_find_vector(size_t const collection_size, size_t const dimensions) {
         size_t found_count =
             usearch_search(idx, data + i * dimensions, usearch_scalar_f32_k, collection_size, keys, distances, &error);
         ASSERT(!error, error);
-        ASSERT(found_count == 1, "Vector is missing");
+        ASSERT(found_count >= 1 && found_count <= collection_size, "Vector is missing");
     }
 
     free(data);

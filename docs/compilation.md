@@ -171,13 +171,19 @@ Using CMake:
 cmake -B ./build_release -DUSEARCH_BUILD_CLIB=1 && make -C ./build_release -j
 ```
 
+Testing on MacOS and Linux:
+
+```sh
+make USEARCH_USE_OPENMP=1 USEARCH_USE_SIMSIMD=1 -C ./c libusearch_c.so test_c && ./c/test_c
+```
+
 ## GoLang
 
 GoLang bindings are based on C.
 So one should first compile the C library, link it with GoLang, and only then run tests.
 
 ```sh
-make -C ./c libusearch_c.so && mv ./c/libusearch_c.so ./golang/libusearch_c.so 
+make -C ./c libusearch_c.so && mv ./c/libusearch_c.so ./golang/ && cp ./c/usearch.h ./golang/
 cd golang && go test -v ; cd ..
 ```
 

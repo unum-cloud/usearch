@@ -44,7 +44,6 @@ CXX_FLAGS += -DUSEARCH_USE_NATIVE_F16=$(USEARCH_USE_NATIVE_F16)
 # Define source, object files, and libraries
 SRCS = lib.cpp
 OBJS = $(SRCS:.cpp=.o)
-LIBS = -L. -lusearch_c
 USEARCH_HEADER_INCLUDES = -I.  -I ../include/  -I ../fp16/include/ -I ../simsimd/include/
 
 # Default target
@@ -57,15 +56,15 @@ libusearch_static_c.a: $(OBJS)
 
 # Builds the shared library for Linux.
 libusearch_c.so: $(OBJS)
-	$(CXX) $(CXX_FLAGS) $(USEARCH_HEADER_INCLUDES) -shared $^ -o $@
+	$(CXX) $(CXX_FLAGS) $(USEARCH_HEADER_INCLUDES) -shared $^ -lc++ -o $@
 
 # Builds the shared library for macOS.
 libusearch_c.dylib: $(OBJS)
-	$(CXX) $(CXX_FLAGS) $(USEARCH_HEADER_INCLUDES) -dynamiclib $^ -o $@
+	$(CXX) $(CXX_FLAGS) $(USEARCH_HEADER_INCLUDES) -dynamiclib $^ -lc++ -o $@
 
 # Compiles the test executable.
 test_c: test.c libusearch_static_c.a
-	$(CC) $(C_FLAGS) $< $(LIBS) -Wl,-rpath,. -o $@
+	$(CC) $(C_FLAGS) $< -L. -lusearch_static_c -lc++ -Wl,-rpath,. -o $@
 
 # Compiles source files to object files.
 %.o: %.cpp
