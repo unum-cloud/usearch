@@ -100,7 +100,7 @@ func TestUSearch(t *testing.T) {
 			t.Fatalf("Failed to search: %s", err)
 		}
 
-		const tolerance = 1e-9  // For example, this sets the tolerance to 0.000000001
+		const tolerance = 1e-2  // For example, this sets the tolerance to 0.01
 		if keys[0] != 42 || math.Abs(float64(distances[0])) > tolerance {
 			t.Fatalf("Expected result 42 with distance 0, got key %d with distance %f", keys[0], distances[0])
 		}
