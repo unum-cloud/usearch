@@ -142,11 +142,10 @@ void test_find_vector(size_t const collection_size, size_t const dimensions) {
 
     // Find the vectors
     for (size_t i = 0; i < collection_size; i++) {
-        const void* query_vector = data + i * dimensions;
         size_t found_count =
-            usearch_search(idx, query_vector, usearch_scalar_f32_k, collection_size, keys, distances, &error);
+            usearch_search(idx, data + i * dimensions, usearch_scalar_f32_k, collection_size, keys, distances, &error);
         ASSERT(!error, error);
-        ASSERT(found_count == collection_size, "Vector is missing");
+        ASSERT(found_count == 1, "Vector is missing");
     }
 
     free(data);
