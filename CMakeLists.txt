@@ -198,7 +198,6 @@ function (setup_target TARGET_NAME)
                     -g>
                     $<$<CONFIG:DEBUG>:-g
                     -fsanitize=address
-                    -fsanitize=leak
                     -fsanitize=alignment
                     -fsanitize=undefined
                     >
@@ -214,12 +213,17 @@ function (setup_target TARGET_NAME)
             PRIVATE
             $<$<CONFIG:DEBUG>:-g
             -fsanitize=address
-            -fsanitize=leak
             -fsanitize=alignment
             -fsanitize=undefined
             >
             -fPIC
         )
+
+        # Check if the compiler is AppleClang, and if not, add the leak sanitizer
+        if (NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "AppleClang")
+            target_compile_options(${TARGET_NAME} PRIVATE $<$<CONFIG:DEBUG>:-fsanitize=leak>)
+            target_link_options(${TARGET_NAME} PRIVATE $<$<CONFIG:DEBUG>:-fsanitize=leak>)
+        endif ()
 
         if (USEARCH_USE_OPENMP)
             target_link_libraries(${TARGET_NAME} PRIVATE OpenMP::OpenMP_CXX)
