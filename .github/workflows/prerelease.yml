@@ -38,8 +38,7 @@ jobs:
         
     - name: Build
       run: |
-        export CC=${{ matrix.compiler }}
-        export CXX=${{ matrix.compiler }}++
+        export CXX=${{ matrix.compiler }}
         cmake -B build -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST=1 -DUSEARCH_BUILD_CTEST=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
         cmake --build build --config Debug
     - name: Run C++ tests
@@ -59,7 +58,7 @@ jobs:
     - name: Install Dependencies
       run: |
         brew update
-        brew install cmake jemalloc
+        brew install cmake
         
     - name: Build
       run: |
@@ -80,7 +79,7 @@ jobs:
     - run: git submodule update --init --recursive
     
     - name: Install Dependencies
-      run: choco install cmake jemalloc
+      run: choco install cmake
         
     - name: Build
       run: |
