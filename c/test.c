@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,14 +5,20 @@
 
 #include "usearch.h"
 
-#define ASSERT(must_be_true, message)           \
-    if (!(must_be_true)) {                      \
-        printf("Assert: %s\n", message);        \
-        exit(-1);                               \
+#define ASSERT(must_be_true, message)                                                                                  \
+    if (!(must_be_true)) {                                                                                             \
+        printf("Assert: %s\n", message);                                                                               \
+        exit(-1);                                                                                                      \
     }
 
-
-float* create_vectors(size_t count, size_t dimensions) {
+/**
+ * @brief Creates and initializes vectors with random float values.
+ *
+ * @param count The number of vectors.
+ * @param dimensions The number of dimensions per vector.
+ * @return A pointer to the first element of the vectors, that must be @b free-ed afterwards.
+ */
+float* create_vectors(size_t const count, size_t const dimensions) {
     float* data = (float*)malloc(count * dimensions * sizeof(float));
     ASSERT(data, "Failed to allocate memory");
     for (size_t idx = 0; idx < count * dimensions; ++idx)
@@ -21,9 +26,9 @@ float* create_vectors(size_t count, size_t dimensions) {
     return data;
 }
 
-usearch_init_options_t create_options(size_t dimensions) {
+usearch_init_options_t create_options(size_t const dimensions) {
     usearch_init_options_t opts;
-    opts.connectivity = 2; // 32 in faiss
+    opts.connectivity = 3; // 32 in faiss
     opts.dimensions = dimensions;
     opts.expansion_add = 40;    // 40 in faiss
     opts.expansion_search = 16; // 10 in faiss
@@ -33,7 +38,13 @@ usearch_init_options_t create_options(size_t dimensions) {
     return opts;
 }
 
-void test_init(size_t collection_size, size_t dimensions) {
+/**
+ *  This test is designed to verify the initialization of the index with specific dimensions and ensures that the
+ *  associated properties are set correctly. It initializes the index twice, checking for errors at each step, and
+ *  performs a reserve operation to pre-allocate space in the index, verifying the correct settings of size, capacity,
+ *  dimensions, and connectivity after each operation.
+ */
+void test_init(size_t const collection_size, size_t const dimensions) {
     printf("Test: Index Initialization...\n");
 
     // Init index
@@ -67,7 +78,12 @@ void test_init(size_t collection_size, size_t dimensions) {
     printf("Test: Index Initialization - PASSED\n");
 }
 
-void test_add_vector(size_t collection_size, size_t dimensions) {
+/**
+ *  This test validates the addition of vectors to the index. It initializes the index and reserves space for vectors.
+ *  It then iteratively adds vectors to the index and checks if the index contains the added vectors by verifying the
+ *  size, capacity, and presence of each vector in the index.
+ */
+void test_add_vector(size_t const collection_size, size_t const dimensions) {
     printf("Test: Add Vector...\n");
 
     usearch_error_t error = NULL;
@@ -98,7 +114,12 @@ void test_add_vector(size_t collection_size, size_t dimensions) {
     printf("Test: Add Vector - PASSED\n");
 }
 
-void test_find_vector(size_t collection_size, size_t dimensions) {
+/**
+ *  This test ensures that vectors added to the index can be correctly found. It initializes the index, reserves space,
+ *  and adds vectors. It then performs a search query for each added vector to ensure that the vectors are correctly
+ *  found in the index, validating the count of found vectors.
+ */
+void test_find_vector(size_t const collection_size, size_t const dimensions) {
     printf("Test: Find Vector...\n");
 
     usearch_error_t error = NULL;
@@ -107,9 +128,8 @@ void test_find_vector(size_t collection_size, size_t dimensions) {
     usearch_reserve(idx, collection_size, &error);
 
     // Create result buffers
-    int results_count = collection_size;
-    usearch_key_t* keys = (usearch_key_t*)malloc(results_count * sizeof(usearch_key_t));
-    float* distances = (float*)malloc(results_count * sizeof(float));
+    usearch_key_t* keys = (usearch_key_t*)malloc(collection_size * sizeof(usearch_key_t));
+    float* distances = (float*)malloc(collection_size * sizeof(float));
     ASSERT(keys && distances, "Failed to allocate memory");
 
     // Add vectors
@@ -122,10 +142,10 @@ void test_find_vector(size_t collection_size, size_t dimensions) {
 
     // Find the vectors
     for (size_t i = 0; i < collection_size; i++) {
-        const void *query_vector = data + i * dimensions;
-        size_t found_count = usearch_search(idx, query_vector, usearch_scalar_f32_k, results_count, keys, distances, &error);
+        size_t found_count =
+            usearch_search(idx, data + i * dimensions, usearch_scalar_f32_k, collection_size, keys, distances, &error);
         ASSERT(!error, error);
-        ASSERT(found_count = results_count, "Vector is missing");
+        ASSERT(found_count >= 1 && found_count <= collection_size, "Vector is missing");
     }
 
     free(data);
@@ -135,7 +155,12 @@ void test_find_vector(size_t collection_size, size_t dimensions) {
     printf("Test: Find Vector - PASSED\n");
 }
 
-void test_get_vector(size_t collection_size, size_t dimensions) {
+/**
+ *  This test checks the ability of the index to handle multiple vectors associated with the same key. It initializes
+ *  the index with the multi-option enabled, reserves space, and adds multiple vectors with the same key. The test then
+ *  retrieves vectors associated with the key from the index and checks the count of retrieved vectors.
+ */
+void test_get_vector(size_t const collection_size, size_t const dimensions) {
     printf("Test: Get Vector...\n");
 
     usearch_error_t error = NULL;
@@ -145,8 +170,7 @@ void test_get_vector(size_t collection_size, size_t dimensions) {
     usearch_reserve(idx, collection_size, &error);
 
     // Create result buffers
-    int results_count = collection_size;
-    float* vectors = (float*)malloc(results_count * dimensions * sizeof(float));
+    float* vectors = (float*)malloc(collection_size * dimensions * sizeof(float));
     ASSERT(vectors, "Failed to allocate memory");
 
     // Add multiple vectors with SAME key
@@ -159,7 +183,7 @@ void test_get_vector(size_t collection_size, size_t dimensions) {
 
     // Retrieve vectors from index
     size_t count = usearch_get(idx, key, collection_size, vectors, usearch_scalar_f32_k, &error);
-    ASSERT(count == results_count, "Vector is missing");
+    ASSERT(count == collection_size, "Vector is missing");
 
     free(vectors);
     free(data);
@@ -168,7 +192,12 @@ void test_get_vector(size_t collection_size, size_t dimensions) {
     printf("Test: Get Vector - PASSED\n");
 }
 
-void test_remove_vector(size_t collection_size, size_t dimensions) {
+/**
+ *  This test ensures that vectors can be successfully removed from the index. It initializes the index, reserves space,
+ *  and adds vectors. It then iteratively removes each vector from the index and checks for errors. However, note that
+ *  the assert in this test expects an error, indicating that the remove functionality is not currently supported.
+ */
+void test_remove_vector(size_t const collection_size, size_t const dimensions) {
     printf("Test: Remove Vector...\n");
 
     usearch_error_t error = NULL;
@@ -196,7 +225,13 @@ void test_remove_vector(size_t collection_size, size_t dimensions) {
     printf("Test: Remove Vector - PASSED\n");
 }
 
-void test_save_load(size_t collection_size, size_t dimensions) {
+/**
+ *  This test validates the save and load functionality of the index. It initializes the index, reserves space, and adds
+ *  vectors. The index is then saved to a file and freed. A new index is initialized, and the previously saved index is
+ *  loaded into it. The test then validates the loaded index properties and ensures that it contains all the vectors
+ *  from the saved index.
+ */
+void test_save_load(size_t const collection_size, size_t const dimensions) {
     printf("Test: Save/Load...\n");
 
     usearch_error_t error = NULL;
@@ -242,7 +277,13 @@ void test_save_load(size_t collection_size, size_t dimensions) {
     printf("Test: Save/Load - PASSED\n");
 }
 
-void test_view(size_t collection_size, size_t dimensions) {
+/**
+ *  This test is designed to validate the view functionality of the index. It initializes the index, reserves space, and
+ *  adds vectors. The index is then saved to a file and freed. A new index is initialized and a view is created from the
+ *  saved index file. The test is mainly focused on ensuring that no errors occur during these operations, but it does
+ *  not verify the properties or contents of the viewed index.
+ */
+void test_view(size_t const collection_size, size_t const dimensions) {
     printf("Test: View...\n");
 
     usearch_error_t error = NULL;

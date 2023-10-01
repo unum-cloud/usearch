@@ -2,4 +2,4 @@
 
 #include <emscripten/emscripten.h>
 
-#include <lib.cpp>
+#include <../c/lib.cpp>

@@ -259,9 +259,9 @@ jobs:
     - name: Build library
       run: |
         cd golang/
-        make USEARCH_USE_OPENMP=0 -C ../c libusearch_c.so
-        sudo mv ../c/libusearch_c.so /usr/local/lib/libusearch.a
-        sudo mv ../c/usearch.h /usr/local/include/usearch.h
+        make USEARCH_USE_OPENMP=0 USEARCH_USE_NATIVE_F16=0 USEARCH_USE_SIMSIMD=1 -C ../c libusearch_c.so
+        sudo cp ../c/libusearch_c.so /usr/local/lib/libusearch_c.a
+        sudo cp ../c/usearch.h /usr/local/include/usearch.h
 
     - name: Run test
       run: |

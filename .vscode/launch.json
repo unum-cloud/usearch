@@ -8,7 +8,7 @@
             "name": "Unit Test C++",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/test",
+            "program": "${workspaceFolder}/build_debug/test_cpp",
             "cwd": "${workspaceFolder}",
             "environment": [
                 {
@@ -34,7 +34,7 @@
             "name": "Debug C++ on Wiki 1M @Cos",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/bench",
+            "program": "${workspaceFolder}/build_debug/bench_cpp",
             "cwd": "${workspaceFolder}",
             "args": [
                 "--vectors",
@@ -71,7 +71,7 @@
             "name": "Debug C++ on Text-to-Image 1B @Cos",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/bench",
+            "program": "${workspaceFolder}/build_debug/bench_cpp",
             "cwd": "${workspaceFolder}",
             "args": [
                 "--vectors",
@@ -102,7 +102,7 @@
             "name": "Run C++ on Text-to-Image 1M @Cos",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_release/bench",
+            "program": "${workspaceFolder}/build_release/bench_cpp",
             "cwd": "${workspaceFolder}",
             "args": [
                 "--vectors",

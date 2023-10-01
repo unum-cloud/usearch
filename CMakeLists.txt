@@ -15,11 +15,17 @@ endif ()
 
 # Options
 option(USEARCH_INSTALL "Install CMake targets" OFF)
+
+option(USEARCH_USE_OPENMP "Use OpenMP for a thread pool" OFF)
+option(USEARCH_USE_SIMSIMD "Use SimSIMD hardware-accelerated metrics" OFF)
+option(USEARCH_USE_JEMALLOC "Use JeMalloc for faster memory allocations" OFF)
+option(USEARCH_USE_NATIVE_F16 "Use native half-precision types" OFF)
+
 option(USEARCH_BUILD_TEST "Compile a native unit test in C++" ${USEARCH_IS_MAIN_PROJECT})
 option(USEARCH_BUILD_BENCHMARK "Compile a native benchmark in C++" ${USEARCH_IS_MAIN_PROJECT})
-option(USEARCH_BUILD_WOLFRAM "Compile Wolfram Language bindings" OFF)
 option(USEARCH_BUILD_CLIB "Compile a native library for the C 99 interface" OFF)
 option(USEARCH_BUILD_CTEST "Compile a test for the C 99 interface" OFF)
+option(USEARCH_BUILD_WOLFRAM "Compile Wolfram Language bindings" OFF)
 
 # Includes
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
@@ -57,14 +63,18 @@ else ()
 endif ()
 
 # Core compilation settings affecting "index.hpp"
-target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${JSON_GlobalUDLs}>>:USEARCH_USE_OPENMP=0>)
+target_compile_definitions(
+    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${USEARCH_USE_OPENMP}>>:USEARCH_USE_OPENMP=0>
+)
 
 # Supplementary compilation settings affecting "index_plugins.hpp"
 target_compile_definitions(
-    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${JSON_GlobalUDLs}>>:USEARCH_USE_NATIVE_F16=0>
+    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${USEARCH_USE_NATIVE_F16}>>:USEARCH_USE_NATIVE_F16=0>
 )
 
-target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${JSON_GlobalUDLs}>>:USEARCH_USE_SIMSIMD=0>)
+target_compile_definitions(
+    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${USEARCH_USE_SIMSIMD}>>:USEARCH_USE_SIMSIMD=0>
+)
 
 target_include_directories(
     ${USEARCH_TARGET_NAME} ${USEARCH_SYSTEM_INCLUDE} INTERFACE $<BUILD_INTERFACE:${USEARCH_INCLUDE_BUILD_DIR}>
@@ -103,6 +113,160 @@ if (USEARCH_INSTALL)
     )
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc" DESTINATION ${USEARCH_PKGCONFIG_INSTALL_DIR})
 endif ()
+
+# Find required packages
+if (CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin")
+    set(CMAKE_THREAD_LIBS_INIT "-lpthread")
+    set(CMAKE_HAVE_THREADS_LIBRARY 1)
+    set(CMAKE_USE_WIN32_THREADS_INIT 0)
+    set(CMAKE_USE_PTHREADS_INIT 1)
+    set(THREADS_PREFER_PTHREAD_FLAG ON)
+endif ()
+find_package(Threads REQUIRED)
+
+if (USEARCH_USE_OPENMP)
+    find_package(OpenMP REQUIRED)
+endif ()
+
+if (USEARCH_USE_JEMALLOC)
+    include(jemalloc)
+endif ()
+
+# Set default build type to Release
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif ()
+
+# Include directories
+set(USEARCH_HEADER_INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/fp16/include"
+                            "${CMAKE_CURRENT_SOURCE_DIR}/simsimd/include"
+)
+
+# Function to setup target
+function (setup_target TARGET_NAME)
+    # Compiler-specific options List of all possible compiler IDs:
+    # https://cmake.org/cmake/help/latest/variable/CMAKE_LANG_COMPILER_ID.html
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_compile_options(
+            ${TARGET_NAME}
+            PRIVATE $<$<CONFIG:RELEASE>:-O3>
+                    $<$<CONFIG:RELWITHDEBINFO>:-O3
+                    -g>
+                    $<$<CONFIG:DEBUG>:-g
+                    -fsanitize=address
+                    -fsanitize=leak
+                    -fsanitize=alignment
+                    -fsanitize=undefined
+                    >
+                    -ffast-math
+                    -fPIC
+                    -Wall
+                    -Wextra
+                    -Wno-conversion
+                    -Wno-unknown-pragmas
+                    -march=native
+                    -fmax-errors=1
+                    -pedantic
+                    -fdiagnostics-color=always
+                    -ftime-report
+        )
+        target_link_options(
+            ${TARGET_NAME}
+            PRIVATE
+            $<$<CONFIG:DEBUG>:-g
+            -fsanitize=address
+            -fsanitize=leak
+            -fsanitize=alignment
+            -fsanitize=undefined
+            >
+            -fPIC
+        )
+
+        if (USEARCH_USE_OPENMP)
+            target_link_libraries(${TARGET_NAME} PRIVATE OpenMP::OpenMP_CXX)
+        endif ()
+
+        if (CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin")
+            target_link_libraries(${TARGET_NAME} PRIVATE Threads::Threads)
+        endif ()
+
+    elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        target_compile_options(
+            ${TARGET_NAME}
+            PRIVATE $<$<CONFIG:RELEASE>:-O3>
+                    $<$<CONFIG:RELWITHDEBINFO>:-O3
+                    -g>
+                    $<$<CONFIG:DEBUG>:-g
+                    -fsanitize=address
+                    -fsanitize=leak
+                    -fsanitize=alignment
+                    -fsanitize=undefined
+                    >
+                    -ffast-math
+                    -fPIC
+                    -pedantic
+                    -Wfatal-errors
+                    -fcolor-diagnostics
+                    -ftime-trace
+        )
+        target_link_options(
+            ${TARGET_NAME}
+            PRIVATE
+            $<$<CONFIG:DEBUG>:-g
+            -fsanitize=address
+            -fsanitize=leak
+            -fsanitize=alignment
+            -fsanitize=undefined
+            >
+            -fPIC
+        )
+
+        if (USEARCH_USE_OPENMP)
+            target_link_libraries(${TARGET_NAME} PRIVATE OpenMP::OpenMP_CXX)
+        endif ()
+
+        if (CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin")
+            target_link_libraries(
+                ${TARGET_NAME} PRIVATE "-framework CoreFoundation" "-framework Security" Threads::Threads
+            )
+        else ()
+            target_link_libraries(${TARGET_NAME} PRIVATE Threads::Threads)
+        endif ()
+
+    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "NVIDIA" OR CMAKE_CXX_COMPILER_ID STREQUAL "NVHPC")
+        target_compile_options(${TARGET_NAME} PRIVATE $<$<CONFIG:RELEASE>:-O3>)
+        target_compile_definitions(${TARGET_NAME} PRIVATE --expt-relaxed-constexpr --extended-lambda)
+        set_property(SOURCE bench.cpp PROPERTY LANGUAGE CUDA)
+        set_target_properties(${TARGET_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+        set_target_properties(${TARGET_NAME} PROPERTIES CUDA_ARCHITECTURES "86")
+
+    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
+        target_compile_options(${TARGET_NAME} PRIVATE -w -ferror-limit=1)
+
+    elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        target_compile_options(
+            ${TARGET_NAME} PRIVATE $<$<CONFIG:DEBUG>:/DEBUG> $<$<CONFIG:RELEASE>:/O2> $<$<CONFIG:RELWITHDEBINFO>:/O2
+                                   /DEBUG>
+        )
+    endif ()
+
+    target_include_directories(${TARGET_NAME} PRIVATE ${USEARCH_HEADER_INCLUDES})
+    set_target_properties(${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+    set_target_properties(${TARGET_NAME} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+    set_target_properties(${TARGET_NAME} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+    set_target_properties(${TARGET_NAME} PROPERTIES CXX_STANDARD 17)
+
+    # Core compilation settings affecting "index.hpp"
+    target_compile_definitions(${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_OPENMP}>>:USEARCH_USE_OPENMP=0>)
+
+    # Supplementary compilation settings affecting "index_plugins.hpp"
+    target_compile_definitions(
+        ${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_NATIVE_F16}>>:USEARCH_USE_NATIVE_F16=0>
+    )
+
+    target_compile_definitions(${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_SIMSIMD}>>:USEARCH_USE_SIMSIMD=0>)
+
+endfunction ()
 
 if (${USEARCH_BUILD_TEST} OR ${USEARCH_BUILD_BENCHMARK})
     add_subdirectory(cpp)

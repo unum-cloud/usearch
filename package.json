@@ -28,7 +28,7 @@
         "node-addon-api": "^3.0.0"
     },
     "scripts": {
-        "test": "node javascript/test.js"
+        "test": "node --test ./javascript/usearch.test.js"
     },
     "devDependencies": {
         "@semantic-release/exec": "^6.0.3",
