@@ -10,6 +10,7 @@
 datasets
 bin
 *.usearch
+.cache
 
 # C++ builds
 build
