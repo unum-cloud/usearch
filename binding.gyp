@@ -10,6 +10,7 @@
                 "simsimd/include",
             ],
             "dependencies": ["<!(node -p \"require('node-addon-api').gyp\")"],
+            "defines": ["USEARCH_USE_SIMSIMD=1"],
             "cflags": [
                 "-fexceptions",
                 "-Wno-unknown-pragmas",
@@ -19,7 +20,7 @@
                 "-fexceptions",
                 "-Wno-unknown-pragmas",
                 "-Wno-maybe-uninitialized",
-                "-std=c++11",
+                "-std=c++17",
             ],
             "xcode_settings": {
                 "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
@@ -29,7 +30,7 @@
             "msvs_settings": {
                 "VCCLCompilerTool": {
                     "ExceptionHandling": 1,
-                    "AdditionalOptions": ["-std:c++11"],
+                    "AdditionalOptions": ["-std:c++17"],
                 }
             },
         }

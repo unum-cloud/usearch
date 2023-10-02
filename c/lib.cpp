@@ -257,7 +257,7 @@ USEARCH_EXPORT usearch_distance_t usearch_distance(       //
     return metric((byte_t const*)vector_first, (byte_t const*)vector_second);
 }
 
-USEARCH_EXPORT void usearch_brute_force(                              //
+USEARCH_EXPORT void usearch_exact_search(                             //
     void const* dataset, size_t dataset_count, size_t dataset_stride, //
     void const* queries, size_t queries_count, size_t queries_stride, //
     usearch_scalar_kind_t scalar_kind, size_t dimensions,             //

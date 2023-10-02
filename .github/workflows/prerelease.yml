@@ -16,60 +16,102 @@ permissions:
   contents: read
 
 jobs:
-
-  test_c:
-    name: Test C
+  
+  test_cpp_c_ubuntu_gcc:
+    name: Test C++ Ubuntu (GCC)
     runs-on: ubuntu-latest
+    
     steps:
     - uses: actions/checkout@v3
       with:
         ref: main-dev
     - run: git submodule update --init --recursive
-    - name: Prepare Environment
-      run: |
-        sudo apt update && 
-        sudo apt install -y cmake build-essential libjemalloc-dev
+    
+    - name: Install Dependencies
+      run: sudo apt update && sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev g++-12
+        
     - name: Build
       run: |
-        cmake -B ./build_release \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DUSEARCH_USE_OPENMP=1 \
-        -DUSEARCH_USE_SIMSIMD=1 \
-        -DUSEARCH_USE_JEMALLOC=1 \
-        -DUSEARCH_USE_NATIVE_F16=0 \
-        -DUSEARCH_BUILD_CLIB=1 \
-        -DUSEARCH_BUILD_CTEST=1 \
-        -DUSEARCH_BUILD_BENCHMARK=0 &&
-        make -C ./build_release -j
-    - name: Run tests
-      run: ./build_release/test_c
+        export CC=gcc-12
+        export CXX=g++-12
+        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+        cmake --build build --config Debug
+        
+    - name: Run C++ tests
+      run: ./build/test_cpp
+    - name: Run C tests
+      run: ./build/test_c
 
-  test_cpp:
-    name: Test C++
+
+  test_cpp_c_ubuntu_clang:
+    name: Test C++ Ubuntu (Clang)
     runs-on: ubuntu-latest
+    
     steps:
     - uses: actions/checkout@v3
       with:
         ref: main-dev
     - run: git submodule update --init --recursive
-    - name: Prepare Environment
-      run: |
-        sudo apt update && 
-        sudo apt install -y cmake build-essential libjemalloc-dev
+    
+    - name: Install Dependencies
+      run: sudo apt update && sudo apt install -y cmake build-essential libjemalloc-dev clang-15
+        
     - name: Build
       run: |
-        cmake -B ./build_release \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DUSEARCH_USE_OPENMP=1 \
-        -DUSEARCH_USE_SIMSIMD=1 \
-        -DUSEARCH_USE_JEMALLOC=1 \
-        -DUSEARCH_USE_NATIVE_F16=0 \
-        -DUSEARCH_BUILD_TEST=1 \
-        -DUSEARCH_BUILD_BENCHMARK=0 &&
-        make -C ./build_release -j
-    - name: Run tests
-      run: ./build_release/test_cpp
-      
+        export CC=clang-15
+        export CXX=clang++-15
+        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+        cmake --build build --config Debug
+        
+    - name: Run C++ tests
+      run: ./build/test_cpp
+    - name: Run C tests
+      run: ./build/test_c
+
+
+  test_cpp_c_macos:
+    name: Test C++ MacOS
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: main-dev
+    - run: git submodule update --init --recursive
+    
+    - name: Install Dependencies
+      run: |
+        brew update
+        brew install cmake
+    
+    - name: Build
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1
+        cmake --build build --config Debug
+    - name: Run C++ tests
+      run: ./build/test_cpp
+    - name: Run C tests
+      run: ./build/test_c
+
+  test_cpp_c_windows:
+    name: Test C++ Windows
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: main-dev
+    - run: git submodule update --init --recursive
+    
+    - name: Install Dependencies
+      run: choco install cmake
+        
+    - name: Build
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1
+        cmake --build build --config Debug
+    - name: Run C++ tests
+      run: .\build\test_cpp
+    - name: Run C tests
+      run: .\build\test_c
       
   test_python_311:
     name: Test Python
@@ -92,15 +134,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest numpy
       - name: Build locally on Ubuntu
-        run: |
-          export CC=/usr/bin/gcc-12
-          export CXX=/usr/bin/g++-12
-          export LD_LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:$LD_LIBRARY_PATH
-          python -m pip install .
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
-      - name: Build locally
         run: python -m pip install .
-        if: ${{ matrix.os != 'ubuntu-22.04' }}
       - name: Test with PyTest
         run: pytest python/scripts/ -s -x
 
@@ -129,13 +163,7 @@ jobs:
           pip install pytest numpy
 
       - name: Build locally
-        run: |
-          export CC=/usr/bin/gcc-12
-          export CXX=/usr/bin/g++-12
-          export LD_LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/12/:$LD_LIBRARY_PATH
-          python -m pip install .
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
-
+        run: python -m pip install .
       - name: Test with PyTest
         run: pytest python/scripts/ -s -x
 
@@ -149,10 +177,7 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
-      - run: |
-          export CC=/usr/bin/gcc-12
-          export CXX=/usr/bin/g++-12
-          npm install
+      - run: npm install
       - run: npm ci
       - run: npm test
 
@@ -180,10 +205,7 @@ jobs:
     - name: Setup Gradle
       uses: gradle/gradle-build-action@v2.4.2
     - name: Execute Gradle build
-      run:
-        export CC=/usr/bin/gcc-12
-        export CXX=/usr/bin/g++-12
-        gradle clean build
+      run: gradle clean build
 
   test_swift:
     name: Test ObjC & Swift
@@ -254,14 +276,14 @@ jobs:
     - name: Prepare environment
       run: |
         sudo apt update && 
-        sudo apt install -y cmake build-essential libjemalloc-dev
+        sudo apt install -y build-essential
           
     - name: Build library
       run: |
         cd golang/
         make USEARCH_USE_OPENMP=0 USEARCH_USE_NATIVE_F16=0 USEARCH_USE_SIMSIMD=1 -C ../c libusearch_c.so
-        sudo mv ../c/libusearch_c.so /usr/local/lib/libusearch_c.a
-        sudo mv ../c/usearch.h /usr/local/include/usearch.h
+        sudo cp ../c/libusearch_c.so /usr/local/lib/libusearch_c.a
+        sudo cp ../c/usearch.h /usr/local/include/usearch.h
 
     - name: Run test
       run: |

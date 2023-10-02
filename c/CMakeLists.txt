@@ -1,4 +1,4 @@
-if (USEARCH_BUILD_CLIB)
+if (USEARCH_BUILD_TEST_C)
     add_executable(test_c test.c lib.cpp)
     setup_target(test_c)
     include(CTest)
@@ -8,7 +8,7 @@ endif ()
 
 # This article discusses a better way to allow building either static or shared libraries:
 # https://alexreinking.com/blog/building-a-dual-shared-and-static-library-with-cmake.html
-if (USEARCH_BUILD_CTEST)
+if (USEARCH_BUILD_LIB_C)
     add_library(usearch_c SHARED lib.cpp)
     add_library(usearch_static_c STATIC lib.cpp)
 
