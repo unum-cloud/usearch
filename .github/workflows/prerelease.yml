@@ -17,14 +17,10 @@ permissions:
 
 jobs:
   
-  test_cpp_c_ubuntu:
-    name: Test C++ Ubuntu (${{ matrix.compiler }})
+  test_cpp_c_ubuntu_gcc:
+    name: Test C++ Ubuntu (GCC)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        compiler: [g++-9, g++-10, g++-11, clang-10, clang-11, clang-12]
-        
+    
     steps:
     - uses: actions/checkout@v3
       with:
@@ -32,19 +28,46 @@ jobs:
     - run: git submodule update --init --recursive
     
     - name: Install Dependencies
-      run: |
-        sudo apt update && 
-        sudo apt install -y cmake build-essential libjemalloc-dev ${{ matrix.compiler }}
+      run: sudo apt update && sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev g++-12
         
     - name: Build
       run: |
-        export CXX=${{ matrix.compiler }}
-        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST=1 -DUSEARCH_BUILD_CTEST=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+        export CC=gcc-12
+        export CXX=g++-12
+        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
         cmake --build build --config Debug
+        
     - name: Run C++ tests
       run: ./build/test_cpp
     - name: Run C tests
       run: ./build/test_c
+
+
+  test_cpp_c_ubuntu_clang:
+    name: Test C++ Ubuntu (Clang)
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: main-dev
+    - run: git submodule update --init --recursive
+    
+    - name: Install Dependencies
+      run: sudo apt update && sudo apt install -y cmake build-essential libjemalloc-dev clang-15
+        
+    - name: Build
+      run: |
+        export CC=clang-15
+        export CXX=clang++-15
+        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+        cmake --build build --config Debug
+        
+    - name: Run C++ tests
+      run: ./build/test_cpp
+    - name: Run C tests
+      run: ./build/test_c
+
 
   test_cpp_c_macos:
     name: Test C++ MacOS
@@ -59,13 +82,13 @@ jobs:
       run: |
         brew update
         brew install cmake
-        
+    
     - name: Build
       run: |
-        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST=1 -DUSEARCH_BUILD_CTEST=1
+        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1
         cmake --build build --config Debug
     - name: Run C++ tests
-      run: ./build/test
+      run: ./build/test_cpp
     - name: Run C tests
       run: ./build/test_c
 
@@ -83,12 +106,12 @@ jobs:
         
     - name: Build
       run: |
-        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST=1 -DUSEARCH_BUILD_CTEST=1
+        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1
         cmake --build build --config Debug
     - name: Run C++ tests
-      run: ./build/test
+      run: .\build\test_cpp
     - name: Run C tests
-      run: ./build/test_c
+      run: .\build\test_c
       
   test_python_311:
     name: Test Python

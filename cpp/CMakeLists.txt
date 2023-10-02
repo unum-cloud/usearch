@@ -1,5 +1,4 @@
-
-if (USEARCH_BUILD_TEST)
+if (USEARCH_BUILD_TEST_CPP)
     add_executable(test_cpp test.cpp)
     setup_target(test_cpp)
     include(CTest)
@@ -7,7 +6,7 @@ if (USEARCH_BUILD_TEST)
     add_test(NAME test_cpp COMMAND test_cpp)
 endif ()
 
-if (USEARCH_BUILD_BENCHMARK)
+if (USEARCH_BUILD_BENCH_CPP)
     include(clipp)
     add_executable(bench_cpp bench.cpp)
     setup_target(bench_cpp)

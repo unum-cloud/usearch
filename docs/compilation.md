@@ -19,10 +19,10 @@ cmake -B ./build_release \
     -DUSEARCH_USE_OPENMP=1 \
     -DUSEARCH_USE_SIMSIMD=1 \
     -DUSEARCH_USE_JEMALLOC=1 \
-    -DUSEARCH_BUILD_TEST=1 \
-    -DUSEARCH_BUILD_BENCHMARK=1 \
-    -DUSEARCH_BUILD_CTEST=1 \
-    -DUSEARCH_BUILD_CLIB=1 \
+    -DUSEARCH_BUILD_TEST_CPP=1 \
+    -DUSEARCH_BUILD_BENCH_CPP=1 \
+    -DUSEARCH_BUILD_LIB_C=1 \
+    -DUSEARCH_BUILD_TEST_C=1 \
     && \
     make -C ./build_release -j
 ```
@@ -36,8 +36,8 @@ cmake -B ./build_release \
     -DCMAKE_CXX_COMPILER="/opt/homebrew/opt/llvm/bin/clang++" \
     -DUSEARCH_USE_OPENMP=1 \
     -DUSEARCH_USE_SIMSIMD=1 \
-    -DUSEARCH_BUILD_BENCHMARK=1 \
-    -DUSEARCH_BUILD_TEST=1 \
+    -DUSEARCH_BUILD_BENCH_CPP=1 \
+    -DUSEARCH_BUILD_TEST_CPP=1 \
     && \
     make -C ./build_release -j
 ```
@@ -168,7 +168,7 @@ make USEARCH_USE_OPENMP=1 USEARCH_USE_SIMSIMD=1 -C ./c libusearch_c.so
 Using CMake:
 
 ```sh
-cmake -B ./build_release -DUSEARCH_BUILD_CLIB=1 && make -C ./build_release -j
+cmake -B ./build_release -DUSEARCH_BUILD_LIB_C=1 && make -C ./build_release -j
 ```
 
 Testing on MacOS and Linux:

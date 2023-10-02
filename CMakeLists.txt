@@ -21,10 +21,10 @@ option(USEARCH_USE_SIMSIMD "Use SimSIMD hardware-accelerated metrics" OFF)
 option(USEARCH_USE_JEMALLOC "Use JeMalloc for faster memory allocations" OFF)
 option(USEARCH_USE_NATIVE_F16 "Use native half-precision types" OFF)
 
-option(USEARCH_BUILD_TEST "Compile a native unit test in C++" ${USEARCH_IS_MAIN_PROJECT})
-option(USEARCH_BUILD_BENCHMARK "Compile a native benchmark in C++" ${USEARCH_IS_MAIN_PROJECT})
-option(USEARCH_BUILD_CLIB "Compile a native library for the C 99 interface" OFF)
-option(USEARCH_BUILD_CTEST "Compile a test for the C 99 interface" OFF)
+option(USEARCH_BUILD_TEST_CPP "Compile a native unit test in C++" ${USEARCH_IS_MAIN_PROJECT})
+option(USEARCH_BUILD_BENCH_CPP "Compile a native benchmark in C++" ${USEARCH_IS_MAIN_PROJECT})
+option(USEARCH_BUILD_LIB_C "Compile a native library for the C 99 interface" OFF)
+option(USEARCH_BUILD_TEST_C "Compile a test for the C 99 interface" OFF)
 option(USEARCH_BUILD_WOLFRAM "Compile Wolfram Language bindings" OFF)
 
 # Includes
@@ -220,7 +220,10 @@ function (setup_target TARGET_NAME)
         )
 
         # Check if the compiler is AppleClang, and if not, add the leak sanitizer
-        if (NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "AppleClang")
+        if (CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin")
+            # It's likely AppleClang Adjust options as needed for AppleClang
+        else ()
+            # It's likely LLVM Clang
             target_compile_options(${TARGET_NAME} PRIVATE $<$<CONFIG:DEBUG>:-fsanitize=leak>)
             target_link_options(${TARGET_NAME} PRIVATE $<$<CONFIG:DEBUG>:-fsanitize=leak>)
         endif ()
@@ -255,6 +258,8 @@ function (setup_target TARGET_NAME)
     endif ()
 
     target_include_directories(${TARGET_NAME} PRIVATE ${USEARCH_HEADER_INCLUDES})
+    set_target_properties(${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR})
+    set_target_properties(${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR})
     set_target_properties(${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
     set_target_properties(${TARGET_NAME} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
     set_target_properties(${TARGET_NAME} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -272,7 +277,7 @@ function (setup_target TARGET_NAME)
 
 endfunction ()
 
-if (${USEARCH_BUILD_TEST} OR ${USEARCH_BUILD_BENCHMARK})
+if (${USEARCH_BUILD_TEST_CPP} OR ${USEARCH_BUILD_BENCH_CPP})
     add_subdirectory(cpp)
 endif ()
 
@@ -284,6 +289,6 @@ if (${USEARCH_BUILD_WASM})
     add_subdirectory(wasm)
 endif ()
 
-if (${USEARCH_BUILD_CLIB} OR ${USEARCH_BUILD_CTEST})
+if (${USEARCH_BUILD_LIB_C} OR ${USEARCH_BUILD_TEST_C})
     add_subdirectory(c)
 endif ()
