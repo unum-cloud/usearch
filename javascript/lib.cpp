@@ -20,10 +20,10 @@
 using namespace unum::usearch;
 using namespace unum;
 
-class Index : public Napi::ObjectWrap<Index> {
+class CompiledIndex : public Napi::ObjectWrap<CompiledIndex> {
   public:
     static Napi::Object Init(Napi::Env env, Napi::Object exports);
-    Index(Napi::CallbackInfo const& ctx);
+    CompiledIndex(Napi::CallbackInfo const& ctx);
 
   private:
     Napi::Value GetDimensions(Napi::CallbackInfo const& ctx);
@@ -39,405 +39,294 @@ class Index : public Napi::ObjectWrap<Index> {
     Napi::Value Search(Napi::CallbackInfo const& ctx);
     Napi::Value Remove(Napi::CallbackInfo const& ctx);
     Napi::Value Contains(Napi::CallbackInfo const& ctx);
+    Napi::Value Count(Napi::CallbackInfo const& ctx);
 
     std::unique_ptr<index_dense_t> native_;
 };
 
-Napi::Object Index::Init(Napi::Env env, Napi::Object exports) {
+Napi::Object CompiledIndex::Init(Napi::Env env, Napi::Object exports) {
     Napi::Function func = DefineClass( //
-        env, "Index",
+        env, "CompiledIndex",
         {
-            InstanceMethod("dimensions", &Index::GetDimensions),
-            InstanceMethod("size", &Index::GetSize),
-            InstanceMethod("capacity", &Index::GetCapacity),
-            InstanceMethod("connectivity", &Index::GetConnectivity),
-            InstanceMethod("add", &Index::Add),
-            InstanceMethod("search", &Index::Search),
-            InstanceMethod("remove", &Index::Remove),
-            InstanceMethod("contains", &Index::Contains),
-            InstanceMethod("save", &Index::Save),
-            InstanceMethod("load", &Index::Load),
-            InstanceMethod("view", &Index::View),
+            InstanceMethod("dimensions", &CompiledIndex::GetDimensions),
+            InstanceMethod("size", &CompiledIndex::GetSize),
+            InstanceMethod("capacity", &CompiledIndex::GetCapacity),
+            InstanceMethod("connectivity", &CompiledIndex::GetConnectivity),
+            InstanceMethod("add", &CompiledIndex::Add),
+            InstanceMethod("search", &CompiledIndex::Search),
+            InstanceMethod("remove", &CompiledIndex::Remove),
+            InstanceMethod("contains", &CompiledIndex::Contains),
+            InstanceMethod("count", &CompiledIndex::Count),
+            InstanceMethod("save", &CompiledIndex::Save),
+            InstanceMethod("load", &CompiledIndex::Load),
+            InstanceMethod("view", &CompiledIndex::View),
         });
 
     Napi::FunctionReference* constructor = new Napi::FunctionReference();
     *constructor = Napi::Persistent(func);
     env.SetInstanceData(constructor);
 
-    exports.Set("Index", func);
+    exports.Set("CompiledIndex", func);
     return exports;
 }
 
-Index::Index(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<Index>(ctx) {
-    Napi::Env env = ctx.Env();
+std::size_t napi_argument_to_size(Napi::Value v) {
+    return static_cast<std::size_t>(v.As<Napi::Number>().DoubleValue());
+}
 
-    int length = ctx.Length();
-    if (length == 0 || length >= 2 || !ctx[0].IsObject()) {
-        Napi::TypeError::New(env, "Pass args as named objects: dimensions: uint, capacity: uint, metric: str")
-            .ThrowAsJavaScriptException();
-        return;
-    }
+CompiledIndex::CompiledIndex(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<CompiledIndex>(ctx) {
 
-    bool lossless = true;
-    Napi::Object params = ctx[0].As<Napi::Object>();
-    std::size_t dimensions =
-        params.Has("dimensions") ? params.Get("dimensions").As<Napi::BigInt>().Uint64Value(&lossless) : 0;
-
-    index_limits_t limits;
-    std::size_t connectivity = default_connectivity();
-    std::size_t expansion_add = default_expansion_add();
-    std::size_t expansion_search = default_expansion_search();
-
-    if (params.Has("capacity"))
-        limits.members = params.Get("capacity").As<Napi::BigInt>().Uint64Value(&lossless);
-    if (params.Has("connectivity"))
-        connectivity = params.Get("connectivity").As<Napi::BigInt>().Uint64Value(&lossless);
-    if (params.Has("expansion_add"))
-        expansion_add = params.Get("expansion_add").As<Napi::BigInt>().Uint64Value(&lossless);
-    if (params.Has("expansion_search"))
-        expansion_search = params.Get("expansion_search").As<Napi::BigInt>().Uint64Value(&lossless);
-    if (!lossless) {
-        Napi::TypeError::New(env, "Arguments must be unsigned integers").ThrowAsJavaScriptException();
-        return;
-    }
-
-    scalar_kind_t quantization = scalar_kind_t::f32_k;
-    if (params.Has("quantization")) {
-        std::string quantization_str = params.Get("quantization").As<Napi::String>().Utf8Value();
-        expected_gt<scalar_kind_t> expected = scalar_kind_from_name(quantization_str.c_str(), quantization_str.size());
-        if (!expected) {
-            Napi::TypeError::New(env, expected.error.release()).ThrowAsJavaScriptException();
-            return;
-        }
-        quantization = *expected;
-    }
-
-    // By default we use the Inner Product similarity
-    metric_kind_t metric_kind = metric_kind_t::ip_k;
-    if (params.Has("metric")) {
-        std::string metric_str = params.Get("metric").As<Napi::String>().Utf8Value();
-        expected_gt<metric_kind_t> expected = metric_from_name(metric_str.c_str(), metric_str.size());
-        if (!expected) {
-            Napi::TypeError::New(env, expected.error.release()).ThrowAsJavaScriptException();
-            return;
-        }
-        metric_kind = *expected;
-    }
+    // Directly assign the parameters without checks
+    std::size_t dimensions = napi_argument_to_size(ctx[0]);
+    metric_kind_t metric_kind = metric_from_name(ctx[1].As<Napi::String>().Utf8Value().c_str());
+    scalar_kind_t quantization = scalar_kind_from_name(ctx[2].As<Napi::String>().Utf8Value().c_str());
+    std::size_t connectivity = napi_argument_to_size(ctx[3]);
+    std::size_t expansion_add = napi_argument_to_size(ctx[4]);
+    std::size_t expansion_search = napi_argument_to_size(ctx[5]);
+    bool multi = ctx[6].As<Napi::Boolean>().Value();
 
     metric_punned_t metric(dimensions, metric_kind, quantization);
     index_dense_config_t config(connectivity, expansion_add, expansion_search);
+    config.multi = multi;
+
     native_.reset(new index_dense_t(index_dense_t::make(metric, config)));
-    native_->reserve(limits);
+    if (!native_)
+        Napi::Error::New(ctx.Env(), "Out of memory!").ThrowAsJavaScriptException();
 }
 
-Napi::Value Index::GetDimensions(Napi::CallbackInfo const& ctx) {
-    return Napi::BigInt::New(ctx.Env(), static_cast<std::uint64_t>(native_->dimensions()));
+Napi::Value CompiledIndex::GetDimensions(Napi::CallbackInfo const& ctx) {
+    return Napi::Number::New(ctx.Env(), static_cast<std::uint64_t>(native_->dimensions()));
 }
-Napi::Value Index::GetSize(Napi::CallbackInfo const& ctx) {
-    return Napi::BigInt::New(ctx.Env(), static_cast<std::uint64_t>(native_->size()));
+Napi::Value CompiledIndex::GetConnectivity(Napi::CallbackInfo const& ctx) {
+    return Napi::Number::New(ctx.Env(), static_cast<std::uint64_t>(native_->connectivity()));
 }
-Napi::Value Index::GetConnectivity(Napi::CallbackInfo const& ctx) {
-    return Napi::BigInt::New(ctx.Env(), static_cast<std::uint64_t>(native_->connectivity()));
+Napi::Value CompiledIndex::GetSize(Napi::CallbackInfo const& ctx) {
+    return Napi::Number::New(ctx.Env(), static_cast<std::uint64_t>(native_->size()));
 }
-Napi::Value Index::GetCapacity(Napi::CallbackInfo const& ctx) {
-    return Napi::BigInt::New(ctx.Env(), static_cast<std::uint64_t>(native_->capacity()));
+Napi::Value CompiledIndex::GetCapacity(Napi::CallbackInfo const& ctx) {
+    return Napi::Number::New(ctx.Env(), static_cast<std::uint64_t>(native_->capacity()));
 }
 
-void Index::Save(Napi::CallbackInfo const& ctx) {
-    Napi::Env env = ctx.Env();
-
-    int length = ctx.Length();
-    if (length == 0 || !ctx[0].IsString()) {
-        Napi::TypeError::New(env, "Function expects a string path argument").ThrowAsJavaScriptException();
-        return;
-    }
-
+void CompiledIndex::Save(Napi::CallbackInfo const& ctx) {
     try {
         std::string path = ctx[0].As<Napi::String>();
         auto result = native_->save(path.c_str());
         if (!result)
-            return Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
+            Napi::TypeError::New(ctx.Env(), result.error.release()).ThrowAsJavaScriptException();
 
     } catch (...) {
-        Napi::TypeError::New(env, "Serialization failed").ThrowAsJavaScriptException();
+        Napi::TypeError::New(ctx.Env(), "Serialization failed").ThrowAsJavaScriptException();
     }
 }
 
-void Index::Load(Napi::CallbackInfo const& ctx) {
-    Napi::Env env = ctx.Env();
-
-    int length = ctx.Length();
-    if (length == 0 || !ctx[0].IsString()) {
-        Napi::TypeError::New(env, "Function expects a string path argument").ThrowAsJavaScriptException();
-        return;
-    }
-
+void CompiledIndex::Load(Napi::CallbackInfo const& ctx) {
     try {
         std::string path = ctx[0].As<Napi::String>();
         auto result = native_->load(path.c_str());
         if (!result)
-            return Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
+            Napi::TypeError::New(ctx.Env(), result.error.release()).ThrowAsJavaScriptException();
 
     } catch (...) {
-        Napi::TypeError::New(env, "Loading failed").ThrowAsJavaScriptException();
+        Napi::TypeError::New(ctx.Env(), "Loading failed").ThrowAsJavaScriptException();
     }
 }
 
-void Index::View(Napi::CallbackInfo const& ctx) {
-    Napi::Env env = ctx.Env();
-
-    int length = ctx.Length();
-    if (length == 0 || !ctx[0].IsString()) {
-        Napi::TypeError::New(env, "Function expects a string path argument").ThrowAsJavaScriptException();
-        return;
-    }
+void CompiledIndex::View(Napi::CallbackInfo const& ctx) {
 
     try {
         std::string path = ctx[0].As<Napi::String>();
         auto result = native_->view(path.c_str());
         if (!result)
-            return Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
+            Napi::TypeError::New(ctx.Env(), result.error.release()).ThrowAsJavaScriptException();
 
     } catch (...) {
-        Napi::TypeError::New(env, "Memory-mapping failed").ThrowAsJavaScriptException();
+        Napi::TypeError::New(ctx.Env(), "Memory-mapping failed").ThrowAsJavaScriptException();
     }
 }
 
-void Index::Add(Napi::CallbackInfo const& ctx) {
-    Napi::Env env = ctx.Env();
+void CompiledIndex::Add(Napi::CallbackInfo const& ctx) {
+    // Extract keys and vectors from arguments
+    Napi::BigUint64Array keys = ctx[0].As<Napi::BigUint64Array>();
+    std::size_t tasks = keys.ElementLength();
 
-    if (ctx.Length() < 2)
-        return Napi::TypeError::New(env, "Expects at least two arguments").ThrowAsJavaScriptException();
+    // Ensure there is enough capacity
+    if (native_->size() + tasks >= native_->capacity())
+        native_->reserve(ceil2(native_->size() + tasks));
 
-    using key_t = typename index_dense_t::key_t;
-    std::size_t index_dimensions = native_->dimensions();
-
-    auto add = [&](Napi::BigInt key_js, Napi::Float32Array vector_js) {
-        bool lossless = true;
-        key_t key = static_cast<key_t>(key_js.Uint64Value(&lossless));
-        if (!lossless)
-            return Napi::TypeError::New(env, "Keys must be unsigned integers").ThrowAsJavaScriptException();
-
-        float const* vector = vector_js.Data();
-        std::size_t dimensions = static_cast<std::size_t>(vector_js.ElementLength());
-
-        if (dimensions != index_dimensions)
-            return Napi::TypeError::New(env, "Wrong number of dimensions").ThrowAsJavaScriptException();
-
-        try {
-            auto result = native_->add(key, vector);
-            if (!result)
-                return Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
-
-        } catch (std::bad_alloc const&) {
-            return Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
-        } catch (...) {
-            return Napi::TypeError::New(env, "Insertion failed").ThrowAsJavaScriptException();
-        }
+    // Create an instance of the executor with the default number of threads
+    auto run_parallel = [&](auto vectors) {
+        executor_stl_t executor;
+        executor.fixed(tasks, [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
+            native_->add(static_cast<default_key_t>(keys[task_idx]), vectors + task_idx * native_->dimensions());
+        });
     };
 
-    if (ctx[0].IsArray() && ctx[1].IsArray()) {
-        Napi::Array keys_js = ctx[0].As<Napi::Array>();
-        Napi::Array vectors_js = ctx[1].As<Napi::Array>();
-        auto length = keys_js.Length();
-
-        if (length != vectors_js.Length())
-            return Napi::TypeError::New(env, "The number of keys must match the number of vectors")
-                .ThrowAsJavaScriptException();
-
-        if (native_->size() + length >= native_->capacity())
-            if (!native_->reserve(ceil2(native_->size() + length)))
-                return Napi::TypeError::New(env, "Out of memory!").ThrowAsJavaScriptException();
-
-        for (std::size_t i = 0; i < length; i++) {
-            Napi::Value key_js = keys_js[i];
-            Napi::Value vector_js = vectors_js[i];
-            add(key_js.As<Napi::BigInt>(), vector_js.As<Napi::Float32Array>());
-        }
-
-    } else if (ctx[0].IsBigInt() && ctx[1].IsTypedArray()) {
-        if (native_->size() + 1 >= native_->capacity())
-            native_->reserve(ceil2(native_->size() + 1));
-        add(ctx[0].As<Napi::BigInt>(), ctx[1].As<Napi::Float32Array>());
-    } else
-        return Napi::TypeError::New(env, "Invalid argument type, expects integral key(s) and float vector(s)")
+    Napi::TypedArray vectors = ctx[1].As<Napi::TypedArray>();
+    if (vectors.TypedArrayType() == napi_float32_array) {
+        run_parallel(vectors.As<Napi::Float32Array>().Data());
+    } else if (vectors.TypedArrayType() == napi_float64_array) {
+        run_parallel(vectors.As<Napi::Float64Array>().Data());
+    } else if (vectors.TypedArrayType() == napi_int8_array) {
+        run_parallel(vectors.As<Napi::Int8Array>().Data());
+    } else {
+        Napi::TypeError::New(ctx.Env(),
+                             "Unsupported TypedArray. Supported types are Float32Array, Float64Array, and Int8Array.")
             .ThrowAsJavaScriptException();
+    }
 }
 
-Napi::Value Index::Search(Napi::CallbackInfo const& ctx) {
+Napi::Value CompiledIndex::Search(Napi::CallbackInfo const& ctx) {
     Napi::Env env = ctx.Env();
-    if (ctx.Length() < 2 || !ctx[0].IsTypedArray() || !ctx[1].IsBigInt()) {
-        Napi::TypeError::New(env, "Expects a  and the number of wanted results").ThrowAsJavaScriptException();
-        return {};
-    }
+    Napi::TypedArray queries = ctx[0].As<Napi::TypedArray>();
+    std::size_t tasks = queries.ElementLength() / native_->dimensions();
+    std::size_t wanted = napi_argument_to_size(ctx[1]);
 
-    Napi::Float32Array vector_js = ctx[0].As<Napi::Float32Array>();
-    Napi::BigInt wanted_js = ctx[1].As<Napi::BigInt>();
+    auto run_parallel = [&](auto vectors) {
+        Napi::Array result_js = Napi::Array::New(env, 3);
+        Napi::BigUint64Array matches_js = Napi::BigUint64Array::New(env, tasks * wanted);
+        Napi::Float32Array distances_js = Napi::Float32Array::New(env, tasks * wanted);
+        Napi::BigUint64Array counts_js = Napi::BigUint64Array::New(env, tasks);
 
-    float const* vector = vector_js.Data();
-    std::size_t dimensions = static_cast<std::size_t>(vector_js.ElementLength());
-    if (dimensions != native_->dimensions()) {
-        Napi::TypeError::New(env, "Wrong number of dimensions").ThrowAsJavaScriptException();
-        return {};
-    }
+        auto matches_data = matches_js.Data();
+        auto distances_data = distances_js.Data();
+        auto counts_data = counts_js.Data();
 
-    bool lossless = true;
-    std::uint64_t wanted = wanted_js.Uint64Value(&lossless);
-    if (!lossless) {
-        Napi::TypeError::New(env, "Wanted number of matches must be an unsigned integer").ThrowAsJavaScriptException();
-        return {};
-    }
-
-    using key_t = typename index_dense_t::key_t;
-    Napi::TypedArrayOf<key_t> matches_js = Napi::TypedArrayOf<key_t>::New(env, wanted);
-    static_assert(std::is_same<std::uint64_t, key_t>::value, "Matches.key interface expects BigUint64Array");
-    Napi::Float32Array distances_js = Napi::Float32Array::New(env, wanted);
-    try {
-
-        auto result = native_->search(vector, wanted);
-        if (!result) {
-            Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
-            return {};
+        try {
+            executor_stl_t executor;
+            executor.fixed(tasks, [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
+                auto result = native_->search(vectors + task_idx * native_->dimensions(), wanted);
+                if (!result) {
+                    // Handle the error appropriately
+                    // For example, log the error or set some flag in the result_js object
+                } else {
+                    counts_data[task_idx] = result.dump_to(matches_data + task_idx * native_->dimensions(),
+                                                           distances_data + task_idx * native_->dimensions());
+                }
+            });
+        } catch (std::bad_alloc const&) {
+            Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
+        } catch (...) {
+            Napi::TypeError::New(env, "Search failed").ThrowAsJavaScriptException();
         }
 
-        std::uint64_t count = result.dump_to(matches_js.Data(), distances_js.Data());
-        Napi::Object result_js = Napi::Object::New(env);
-        result_js.Set("keys", matches_js);
-        result_js.Set("distances", distances_js);
-        result_js.Set("count", Napi::BigInt::New(env, count));
+        result_js.Set(0u, matches_js);
+        result_js.Set(1u, distances_js);
+        result_js.Set(2u, counts_js);
         return result_js;
-    } catch (std::bad_alloc const&) {
-        Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
-        return {};
-    } catch (...) {
-        Napi::TypeError::New(env, "Search failed").ThrowAsJavaScriptException();
-        return {};
+    };
+
+    if (queries.TypedArrayType() == napi_float32_array) {
+        return run_parallel(queries.As<Napi::Float32Array>().Data());
+    } else if (queries.TypedArrayType() == napi_float64_array) {
+        return run_parallel(queries.As<Napi::Float64Array>().Data());
+    } else if (queries.TypedArrayType() == napi_int8_array) {
+        return run_parallel(queries.As<Napi::Int8Array>().Data());
+    } else {
+        Napi::TypeError::New(env,
+                             "Unsupported TypedArray. Supported types are Float32Array, Float64Array, and Int8Array.")
+            .ThrowAsJavaScriptException();
+        return env.Null();
     }
 }
 
-Napi::Value Index::Remove(Napi::CallbackInfo const& ctx) {
+Napi::Value CompiledIndex::Remove(Napi::CallbackInfo const& ctx) {
     Napi::Env env = ctx.Env();
-    if (ctx.Length() < 1 || !ctx[0].IsBigInt()) {
-        Napi::TypeError::New(env, "Expects an entry identifier").ThrowAsJavaScriptException();
-        return {};
+    Napi::BigUint64Array keys = ctx[0].As<Napi::BigUint64Array>();
+    std::size_t length = keys.ElementLength();
+    Napi::Array result = Napi::Array::New(env, length);
+    for (std::size_t i = 0; i < length; ++i) {
+        result[i] = Napi::Number::New(env, native_->remove(static_cast<default_key_t>(keys[i])).completed);
     }
-
-    Napi::BigInt key_js = ctx[0].As<Napi::BigInt>();
-    bool lossless = true;
-    std::uint64_t key = key_js.Uint64Value(&lossless);
-    if (!lossless) {
-        Napi::TypeError::New(env, "Identifier must be an unsigned integer").ThrowAsJavaScriptException();
-        return {};
-    }
-
-    try {
-        auto result = native_->remove(key);
-        if (!result) {
-            Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
-            return {};
-        }
-        return Napi::Boolean::New(env, result.completed);
-    } catch (std::bad_alloc const&) {
-        Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
-        return {};
-    } catch (...) {
-        Napi::TypeError::New(env, "Search failed").ThrowAsJavaScriptException();
-        return {};
-    }
-}
-
-Napi::Value Index::Contains(Napi::CallbackInfo const& ctx) {
-    Napi::Env env = ctx.Env();
-    if (ctx.Length() < 1 || !ctx[0].IsBigInt()) {
-        Napi::TypeError::New(env, "Expects an entry identifier").ThrowAsJavaScriptException();
-        return {};
-    }
-
-    Napi::BigInt key_js = ctx[0].As<Napi::BigInt>();
-    bool lossless = true;
-    std::uint64_t key = key_js.Uint64Value(&lossless);
-    if (!lossless) {
-        Napi::TypeError::New(env, "Identifier must be an unsigned integer").ThrowAsJavaScriptException();
-        return {};
-    }
-
-    try {
-        bool result = native_->contains(key);
-        return Napi::Boolean::New(env, result);
-    } catch (std::bad_alloc const&) {
-        Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
-        return {};
-    } catch (...) {
-        Napi::TypeError::New(env, "Search failed").ThrowAsJavaScriptException();
-        return {};
-    }
-}
-
-Napi::Value ExactSearch(Napi::CallbackInfo const& info) {
-    Napi::Env env = info.Env();
-
-    // Validate the number of arguments and their types.
-    if (info.Length() < 5) {
-        Napi::TypeError::New(env, "Wrong number of arguments").ThrowAsJavaScriptException();
-        return env.Null();
-    }
-
-    // Dataset
-    if (!info[0].IsTypedArray()) {
-        Napi::TypeError::New(env, "Dataset should be a TypedArray").ThrowAsJavaScriptException();
-        return env.Null();
-    }
-    Napi::TypedArray dataset = info[0].As<Napi::TypedArray>();
-
-    // Queries
-    if (!info[1].IsTypedArray()) {
-        Napi::TypeError::New(env, "Queries should be a TypedArray").ThrowAsJavaScriptException();
-        return env.Null();
-    }
-    Napi::TypedArray queries = info[1].As<Napi::TypedArray>();
-
-    // Dimensions
-    if (!info[2].IsBigInt()) {
-        Napi::TypeError::New(env, "Dimensions should be a BigInt").ThrowAsJavaScriptException();
-        return env.Null();
-    }
-    std::uint64_t dimensions = info[2].As<Napi::BigInt>().Uint64Value();
-
-    // Count
-    if (!info[3].IsBigInt()) {
-        Napi::TypeError::New(env, "Count should be a BigInt").ThrowAsJavaScriptException();
-        return env.Null();
-    }
-    std::uint64_t count = info[3].As<Napi::BigInt>().Uint64Value();
-
-    // Metric
-    if (!info[4].IsString()) {
-        Napi::TypeError::New(env, "Metric should be a string").ThrowAsJavaScriptException();
-        return env.Null();
-    }
-    std::string metric_str = info[4].As<Napi::String>().Utf8Value();
-    metric_punned_t metric(dimensions, metric_kind_t::cos_k); // Adjust as needed based on the metric_str
-
-    // Perform exact search
-    exact_search_t search;
-    auto results = search(                                                                               //
-        (byte_t const*)dataset.Data(), dataset.ElementLength() / dimensions, dimensions * sizeof(float), //
-        (byte_t const*)queries.Data(), queries.ElementLength() / dimensions, dimensions * sizeof(float), //
-        count, metric);
-
-    // Construct the result object
-    Napi::Object result = Napi::Object::New(env);
-
-    result.Set("keys", /* TODO: populate keys */);
-    result.Set("distances", /* TODO: populate distances */);
-    result.Set("count", Napi::BigInt::New(env, results.size()));
-
     return result;
 }
 
+Napi::Value CompiledIndex::Contains(Napi::CallbackInfo const& ctx) {
+    Napi::Env env = ctx.Env();
+    Napi::BigUint64Array keys = ctx[0].As<Napi::BigUint64Array>();
+    std::size_t length = keys.ElementLength();
+    Napi::Array result = Napi::Array::New(env, length);
+    for (std::size_t i = 0; i < length; ++i)
+        result[i] = Napi::Boolean::New(env, native_->contains(static_cast<default_key_t>(keys[i])));
+    return result;
+}
+
+Napi::Value CompiledIndex::Count(Napi::CallbackInfo const& ctx) {
+    Napi::Env env = ctx.Env();
+    Napi::BigUint64Array keys = ctx[0].As<Napi::BigUint64Array>();
+    std::size_t length = keys.ElementLength();
+    Napi::Array result = Napi::Array::New(env, length);
+    for (std::size_t i = 0; i < length; ++i)
+        result[i] = Napi::Boolean::New(env, native_->count(static_cast<default_key_t>(keys[i])));
+    return result;
+}
+
+Napi::Value compiledExactSearch(Napi::CallbackInfo const& ctx) {
+    Napi::Env env = ctx.Env();
+
+    // Extracting parameters directly without additional type checks.
+    Napi::TypedArray dataset = ctx[0].As<Napi::TypedArray>();
+    Napi::ArrayBuffer datasetBuffer = dataset.ArrayBuffer();
+    Napi::TypedArray queries = ctx[1].As<Napi::TypedArray>();
+    Napi::ArrayBuffer queriesBuffer = queries.ArrayBuffer();
+    std::uint64_t dimensions = napi_argument_to_size(ctx[2]);
+    std::uint64_t wanted = napi_argument_to_size(ctx[3]);
+    metric_kind_t metric_kind = metric_from_name(ctx[4].As<Napi::String>().Utf8Value().c_str());
+
+    scalar_kind_t quantization;
+    std::size_t bytes_per_scalar;
+    switch (queries.TypedArrayType()) {
+    case napi_float64_array: quantization = scalar_kind_t::f64_k, bytes_per_scalar = 8; break;
+    case napi_int8_array: quantization = scalar_kind_t::i8_k, bytes_per_scalar = 1; break;
+    default: quantization = scalar_kind_t::f32_k, bytes_per_scalar = 4; break;
+    }
+
+    metric_punned_t metric(dimensions, metric_kind, quantization);
+    exact_search_t search;
+
+    // Performing the exact search.
+    std::size_t dataset_size = dataset.ElementLength() / dimensions;
+    std::size_t queries_size = queries.ElementLength() / dimensions;
+    auto results = search(                                     //
+        reinterpret_cast<byte_t const*>(datasetBuffer.Data()), //
+        dataset_size,                                          //
+        dimensions * bytes_per_scalar,                         //
+        reinterpret_cast<byte_t const*>(queriesBuffer.Data()), //
+        queries_size,                                          //
+        dimensions * bytes_per_scalar,                         //
+        wanted, metric);
+
+    if (!results)
+        Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
+
+    // Constructing the result object
+    Napi::Array result_js = Napi::Array::New(env, 3);
+    Napi::BigUint64Array matches_js = Napi::BigUint64Array::New(env, queries_size * wanted);
+    Napi::Float32Array distances_js = Napi::Float32Array::New(env, queries_size * wanted);
+    Napi::BigUint64Array counts_js = Napi::BigUint64Array::New(env, queries_size);
+
+    auto matches_data = matches_js.Data();
+    auto distances_data = distances_js.Data();
+    auto counts_data = counts_js.Data();
+
+    // Export into JS buffers
+    for (std::size_t task_idx = 0; task_idx != queries_size; ++task_idx) {
+        auto result = results.at(task_idx);
+        counts_data[task_idx] = wanted;
+        for (std::size_t result_idx = 0; result_idx != wanted; ++result_idx) {
+            matches_data[task_idx * wanted + result_idx] = result[result_idx].offset;
+            distances_data[task_idx * wanted + result_idx] = result[result_idx].distance;
+        }
+    }
+
+    result_js.Set(0u, matches_js);
+    result_js.Set(1u, distances_js);
+    result_js.Set(2u, counts_js);
+    return result_js;
+}
+
 Napi::Object InitAll(Napi::Env env, Napi::Object exports) {
-    exports.Set("exactSearch", Napi::Function::New(env, ExactSearch));
-    return Index::Init(env, exports);
+    exports.Set("compiledExactSearch", Napi::Function::New(env, compiledExactSearch));
+    return CompiledIndex::Init(env, exports);
 }
 
 NODE_API_MODULE(usearch, InitAll)

@@ -346,6 +346,10 @@ inline expected_gt<scalar_kind_t> scalar_kind_from_name(char const* name, std::s
     return parsed;
 }
 
+inline expected_gt<scalar_kind_t> scalar_kind_from_name(char const* name) {
+    return scalar_kind_from_name(name, std::strlen(name));
+}
+
 inline expected_gt<metric_kind_t> metric_from_name(char const* name, std::size_t len) {
     expected_gt<metric_kind_t> parsed;
     if (str_equals(name, len, "l2sq") || str_equals(name, len, "euclidean_sq")) {
@@ -368,6 +372,10 @@ inline expected_gt<metric_kind_t> metric_from_name(char const* name, std::size_t
         parsed.failed(
             "Unknown distance, choose: l2sq, ip, cos, haversine, jaccard, pearson, hamming, tanimoto, sorensen");
     return parsed;
+}
+
+inline expected_gt<metric_kind_t> metric_from_name(char const* name) {
+    return metric_from_name(name, std::strlen(name));
 }
 
 inline float f16_to_f32(std::uint16_t u16) noexcept {

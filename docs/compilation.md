@@ -94,7 +94,7 @@ WebAssembly:
 
 ```sh
 emcmake cmake -B ./build -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} -s TOTAL_MEMORY=64MB" && emmake make -C ./build
-node ./build/test.js
+node ./build/usearch.test.js
 ```
 
 If you don't yet have `emcmake` installed:
