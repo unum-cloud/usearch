@@ -1,13 +1,12 @@
 #[cxx::bridge]
 pub mod ffi {
-
     // Shared structs with fields visible to both languages.
     struct Matches {
         keys: Vec<u64>,
         distances: Vec<f32>,
     }
 
-    #[derive(Debug)]
+    #[derive(Serialize, Deserialize, Debug)]
     enum MetricKind {
         IP,
         L2sq,
@@ -19,7 +18,7 @@ pub mod ffi {
         Sorensen,
     }
 
-    #[derive(Debug)]
+    #[derive(Serialize, Deserialize, Debug)]
     enum ScalarKind {
         F64,
         F32,
@@ -28,7 +27,7 @@ pub mod ffi {
         B1,
     }
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct IndexOptions {
         dimensions: usize,
         metric: MetricKind,
@@ -384,6 +383,12 @@ mod tests {
     fn integration() {
         let mut options = IndexOptions::default();
         options.dimensions = 5;
+
+        let serialized = serde_json::to_string(&options).unwrap();
+        println!("serialized = {}", serialized);
+        let deserialized: IndexOptions = serde_json::from_str(&serialized).unwrap();
+        println!("deserialized = {:?}", deserialized);
+        assert_eq!(deserialized, options);
 
         let index = Index::new(&options).unwrap();
 
