@@ -7,6 +7,7 @@ pub mod ffi {
         distances: Vec<f32>,
     }
 
+    #[derive(Debug)]
     enum MetricKind {
         IP,
         L2sq,
@@ -18,6 +19,7 @@ pub mod ffi {
         Sorensen,
     }
 
+    #[derive(Debug)]
     enum ScalarKind {
         F64,
         F32,
@@ -26,6 +28,7 @@ pub mod ffi {
         B1,
     }
 
+    #[derive(Debug, PartialEq)]
     struct IndexOptions {
         dimensions: usize,
         metric: MetricKind,
@@ -74,6 +77,8 @@ pub mod ffi {
         pub fn save(self: &NativeIndex, path: &str) -> Result<()>;
         pub fn load(self: &NativeIndex, path: &str) -> Result<()>;
         pub fn view(self: &NativeIndex, path: &str) -> Result<()>;
+        pub fn reset(self: &NativeIndex) -> Result<()>;
+
         pub fn save_to_buffer(self: &NativeIndex, buffer: &mut [u8]) -> Result<()>;
         pub fn load_from_buffer(self: &NativeIndex, buffer: &[u8]) -> Result<()>;
         pub fn view_from_buffer(self: &NativeIndex, buffer: &[u8]) -> Result<()>;
@@ -96,6 +101,20 @@ impl Default for ffi::IndexOptions {
             expansion_add: 2,
             expansion_search: 3,
             multi: false,
+        }
+    }
+}
+
+impl Clone for ffi::IndexOptions {
+    fn clone(&self) -> Self {
+        ffi::IndexOptions {
+            dimensions: (self.dimensions),
+            metric: (self.metric),
+            quantization: (self.quantization),
+            connectivity: (self.connectivity),
+            expansion_add: (self.expansion_add),
+            expansion_search: (self.expansion_search),
+            multi: (self.multi),
         }
     }
 }
@@ -312,6 +331,15 @@ impl Index {
         self.inner.view(path)
     }
 
+    /// Erases all members from index, closing files, and returning RAM to OS
+    ///
+    /// # Arguments
+    ///
+    ///
+    pub fn reset(self: &Index) -> Result<(), cxx::Exception> {
+        self.inner.reset()
+    }
+
     /// Saves the index to a specified file.
     ///
     /// # Arguments
@@ -399,5 +427,19 @@ mod tests {
             .load_from_buffer(&serialization_buffer)
             .is_ok());
         assert_eq!(index.size(), deserialized_index.size());
+
+        // reset
+        assert!(index.reset().is_ok());
+        assert_eq!(index.size(), 0);
+
+        // clone
+        options.metric = MetricKind::Haversine;
+        let mut opts = options.clone();
+        assert_eq!(opts.metric, options.metric);
+        assert_eq!(opts.quantization, options.quantization);
+        assert_eq!(opts, options);
+        opts.metric = MetricKind::Cos;
+        assert_ne!(opts.metric, options.metric);
+        assert!(new_index(&opts).is_ok());
     }
 }

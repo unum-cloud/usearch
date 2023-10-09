@@ -71,6 +71,8 @@ void NativeIndex::view(rust::Str path) const {
     index_->view(memory_mapped_file_t(std::string(path).c_str())).error.raise();
 }
 
+void NativeIndex::reset() const { index_->reset(); }
+
 void NativeIndex::save_to_buffer(rust::Slice<uint8_t> buffer) const {
     index_->save(memory_mapped_file_t((byte_t*)buffer.data(), buffer.size())).error.raise();
 }
