@@ -12,6 +12,7 @@ macros_args = []
 if sys.platform == "linux":
     compile_args.append("-std=c++17")
     compile_args.append("-O3")  # Maximize performance
+    compile_args.append("-ffast-math")  # Maximize floating-point performance
     compile_args.append("-Wno-unknown-pragmas")
     compile_args.append("-fdiagnostics-color=always")
 
@@ -30,20 +31,29 @@ if sys.platform == "darwin":
     compile_args.append("-mmacosx-version-min=10.15")
     compile_args.append("-std=c++17")
     compile_args.append("-O3")  # Maximize performance
+    compile_args.append("-ffast-math")  # Maximize floating-point performance
     compile_args.append("-fcolor-diagnostics")
     compile_args.append("-Wno-unknown-pragmas")
 
     # Simplify debugging, but the normal `-g` may make builds much longer!
     compile_args.append("-g1")
 
-    # Linking OpenMP requires additional preparation in CIBuildWheel
-    # macros_args.append(("USEARCH_USE_OPENMP", "1"))
-    # compile_args.append("-Xpreprocessor -fopenmp")
-    # link_args.append("-Xpreprocessor -lomp")
+    # Linking OpenMP requires additional preparation in CIBuildWheel.
+    # We must install `brew install llvm` ahead of time.
+    # import subprocess as cli
+    # llvm_base = cli.check_output(["brew", "--prefix", "llvm"]).strip().decode("utf-8")
+    # if len(llvm_base):
+    #     compile_args.append(f"-I{llvm_base}/include")
+    #     compile_args.append("-Xpreprocessor -fopenmp")
+    #     link_args.append(f"-L{llvm_base}/lib")
+    #     link_args.append("-lomp")
+    #     macros_args.append(("USEARCH_USE_OPENMP", "1"))
 
 if sys.platform == "win32":
     compile_args.append("/std:c++17")
     compile_args.append("/O2")
+    compile_args.append("/fp:fast")  # Enable fast math for MSVC
+    compile_args.append("/W1")  # Reduce warnings verbosity
 
 ext_modules = [
     Pybind11Extension(

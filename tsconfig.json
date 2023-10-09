@@ -1,8 +1,0 @@
-{
-    "typedocOptions": {
-        "entryPoints": [
-            "javascript/usearch.d.ts"
-        ],
-        "out": "docs"
-    }
-}
