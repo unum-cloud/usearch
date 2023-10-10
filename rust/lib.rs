@@ -1,6 +1,5 @@
 #[cxx::bridge]
 pub mod ffi {
-
     // Shared structs with fields visible to both languages.
     struct Matches {
         keys: Vec<u64>,
@@ -78,6 +77,7 @@ pub mod ffi {
         pub fn load(self: &NativeIndex, path: &str) -> Result<()>;
         pub fn view(self: &NativeIndex, path: &str) -> Result<()>;
         pub fn reset(self: &NativeIndex) -> Result<()>;
+        pub fn memory_usage(self: &NativeIndex) -> usize;
 
         pub fn save_to_buffer(self: &NativeIndex, buffer: &mut [u8]) -> Result<()>;
         pub fn load_from_buffer(self: &NativeIndex, buffer: &[u8]) -> Result<()>;
@@ -340,6 +340,13 @@ impl Index {
         self.inner.reset()
     }
 
+    /// A relatively accurate lower bound on the amount of memory consumed by the system.In practice it's error will be below 10%.
+    ///
+    /// Retrieves the index's total memeory usage bytes
+    pub fn memory_usage(self: &Index) -> usize {
+        self.inner.memory_usage()
+    }
+
     /// Saves the index to a specified file.
     ///
     /// # Arguments
@@ -396,9 +403,23 @@ mod tests {
         let first: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
         let second: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
 
+        println!(
+            "before add, memory_usage: {} \
+            cap: {} \
+            ",
+            index.memory_usage(),
+            index.capacity(),
+        );
         assert!(index.add(42, &first).is_ok());
         assert!(index.add(43, &second).is_ok());
         assert_eq!(index.size(), 2);
+        println!(
+            "after add, memory_usage: {} \
+            cap: {} \
+            ",
+            index.memory_usage(),
+            index.capacity(),
+        );
 
         // Read back the tags
         let results = index.search(&first, 10).unwrap();
@@ -429,8 +450,10 @@ mod tests {
         assert_eq!(index.size(), deserialized_index.size());
 
         // reset
+        assert_ne!(index.memory_usage(), 0);
         assert!(index.reset().is_ok());
         assert_eq!(index.size(), 0);
+        assert_eq!(index.memory_usage(), 0);
 
         // clone
         options.metric = MetricKind::Haversine;
