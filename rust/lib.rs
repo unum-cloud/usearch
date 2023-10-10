@@ -1,6 +1,5 @@
 #[cxx::bridge]
 pub mod ffi {
-
     // Shared structs with fields visible to both languages.
     struct Matches {
         keys: Vec<u64>,
@@ -43,7 +42,7 @@ pub mod ffi {
     unsafe extern "C++" {
         include!("lib.hpp");
 
-        /// Low-level C++ interface, that is further wrapped into the high-level `Index`
+        /// Low-level C++ interface that is further wrapped into the high-level `Index`
         type NativeIndex;
 
         pub fn new_native_index(options: &IndexOptions) -> Result<UniquePtr<NativeIndex>>;
@@ -78,6 +77,7 @@ pub mod ffi {
         pub fn load(self: &NativeIndex, path: &str) -> Result<()>;
         pub fn view(self: &NativeIndex, path: &str) -> Result<()>;
         pub fn reset(self: &NativeIndex) -> Result<()>;
+        pub fn memory_usage(self: &NativeIndex) -> usize;
 
         pub fn save_to_buffer(self: &NativeIndex, buffer: &mut [u8]) -> Result<()>;
         pub fn load_from_buffer(self: &NativeIndex, buffer: &[u8]) -> Result<()>;
@@ -203,7 +203,7 @@ impl Index {
         T::add(self, key, vector)
     }
 
-    /// Extracts one or more vectors matching specified key.
+    /// Extracts one or more vectors matching the specified key.
     ///
     /// # Arguments
     ///
@@ -221,7 +221,7 @@ impl Index {
     ///
     /// # Arguments
     ///
-    /// * `capacity` - The desired total capacity including the current size.
+    /// * `capacity` - The desired total capacity, including the current size.
     pub fn reserve(self: &Index, capacity: usize) -> Result<(), cxx::Exception> {
         self.inner.reserve(capacity)
     }
@@ -264,7 +264,7 @@ impl Index {
         self.inner.remove(key)
     }
 
-    /// Renames the vector under a certain key.
+    /// Renames the vector under a specific key.
     ///
     /// # Arguments
     ///
@@ -273,7 +273,7 @@ impl Index {
     ///
     /// # Returns
     ///
-    /// `true` if the vector is successfully renamed, `false` otherwise.
+    /// `true` if the vector is renamed, `false` otherwise.
     pub fn rename(self: &Index, from: u64, to: u64) -> Result<usize, cxx::Exception> {
         self.inner.rename(from, to)
     }
@@ -291,7 +291,7 @@ impl Index {
         self.inner.contains(key)
     }
 
-    /// Count the count of vector with the same specified key.
+    /// Count the count of vectors with the same specified key.
     ///
     /// # Arguments
     ///
@@ -331,13 +331,15 @@ impl Index {
         self.inner.view(path)
     }
 
-    /// Erases all members from index, closing files, and returning RAM to OS
-    ///
-    /// # Arguments
-    ///
-    ///
+    /// Erases all members from the index, closes files, and returns RAM to OS.
     pub fn reset(self: &Index) -> Result<(), cxx::Exception> {
         self.inner.reset()
+    }
+
+    /// A relatively accurate lower bound on the amount of memory consumed by the system. 
+    /// In practice, its error will be below 10%.
+    pub fn memory_usage(self: &Index) -> usize {
+        self.inner.memory_usage()
     }
 
     /// Saves the index to a specified file.
@@ -396,9 +398,23 @@ mod tests {
         let first: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
         let second: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
 
+        println!(
+            "before add, memory_usage: {} \
+            cap: {} \
+            ",
+            index.memory_usage(),
+            index.capacity(),
+        );
         assert!(index.add(42, &first).is_ok());
         assert!(index.add(43, &second).is_ok());
         assert_eq!(index.size(), 2);
+        println!(
+            "after add, memory_usage: {} \
+            cap: {} \
+            ",
+            index.memory_usage(),
+            index.capacity(),
+        );
 
         // Read back the tags
         let results = index.search(&first, 10).unwrap();
@@ -429,8 +445,10 @@ mod tests {
         assert_eq!(index.size(), deserialized_index.size());
 
         // reset
+        assert_ne!(index.memory_usage(), 0);
         assert!(index.reset().is_ok());
         assert_eq!(index.size(), 0);
+        assert_eq!(index.memory_usage(), 0);
 
         // clone
         options.metric = MetricKind::Haversine;
