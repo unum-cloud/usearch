@@ -42,7 +42,7 @@ pub mod ffi {
     unsafe extern "C++" {
         include!("lib.hpp");
 
-        /// Low-level C++ interface, that is further wrapped into the high-level `Index`
+        /// Low-level C++ interface that is further wrapped into the high-level `Index`
         type NativeIndex;
 
         pub fn new_native_index(options: &IndexOptions) -> Result<UniquePtr<NativeIndex>>;
@@ -203,7 +203,7 @@ impl Index {
         T::add(self, key, vector)
     }
 
-    /// Extracts one or more vectors matching specified key.
+    /// Extracts one or more vectors matching the specified key.
     ///
     /// # Arguments
     ///
@@ -221,7 +221,7 @@ impl Index {
     ///
     /// # Arguments
     ///
-    /// * `capacity` - The desired total capacity including the current size.
+    /// * `capacity` - The desired total capacity, including the current size.
     pub fn reserve(self: &Index, capacity: usize) -> Result<(), cxx::Exception> {
         self.inner.reserve(capacity)
     }
@@ -264,7 +264,7 @@ impl Index {
         self.inner.remove(key)
     }
 
-    /// Renames the vector under a certain key.
+    /// Renames the vector under a specific key.
     ///
     /// # Arguments
     ///
@@ -273,7 +273,7 @@ impl Index {
     ///
     /// # Returns
     ///
-    /// `true` if the vector is successfully renamed, `false` otherwise.
+    /// `true` if the vector is renamed, `false` otherwise.
     pub fn rename(self: &Index, from: u64, to: u64) -> Result<usize, cxx::Exception> {
         self.inner.rename(from, to)
     }
@@ -291,7 +291,7 @@ impl Index {
         self.inner.contains(key)
     }
 
-    /// Count the count of vector with the same specified key.
+    /// Count the count of vectors with the same specified key.
     ///
     /// # Arguments
     ///
@@ -331,18 +331,13 @@ impl Index {
         self.inner.view(path)
     }
 
-    /// Erases all members from index, closing files, and returning RAM to OS
-    ///
-    /// # Arguments
-    ///
-    ///
+    /// Erases all members from the index, closes files, and returns RAM to OS.
     pub fn reset(self: &Index) -> Result<(), cxx::Exception> {
         self.inner.reset()
     }
 
-    /// A relatively accurate lower bound on the amount of memory consumed by the system.In practice it's error will be below 10%.
-    ///
-    /// Retrieves the index's total memeory usage bytes
+    /// A relatively accurate lower bound on the amount of memory consumed by the system. 
+    /// In practice, its error will be below 10%.
     pub fn memory_usage(self: &Index) -> usize {
         self.inner.memory_usage()
     }
