@@ -88,6 +88,8 @@ pub mod ffi {
 pub struct Index {
     inner: cxx::UniquePtr<ffi::NativeIndex>,
 }
+unsafe impl Send for Index {}
+unsafe impl Sync for Index {}
 
 impl Default for ffi::IndexOptions {
     fn default() -> Self {
@@ -387,6 +389,10 @@ mod tests {
     use crate::new_index;
     use crate::Index;
 
+    use std::collections::HashMap;
+    use std::sync::{Arc, RwLock};
+    use std::thread;
+
     #[test]
     fn integration() {
         let mut options = IndexOptions::default();
@@ -464,5 +470,28 @@ mod tests {
         opts.metric = MetricKind::Cos;
         assert_ne!(opts.metric, options.metric);
         assert!(new_index(&opts).is_ok());
+    }
+
+    #[test]
+    fn threads() {
+        let indices: Arc<RwLock<HashMap<String, Index>>> = Arc::new(RwLock::new(HashMap::new()));
+        let mut handles = vec![];
+        let n = 10;
+        for i in 0..n {
+            let indices = Arc::clone(&indices);
+            let handle = thread::spawn(move || {
+                //println!("{} {:?}", i, indices.read().unwrap().keys().len());
+                indices
+                    .write()
+                    .unwrap()
+                    .insert(i.to_string(), Index::new(&IndexOptions::default()).unwrap());
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        assert_eq!(indices.read().unwrap().keys().len(), n);
     }
 }
