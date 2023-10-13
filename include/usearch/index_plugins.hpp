@@ -1960,7 +1960,7 @@ class flat_hash_multi_set_gt {
             do {
                 index_ = (index_ + 1) & (parent_->capacity_slots_ - 1);
             } while (!equals_(parent_->slot_ref(index_).element, query_) &&
-                     !(parent_->slot_ref(index_).header.populated & parent_->slot_ref(index_).mask));
+                     (parent_->slot_ref(index_).header.populated & parent_->slot_ref(index_).mask));
             return *this;
         }
 

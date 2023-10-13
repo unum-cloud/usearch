@@ -172,13 +172,11 @@ Using CMake:
 ```sh
 cmake -B ./build_release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
 cmake --build ./build_release --config Release -j
+./build_release/test_c
+# On Windows:
+.\build_release\test_c.exe
 ```
 
-```sh
-cmake -B ./build_debug -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
-cmake --build ./build_debug --config Debug -j
-.\build_debug\Debug\test_c.exe
-```
 
 ## GoLang
 
