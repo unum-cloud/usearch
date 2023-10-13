@@ -8,7 +8,7 @@ from usearch.index import (
 )
 
 
-@pytest.mark.parametrize("bits", [3, 97, 256, 4097])
+@pytest.mark.parametrize("bits", [7, 97, 256, 4097])
 @pytest.mark.parametrize("metric", [MetricKind.Tanimoto])
 @pytest.mark.parametrize("connectivity", [3, 13, 50])
 @pytest.mark.parametrize("batch_size", [3, 77])
