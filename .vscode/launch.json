@@ -5,7 +5,7 @@
             "name": "Unit Test C++",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/test",
+            "program": "${workspaceFolder}/build_debug/test_cpp",
             "cwd": "${workspaceFolder}",
             "environment": [
                 {
@@ -29,7 +29,7 @@
             "windows": {
                 "preLaunchTask": "Windows Build Debug",
                 "type": "cppvsdbg",
-                "program": "${workspaceFolder}/build_debug/test.exe"
+                "program": "${workspaceFolder}/build_debug/test_cpp.exe"
             }
         },
         {

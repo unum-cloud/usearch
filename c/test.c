@@ -142,9 +142,8 @@ void test_find_vector(size_t const collection_size, size_t const dimensions) {
 
     // Find the vectors
     for (size_t i = 0; i < collection_size; i++) {
-        size_t found_count =
-            usearch_search(index, data + i * dimensions, usearch_scalar_f32_k, collection_size, keys, distances, &error);
-        printf("count %i : %i cs %i d\n", (int)found_count, (int)collection_size, (int)dimensions);
+        size_t found_count = usearch_search(index, data + i * dimensions, usearch_scalar_f32_k, collection_size, keys,
+                                            distances, &error);
         ASSERT(!error, error);
         ASSERT(found_count >= 1 && found_count <= collection_size, "Vector is missing");
     }
@@ -184,7 +183,6 @@ void test_get_vector(size_t const collection_size, size_t const dimensions) {
 
     // Retrieve vectors from index
     size_t found_count = usearch_get(index, key, collection_size, vectors, usearch_scalar_f32_k, &error);
-    printf("found_count %zu : %zu cs %zu d\n", found_count, collection_size, dimensions);
     ASSERT(found_count == collection_size, "Vector is missing");
 
     free(vectors);

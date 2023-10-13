@@ -54,7 +54,9 @@ cppcheck --enable=all --force --suppress=cstyleCast --suppress=unusedFunction \
 Testing:
 
 ```sh
-cmake -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make -C ./build_debug && ./build_debug/test_cpp
+cmake -DUSEARCH_BUILD_TEST_CPP=1 -B ./build_debug
+cmake --build ./build_debug --config Debug
+./build_debug/test_cpp
 ```
 
 ## Python 3

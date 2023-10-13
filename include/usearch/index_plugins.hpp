@@ -1732,6 +1732,7 @@ class exact_search_t {
  *  @section Layout
  *
  *  For every slot we store 2 extra bits for 3 possible states: empty, populated, or deleted.
+ *  With linear probing the hashes at the end of the populated region will spill into its first half.
  */
 template <typename element_at, typename hash_at, typename equals_at, typename allocator_at = std::allocator<char>>
 class flat_hash_multi_set_gt {
@@ -1950,18 +1951,15 @@ class flat_hash_multi_set_gt {
         using pointer = element_t*;
         using reference = element_t&;
 
-        equal_iterator_gt(std::size_t index, flat_hash_multi_set_gt* parent, const query_at& query,
-                          const equals_t& equals)
+        equal_iterator_gt(std::size_t index, flat_hash_multi_set_gt* parent, query_at const& query,
+                          equals_t const& equals)
             : index_(index), parent_(parent), query_(query), equals_(equals) {}
 
         // Pre-increment
         equal_iterator_gt& operator++() {
             do {
-                ++index_;
-                if (index_ >= parent_->capacity_slots_) {
-                    break;
-                }
-            } while (!equals_(parent_->slot_ref(index_).element, query_) ||
+                index_ = (index_ + 1) & (parent_->capacity_slots_ - 1);
+            } while (!equals_(parent_->slot_ref(index_).element, query_) &&
                      !(parent_->slot_ref(index_).header.populated & parent_->slot_ref(index_).mask));
             return *this;
         }
@@ -1986,6 +1984,12 @@ class flat_hash_multi_set_gt {
         equals_t equals_; // Store the equals functor
     };
 
+    /**
+     *  @brief  Returns an iterator range of all elements matching the given query.
+     *
+     *  Technically, the second iterator points to the first empty slot after a
+     *  range of equal values and non-equal values with similar hashes.
+     */
     template <typename query_at>
     std::pair<equal_iterator_gt<query_at>, equal_iterator_gt<query_at>>
     equal_range(query_at const& query) const noexcept {
@@ -1998,28 +2002,41 @@ class flat_hash_multi_set_gt {
 
         hash_t hasher;
         std::size_t hash_value = hasher(query);
-        std::size_t slot_index = hash_value & (capacity_slots_ - 1);
-        std::size_t const start_index = slot_index;
-        std::size_t first_equal_index = capacity_slots_;
+        std::size_t first_equal_index = hash_value & (capacity_slots_ - 1);
+        std::size_t const start_index = first_equal_index;
 
         // Linear probing to find the first equal element
         do {
-            slot_ref_t slot = slot_ref(slot_index);
+            slot_ref_t slot = slot_ref(first_equal_index);
             if (slot.header.populated & ~slot.header.deleted & slot.mask) {
-                if (equals(slot.element, query)) {
-                    first_equal_index = slot_index;
+                if (equals(slot.element, query))
                     break;
-                }
             }
             // Stop if we find an empty slot
             else if (~slot.header.populated & slot.mask)
-                break;
+                return {end, end};
 
             // Move to the next slot
-            slot_index = (slot_index + 1) & (capacity_slots_ - 1);
-        } while (slot_index != start_index);
+            first_equal_index = (first_equal_index + 1) & (capacity_slots_ - 1);
+        } while (first_equal_index != start_index);
 
-        return {equal_iterator_gt<query_at>(first_equal_index, this_ptr, query, equals), end};
+        // If no matching element was found, return end iterators
+        if (first_equal_index == capacity_slots_)
+            return {end, end};
+
+        // Start from the first matching element and find the end of the populated range
+        std::size_t first_empty_index = first_equal_index;
+        do {
+            first_empty_index = (first_empty_index + 1) & (capacity_slots_ - 1);
+            slot_ref_t slot = slot_ref(first_empty_index);
+
+            // If we find an empty slot, this is our end
+            if (~slot.header.populated & slot.mask)
+                break;
+        } while (first_empty_index != start_index);
+
+        return {equal_iterator_gt<query_at>(first_equal_index, this_ptr, query, equals),
+                equal_iterator_gt<query_at>(first_empty_index, this_ptr, query, equals)};
     }
 
     template <typename similar_at> bool pop_first(similar_at&& query, element_t& popped_value) noexcept {
@@ -2065,7 +2082,7 @@ class flat_hash_multi_set_gt {
         equals_t equals;
         std::size_t hash_value = hasher(query);
         std::size_t slot_index = hash_value & (capacity_slots_ - 1); // Assuming capacity_slots_ is a power of 2
-        std::size_t start_index = slot_index;                        // To detect loop in probing
+        std::size_t const start_index = slot_index;                  // To detect loop in probing
         std::size_t count = 0;                                       // Count of elements removed
 
         // Linear probing to find all matches
