@@ -381,6 +381,52 @@ mod tests {
     use crate::Index;
 
     #[test]
+    fn test_add_get_vector() {
+        let mut options = IndexOptions::default();
+        options.dimensions = 5;
+        let index = Index::new(&options).unwrap();
+        assert!(index.reserve(10).is_ok());
+
+        let first: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
+        let second: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
+        assert!(index.add(1, &first).is_ok());
+        assert!(index.add(2, &second).is_ok());
+        assert_eq!(index.size(), 2);
+
+        let mut found: Vec<f32> = Vec::with_capacity(10);
+        assert_eq!(index.get(1, &mut found).unwrap(), 1);
+        println!("{:?}", found);
+        assert_eq!(found.len(), 1);
+    }
+
+    #[test]
+    fn test_add_remove_search_vector() {
+        let mut options = IndexOptions::default();
+        options.dimensions = 5;
+        let index = Index::new(&options).unwrap();
+        assert!(index.reserve(10).is_ok());
+
+        // add
+        let first: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
+        let second: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
+        assert!(index.add(1, &first).is_ok());
+        assert!(index.add(2, &second).is_ok());
+        assert_eq!(index.size(), 2);
+
+        // remove
+        assert!(index.remove(1).is_ok());
+        assert_eq!(index.size(), 1);
+        // add the removed key, fail
+        //assert!(index.add(1, &first).is_ok());
+        assert!(index.add(3, &first).is_ok());
+        assert_eq!(index.size(), 2);
+
+        // search
+        let results = index.search(&first, 10).unwrap();
+        assert_eq!(results.keys.len(), 2);
+    }
+
+    #[test]
     fn integration() {
         let mut options = IndexOptions::default();
         options.dimensions = 5;
