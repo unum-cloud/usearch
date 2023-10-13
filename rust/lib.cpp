@@ -36,10 +36,10 @@ Matches NativeIndex::search_f16(rust::Slice<uint16_t const> vec, size_t count) c
 Matches NativeIndex::search_f32(rust::Slice<float const> vec, size_t count) const { return search_(*index_, vec.data(), count); }
 Matches NativeIndex::search_f64(rust::Slice<double const> vec, size_t count) const { return search_(*index_, vec.data(), count); }
 
-size_t NativeIndex::get_i8(key_t key, rust::Slice<int8_t> vec) const { return index_->get(key, vec.data(), vec.size() / dimensions()); }
-size_t NativeIndex::get_f16(key_t key, rust::Slice<uint16_t> vec) const { return index_->get(key, (f16_t*)vec.data(), vec.size() / dimensions()); }
-size_t NativeIndex::get_f32(key_t key, rust::Slice<float> vec) const { return index_->get(key, vec.data(), vec.size() / dimensions()); }
-size_t NativeIndex::get_f64(key_t key, rust::Slice<double> vec) const { return index_->get(key, vec.data(), vec.size() / dimensions()); }
+size_t NativeIndex::get_i8(key_t key, rust::Slice<int8_t> vec) const { if (vec.size() % dimensions()) throw std::invalid_argument("Vector length must be a multiple of index dimensionality"); return index_->get(key, vec.data(), vec.size() / dimensions()); }
+size_t NativeIndex::get_f16(key_t key, rust::Slice<uint16_t> vec) const { if (vec.size() % dimensions()) throw std::invalid_argument("Vector length must be a multiple of index dimensionality"); return index_->get(key, (f16_t*)vec.data(), vec.size() / dimensions()); }
+size_t NativeIndex::get_f32(key_t key, rust::Slice<float> vec) const { if (vec.size() % dimensions()) throw std::invalid_argument("Vector length must be a multiple of index dimensionality"); return index_->get(key, vec.data(), vec.size() / dimensions()); }
+size_t NativeIndex::get_f64(key_t key, rust::Slice<double> vec) const { if (vec.size() % dimensions()) throw std::invalid_argument("Vector length must be a multiple of index dimensionality"); return index_->get(key, vec.data(), vec.size() / dimensions()); }
 // clang-format on
 
 size_t NativeIndex::remove(key_t key) const {
