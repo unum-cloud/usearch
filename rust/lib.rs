@@ -1,7 +1,7 @@
 #[cxx::bridge]
 pub mod ffi {
-
     // Shared structs with fields visible to both languages.
+    #[derive(Debug)]
     struct Matches {
         keys: Vec<u64>,
         distances: Vec<f32>,
@@ -411,19 +411,26 @@ mod tests {
         let second: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
         assert!(index.add(1, &first).is_ok());
         assert!(index.add(2, &second).is_ok());
-        assert_eq!(index.size(), 2);
+        assert!(index.add(3, &second).is_ok());
+        assert_eq!(index.size(), 3);
 
         // remove
         assert!(index.remove(1).is_ok());
-        assert_eq!(index.size(), 1);
-        // add the removed key, fail
-        //assert!(index.add(1, &first).is_ok());
-        assert!(index.add(3, &first).is_ok());
         assert_eq!(index.size(), 2);
+        // search
+        let results = index.search(&first, 10).unwrap();
+        println!("{:?}", results);
+        assert_eq!(results.keys.len(), 2);
+
+        // add
+        assert!(index.add(1, &first).is_ok());
+        assert!(index.add(4, &first).is_ok());
+        assert_eq!(index.size(), 4);
 
         // search
         let results = index.search(&first, 10).unwrap();
-        assert_eq!(results.keys.len(), 2);
+        println!("{:?}", results);
+        assert_eq!(results.keys.len(), 4);
     }
 
     #[test]
@@ -448,6 +455,7 @@ mod tests {
 
         // Read back the tags
         let results = index.search(&first, 10).unwrap();
+        println!("{:?}", results);
         assert_eq!(results.keys.len(), 2);
 
         // Validate serialization
