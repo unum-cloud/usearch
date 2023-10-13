@@ -393,10 +393,10 @@ mod tests {
         assert!(index.add(2, &second).is_ok());
         assert_eq!(index.size(), 2);
 
-        let mut found: Vec<f32> = Vec::with_capacity(10);
+        let mut found = vec![0.0 as f32; options.dimensions];
         assert_eq!(index.get(1, &mut found).unwrap(), 1);
         println!("{:?}", found);
-        assert_eq!(found.len(), 1);
+        assert_eq!(found.len(), 5);
     }
 
     #[test]
