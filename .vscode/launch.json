@@ -1,14 +1,11 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
             "name": "Unit Test C++",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/test_cpp",
+            "program": "${workspaceFolder}/build_debug/test",
             "cwd": "${workspaceFolder}",
             "environment": [
                 {
@@ -22,12 +19,48 @@
             ],
             "stopAtEntry": false,
             "linux": {
-                "preLaunchTask": "Linux Build C++ Debug",
+                "preLaunchTask": "Linux Build Debug",
                 "MIMode": "gdb"
             },
             "osx": {
-                "preLaunchTask": "MacOS Build C++ Debug",
+                "preLaunchTask": "MacOS Build Debug",
                 "MIMode": "lldb"
+            },
+            "windows": {
+                "preLaunchTask": "Windows Build Debug",
+                "type": "cppvsdbg",
+                "program": "${workspaceFolder}/build_debug/test.exe"
+            }
+        },
+        {
+            "name": "Unit Test C",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/test_c",
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1:abort_on_error=0"
+                },
+                {
+                    "name": "LSAN_OPTIONS",
+                    "value": "verbosity=1:log_threads=1"
+                }
+            ],
+            "stopAtEntry": false,
+            "linux": {
+                "preLaunchTask": "Linux Build Debug",
+                "MIMode": "gdb"
+            },
+            "osx": {
+                "preLaunchTask": "MacOS Build Debug",
+                "MIMode": "lldb"
+            },
+            "windows": {
+                "preLaunchTask": "Windows Build Debug",
+                "type": "cppvsdbg",
+                "program": "${workspaceFolder}/build_debug/test_c.exe"
             }
         },
         {
@@ -53,7 +86,7 @@
             ],
             "stopAtEntry": false,
             "linux": {
-                "preLaunchTask": "Linux Build C++ Debug",
+                "preLaunchTask": "Linux Build Debug",
                 "MIMode": "gdb",
                 "environment": [
                     {
@@ -63,7 +96,7 @@
                 ]
             },
             "osx": {
-                "preLaunchTask": "MacOS Build C++ Debug",
+                "preLaunchTask": "MacOS Build Debug",
                 "MIMode": "lldb"
             }
         },
@@ -90,11 +123,11 @@
             ],
             "stopAtEntry": false,
             "linux": {
-                "preLaunchTask": "Linux Build C++ Debug",
+                "preLaunchTask": "Linux Build Debug",
                 "MIMode": "gdb"
             },
             "osx": {
-                "preLaunchTask": "MacOS Build C++ Debug",
+                "preLaunchTask": "MacOS Build Debug",
                 "MIMode": "lldb"
             }
         },
@@ -113,7 +146,7 @@
                 "datasets/t2i_1M/groundtruth.public.100K.ibin",
             ],
             "stopAtEntry": false,
-            "preLaunchTask": "Linux Build C++ Release",
+            "preLaunchTask": "Linux Build Release",
             "MIMode": "gdb"
         },
         {

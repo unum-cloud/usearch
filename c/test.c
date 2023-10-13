@@ -21,8 +21,8 @@
 float* create_vectors(size_t const count, size_t const dimensions) {
     float* data = (float*)malloc(count * dimensions * sizeof(float));
     ASSERT(data, "Failed to allocate memory");
-    for (size_t idx = 0; idx < count * dimensions; ++idx)
-        data[idx] = (float)rand() / (float)RAND_MAX;
+    for (size_t index = 0; index < count * dimensions; ++index)
+        data[index] = (float)rand() / (float)RAND_MAX;
     return data;
 }
 
@@ -50,29 +50,29 @@ void test_init(size_t const collection_size, size_t const dimensions) {
     // Init index
     usearch_error_t error = NULL;
     usearch_init_options_t opts = create_options(dimensions);
-    usearch_index_t idx = usearch_init(&opts, &error);
+    usearch_index_t index = usearch_init(&opts, &error);
     ASSERT(!error, error);
-    usearch_free(idx, &error);
+    usearch_free(index, &error);
     ASSERT(!error, error);
 
     // Init second time
-    idx = usearch_init(&opts, &error);
+    index = usearch_init(&opts, &error);
     ASSERT(!error, error);
 
-    ASSERT(usearch_size(idx, &error) == 0, error);
-    ASSERT(usearch_capacity(idx, &error) == 0, error);
-    ASSERT(usearch_dimensions(idx, &error) == dimensions, error);
-    ASSERT(usearch_connectivity(idx, &error) == opts.connectivity, error);
+    ASSERT(usearch_size(index, &error) == 0, error);
+    ASSERT(usearch_capacity(index, &error) == 0, error);
+    ASSERT(usearch_dimensions(index, &error) == dimensions, error);
+    ASSERT(usearch_connectivity(index, &error) == opts.connectivity, error);
 
     // Reserve
-    usearch_reserve(idx, collection_size, &error);
+    usearch_reserve(index, collection_size, &error);
     ASSERT(!error, error);
-    ASSERT(usearch_size(idx, &error) == 0, error);
-    ASSERT(usearch_capacity(idx, &error) == collection_size, error);
-    ASSERT(usearch_dimensions(idx, &error) == dimensions, error);
-    ASSERT(usearch_connectivity(idx, &error) == opts.connectivity, error);
+    ASSERT(usearch_size(index, &error) == 0, error);
+    ASSERT(usearch_capacity(index, &error) == collection_size, error);
+    ASSERT(usearch_dimensions(index, &error) == dimensions, error);
+    ASSERT(usearch_connectivity(index, &error) == opts.connectivity, error);
 
-    usearch_free(idx, &error);
+    usearch_free(index, &error);
     ASSERT(!error, error);
 
     printf("Test: Index Initialization - PASSED\n");
@@ -88,29 +88,29 @@ void test_add_vector(size_t const collection_size, size_t const dimensions) {
 
     usearch_error_t error = NULL;
     usearch_init_options_t opts = create_options(dimensions);
-    usearch_index_t idx = usearch_init(&opts, &error);
-    usearch_reserve(idx, collection_size, &error);
+    usearch_index_t index = usearch_init(&opts, &error);
+    usearch_reserve(index, collection_size, &error);
 
     // Add vectors
     float* data = create_vectors(collection_size, dimensions);
     for (size_t i = 0; i < collection_size; ++i) {
         usearch_key_t key = i;
-        usearch_add(idx, key, data + i * dimensions, usearch_scalar_f32_k, &error);
+        usearch_add(index, key, data + i * dimensions, usearch_scalar_f32_k, &error);
         ASSERT(!error, error);
     }
 
-    ASSERT(usearch_size(idx, &error) == collection_size, error);
-    ASSERT(usearch_capacity(idx, &error) == collection_size, error);
+    ASSERT(usearch_size(index, &error) == collection_size, error);
+    ASSERT(usearch_capacity(index, &error) == collection_size, error);
 
     // Check vectors in the index
     for (size_t i = 0; i < collection_size; ++i) {
         usearch_key_t key = i;
-        ASSERT(usearch_contains(idx, key, &error), error);
+        ASSERT(usearch_contains(index, key, &error), error);
     }
-    ASSERT(!usearch_contains(idx, -1, &error), error); // Non existing key
+    ASSERT(!usearch_contains(index, -1, &error), error); // Non existing key
 
     free(data);
-    usearch_free(idx, &error);
+    usearch_free(index, &error);
     printf("Test: Add Vector - PASSED\n");
 }
 
@@ -124,8 +124,8 @@ void test_find_vector(size_t const collection_size, size_t const dimensions) {
 
     usearch_error_t error = NULL;
     usearch_init_options_t opts = create_options(dimensions);
-    usearch_index_t idx = usearch_init(&opts, &error);
-    usearch_reserve(idx, collection_size, &error);
+    usearch_index_t index = usearch_init(&opts, &error);
+    usearch_reserve(index, collection_size, &error);
 
     // Create result buffers
     usearch_key_t* keys = (usearch_key_t*)malloc(collection_size * sizeof(usearch_key_t));
@@ -136,14 +136,15 @@ void test_find_vector(size_t const collection_size, size_t const dimensions) {
     float* data = create_vectors(collection_size, dimensions);
     for (size_t i = 0; i < collection_size; ++i) {
         usearch_key_t key = i;
-        usearch_add(idx, key, data + i * dimensions, usearch_scalar_f32_k, &error);
+        usearch_add(index, key, data + i * dimensions, usearch_scalar_f32_k, &error);
         ASSERT(!error, error);
     }
 
     // Find the vectors
     for (size_t i = 0; i < collection_size; i++) {
         size_t found_count =
-            usearch_search(idx, data + i * dimensions, usearch_scalar_f32_k, collection_size, keys, distances, &error);
+            usearch_search(index, data + i * dimensions, usearch_scalar_f32_k, collection_size, keys, distances, &error);
+        printf("count %i : %i cs %i d\n", (int)found_count, (int)collection_size, (int)dimensions);
         ASSERT(!error, error);
         ASSERT(found_count >= 1 && found_count <= collection_size, "Vector is missing");
     }
@@ -151,7 +152,7 @@ void test_find_vector(size_t const collection_size, size_t const dimensions) {
     free(data);
     free(keys);
     free(distances);
-    usearch_free(idx, &error);
+    usearch_free(index, &error);
     printf("Test: Find Vector - PASSED\n");
 }
 
@@ -166,8 +167,8 @@ void test_get_vector(size_t const collection_size, size_t const dimensions) {
     usearch_error_t error = NULL;
     usearch_init_options_t opts = create_options(dimensions);
     opts.multi = true;
-    usearch_index_t idx = usearch_init(&opts, &error);
-    usearch_reserve(idx, collection_size, &error);
+    usearch_index_t index = usearch_init(&opts, &error);
+    usearch_reserve(index, collection_size, &error);
 
     // Create result buffers
     float* vectors = (float*)malloc(collection_size * dimensions * sizeof(float));
@@ -177,17 +178,18 @@ void test_get_vector(size_t const collection_size, size_t const dimensions) {
     usearch_key_t const key = 1;
     float* data = create_vectors(collection_size, dimensions);
     for (size_t i = 0; i < collection_size; i++) {
-        usearch_add(idx, key, data + i * dimensions, usearch_scalar_f32_k, &error);
+        usearch_add(index, key, data + i * dimensions, usearch_scalar_f32_k, &error);
         ASSERT(!error, error);
     }
 
     // Retrieve vectors from index
-    size_t count = usearch_get(idx, key, collection_size, vectors, usearch_scalar_f32_k, &error);
-    ASSERT(count == collection_size, "Vector is missing");
+    size_t found_count = usearch_get(index, key, collection_size, vectors, usearch_scalar_f32_k, &error);
+    printf("found_count %zu : %zu cs %zu d\n", found_count, collection_size, dimensions);
+    ASSERT(found_count == collection_size, "Vector is missing");
 
     free(vectors);
     free(data);
-    usearch_free(idx, &error);
+    usearch_free(index, &error);
 
     printf("Test: Get Vector - PASSED\n");
 }
@@ -202,26 +204,26 @@ void test_remove_vector(size_t const collection_size, size_t const dimensions) {
 
     usearch_error_t error = NULL;
     usearch_init_options_t opts = create_options(dimensions);
-    usearch_index_t idx = usearch_init(&opts, &error);
-    usearch_reserve(idx, collection_size, &error);
+    usearch_index_t index = usearch_init(&opts, &error);
+    usearch_reserve(index, collection_size, &error);
 
     // Add vectors
     float* data = create_vectors(collection_size, dimensions);
     for (size_t i = 0; i < collection_size; ++i) {
         usearch_key_t key = i;
-        usearch_add(idx, key, data + i * dimensions, usearch_scalar_f32_k, &error);
+        usearch_add(index, key, data + i * dimensions, usearch_scalar_f32_k, &error);
         ASSERT(!error, error);
     }
 
     // Remove the vectors
     for (size_t i = 0; i < collection_size; i++) {
         usearch_key_t key = i;
-        usearch_remove(idx, key, &error);
+        usearch_remove(index, key, &error);
         ASSERT(!error, "Currently, Remove is not supported");
     }
 
     free(data);
-    usearch_free(idx, &error);
+    usearch_free(index, &error);
     printf("Test: Remove Vector - PASSED\n");
 }
 
@@ -236,44 +238,44 @@ void test_save_load(size_t const collection_size, size_t const dimensions) {
 
     usearch_error_t error = NULL;
     usearch_init_options_t opts = create_options(dimensions);
-    usearch_index_t idx = usearch_init(&opts, &error);
-    usearch_reserve(idx, collection_size, &error);
+    usearch_index_t index = usearch_init(&opts, &error);
+    usearch_reserve(index, collection_size, &error);
 
     // Add vectors
     float* data = create_vectors(collection_size, dimensions);
     for (size_t i = 0; i < collection_size; ++i) {
         usearch_key_t key = i;
-        usearch_add(idx, key, data + i * dimensions, usearch_scalar_f32_k, &error);
+        usearch_add(index, key, data + i * dimensions, usearch_scalar_f32_k, &error);
         ASSERT(!error, error);
     }
 
     // Save and free the index
-    usearch_save(idx, "usearch_index.bin", &error);
+    usearch_save(index, "usearch_index.bin", &error);
     ASSERT(!error, error);
-    usearch_free(idx, &error);
+    usearch_free(index, &error);
     ASSERT(!error, error);
 
     // Reinit
-    idx = usearch_init(&opts, &error);
+    index = usearch_init(&opts, &error);
     ASSERT(!error, error);
-    ASSERT(usearch_size(idx, &error) == 0, error);
+    ASSERT(usearch_size(index, &error) == 0, error);
 
     // Load
-    usearch_load(idx, "usearch_index.bin", &error);
+    usearch_load(index, "usearch_index.bin", &error);
     ASSERT(!error, error);
-    ASSERT(usearch_size(idx, &error) == collection_size, error);
-    ASSERT(usearch_capacity(idx, &error) == collection_size, error);
-    ASSERT(usearch_dimensions(idx, &error) == dimensions, error);
-    ASSERT(usearch_connectivity(idx, &error) == opts.connectivity, error);
+    ASSERT(usearch_size(index, &error) == collection_size, error);
+    ASSERT(usearch_capacity(index, &error) == collection_size, error);
+    ASSERT(usearch_dimensions(index, &error) == dimensions, error);
+    ASSERT(usearch_connectivity(index, &error) == opts.connectivity, error);
 
     // Check vectors in the index
     for (size_t i = 0; i < collection_size; ++i) {
         usearch_key_t key = i;
-        ASSERT(usearch_contains(idx, key, &error), error);
+        ASSERT(usearch_contains(index, key, &error), error);
     }
 
     free(data);
-    usearch_free(idx, &error);
+    usearch_free(index, &error);
     printf("Test: Save/Load - PASSED\n");
 }
 
@@ -288,33 +290,33 @@ void test_view(size_t const collection_size, size_t const dimensions) {
 
     usearch_error_t error = NULL;
     usearch_init_options_t opts = create_options(dimensions);
-    usearch_index_t idx = usearch_init(&opts, &error);
-    usearch_reserve(idx, collection_size, &error);
+    usearch_index_t index = usearch_init(&opts, &error);
+    usearch_reserve(index, collection_size, &error);
 
     // Add vectors
     float* data = create_vectors(collection_size, dimensions);
     for (size_t i = 0; i < collection_size; ++i) {
         usearch_key_t key = i;
-        usearch_add(idx, key, data + i * dimensions, usearch_scalar_f32_k, &error);
+        usearch_add(index, key, data + i * dimensions, usearch_scalar_f32_k, &error);
         ASSERT(!error, error);
     }
 
     // Save and free the index
-    usearch_save(idx, "usearch_index.bin", &error);
+    usearch_save(index, "usearch_index.bin", &error);
     ASSERT(!error, error);
-    usearch_free(idx, &error);
+    usearch_free(index, &error);
     ASSERT(!error, error);
 
     // Reinit
-    idx = usearch_init(&opts, &error);
+    index = usearch_init(&opts, &error);
     ASSERT(!error, error);
 
     // View
-    usearch_view(idx, "usearch_index.bin", &error);
+    usearch_view(index, "usearch_index.bin", &error);
     ASSERT(!error, error);
 
     free(data);
-    usearch_free(idx, &error);
+    usearch_free(index, &error);
     printf("Test: View - PASSED\n");
 }
 
@@ -322,15 +324,15 @@ int main(int argc, char const* argv[]) {
 
     size_t collection_sizes[] = {11, 512};
     size_t dimensions[] = {83, 1};
-    for (size_t idx = 0; idx < sizeof(collection_sizes) / sizeof(collection_sizes[0]); ++idx) {
+    for (size_t index = 0; index < sizeof(collection_sizes) / sizeof(collection_sizes[0]); ++index) {
         for (size_t jdx = 0; jdx < sizeof(dimensions) / sizeof(dimensions[0]); ++jdx) {
-            test_init(collection_sizes[idx], dimensions[jdx]);
-            test_add_vector(collection_sizes[idx], dimensions[jdx]);
-            test_find_vector(collection_sizes[idx], dimensions[jdx]);
-            test_get_vector(collection_sizes[idx], dimensions[jdx]);
-            test_remove_vector(collection_sizes[idx], dimensions[jdx]);
-            test_save_load(collection_sizes[idx], dimensions[jdx]);
-            test_view(collection_sizes[idx], dimensions[jdx]);
+            test_init(collection_sizes[index], dimensions[jdx]);
+            test_add_vector(collection_sizes[index], dimensions[jdx]);
+            test_find_vector(collection_sizes[index], dimensions[jdx]);
+            test_get_vector(collection_sizes[index], dimensions[jdx]);
+            test_remove_vector(collection_sizes[index], dimensions[jdx]);
+            test_save_load(collection_sizes[index], dimensions[jdx]);
+            test_view(collection_sizes[index], dimensions[jdx]);
         }
     }
 
