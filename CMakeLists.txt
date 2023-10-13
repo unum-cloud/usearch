@@ -205,6 +205,8 @@ function (setup_target TARGET_NAME)
                     -fPIC
                     -pedantic
                     -Wfatal-errors
+                    # Don't complain if the for-loops were not vectorzied
+                    -Wpass-failed=transform-warning
                     -fcolor-diagnostics
                     -ftime-trace
         )

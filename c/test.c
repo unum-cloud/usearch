@@ -318,7 +318,7 @@ void test_view(size_t const collection_size, size_t const dimensions) {
     printf("Test: View - PASSED\n");
 }
 
-int main() {
+int main(int argc, char const* argv[]) {
 
     size_t collection_sizes[] = {11, 512};
     size_t dimensions[] = {83, 1};
@@ -334,5 +334,7 @@ int main() {
         }
     }
 
+    (void)argc;
+    (void)argv;
     return 0;
 }
