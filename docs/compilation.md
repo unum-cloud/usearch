@@ -153,7 +153,7 @@ swift test -v
 ## C 99
 
 There are a few ways to compile the C 99 USearch SDK.
-Using the Makefile:
+Using the Makefile, specifying the targets you need:
 
 ```sh
 make -C ./c libusearch_c.so
@@ -168,13 +168,14 @@ make USEARCH_USE_OPENMP=1 USEARCH_USE_SIMSIMD=1 -C ./c libusearch_c.so
 Using CMake:
 
 ```sh
-cmake -B ./build_release -DUSEARCH_BUILD_LIB_C=1 && make -C ./build_release -j
+cmake -B ./build_release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
+cmake --build ./build_release --config Release -j
 ```
 
-Testing on MacOS and Linux:
-
 ```sh
-make USEARCH_USE_OPENMP=1 USEARCH_USE_SIMSIMD=1 -C ./c libusearch_c.so test_c && ./c/test_c
+cmake -B ./build_debug -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
+cmake --build ./build_debug --config Debug -j
+.\build_debug\Debug\test_c.exe
 ```
 
 ## GoLang
