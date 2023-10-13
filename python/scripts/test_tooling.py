@@ -48,7 +48,9 @@ def test_serializing_ibin_matrix(rows: int, cols: int):
 
 @pytest.mark.parametrize("rows", batch_sizes)
 @pytest.mark.parametrize("cols", dimensions)
-def test_exact_search(rows: int, cols: int):
+@pytest.mark.parametrize("k", [1, 5])
+@pytest.mark.parametrize("reordered", [False, True])
+def test_exact_search(rows: int, cols: int, k: int, reordered: bool):
     """
     Test exact search.
 
@@ -57,13 +59,21 @@ def test_exact_search(rows: int, cols: int):
     """
     original = np.random.rand(rows, cols)
     keys = np.arange(rows)
-    matches: BatchMatches = search(original, original, min(10, rows), exact=True)
-    top_matches = (
-        [int(m.keys[0]) for m in matches] if rows > 1 else int(matches.keys[0])
-    )
-    assert np.all(top_matches == keys)
+    k = min(k, rows)
 
-    matches: Matches = search(original, original[-1], min(10, rows), exact=True)
+    if reordered:
+        reordered_keys = np.arange(rows)
+        np.random.shuffle(reordered_keys)
+    else:
+        reordered_keys = keys
+
+    matches: BatchMatches = search(original, original[reordered_keys], k, exact=True)
+    top_matches = (
+        [int(m.keys[0]) for m in matches] if rows > 1 else [int(matches.keys[0])]
+    )
+    assert top_matches == list(reordered_keys)
+
+    matches: Matches = search(original, original[-1], k, exact=True)
     top_match = int(matches.keys[0])
     assert top_match == keys[-1]
 

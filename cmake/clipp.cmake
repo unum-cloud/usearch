@@ -5,4 +5,3 @@ FetchContent_Declare(
     GIT_TAG v1.2.3
 )
 FetchContent_MakeAvailable(clipp)
-include_directories(${clipp_SOURCE_DIR}/include)

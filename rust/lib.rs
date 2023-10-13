@@ -1,12 +1,13 @@
 #[cxx::bridge]
 pub mod ffi {
-
     // Shared structs with fields visible to both languages.
+    #[derive(Debug)]
     struct Matches {
         keys: Vec<u64>,
         distances: Vec<f32>,
     }
 
+    #[derive(Debug)]
     enum MetricKind {
         IP,
         L2sq,
@@ -18,6 +19,7 @@ pub mod ffi {
         Sorensen,
     }
 
+    #[derive(Debug)]
     enum ScalarKind {
         F64,
         F32,
@@ -26,6 +28,7 @@ pub mod ffi {
         B1,
     }
 
+    #[derive(Debug, PartialEq)]
     struct IndexOptions {
         dimensions: usize,
         metric: MetricKind,
@@ -40,7 +43,7 @@ pub mod ffi {
     unsafe extern "C++" {
         include!("lib.hpp");
 
-        /// Low-level C++ interface, that is further wrapped into the high-level `Index`
+        /// Low-level C++ interface that is further wrapped into the high-level `Index`
         type NativeIndex;
 
         pub fn new_native_index(options: &IndexOptions) -> Result<UniquePtr<NativeIndex>>;
@@ -74,6 +77,9 @@ pub mod ffi {
         pub fn save(self: &NativeIndex, path: &str) -> Result<()>;
         pub fn load(self: &NativeIndex, path: &str) -> Result<()>;
         pub fn view(self: &NativeIndex, path: &str) -> Result<()>;
+        pub fn reset(self: &NativeIndex) -> Result<()>;
+        pub fn memory_usage(self: &NativeIndex) -> usize;
+
         pub fn save_to_buffer(self: &NativeIndex, buffer: &mut [u8]) -> Result<()>;
         pub fn load_from_buffer(self: &NativeIndex, buffer: &[u8]) -> Result<()>;
         pub fn view_from_buffer(self: &NativeIndex, buffer: &[u8]) -> Result<()>;
@@ -96,6 +102,20 @@ impl Default for ffi::IndexOptions {
             expansion_add: 2,
             expansion_search: 3,
             multi: false,
+        }
+    }
+}
+
+impl Clone for ffi::IndexOptions {
+    fn clone(&self) -> Self {
+        ffi::IndexOptions {
+            dimensions: (self.dimensions),
+            metric: (self.metric),
+            quantization: (self.quantization),
+            connectivity: (self.connectivity),
+            expansion_add: (self.expansion_add),
+            expansion_search: (self.expansion_search),
+            multi: (self.multi),
         }
     }
 }
@@ -185,6 +205,11 @@ impl Index {
     }
 
     /// Extracts one or more vectors matching specified key.
+    /// The `vector` slice must be a multiple number of dimensions in the index.
+    /// After the execution return the number `X` of vectors found.
+    /// The first `X * dimensions` elements of the vector slice will be filled.
+    ///
+    /// If you are a novice user, consider `export`.
     ///
     /// # Arguments
     ///
@@ -198,11 +223,34 @@ impl Index {
         T::get(self, key, vector)
     }
 
+    /// Extracts one or more vectors matching specified key into supplied resizable vector.
+    /// The `vector` is resized to a multiple number of dimensions in the index.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key associated with the vector.
+    /// * `vector` - A mutable vector containing the vector data.
+    pub fn export<T: VectorType + Default + Clone>(
+        self: &Index,
+        key: u64,
+        vector: &mut Vec<T>,
+    ) -> Result<usize, cxx::Exception> {
+        let dim = self.dimensions();
+        let max_matches = self.count(key);
+        vector.resize(dim * max_matches, T::default());
+        let matches = T::get(self, key, &mut vector[..]);
+        if matches.is_err() {
+            return matches;
+        }
+        vector.resize(dim * matches.as_ref().unwrap(), T::default());
+        return matches;
+    }
+
     /// Reserves memory for a specified number of incoming vectors.
     ///
     /// # Arguments
     ///
-    /// * `capacity` - The desired total capacity including the current size.
+    /// * `capacity` - The desired total capacity, including the current size.
     pub fn reserve(self: &Index, capacity: usize) -> Result<(), cxx::Exception> {
         self.inner.reserve(capacity)
     }
@@ -245,7 +293,7 @@ impl Index {
         self.inner.remove(key)
     }
 
-    /// Renames the vector under a certain key.
+    /// Renames the vector under a specific key.
     ///
     /// # Arguments
     ///
@@ -254,7 +302,7 @@ impl Index {
     ///
     /// # Returns
     ///
-    /// `true` if the vector is successfully renamed, `false` otherwise.
+    /// `true` if the vector is renamed, `false` otherwise.
     pub fn rename(self: &Index, from: u64, to: u64) -> Result<usize, cxx::Exception> {
         self.inner.rename(from, to)
     }
@@ -272,7 +320,7 @@ impl Index {
         self.inner.contains(key)
     }
 
-    /// Count the count of vector with the same specified key.
+    /// Count the count of vectors with the same specified key.
     ///
     /// # Arguments
     ///
@@ -310,6 +358,17 @@ impl Index {
     /// * `path` - The file path from where the view will be created.
     pub fn view(self: &Index, path: &str) -> Result<(), cxx::Exception> {
         self.inner.view(path)
+    }
+
+    /// Erases all members from the index, closes files, and returns RAM to OS.
+    pub fn reset(self: &Index) -> Result<(), cxx::Exception> {
+        self.inner.reset()
+    }
+
+    /// A relatively accurate lower bound on the amount of memory consumed by the system.
+    /// In practice, its error will be below 10%.
+    pub fn memory_usage(self: &Index) -> usize {
+        self.inner.memory_usage()
     }
 
     /// Saves the index to a specified file.
@@ -353,6 +412,36 @@ mod tests {
     use crate::Index;
 
     #[test]
+    fn test_add_get_vector() {
+        let mut options = IndexOptions::default();
+        options.dimensions = 5;
+        let index = Index::new(&options).unwrap();
+        assert!(index.reserve(10).is_ok());
+
+        let first: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
+        let second: [f32; 5] = [0.3, 0.2, 0.4, 0.0, 0.1];
+        assert!(index.add(1, &first).is_ok());
+        assert!(index.add(2, &second).is_ok());
+        assert_eq!(index.size(), 2);
+
+        // Test using Vec<T>
+        let mut found_vec: Vec<f32> = Vec::new();
+        assert_eq!(index.export(1, &mut found_vec).unwrap(), 1);
+        assert_eq!(found_vec.len(), 5);
+        assert_eq!(found_vec, first.to_vec());
+
+        // Test using slice
+        let mut found_slice = [0.0 as f32; 5];
+        assert_eq!(index.get(1, &mut found_slice).unwrap(), 1);
+        assert_eq!(found_slice, first);
+
+        // Create a slice with incorrect size
+        let mut found = [0.0 as f32; 6]; // This isn't a multiple of the index's dimensions.
+        let result = index.get(1, &mut found);
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn integration() {
         let mut options = IndexOptions::default();
         options.dimensions = 5;
@@ -366,14 +455,29 @@ mod tests {
         assert_eq!(index.size(), 0);
 
         let first: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
-        let second: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
+        let second: [f32; 5] = [0.3, 0.2, 0.4, 0.0, 0.1];
 
+        println!(
+            "before add, memory_usage: {} \
+            cap: {} \
+            ",
+            index.memory_usage(),
+            index.capacity(),
+        );
         assert!(index.add(42, &first).is_ok());
         assert!(index.add(43, &second).is_ok());
         assert_eq!(index.size(), 2);
+        println!(
+            "after add, memory_usage: {} \
+            cap: {} \
+            ",
+            index.memory_usage(),
+            index.capacity(),
+        );
 
         // Read back the tags
         let results = index.search(&first, 10).unwrap();
+        println!("{:?}", results);
         assert_eq!(results.keys.len(), 2);
 
         // Validate serialization
@@ -399,5 +503,21 @@ mod tests {
             .load_from_buffer(&serialization_buffer)
             .is_ok());
         assert_eq!(index.size(), deserialized_index.size());
+
+        // reset
+        assert_ne!(index.memory_usage(), 0);
+        assert!(index.reset().is_ok());
+        assert_eq!(index.size(), 0);
+        assert_eq!(index.memory_usage(), 0);
+
+        // clone
+        options.metric = MetricKind::Haversine;
+        let mut opts = options.clone();
+        assert_eq!(opts.metric, options.metric);
+        assert_eq!(opts.quantization, options.quantization);
+        assert_eq!(opts, options);
+        opts.metric = MetricKind::Cos;
+        assert_ne!(opts.metric, options.metric);
+        assert!(new_index(&opts).is_ok());
     }
 }

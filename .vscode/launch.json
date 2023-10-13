@@ -1,14 +1,11 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
             "name": "Unit Test C++",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/test",
+            "program": "${workspaceFolder}/build_debug/test_cpp",
             "cwd": "${workspaceFolder}",
             "environment": [
                 {
@@ -22,19 +19,55 @@
             ],
             "stopAtEntry": false,
             "linux": {
-                "preLaunchTask": "Linux Build C++ Debug",
+                "preLaunchTask": "Linux Build Debug",
                 "MIMode": "gdb"
             },
             "osx": {
-                "preLaunchTask": "MacOS Build C++ Debug",
+                "preLaunchTask": "MacOS Build Debug",
                 "MIMode": "lldb"
+            },
+            "windows": {
+                "preLaunchTask": "Windows Build Debug",
+                "type": "cppvsdbg",
+                "program": "${workspaceFolder}/build_debug/test_cpp.exe"
+            }
+        },
+        {
+            "name": "Unit Test C",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build_debug/test_c",
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0:atexit=1:strict_init_order=1:strict_string_checks=1:abort_on_error=0"
+                },
+                {
+                    "name": "LSAN_OPTIONS",
+                    "value": "verbosity=1:log_threads=1"
+                }
+            ],
+            "stopAtEntry": false,
+            "linux": {
+                "preLaunchTask": "Linux Build Debug",
+                "MIMode": "gdb"
+            },
+            "osx": {
+                "preLaunchTask": "MacOS Build Debug",
+                "MIMode": "lldb"
+            },
+            "windows": {
+                "preLaunchTask": "Windows Build Debug",
+                "type": "cppvsdbg",
+                "program": "${workspaceFolder}/build_debug/test_c.exe"
             }
         },
         {
             "name": "Debug C++ on Wiki 1M @Cos",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/bench",
+            "program": "${workspaceFolder}/build_debug/bench_cpp",
             "cwd": "${workspaceFolder}",
             "args": [
                 "--vectors",
@@ -53,7 +86,7 @@
             ],
             "stopAtEntry": false,
             "linux": {
-                "preLaunchTask": "Linux Build C++ Debug",
+                "preLaunchTask": "Linux Build Debug",
                 "MIMode": "gdb",
                 "environment": [
                     {
@@ -63,7 +96,7 @@
                 ]
             },
             "osx": {
-                "preLaunchTask": "MacOS Build C++ Debug",
+                "preLaunchTask": "MacOS Build Debug",
                 "MIMode": "lldb"
             }
         },
@@ -71,7 +104,7 @@
             "name": "Debug C++ on Text-to-Image 1B @Cos",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_debug/bench",
+            "program": "${workspaceFolder}/build_debug/bench_cpp",
             "cwd": "${workspaceFolder}",
             "args": [
                 "--vectors",
@@ -90,11 +123,11 @@
             ],
             "stopAtEntry": false,
             "linux": {
-                "preLaunchTask": "Linux Build C++ Debug",
+                "preLaunchTask": "Linux Build Debug",
                 "MIMode": "gdb"
             },
             "osx": {
-                "preLaunchTask": "MacOS Build C++ Debug",
+                "preLaunchTask": "MacOS Build Debug",
                 "MIMode": "lldb"
             }
         },
@@ -102,7 +135,7 @@
             "name": "Run C++ on Text-to-Image 1M @Cos",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build_release/bench",
+            "program": "${workspaceFolder}/build_release/bench_cpp",
             "cwd": "${workspaceFolder}",
             "args": [
                 "--vectors",
@@ -113,7 +146,7 @@
                 "datasets/t2i_1M/groundtruth.public.100K.ibin",
             ],
             "stopAtEntry": false,
-            "preLaunchTask": "Linux Build C++ Release",
+            "preLaunchTask": "Linux Build Release",
             "MIMode": "gdb"
         },
         {

@@ -13,15 +13,16 @@ Linux:
 
 ```sh
 sudo apt-get update
-sudo apt-get install cmake g++-12 build-essential libjemalloc-dev
+sudo apt-get install cmake build-essential libjemalloc-dev
 cmake -B ./build_release \
-    -DCMAKE_CXX_COMPILER="g++-12" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DUSEARCH_BUILD_TEST=1 \
     -DUSEARCH_USE_OPENMP=1 \
     -DUSEARCH_USE_SIMSIMD=1 \
     -DUSEARCH_USE_JEMALLOC=1 \
-    -DUSEARCH_BUILD_BENCHMARK=1 \
+    -DUSEARCH_BUILD_TEST_CPP=1 \
+    -DUSEARCH_BUILD_BENCH_CPP=1 \
+    -DUSEARCH_BUILD_LIB_C=1 \
+    -DUSEARCH_BUILD_TEST_C=1 \
     && \
     make -C ./build_release -j
 ```
@@ -35,8 +36,8 @@ cmake -B ./build_release \
     -DCMAKE_CXX_COMPILER="/opt/homebrew/opt/llvm/bin/clang++" \
     -DUSEARCH_USE_OPENMP=1 \
     -DUSEARCH_USE_SIMSIMD=1 \
-    -DUSEARCH_BUILD_BENCHMARK=1 \
-    -DUSEARCH_BUILD_TEST=1 \
+    -DUSEARCH_BUILD_BENCH_CPP=1 \
+    -DUSEARCH_BUILD_TEST_CPP=1 \
     && \
     make -C ./build_release -j
 ```
@@ -53,7 +54,9 @@ cppcheck --enable=all --force --suppress=cstyleCast --suppress=unusedFunction \
 Testing:
 
 ```sh
-cmake -DCMAKE_BUILD_TYPE=Debug -B ./build_debug && make -C ./build_debug && ./build_debug/test
+cmake -DUSEARCH_BUILD_TEST_CPP=1 -B ./build_debug
+cmake --build ./build_debug --config Debug
+./build_debug/test_cpp
 ```
 
 ## Python 3
@@ -85,7 +88,7 @@ cibuildwheel --platform linux
 Node.JS:
 
 ```sh
-npm install && node javascript/test.js
+npm install && node --test ./javascript/usearch.test.js
 npm publish
 ```
 
@@ -93,7 +96,7 @@ WebAssembly:
 
 ```sh
 emcmake cmake -B ./build -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} -s TOTAL_MEMORY=64MB" && emmake make -C ./build
-node ./build/test.js
+node ./build/usearch.test.js
 ```
 
 If you don't yet have `emcmake` installed:
@@ -124,7 +127,7 @@ javac -h . Index.java
 
 # Ubuntu:
 g++ -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
-g++ -shared -fPIC -o libusearch.so cloud_unum_usearch_Index.o -lc
+g++ -shared -fPIC -o libusearch_c.so cloud_unum_usearch_Index.o -lc
 
 # Windows
 g++ -c -I%JAVA_HOME%\include -I%JAVA_HOME%\include\win32 cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
@@ -152,22 +155,26 @@ swift test -v
 ## C 99
 
 There are a few ways to compile the C 99 USearch SDK.
-Using the Makefile:
+Using the Makefile, specifying the targets you need:
 
 ```sh
 make -C ./c libusearch_c.so
 ```
 
+With options:
+
+```sh
+make USEARCH_USE_OPENMP=1 USEARCH_USE_SIMSIMD=1 -C ./c libusearch_c.so
+```
+
 Using CMake:
 
 ```sh
-cmake -B ./build_release -DUSEARCH_BUILD_CLIB=1 && make -C ./build_release -j
-```
-
-Linux:
-
-```sh
-g++ -std=c++11 -shared -fPIC c/lib.cpp -I ./include/  -I ./fp16/include/ -o libusearch_c.so
+cmake -B ./build_release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
+cmake --build ./build_release --config Release -j
+./build_release/test_c
+# On Windows:
+.\build_release\test_c.exe
 ```
 
 
@@ -177,7 +184,7 @@ GoLang bindings are based on C.
 So one should first compile the C library, link it with GoLang, and only then run tests.
 
 ```sh
-make -C ./c libusearch_c.so && mv ./c/libusearch_c.so ./golang/libusearch_c.so 
+make -C ./c libusearch_c.so && mv ./c/libusearch_c.so ./golang/ && cp ./c/usearch.h ./golang/
 cd golang && go test -v ; cd ..
 ```
 

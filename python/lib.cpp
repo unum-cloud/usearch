@@ -32,17 +32,6 @@
 using namespace unum::usearch;
 using namespace unum;
 
-/**
- *  @brief  The signature of the user-defined function.
- *          Can be just two array pointers, precompiled for a specific array length,
- *          or include one or two array sizes as 64-bit unsigned integers.
- */
-enum class metric_signature_t {
-    array_array_k = 0,
-    array_array_size_k,
-    array_size_array_size_k,
-};
-
 namespace py = pybind11;
 using py_shape_t = py::array::ShapeContainer;
 
@@ -59,6 +48,7 @@ using dense_clustering_result_t = typename index_dense_t::clustering_result_t;
 using progress_func_t = std::function<bool(std::size_t /*processed*/, std::size_t /*total*/)>;
 
 struct progress_t {
+    inline progress_t(nullptr_t = nullptr) : func_(&dummy_progress) {}
     inline progress_t(progress_func_t const& func) : func_(func ? func : &dummy_progress) {}
     inline bool operator()(std::size_t processed, std::size_t total) const noexcept { return func_(processed, total); }
 
@@ -114,70 +104,16 @@ struct dense_indexes_py_t {
     }
 };
 
-template <typename scalar_at>
-metric_t wrap_typed_user_defined_metric(                                             //
-    metric_kind_t kind, metric_signature_t signature, std::uintptr_t metric_uintptr, //
-    scalar_kind_t scalar_kind, std::size_t dimensions) {
-    //
-    using stl_function_t = metric_t::stl_function_t;
-    stl_function_t stl_function;
-    std::size_t scalar_words =
-        divide_round_up(dimensions * bits_per_scalar(scalar_kind), bits_per_scalar_word(scalar_kind));
-    switch (signature) {
-    case metric_signature_t::array_array_k:
-        stl_function = [metric_uintptr](byte_t const* a, byte_t const* b) -> distance_t {
-            using metric_raw_t = distance_punned_t (*)(scalar_at const*, scalar_at const*);
-            metric_raw_t metric_ptr = reinterpret_cast<metric_raw_t>(metric_uintptr);
-            return metric_ptr((scalar_at const*)a, (scalar_at const*)b);
-        };
-        break;
-    case metric_signature_t::array_array_size_k:
-        stl_function = [metric_uintptr, scalar_words](byte_t const* a, byte_t const* b) -> distance_t {
-            using metric_raw_t = distance_punned_t (*)(scalar_at const*, scalar_at const*, size_t);
-            metric_raw_t metric_ptr = reinterpret_cast<metric_raw_t>(metric_uintptr);
-            return metric_ptr((scalar_at const*)a, (scalar_at const*)b, scalar_words);
-        };
-        break;
-    case metric_signature_t::array_size_array_size_k:
-        stl_function = [metric_uintptr, scalar_words](byte_t const* a, byte_t const* b) -> distance_t {
-            using metric_raw_t = distance_punned_t (*)(scalar_at const*, size_t, scalar_at const*, size_t);
-            metric_raw_t metric_ptr = reinterpret_cast<metric_raw_t>(metric_uintptr);
-            return metric_ptr((scalar_at const*)a, scalar_words, (scalar_at const*)b, scalar_words);
-        };
-        break;
-    }
-    return metric_t(stl_function, dimensions, kind, scalar_kind);
-}
-
-metric_t wrap_user_defined_metric(                                                   //
-    metric_kind_t kind, metric_signature_t signature, std::uintptr_t metric_uintptr, //
-    scalar_kind_t scalar_kind, std::size_t dimensions) {
-
-    switch (scalar_kind) {
-    case scalar_kind_t::b1x8_k:
-        return wrap_typed_user_defined_metric<b1x8_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
-    case scalar_kind_t::i8_k:
-        return wrap_typed_user_defined_metric<i8_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
-    case scalar_kind_t::f16_k:
-        return wrap_typed_user_defined_metric<f16_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
-    case scalar_kind_t::f32_k:
-        return wrap_typed_user_defined_metric<f32_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
-    case scalar_kind_t::f64_k:
-        return wrap_typed_user_defined_metric<f64_t>(kind, signature, metric_uintptr, scalar_kind, dimensions);
-    default: return {};
-    }
-}
-
-static dense_index_py_t make_index(      //
-    std::size_t dimensions,              //
-    scalar_kind_t scalar_kind,           //
-    std::size_t connectivity,            //
-    std::size_t expansion_add,           //
-    std::size_t expansion_search,        //
-    metric_kind_t metric_kind,           //
-    metric_signature_t metric_signature, //
-    std::uintptr_t metric_uintptr,       //
-    bool multi,                          //
+static dense_index_py_t make_index(             //
+    std::size_t dimensions,                     //
+    scalar_kind_t scalar_kind,                  //
+    std::size_t connectivity,                   //
+    std::size_t expansion_add,                  //
+    std::size_t expansion_search,               //
+    metric_kind_t metric_kind,                  //
+    metric_punned_signature_t metric_signature, //
+    std::uintptr_t metric_uintptr,              //
+    bool multi,                                 //
     bool enable_key_lookups) {
 
     index_dense_config_t config(connectivity, expansion_add, expansion_search);
@@ -186,7 +122,7 @@ static dense_index_py_t make_index(      //
 
     metric_t metric =  //
         metric_uintptr //
-            ? wrap_user_defined_metric(metric_kind, metric_signature, metric_uintptr, scalar_kind, dimensions)
+            ? metric_t(dimensions, metric_uintptr, metric_signature, metric_kind, scalar_kind)
             : metric_t(dimensions, metric_kind, scalar_kind);
     return index_dense_t::make(metric, config);
 }
@@ -509,105 +445,13 @@ static py::tuple search_many_in_index( //
     return results;
 }
 
-template <typename scalar_at>
-static void search_typed_brute_force(                                //
-    py::buffer_info& dataset_info, py::buffer_info& queries_info,    //
-    std::size_t wanted, std::size_t threads, metric_t const& metric, //
-    py::array_t<dense_key_t>& keys_py, py::array_t<distance_t>& distances_py, py::array_t<Py_ssize_t>& counts_py,
-    progress_func_t const& progress) {
-
-    auto keys_py2d = keys_py.template mutable_unchecked<2>();
-    auto distances_py2d = distances_py.template mutable_unchecked<2>();
-    auto counts_py1d = counts_py.template mutable_unchecked<1>();
-
-    std::size_t dataset_count = static_cast<std::size_t>(dataset_info.shape[0]);
-    std::size_t queries_count = static_cast<std::size_t>(queries_info.shape[0]);
-
-    byte_t const* dataset_data = reinterpret_cast<byte_t const*>(dataset_info.ptr);
-    byte_t const* queries_data = reinterpret_cast<byte_t const*>(queries_info.ptr);
-    for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx)
-        counts_py1d(query_idx) = wanted;
-
-    if (!threads)
-        threads = std::thread::hardware_concurrency();
-
-    std::size_t tasks_count = static_cast<std::size_t>(dataset_count * queries_count);
-    executor_default_t executor{threads};
-
-    // Progress status
-    progress_t progress_{progress};
-    std::atomic<std::size_t> processed{0};
-
-    struct dense_key_and_distance_t {
-        u32_t offset;
-        f32_t distance;
-    };
-    auto less = [](dense_key_and_distance_t const& a, dense_key_and_distance_t const& b) {
-        return a.distance < b.distance;
-    };
-
-    // Allocate temporary memory to store the distance matrix
-    // Previous version didn't need temporary memory, but the performance was much lower.
-    // In the new design we keep two buffers - original and transposed, as in-place transpositions
-    // of non-rectangular matrixes is expensive.
-    std::vector<dense_key_and_distance_t> keys_and_distances(tasks_count * 2);
-    dense_key_and_distance_t* keys_and_distances_per_dataset = keys_and_distances.data();
-    dense_key_and_distance_t* keys_and_distances_per_query = keys_and_distances_per_dataset + tasks_count;
-    executor.dynamic(dataset_count, [&](std::size_t thread_idx, std::size_t dataset_idx) {
-        byte_t const* dataset = dataset_data + dataset_idx * dataset_info.strides[0];
-        for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx) {
-        byte_t const* query = queries_data + query_idx * queries_info.strides[0];
-        distance_t distance = metric(dataset, query);
-            std::size_t task_idx = dataset_idx * queries_count + query_idx;
-            keys_and_distances_per_dataset[task_idx].offset = static_cast<u32_t>(dataset_idx);
-            keys_and_distances_per_dataset[task_idx].distance = static_cast<f32_t>(distance);
-        }
-
-        // We don't want to check for signals from multiple threads
-        processed += queries_count;
-        if (thread_idx == 0)
-            if (PyErr_CheckSignals() != 0 || !progress_(processed.load(), tasks_count))
-                return false;
-        return true;
-    });
-    if (processed.load() != tasks_count)
-        return;
-
-    // Transpose in a single thread to avoid contention writing into the same memory buffers
-    for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx) {
-        for (std::size_t dataset_idx = 0; dataset_idx != dataset_count; ++dataset_idx) {
-            std::size_t from_idx = queries_count * dataset_idx + query_idx;
-            std::size_t to_idx = dataset_count * query_idx + dataset_idx;
-            keys_and_distances_per_query[to_idx] = keys_and_distances_per_dataset[from_idx];
-        }
-    }
-
-    // Partial-sort every query result
-    executor.fixed(queries_count, [&](std::size_t, std::size_t query_idx) {
-        dense_key_t* keys = &keys_py2d(query_idx, 0);
-        distance_t* distances = &distances_py2d(query_idx, 0);
-        auto start = keys_and_distances_per_query + dataset_count * query_idx;
-        if (wanted > 1) {
-            std::partial_sort(start, start + wanted, start + dataset_count, less);
-        for (std::size_t i = 0; i != wanted; ++i)
-            keys[i] = static_cast<dense_key_t>(start[i].offset), distances[i] = start[i].distance;
-        } else {
-            auto max_it = std::max_element(start, start + dataset_count, less);
-            keys[0] = static_cast<dense_key_t>(max_it->offset), distances[0] = max_it->distance;
-        }
-    });
-
-    // At the end report the latest numbers, because the reporter thread may be finished earlier
-    progress_(processed.load(), tasks_count);
-}
-
-static py::tuple search_many_brute_force(    //
-    py::buffer dataset, py::buffer queries,  //
-    std::size_t wanted, std::size_t threads, //
-    metric_kind_t metric_kind,               //
-    metric_signature_t metric_signature,     //
-    std::uintptr_t metric_uintptr,           //
-    progress_func_t const& progress) {
+static py::tuple search_many_brute_force(       //
+    py::buffer dataset, py::buffer queries,     //
+    std::size_t wanted, std::size_t threads,    //
+    metric_kind_t metric_kind,                  //
+    metric_punned_signature_t metric_signature, //
+    std::uintptr_t metric_uintptr,              //
+    progress_func_t const& progress_func) {
 
     if (wanted == 0)
         return py::tuple(5);
@@ -617,10 +461,13 @@ static py::tuple search_many_brute_force(    //
     if (dataset_info.ndim != 2 || queries_info.ndim != 2)
         throw std::invalid_argument("Expects a matrix of dataset to add!");
 
-    Py_ssize_t dataset_count = dataset_info.shape[0];
-    Py_ssize_t dataset_dimensions = dataset_info.shape[1];
-    Py_ssize_t queries_count = queries_info.shape[0];
-    Py_ssize_t queries_dimensions = queries_info.shape[1];
+    std::size_t dataset_count = static_cast<std::size_t>(dataset_info.shape[0]);
+    std::size_t dataset_dimensions = static_cast<std::size_t>(dataset_info.shape[1]);
+    std::size_t dataset_stride = static_cast<std::size_t>(dataset_info.strides[0]);
+    std::size_t queries_stride = static_cast<std::size_t>(queries_info.strides[0]);
+    std::size_t queries_count = static_cast<std::size_t>(queries_info.shape[0]);
+    std::size_t queries_dimensions = static_cast<std::size_t>(queries_info.shape[1]);
+
     if (dataset_dimensions != queries_dimensions)
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
     if (wanted > dataset_count)
@@ -631,26 +478,51 @@ static py::tuple search_many_brute_force(    //
     if (dataset_kind != queries_kind)
         throw std::invalid_argument("The types of vectors don't match!");
 
-    py::array_t<dense_key_t> keys_py({queries_count, static_cast<Py_ssize_t>(wanted)});
-    py::array_t<distance_t> distances_py({queries_count, static_cast<Py_ssize_t>(wanted)});
-    py::array_t<Py_ssize_t> counts_py(queries_count);
-
     std::size_t dimensions = static_cast<std::size_t>(queries_dimensions);
     metric_t metric =  //
         metric_uintptr //
-            ? wrap_user_defined_metric(metric_kind, metric_signature, metric_uintptr, queries_kind, dimensions)
+            ? metric_t(dimensions, metric_uintptr, metric_signature, metric_kind, queries_kind)
             : metric_t(dimensions, metric_kind, queries_kind);
 
-    // clang-format off
-    switch (dataset_kind) {
-    case scalar_kind_t::b1x8_k: search_typed_brute_force<b1x8_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py, progress); break;
-    case scalar_kind_t::i8_k: search_typed_brute_force<i8_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py, progress); break;
-    case scalar_kind_t::f16_k: search_typed_brute_force<f16_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py, progress); break;
-    case scalar_kind_t::f32_k: search_typed_brute_force<f32_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py, progress); break;
-    case scalar_kind_t::f64_k: search_typed_brute_force<f64_t>(dataset_info, queries_info, wanted, threads, metric, keys_py, distances_py, counts_py, progress); break;
-    default: throw std::invalid_argument("Incompatible vector types: " + dataset_info.format);
+    py::array_t<dense_key_t> keys_py({static_cast<Py_ssize_t>(queries_count), static_cast<Py_ssize_t>(wanted)});
+    py::array_t<distance_t> distances_py({static_cast<Py_ssize_t>(queries_count), static_cast<Py_ssize_t>(wanted)});
+    py::array_t<Py_ssize_t> counts_py(static_cast<Py_ssize_t>(queries_count));
+
+    auto keys_py2d = keys_py.template mutable_unchecked<2>();
+    auto distances_py2d = distances_py.template mutable_unchecked<2>();
+    auto counts_py1d = counts_py.template mutable_unchecked<1>();
+
+    byte_t const* dataset_data = reinterpret_cast<byte_t const*>(dataset_info.ptr);
+    byte_t const* queries_data = reinterpret_cast<byte_t const*>(queries_info.ptr);
+    for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx)
+        counts_py1d(query_idx) = wanted;
+
+    if (!threads)
+        threads = std::thread::hardware_concurrency();
+
+    // Dispatch brute-force search
+    progress_t progress{progress_func};
+    executor_default_t executor{threads};
+    exact_search_t search;
+
+    exact_search_results_t offsets_and_distances = search( //
+        dataset_data, dataset_count, dataset_stride,       //
+        queries_data, queries_count, queries_stride,       //
+        wanted, metric, executor,
+        [&](std::size_t passed, std::size_t total) { return PyErr_CheckSignals() == 0 && progress(passed, total); });
+
+    if (!offsets_and_distances)
+        throw std::bad_alloc();
+
+    // Export the results
+    for (std::size_t query_idx = 0; query_idx != queries_count; ++query_idx) {
+        dense_key_t* query_keys = &keys_py2d(query_idx, 0);
+        distance_t* query_distances = &distances_py2d(query_idx, 0);
+        auto query_result = offsets_and_distances.at(query_idx);
+        for (std::size_t i = 0; i != wanted; ++i)
+            query_keys[i] = static_cast<dense_key_t>(query_result[i].offset),
+            query_distances[i] = query_result[i].distance;
     }
-    // clang-format on
 
     py::tuple results(5);
     results[0] = keys_py;
@@ -980,10 +852,9 @@ PYBIND11_MODULE(compiled, m) {
     m.attr("USES_SIMSIMD") = py::int_(USEARCH_USE_SIMSIMD);
     m.attr("USES_NATIVE_F16") = py::int_(USEARCH_USE_NATIVE_F16);
 
-    py::enum_<metric_signature_t>(m, "MetricSignature")
-        .value("ArrayArray", metric_signature_t::array_array_k)
-        .value("ArrayArraySize", metric_signature_t::array_array_size_k)
-        .value("ArraySizeArraySize", metric_signature_t::array_size_array_size_k);
+    py::enum_<metric_punned_signature_t>(m, "MetricSignature")
+        .value("ArrayArray", metric_punned_signature_t::array_array_k)
+        .value("ArrayArraySize", metric_punned_signature_t::array_array_size_k);
 
     py::enum_<metric_kind_t>(m, "MetricKind")
         .value("Unknown", metric_kind_t::unknown_k)
@@ -1032,16 +903,16 @@ PYBIND11_MODULE(compiled, m) {
         return index_metadata(meta);
     });
 
-    m.def("exact_search", &search_many_brute_force,                        //
-          py::arg("dataset"),                                              //
-          py::arg("queries"),                                              //
-          py::arg("count") = 10,                                           //
-          py::kw_only(),                                                   //
-          py::arg("threads") = 0,                                          //
-          py::arg("metric_kind") = metric_kind_t::cos_k,                   //
-          py::arg("metric_signature") = metric_signature_t::array_array_k, //
-          py::arg("metric_pointer") = 0,                                   //
-          py::arg("progress") = nullptr                                    //
+    m.def("exact_search", &search_many_brute_force,                               //
+          py::arg("dataset"),                                                     //
+          py::arg("queries"),                                                     //
+          py::arg("count") = 10,                                                  //
+          py::kw_only(),                                                          //
+          py::arg("threads") = 0,                                                 //
+          py::arg("metric_kind") = metric_kind_t::cos_k,                          //
+          py::arg("metric_signature") = metric_punned_signature_t::array_array_k, //
+          py::arg("metric_pointer") = 0,                                          //
+          py::arg("progress") = nullptr                                           //
     );
 
     m.def(
@@ -1057,18 +928,18 @@ PYBIND11_MODULE(compiled, m) {
 
     auto i = py::class_<dense_index_py_t, std::shared_ptr<dense_index_py_t>>(m, "Index");
 
-    i.def(py::init(&make_index),                                           //
-          py::kw_only(),                                                   //
-          py::arg("ndim") = 0,                                             //
-          py::arg("dtype") = scalar_kind_t::f32_k,                         //
-          py::arg("connectivity") = default_connectivity(),                //
-          py::arg("expansion_add") = default_expansion_add(),              //
-          py::arg("expansion_search") = default_expansion_search(),        //
-          py::arg("metric_kind") = metric_kind_t::cos_k,                   //
-          py::arg("metric_signature") = metric_signature_t::array_array_k, //
-          py::arg("metric_pointer") = 0,                                   //
-          py::arg("multi") = false,                                        //
-          py::arg("enable_key_lookups") = true                             //
+    i.def(py::init(&make_index),                                                  //
+          py::kw_only(),                                                          //
+          py::arg("ndim") = 0,                                                    //
+          py::arg("dtype") = scalar_kind_t::f32_k,                                //
+          py::arg("connectivity") = default_connectivity(),                       //
+          py::arg("expansion_add") = default_expansion_add(),                     //
+          py::arg("expansion_search") = default_expansion_search(),               //
+          py::arg("metric_kind") = metric_kind_t::cos_k,                          //
+          py::arg("metric_signature") = metric_punned_signature_t::array_array_k, //
+          py::arg("metric_pointer") = 0,                                          //
+          py::arg("multi") = false,                                               //
+          py::arg("enable_key_lookups") = true                                    //
     );
 
     i.def(                                                //
@@ -1201,19 +1072,19 @@ PYBIND11_MODULE(compiled, m) {
 
     i.def(
         "change_metric",
-        [](dense_index_py_t& index, metric_kind_t metric_kind, metric_signature_t metric_signature,
+        [](dense_index_py_t& index, metric_kind_t metric_kind, metric_punned_signature_t metric_signature,
            std::uintptr_t metric_uintptr) {
             scalar_kind_t scalar_kind = index.scalar_kind();
             std::size_t dimensions = index.dimensions();
             metric_t metric =  //
                 metric_uintptr //
-                    ? wrap_user_defined_metric(metric_kind, metric_signature, metric_uintptr, scalar_kind, dimensions)
+                    ? metric_t(dimensions, metric_uintptr, metric_signature, metric_kind, scalar_kind)
                     : metric_t(dimensions, metric_kind, scalar_kind);
             index.change_metric(std::move(metric));
         },
-        py::arg("metric_kind") = metric_kind_t::cos_k,                   //
-        py::arg("metric_signature") = metric_signature_t::array_array_k, //
-        py::arg("metric_pointer") = 0                                    //
+        py::arg("metric_kind") = metric_kind_t::cos_k,                          //
+        py::arg("metric_signature") = metric_punned_signature_t::array_array_k, //
+        py::arg("metric_pointer") = 0                                           //
     );
 
     i.def_property_readonly("hardware_acceleration", [](dense_index_py_t const& index) -> py::str {

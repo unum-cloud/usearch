@@ -268,7 +268,7 @@ template <typename scalar_at> class span_gt {
  *  @brief  Similar to `std::vector`, but doesn't support dynamic resizing.
  *          On the bright side, this can't throw exceptions.
  */
-template <typename scalar_at, typename allocator_at> class buffer_gt {
+template <typename scalar_at, typename allocator_at = std::allocator<scalar_at>> class buffer_gt {
     scalar_at* data_;
     std::size_t size_;
 

@@ -96,27 +96,36 @@ publishing {
                 name = "USearch"
                 description = "Smaller & Faster Single-File Vector Search Engine from Unum"
                 url = "https://github.com/unum-cloud/usearch"
+
                 licenses {
                     license {
                         name = 'The Apache License, Version 2.0'
                         url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
                     }
                 }
+
+                scm {
+                    connection = 'scm:git:git://github.com/unum-cloud/usearch.git'
+                    developerConnection = 'scm:git:ssh://github.com/unum-cloud/usearch.git'
+                    url = 'https://github.com/unum-cloud/usearch'
+                }
+
             }
         }
     }
 
+
     // Publishing to GitHub is much easier ;)
-    // repositories {
-    //     maven {
-    //         name = "OSSRH"
-    //         url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
-    //         credentials {
-    //             username = System.getenv("MAVEN_USERNAME")
-    //             password = System.getenv("MAVEN_PASSWORD")
-    //         }
-    //     }
-    // }
+    repositories {
+        maven {
+            name = "OSSRH"
+            url = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+            credentials {
+                username = System.getenv("MAVEN_USERNAME")
+                password = System.getenv("MAVEN_PASSWORD")
+            }
+        }
+    }
 
     repositories {
         maven {
