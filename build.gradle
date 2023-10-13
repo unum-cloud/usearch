@@ -104,14 +104,6 @@ publishing {
                     }
                 }
 
-                developers {
-                    developer {
-                        id 'ashvardanian'
-                        name 'Ash Vardanian'
-                        email '1983160+ashvardanian@users.noreply.github.com'
-                    }
-                }
-
                 scm {
                     connection = 'scm:git:git://github.com/unum-cloud/usearch.git'
                     developerConnection = 'scm:git:ssh://github.com/unum-cloud/usearch.git'
