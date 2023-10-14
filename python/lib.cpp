@@ -373,8 +373,8 @@ static void search_typed(                                       //
                     atomic_error.store("Operation has been terminated");
                     return false;
                 }
-            return true;
         }
+        return true;
     });
 
     // At the end report the latest numbers, because the reporter thread may be finished earlier
