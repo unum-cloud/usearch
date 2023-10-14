@@ -7,7 +7,7 @@ ARG docker_ip
 ARG user_pass
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends cmake g++-12 build-essential libjemalloc-dev golang openssh-client sshpass && \
+    apt-get install -y --no-install-recommends cmake g++-12 libc++-dev build-essential libjemalloc-dev golang openssh-client sshpass && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
