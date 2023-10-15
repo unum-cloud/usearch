@@ -46,6 +46,11 @@ pub mod ffi {
         /// Low-level C++ interface that is further wrapped into the high-level `Index`
         type NativeIndex;
 
+        pub fn expansion_add(self: &NativeIndex) -> usize;
+        pub fn expansion_search(self: &NativeIndex) -> usize;
+        pub fn change_expansion_add(self: &NativeIndex, n: usize) -> Result<()>;
+        pub fn change_expansion_search(self: &NativeIndex, n: usize) -> Result<()>;
+
         pub fn new_native_index(options: &IndexOptions) -> Result<UniquePtr<NativeIndex>>;
         pub fn reserve(self: &NativeIndex, capacity: usize) -> Result<()>;
         pub fn dimensions(self: &NativeIndex) -> usize;
@@ -174,6 +179,26 @@ impl Index {
             Ok(inner) => Result::Ok(Self { inner }),
             Err(err) => Err(err),
         }
+    }
+
+    /// get expansion_add for index create to add
+    pub fn expansion_add(self: &Index) -> usize {
+        self.inner.expansion_add()
+    }
+
+    /// get expansion_search for index search
+    pub fn expansion_search(self: &Index) -> usize {
+        self.inner.expansion_search()
+    }
+
+    /// change expansion_add for index create to add
+    pub fn change_expansion_add(self: &Index, n: usize) -> Result<(), cxx::Exception> {
+        self.inner.change_expansion_add(n)
+    }
+
+    /// change expansion_search for index search
+    pub fn change_expansion_search(self: &Index, n: usize) -> Result<(), cxx::Exception> {
+        self.inner.change_expansion_search(n)
     }
 
     /// Performs k-Approximate Nearest Neighbors (kANN) Search for closest vectors to the provided query.
@@ -448,6 +473,9 @@ mod tests {
 
         let index = Index::new(&options).unwrap();
 
+        assert!(index.expansion_add() > 0);
+        assert!(index.expansion_search() > 0);
+
         assert!(index.reserve(10).is_ok());
         assert!(index.capacity() >= 10);
         assert!(index.connectivity() != 0);
@@ -464,7 +492,11 @@ mod tests {
             index.memory_usage(),
             index.capacity(),
         );
+        assert!(index.change_expansion_add(10).is_ok());
+        assert_eq!(index.expansion_add(), 10);
         assert!(index.add(42, &first).is_ok());
+        assert!(index.change_expansion_add(12).is_ok());
+        assert_eq!(index.expansion_add(), 12);
         assert!(index.add(43, &second).is_ok());
         assert_eq!(index.size(), 2);
         println!(
@@ -475,7 +507,15 @@ mod tests {
             index.capacity(),
         );
 
+        assert!(index.change_expansion_search(10).is_ok());
+        assert_eq!(index.expansion_search(), 10);
         // Read back the tags
+        let results = index.search(&first, 10).unwrap();
+        println!("{:?}", results);
+        assert_eq!(results.keys.len(), 2);
+
+        assert!(index.change_expansion_search(12).is_ok());
+        assert_eq!(index.expansion_search(), 12);
         let results = index.search(&first, 10).unwrap();
         println!("{:?}", results);
         assert_eq!(results.keys.len(), 2);
