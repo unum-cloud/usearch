@@ -4,6 +4,7 @@ plugins {
     id 'java-library'
     id 'cpp'
     id 'maven-publish'
+    id 'signing'
 }
 
 group "cloud.unum"
@@ -28,6 +29,11 @@ sourceSets {
             srcDir "java/test"
         }
     }
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    archiveClassifier.set('sources')
+    from sourceSets.main.allSource
 }
 
 dependencies {
@@ -87,10 +93,21 @@ jar {
     }
 }
 
+signing {
+    useGpgCmd()
+    sign publishing.publications
+}
+
 publishing {
     publications {
         library(MavenPublication) {
             from components.java
+            
+            artifact sourcesJar
+
+            signing {
+                sign publishing.publications.library
+            }
 
             pom {
                 name = "USearch"
@@ -110,6 +127,13 @@ publishing {
                     url = 'https://github.com/unum-cloud/usearch'
                 }
 
+                developers {
+                    developer {
+                        id = 'ashvardanian'
+                        name = 'Ash Vardanian'
+                        email = 'ash.vardanian@unum.cloud'
+                    }
+                }
             }
         }
     }

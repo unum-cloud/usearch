@@ -418,13 +418,6 @@ jobs:
           verbose: true
           print-hash: true
 
-      - name: Publish to Anaconda
-        run: |
-          pip install anaconda-client
-          export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
-          anaconda login --token $ANACONDA_API_TOKEN
-          anaconda upload -u unum-cloud ./dist/artifact/*.tar.bz2
-
   publish_javascript:
     name: Publish JavaScript
     needs: versioning
