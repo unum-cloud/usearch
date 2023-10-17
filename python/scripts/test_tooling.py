@@ -118,5 +118,16 @@ def test_multi_index():
     index_b.add(43, vectors[1])
 
     indexes = Indexes([index_a, index_b])
+
+    # Search top 10 for 1
     matches = indexes.search(vectors[2], 10)
     assert len(matches) == 2
+
+    # Search top 1 for 1
+    matches = indexes.search(vectors[2], 1)
+    assert len(matches) == 1
+
+    # Search top 10 for 3
+    matches = indexes.search(vectors, 10)
+    assert len(matches) == 3
+    assert len(matches[0].keys) == 2

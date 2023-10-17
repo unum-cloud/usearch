@@ -95,7 +95,7 @@ jobs:
         --build-arg docker_ip=${{ steps.dockerip.outputs.docker_ip }} \
         --build-arg user_pass=${{ steps.userpass.outputs.user_pass }} \
         --file .github/workflows/Dockerfile.libs \
-        --tag unum/ustore-deps:latest \
+        --tag unum/usearch-library:latest \
         --load .
     - name: Clear Docker buildx cache
       run: docker buildx prune --all --force

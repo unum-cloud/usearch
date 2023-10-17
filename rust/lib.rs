@@ -46,6 +46,11 @@ pub mod ffi {
         /// Low-level C++ interface that is further wrapped into the high-level `Index`
         type NativeIndex;
 
+        pub fn expansion_add(self: &NativeIndex) -> usize;
+        pub fn expansion_search(self: &NativeIndex) -> usize;
+        pub fn change_expansion_add(self: &NativeIndex, n: usize) -> Result<()>;
+        pub fn change_expansion_search(self: &NativeIndex, n: usize) -> Result<()>;
+
         pub fn new_native_index(options: &IndexOptions) -> Result<UniquePtr<NativeIndex>>;
         pub fn reserve(self: &NativeIndex, capacity: usize) -> Result<()>;
         pub fn dimensions(self: &NativeIndex) -> usize;
@@ -176,6 +181,26 @@ impl Index {
         }
     }
 
+    /// Retrieves the expansion value used during index creation.
+    pub fn expansion_add(self: &Index) -> usize {
+        self.inner.expansion_add()
+    }
+
+    /// Retrieves the expansion value used during search.
+    pub fn expansion_search(self: &Index) -> usize {
+        self.inner.expansion_search()
+    }
+
+    /// Updates the expansion value used during index creation. Rarely used.
+    pub fn change_expansion_add(self: &Index, n: usize) -> Result<(), cxx::Exception> {
+        self.inner.change_expansion_add(n)
+    }
+
+    /// Updates the expansion value used during search operations.
+    pub fn change_expansion_search(self: &Index, n: usize) -> Result<(), cxx::Exception> {
+        self.inner.change_expansion_search(n)
+    }
+
     /// Performs k-Approximate Nearest Neighbors (kANN) Search for closest vectors to the provided query.
     ///
     /// # Arguments
@@ -204,10 +229,10 @@ impl Index {
         T::add(self, key, vector)
     }
 
-    /// Extracts one or more vectors matching specified key.
-    /// The `vector` slice must be a multiple number of dimensions in the index.
-    /// After the execution return the number `X` of vectors found.
-    /// The first `X * dimensions` elements of the vector slice will be filled.
+    /// Extracts one or more vectors matching the specified key.
+    /// The `vector` slice must be a multiple of the number of dimensions in the index.
+    /// After the execution, return the number `X` of vectors found.
+    /// The vector slice's first `X * dimensions` elements will be filled.
     ///
     /// If you are a novice user, consider `export`.
     ///
@@ -224,7 +249,7 @@ impl Index {
     }
 
     /// Extracts one or more vectors matching specified key into supplied resizable vector.
-    /// The `vector` is resized to a multiple number of dimensions in the index.
+    /// The `vector` is resized to a multiple of the number of dimensions in the index.
     ///
     /// # Arguments
     ///
@@ -448,6 +473,9 @@ mod tests {
 
         let index = Index::new(&options).unwrap();
 
+        assert!(index.expansion_add() > 0);
+        assert!(index.expansion_search() > 0);
+
         assert!(index.reserve(10).is_ok());
         assert!(index.capacity() >= 10);
         assert!(index.connectivity() != 0);
@@ -464,7 +492,11 @@ mod tests {
             index.memory_usage(),
             index.capacity(),
         );
+        assert!(index.change_expansion_add(10).is_ok());
+        assert_eq!(index.expansion_add(), 10);
         assert!(index.add(42, &first).is_ok());
+        assert!(index.change_expansion_add(12).is_ok());
+        assert_eq!(index.expansion_add(), 12);
         assert!(index.add(43, &second).is_ok());
         assert_eq!(index.size(), 2);
         println!(
@@ -475,7 +507,15 @@ mod tests {
             index.capacity(),
         );
 
+        assert!(index.change_expansion_search(10).is_ok());
+        assert_eq!(index.expansion_search(), 10);
         // Read back the tags
+        let results = index.search(&first, 10).unwrap();
+        println!("{:?}", results);
+        assert_eq!(results.keys.len(), 2);
+
+        assert!(index.change_expansion_search(12).is_ok());
+        assert_eq!(index.expansion_search(), 12);
         let results = index.search(&first, 10).unwrap();
         println!("{:?}", results);
         assert_eq!(results.keys.len(), 2);

@@ -36,6 +36,11 @@ class NativeIndex {
     size_t get_f32(key_t key, rust::Slice<float> vector) const;
     size_t get_f64(key_t key, rust::Slice<double> vector) const;
 
+    size_t expansion_add() const;
+    size_t expansion_search() const;
+    void change_expansion_add(size_t n) const;
+    void change_expansion_search(size_t n) const;
+
     size_t count(key_t key) const;
     size_t remove(key_t key) const;
     size_t rename(key_t from, key_t to) const;

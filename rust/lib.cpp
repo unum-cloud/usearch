@@ -42,6 +42,11 @@ size_t NativeIndex::get_f32(key_t key, rust::Slice<float> vec) const { if (vec.s
 size_t NativeIndex::get_f64(key_t key, rust::Slice<double> vec) const { if (vec.size() % dimensions()) throw std::invalid_argument("Vector length must be a multiple of index dimensionality"); return index_->get(key, vec.data(), vec.size() / dimensions()); }
 // clang-format on
 
+size_t NativeIndex::expansion_add() const { return index_->expansion_add(); }
+size_t NativeIndex::expansion_search() const { return index_->expansion_search(); }
+void NativeIndex::change_expansion_add(size_t n) const { index_->change_expansion_add(n); }
+void NativeIndex::change_expansion_search(size_t n) const { index_->change_expansion_search(n); }
+
 size_t NativeIndex::remove(key_t key) const {
     labeling_result_t result = index_->remove(key);
     result.error.raise();
