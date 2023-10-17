@@ -181,22 +181,22 @@ impl Index {
         }
     }
 
-    /// get expansion_add for index create to add
+    /// Retrieves the expansion value used during index creation.
     pub fn expansion_add(self: &Index) -> usize {
         self.inner.expansion_add()
     }
 
-    /// get expansion_search for index search
+    /// Retrieves the expansion value used during search.
     pub fn expansion_search(self: &Index) -> usize {
         self.inner.expansion_search()
     }
 
-    /// change expansion_add for index create to add
+    /// Updates the expansion value used during index creation. Rarely used.
     pub fn change_expansion_add(self: &Index, n: usize) -> Result<(), cxx::Exception> {
         self.inner.change_expansion_add(n)
     }
 
-    /// change expansion_search for index search
+    /// Updates the expansion value used during search operations.
     pub fn change_expansion_search(self: &Index, n: usize) -> Result<(), cxx::Exception> {
         self.inner.change_expansion_search(n)
     }
@@ -229,10 +229,10 @@ impl Index {
         T::add(self, key, vector)
     }
 
-    /// Extracts one or more vectors matching specified key.
-    /// The `vector` slice must be a multiple number of dimensions in the index.
-    /// After the execution return the number `X` of vectors found.
-    /// The first `X * dimensions` elements of the vector slice will be filled.
+    /// Extracts one or more vectors matching the specified key.
+    /// The `vector` slice must be a multiple of the number of dimensions in the index.
+    /// After the execution, return the number `X` of vectors found.
+    /// The vector slice's first `X * dimensions` elements will be filled.
     ///
     /// If you are a novice user, consider `export`.
     ///
@@ -249,7 +249,7 @@ impl Index {
     }
 
     /// Extracts one or more vectors matching specified key into supplied resizable vector.
-    /// The `vector` is resized to a multiple number of dimensions in the index.
+    /// The `vector` is resized to a multiple of the number of dimensions in the index.
     ///
     /// # Arguments
     ///
