@@ -432,6 +432,7 @@ pub fn new_index(options: &ffi::IndexOptions) -> Result<Index, cxx::Exception> {
 mod tests {
     use crate::ffi::IndexOptions;
     use crate::ffi::MetricKind;
+    use crate::ffi::ScalarKind;
 
     use crate::new_index;
     use crate::Index;
@@ -464,6 +465,40 @@ mod tests {
         let mut found = [0.0 as f32; 6]; // This isn't a multiple of the index's dimensions.
         let result = index.get(1, &mut found);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_add_remove_vector() {
+        let mut options = IndexOptions::default();
+        options.dimensions = 4;
+        options.metric = MetricKind::IP;
+        options.quantization = ScalarKind::F64;
+        options.connectivity = 10;
+        options.expansion_add = 128;
+        options.expansion_search = 3;
+        let index = Index::new(&options).unwrap();
+        assert!(index.reserve(10).is_ok());
+        assert_eq!(index.capacity(), 10);
+
+        let first: [f32; 4] = [0.2, 0.1, 0.2, 0.1];
+        let second: [f32; 4] = [0.3, 0.2, 0.4, 0.0];
+        assert!(index.add(483367403120493160, &first).is_ok());
+        let mut found_slice = [0.0 as f32; 4];
+        assert_eq!(index.get(483367403120493160, &mut found_slice).unwrap(), 1);
+        assert!(index.remove(483367403120493160).is_ok());
+        assert!(index.add(483367403120558696, &second).is_ok());
+        let mut found_slice = [0.0 as f32; 4];
+        assert_eq!(index.get(483367403120558696, &mut found_slice).unwrap(), 1);
+        assert!(index.remove(483367403120558696).is_ok());
+        assert!(index.add(483367403120624232, &second).is_ok());
+        let mut found_slice = [0.0 as f32; 4];
+        assert_eq!(index.get(483367403120624232, &mut found_slice).unwrap(), 1);
+        assert!(index.remove(483367403120624232).is_ok());
+        assert!(index.add(483367403120624233, &second).is_ok());
+        let mut found_slice = [0.0 as f32; 4];
+        assert_eq!(index.get(483367403120624233, &mut found_slice).unwrap(), 1);
+        assert!(index.remove(483367403120624233).is_ok());
+        assert_eq!(index.size(), 0);
     }
 
     #[test]
