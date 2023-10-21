@@ -260,7 +260,7 @@ Napi::Value CompiledIndex::Count(Napi::CallbackInfo const& ctx) {
     return result;
 }
 
-Napi::Value compiledExactSearch(Napi::CallbackInfo const& ctx) {
+Napi::Value exactSearch(Napi::CallbackInfo const& ctx) {
     Napi::Env env = ctx.Env();
 
     // Extracting parameters directly without additional type checks.
@@ -281,6 +281,7 @@ Napi::Value compiledExactSearch(Napi::CallbackInfo const& ctx) {
     }
 
     metric_punned_t metric(dimensions, metric_kind, quantization);
+    executor_default_t executor;
     exact_search_t search;
 
     // Performing the exact search.
@@ -293,7 +294,7 @@ Napi::Value compiledExactSearch(Napi::CallbackInfo const& ctx) {
         reinterpret_cast<byte_t const*>(queriesBuffer.Data()), //
         queries_size,                                          //
         dimensions * bytes_per_scalar,                         //
-        wanted, metric);
+        wanted, metric, executor);
 
     if (!results)
         Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
@@ -325,7 +326,7 @@ Napi::Value compiledExactSearch(Napi::CallbackInfo const& ctx) {
 }
 
 Napi::Object InitAll(Napi::Env env, Napi::Object exports) {
-    exports.Set("compiledExactSearch", Napi::Function::New(env, compiledExactSearch));
+    exports.Set("exactSearch", Napi::Function::New(env, exactSearch));
     return CompiledIndex::Init(env, exports);
 }
 
