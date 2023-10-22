@@ -21,12 +21,25 @@
 # Check for available compilers
 AVAILABLE_GCC := $(shell command -v g++ 2> /dev/null)
 AVAILABLE_CLANG := $(shell command -v clang++ 2> /dev/null)
+AVAILABLE_MINGW64 := $(shell command -v x86_64-w64-mingw32-g++ 2> /dev/null)
+AVAILABLE_MINGW32 := $(shell command -v i686-w64-mingw32-g++ 2> /dev/null)
 
-# If g++ is available, choose it; otherwise, choose clang++ if available; else, default to g++
+# If g++ is available, choose it; otherwise, choose clang++ if available; 
+# then check for MinGW compilers; else, default to g++
 ifeq ($(AVAILABLE_GCC),)
 ifeq ($(AVAILABLE_CLANG),)
+ifeq ($(AVAILABLE_MINGW64),)
+ifeq ($(AVAILABLE_MINGW32),)
 CC ?= gcc
 CXX ?= g++
+else
+CC ?= i686-w64-mingw32-gcc
+CXX ?= i686-w64-mingw32-g++
+endif
+else
+CC ?= x86_64-w64-mingw32-gcc
+CXX ?= x86_64-w64-mingw32-g++
+endif
 else
 CC ?= clang
 CXX ?= clang++
@@ -37,14 +50,18 @@ CXX ?= g++
 endif
 
 # Depending on the compiler, set the correct C++ library
-ifneq (,$(findstring g++,$(CXX)))
+ifeq (,$(findstring g++,$(CXX)))
     CXX_LIB = -lstdc++
-else ifneq (,$(findstring clang++,$(CXX)))
+else ifeq (,$(findstring clang++,$(CXX)))
     CXX_LIB = -lc++
+else
+    # For MinGW or other compilers, defaulting to g++ library
+    CXX_LIB = -lstdc++
 endif
+CXX_LIB = -lstdc++
 
-C_FLAGS = -std=c99 -fPIC -O3 -ffast-math
-CXX_FLAGS = -std=c++11 -Wall -Wextra -Wno-conversion -Wno-unknown-pragmas -pedantic -fPIC -O3 -ffast-math
+C_FLAGS += -std=c99 -fPIC -O3 -ffast-math
+CXX_FLAGS += -std=c++11 -Wall -Wextra -Wno-conversion -Wno-unknown-pragmas -pedantic -fPIC -O3 -ffast-math
 
 # Preset USEARCH_USE_OPENMP, USEARCH_USE_SIMSIMD, USEARCH_USE_NATIVE_F16, if not provided
 USEARCH_USE_SIMSIMD ?= 1

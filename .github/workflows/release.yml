@@ -144,16 +144,16 @@ jobs:
         
     - name: Build library
       run: |
-        cd c
-        make libusearch_c.dll    
-        tar -cvf usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar .\libusearch_c.dll .\usearch.h
+        cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_BENCH_CPP=0 -B ./build_release
+        cmake --build ./build_release --config Release
+        tar -cvf usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar .\build_release\libusearch_c.dll .\c\usearch.h
 
     - name: Upload archive
       uses: xresloader/upload-to-github-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        file: "c/usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar"
+        file: "usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar"
         update_latest_release: true
 
 
@@ -183,16 +183,16 @@ jobs:
 
     - name: Build library
       run: |
-        cd c
-        make libusearch_c.so -target ${{ matrix.arch }}-apple-macos11
-        zip -r usearch_macOS_${{ matrix.arch }}_${{ steps.version.outputs.version }}.zip libusearch_c.so usearch.h 
+        cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_BENCH_CPP=0 -B ./build_release
+        cmake --build ./build_release --config Release        
+        zip -r usearch_macOS_${{ matrix.arch }}_${{ steps.version.outputs.version }}.zip build_release/libusearch_c.so c/usearch.h 
 
     - name: Upload archive
       uses: xresloader/upload-to-github-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        file: "c/*.zip"
+        file: "*.zip"
         update_latest_release: true
 
 
