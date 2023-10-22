@@ -918,7 +918,7 @@ PYBIND11_MODULE(compiled, m) {
     m.def(
         "hardware_acceleration",
         [](scalar_kind_t scalar_kind, std::size_t dimensions, metric_kind_t metric_kind) -> py::str {
-            return isa_name(metric_t(dimensions, metric_kind, scalar_kind).isa_kind());
+            return metric_t(dimensions, metric_kind, scalar_kind).isa_name();
         },
         py::kw_only(),                                //
         py::arg("dtype") = scalar_kind_t::f32_k,      //
@@ -1087,9 +1087,8 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("metric_pointer") = 0                                           //
     );
 
-    i.def_property_readonly("hardware_acceleration", [](dense_index_py_t const& index) -> py::str {
-        return isa_name(index.metric().isa_kind());
-    });
+    i.def_property_readonly("hardware_acceleration",
+                            [](dense_index_py_t const& index) -> py::str { return index.metric().isa_name(); });
 
     i.def("contains_one", &dense_index_py_t::contains);
     i.def("count_one", &dense_index_py_t::count);

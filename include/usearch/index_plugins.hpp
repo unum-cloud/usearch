@@ -186,20 +186,6 @@ inline bool str_equals(char const* begin, std::size_t len, char const* other_beg
     return len == other_len && std::strncmp(begin, other_begin, len) == 0;
 }
 
-inline char const* isa_name(simsimd_capability_t isa_kind) noexcept {
-    switch (isa_kind) {
-    case simsimd_cap_serial_k: return "serial";
-    case simsimd_cap_arm_neon_k: return "neon";
-    case simsimd_cap_arm_sve_k: return "sve";
-    case simsimd_cap_x86_avx2_k: return "avx2";
-    case simsimd_cap_x86_avx512_k: return "avx512";
-    case simsimd_cap_x86_avx2fp16_k: return "avx2+f16";
-    case simsimd_cap_x86_avx512fp16_k: return "avx512+f16";
-    case simsimd_cap_x86_avx512vpopcntdq_k: return "avx512+popcnt";
-    default: return "unknown";
-    }
-}
-
 inline std::size_t bits_per_scalar(scalar_kind_t scalar_kind) noexcept {
     switch (scalar_kind) {
     case scalar_kind_t::f64_k: return 64;
@@ -1283,7 +1269,10 @@ class metric_punned_t {
     std::size_t dimensions_ = 0;
     metric_kind_t metric_kind_ = metric_kind_t::unknown_k;
     scalar_kind_t scalar_kind_ = scalar_kind_t::unknown_k;
+
+#if USEARCH_USE_SIMSIMD
     simsimd_capability_t isa_kind_ = simsimd_cap_serial_k;
+#endif
 
   public:
     /**
@@ -1303,7 +1292,7 @@ class metric_punned_t {
         metric_kind_t metric_kind = metric_kind_t::l2sq_k, //
         scalar_kind_t scalar_kind = scalar_kind_t::f32_k) noexcept
         : raw_arg3_(dimensions), raw_arg4_(dimensions), dimensions_(dimensions), metric_kind_(metric_kind),
-          scalar_kind_(scalar_kind), isa_kind_(simsimd_cap_serial_k) {
+          scalar_kind_(scalar_kind) {
 
 #if USEARCH_USE_SIMSIMD
         if (configure_with_simsimd())
@@ -1328,7 +1317,23 @@ class metric_punned_t {
     inline std::size_t dimensions() const noexcept { return dimensions_; }
     inline metric_kind_t metric_kind() const noexcept { return metric_kind_; }
     inline scalar_kind_t scalar_kind() const noexcept { return scalar_kind_; }
-    inline simsimd_capability_t isa_kind() const noexcept { return isa_kind_; }
+
+    inline char const* isa_name() const noexcept {
+#if USEARCH_USE_SIMSIMD
+        switch (isa_kind_) {
+        case simsimd_cap_serial_k: return "serial";
+        case simsimd_cap_arm_neon_k: return "neon";
+        case simsimd_cap_arm_sve_k: return "sve";
+        case simsimd_cap_x86_avx2_k: return "avx2";
+        case simsimd_cap_x86_avx512_k: return "avx512";
+        case simsimd_cap_x86_avx2fp16_k: return "avx2+f16";
+        case simsimd_cap_x86_avx512fp16_k: return "avx512+f16";
+        case simsimd_cap_x86_avx512vpopcntdq_k: return "avx512+popcnt";
+        default: return "unknown";
+        }
+#endif
+        return "serial";
+    }
 
     inline std::size_t bytes_per_vector() const noexcept {
         return divide_round_up<CHAR_BIT>(dimensions_ * bits_per_scalar(scalar_kind_));
