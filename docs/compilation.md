@@ -23,6 +23,7 @@ cmake -B ./build_release \
     -DUSEARCH_BUILD_BENCH_CPP=1 \
     -DUSEARCH_BUILD_LIB_C=1 \
     -DUSEARCH_BUILD_TEST_C=1 \
+    -DUSEARCH_USE_NATIVE_F16=1 \
     && \
     make -C ./build_release -j
 ```
@@ -156,18 +157,6 @@ swift test -v
 
 There are a few ways to compile the C 99 USearch SDK.
 Using the Makefile, specifying the targets you need:
-
-```sh
-make -C ./c libusearch_c.so
-```
-
-With options:
-
-```sh
-make USEARCH_USE_OPENMP=1 USEARCH_USE_SIMSIMD=1 -C ./c libusearch_c.so
-```
-
-Using CMake:
 
 ```sh
 cmake -B ./build_release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
