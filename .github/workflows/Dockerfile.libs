@@ -7,15 +7,13 @@ ARG docker_ip
 ARG user_pass
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends cmake g++-12 libc++-dev build-essential libjemalloc-dev golang openssh-client sshpass && \
+    apt-get install -y --no-install-recommends cmake g++-12 gcc-12 libc++-dev libc++abi-dev build-essential libjemalloc-dev openssh-client sshpass && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
-RUN cd golang && make -C ../c libusearch_c.so && \
-    mv ../c/libusearch_c.so libusearch_static_c.a && cp ../c/usearch.h usearch.h && \
-    go test -v && cd ..
+RUN cd c && make libusearch_c.so
 
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         export arch="amd"; \
@@ -28,7 +26,7 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
     mkdir -p usearch_linux_"$arch"_"$version"/usr/local/lib && \
     mkdir usearch_linux_"$arch"_"$version"/usr/local/include && \
     cp c/usearch.h usearch_linux_"$arch"_"$version"/usr/local/include/ && \
-    cp golang/libusearch_static_c.a usearch_linux_"$arch"_"$version"/usr/local/lib/ && \
-    echo "Package: usearch\nVersion: $version\nMaintainer: Ashot Vardanian\nArchitecture: "$arch"\nDescription: Faster & Smaller Single-File Search Engine for Vectors & Texts" > usearch_linux_"$arch"_"$version"/DEBIAN/control && \
+    cp c/libusearch_so.a usearch_linux_"$arch"_"$version"/usr/local/lib/ && \
+    echo "Package: usearch\nVersion: $version\nMaintainer: Ash Vardanian\nArchitecture: "$arch"\nDescription: Faster & Smaller Single-File Search Engine for Vectors & Texts" > usearch_linux_"$arch"_"$version"/DEBIAN/control && \
     dpkg-deb --build usearch_linux_"$arch"_"$version" && \
     sshpass -p "$user_pass" scp -o StrictHostKeyChecking=no usearch_linux_"$arch"_"$version".deb "$user_name"@"$docker_ip":/home/$user_name/work/usearch/usearch/

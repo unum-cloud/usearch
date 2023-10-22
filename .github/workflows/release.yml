@@ -130,7 +130,7 @@ jobs:
       with:
         go-version: '^1.19.0'
 
-    - name: Setup Mingw
+    - name: Setup MinGW
       uses: egor-tensin/setup-mingw@v2
       with:
         platform: ${{ matrix.arch }}
@@ -144,17 +144,8 @@ jobs:
         
     - name: Build library
       run: |
-        cd c/ && g++ -std=c++11 -o libusearch_c.dll -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared && cd ..
-        cp c/libusearch_c.dll golang/libusearch_c.dll && cp c/usearch.h golang/usearch.h
-    
-    - name: Golang test
-      run: |
-        cd golang/ && go test -v
-      if: ${{ matrix.arch == 'x64' }}
-
-    - name: Compress library
-      run: |
-        cd golang/
+        cd c
+        make libusearch_c.dll    
         tar -cvf usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar .\libusearch_c.dll .\usearch.h
 
     - name: Upload archive
@@ -162,7 +153,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        file: "golang/usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar"
+        file: "c/usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar"
         update_latest_release: true
 
 
@@ -192,19 +183,8 @@ jobs:
 
     - name: Build library
       run: |
-        cd c/ && clang++ -std=c++11 -o libusearch_c.so -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared -target ${{ matrix.arch }}-apple-macos11 && cd ..
-        cp c/usearch.h golang/
-        cp c/libusearch_c.so golang/libusearch_c.so
-
-    - name: Golang test
-      run: |
-        cd golang/
-        go test -v
-      if: ${{ matrix.arch == 'x86_64' }}
-
-    - name: Compress library
-      run: |
-        cd golang/
+        cd c
+        make libusearch_c.so -target ${{ matrix.arch }}-apple-macos11
         zip -r usearch_macOS_${{ matrix.arch }}_${{ steps.version.outputs.version }}.zip libusearch_c.so usearch.h 
 
     - name: Upload archive
@@ -212,7 +192,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        file: "golang/*.zip"
+        file: "c/*.zip"
         update_latest_release: true
 
 

@@ -177,7 +177,6 @@ cmake --build ./build_release --config Release -j
 .\build_release\test_c.exe
 ```
 
-
 ## GoLang
 
 GoLang bindings are based on C.
@@ -193,7 +192,6 @@ cd golang && go test -v ; cd ..
 ```sh
 brew install --cask wolfram-engine
 ```
-
 
 ## Docker
 

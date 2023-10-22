@@ -277,7 +277,10 @@ jobs:
       run: |
         sudo apt update && 
         sudo apt install -y build-essential
-          
+      
+      # This is the weirdest step. GoLang runtime is having a hard time working with our static library...
+      # And doesn't want to link to the dynamic library... So instead, we rename the `.so` file `.a`, and
+      # it works just fine.
     - name: Build library
       run: |
         cd golang/

@@ -48,7 +48,7 @@ USEARCH_HEADER_INCLUDES = -I.  -I ../include/  -I ../fp16/include/ -I ../simsimd
 
 # Default target
 .PHONY: all
-all: libusearch_static_c.a libusearch_c.so libusearch_c.dylib test_c
+all: libusearch_static_c.a libusearch_c.so libusearch_c.dylib libusearch_c.dll test_c
 
 # Builds the static library.
 libusearch_static_c.a: $(OBJS)
@@ -61,6 +61,10 @@ libusearch_c.so: $(OBJS)
 # Builds the shared library for macOS.
 libusearch_c.dylib: $(OBJS)
 	$(CXX) $(CXX_FLAGS) $(USEARCH_HEADER_INCLUDES) -dynamiclib $^ -lc++ -o $@
+
+# Builds the shared library for Windows.
+libusearch_c.dll: $(OBJS)
+	$(CXX) $(CXX_FLAGS) $(USEARCH_HEADER_INCLUDES) -shared $^ -lc++ -o $@
 
 # Compiles the test executable.
 test_c: test.c libusearch_static_c.a
