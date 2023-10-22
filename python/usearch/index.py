@@ -873,7 +873,7 @@ class Index:
 
     @property
     def metric_kind(self) -> Union[MetricKind, CompiledMetric]:
-        return self._metric_jit if self._metric_jit.kind else self._metric_kind
+        return self._metric_jit.kind if self._metric_jit else self._metric_kind
 
     @property
     def metric(self) -> Union[MetricKind, CompiledMetric]:
