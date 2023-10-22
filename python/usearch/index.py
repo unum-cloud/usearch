@@ -573,7 +573,7 @@ class Index:
         )
 
         self.path = path
-        if path is not None:
+        if path is not None and os.path.exists(path):
             if view:
                 self.view(path)
             else:
@@ -873,7 +873,7 @@ class Index:
 
     @property
     def metric_kind(self) -> Union[MetricKind, CompiledMetric]:
-        return self._metric_jit if self._metric_jit.kind else self._metric_kind
+        return self._metric_jit.kind if self._metric_jit else self._metric_kind
 
     @property
     def metric(self) -> Union[MetricKind, CompiledMetric]:
@@ -965,7 +965,11 @@ class Index:
         if isinstance(path_or_buffer, bytes):
             self._compiled.load_index_from_buffer(path_or_buffer, progress)
         else:
-            self._compiled.load_index_from_path(os.fspath(path_or_buffer), progress)
+            path_or_buffer = os.fspath(path_or_buffer)
+            if os.path.exists(path_or_buffer):
+                self._compiled.load_index_from_path(path_or_buffer, progress)
+            else:
+                raise RuntimeError("Missing file!")
 
     def view(
         self,

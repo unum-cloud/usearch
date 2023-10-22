@@ -8,6 +8,7 @@ using index_t = index_dense_t;
 using add_result_t = typename index_t::add_result_t;
 using search_result_t = typename index_t::search_result_t;
 using labeling_result_t = typename index_t::labeling_result_t;
+using vector_key_t = typename index_dense_t::vector_key_t;
 
 template <typename scalar_at> Matches search_(index_dense_t& index, scalar_at const* vec, size_t count) {
     Matches matches;
@@ -26,20 +27,20 @@ template <typename scalar_at> Matches search_(index_dense_t& index, scalar_at co
 NativeIndex::NativeIndex(std::unique_ptr<index_t> index) : index_(std::move(index)) {}
 
 // clang-format off
-void NativeIndex::add_i8(key_t key, rust::Slice<int8_t const> vec) const { index_->add(key, vec.data()).error.raise(); }
-void NativeIndex::add_f16(key_t key, rust::Slice<uint16_t const> vec) const { index_->add(key, (f16_t const*)vec.data()).error.raise(); }
-void NativeIndex::add_f32(key_t key, rust::Slice<float const> vec) const { index_->add(key, vec.data()).error.raise(); }
-void NativeIndex::add_f64(key_t key, rust::Slice<double const> vec) const { index_->add(key, vec.data()).error.raise(); }
+void NativeIndex::add_i8(vector_key_t key, rust::Slice<int8_t const> vec) const { index_->add(key, vec.data()).error.raise(); }
+void NativeIndex::add_f16(vector_key_t key, rust::Slice<uint16_t const> vec) const { index_->add(key, (f16_t const*)vec.data()).error.raise(); }
+void NativeIndex::add_f32(vector_key_t key, rust::Slice<float const> vec) const { index_->add(key, vec.data()).error.raise(); }
+void NativeIndex::add_f64(vector_key_t key, rust::Slice<double const> vec) const { index_->add(key, vec.data()).error.raise(); }
 
 Matches NativeIndex::search_i8(rust::Slice<int8_t const> vec, size_t count) const { return search_(*index_, vec.data(), count); }
 Matches NativeIndex::search_f16(rust::Slice<uint16_t const> vec, size_t count) const { return search_(*index_, (f16_t const*)vec.data(), count); }
 Matches NativeIndex::search_f32(rust::Slice<float const> vec, size_t count) const { return search_(*index_, vec.data(), count); }
 Matches NativeIndex::search_f64(rust::Slice<double const> vec, size_t count) const { return search_(*index_, vec.data(), count); }
 
-size_t NativeIndex::get_i8(key_t key, rust::Slice<int8_t> vec) const { if (vec.size() % dimensions()) throw std::invalid_argument("Vector length must be a multiple of index dimensionality"); return index_->get(key, vec.data(), vec.size() / dimensions()); }
-size_t NativeIndex::get_f16(key_t key, rust::Slice<uint16_t> vec) const { if (vec.size() % dimensions()) throw std::invalid_argument("Vector length must be a multiple of index dimensionality"); return index_->get(key, (f16_t*)vec.data(), vec.size() / dimensions()); }
-size_t NativeIndex::get_f32(key_t key, rust::Slice<float> vec) const { if (vec.size() % dimensions()) throw std::invalid_argument("Vector length must be a multiple of index dimensionality"); return index_->get(key, vec.data(), vec.size() / dimensions()); }
-size_t NativeIndex::get_f64(key_t key, rust::Slice<double> vec) const { if (vec.size() % dimensions()) throw std::invalid_argument("Vector length must be a multiple of index dimensionality"); return index_->get(key, vec.data(), vec.size() / dimensions()); }
+size_t NativeIndex::get_i8(vector_key_t key, rust::Slice<int8_t> vec) const { if (vec.size() % dimensions()) throw std::invalid_argument("Vector length must be a multiple of index dimensionality"); return index_->get(key, vec.data(), vec.size() / dimensions()); }
+size_t NativeIndex::get_f16(vector_key_t key, rust::Slice<uint16_t> vec) const { if (vec.size() % dimensions()) throw std::invalid_argument("Vector length must be a multiple of index dimensionality"); return index_->get(key, (f16_t*)vec.data(), vec.size() / dimensions()); }
+size_t NativeIndex::get_f32(vector_key_t key, rust::Slice<float> vec) const { if (vec.size() % dimensions()) throw std::invalid_argument("Vector length must be a multiple of index dimensionality"); return index_->get(key, vec.data(), vec.size() / dimensions()); }
+size_t NativeIndex::get_f64(vector_key_t key, rust::Slice<double> vec) const { if (vec.size() % dimensions()) throw std::invalid_argument("Vector length must be a multiple of index dimensionality"); return index_->get(key, vec.data(), vec.size() / dimensions()); }
 // clang-format on
 
 size_t NativeIndex::expansion_add() const { return index_->expansion_add(); }
@@ -47,20 +48,20 @@ size_t NativeIndex::expansion_search() const { return index_->expansion_search()
 void NativeIndex::change_expansion_add(size_t n) const { index_->change_expansion_add(n); }
 void NativeIndex::change_expansion_search(size_t n) const { index_->change_expansion_search(n); }
 
-size_t NativeIndex::remove(key_t key) const {
+size_t NativeIndex::remove(vector_key_t key) const {
     labeling_result_t result = index_->remove(key);
     result.error.raise();
     return result.completed;
 }
 
-size_t NativeIndex::rename(key_t from, key_t to) const {
+size_t NativeIndex::rename(vector_key_t from, vector_key_t to) const {
     labeling_result_t result = index_->rename(from, to);
     result.error.raise();
     return result.completed;
 }
 
-size_t NativeIndex::count(key_t key) const { return index_->count(key); }
-bool NativeIndex::contains(key_t key) const { return index_->contains(key); }
+size_t NativeIndex::count(vector_key_t key) const { return index_->count(key); }
+bool NativeIndex::contains(vector_key_t key) const { return index_->contains(key); }
 
 void NativeIndex::reserve(size_t capacity) const { index_->reserve(capacity); }
 

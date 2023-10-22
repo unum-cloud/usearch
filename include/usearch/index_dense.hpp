@@ -301,13 +301,14 @@ inline index_dense_metadata_result_t index_dense_metadata_from_buffer(memory_map
 template <typename key_at = default_key_t, typename compressed_slot_at = default_slot_t> //
 class index_dense_gt {
   public:
-    using key_t = key_at;
+    using vector_key_t = key_at;
+    using key_t = vector_key_t;
     using compressed_slot_t = compressed_slot_at;
     using distance_t = distance_punned_t;
     using metric_t = metric_punned_t;
 
-    using member_ref_t = member_ref_gt<key_t>;
-    using member_cref_t = member_cref_gt<key_t>;
+    using member_ref_t = member_ref_gt<vector_key_t>;
+    using member_cref_t = member_cref_gt<vector_key_t>;
 
     using head_t = index_dense_head_t;
     using head_buffer_t = index_dense_head_buffer_t;
@@ -323,7 +324,7 @@ class index_dense_gt {
     using cast_t = std::function<bool(byte_t const*, std::size_t, byte_t*)>;
     /// @brief Punned index.
     using index_t = index_gt<                 //
-        distance_t, key_t, compressed_slot_t, //
+        distance_t, vector_key_t, compressed_slot_t, //
         dynamic_allocator_t, tape_allocator_t>;
     using index_allocator_t = aligned_allocator_gt<index_t, 64>;
 
@@ -395,23 +396,23 @@ class index_dense_gt {
     using unique_lock_t = std::unique_lock<shared_mutex_t>;
 
     struct key_and_slot_t {
-        key_t key;
+        vector_key_t key;
         compressed_slot_t slot;
 
         bool any_slot() const { return slot == default_free_value<compressed_slot_t>(); }
-        static key_and_slot_t any_slot(key_t key) { return {key, default_free_value<compressed_slot_t>()}; }
+        static key_and_slot_t any_slot(vector_key_t key) { return {key, default_free_value<compressed_slot_t>()}; }
     };
 
     struct lookup_key_hash_t {
         using is_transparent = void;
-        std::size_t operator()(key_and_slot_t const& k) const noexcept { return std::hash<key_t>{}(k.key); }
-        std::size_t operator()(key_t const& k) const noexcept { return std::hash<key_t>{}(k); }
+        std::size_t operator()(key_and_slot_t const& k) const noexcept { return std::hash<vector_key_t>{}(k.key); }
+        std::size_t operator()(vector_key_t const& k) const noexcept { return std::hash<vector_key_t>{}(k); }
     };
 
     struct lookup_key_same_t {
         using is_transparent = void;
-        bool operator()(key_and_slot_t const& a, key_t const& b) const noexcept { return a.key == b; }
-        bool operator()(key_t const& a, key_and_slot_t const& b) const noexcept { return a == b.key; }
+        bool operator()(key_and_slot_t const& a, vector_key_t const& b) const noexcept { return a.key == b; }
+        bool operator()(vector_key_t const& a, key_and_slot_t const& b) const noexcept { return a == b.key; }
         bool operator()(key_and_slot_t const& a, key_and_slot_t const& b) const noexcept { return a.key == b.key; }
     };
 
@@ -428,7 +429,7 @@ class index_dense_gt {
     mutable std::mutex free_keys_mutex_;
 
     /// @brief A constant for the reserved key value, used to mark deleted entries.
-    key_t free_key_ = default_free_value<key_t>();
+    vector_key_t free_key_ = default_free_value<vector_key_t>();
 
   public:
     using search_result_t = typename index_t::search_result_t;
@@ -497,7 +498,7 @@ class index_dense_gt {
     static index_dense_gt make(           //
         metric_t metric,                  //
         index_dense_config_t config = {}, //
-        key_t free_key = default_free_value<key_t>()) {
+        vector_key_t free_key = default_free_value<vector_key_t>()) {
 
         scalar_kind_t scalar_kind = metric.scalar_kind();
         std::size_t hardware_threads = std::thread::hardware_concurrency();
@@ -573,7 +574,7 @@ class index_dense_gt {
     }
 
     dynamic_allocator_t const& allocator() const { return typed_->dynamic_allocator(); }
-    key_t const& free_key() const { return free_key_; }
+    vector_key_t const& free_key() const { return free_key_; }
 
     /**
      *  @brief  A relatively accurate lower bound on the amount of memory consumed by the system.
@@ -600,11 +601,11 @@ class index_dense_gt {
     };
 
     // clang-format off
-    add_result_t add(key_t key, b1x8_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_b1x8); }
-    add_result_t add(key_t key, i8_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_i8); }
-    add_result_t add(key_t key, f16_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_f16); }
-    add_result_t add(key_t key, f32_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_f32); }
-    add_result_t add(key_t key, f64_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_f64); }
+    add_result_t add(vector_key_t key, b1x8_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_b1x8); }
+    add_result_t add(vector_key_t key, i8_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_i8); }
+    add_result_t add(vector_key_t key, f16_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_f16); }
+    add_result_t add(vector_key_t key, f32_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_f32); }
+    add_result_t add(vector_key_t key, f64_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_f64); }
 
     search_result_t search(b1x8_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, thread, exact, casts_.from_b1x8); }
     search_result_t search(i8_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, thread, exact, casts_.from_i8); }
@@ -612,11 +613,11 @@ class index_dense_gt {
     search_result_t search(f32_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, thread, exact, casts_.from_f32); }
     search_result_t search(f64_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, thread, exact, casts_.from_f64); }
 
-    std::size_t get(key_t key, b1x8_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_b1x8); }
-    std::size_t get(key_t key, i8_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_i8); }
-    std::size_t get(key_t key, f16_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f16); }
-    std::size_t get(key_t key, f32_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f32); }
-    std::size_t get(key_t key, f64_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f64); }
+    std::size_t get(vector_key_t key, b1x8_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_b1x8); }
+    std::size_t get(vector_key_t key, i8_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_i8); }
+    std::size_t get(vector_key_t key, f16_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f16); }
+    std::size_t get(vector_key_t key, f32_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f32); }
+    std::size_t get(vector_key_t key, f64_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f64); }
 
     cluster_result_t cluster(b1x8_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_b1x8); }
     cluster_result_t cluster(i8_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_i8); }
@@ -624,11 +625,11 @@ class index_dense_gt {
     cluster_result_t cluster(f32_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_f32); }
     cluster_result_t cluster(f64_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_f64); }
 
-    aggregated_distances_t distance_between(key_t key, b1x8_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_b1x8); }
-    aggregated_distances_t distance_between(key_t key, i8_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_i8); }
-    aggregated_distances_t distance_between(key_t key, f16_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_f16); }
-    aggregated_distances_t distance_between(key_t key, f32_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_f32); }
-    aggregated_distances_t distance_between(key_t key, f64_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_f64); }
+    aggregated_distances_t distance_between(vector_key_t key, b1x8_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_b1x8); }
+    aggregated_distances_t distance_between(vector_key_t key, i8_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_i8); }
+    aggregated_distances_t distance_between(vector_key_t key, f16_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_f16); }
+    aggregated_distances_t distance_between(vector_key_t key, f32_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_f32); }
+    aggregated_distances_t distance_between(vector_key_t key, f64_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_f64); }
     // clang-format on
 
     /**
@@ -636,7 +637,7 @@ class index_dense_gt {
      *          If either key maps into more than one vector, will aggregate results
      *          exporting the mean, maximum, and minimum values.
      */
-    aggregated_distances_t distance_between(key_t a, key_t b, std::size_t = any_thread()) const {
+    aggregated_distances_t distance_between(vector_key_t a, vector_key_t b, std::size_t = any_thread()) const {
         shared_lock_t lock(slot_lookup_mutex_);
         aggregated_distances_t result;
         if (!multi()) {
@@ -696,7 +697,7 @@ class index_dense_gt {
     /**
      *  @brief  Identifies a node in a given `level`, that is the closest to the `key`.
      */
-    cluster_result_t cluster(key_t key, std::size_t level, std::size_t thread = any_thread()) const {
+    cluster_result_t cluster(vector_key_t key, std::size_t level, std::size_t thread = any_thread()) const {
 
         // Check if such `key` is even present.
         shared_lock_t slots_lock(slot_lookup_mutex_);
@@ -837,7 +838,7 @@ class index_dense_gt {
             // Describes types used
             head.kind_metric = metric_.metric_kind();
             head.kind_scalar = metric_.scalar_kind();
-            head.kind_key = unum::usearch::scalar_kind<key_t>();
+            head.kind_key = unum::usearch::scalar_kind<vector_key_t>();
             head.kind_compressed_slot = unum::usearch::scalar_kind<compressed_slot_t>();
 
             head.count_present = size();
@@ -926,7 +927,7 @@ class index_dense_gt {
                 return result.failed("File format may be different, please rebuild");
 
             // Check the types used
-            if (head.kind_key != unum::usearch::scalar_kind<key_t>())
+            if (head.kind_key != unum::usearch::scalar_kind<vector_key_t>())
                 return result.failed("Key type doesn't match, consider rebuilding");
             if (head.kind_compressed_slot != unum::usearch::scalar_kind<compressed_slot_t>())
                 return result.failed("Slot type doesn't match, consider rebuilding");
@@ -1010,7 +1011,7 @@ class index_dense_gt {
                 return result.failed("File format may be different, please rebuild");
 
             // Check the types used
-            if (head.kind_key != unum::usearch::scalar_kind<key_t>())
+            if (head.kind_key != unum::usearch::scalar_kind<vector_key_t>())
                 return result.failed("Key type doesn't match, consider rebuilding");
             if (head.kind_compressed_slot != unum::usearch::scalar_kind<compressed_slot_t>())
                 return result.failed("Slot type doesn't match, consider rebuilding");
@@ -1164,7 +1165,7 @@ class index_dense_gt {
      *  @brief Checks if a vector with specified key is present.
      *  @return `true` if the key is present in the index, `false` otherwise.
      */
-    bool contains(key_t key) const {
+    bool contains(vector_key_t key) const {
         shared_lock_t lock(slot_lookup_mutex_);
         return slot_lookup_.contains(key_and_slot_t::any_slot(key));
     }
@@ -1173,7 +1174,7 @@ class index_dense_gt {
      *  @brief Count the number of vectors with specified key present.
      *  @return Zero if nothing is found, a positive integer otherwise.
      */
-    std::size_t count(key_t key) const {
+    std::size_t count(vector_key_t key) const {
         shared_lock_t lock(slot_lookup_mutex_);
         return slot_lookup_.count(key_and_slot_t::any_slot(key));
     }
@@ -1197,7 +1198,7 @@ class index_dense_gt {
      *          If the key was not found in the index, `result.completed` will be `false`.
      *          If an error occurred during the removal operation, `result.error` will contain an error message.
      */
-    labeling_result_t remove(key_t key) {
+    labeling_result_t remove(vector_key_t key) {
         labeling_result_t result;
 
         unique_lock_t lookup_lock(slot_lookup_mutex_);
@@ -1250,7 +1251,7 @@ class index_dense_gt {
 
         // Remove them one-by-one
         for (auto keys_it = keys_begin; keys_it != keys_end; ++keys_it) {
-            key_t key = *keys_it;
+            vector_key_t key = *keys_it;
             auto matching_slots = slot_lookup_.equal_range(key_and_slot_t::any_slot(key));
             // A removed entry would be:
             // - present in `free_keys_`
@@ -1279,7 +1280,7 @@ class index_dense_gt {
      *          If the rename was successful, `result.completed` will be `true`.
      *          If the entry with the current key was not found, `result.completed` will be `false`.
      */
-    labeling_result_t rename(key_t from, key_t to) {
+    labeling_result_t rename(vector_key_t from, vector_key_t to) {
         labeling_result_t result;
         unique_lock_t lookup_lock(slot_lookup_mutex_);
 
@@ -1307,7 +1308,7 @@ class index_dense_gt {
      *  @param[in] offset The number of keys to skip. Useful for pagination.
      *  @param[in] limit The maximum number of keys to export, that can fit in ::keys.
      */
-    void export_keys(key_t* keys, std::size_t offset, std::size_t limit) const {
+    void export_keys(vector_key_t* keys, std::size_t offset, std::size_t limit) const {
         shared_lock_t lock(slot_lookup_mutex_);
         offset = (std::min)(offset, slot_lookup_.size());
         slot_lookup_.for_each([&](key_and_slot_t const& key_and_slot) {
@@ -1455,7 +1456,7 @@ class index_dense_gt {
         std::vector<byte_t*> new_vectors_lookup(vectors_lookup_.size());
         vectors_tape_allocator_t new_vectors_allocator;
 
-        auto track_slot_change = [&](key_t, compressed_slot_t old_slot, compressed_slot_t new_slot) {
+        auto track_slot_change = [&](vector_key_t, compressed_slot_t old_slot, compressed_slot_t new_slot) {
             byte_t* new_vector = new_vectors_allocator.allocate(metric_.bytes_per_vector());
             byte_t* old_vector = vectors_lookup_[old_slot];
             std::memcpy(new_vector, old_vector, metric_.bytes_per_vector());
@@ -1525,7 +1526,7 @@ class index_dense_gt {
         queries_iterator_at queries_begin,      //
         queries_iterator_at queries_end,        //
         index_dense_clustering_config_t config, //
-        key_t* cluster_keys,                    //
+        vector_key_t* cluster_keys,                    //
         distance_t* cluster_distances,          //
         executor_at&& executor = executor_at{}, //
         progress_at&& progress = progress_at{}) {
@@ -1548,8 +1549,8 @@ class index_dense_gt {
 
         // A structure used to track the popularity of a specific cluster
         struct cluster_t {
-            key_t centroid;
-            key_t merged_into;
+            vector_key_t centroid;
+            vector_key_t merged_into;
             std::size_t popularity;
             byte_t* vector;
         };
@@ -1658,7 +1659,7 @@ class index_dense_gt {
             std::sort(clusters.data(), clusters_end, centroid_id);
 
             executor.dynamic(queries_count, [&](std::size_t thread_idx, std::size_t query_idx) {
-                key_t& cluster_key = cluster_keys[query_idx];
+                vector_key_t& cluster_key = cluster_keys[query_idx];
                 distance_t& cluster_distance = cluster_distances[query_idx];
 
                 // Recursively trace replacements of that cluster
@@ -1715,7 +1716,7 @@ class index_dense_gt {
 
     template <typename scalar_at>
     add_result_t add_(                      //
-        key_t key, scalar_at const* vector, //
+        vector_key_t key, scalar_at const* vector, //
         std::size_t thread, bool force_vector_copy, cast_t const& cast) {
 
         if (!multi() && contains(key))
@@ -1811,7 +1812,7 @@ class index_dense_gt {
 
     template <typename scalar_at>
     aggregated_distances_t distance_between_( //
-        key_t key, scalar_at const* vector,   //
+        vector_key_t key, scalar_at const* vector,   //
         std::size_t thread, cast_t const& cast) const {
 
         // Cast the vector, if needed for compatibility with `metric_`
@@ -1881,12 +1882,12 @@ class index_dense_gt {
             if (member.key == free_key_)
                 free_keys_.push(static_cast<compressed_slot_t>(i));
             else if (config_.enable_key_lookups)
-                slot_lookup_.try_emplace(key_and_slot_t{key_t(member.key), static_cast<compressed_slot_t>(i)});
+                slot_lookup_.try_emplace(key_and_slot_t{vector_key_t(member.key), static_cast<compressed_slot_t>(i)});
         }
     }
 
     template <typename scalar_at>
-    std::size_t get_(key_t key, scalar_at* reconstructed, std::size_t vectors_limit, cast_t const& cast) const {
+    std::size_t get_(vector_key_t key, scalar_at* reconstructed, std::size_t vectors_limit, cast_t const& cast) const {
 
         if (!multi()) {
             compressed_slot_t slot;
