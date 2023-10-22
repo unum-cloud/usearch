@@ -475,7 +475,7 @@ jobs:
     - name: Execute Gradle build
       run: gradle clean build
     - name: Publish package
-      run: gradle publish
+      run: gradle publish -PsignArtifacts=false
       env:
         MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
         MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}

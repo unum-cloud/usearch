@@ -74,6 +74,16 @@ model {
             }
         }
     }
+
+    toolChains {
+        gcc(Gcc) {
+            target("linux_aarch64") {
+                cppCompiler.withArguments { args ->
+                    args << "-march=armv8-a"
+                }
+            }
+        }
+    }    
 }
 
 test {
@@ -89,13 +99,16 @@ jar {
     dependsOn("usearchSharedLibrary")
     into("usearch") {
         from("$buildDir/libs/usearch/shared/libusearch.dylib")
+        from("$buildDir/libs/usearch/shared/libusearch.dll")
         from("$buildDir/libs/usearch/shared/libusearch.so")
     }
 }
 
-signing {
-    useGpgCmd()
-    sign publishing.publications
+if (project.hasProperty('signArtifacts') && signArtifacts.toBoolean()) {
+    signing {
+        useGpgCmd()
+        sign publishing.publications
+    }
 }
 
 publishing {
@@ -105,8 +118,10 @@ publishing {
             
             artifact sourcesJar
 
-            signing {
-                sign publishing.publications.library
+            if (project.hasProperty('signArtifacts') && signArtifacts.toBoolean()) {
+                signing {
+                    sign publishing.publications.library
+                }
             }
 
             pom {
