@@ -43,8 +43,8 @@ else ifneq (,$(findstring clang++,$(CXX)))
     CXX_LIB = -lc++
 endif
 
-C_FLAGS = -std=c99 -fPIC -O3 -ffast-math
-CXX_FLAGS = -std=c++11 -Wall -Wextra -Wno-conversion -Wno-unknown-pragmas -pedantic -fPIC -O3 -ffast-math
+C_FLAGS += -std=c99 -fPIC -O3 -ffast-math
+CXX_FLAGS += -std=c++11 -Wall -Wextra -Wno-conversion -Wno-unknown-pragmas -pedantic -fPIC -O3 -ffast-math
 
 # Preset USEARCH_USE_OPENMP, USEARCH_USE_SIMSIMD, USEARCH_USE_NATIVE_F16, if not provided
 USEARCH_USE_SIMSIMD ?= 1
