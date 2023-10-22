@@ -130,16 +130,6 @@ enum class scalar_kind_t : std::uint8_t {
     i8_k,
 };
 
-enum class isa_kind_t {
-    serial_k,
-    neon_k,
-    sve_k,
-    avx2_k,
-    avx2f16_k,
-    avx512_k,
-    avx512f16_k,
-};
-
 enum class prefetching_kind_t {
     none_k,
     cpu_k,
@@ -196,16 +186,17 @@ inline bool str_equals(char const* begin, std::size_t len, char const* other_beg
     return len == other_len && std::strncmp(begin, other_begin, len) == 0;
 }
 
-inline char const* isa_name(isa_kind_t isa_kind) noexcept {
+inline char const* isa_name(simsimd_capability_t isa_kind) noexcept {
     switch (isa_kind) {
-    case isa_kind_t::serial_k: return "serial";
-    case isa_kind_t::neon_k: return "neon";
-    case isa_kind_t::sve_k: return "sve";
-    case isa_kind_t::avx2_k: return "avx2";
-    case isa_kind_t::avx512_k: return "avx512";
-    case isa_kind_t::avx2f16_k: return "avx2+f16";
-    case isa_kind_t::avx512f16_k: return "avx512+f16";
-    default: return "";
+    case simsimd_cap_serial_k: return "serial";
+    case simsimd_cap_arm_neon_k: return "neon";
+    case simsimd_cap_arm_sve_k: return "sve";
+    case simsimd_cap_x86_avx2_k: return "avx2";
+    case simsimd_cap_x86_avx512_k: return "avx512";
+    case simsimd_cap_x86_avx2fp16_k: return "avx2+f16";
+    case simsimd_cap_x86_avx512fp16_k: return "avx512+f16";
+    case simsimd_cap_x86_avx512vpopcntdq_k: return "avx512+popcnt";
+    default: return "unknown";
     }
 }
 
@@ -1282,13 +1273,8 @@ class metric_punned_t {
     using result_t = distance_punned_t;
 
   private:
-#if USEARCH_USE_SIMSIMD
-    using punned_arg_t = simsimd_size_t;
-    using punned_ptr_t = simsimd_metric_punned_t;
-#else
     using punned_arg_t = std::size_t;
     using punned_ptr_t = result_t (*)(std::size_t, std::size_t, std::size_t, std::size_t);
-#endif
 
     punned_ptr_t raw_ptr_ = nullptr;
     punned_arg_t raw_arg3_ = 0;
@@ -1297,7 +1283,7 @@ class metric_punned_t {
     std::size_t dimensions_ = 0;
     metric_kind_t metric_kind_ = metric_kind_t::unknown_k;
     scalar_kind_t scalar_kind_ = scalar_kind_t::unknown_k;
-    isa_kind_t isa_kind_ = isa_kind_t::serial_k;
+    simsimd_capability_t isa_kind_ = simsimd_cap_serial_k;
 
   public:
     /**
@@ -1317,7 +1303,7 @@ class metric_punned_t {
         metric_kind_t metric_kind = metric_kind_t::l2sq_k, //
         scalar_kind_t scalar_kind = scalar_kind_t::f32_k) noexcept
         : raw_arg3_(dimensions), raw_arg4_(dimensions), dimensions_(dimensions), metric_kind_(metric_kind),
-          scalar_kind_(scalar_kind), isa_kind_(isa_kind_t::serial_k) {
+          scalar_kind_(scalar_kind), isa_kind_(simsimd_cap_serial_k) {
 
 #if USEARCH_USE_SIMSIMD
         if (configure_with_simsimd())
@@ -1342,7 +1328,7 @@ class metric_punned_t {
     inline std::size_t dimensions() const noexcept { return dimensions_; }
     inline metric_kind_t metric_kind() const noexcept { return metric_kind_; }
     inline scalar_kind_t scalar_kind() const noexcept { return scalar_kind_; }
-    inline isa_kind_t isa_kind() const noexcept { return isa_kind_; }
+    inline simsimd_capability_t isa_kind() const noexcept { return isa_kind_; }
 
     inline std::size_t bytes_per_vector() const noexcept {
         return divide_round_up<CHAR_BIT>(dimensions_ * bits_per_scalar(scalar_kind_));
@@ -1357,7 +1343,7 @@ class metric_punned_t {
 #if USEARCH_USE_SIMSIMD
         simsimd_metric_kind_t kind = simsimd_metric_unknown_k;
         simsimd_datatype_t datatype = simsimd_datatype_unknown_k;
-        simsimd_capability_t allowed = 0xFFFFFFFF;
+        simsimd_capability_t allowed = simsimd_cap_any_k;
         switch (metric_kind_) {
         case metric_kind_t::ip_k: kind = simsimd_metric_ip_k; break;
         case metric_kind_t::cos_k: kind = simsimd_metric_cos_k; break;
@@ -1372,13 +1358,13 @@ class metric_punned_t {
         case scalar_kind_t::i8_k: datatype = simsimd_datatype_i8_k; break;
         case scalar_kind_t::b1x8_k: datatype = simsimd_datatype_b8_k; break;
         }
-        simsimd_metric_punned_t simd_metric = 0;
-        simsimd_capability_t simd_kind = 0;
-        simsimd_find_metric_punned(kind, datatype, allowed, &simd_metric, &simd_kind);
+        simsimd_metric_punned_t simd_metric = NULL;
+        simsimd_capability_t simd_kind = simsimd_cap_any_k;
+        simsimd_find_metric_punned(kind, datatype, simsimd_capabilities(), allowed, &simd_metric, &simd_kind);
         if (simd_metric == nullptr)
             return false;
 
-        raw_ptr_ = simd_metric;
+        raw_ptr_ = (punned_ptr_t)simd_metric;
         isa_kind_ = simd_kind;
         return true;
 #else
@@ -1390,64 +1376,68 @@ class metric_punned_t {
         switch (metric_kind_) {
         case metric_kind_t::ip_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::f32_k: raw_ptr_ = &equidimensional_<metric_ip_gt<f32_t>>; break;
-            case scalar_kind_t::f16_k: raw_ptr_ = &equidimensional_<metric_ip_gt<f16_t, f32_t>>; break;
-            case scalar_kind_t::i8_k: raw_ptr_ = &equidimensional_<metric_ip_gt<i8_t, f32_t>>; break;
-            case scalar_kind_t::f64_k: raw_ptr_ = &equidimensional_<metric_ip_gt<f64_t>>; break;
+            case scalar_kind_t::f32_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_ip_gt<f32_t>>; break;
+            case scalar_kind_t::f16_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_ip_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::i8_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_ip_gt<i8_t, f32_t>>; break;
+            case scalar_kind_t::f64_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_ip_gt<f64_t>>; break;
             default: raw_ptr_ = nullptr; break;
             }
             break;
         }
         case metric_kind_t::cos_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::f32_k: raw_ptr_ = &equidimensional_<metric_cos_gt<f32_t>>; break;
-            case scalar_kind_t::f16_k: raw_ptr_ = &equidimensional_<metric_cos_gt<f16_t, f32_t>>; break;
-            case scalar_kind_t::i8_k: raw_ptr_ = &equidimensional_<metric_cos_gt<i8_t, f32_t>>; break;
-            case scalar_kind_t::f64_k: raw_ptr_ = &equidimensional_<metric_cos_gt<f64_t>>; break;
+            case scalar_kind_t::f32_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_cos_gt<f32_t>>; break;
+            case scalar_kind_t::f16_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_cos_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::i8_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_cos_gt<i8_t, f32_t>>; break;
+            case scalar_kind_t::f64_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_cos_gt<f64_t>>; break;
             default: raw_ptr_ = nullptr; break;
             }
             break;
         }
         case metric_kind_t::l2sq_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::f32_k: raw_ptr_ = &equidimensional_<metric_l2sq_gt<f32_t>>; break;
-            case scalar_kind_t::f16_k: raw_ptr_ = &equidimensional_<metric_l2sq_gt<f16_t, f32_t>>; break;
-            case scalar_kind_t::i8_k: raw_ptr_ = &equidimensional_<metric_l2sq_gt<i8_t, f32_t>>; break;
-            case scalar_kind_t::f64_k: raw_ptr_ = &equidimensional_<metric_l2sq_gt<f64_t>>; break;
+            case scalar_kind_t::f32_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_l2sq_gt<f32_t>>; break;
+            case scalar_kind_t::f16_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_l2sq_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::i8_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_l2sq_gt<i8_t, f32_t>>; break;
+            case scalar_kind_t::f64_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_l2sq_gt<f64_t>>; break;
             default: raw_ptr_ = nullptr; break;
             }
             break;
         }
         case metric_kind_t::pearson_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::i8_k: raw_ptr_ = &equidimensional_<metric_pearson_gt<i8_t, f32_t>>; break;
-            case scalar_kind_t::f16_k: raw_ptr_ = &equidimensional_<metric_pearson_gt<f16_t, f32_t>>; break;
-            case scalar_kind_t::f32_k: raw_ptr_ = &equidimensional_<metric_pearson_gt<f32_t>>; break;
-            case scalar_kind_t::f64_k: raw_ptr_ = &equidimensional_<metric_pearson_gt<f64_t>>; break;
+            case scalar_kind_t::i8_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_pearson_gt<i8_t, f32_t>>; break;
+            case scalar_kind_t::f16_k:
+                raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_pearson_gt<f16_t, f32_t>>;
+                break;
+            case scalar_kind_t::f32_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_pearson_gt<f32_t>>; break;
+            case scalar_kind_t::f64_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_pearson_gt<f64_t>>; break;
             default: raw_ptr_ = nullptr; break;
             }
             break;
         }
         case metric_kind_t::haversine_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::f16_k: raw_ptr_ = &equidimensional_<metric_haversine_gt<f16_t, f32_t>>; break;
-            case scalar_kind_t::f32_k: raw_ptr_ = &equidimensional_<metric_haversine_gt<f32_t>>; break;
-            case scalar_kind_t::f64_k: raw_ptr_ = &equidimensional_<metric_haversine_gt<f64_t>>; break;
+            case scalar_kind_t::f16_k:
+                raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_haversine_gt<f16_t, f32_t>>;
+                break;
+            case scalar_kind_t::f32_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_haversine_gt<f32_t>>; break;
+            case scalar_kind_t::f64_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_haversine_gt<f64_t>>; break;
             default: raw_ptr_ = nullptr; break;
             }
             break;
         }
         case metric_kind_t::jaccard_k: // Equivalent to Tanimoto
         case metric_kind_t::tanimoto_k:
-            raw_ptr_ = &equidimensional_<metric_tanimoto_gt<b1x8_t>>,
+            raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_tanimoto_gt<b1x8_t>>,
             raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_), scalar_kind_ = scalar_kind_t::b1x8_k;
             break;
         case metric_kind_t::hamming_k:
-            raw_ptr_ = &equidimensional_<metric_hamming_gt<b1x8_t>>,
+            raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_hamming_gt<b1x8_t>>,
             raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_), scalar_kind_ = scalar_kind_t::b1x8_k;
             break;
         case metric_kind_t::sorensen_k:
-            raw_ptr_ = &equidimensional_<metric_sorensen_gt<b1x8_t>>,
+            raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_sorensen_gt<b1x8_t>>,
             raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_), scalar_kind_ = scalar_kind_t::b1x8_k;
             break;
         default: return;
