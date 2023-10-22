@@ -18,8 +18,31 @@
 #   - CXX_FLAGS                    : Flags for the C++ compiler.
 # -----------------------------------------------------------------------------
 
+# Check for available compilers
+AVAILABLE_GCC := $(shell command -v g++ 2> /dev/null)
+AVAILABLE_CLANG := $(shell command -v clang++ 2> /dev/null)
+
+# If g++ is available, choose it; otherwise, choose clang++ if available; else, default to g++
+ifeq ($(AVAILABLE_GCC),)
+ifeq ($(AVAILABLE_CLANG),)
 CC ?= gcc
 CXX ?= g++
+else
+CC ?= clang
+CXX ?= clang++
+endif
+else
+CC ?= gcc
+CXX ?= g++
+endif
+
+# Depending on the compiler, set the correct C++ library
+ifneq (,$(findstring g++,$(CXX)))
+    CXX_LIB = -lstdc++
+else ifneq (,$(findstring clang++,$(CXX)))
+    CXX_LIB = -lc++
+endif
+
 C_FLAGS = -std=c99 -fPIC -O3 -ffast-math
 CXX_FLAGS = -std=c++11 -Wall -Wextra -Wno-conversion -Wno-unknown-pragmas -pedantic -fPIC -O3 -ffast-math
 
@@ -56,15 +79,15 @@ libusearch_static_c.a: $(OBJS)
 
 # Builds the shared library for Linux.
 libusearch_c.so: $(OBJS)
-	$(CXX) $(CXX_FLAGS) $(USEARCH_HEADER_INCLUDES) -shared $^ -lc++ -o $@
+	$(CXX) $(CXX_FLAGS) $(USEARCH_HEADER_INCLUDES) -shared $^ $(CXX_LIB) -o $@
 
 # Builds the shared library for macOS.
 libusearch_c.dylib: $(OBJS)
-	$(CXX) $(CXX_FLAGS) $(USEARCH_HEADER_INCLUDES) -dynamiclib $^ -lc++ -o $@
+	$(CXX) $(CXX_FLAGS) $(USEARCH_HEADER_INCLUDES) -dynamiclib $^ $(CXX_LIB) -o $@
 
 # Builds the shared library for Windows.
 libusearch_c.dll: $(OBJS)
-	$(CXX) $(CXX_FLAGS) $(USEARCH_HEADER_INCLUDES) -shared $^ -lc++ -o $@
+	$(CXX) $(CXX_FLAGS) $(USEARCH_HEADER_INCLUDES) -shared $^ $(CXX_LIB) -o $@
 
 # Compiles the test executable.
 test_c: test.c libusearch_static_c.a
