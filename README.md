@@ -387,13 +387,13 @@ The search is based on the Haversine distance metric, but can easily be extended
 ## Citations
 
 ```txt
-@software{Vardanian_USearch_2022,
+@software{Vardanian_USearch_2023,
 doi = {10.5281/zenodo.7949416},
 author = {Vardanian, Ash},
 title = {{USearch by Unum Cloud}},
 url = {https://github.com/unum-cloud/usearch},
 version = {2.7.2},
-year = {2022},
-month = jun,
+year = {2023},
+month = oct,
 }
 ```

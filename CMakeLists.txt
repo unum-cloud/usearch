@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.1)
 project(
     usearch
-    VERSION 0.6.0
+    VERSION 2.7.2
     LANGUAGES C CXX
 )
 
