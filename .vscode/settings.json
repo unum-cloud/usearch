@@ -102,7 +102,8 @@
         "__verbose_abort": "cpp",
         "shared_mutex": "cpp",
         "ranges": "cpp",
-        "span": "cpp"
+        "span": "cpp",
+        "format": "cpp"
     },
     "cSpell.words": [
         "allclose",

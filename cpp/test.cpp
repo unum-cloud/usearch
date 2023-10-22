@@ -25,15 +25,15 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
 
     using scalar_t = scalar_at;
     using index_t = index_at;
-    using key_t = typename index_t::key_t;
+    using vector_key_t = typename index_t::vector_key_t;
     using distance_t = typename index_t::distance_t;
 
     // Generate some keys starting from end,
     // for three vectors from the dataset
-    key_t const key_max = default_free_value<key_t>() - 1;
-    key_t const key_first = key_max - 0;
-    key_t const key_second = key_max - 1;
-    key_t const key_third = key_max - 2;
+    vector_key_t const key_max = default_free_value<vector_key_t>() - 1;
+    vector_key_t const key_first = key_max - 0;
+    vector_key_t const key_second = key_max - 1;
+    vector_key_t const key_third = key_max - 2;
     scalar_t const* vector_first = vectors[0].data();
     scalar_t const* vector_second = vectors[1].data();
     scalar_t const* vector_third = vectors[2].data();
@@ -50,7 +50,7 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     index.add(key_first, vector_first, args...);
 
     // Default approximate search
-    key_t matched_keys[10] = {0};
+    vector_key_t matched_keys[10] = {0};
     distance_t matched_distances[10] = {0};
     std::size_t matched_count = index.search(vector_first, 5, args...).dump_to(matched_keys, matched_distances);
 
@@ -69,7 +69,7 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     // Validate scans
     std::size_t count = 0;
     for (auto member : index) {
-        key_t id = member.key;
+        vector_key_t id = member.key;
         expect(id <= key_first && id >= key_third);
         count++;
     }
@@ -159,10 +159,10 @@ template <typename scalar_at, typename key_at, typename slot_at> //
 void test_cosine(std::size_t collection_size, std::size_t dimensions) {
 
     using scalar_t = scalar_at;
-    using key_t = key_at;
+    using vector_key_t = key_at;
     using slot_t = slot_at;
 
-    using index_typed_t = index_gt<float, key_t, slot_t>;
+    using index_typed_t = index_gt<float, vector_key_t, slot_t>;
     using member_cref_t = typename index_typed_t::member_cref_t;
     using member_citerator_t = typename index_typed_t::member_citerator_t;
 
@@ -205,7 +205,7 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     for (bool multi : {false, true}) {
         for (std::size_t connectivity : {3, 13, 50}) {
             std::printf("- punned with connectivity %zu \n", connectivity);
-            using index_t = index_dense_gt<key_t, slot_t>;
+            using index_t = index_dense_gt<vector_key_t, slot_t>;
             metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
             index_dense_config_t config(connectivity);
             config.multi = multi;
@@ -217,10 +217,10 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
 
 template <typename key_at, typename slot_at> void test_tanimoto(std::size_t dimensions, std::size_t connectivity) {
 
-    using key_t = key_at;
+    using vector_key_t = key_at;
     using slot_t = slot_at;
 
-    using index_punned_t = index_dense_gt<key_t, slot_t>;
+    using index_punned_t = index_dense_gt<vector_key_t, slot_t>;
     std::size_t words = divide_round_up<CHAR_BIT>(dimensions);
     metric_punned_t metric(words, metric_kind_t::tanimoto_k, scalar_kind_t::b1x8_k);
     index_config_t config(connectivity);

@@ -482,22 +482,33 @@ mod tests {
 
         let first: [f32; 4] = [0.2, 0.1, 0.2, 0.1];
         let second: [f32; 4] = [0.3, 0.2, 0.4, 0.0];
-        assert!(index.add(483367403120493160, &first).is_ok());
+
+        // IDs until 18446744073709551615 are fine:
+        let id1 = 1; // 483367403120493160;
+        let id2 = 2; // 483367403120558696;
+        let id3 = 3; // 483367403120624232;
+        let id4 = 4; // 483367403120624233;
+
+        assert!(index.add(id1, &first).is_ok());
         let mut found_slice = [0.0 as f32; 4];
-        assert_eq!(index.get(483367403120493160, &mut found_slice).unwrap(), 1);
-        assert!(index.remove(483367403120493160).is_ok());
-        assert!(index.add(483367403120558696, &second).is_ok());
+        assert_eq!(index.get(id1, &mut found_slice).unwrap(), 1);
+        assert!(index.remove(id1).is_ok());
+    
+        assert!(index.add(id2, &second).is_ok());
         let mut found_slice = [0.0 as f32; 4];
-        assert_eq!(index.get(483367403120558696, &mut found_slice).unwrap(), 1);
-        assert!(index.remove(483367403120558696).is_ok());
-        assert!(index.add(483367403120624232, &second).is_ok());
+        assert_eq!(index.get(id2, &mut found_slice).unwrap(), 1);
+        assert!(index.remove(id2).is_ok());
+        
+        assert!(index.add(id3, &second).is_ok());
         let mut found_slice = [0.0 as f32; 4];
-        assert_eq!(index.get(483367403120624232, &mut found_slice).unwrap(), 1);
-        assert!(index.remove(483367403120624232).is_ok());
-        assert!(index.add(483367403120624233, &second).is_ok());
+        assert_eq!(index.get(id3, &mut found_slice).unwrap(), 1);
+        assert!(index.remove(id3).is_ok());
+                
+        assert!(index.add(id4, &second).is_ok());
         let mut found_slice = [0.0 as f32; 4];
-        assert_eq!(index.get(483367403120624233, &mut found_slice).unwrap(), 1);
-        assert!(index.remove(483367403120624233).is_ok());
+        assert_eq!(index.get(id4, &mut found_slice).unwrap(), 1);
+        assert!(index.remove(id4).is_ok());
+
         assert_eq!(index.size(), 0);
     }
 

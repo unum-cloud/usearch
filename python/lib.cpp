@@ -38,7 +38,7 @@ using py_shape_t = py::array::ShapeContainer;
 using metric_t = metric_punned_t;
 using distance_t = distance_punned_t;
 
-using dense_key_t = typename index_dense_t::key_t;
+using dense_key_t = typename index_dense_t::vector_key_t;
 using dense_add_result_t = typename index_dense_t::add_result_t;
 using dense_search_result_t = typename index_dense_t::search_result_t;
 using dense_labeling_result_t = typename index_dense_t::labeling_result_t;

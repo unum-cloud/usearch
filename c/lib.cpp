@@ -13,7 +13,7 @@ using add_result_t = typename index_dense_t::add_result_t;
 using search_result_t = typename index_dense_t::search_result_t;
 using labeling_result_t = typename index_dense_t::labeling_result_t;
 
-static_assert(std::is_same<usearch_key_t, index_dense_t::key_t>::value, "Type mismatch between C and C++");
+static_assert(std::is_same<usearch_key_t, index_dense_t::vector_key_t>::value, "Type mismatch between C and C++");
 static_assert(std::is_same<usearch_distance_t, index_dense_t::distance_t>::value, "Type mismatch between C and C++");
 
 // helper functions that are not part of the C ABI

@@ -1686,14 +1686,15 @@ template <typename distance_at = default_distance_t,              //
 class index_gt {
   public:
     using distance_t = distance_at;
-    using key_t = key_at;
+    using vector_key_t = key_at;
+    using key_t = vector_key_t;
     using compressed_slot_t = compressed_slot_at;
     using dynamic_allocator_t = dynamic_allocator_at;
     using tape_allocator_t = tape_allocator_at;
-    static_assert(sizeof(key_t) >= sizeof(compressed_slot_t), "Having tiny keys doesn't make sense.");
+    static_assert(sizeof(vector_key_t) >= sizeof(compressed_slot_t), "Having tiny keys doesn't make sense.");
 
-    using member_cref_t = member_cref_gt<key_t>;
-    using member_ref_t = member_ref_gt<key_t>;
+    using member_cref_t = member_cref_gt<vector_key_t>;
+    using member_ref_t = member_ref_gt<vector_key_t>;
 
     template <typename ref_at, typename index_at> class member_iterator_gt {
         using ref_t = ref_at;
@@ -1714,10 +1715,10 @@ class index_gt {
         using reference = ref_t;
 
         reference operator*() const noexcept { return {index_->node_at_(slot_).key(), slot_}; }
-        key_t key() const noexcept { return index_->node_at_(slot_).key(); }
+        vector_key_t key() const noexcept { return index_->node_at_(slot_).key(); }
 
         friend inline std::size_t get_slot(member_iterator_gt const& it) noexcept { return it.slot_; }
-        friend inline key_t get_key(member_iterator_gt const& it) noexcept { return it.key(); }
+        friend inline vector_key_t get_key(member_iterator_gt const& it) noexcept { return it.key(); }
 
         member_iterator_gt operator++(int) noexcept { return member_iterator_gt(index_, slot_ + 1); }
         member_iterator_gt operator--(int) noexcept { return member_iterator_gt(index_, slot_ - 1); }
@@ -1738,7 +1739,7 @@ class index_gt {
     using member_citerator_t = member_iterator_gt<member_cref_t, index_gt const>;
 
     // STL compatibility:
-    using value_type = key_t;
+    using value_type = vector_key_t;
     using allocator_type = dynamic_allocator_t;
     using size_type = std::size_t;
     using difference_type = std::ptrdiff_t;
@@ -1774,7 +1775,7 @@ class index_gt {
     /**
      *  @brief  How many bytes of memory are needed to form the "head" of the node.
      */
-    static constexpr std::size_t node_head_bytes_() { return sizeof(key_t) + sizeof(level_t); }
+    static constexpr std::size_t node_head_bytes_() { return sizeof(vector_key_t) + sizeof(level_t); }
 
     using nodes_mutexes_t = bitset_gt<dynamic_allocator_t>;
 
@@ -1800,7 +1801,7 @@ class index_gt {
     /**
      *  @brief  A loosely-structured handle for every node. One such node is created for every member.
      *          To minimize memory usage and maximize the number of entries per cache-line, it only
-     *          stores to pointers. The internal tape starts with a `key_t` @b key, then
+     *          stores to pointers. The internal tape starts with a `vector_key_t` @b key, then
      *          a `level_t` for the number of graph @b levels in which this member appears,
      *          then the { `neighbors_count_t`, `compressed_slot_t`, `compressed_slot_t` ... } sequences
      *          for @b each-level.
@@ -1818,12 +1819,12 @@ class index_gt {
         node_t(node_t const&) = default;
         node_t& operator=(node_t const&) = default;
 
-        misaligned_ref_gt<key_t const> ckey() const noexcept { return {tape_}; }
-        misaligned_ref_gt<key_t> key() const noexcept { return {tape_}; }
-        misaligned_ref_gt<level_t> level() const noexcept { return {tape_ + sizeof(key_t)}; }
+        misaligned_ref_gt<vector_key_t const> ckey() const noexcept { return {tape_}; }
+        misaligned_ref_gt<vector_key_t> key() const noexcept { return {tape_}; }
+        misaligned_ref_gt<level_t> level() const noexcept { return {tape_ + sizeof(vector_key_t)}; }
 
-        void key(key_t v) noexcept { return misaligned_store<key_t>(tape_, v); }
-        void level(level_t v) noexcept { return misaligned_store<level_t>(tape_ + sizeof(key_t), v); }
+        void key(vector_key_t v) noexcept { return misaligned_store<vector_key_t>(tape_, v); }
+        void level(level_t v) noexcept { return misaligned_store<level_t>(tape_ + sizeof(vector_key_t), v); }
     };
 
     static_assert(std::is_trivially_copy_constructible<node_t>::value, "Nodes must be light!");
@@ -2192,7 +2193,7 @@ class index_gt {
         inline match_t operator[](std::size_t i) const noexcept { return at(i); }
         inline match_t front() const noexcept { return at(0); }
         inline match_t back() const noexcept { return at(count - 1); }
-        inline bool contains(key_t key) const noexcept {
+        inline bool contains(vector_key_t key) const noexcept {
             for (std::size_t i = 0; i != count; ++i)
                 if (at(i).member.key == key)
                     return true;
@@ -2205,7 +2206,7 @@ class index_gt {
             return {member_cref_t{node.ckey(), candidate.slot}, candidate.distance};
         }
         inline std::size_t merge_into(          //
-            key_t* keys, distance_t* distances, //
+            vector_key_t* keys, distance_t* distances, //
             std::size_t old_count, std::size_t max_count) const noexcept {
 
             std::size_t merged_count = old_count;
@@ -2217,7 +2218,7 @@ class index_gt {
                     continue;
 
                 std::size_t count_worse = merged_count - offset - (max_count == merged_count);
-                std::memmove(keys + offset + 1, keys + offset, count_worse * sizeof(key_t));
+                std::memmove(keys + offset + 1, keys + offset, count_worse * sizeof(vector_key_t));
                 std::memmove(distances + offset + 1, distances + offset, count_worse * sizeof(distance_t));
                 keys[offset] = result.member.key;
                 distances[offset] = result.distance;
@@ -2225,7 +2226,7 @@ class index_gt {
             }
             return merged_count;
         }
-        inline std::size_t dump_to(key_t* keys, distance_t* distances) const noexcept {
+        inline std::size_t dump_to(vector_key_t* keys, distance_t* distances) const noexcept {
             for (std::size_t i = 0; i != count; ++i) {
                 match_t result = operator[](i);
                 keys[i] = result.member.key;
@@ -2233,7 +2234,7 @@ class index_gt {
             }
             return count;
         }
-        inline std::size_t dump_to(key_t* keys) const noexcept {
+        inline std::size_t dump_to(vector_key_t* keys) const noexcept {
             for (std::size_t i = 0; i != count; ++i) {
                 match_t result = operator[](i);
                 keys[i] = result.member.key;
@@ -2264,7 +2265,7 @@ class index_gt {
      *      It should be callable into distinctly different scenarios:
      *          - `distance_t operator() (value_at, entry_at)` - from new object to existing entries.
      *          - `distance_t operator() (entry_at, entry_at)` - between existing entries.
-     *      Where any possible `entry_at` has both two interfaces: `std::size_t slot()`, `key_t key()`.
+     *      Where any possible `entry_at` has both two interfaces: `std::size_t slot()`, `vector_key_t key()`.
      *
      *  @param[in] key External identifier/name/descriptor for the new entry.
      *  @param[in] value Content that will be compared against other entries to index.
@@ -2279,7 +2280,7 @@ class index_gt {
         typename prefetch_at = dummy_prefetch_t  //
         >
     add_result_t add(                                    //
-        key_t key, value_at&& value, metric_at&& metric, //
+        vector_key_t key, value_at&& value, metric_at&& metric, //
         index_update_config_t config = {},               //
         callback_at&& callback = callback_at{},          //
         prefetch_at&& prefetch = prefetch_at{}) usearch_noexcept_m {
@@ -2371,7 +2372,7 @@ class index_gt {
      *          - `distance_t operator() (entry_at, entry_at)` - between existing entries.
      *      For any possible `entry_at` following interfaces will work:
      *          - `std::size_t get_slot(entry_at const &)`
-     *          - `key_t get_key(entry_at const &)`
+     *          - `vector_key_t get_key(entry_at const &)`
      *
      *  @param[in] iterator Iterator pointing to an existing entry to be replaced.
      *  @param[in] key External identifier/name/descriptor for the entry.
@@ -2388,7 +2389,7 @@ class index_gt {
         >
     add_result_t update(                        //
         member_iterator_t iterator,             //
-        key_t key,                              //
+        vector_key_t key,                              //
         value_at&& value,                       //
         metric_at&& metric,                     //
         index_update_config_t config = {},      //
@@ -3142,7 +3143,7 @@ class index_gt {
         return data ? span_bytes_t{data, node_bytes} : span_bytes_t{};
     }
 
-    node_t node_make_(key_t key, level_t level) noexcept {
+    node_t node_make_(vector_key_t key, level_t level) noexcept {
         span_bytes_t node_bytes = node_malloc_(level);
         if (!node_bytes)
             return {};
@@ -3334,10 +3335,10 @@ class index_gt {
         bool operator==(candidates_iterator_t const& other) noexcept { return current_ == other.current_; }
         bool operator!=(candidates_iterator_t const& other) noexcept { return current_ != other.current_; }
 
-        key_t key() const noexcept { return index_->node_at_(slot()).key(); }
+        vector_key_t key() const noexcept { return index_->node_at_(slot()).key(); }
         compressed_slot_t slot() const noexcept { return neighbors_[current_]; }
         friend inline std::size_t get_slot(candidates_iterator_t const& it) noexcept { return it.slot(); }
-        friend inline key_t get_key(candidates_iterator_t const& it) noexcept { return it.key(); }
+        friend inline vector_key_t get_key(candidates_iterator_t const& it) noexcept { return it.key(); }
     };
 
     struct candidates_range_t {
@@ -3683,8 +3684,8 @@ static join_result_t join(               //
 
     using distance_t = typename men_at::distance_t;
     using dynamic_allocator_traits_t = typename men_at::dynamic_allocator_traits_t;
-    using man_key_t = typename men_at::key_t;
-    using woman_key_t = typename women_at::key_t;
+    using man_key_t = typename men_at::vector_key_t;
+    using woman_key_t = typename women_at::vector_key_t;
 
     // Use the `compressed_slot_t` type of the larger collection
     using compressed_slot_t = typename women_at::compressed_slot_t;

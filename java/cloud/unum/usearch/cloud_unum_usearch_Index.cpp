@@ -124,10 +124,10 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add( //
     jsize vector_dims = (*env).GetArrayLength(vector);
     float_span_t vector_span = float_span_t{vector_data, static_cast<std::size_t>(vector_dims)};
 
-    using key_t = typename index_dense_t::key_t;
+    using vector_key_t = typename index_dense_t::vector_key_t;
     using add_result_t = typename index_dense_t::add_result_t;
 
-    add_result_t result = reinterpret_cast<index_dense_t*>(c_ptr)->add(static_cast<key_t>(key), vector_span);
+    add_result_t result = reinterpret_cast<index_dense_t*>(c_ptr)->add(static_cast<vector_key_t>(key), vector_span);
     if (!result) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
@@ -152,13 +152,13 @@ JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search( //
     jsize vector_dims = (*env).GetArrayLength(vector);
     float_span_t vector_span = float_span_t{vector_data, static_cast<std::size_t>(vector_dims)};
 
-    using key_t = typename index_dense_t::key_t;
+    using vector_key_t = typename index_dense_t::vector_key_t;
     using search_result_t = typename index_dense_t::search_result_t;
 
     search_result_t result =
         reinterpret_cast<index_dense_t*>(c_ptr)->search(vector_span, static_cast<std::size_t>(wanted));
     if (result) {
-        std::size_t found = result.dump_to(reinterpret_cast<key_t*>(matches_data), NULL);
+        std::size_t found = result.dump_to(reinterpret_cast<vector_key_t*>(matches_data), NULL);
         (*env).SetIntArrayRegion(matches, 0, found, matches_data);
     } else {
         jclass jc = (*env).FindClass("java/lang/Error");
@@ -172,9 +172,9 @@ JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search( //
 }
 
 JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1remove(JNIEnv* env, jclass, jlong c_ptr, jlong key) {
-    using key_t = typename index_dense_t::key_t;
+    using vector_key_t = typename index_dense_t::vector_key_t;
     using labeling_result_t = typename index_dense_t::labeling_result_t;
-    labeling_result_t result = reinterpret_cast<index_dense_t*>(c_ptr)->remove(static_cast<key_t>(key));
+    labeling_result_t result = reinterpret_cast<index_dense_t*>(c_ptr)->remove(static_cast<vector_key_t>(key));
     if (!result) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
@@ -184,10 +184,10 @@ JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1remove(JNIEnv* env, jcla
 }
 
 JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1rename(JNIEnv* env, jclass, jlong c_ptr, jlong from, jlong to) {
-    using key_t = typename index_dense_t::key_t;
+    using vector_key_t = typename index_dense_t::vector_key_t;
     using labeling_result_t = typename index_dense_t::labeling_result_t;
     labeling_result_t result =
-        reinterpret_cast<index_dense_t*>(c_ptr)->rename(static_cast<key_t>(from), static_cast<key_t>(to));
+        reinterpret_cast<index_dense_t*>(c_ptr)->rename(static_cast<vector_key_t>(from), static_cast<vector_key_t>(to));
     if (!result) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)

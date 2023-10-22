@@ -14,7 +14,7 @@ using labeling_result_t = typename index_dense_t::labeling_result_t;
 using search_result_t = typename index_dense_t::search_result_t;
 using shared_index_dense_t = std::shared_ptr<index_dense_t>;
 
-static_assert(std::is_same<USearchKey, index_dense_t::key_t>::value, "Type mismatch between Objective-C and C++");
+static_assert(std::is_same<USearchKey, index_dense_t::vector_key_t>::value, "Type mismatch between Objective-C and C++");
 
 metric_kind_t to_native_metric(USearchMetric m) {
     switch (m) {
