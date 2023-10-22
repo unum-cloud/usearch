@@ -10,7 +10,7 @@
                 "simsimd/include",
             ],
             "dependencies": ["<!(node -p \"require('node-addon-api').gyp\")"],
-            "defines": ["USEARCH_USE_SIMSIMD=1"],
+            "defines": ["USEARCH_USE_SIMSIMD=1", "USEARCH_USE_NATIVE_F16=0"],
             "cflags": [
                 "-fexceptions",
                 "-Wno-unknown-pragmas",
