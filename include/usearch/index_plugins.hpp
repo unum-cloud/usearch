@@ -41,6 +41,8 @@
 #endif
 
 #if USEARCH_USE_SIMSIMD
+// Propagate the `f16` settings
+#define SIMSIMD_NATIVE_F16 USEARCH_USE_NATIVE_F16
 #if defined(USEARCH_DEFINED_LINUX)
 #include <simsimd/simsimd.h>
 #elif defined(USEARCH_DEFINED_APPLE)
