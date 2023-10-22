@@ -184,7 +184,7 @@ jobs:
     - name: Build library
       run: |
         cd c
-        make libusearch_c.so -target ${{ matrix.arch }}-apple-macos11
+        make libusearch_c.so CXX_FLAGS="-target ${{ matrix.arch }}-apple-macos11"
         zip -r usearch_macOS_${{ matrix.arch }}_${{ steps.version.outputs.version }}.zip libusearch_c.so usearch.h 
 
     - name: Upload archive
