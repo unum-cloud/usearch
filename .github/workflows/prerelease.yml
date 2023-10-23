@@ -82,12 +82,12 @@ jobs:
           go test -v
 
   test_ubuntu_clang:
-    name: Ubuntu (Clang 15)
+    name: Ubuntu (Clang 16)
     runs-on: ubuntu-22.04
 
     env:
-      CC: clang-15
-      CXX: clang++-15
+      CC: clang-16
+      CXX: clang++-16
 
     steps:
       - uses: actions/checkout@v3
@@ -99,7 +99,7 @@ jobs:
       - name: Build C/C++
         run: |
           sudo apt update
-          sudo apt install -y cmake build-essential libjemalloc-dev clang-15
+          sudo apt install -y cmake build-essential libjemalloc-dev clang-16
           cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DDUSEARCH_USE_OPENMP=0 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
           cmake --build build_debug --config Debug
       - name: Test C++
