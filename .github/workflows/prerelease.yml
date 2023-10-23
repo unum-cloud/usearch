@@ -113,10 +113,14 @@ jobs:
       - run: git submodule update --init --recursive
 
         # C/C++
+        # Clang 16 isn't available from default repos on Ubuntu 22.04, so we have to install it manually
       - name: Build C/C++
         run: |
           sudo apt update
-          sudo apt install -y cmake build-essential libjemalloc-dev clang-16
+          sudo apt install -y cmake build-essential libjemalloc-dev
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 16
           cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DDUSEARCH_USE_OPENMP=0 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
           cmake --build build_debug --config Debug
       - name: Test C++
