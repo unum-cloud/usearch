@@ -55,6 +55,12 @@
 #define SIMSIMD_TARGET_X86_AVX2 1
 #define SIMSIMD_TARGET_ARM_NEON 1
 #include <simsimd/simsimd.h>
+#else
+#define SIMSIMD_TARGET_X86_AVX512 0
+#define SIMSIMD_TARGET_ARM_SVE 0
+#define SIMSIMD_TARGET_X86_AVX2 0
+#define SIMSIMD_TARGET_ARM_NEON 0
+#include <simsimd/simsimd.h>
 #endif
 #endif
 
