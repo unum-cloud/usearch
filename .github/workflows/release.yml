@@ -20,7 +20,7 @@ jobs:
 
   versioning:
     name: Semantic Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v3
       with:
@@ -32,7 +32,7 @@ jobs:
   rebase:
     name: Rebase Dev. Branch
     needs: versioning
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout the latest code
         uses: actions/checkout@v3
@@ -56,7 +56,7 @@ jobs:
 
   create_linux_deb_package:
     name: Create Debian Package for ${{ matrix.arch }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: versioning
     strategy:
       matrix:
@@ -111,7 +111,7 @@ jobs:
 
   create_windows_dll_library:
     name: Create Dll Library for Windows ${{ matrix.arch }}
-    runs-on: windows-latest
+    runs-on: windows-2022
     needs: versioning
     strategy:
       matrix:
@@ -283,7 +283,7 @@ jobs:
 
   publish_checksums:
     name: Compute Assets Checksums
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [versioning, create_linux_deb_package, create_windows_dll_library, create_macos_library, deploy_docs_pages, wasm_c_library]
     steps:
     - name: Get last release ID
@@ -401,7 +401,7 @@ jobs:
   publish_javascript:
     name: Publish JavaScript
     needs: versioning
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
         with:
@@ -420,7 +420,7 @@ jobs:
   publish_rust:
     name: Publish Rust
     needs: versioning
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v3
       with:
@@ -437,7 +437,7 @@ jobs:
   publish_java:
     name: Publish Java
     needs: versioning
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
       packages: write
@@ -464,7 +464,7 @@ jobs:
   publish_swift:
     name: Publish ObjC & Swift
     needs: versioning
-    runs-on: macos-latest
+    runs-on: macos-12
     steps:
     - uses: actions/checkout@v3
       with:
@@ -480,7 +480,7 @@ jobs:
   publish_docker:
     name: Publish Docker Image
     needs: versioning
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
       packages: write
@@ -522,7 +522,7 @@ jobs:
     needs: versioning
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-22.04, macos-12, windows-2022]
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -534,12 +534,12 @@ jobs:
       - run: git submodule update --init --recursive
 
       - name: Ubuntu/macOS build usearch shared obj
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+        if: matrix.os == 'ubuntu-22.04' || matrix.os == 'macos-12'
         run: ./build_lib.sh
         working-directory: ${{ github.workspace }}/csharp/eng
 
       - name: Windows MSVC build usearch dll
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2022'
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           where cl
@@ -548,7 +548,7 @@ jobs:
         shell: cmd
 
       - name: Windows copy dll
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2022'
         run: |
           mkdir -p "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
           cp "${GITHUB_WORKSPACE}/c/libusearch_c.dll" "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
@@ -562,7 +562,7 @@ jobs:
 
   publish_csharp:
     name: Publish C#
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [build_csharp]
     env:
       SOLUTION: ${{ github.workspace }}/csharp

@@ -19,7 +19,7 @@ jobs:
   
   test_cpp_c_ubuntu_gcc:
     name: Test C++ Ubuntu (GCC)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     
     steps:
     - uses: actions/checkout@v3
@@ -34,18 +34,18 @@ jobs:
       run: |
         export CC=gcc-12
         export CXX=g++-12
-        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
-        cmake --build build --config Debug
+        cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+        cmake --build build_debug --config Debug
         
     - name: Run C++ tests
-      run: ./build/test_cpp
+      run: ./build_debug/test_cpp
     - name: Run C tests
-      run: ./build/test_c
+      run: ./build_debug/test_c
 
 
   test_cpp_c_ubuntu_clang:
     name: Test C++ Ubuntu (Clang)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     
     steps:
     - uses: actions/checkout@v3
@@ -60,18 +60,18 @@ jobs:
       run: |
         export CC=clang-15
         export CXX=clang++-15
-        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
-        cmake --build build --config Debug
+        cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+        cmake --build build_debug --config Debug
         
     - name: Run C++ tests
-      run: ./build/test_cpp
+      run: ./build_debug/test_cpp
     - name: Run C tests
-      run: ./build/test_c
+      run: ./build_debug/test_c
 
 
   test_cpp_c_macos:
     name: Test C++ MacOS
-    runs-on: macos-latest
+    runs-on: macos-12
     steps:
     - uses: actions/checkout@v3
       with:
@@ -85,16 +85,16 @@ jobs:
     
     - name: Build
       run: |
-        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1
-        cmake --build build --config Debug
+        cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1
+        cmake --build build_debug --config Debug
     - name: Run C++ tests
-      run: ./build/test_cpp
+      run: ./build_debug/test_cpp
     - name: Run C tests
-      run: ./build/test_c
+      run: ./build_debug/test_c
 
   test_cpp_c_windows:
     name: Test C++ Windows
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
     - uses: actions/checkout@v3
       with:
@@ -106,8 +106,8 @@ jobs:
         
     - name: Build
       run: |
-        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1
-        cmake --build build --config Debug
+        cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1
+        cmake --build build_debug --config Debug
     - name: Run C++ tests
       run: .\build\test_cpp
     - name: Run C tests
@@ -170,7 +170,7 @@ jobs:
 
   test_javascript:
     name: Test JavaScript
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
       - run: git submodule update --init --recursive
@@ -183,7 +183,7 @@ jobs:
 
   test_rust:
     name: Test Rust
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v3
     - run: git submodule update --init --recursive
@@ -194,7 +194,7 @@ jobs:
 
   test_java:
     name: Test Java
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v3
     - run: git submodule update --init --recursive
@@ -209,7 +209,7 @@ jobs:
 
   test_swift:
     name: Test ObjC & Swift
-    runs-on: macos-latest
+    runs-on: macos-12
     steps:
     - uses: actions/checkout@v3
     - run: git submodule update --init --recursive
@@ -224,7 +224,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-22.04, windows-2022, macos-12]
         dotnet-version: ['7.0.x']
     steps:
       - uses: actions/checkout@v3
@@ -235,7 +235,7 @@ jobs:
           dotnet-version: ${{ matrix.dotnet-version }}
 
       - name: Ubuntu/macOS build native lib
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+        if: matrix.os == 'ubuntu-22.04' || matrix.os == 'macos-12'
         run: ./build_lib.sh
         shell: bash
         working-directory: ${{ github.workspace }}/csharp/eng/
@@ -243,7 +243,7 @@ jobs:
       # Use cl.exe https://www.appveyor.com/docs/lang/cpp/#visual-studio-2017
       # There is no support for c++11
       - name: Windows MSVC build
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2022'
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           where cl
@@ -252,7 +252,7 @@ jobs:
         shell: cmd
 
       - name: Windows move dll to lib dir
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2022'
         run: |
           mkdir -p "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
           mv "${GITHUB_WORKSPACE}/c/libusearch_c.dll" "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
@@ -264,8 +264,8 @@ jobs:
         working-directory: ${{ github.workspace }}/csharp/
 
   test_golang:
-    name: Test Golang
-    runs-on: ubuntu-latest
+    name: Test GoLang
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v3
       with:
@@ -283,10 +283,10 @@ jobs:
       # it works just fine.
     - name: Build library
       run: |
-        cd golang/
-        make USEARCH_USE_OPENMP=0 USEARCH_USE_NATIVE_F16=0 USEARCH_USE_SIMSIMD=1 -C ../c libusearch_c.so
-        sudo cp ../c/libusearch_c.so /usr/local/lib/libusearch_c.a
-        sudo cp ../c/usearch.h /usr/local/include/usearch.h
+        cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 USEARCH_USE_OPENMP=0 USEARCH_USE_NATIVE_F16=0 USEARCH_USE_SIMSIMD=1
+        cmake --build build_debug --config Debug
+        sudo cp build_debug/libusearch_c.so /usr/local/lib/libusearch_c.a
+        sudo cp c/usearch.h /usr/local/include/usearch.h
 
     - name: Run test
       run: |
@@ -296,7 +296,7 @@ jobs:
 
   build_docker:
     name: Test Docker Image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v3
     - run: git submodule update --init --recursive
