@@ -16,6 +16,7 @@ bin
 build
 build_release
 build_debug
+build_artifacts
 _deps
 CMakeCache.txt
 CMakeFiles

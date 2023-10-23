@@ -7,10 +7,10 @@ on:
     branches: ["main-dev"]
 
 env:
-  BUILD_TYPE: Release
   GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
   PYTHONUTF8: 1
   PYTHON_VERSION: 3.11
+  DOTNET_VERSION: 7.0.x
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -36,12 +36,12 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev gcc-12 g++-12
-          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
-          cmake --build build_debug --config Debug
+          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+          cmake --build build_artifacts --config RelWithDebInfo
       - name: Test C++
-        run: ./build_debug/test_cpp
+        run: ./build_artifacts/test_cpp
       - name: Test C
-        run: ./build_debug/test_c
+        run: ./build_artifacts/test_c
 
         # Python
       - name: Set up Python ${{ env.PYTHON_VERSION }}
@@ -84,14 +84,27 @@ jobs:
       - name: Test Java
         run: gradle clean build
 
+        # C#
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Test .NET
+        run: |
+          mkdir -p "${{ github.workspace }}/csharp/lib/runtimes/linux-x64/native"
+          cp "${{ github.workspace }}/build_artifacts/libusearch_c.so" "${{ github.workspace }}/csharp/lib/runtimes/linux-x64/native"
+          dotnet test -c Release
+        shell: bash
+        working-directory: ${{ github.workspace }}/csharp
+
         # GoLang
         # With `LD_DEBUG=all` we detect the addresses of the libraries that are loaded
       - name: Test GoLang
         run: |
-          sudo cp build_debug/libusearch_c.so /usr/lib/libusearch_c.so
-          sudo cp c/usearch.h /usr/include/usearch.h
-          cd golang
+          sudo cp ${{ github.workspace }}/build_artifacts/libusearch_c.so /usr/lib/libusearch_c.so
+          sudo cp ${{ github.workspace }}/c/usearch.h /usr/include/usearch.h
           LD_DEBUG=all go test -v
+        working-directory: ${{ github.workspace }}/golang/
 
   test_ubuntu_clang:
     name: Ubuntu (Clang 16)
@@ -116,12 +129,12 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 16
-          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DDUSEARCH_USE_OPENMP=0 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
-          cmake --build build_debug --config Debug
+          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DDUSEARCH_USE_OPENMP=0 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+          cmake --build build_artifacts --config RelWithDebInfo
       - name: Test C++
-        run: ./build_debug/test_cpp
+        run: ./build_artifacts/test_cpp
       - name: Test C
-        run: ./build_debug/test_c
+        run: ./build_artifacts/test_c
 
         # Python
       - name: Set up Python ${{ env.PYTHON_VERSION }}
@@ -146,6 +159,19 @@ jobs:
       - name: Test JavaScript
         run: npm ci && npm test
 
+        # C#
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Test .NET
+        run: |
+          mkdir -p "${{ github.workspace }}/csharp/lib/runtimes/linux-x64/native"
+          cp "${{ github.workspace }}/build_artifacts/libusearch_c.so" "${{ github.workspace }}/csharp/lib/runtimes/linux-x64/native"
+          dotnet test -c Release
+        shell: bash
+        working-directory: ${{ github.workspace }}/csharp
+
   test_macos:
     name: MacOS
     runs-on: macos-12
@@ -161,12 +187,12 @@ jobs:
         run: |
           brew update
           brew install cmake
-          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1
-          cmake --build build_debug --config Debug
+          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1
+          cmake --build build_artifacts --config RelWithDebInfo
       - name: Test C++
-        run: ./build_debug/test_cpp
+        run: ./build_artifacts/test_cpp
       - name: Test C
-        run: ./build_debug/test_c
+        run: ./build_artifacts/test_c
 
         # Python
       - name: Set up Python ${{ env.PYTHON_VERSION }}
@@ -197,6 +223,19 @@ jobs:
       - name: Test ObjC/Swift
         run: swift test
 
+        # C#
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Test .NET
+        run: |
+          mkdir -p "${{ github.workspace }}/csharp/lib/runtimes/osx-x64/native"
+          cp "${{ github.workspace }}/build_artifacts/libusearch_c.dylib" "${{ github.workspace }}/csharp/lib/runtimes/osx-x64/native"
+          dotnet test -c Release
+        shell: bash
+        working-directory: ${{ github.workspace }}/csharp
+
   test_windows:
     name: Windows
     runs-on: windows-2022
@@ -210,12 +249,12 @@ jobs:
       - name: Build C/C++
         run: |
           choco install cmake
-          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1
-          cmake --build build_debug --config Debug
+          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1
+          cmake --build build_artifacts --config RelWithDebInfo
       - name: Test C++
-        run: .\build_debug\test_cpp
+        run: .\build_artifacts\test_cpp.exe
       - name: Test C
-        run: .\build_debug\test_c
+        run: .\build_artifacts\test_c.exe
 
         # Python
       - name: Set up Python ${{ env.PYTHON_VERSION }}
@@ -240,50 +279,18 @@ jobs:
       - name: Test JavaScript
         run: npm ci && npm test
 
-  test_csharp:
-    name: Test C#
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-22.04, windows-2022, macos-12]
-        dotnet-version: ["7.0.x"]
-    steps:
-      - uses: actions/checkout@v3
-      - run: git submodule update --init --recursive
-      - name: Setup .NET ${{ matrix.dotnet-version }}
+        # C#
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: ${{ matrix.dotnet-version }}
-
-      - name: Ubuntu/macOS build native lib
-        if: matrix.os == 'ubuntu-22.04' || matrix.os == 'macos-12'
-        run: ./build_lib.sh
-        shell: bash
-        working-directory: ${{ github.workspace }}/csharp/eng/
-
-      # Use cl.exe https://www.appveyor.com/docs/lang/cpp/#visual-studio-2017
-      # There is no support for c++11
-      - name: Windows MSVC build
-        if: matrix.os == 'windows-2022'
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Test .NET
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          where cl
-          cl /EHsc /std:c++14 /O2 /LD /Fe:libusearch_c.dll lib.cpp /I. /I../include/ /I../fp16/include/
-        working-directory: ${{ github.workspace }}/c
-        shell: cmd
-
-      - name: Windows move dll to lib dir
-        if: matrix.os == 'windows-2022'
-        run: |
-          mkdir -p "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
-          mv "${GITHUB_WORKSPACE}/c/libusearch_c.dll" "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
+          mkdir -p "${{ github.workspace }}\csharp\lib\runtimes\win-x64\native"
+          cp "${{ github.workspace }}\build_artifacts\libusearch_c.dll" "${{ github.workspace }}\csharp\lib\runtimes\win-x64\native"
+          dotnet test -c Release
         shell: bash
-
-      - name: Build and test
-        run: dotnet test -c Release
-        shell: bash
-        working-directory: ${{ github.workspace }}/csharp/
+        working-directory: ${{ github.workspace }}/csharp
 
   build_docker:
     name: Docker
