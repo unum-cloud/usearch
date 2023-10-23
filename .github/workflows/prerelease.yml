@@ -85,19 +85,13 @@ jobs:
         run: gradle clean build
 
         # GoLang
-        # This is the weirdest step. GoLang runtime is having a hard time working with our static library...
-        # And doesn't want to link to the dynamic library... So instead, we rename the `.so` file `.a`, and
-        # it works just fine.
-      - name: Install GoLang
-        run: |
-          sudo cp build_debug/libusearch_c.so /usr/local/lib/libusearch_c.a
-          sudo cp c/usearch.h /usr/local/include/usearch.h
-          echo "LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+        # With `LD_DEBUG=all` we detect the addresses of the libraries that are loaded
       - name: Test GoLang
         run: |
+          sudo cp build_debug/libusearch_c.so /usr/lib/libusearch_c.so
+          sudo cp c/usearch.h /usr/include/usearch.h
           cd golang
-          LD_DEBUG=all go test -v 2>&1 | grep libusearch_c
-          go test -v
+          LD_DEBUG=all go test -v
 
   test_ubuntu_clang:
     name: Ubuntu (Clang 16)
@@ -292,7 +286,7 @@ jobs:
         working-directory: ${{ github.workspace }}/csharp/
 
   build_docker:
-    name: Test Docker Image
+    name: Docker
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3

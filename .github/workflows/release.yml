@@ -119,7 +119,7 @@ jobs:
           ref: "main"
       - run: git submodule update --init --recursive
 
-      - name: Setup Cmake
+      - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v1.13
 
       - uses: actions/setup-go@v4
@@ -154,7 +154,7 @@ jobs:
 
   create_macos_library:
     name: Create Library for MacOS ${{ matrix.arch }}
-    runs-on: macOS-12
+    runs-on: macos-12
     needs: versioning
     strategy:
       matrix:
@@ -283,8 +283,8 @@ jobs:
         create_linux_deb_package,
         create_windows_dll_library,
         create_macos_library,
-        deploy_docs_pages,
         wasm_c_library,
+        deploy_docs_pages,
       ]
     steps:
       - name: Get last release ID
