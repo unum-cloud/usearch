@@ -66,6 +66,24 @@ jobs:
       - name: Test JavaScript
         run: npm ci && npm test
 
+        # Rust
+      - name: Test Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+        # Java
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: "11"
+          distribution: "adopt"
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2.4.2
+      - name: Test Java
+        run: gradle clean build
+
         # GoLang
         # This is the weirdest step. GoLang runtime is having a hard time working with our static library...
         # And doesn't want to link to the dynamic library... So instead, we rename the `.so` file `.a`, and
@@ -75,7 +93,6 @@ jobs:
           sudo cp build_debug/libusearch_c.so /usr/local/lib/libusearch_c.a
           sudo cp c/usearch.h /usr/local/include/usearch.h
           echo "LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
-
       - name: Test GoLang
         run: |
           cd golang
@@ -175,6 +192,12 @@ jobs:
       - name: Test JavaScript
         run: npm ci && npm test
 
+        # ObjC/Swift
+      - name: Build ObjC/Swift
+        run: swift build
+      - name: Test ObjC/Swift
+        run: swift test
+
   test_windows:
     name: Windows
     runs-on: windows-2022
@@ -217,43 +240,6 @@ jobs:
         run: npm install
       - name: Test JavaScript
         run: npm ci && npm test
-
-  test_rust:
-    name: Test Rust
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v3
-      - run: git submodule update --init --recursive
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-
-  test_java:
-    name: Test Java
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v3
-      - run: git submodule update --init --recursive
-      - uses: actions/setup-java@v3
-        with:
-          java-version: "11"
-          distribution: "adopt"
-      - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2.4.2
-      - name: Execute Gradle build
-        run: gradle clean build
-
-  test_swift:
-    name: Test ObjC & Swift
-    runs-on: macos-12
-    steps:
-      - uses: actions/checkout@v3
-      - run: git submodule update --init --recursive
-      - name: Build
-        run: swift build
-      - name: Test
-        run: swift test
 
   test_csharp:
     name: Test C#
