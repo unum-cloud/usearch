@@ -72,10 +72,9 @@ jobs:
         # it works just fine.
       - name: Install GoLang
         run: |
-          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_NATIVE_F16=0 -DUSEARCH_USE_SIMSIMD=1
-          cmake --build build_debug --config Debug
           sudo cp build_debug/libusearch_c.so /usr/local/lib/libusearch_c.a
           sudo cp c/usearch.h /usr/local/include/usearch.h
+          echo "LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
 
       - name: Test GoLang
         run: |
@@ -101,7 +100,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y cmake build-essential libjemalloc-dev clang-15
-          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DDUSEARCH_USE_OPENMP=0 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
           cmake --build build_debug --config Debug
       - name: Test C++
         run: ./build_debug/test_cpp
