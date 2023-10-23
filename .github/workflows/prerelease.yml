@@ -19,7 +19,7 @@ jobs:
   
   test_cpp_c_ubuntu_gcc:
     name: Test C++ Ubuntu (GCC)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     
     steps:
     - uses: actions/checkout@v3
@@ -45,7 +45,7 @@ jobs:
 
   test_cpp_c_ubuntu_clang:
     name: Test C++ Ubuntu (Clang)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     
     steps:
     - uses: actions/checkout@v3
@@ -71,7 +71,7 @@ jobs:
 
   test_cpp_c_macos:
     name: Test C++ MacOS
-    runs-on: macos-latest
+    runs-on: macos-12
     steps:
     - uses: actions/checkout@v3
       with:
@@ -94,7 +94,7 @@ jobs:
 
   test_cpp_c_windows:
     name: Test C++ Windows
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
     - uses: actions/checkout@v3
       with:
@@ -170,7 +170,7 @@ jobs:
 
   test_javascript:
     name: Test JavaScript
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
       - run: git submodule update --init --recursive
@@ -183,7 +183,7 @@ jobs:
 
   test_rust:
     name: Test Rust
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v3
     - run: git submodule update --init --recursive
@@ -194,7 +194,7 @@ jobs:
 
   test_java:
     name: Test Java
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v3
     - run: git submodule update --init --recursive
@@ -209,7 +209,7 @@ jobs:
 
   test_swift:
     name: Test ObjC & Swift
-    runs-on: macos-latest
+    runs-on: macos-12
     steps:
     - uses: actions/checkout@v3
     - run: git submodule update --init --recursive
@@ -224,7 +224,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-22.04, windows-2022, macos-12]
         dotnet-version: ['7.0.x']
     steps:
       - uses: actions/checkout@v3
@@ -235,7 +235,7 @@ jobs:
           dotnet-version: ${{ matrix.dotnet-version }}
 
       - name: Ubuntu/macOS build native lib
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+        if: matrix.os == 'ubuntu-22.04' || matrix.os == 'macos-12'
         run: ./build_lib.sh
         shell: bash
         working-directory: ${{ github.workspace }}/csharp/eng/
@@ -243,7 +243,7 @@ jobs:
       # Use cl.exe https://www.appveyor.com/docs/lang/cpp/#visual-studio-2017
       # There is no support for c++11
       - name: Windows MSVC build
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2022'
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           where cl
@@ -252,7 +252,7 @@ jobs:
         shell: cmd
 
       - name: Windows move dll to lib dir
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2022'
         run: |
           mkdir -p "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
           mv "${GITHUB_WORKSPACE}/c/libusearch_c.dll" "${GITHUB_WORKSPACE}/csharp/lib/runtimes/win-x64/native"
@@ -265,7 +265,7 @@ jobs:
 
   test_golang:
     name: Test Golang
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v3
       with:
@@ -296,7 +296,7 @@ jobs:
 
   build_docker:
     name: Test Docker Image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v3
     - run: git submodule update --init --recursive
