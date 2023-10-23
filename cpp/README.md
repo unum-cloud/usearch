@@ -21,7 +21,7 @@ using namespace unum::usearch;
 metric_punned_t metric(256, metric_kind_t::l2sq_k, scalar_kind_t::f32_k);
 
 // If you plan to store more than 4 Billion entries - use `index_dense_big_t`.
-// Or directly instantiate the template variant you need - `index_dense_gt<key_t, internal_id_t>`.
+// Or directly instantiate the template variant you need - `index_dense_gt<vector_key_t, internal_id_t>`.
 index_dense_t index = index_dense_t::make(metric);
 float vec[3] = {0.1, 0.3, 0.2};
 

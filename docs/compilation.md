@@ -23,6 +23,7 @@ cmake -B ./build_release \
     -DUSEARCH_BUILD_BENCH_CPP=1 \
     -DUSEARCH_BUILD_LIB_C=1 \
     -DUSEARCH_BUILD_TEST_C=1 \
+    -DUSEARCH_USE_NATIVE_F16=1 \
     && \
     make -C ./build_release -j
 ```
@@ -158,18 +159,6 @@ There are a few ways to compile the C 99 USearch SDK.
 Using the Makefile, specifying the targets you need:
 
 ```sh
-make -C ./c libusearch_c.so
-```
-
-With options:
-
-```sh
-make USEARCH_USE_OPENMP=1 USEARCH_USE_SIMSIMD=1 -C ./c libusearch_c.so
-```
-
-Using CMake:
-
-```sh
 cmake -B ./build_release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
 cmake --build ./build_release --config Release -j
 ./build_release/test_c
@@ -183,7 +172,10 @@ GoLang bindings are based on C.
 So one should first compile the C library, link it with GoLang, and only then run tests.
 
 ```sh
-make -C ./c libusearch_c.so && mv ./c/libusearch_c.so ./golang/ && cp ./c/usearch.h ./golang/
+cmake -B ./build_release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
+cmake --build ./build_release --config Release -j
+mv ./c/libusearch_c.so ./golang/
+cp ./c/usearch.h ./golang/
 cd golang && go test -v ; cd ..
 ```
 

@@ -9,7 +9,7 @@ using vector_view_t = span_gt<float>;
 
 using add_result_t = typename index_t::add_result_t;
 using search_result_t = typename index_t::search_result_t;
-using key_t = typename index_t::key_t;
+using vector_key_t = typename index_t::vector_key_t;
 
 EXTERN_C DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) { return LIBRARY_NO_ERROR; }
 EXTERN_C DLLEXPORT void WolframLibrary_uninitialize(WolframLibraryData libData) { return; }
