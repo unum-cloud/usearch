@@ -10,14 +10,15 @@ env:
   BUILD_TYPE: Release
   GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
   PYTHONUTF8: 1
+  PYTHON_VERSION: 3.11
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
 
 jobs:
-  test_cpp_c_ubuntu_gcc:
-    name: Test C++ Ubuntu (GCC)
+  test_ubuntu_gcc:
+    name: Ubuntu (GCC 12)
     runs-on: ubuntu-22.04
 
     env:
@@ -30,21 +31,59 @@ jobs:
           ref: main-dev
       - run: git submodule update --init --recursive
 
-      - name: Install dependencies
-        run: sudo apt update && sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev g++-12
-
-      - name: Build
+        # C/C++
+      - name: Build C/C++
         run: |
-          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+          sudo apt update
+          sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev gcc-12 g++-12
+          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
           cmake --build build_debug --config Debug
-
-      - name: Run C++ tests
+      - name: Test C++
         run: ./build_debug/test_cpp
-      - name: Run C tests
+      - name: Test C
         run: ./build_debug/test_c
 
-  test_cpp_c_ubuntu_clang:
-    name: Test C++ Ubuntu (Clang)
+        # Python
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Build Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest numpy
+          python -m pip install .
+      - name: Test Python
+        run: pytest python/scripts/ -s -x
+
+        # JavaScript
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - name: Build JavaScript
+        run: npm install
+      - name: Test JavaScript
+        run: npm ci && npm test
+
+        # GoLang
+        # This is the weirdest step. GoLang runtime is having a hard time working with our static library...
+        # And doesn't want to link to the dynamic library... So instead, we rename the `.so` file `.a`, and
+        # it works just fine.
+      - name: Install GoLang
+        run: |
+          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_NATIVE_F16=0 -DUSEARCH_USE_SIMSIMD=1
+          cmake --build build_debug --config Debug
+          sudo cp build_debug/libusearch_c.so /usr/local/lib/libusearch_c.a
+          sudo cp c/usearch.h /usr/local/include/usearch.h
+
+      - name: Test GoLang
+        run: |
+          cd golang
+          go test -v
+
+  test_ubuntu_clang:
+    name: Ubuntu (Clang 15)
     runs-on: ubuntu-22.04
 
     env:
@@ -57,21 +96,43 @@ jobs:
           ref: main-dev
       - run: git submodule update --init --recursive
 
-      - name: Install dependencies
-        run: sudo apt update && sudo apt install -y cmake build-essential libjemalloc-dev clang-15
-
-      - name: Build
+        # C/C++
+      - name: Build C/C++
         run: |
-          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+          sudo apt update
+          sudo apt install -y cmake build-essential libjemalloc-dev clang-15
+          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
           cmake --build build_debug --config Debug
-
-      - name: Run C++ tests
+      - name: Test C++
         run: ./build_debug/test_cpp
-      - name: Run C tests
+      - name: Test C
         run: ./build_debug/test_c
 
-  test_cpp_c_macos:
-    name: Test C++ MacOS
+        # Python
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Build Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest numpy
+          python -m pip install .
+      - name: Test Python
+        run: pytest python/scripts/ -s -x
+
+        # JavaScript
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - name: Build JavaScript
+        run: npm install
+      - name: Test JavaScript
+        run: npm ci && npm test
+
+  test_macos:
+    name: MacOS
     runs-on: macos-12
 
     steps:
@@ -80,23 +141,43 @@ jobs:
           ref: main-dev
       - run: git submodule update --init --recursive
 
-      - name: Install dependencies
+        # C/C++
+      - name: Build C/C++
         run: |
           brew update
           brew install cmake
-
-      - name: Build
-        run: |
-          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1
+          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1
           cmake --build build_debug --config Debug
-
-      - name: Run C++ tests
+      - name: Test C++
         run: ./build_debug/test_cpp
-      - name: Run C tests
+      - name: Test C
         run: ./build_debug/test_c
 
-  test_cpp_c_windows:
-    name: Test C++ Windows
+        # Python
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Build Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest numpy
+          python -m pip install .
+      - name: Test Python
+        run: pytest python/scripts/ -s -x
+
+        # JavaScript
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - name: Build JavaScript
+        run: npm install
+      - name: Test JavaScript
+        run: npm ci && npm test
+
+  test_windows:
+    name: Windows
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v3
@@ -104,82 +185,39 @@ jobs:
           ref: main-dev
       - run: git submodule update --init --recursive
 
-      - name: Install dependencies
-        run: choco install cmake
-
-      - name: Build
+        # C/C++
+      - name: Build C/C++
         run: |
-          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1
+          choco install cmake
+          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1
           cmake --build build_debug --config Debug
-
-      - name: Run C++ tests
+      - name: Test C++
         run: .\build_debug\test_cpp
-      - name: Run C tests
+      - name: Test C
         run: .\build_debug\test_c
 
-  test_python:
-    name: Test Python
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-22.04, macOS-11, windows-2022]
-        python-version: ["3.7", "3.11"]
-
-    steps:
-      - uses: actions/checkout@v3
-      - run: git submodule update --init --recursive
-      - name: Set up Python ${{ matrix.python-version }}
+        # Python
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install dependencies
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Build Python
         run: |
-          if [[ $RUNNER_OS == 'Linux' ]]; then
-            sudo apt update
-            sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev gcc-12 g++-12
-            export CC=gcc-12
-            export CXX=g++-12
-          elif [[ $RUNNER_OS == 'macOS' ]]; then
-            brew install cmake libomp jemalloc
-          elif [[ $RUNNER_OS == 'Windows' ]]; then
-            choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
-          fi
           python -m pip install --upgrade pip
           pip install pytest numpy
-
-      - name: Build
-        run: python -m pip install .
-
-      - name: Test
+          python -m pip install .
+      - name: Test Python
         run: pytest python/scripts/ -s -x
 
-  test_javascript:
-    name: Test JavaScript
-    runs-on: ubuntu-22.04
-
-    env:
-      CC: gcc-12
-      CXX: g++-12
-
-    steps:
-      - uses: actions/checkout@v3
-      - run: git submodule update --init --recursive
-      - uses: actions/setup-node@v3
+        # JavaScript
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
         with:
           node-version: 18
-
-      - name: Install dependencies
-        run: sudo apt update && sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev g++-12
-
-      - name: Build
+      - name: Build JavaScript
         run: npm install
-
-      - name: Test
-        run: |
-          npm ci
-          npm test
+      - name: Test JavaScript
+        run: npm ci && npm test
 
   test_rust:
     name: Test Rust
@@ -262,41 +300,6 @@ jobs:
         run: dotnet test -c Release
         shell: bash
         working-directory: ${{ github.workspace }}/csharp/
-
-  test_golang:
-    name: Test GoLang
-    runs-on: ubuntu-22.04
-
-    env:
-      CC: gcc-12
-      CXX: g++-12
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          persist-credentials: false
-          ref: "main-dev"
-      - run: git submodule update --init --recursive
-
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev g++-12
-
-        # This is the weirdest step. GoLang runtime is having a hard time working with our static library...
-        # And doesn't want to link to the dynamic library... So instead, we rename the `.so` file `.a`, and
-        # it works just fine.
-      - name: Build library
-        run: |
-          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=0 -DUSEARCH_USE_NATIVE_F16=0 -DUSEARCH_USE_SIMSIMD=1
-          cmake --build build_debug --config Debug
-          sudo cp build_debug/libusearch_c.so /usr/local/lib/libusearch_c.a
-          sudo cp c/usearch.h /usr/local/include/usearch.h
-
-      - name: Run test
-        run: |
-          cd golang
-          go test -v
 
   build_docker:
     name: Test Docker Image
