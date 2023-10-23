@@ -96,6 +96,7 @@ jobs:
       - name: Test GoLang
         run: |
           cd golang
+          LD_DEBUG=all go test -v 2>&1 | grep libusearch_c
           go test -v
 
   test_ubuntu_clang:
