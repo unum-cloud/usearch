@@ -8,7 +8,6 @@ SCRIPT_DIR="${SCRIPT_DIR}/"
 # Define project paths
 REPO_ROOT=`cd -P "${SCRIPT_DIR}../.." && pwd`
 REPO_ROOT="${REPO_ROOT}/"
-C_DIR="${REPO_ROOT}c/"
 CSHARP_DIR="${REPO_ROOT}csharp/"
 BUILD_ARTIFACTS_DIR="${CSHARP_DIR}lib/"
 
@@ -20,9 +19,6 @@ case "$ARCH_TYPE" in
     x86_64)
         ARCH="x64"
         ;;
-    # i386|i486|i586|i686)
-    #     ARCH="x86"
-    #     ;;
     *)
         echo "Unsupported architecture"
         exit 1
@@ -46,15 +42,9 @@ case "$(uname -s)" in
         ;;
 esac
 
-MAKE_TARGET="${LIB_FILE}"
-
-# Build the native dynamic lib
-cd "$C_DIR" || { echo "C directory not found in $C_DIR"; exit 1; }
-if [ ! -f Makefile ]; then
-  echo "Makefile not found in $C_DIR"
-  exit 1
-fi
-make "${MAKE_TARGET}"
+# Compile with CMake
+cmake -B build_release -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_OPENMP=0 -DUSEARCH_USE_NATIVE_F16=0 -DUSEARCH_USE_SIMSIMD=1
+cmake --build build_release --config Release
 if [ $? -ne 0 ]; then
   echo "Build failed!"
   exit 1
@@ -62,4 +52,4 @@ fi
 
 # Create output dir for shared lib and copy it there
 mkdir -p "$BUILD_ARTIFACTS_DIR"
-cp "${C_DIR}/${LIB_FILE}" "$BUILD_ARTIFACTS_DIR"
+cp "${REPO_ROOT}/build_release/${LIB_FILE}" "$BUILD_ARTIFACTS_DIR"

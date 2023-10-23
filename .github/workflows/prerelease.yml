@@ -16,111 +16,115 @@ permissions:
   contents: read
 
 jobs:
-  
   test_cpp_c_ubuntu_gcc:
     name: Test C++ Ubuntu (GCC)
     runs-on: ubuntu-22.04
-    
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        ref: main-dev
-    - run: git submodule update --init --recursive
-    
-    - name: Install Dependencies
-      run: sudo apt update && sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev g++-12
-        
-    - name: Build
-      run: |
-        export CC=gcc-12
-        export CXX=g++-12
-        cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
-        cmake --build build_debug --config Debug
-        
-    - name: Run C++ tests
-      run: ./build_debug/test_cpp
-    - name: Run C tests
-      run: ./build_debug/test_c
 
+    env:
+      CC: gcc-12
+      CXX: g++-12
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: main-dev
+      - run: git submodule update --init --recursive
+
+      - name: Install dependencies
+        run: sudo apt update && sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev g++-12
+
+      - name: Build
+        run: |
+          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+          cmake --build build_debug --config Debug
+
+      - name: Run C++ tests
+        run: ./build_debug/test_cpp
+      - name: Run C tests
+        run: ./build_debug/test_c
 
   test_cpp_c_ubuntu_clang:
     name: Test C++ Ubuntu (Clang)
     runs-on: ubuntu-22.04
-    
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        ref: main-dev
-    - run: git submodule update --init --recursive
-    
-    - name: Install Dependencies
-      run: sudo apt update && sudo apt install -y cmake build-essential libjemalloc-dev clang-15
-        
-    - name: Build
-      run: |
-        export CC=clang-15
-        export CXX=clang++-15
-        cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
-        cmake --build build_debug --config Debug
-        
-    - name: Run C++ tests
-      run: ./build_debug/test_cpp
-    - name: Run C tests
-      run: ./build_debug/test_c
 
+    env:
+      CC: clang-15
+      CXX: clang++-15
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: main-dev
+      - run: git submodule update --init --recursive
+
+      - name: Install dependencies
+        run: sudo apt update && sudo apt install -y cmake build-essential libjemalloc-dev clang-15
+
+      - name: Build
+        run: |
+          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+          cmake --build build_debug --config Debug
+
+      - name: Run C++ tests
+        run: ./build_debug/test_cpp
+      - name: Run C tests
+        run: ./build_debug/test_c
 
   test_cpp_c_macos:
     name: Test C++ MacOS
     runs-on: macos-12
+
     steps:
-    - uses: actions/checkout@v3
-      with:
-        ref: main-dev
-    - run: git submodule update --init --recursive
-    
-    - name: Install Dependencies
-      run: |
-        brew update
-        brew install cmake
-    
-    - name: Build
-      run: |
-        cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1
-        cmake --build build_debug --config Debug
-    - name: Run C++ tests
-      run: ./build_debug/test_cpp
-    - name: Run C tests
-      run: ./build_debug/test_c
+      - uses: actions/checkout@v3
+        with:
+          ref: main-dev
+      - run: git submodule update --init --recursive
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install cmake
+
+      - name: Build
+        run: |
+          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1
+          cmake --build build_debug --config Debug
+
+      - name: Run C++ tests
+        run: ./build_debug/test_cpp
+      - name: Run C tests
+        run: ./build_debug/test_c
 
   test_cpp_c_windows:
     name: Test C++ Windows
     runs-on: windows-2022
     steps:
-    - uses: actions/checkout@v3
-      with:
-        ref: main-dev
-    - run: git submodule update --init --recursive
-    
-    - name: Install Dependencies
-      run: choco install cmake
-        
-    - name: Build
-      run: |
-        cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1
-        cmake --build build_debug --config Debug
-    - name: Run C++ tests
-      run: .\build\test_cpp
-    - name: Run C tests
-      run: .\build\test_c
-      
-  test_python_311:
+      - uses: actions/checkout@v3
+        with:
+          ref: main-dev
+      - run: git submodule update --init --recursive
+
+      - name: Install dependencies
+        run: choco install cmake
+
+      - name: Build
+        run: |
+          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1
+          cmake --build build_debug --config Debug
+
+      - name: Run C++ tests
+        run: .\build_debug\test_cpp
+      - name: Run C tests
+        run: .\build_debug\test_c
+
+  test_python:
     name: Test Python
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, macOS-11, windows-2022]
-        python-version: ["3.11"]
+        python-version: ["3.7", "3.11"]
 
     steps:
       - uses: actions/checkout@v3
@@ -129,66 +133,62 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pytest numpy
-      - name: Build locally
-        run: python -m pip install .
-      - name: Test with PyTest
-        run: pytest python/scripts/ -s -x
-
-
-  test_python_37:
-    name: Test Python 3.7
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-22.04]
-        python-version: ["3.7"]
-
-    steps:
-      - uses: actions/checkout@v3
-      - run: git submodule update --init --recursive
-      
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
+          if [[ $RUNNER_OS == 'Linux' ]]; then
+            sudo apt update
+            sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev gcc-12 g++-12
+            export CC=gcc-12
+            export CXX=g++-12
+          elif [[ $RUNNER_OS == 'macOS' ]]; then
+            brew install cmake libomp jemalloc
+          elif [[ $RUNNER_OS == 'Windows' ]]; then
+            choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
+          fi
           python -m pip install --upgrade pip
           pip install pytest numpy
 
-      - name: Build locally
+      - name: Build
         run: python -m pip install .
-      - name: Test with PyTest
-        run: pytest python/scripts/ -s -x
 
+      - name: Test
+        run: pytest python/scripts/ -s -x
 
   test_javascript:
     name: Test JavaScript
     runs-on: ubuntu-22.04
+
+    env:
+      CC: gcc-12
+      CXX: g++-12
+
     steps:
       - uses: actions/checkout@v3
       - run: git submodule update --init --recursive
       - uses: actions/setup-node@v3
         with:
           node-version: 18
-      - run: npm install
-      - run: npm ci
-      - run: npm test
+
+      - name: Install dependencies
+        run: sudo apt update && sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev g++-12
+
+      - name: Build
+        run: npm install
+
+      - name: Test
+        run: |
+          npm ci
+          npm test
 
   test_rust:
     name: Test Rust
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v3
-    - run: git submodule update --init --recursive
-    - uses: actions-rs/toolchain@v1
-      with:
+      - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
+      - uses: actions-rs/toolchain@v1
+        with:
           toolchain: stable
           override: true
 
@@ -196,27 +196,27 @@ jobs:
     name: Test Java
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v3
-    - run: git submodule update --init --recursive
-    - uses: actions/setup-java@v3
-      with:
-        java-version: '11'
-        distribution: 'adopt'
-    - name: Setup Gradle
-      uses: gradle/gradle-build-action@v2.4.2
-    - name: Execute Gradle build
-      run: gradle clean build
+      - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
+      - uses: actions/setup-java@v3
+        with:
+          java-version: "11"
+          distribution: "adopt"
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2.4.2
+      - name: Execute Gradle build
+        run: gradle clean build
 
   test_swift:
     name: Test ObjC & Swift
     runs-on: macos-12
     steps:
-    - uses: actions/checkout@v3
-    - run: git submodule update --init --recursive
-    - name: Build
-      run: swift build
-    - name: Run tests
-      run: swift test
+      - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
 
   test_csharp:
     name: Test C#
@@ -225,7 +225,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, windows-2022, macos-12]
-        dotnet-version: ['7.0.x']
+        dotnet-version: ["7.0.x"]
     steps:
       - uses: actions/checkout@v3
       - run: git submodule update --init --recursive
@@ -266,43 +266,47 @@ jobs:
   test_golang:
     name: Test GoLang
     runs-on: ubuntu-22.04
+
+    env:
+      CC: gcc-12
+      CXX: g++-12
+
     steps:
-    - uses: actions/checkout@v3
-      with:
-        persist-credentials: false
-        ref: 'main-dev'
-    - run: git submodule update --init --recursive
+      - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: "main-dev"
+      - run: git submodule update --init --recursive
 
-    - name: Prepare environment
-      run: |
-        sudo apt update && 
-        sudo apt install -y build-essential
-      
-      # This is the weirdest step. GoLang runtime is having a hard time working with our static library...
-      # And doesn't want to link to the dynamic library... So instead, we rename the `.so` file `.a`, and
-      # it works just fine.
-    - name: Build library
-      run: |
-        cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 USEARCH_USE_OPENMP=0 USEARCH_USE_NATIVE_F16=0 USEARCH_USE_SIMSIMD=1
-        cmake --build build_debug --config Debug
-        sudo cp build_debug/libusearch_c.so /usr/local/lib/libusearch_c.a
-        sudo cp c/usearch.h /usr/local/include/usearch.h
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev g++-12
 
-    - name: Run test
-      run: |
-        cd golang
-        go test -v
-        
+        # This is the weirdest step. GoLang runtime is having a hard time working with our static library...
+        # And doesn't want to link to the dynamic library... So instead, we rename the `.so` file `.a`, and
+        # it works just fine.
+      - name: Build library
+        run: |
+          cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=0 -DUSEARCH_USE_NATIVE_F16=0 -DUSEARCH_USE_SIMSIMD=1
+          cmake --build build_debug --config Debug
+          sudo cp build_debug/libusearch_c.so /usr/local/lib/libusearch_c.a
+          sudo cp c/usearch.h /usr/local/include/usearch.h
+
+      - name: Run test
+        run: |
+          cd golang
+          go test -v
 
   build_docker:
     name: Test Docker Image
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v3
-    - run: git submodule update --init --recursive
-    - name: Build
-      uses: docker/build-push-action@v4
-      with:
-        context: .
-        load: true
-        push: false
+      - uses: actions/checkout@v3
+      - run: git submodule update --init --recursive
+      - name: Build
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          load: true
+          push: false
