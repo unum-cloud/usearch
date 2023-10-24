@@ -2138,7 +2138,8 @@ class flat_hash_multi_set_gt {
             slot_ref_t slot = slot_ref(slot_index);
             if ((~slot.header.populated & slot.mask) | (slot.header.deleted & slot.mask)) {
                 // Found an empty or deleted slot
-                populated_slots_ += populate_slot(slot, element);
+                populate_slot(slot, element);
+                ++populated_slots_;
                 return true;
             }
             // Move to the next slot

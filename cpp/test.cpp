@@ -293,7 +293,45 @@ template <typename index_at> void test_sets_moved(index_config_t const& config) 
     }
 }
 
+void test_special() {
+    index_config_t config;
+    metric_punned_t metric(4, metric_kind_t::cos_k, scalar_kind_t::f32_k);
+    index_dense_t index = index_dense_t::make(metric, config);
+
+    expect(index.reserve(10));
+    expect(index.capacity() == 10);
+
+    float first[4] = {0.2, 0.1, 0.2, 0.1};
+    float second[4] = {0.3, 0.2, 0.4, 0.0};
+
+    default_key_t id1 = 483367403120493160;
+    default_key_t id2 = 483367403120558696;
+    default_key_t id3 = 483367403120624232;
+    default_key_t id4 = 4; // Adjusted to match Rust test
+
+    expect(!!index.add(id1, first));
+    float found_slice[4] = {0.0f};
+    expect(index.get(id1, found_slice) == 1);
+    expect(!!index.remove(id1));
+
+    expect(!!index.add(id2, second));
+    expect(index.get(id2, found_slice) == 1);
+    expect(!!index.remove(id2));
+
+    expect(!!index.add(id3, second));
+    expect(index.get(id3, found_slice) == 1);
+    expect(!!index.remove(id3));
+
+    expect(!!index.add(id4, second));
+    expect(index.get(id4, found_slice) == 1);
+    expect(!!index.remove(id4));
+
+    expect(index.size() == 0);
+}
+
 int main(int, char**) {
+
+    test_special();
 
     for (std::size_t dataset_count : {10, 100})
         for (std::size_t queries_count : {1, 10})
