@@ -56,6 +56,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: versioning
     strategy:
+      fail-fast: false
       matrix:
         arch: ["linux/amd64", "linux/arm64"]
     steps:
@@ -110,6 +111,7 @@ jobs:
     runs-on: windows-2022
     needs: versioning
     strategy:
+      fail-fast: false
       matrix:
         arch: [x64, x86]
     steps:
@@ -158,6 +160,7 @@ jobs:
     runs-on: macos-12
     needs: versioning
     strategy:
+      fail-fast: false
       matrix:
         arch: [arm64, x86_64]
     steps:
@@ -196,6 +199,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: versioning
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-22.04, macOS-11, windows-2022]
     steps:
@@ -346,6 +350,7 @@ jobs:
     needs: versioning
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-22.04, macOS-11, windows-2022]
 
@@ -537,12 +542,14 @@ jobs:
     name: Build C Dependencies for C#
     needs: versioning
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-22.04, macos-12, windows-2022]
     runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash
+
     steps:
       - uses: actions/checkout@v3
         with:
@@ -554,6 +561,8 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev gcc-12 g++-12
+          export CC=gcc-12
+          export CXX=g++-12
           cmake -B build_artifacts -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_TEST_C=0 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
           cmake --build build_artifacts --config Release
           mkdir -p "${{ github.workspace }}/csharp/lib/runtimes/linux-x64/native"
@@ -577,7 +586,6 @@ jobs:
           cmake --build build_artifacts --config Release
           mkdir -p "${{ github.workspace }}\csharp\lib\runtimes\win-x64\native"
           cp "${{ github.workspace }}\build_artifacts\libusearch_c.dll" "${{ github.workspace }}\csharp\lib\runtimes\win-x64\native"
-        shell: bash
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
