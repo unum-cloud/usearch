@@ -14,6 +14,7 @@ pub mod ffi {
         Cos,
         Pearson,
         Haversine,
+        Divergence,
         Hamming,
         Tanimoto,
         Sorensen,
