@@ -1,5 +1,6 @@
 import os
 import sys
+import subprocess
 from setuptools import setup
 
 from pybind11.setup_helpers import Pybind11Extension
@@ -8,6 +9,13 @@ from pybind11.setup_helpers import Pybind11Extension
 compile_args = []
 link_args = []
 macros_args = []
+
+def is_gcc():
+    try:
+        compiler_version = subprocess.check_output(["c++", "--version"], universal_newlines=True)
+        return "gcc" in compiler_version.lower()
+    except Exception:
+        return False
 
 if sys.platform == "linux":
     compile_args.append("-std=c++17")
@@ -21,9 +29,13 @@ if sys.platform == "linux":
 
     macros_args.append(("USEARCH_USE_NATIVE_F16", "0"))
     macros_args.append(("USEARCH_USE_SIMSIMD", "1"))
-    macros_args.append(("USEARCH_USE_OPENMP", "1"))
-    compile_args.append("-fopenmp")
-    link_args.append("-lgomp")
+
+    if is_gcc():
+        macros_args.append(("USEARCH_USE_OPENMP", "1"))
+        compile_args.append("-fopenmp")
+        link_args.append("-lgomp")
+    else:
+        macros_args.append(("USEARCH_USE_OPENMP", "0"))
 
 if sys.platform == "darwin":
     # MacOS 10.15 or higher is needed for `aligned_alloc` support.

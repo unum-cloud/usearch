@@ -44,10 +44,22 @@
 // Propagate the `f16` settings
 #define SIMSIMD_NATIVE_F16 USEARCH_USE_NATIVE_F16
 #if defined(USEARCH_DEFINED_LINUX)
+#define SIMSIMD_TARGET_X86_AVX512 1
+#define SIMSIMD_TARGET_ARM_SVE 1
+#define SIMSIMD_TARGET_X86_AVX2 1
+#define SIMSIMD_TARGET_ARM_NEON 1
 #include <simsimd/simsimd.h>
 #elif defined(USEARCH_DEFINED_APPLE)
 #define SIMSIMD_TARGET_X86_AVX512 0
 #define SIMSIMD_TARGET_ARM_SVE 0
+#define SIMSIMD_TARGET_X86_AVX2 1
+#define SIMSIMD_TARGET_ARM_NEON 1
+#include <simsimd/simsimd.h>
+#else
+#define SIMSIMD_TARGET_X86_AVX512 0
+#define SIMSIMD_TARGET_ARM_SVE 0
+#define SIMSIMD_TARGET_X86_AVX2 0
+#define SIMSIMD_TARGET_ARM_NEON 0
 #include <simsimd/simsimd.h>
 #endif
 #endif
@@ -556,7 +568,9 @@ class aligned_allocator_gt {
     using size_type = std::size_t;
     using pointer = element_at*;
     using const_pointer = element_at const*;
-    template <typename other_element_at> struct rebind { using other = aligned_allocator_gt<other_element_at>; };
+    template <typename other_element_at> struct rebind {
+        using other = aligned_allocator_gt<other_element_at>;
+    };
 
     constexpr std::size_t alignment() const { return alignment_ak; }
 
@@ -1344,8 +1358,8 @@ class metric_punned_t {
     }
 
   private:
-    bool configure_with_simsimd() noexcept {
 #if USEARCH_USE_SIMSIMD
+    bool configure_with_simsimd(simsimd_capability_t simd_caps) noexcept {
         simsimd_metric_kind_t kind = simsimd_metric_unknown_k;
         simsimd_datatype_t datatype = simsimd_datatype_unknown_k;
         simsimd_capability_t allowed = simsimd_cap_any_k;
@@ -1355,6 +1369,7 @@ class metric_punned_t {
         case metric_kind_t::l2sq_k: kind = simsimd_metric_l2sq_k; break;
         case metric_kind_t::hamming_k: kind = simsimd_metric_hamming_k; break;
         case metric_kind_t::jaccard_k: kind = simsimd_metric_jaccard_k; break;
+        default: break;
         }
         switch (scalar_kind_) {
         case scalar_kind_t::f32_k: datatype = simsimd_datatype_f32_k; break;
@@ -1362,20 +1377,25 @@ class metric_punned_t {
         case scalar_kind_t::f16_k: datatype = simsimd_datatype_f16_k; break;
         case scalar_kind_t::i8_k: datatype = simsimd_datatype_i8_k; break;
         case scalar_kind_t::b1x8_k: datatype = simsimd_datatype_b8_k; break;
+        default: break;
         }
         simsimd_metric_punned_t simd_metric = NULL;
         simsimd_capability_t simd_kind = simsimd_cap_any_k;
-        simsimd_find_metric_punned(kind, datatype, simsimd_capabilities(), allowed, &simd_metric, &simd_kind);
+        simsimd_find_metric_punned(kind, datatype, simd_caps, allowed, &simd_metric, &simd_kind);
         if (simd_metric == nullptr)
             return false;
 
         raw_ptr_ = (punned_ptr_t)simd_metric;
         isa_kind_ = simd_kind;
         return true;
-#else
-        return false;
-#endif
     }
+    bool configure_with_simsimd() noexcept {
+        static simsimd_capability_t static_capabilities = simsimd_capabilities();
+        return configure_with_simsimd(static_capabilities);
+    }
+#else
+    bool configure_with_simsimd() noexcept { return false; }
+#endif
 
     void configure_with_auto_vectorized() noexcept {
         switch (metric_kind_) {
@@ -2118,7 +2138,8 @@ class flat_hash_multi_set_gt {
             slot_ref_t slot = slot_ref(slot_index);
             if ((~slot.header.populated & slot.mask) | (slot.header.deleted & slot.mask)) {
                 // Found an empty or deleted slot
-                populated_slots_ += populate_slot(slot, element);
+                populate_slot(slot, element);
+                ++populated_slots_;
                 return true;
             }
             // Move to the next slot

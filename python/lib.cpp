@@ -38,7 +38,7 @@ using py_shape_t = py::array::ShapeContainer;
 using metric_t = metric_punned_t;
 using distance_t = distance_punned_t;
 
-using dense_key_t = typename index_dense_t::key_t;
+using dense_key_t = typename index_dense_t::vector_key_t;
 using dense_add_result_t = typename index_dense_t::add_result_t;
 using dense_search_result_t = typename index_dense_t::search_result_t;
 using dense_labeling_result_t = typename index_dense_t::labeling_result_t;
@@ -48,7 +48,7 @@ using dense_clustering_result_t = typename index_dense_t::clustering_result_t;
 using progress_func_t = std::function<bool(std::size_t /*processed*/, std::size_t /*total*/)>;
 
 struct progress_t {
-    inline progress_t(nullptr_t = nullptr) : func_(&dummy_progress) {}
+    inline progress_t(std::nullptr_t = nullptr) : func_(&dummy_progress) {}
     inline progress_t(progress_func_t const& func) : func_(func ? func : &dummy_progress) {}
     inline bool operator()(std::size_t processed, std::size_t total) const noexcept { return func_(processed, total); }
 

@@ -11,9 +11,13 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+ENV CC=gcc-12
+ENV CXX=g++-12
+
 COPY . .
 
-RUN cd c && make libusearch_c.so
+RUN cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_BENCH_CPP=0 -B ./build_release
+RUN cmake --build ./build_release --config Release
 
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         export arch="amd"; \
@@ -26,7 +30,7 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
     mkdir -p usearch_linux_"$arch"_"$version"/usr/local/lib && \
     mkdir usearch_linux_"$arch"_"$version"/usr/local/include && \
     cp c/usearch.h usearch_linux_"$arch"_"$version"/usr/local/include/ && \
-    cp c/libusearch_so.a usearch_linux_"$arch"_"$version"/usr/local/lib/ && \
+    cp build_release/libusearch_c.so usearch_linux_"$arch"_"$version"/usr/local/lib/ && \
     echo "Package: usearch\nVersion: $version\nMaintainer: Ash Vardanian\nArchitecture: "$arch"\nDescription: Faster & Smaller Single-File Search Engine for Vectors & Texts" > usearch_linux_"$arch"_"$version"/DEBIAN/control && \
     dpkg-deb --build usearch_linux_"$arch"_"$version" && \
     sshpass -p "$user_pass" scp -o StrictHostKeyChecking=no usearch_linux_"$arch"_"$version".deb "$user_name"@"$docker_ip":/home/$user_name/work/usearch/usearch/
