@@ -20,7 +20,6 @@ jobs:
   test_ubuntu_gcc:
     name: Ubuntu (GCC 12)
     runs-on: ubuntu-22.04
-
     env:
       CC: gcc-12
       CXX: g++-12
@@ -109,7 +108,6 @@ jobs:
   test_ubuntu_clang:
     name: Ubuntu (Clang 16)
     runs-on: ubuntu-22.04
-
     env:
       CC: clang-16
       CXX: clang++-16
@@ -154,10 +152,11 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 18
-      - name: Build JavaScript
-        run: npm install
-      - name: Test JavaScript
-        run: npm ci && npm test
+      - name: Build and test JavaScript
+        run: |
+          npm install
+          npm ci
+          npm test
 
         # C#
       - name: Setup .NET ${{ env.DOTNET_VERSION }}

@@ -401,18 +401,34 @@ jobs:
     name: Publish JavaScript
     needs: versioning
     runs-on: ubuntu-22.04
+    env:
+      CC: gcc-12
+      CXX: g++-12
+
     steps:
       - uses: actions/checkout@v3
         with:
           ref: "main"
       - run: git submodule update --init --recursive
-      - uses: actions/setup-node@v3
+
+      - name: Update compilers
+        run: |
+          sudo apt update
+          sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev gcc-12 g++-12
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
         with:
           node-version: 18
-      - run: npm install
-      - run: npm ci
-      - run: npm test
-      - uses: JS-DevTools/npm-publish@v2
+
+      - name: Build and Test
+        run: |
+          npm install
+          npm ci
+          npm test
+
+      - name: Publish
+        uses: JS-DevTools/npm-publish@v2
         with:
           token: ${{ secrets.NPM_TOKEN }}
 
