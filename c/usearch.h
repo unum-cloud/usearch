@@ -138,6 +138,15 @@ USEARCH_EXPORT void usearch_load(usearch_index_t, char const* path, usearch_erro
 USEARCH_EXPORT void usearch_view(usearch_index_t, char const* path, usearch_error_t* error);
 
 /**
+ *  @brief Loads index metadata from a file.
+ *  @param[in] path The file path from where the index will be loaded.
+ *  @param[out] options Pointer to the `usearch_init_options_t` structure to be populated.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ *  @return A handle to the initialized USearch index, or `NULL` on failure.
+ */
+USEARCH_EXPORT void usearch_metadata(char const* path, usearch_init_options_t* options, usearch_error_t* error);
+
+/**
  *  @brief Saves the index to an in-memory buffer.
  *  @param[in] buffer The in-memory continuous buffer where the index will be saved.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
@@ -157,6 +166,16 @@ USEARCH_EXPORT void usearch_load_buffer(usearch_index_t, void const* buffer, siz
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
 USEARCH_EXPORT void usearch_view_buffer(usearch_index_t, void const* buffer, size_t length, usearch_error_t* error);
+
+/**
+ *  @brief Loads index metadata from an in-memory buffer.
+ *  @param[in] path The file path from where the index will be loaded.
+ *  @param[out] options Pointer to the `usearch_init_options_t` structure to be populated.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ *  @return A handle to the initialized USearch index, or `NULL` on failure.
+ */
+USEARCH_EXPORT void usearch_metadata_buffer(void const* buffer, size_t length, usearch_init_options_t* options,
+                                            usearch_error_t* error);
 
 USEARCH_EXPORT size_t usearch_size(usearch_index_t, usearch_error_t* error);
 USEARCH_EXPORT size_t usearch_capacity(usearch_index_t, usearch_error_t* error);
