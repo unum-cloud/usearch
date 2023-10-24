@@ -22,6 +22,7 @@ metric_kind_t metric_kind_to_cpp(usearch_metric_kind_t kind) {
     case usearch_metric_l2sq_k: return metric_kind_t::l2sq_k;
     case usearch_metric_cos_k: return metric_kind_t::cos_k;
     case usearch_metric_haversine_k: return metric_kind_t::haversine_k;
+    case usearch_metric_divergence_k: return metric_kind_t::divergence_k;
     case usearch_metric_pearson_k: return metric_kind_t::pearson_k;
     case usearch_metric_jaccard_k: return metric_kind_t::jaccard_k;
     case usearch_metric_hamming_k: return metric_kind_t::hamming_k;
@@ -37,6 +38,7 @@ usearch_metric_kind_t metric_kind_to_c(metric_kind_t kind) {
     case metric_kind_t::l2sq_k: return usearch_metric_l2sq_k;
     case metric_kind_t::cos_k: return usearch_metric_cos_k;
     case metric_kind_t::haversine_k: return usearch_metric_haversine_k;
+    case metric_kind_t::divergence_k: return usearch_metric_divergence_k;
     case metric_kind_t::pearson_k: return usearch_metric_pearson_k;
     case metric_kind_t::jaccard_k: return usearch_metric_jaccard_k;
     case metric_kind_t::hamming_k: return usearch_metric_hamming_k;

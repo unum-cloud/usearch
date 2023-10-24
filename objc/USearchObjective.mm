@@ -33,6 +33,9 @@ metric_kind_t to_native_metric(USearchMetric m) {
         case USearchMetricHaversine:
             return metric_kind_t::haversine_k;
 
+        case USearchMetricDivergence:
+            return metric_kind_t::divergence_k;
+
         case USearchMetricJaccard:
             return metric_kind_t::jaccard_k;
 

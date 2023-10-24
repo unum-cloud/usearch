@@ -43,6 +43,7 @@ USEARCH_EXPORT typedef enum usearch_metric_kind_t {
     usearch_metric_ip_k,
     usearch_metric_l2sq_k,
     usearch_metric_haversine_k,
+    usearch_metric_divergence_k,
     usearch_metric_pearson_k,
     usearch_metric_jaccard_k,
     usearch_metric_hamming_k,

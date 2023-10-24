@@ -76,6 +76,7 @@ The following distances are pre-packaged:
 - `metric_sorensen_gt<scalar_t>` for "Dice-Sorensen" coefficient for bit-strings.
 - `metric_pearson_gt<scalar_t>` for "Pearson" correlation between probability distributions.
 - `metric_haversine_gt<scalar_t>` for "Haversine" or "Great Circle" distance between coordinates used in GIS applications.
+- `metric_divergence_gt<scalar_t>` for the "Jensen Shannon" similarity between probability distributions.
 
 ## Multi-Threading
 
