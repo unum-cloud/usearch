@@ -447,6 +447,7 @@ struct args_t {
     bool metric_l2 = false;
     bool metric_cos = false;
     bool metric_haversine = false;
+    bool metric_divergence = false;
     bool metric_hamming = false;
     bool metric_tanimoto = false;
     bool metric_sorensen = false;
@@ -458,6 +459,8 @@ struct args_t {
             return metric_kind_t::cos_k;
         if (metric_haversine)
             return metric_kind_t::haversine_k;
+        if (metric_divergence)
+            return metric_kind_t::divergence_k;
         if (metric_hamming)
             return metric_kind_t::hamming_k;
         if (metric_tanimoto)

@@ -19,6 +19,7 @@ typedef NS_ENUM(NSUInteger, USearchMetric) {
     USearchMetricL2sq,
     USearchMetricPearson,
     USearchMetricHaversine,
+    USearchMetricDivergence,
     USearchMetricJaccard,
     USearchMetricHamming,
     USearchMetricTanimoto,

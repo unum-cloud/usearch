@@ -864,6 +864,7 @@ PYBIND11_MODULE(compiled, m) {
         .value("L2sq", metric_kind_t::l2sq_k)
 
         .value("Haversine", metric_kind_t::haversine_k)
+        .value("Divergence", metric_kind_t::divergence_k)
         .value("Pearson", metric_kind_t::pearson_k)
         .value("Jaccard", metric_kind_t::jaccard_k)
         .value("Hamming", metric_kind_t::hamming_k)

@@ -14,7 +14,8 @@ extern "C" {
 #endif
 
 #include <stdbool.h> // `bool`
-#include <stdint.h>  // `size_t`
+#include <stddef.h>  // `size_t`
+#include <stdint.h>  // `uint64_t`
 
 USEARCH_EXPORT typedef void* usearch_index_t;
 USEARCH_EXPORT typedef uint64_t usearch_key_t;
@@ -42,6 +43,7 @@ USEARCH_EXPORT typedef enum usearch_metric_kind_t {
     usearch_metric_ip_k,
     usearch_metric_l2sq_k,
     usearch_metric_haversine_k,
+    usearch_metric_divergence_k,
     usearch_metric_pearson_k,
     usearch_metric_jaccard_k,
     usearch_metric_hamming_k,
@@ -137,6 +139,15 @@ USEARCH_EXPORT void usearch_load(usearch_index_t, char const* path, usearch_erro
 USEARCH_EXPORT void usearch_view(usearch_index_t, char const* path, usearch_error_t* error);
 
 /**
+ *  @brief Loads index metadata from a file.
+ *  @param[in] path The file path from where the index will be loaded.
+ *  @param[out] options Pointer to the `usearch_init_options_t` structure to be populated.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ *  @return A handle to the initialized USearch index, or `NULL` on failure.
+ */
+USEARCH_EXPORT void usearch_metadata(char const* path, usearch_init_options_t* options, usearch_error_t* error);
+
+/**
  *  @brief Saves the index to an in-memory buffer.
  *  @param[in] buffer The in-memory continuous buffer where the index will be saved.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
@@ -156,6 +167,16 @@ USEARCH_EXPORT void usearch_load_buffer(usearch_index_t, void const* buffer, siz
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
 USEARCH_EXPORT void usearch_view_buffer(usearch_index_t, void const* buffer, size_t length, usearch_error_t* error);
+
+/**
+ *  @brief Loads index metadata from an in-memory buffer.
+ *  @param[in] path The file path from where the index will be loaded.
+ *  @param[out] options Pointer to the `usearch_init_options_t` structure to be populated.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ *  @return A handle to the initialized USearch index, or `NULL` on failure.
+ */
+USEARCH_EXPORT void usearch_metadata_buffer(void const* buffer, size_t length, usearch_init_options_t* options,
+                                            usearch_error_t* error);
 
 USEARCH_EXPORT size_t usearch_size(usearch_index_t, usearch_error_t* error);
 USEARCH_EXPORT size_t usearch_capacity(usearch_index_t, usearch_error_t* error);

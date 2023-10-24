@@ -112,6 +112,7 @@ enum class metric_kind_t : std::uint8_t {
     // Custom:
     pearson_k = 'p',
     haversine_k = 'h',
+    divergence_k = 'd',
 
     // Sets:
     jaccard_k = 'j',
@@ -239,6 +240,7 @@ inline char const* metric_kind_name(metric_kind_t metric) noexcept {
     case metric_kind_t::l2sq_k: return "l2sq";
     case metric_kind_t::pearson_k: return "pearson";
     case metric_kind_t::haversine_k: return "haversine";
+    case metric_kind_t::divergence_k: return "divergence";
     case metric_kind_t::jaccard_k: return "jaccard";
     case metric_kind_t::hamming_k: return "hamming";
     case metric_kind_t::tanimoto_k: return "tanimoto";
@@ -275,6 +277,8 @@ inline expected_gt<metric_kind_t> metric_from_name(char const* name, std::size_t
         parsed.result = metric_kind_t::cos_k;
     } else if (str_equals(name, len, "haversine")) {
         parsed.result = metric_kind_t::haversine_k;
+    } else if (str_equals(name, len, "divergence")) {
+        parsed.result = metric_kind_t::divergence_k;
     } else if (str_equals(name, len, "pearson")) {
         parsed.result = metric_kind_t::pearson_k;
     } else if (str_equals(name, len, "hamming")) {
@@ -284,8 +288,8 @@ inline expected_gt<metric_kind_t> metric_from_name(char const* name, std::size_t
     } else if (str_equals(name, len, "sorensen")) {
         parsed.result = metric_kind_t::sorensen_k;
     } else
-        parsed.failed(
-            "Unknown distance, choose: l2sq, ip, cos, haversine, jaccard, pearson, hamming, tanimoto, sorensen");
+        parsed.failed("Unknown distance, choose: l2sq, ip, cos, haversine, divergence, jaccard, pearson, hamming, "
+                      "tanimoto, sorensen");
     return parsed;
 }
 
@@ -1180,6 +1184,32 @@ template <typename scalar_at = float, typename result_at = float> struct metric_
     }
 };
 
+/**
+ *  @brief  Measures Jensen-Shannon Divergence between two probability distributions.
+ */
+template <typename scalar_at = float, typename result_at = float> struct metric_divergence_gt {
+    using scalar_t = scalar_at;
+    using result_t = result_at;
+
+    inline result_t operator()(scalar_t const* p, scalar_t const* q, std::size_t dim) const noexcept {
+        result_t kld_pm{}, kld_qm{};
+        scalar_t epsilon = std::numeric_limits<scalar_t>::epsilon();
+#if USEARCH_USE_OPENMP
+#pragma omp simd reduction(+ : kld_pm, kld_qm)
+#elif defined(USEARCH_DEFINED_CLANG)
+#pragma clang loop vectorize(enable)
+#elif defined(USEARCH_DEFINED_GCC)
+#pragma GCC ivdep
+#endif
+        for (std::size_t i = 0; i != dim; ++i) {
+            result_t mi = result_t(p[i] + q[i]) / 2 + epsilon;
+            kld_pm += p[i] * std::log((p[i] + epsilon) / mi);
+            kld_qm += q[i] * std::log((q[i] + epsilon) / mi);
+        }
+        return (kld_pm + kld_qm) / 2;
+    }
+};
+
 struct cos_i8_t {
     using scalar_t = i8_t;
     using result_t = f32_t;
@@ -1448,6 +1478,17 @@ class metric_punned_t {
                 break;
             case scalar_kind_t::f32_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_haversine_gt<f32_t>>; break;
             case scalar_kind_t::f64_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_haversine_gt<f64_t>>; break;
+            default: raw_ptr_ = nullptr; break;
+            }
+            break;
+        }
+        case metric_kind_t::divergence_k: {
+            switch (scalar_kind_) {
+            case scalar_kind_t::f16_k:
+                raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_divergence_gt<f16_t, f32_t>>;
+                break;
+            case scalar_kind_t::f32_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_divergence_gt<f32_t>>; break;
+            case scalar_kind_t::f64_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_divergence_gt<f64_t>>; break;
             default: raw_ptr_ = nullptr; break;
             }
             break;

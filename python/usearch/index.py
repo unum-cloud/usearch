@@ -151,6 +151,7 @@ def _normalize_metric(metric) -> MetricKind:
             "l2sq": MetricKind.L2sq,
             "l2_sq": MetricKind.L2sq,
             "haversine": MetricKind.Haversine,
+            "divergence": MetricKind.Divergence,
             "pearson": MetricKind.Pearson,
             "hamming": MetricKind.Hamming,
             "tanimoto": MetricKind.Tanimoto,

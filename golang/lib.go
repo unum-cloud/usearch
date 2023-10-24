@@ -21,6 +21,7 @@ const (
 	Cosine
 	L2sq
 	Haversine
+	Divergence
 	Pearson
 	Hamming
 	Tanimoto
@@ -37,6 +38,8 @@ func (m Metric) String() string {
 		return "cos"
 	case Haversine:
 		return "haversine"
+	case Divergence:
+		return "divergence"
 	case Pearson:
 		return "pearson"
 	case Hamming:

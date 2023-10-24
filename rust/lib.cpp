@@ -107,6 +107,7 @@ metric_kind_t rust_to_cpp_metric(MetricKind value) {
     case MetricKind::Cos: return metric_kind_t::cos_k;
     case MetricKind::Pearson: return metric_kind_t::pearson_k;
     case MetricKind::Haversine: return metric_kind_t::haversine_k;
+    case MetricKind::Divergence: return metric_kind_t::divergence_k;
     case MetricKind::Hamming: return metric_kind_t::hamming_k;
     case MetricKind::Tanimoto: return metric_kind_t::tanimoto_k;
     case MetricKind::Sorensen: return metric_kind_t::sorensen_k;

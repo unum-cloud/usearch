@@ -11,6 +11,7 @@ const MetricKind = {
     IP: 'ip',
     L2sq: 'l2sq',
     Haversine: 'haversine',
+    Divergence: 'divergence',
     Pearson: 'pearson',
     Jaccard: 'jaccard',
     Hamming: 'hamming',

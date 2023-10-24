@@ -16,13 +16,13 @@ using labeling_result_t = typename index_dense_t::labeling_result_t;
 static_assert(std::is_same<usearch_key_t, index_dense_t::vector_key_t>::value, "Type mismatch between C and C++");
 static_assert(std::is_same<usearch_distance_t, index_dense_t::distance_t>::value, "Type mismatch between C and C++");
 
-// helper functions that are not part of the C ABI
-metric_kind_t to_native_metric(usearch_metric_kind_t kind) {
+metric_kind_t metric_kind_to_cpp(usearch_metric_kind_t kind) {
     switch (kind) {
     case usearch_metric_ip_k: return metric_kind_t::ip_k;
     case usearch_metric_l2sq_k: return metric_kind_t::l2sq_k;
     case usearch_metric_cos_k: return metric_kind_t::cos_k;
     case usearch_metric_haversine_k: return metric_kind_t::haversine_k;
+    case usearch_metric_divergence_k: return metric_kind_t::divergence_k;
     case usearch_metric_pearson_k: return metric_kind_t::pearson_k;
     case usearch_metric_jaccard_k: return metric_kind_t::jaccard_k;
     case usearch_metric_hamming_k: return metric_kind_t::hamming_k;
@@ -32,7 +32,22 @@ metric_kind_t to_native_metric(usearch_metric_kind_t kind) {
     }
 }
 
-scalar_kind_t to_native_scalar(usearch_scalar_kind_t kind) {
+usearch_metric_kind_t metric_kind_to_c(metric_kind_t kind) {
+    switch (kind) {
+    case metric_kind_t::ip_k: return usearch_metric_ip_k;
+    case metric_kind_t::l2sq_k: return usearch_metric_l2sq_k;
+    case metric_kind_t::cos_k: return usearch_metric_cos_k;
+    case metric_kind_t::haversine_k: return usearch_metric_haversine_k;
+    case metric_kind_t::divergence_k: return usearch_metric_divergence_k;
+    case metric_kind_t::pearson_k: return usearch_metric_pearson_k;
+    case metric_kind_t::jaccard_k: return usearch_metric_jaccard_k;
+    case metric_kind_t::hamming_k: return usearch_metric_hamming_k;
+    case metric_kind_t::tanimoto_k: return usearch_metric_tanimoto_k;
+    case metric_kind_t::sorensen_k: return usearch_metric_sorensen_k;
+    default: return usearch_metric_unknown_k;
+    }
+}
+scalar_kind_t scalar_kind_to_cpp(usearch_scalar_kind_t kind) {
     switch (kind) {
     case usearch_scalar_f32_k: return scalar_kind_t::f32_k;
     case usearch_scalar_f64_k: return scalar_kind_t::f64_k;
@@ -40,6 +55,17 @@ scalar_kind_t to_native_scalar(usearch_scalar_kind_t kind) {
     case usearch_scalar_i8_k: return scalar_kind_t::i8_k;
     case usearch_scalar_b1_k: return scalar_kind_t::b1x8_k;
     default: return scalar_kind_t::unknown_k;
+    }
+}
+
+usearch_scalar_kind_t scalar_kind_to_c(scalar_kind_t kind) {
+    switch (kind) {
+    case scalar_kind_t::f32_k: return usearch_scalar_f32_k;
+    case scalar_kind_t::f64_k: return usearch_scalar_f64_k;
+    case scalar_kind_t::f16_k: return usearch_scalar_f16_k;
+    case scalar_kind_t::i8_k: return usearch_scalar_i8_k;
+    case scalar_kind_t::b1x8_k: return usearch_scalar_b1_k;
+    default: return usearch_scalar_unknown_k;
     }
 }
 
@@ -84,8 +110,8 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
 
     index_dense_config_t config(options->connectivity, options->expansion_add, options->expansion_search);
     config.multi = options->multi;
-    metric_kind_t metric_kind = to_native_metric(options->metric_kind);
-    scalar_kind_t scalar_kind = to_native_scalar(options->quantization);
+    metric_kind_t metric_kind = metric_kind_to_cpp(options->metric_kind);
+    scalar_kind_t scalar_kind = scalar_kind_to_cpp(options->quantization);
 
     metric_punned_t metric = //
         !options->metric ? metric_punned_t(options->dimensions, metric_kind, scalar_kind)
@@ -134,6 +160,24 @@ USEARCH_EXPORT void usearch_view(usearch_index_t index, char const* path, usearc
         *error = result.error.release();
 }
 
+USEARCH_EXPORT void usearch_metadata(char const* path, usearch_init_options_t* options, usearch_error_t* error) {
+
+    assert(path && options && error);
+    index_dense_metadata_result_t result = index_dense_metadata_from_path(path);
+    if (!result)
+        *error = result.error.release();
+
+    options->metric_kind = metric_kind_to_c(result.head.kind_metric);
+    options->quantization = scalar_kind_to_c(result.head.kind_scalar);
+    options->dimensions = result.head.dimensions;
+    options->multi = result.head.multi;
+
+    options->connectivity = 0;
+    options->expansion_add = 0;
+    options->expansion_search = 0;
+    options->metric = NULL;
+}
+
 USEARCH_EXPORT void usearch_save_buffer(usearch_index_t index, void* buffer, size_t length, usearch_error_t* error) {
 
     assert(index && buffer && length && error);
@@ -163,6 +207,26 @@ USEARCH_EXPORT void usearch_view_buffer(usearch_index_t index, void const* buffe
         *error = result.error.release();
 }
 
+USEARCH_EXPORT void usearch_metadata_buffer(void const* buffer, size_t length, usearch_init_options_t* options,
+                                            usearch_error_t* error) {
+
+    assert(buffer && length && options && error);
+    index_dense_metadata_result_t result =
+        index_dense_metadata_from_buffer(memory_mapped_file_t((byte_t*)(buffer), length));
+    if (!result)
+        *error = result.error.release();
+
+    options->metric_kind = metric_kind_to_c(result.head.kind_metric);
+    options->quantization = scalar_kind_to_c(result.head.kind_scalar);
+    options->dimensions = result.head.dimensions;
+    options->multi = result.head.multi;
+
+    options->connectivity = 0;
+    options->expansion_add = 0;
+    options->expansion_search = 0;
+    options->metric = NULL;
+}
+
 USEARCH_EXPORT size_t usearch_size(usearch_index_t index, usearch_error_t*) { //
     return reinterpret_cast<index_dense_t*>(index)->size();
 }
@@ -190,7 +254,7 @@ USEARCH_EXPORT void usearch_add(                                                
     usearch_error_t* error) {
 
     assert(index && vector && error);
-    add_result_t result = add_(reinterpret_cast<index_dense_t*>(index), key, vector, to_native_scalar(kind));
+    add_result_t result = add_(reinterpret_cast<index_dense_t*>(index), key, vector, scalar_kind_to_cpp(kind));
     if (!result)
         *error = result.error.release();
 }
@@ -211,7 +275,7 @@ USEARCH_EXPORT size_t usearch_search(                                           
 
     assert(index && vector && error);
     search_result_t result =
-        search_(reinterpret_cast<index_dense_t*>(index), vector, to_native_scalar(kind), results_limit);
+        search_(reinterpret_cast<index_dense_t*>(index), vector, scalar_kind_to_cpp(kind), results_limit);
     if (!result) {
         *error = result.error.release();
         return 0;
@@ -225,7 +289,7 @@ USEARCH_EXPORT size_t usearch_get(                          //
     void* vectors, usearch_scalar_kind_t kind, usearch_error_t*) {
 
     assert(index && vectors);
-    return get_(reinterpret_cast<index_dense_t*>(index), key, count, vectors, to_native_scalar(kind));
+    return get_(reinterpret_cast<index_dense_t*>(index), key, count, vectors, scalar_kind_to_cpp(kind));
 }
 
 USEARCH_EXPORT size_t usearch_remove(usearch_index_t index, usearch_key_t key, usearch_error_t* error) {
@@ -253,7 +317,7 @@ USEARCH_EXPORT usearch_distance_t usearch_distance(       //
     usearch_metric_kind_t metric_kind, usearch_error_t* error) {
 
     (void)error;
-    metric_punned_t metric(dimensions, to_native_metric(metric_kind), to_native_scalar(scalar_kind));
+    metric_punned_t metric(dimensions, metric_kind_to_cpp(metric_kind), scalar_kind_to_cpp(scalar_kind));
     return metric((byte_t const*)vector_first, (byte_t const*)vector_second);
 }
 
@@ -266,7 +330,7 @@ USEARCH_EXPORT void usearch_exact_search(                             //
     usearch_distance_t* distances, size_t distances_stride,           //
     usearch_error_t* error) {
 
-    metric_punned_t metric(dimensions, to_native_metric(metric_kind), to_native_scalar(scalar_kind));
+    metric_punned_t metric(dimensions, metric_kind_to_cpp(metric_kind), scalar_kind_to_cpp(scalar_kind));
     executor_default_t executor(threads);
     static exact_search_t search;
     exact_search_results_t result = search(                    //
