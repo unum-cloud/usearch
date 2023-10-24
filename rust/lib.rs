@@ -483,11 +483,11 @@ mod tests {
         let first: [f32; 4] = [0.2, 0.1, 0.2, 0.1];
         let second: [f32; 4] = [0.3, 0.2, 0.4, 0.0];
 
-        // IDs until 18446744073709551615 are fine:
+        // IDs until 18446744073709551615 should be fine:
         let id1 = 483367403120493160;
         let id2 = 483367403120558696;
         let id3 = 483367403120624232;
-        let id4 = 4; // 483367403120624233;
+        let id4 = 483367403120624233;
 
         assert!(index.add(id1, &first).is_ok());
         let mut found_slice = [0.0 as f32; 4];
