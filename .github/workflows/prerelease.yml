@@ -287,7 +287,7 @@ jobs:
       - name: Test .NET
         run: |
           mkdir -p "${{ github.workspace }}\csharp\lib\runtimes\win-x64\native"
-          cp "${{ github.workspace }}\build_artifacts\libusearch_c.dll" "${{ github.workspace }}\csharp\lib\runtimes\win-x64\native"
+          cp "${{ github.workspace }}\build_artifacts\usearch_c.dll" "${{ github.workspace }}\csharp\lib\runtimes\win-x64\native"
           dotnet test -c Release
         shell: bash
         working-directory: ${{ github.workspace }}/csharp
