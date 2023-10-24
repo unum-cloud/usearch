@@ -568,7 +568,9 @@ class aligned_allocator_gt {
     using size_type = std::size_t;
     using pointer = element_at*;
     using const_pointer = element_at const*;
-    template <typename other_element_at> struct rebind { using other = aligned_allocator_gt<other_element_at>; };
+    template <typename other_element_at> struct rebind {
+        using other = aligned_allocator_gt<other_element_at>;
+    };
 
     constexpr std::size_t alignment() const { return alignment_ak; }
 
@@ -1356,8 +1358,8 @@ class metric_punned_t {
     }
 
   private:
-    bool configure_with_simsimd() noexcept {
 #if USEARCH_USE_SIMSIMD
+    bool configure_with_simsimd(simsimd_capability_t simd_caps) noexcept {
         simsimd_metric_kind_t kind = simsimd_metric_unknown_k;
         simsimd_datatype_t datatype = simsimd_datatype_unknown_k;
         simsimd_capability_t allowed = simsimd_cap_any_k;
@@ -1379,7 +1381,6 @@ class metric_punned_t {
         }
         simsimd_metric_punned_t simd_metric = NULL;
         simsimd_capability_t simd_kind = simsimd_cap_any_k;
-        simsimd_capability_t simd_caps = simsimd_capabilities();
         simsimd_find_metric_punned(kind, datatype, simd_caps, allowed, &simd_metric, &simd_kind);
         if (simd_metric == nullptr)
             return false;
@@ -1387,10 +1388,14 @@ class metric_punned_t {
         raw_ptr_ = (punned_ptr_t)simd_metric;
         isa_kind_ = simd_kind;
         return true;
-#else
-        return false;
-#endif
     }
+    bool configure_with_simsimd() noexcept {
+        static simsimd_capability_t static_capabilities = simsimd_capabilities();
+        return configure_with_simsimd(static_capabilities);
+    }
+#else
+    bool configure_with_simsimd() noexcept { return false; }
+#endif
 
     void configure_with_auto_vectorized() noexcept {
         switch (metric_kind_) {
