@@ -14,7 +14,8 @@ extern "C" {
 #endif
 
 #include <stdbool.h> // `bool`
-#include <stdint.h>  // `size_t`
+#include <stddef.h>  // `size_t`
+#include <stdint.h>  // `uint64_t`
 
 USEARCH_EXPORT typedef void* usearch_index_t;
 USEARCH_EXPORT typedef uint64_t usearch_key_t;
