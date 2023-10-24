@@ -1184,15 +1184,12 @@ template <typename scalar_at = float, typename result_at = float> struct metric_
     }
 };
 
-#include <cmath>
-#include <vector>
-
 /**
  *  @brief  Measures Jensen-Shannon Divergence between two probability distributions.
  */
-template <typename scalar_t = float, typename result_t = float> struct metric_divergence_gt {
-    using scalar_t = scalar_t;
-    using result_t = result_t;
+template <typename scalar_at = float, typename result_at = float> struct metric_divergence_gt {
+    using scalar_t = scalar_at;
+    using result_t = result_at;
 
     inline result_t operator()(scalar_t const* p, scalar_t const* q, std::size_t dim) const noexcept {
         result_t kld_pm{}, kld_qm{};
@@ -1205,7 +1202,7 @@ template <typename scalar_t = float, typename result_t = float> struct metric_di
 #pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i) {
-            scalar_t mi = (p[i] + q[i]) / 2 + epsilon;
+            result_t mi = result_t(p[i] + q[i]) / 2 + epsilon;
             kld_pm += p[i] * std::log((p[i] + epsilon) / mi);
             kld_qm += q[i] * std::log((q[i] + epsilon) / mi);
         }
