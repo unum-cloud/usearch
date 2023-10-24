@@ -290,6 +290,13 @@ function (setup_target TARGET_NAME)
                    LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_BINARY_DIR}"
     )
 
+    # On Linux and MacOS our primary shared libraries for C are called `libusearch_c.so` and `libusearch_c.dylib`, while
+    # on Windows the "lib" prefix might be missing by default, so let's ensure it's always there
+    get_target_property(TARGET_TYPE ${TARGET_NAME} TYPE)
+    if (TARGET_TYPE STREQUAL "SHARED_LIBRARY" OR TARGET_TYPE STREQUAL "STATIC_LIBRARY")
+        set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "lib")
+    endif ()
+
     # Core compilation settings affecting "index.hpp"
     target_compile_definitions(${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_OPENMP}>>:USEARCH_USE_OPENMP=0>)
 
