@@ -547,6 +547,7 @@ class max_heap_gt {
     inline bool empty() const noexcept { return !size_; }
     inline std::size_t size() const noexcept { return size_; }
     inline std::size_t capacity() const noexcept { return capacity_; }
+
     /// @brief  Selects the largest element in the heap.
     /// @return Reference to the stored element.
     inline element_t const& top() const noexcept { return elements_[0]; }
@@ -2205,7 +2206,7 @@ class index_gt {
             node_t node = nodes_[candidate.slot];
             return {member_cref_t{node.ckey(), candidate.slot}, candidate.distance};
         }
-        inline std::size_t merge_into(          //
+        inline std::size_t merge_into(                 //
             vector_key_t* keys, distance_t* distances, //
             std::size_t old_count, std::size_t max_count) const noexcept {
 
@@ -2279,10 +2280,10 @@ class index_gt {
         typename callback_at = dummy_callback_t, //
         typename prefetch_at = dummy_prefetch_t  //
         >
-    add_result_t add(                                    //
+    add_result_t add(                                           //
         vector_key_t key, value_at&& value, metric_at&& metric, //
-        index_update_config_t config = {},               //
-        callback_at&& callback = callback_at{},          //
+        index_update_config_t config = {},                      //
+        callback_at&& callback = callback_at{},                 //
         prefetch_at&& prefetch = prefetch_at{}) usearch_noexcept_m {
 
         add_result_t result;
@@ -2389,7 +2390,7 @@ class index_gt {
         >
     add_result_t update(                        //
         member_iterator_t iterator,             //
-        vector_key_t key,                              //
+        vector_key_t key,                       //
         value_at&& value,                       //
         metric_at&& metric,                     //
         index_update_config_t config = {},      //
