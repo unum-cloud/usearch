@@ -474,13 +474,15 @@ jobs:
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2.4.2
       - name: Execute Gradle build
-        run: gradle clean build
+        run: gradle sign && gradle build
       - name: Publish package
-        run: gradle publish -PsignArtifacts=false
+        run: gradle publish
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.ORG_GRADLE_PROJECT_SIGNINGKEY }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.ORG_GRADLE_PROJECT_SIGNINGPASSWORD }}
 
   publish_swift:
     name: Publish ObjC & Swift

@@ -194,8 +194,18 @@ cd golang && go test -v ; cd ..
 
 ## Java
 
-USearch provides Java bindings available from the [GitHub Maven registry](https://github.com/unum-cloud/usearch/packages/1867475).
+USearch provides Java bindings available from the [GitHub Maven registry](https://github.com/unum-cloud/usearch/packages/1867475) and the [Sonatype Maven Central Repository](https://central.sonatype.com/artifact/cloud.unum/usearch).
 The compilation settings are controlled by the `build.gradle` and are independent from CMake used for C/C++ builds.
+
+To setup the Gradle environment:
+
+```sh
+sudo apt get install zip unzip
+curl -s "https://get.sdkman.io" | bash
+sdk install java gradle
+```
+
+Afterwards, in a new terminal:
 
 ```sh
 gradle clean build

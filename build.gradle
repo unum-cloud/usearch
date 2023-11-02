@@ -109,11 +109,11 @@ jar {
     }
 }
 
-if (project.hasProperty('signArtifacts') && signArtifacts.toBoolean()) {
-    signing {
-        useGpgCmd()
-        sign publishing.publications
-    }
+signing {
+    def signingKey = findProperty("signingKey")
+    def signingPassword = findProperty("signingPassword")
+    useInMemoryPgpKeys(signingKey, signingPassword)
+    sign publishing.publications
 }
 
 publishing {
@@ -124,10 +124,8 @@ publishing {
             artifact sourcesJar
             artifact javadocJar
 
-            if (project.hasProperty('signArtifacts') && signArtifacts.toBoolean()) {
-                signing {
-                    sign publishing.publications.library
-                }
+            signing {
+                sign publishing.publications.library
             }
 
             pom {
