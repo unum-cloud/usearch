@@ -1,6 +1,6 @@
 <h1 align="center">USearch</h1>
 <h3 align="center">
-Smaller & <a href="https://www.unum.cloud/blog/2023-11-11-scaling-vector-search">Faster</a> Single-File<br/>
+Smaller & <a href="https://www.unum.cloud/blog/2023-11-07-scaling-vector-search-with-intel">Faster</a> Single-File<br/>
 Similarity Search Engine for <a href="https://github.com/ashvardanian/simsimd">Vectors</a> & 🔜 <a href="https://github.com/ashvardanian/stringzilla">Texts</a>
 </h3>
 <br/>
@@ -47,7 +47,7 @@ Linux • MacOS • Windows • iOS • WebAssembly
 
 ---
 
-- ✅ 10x faster than [FAISS][faiss] implementation of [HNSW algorithm][hnsw-algorithm].
+- ✅ [20x faster than][faster-than-faiss] [FAISS][faiss] implementation of [HNSW algorithm][hnsw-algorithm].
 - ✅ Simple and extensible [single C++11 header][usearch-header] implementation.
 - ✅ Compatible with a dozen programming languages out of the box.
 - ✅ [SIMD][simd]-optimized and [user-defined metrics](#user-defined-functions) with JIT compilation.
@@ -66,6 +66,7 @@ Linux • MacOS • Windows • iOS • WebAssembly
 [obscure-use-cases]: https://ashvardanian.com/posts/abusing-vector-search
 [hnsw-algorithm]: https://arxiv.org/abs/1603.09320
 [simd]: https://en.wikipedia.org/wiki/Single_instruction,_multiple_data
+[faster-than-faiss]: https://www.unum.cloud/blog/2023-11-07-scaling-vector-search-with-intel
 
 ## Comparison with FAISS
 
@@ -96,7 +97,7 @@ USearch is compact and broadly compatible without sacrificing performance, prima
 > ⁵ Lack of obligatory dependencies makes USearch much more portable.
 > ⁶ Native bindings introduce lower call latencies than more straightforward approaches.
 
-[intel-benchmarks]: https://www.unum.cloud/blog/2023-11-11-scaling-vector-search
+[intel-benchmarks]: https://www.unum.cloud/blog/2023-11-07-scaling-vector-search-with-intel
 
 Base functionality is identical to FAISS, and the interface must be familiar if you have ever investigated Approximate Nearest Neighbors search:
 
