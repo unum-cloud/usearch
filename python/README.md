@@ -10,7 +10,7 @@ pip install usearch
 
 ```python
 import numpy as np
-from usearch.index import Index
+from usearch.index import Index, Matches
 
 index = Index(
     ndim=3, # Define the number of dimensions in input vectors
