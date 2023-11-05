@@ -22,7 +22,7 @@ Overview
    :hidden:
    :caption: �
 
-   compilation
+   contributing
    benchmarks
    format
 

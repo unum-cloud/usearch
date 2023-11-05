@@ -1,5 +1,5 @@
 ========================
-Compilation
+Contributing
 ========================
 
-.. mdinclude:: compilation.md
+.. mdinclude:: ../CONTRIBUTING.md
