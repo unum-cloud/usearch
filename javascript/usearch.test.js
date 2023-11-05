@@ -35,3 +35,25 @@ test('Batch operations', () => {
     assert.deepEqual(results.keys, new BigUint64Array([15n, 16n]), 'keys should be 15 and 16');
     assert.deepEqual(results.distances, new Float32Array([45, 130]), 'distances should be 45 and 130');
 });
+
+
+test('Operations with invalid values', () => {
+    const indexBatch = new usearch.Index(2, 'l2sq');
+
+    const keys = [NaN, 16n];
+    const vectors = [new Float32Array([10, 30]), new Float32Array([1, 5])];
+
+    try {
+        indexBatch.add(keys, vectors);
+        throw new Error('indexBatch.add should have thrown an error.');
+    } catch (err) {
+        assert.equal(err.message, 'All keys must be integers or bigints.');
+    }
+
+    try {
+        indexBatch.search(NaN, 2);
+        throw new Error('indexBatch.search should have thrown an error.');
+    } catch (err) {
+        assert.equal(err.message, 'Vectors must be a TypedArray or an array of arrays.');
+    }
+});

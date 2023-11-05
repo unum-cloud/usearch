@@ -1,0 +1,10 @@
+{
+    "name": "usearch-ci",
+    "version": "1.0.0",
+    "devDependencies": {
+        "@semantic-release/exec": "^6.0.3",
+        "@semantic-release/git": "^10.0.1",
+        "conventional-changelog-eslint": "^3.0.9",
+        "semantic-release": "^21.1.2"
+    }
+}
