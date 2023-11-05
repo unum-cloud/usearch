@@ -84,7 +84,7 @@ class BatchMatches {
 }
 
 function isOneKey(keys) {
-    return typeof keys === 'number' || typeof keys === 'bigint';
+    return (!Number.isNaN(keys) && typeof keys === 'number') || typeof keys === 'bigint';
 }
 
 function normalizeKeys(keys) {
@@ -92,7 +92,7 @@ function normalizeKeys(keys) {
         keys = BigUint64Array.of(BigInt(keys));
     } else if (Array.isArray(keys)) {
         keys = keys.map(key => {
-            if (typeof key !== 'bigint' && typeof key !== 'number')
+            if ((typeof key !== 'bigint' && typeof key !== 'number') || Number.isNaN(key))
                 throw new Error("All keys must be integers or bigints.");
             return BigInt(key);
         });
@@ -151,7 +151,7 @@ class Index {
         if (typeof dimensionsOrConfigs === 'object' && dimensionsOrConfigs !== null) {
             // Parameters are provided as an object
             ({ dimensions, metric = MetricKind.Cos, quantization = ScalarKind.F32, connectivity = 0, expansion_add = 0, expansion_search = 0, multi = false } = dimensionsOrConfigs);
-        } else if (typeof dimensionsOrConfigs === 'number' || typeof dimensionsOrConfigs === 'bigint') {
+        } else if ((typeof dimensionsOrConfigs === 'number' && !Number.isNaN(dimensionsOrConfigs)) || typeof dimensionsOrConfigs === 'bigint') {
             // Parameters are provided as individual arguments
             dimensions = dimensionsOrConfigs;
         } else {
@@ -238,7 +238,7 @@ class Index {
      * @throws Will throw an error if `vectors` is not a valid input type (TypedArray or an array of arrays) or if its flattened size is not a multiple of dimensions.
      */
     search(vectors, k) {
-        if (typeof k !== 'number' || k <= 0) {
+        if ((!Number.isNaN(k) && typeof k !== 'number') || k <= 0) {
             throw new Error("`k` must be a positive integer representing the number of nearest neighbors to search for.");
         }
 
