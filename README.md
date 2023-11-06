@@ -396,7 +396,7 @@ doi = {10.5281/zenodo.7949416},
 author = {Vardanian, Ash},
 title = {{USearch by Unum Cloud}},
 url = {https://github.com/unum-cloud/usearch},
-version = {2.8.3},
+version = {2.8.4},
 year = {2023},
 month = oct,
 }
