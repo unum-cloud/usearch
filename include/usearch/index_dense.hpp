@@ -323,7 +323,7 @@ class index_dense_gt {
     /// @brief Schema: input buffer, bytes in input buffer, output buffer.
     using cast_t = std::function<bool(byte_t const*, std::size_t, byte_t*)>;
     /// @brief Punned index.
-    using index_t = index_gt<                 //
+    using index_t = index_gt<                        //
         distance_t, vector_key_t, compressed_slot_t, //
         dynamic_allocator_t, tape_allocator_t>;
     using index_allocator_t = aligned_allocator_gt<index_t, 64>;
@@ -1512,10 +1512,14 @@ class index_dense_gt {
      *  @brief  Implements clustering, classifying the given objects (vectors of member keys)
      *          into a given number of clusters.
      *
-     *  @param[in] queries_begin Iterator targeting the fiest query.
-     *  @param[in] queries_end
+     *  @param[in] queries_begin Iterator pointing to the first query.
+     *  @param[in] queries_end Iterator pointing to the last query.
      *  @param[in] executor Thread-pool to execute the job in parallel.
      *  @param[in] progress Callback to report the execution progress.
+     *  @param[in] config Configuration parameters for clustering.
+     *
+     *  @param[out] cluster_keys Pointer to the array where the cluster keys will be exported.
+     *  @param[out] cluster_distances Pointer to the array where the distances to those centroids will be exported.
      */
     template <                                   //
         typename queries_iterator_at,            //
@@ -1526,7 +1530,7 @@ class index_dense_gt {
         queries_iterator_at queries_begin,      //
         queries_iterator_at queries_end,        //
         index_dense_clustering_config_t config, //
-        vector_key_t* cluster_keys,                    //
+        vector_key_t* cluster_keys,             //
         distance_t* cluster_distances,          //
         executor_at&& executor = executor_at{}, //
         progress_at&& progress = progress_at{}) {
@@ -1715,7 +1719,7 @@ class index_dense_gt {
     }
 
     template <typename scalar_at>
-    add_result_t add_(                      //
+    add_result_t add_(                             //
         vector_key_t key, scalar_at const* vector, //
         std::size_t thread, bool force_vector_copy, cast_t const& cast) {
 
@@ -1811,8 +1815,8 @@ class index_dense_gt {
     }
 
     template <typename scalar_at>
-    aggregated_distances_t distance_between_( //
-        vector_key_t key, scalar_at const* vector,   //
+    aggregated_distances_t distance_between_(      //
+        vector_key_t key, scalar_at const* vector, //
         std::size_t thread, cast_t const& cast) const {
 
         // Cast the vector, if needed for compatibility with `metric_`
