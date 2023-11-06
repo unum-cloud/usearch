@@ -1,7 +1,7 @@
 <h1 align="center">USearch</h1>
 <h3 align="center">
-Faster & Smaller Single-File<br/>
-Search Engine for Vectors & Texts<br/>
+Smaller & <a href="https://www.unum.cloud/blog/2023-11-11-scaling-vector-search">Faster</a> Single-File<br/>
+Similarity Search Engine for <a href="https://github.com/ashvardanian/simsimd">Vectors</a> & 🔜 <a href="https://github.com/ashvardanian/stringzilla">Texts</a>
 </h3>
 <br/>
 
@@ -18,7 +18,7 @@ Search Engine for Vectors & Texts<br/>
 </p>
 
 <p align="center">
-Euclidean • Angular • Bitwise • Haversine • User-Defined Metrics
+Spatial • Binary • Probabilistic • User-Defined Metrics
 <br/>
 <a href="https://unum-cloud.github.io/usearch/cpp">C++ 11</a> •
 <a href="https://unum-cloud.github.io/usearch/python">Python 3</a> •
@@ -32,7 +32,7 @@ Euclidean • Angular • Bitwise • Haversine • User-Defined Metrics
 <a href="https://unum-cloud.github.io/usearch/golang">GoLang</a> •
 <a href="https://unum-cloud.github.io/usearch/wolfram">Wolfram</a>
 <br/>
-Linux • MacOS • Windows • iOS • Docker • WebAssembly
+Linux • MacOS • Windows • iOS • WebAssembly
 </p>
 
 <div align="center">
@@ -46,39 +46,56 @@ Linux • MacOS • Windows • iOS • Docker • WebAssembly
 
 ---
 
-- ✅ Benchmark-topping performance.
+- ✅ 10x faster than [FAISS][faiss] implementation of [HNSW algorithm][hnsw-algorithm].
 - ✅ Simple and extensible [single C++11 header][usearch-header] implementation.
-- ✅ SIMD-optimized and [user-defined metrics](#user-defined-functions) with JIT compilation.
-- ✅ Variable dimensionality vectors for unique applications, including search over compressed data.
-- ✅ Bitwise Tanimoto and Sorensen coefficients for [Genomics and Chemistry applications](#usearch--rdkit--molecular-search).
+- ✅ Compatible with a dozen programming languages out of the box.
+- ✅ [SIMD][simd]-optimized and [user-defined metrics](#user-defined-functions) with JIT compilation.
 - ✅ Hardware-agnostic `f16` & `i8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
 - ✅ [View large indexes from disk](#serving-index-from-disk) without loading into RAM.
+- ✅ Heterogeneous lookups, renaming/relabeling, and on-the-fly deletions.
+- ✅ Variable dimensionality vectors for unique applications, including search over compressed data.
+- ✅ Binary Tanimoto and Sorensen coefficients for [Genomics and Chemistry applications](#usearch--rdkit--molecular-search).
 - ✅ Space-efficient point-clouds with `uint40_t`, accommodating 4B+ size.
 - ✅ Compatible with OpenMP and custom "executors", for fine-grained control over CPU utilization.
-- ✅ Heterogeneous lookups, renaming/relabeling, and on-the-fly deletions.
-- ✅ Near-real-time [clustering and sub-clusterings](#clustering) for Tens or Millions of clusters.
+- ✅ Near-real-time [clustering and sub-clustering](#clustering) for Tens or Millions of clusters.
 - ✅ [Semantic Search](#usearch--ai--multi-modal-semantic-search) and [Joins](#joins).
 
+[faiss]: https://github.com/facebookresearch/faiss
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/index.hpp
 [obscure-use-cases]: https://ashvardanian.com/posts/abusing-vector-search
+[hnsw-algorithm]: https://arxiv.org/abs/1603.09320
+[simd]: https://en.wikipedia.org/wiki/Single_instruction,_multiple_data
 
 ## Comparison with FAISS
 
 FAISS is a widely recognized standard for high-performance vector search engines.
 USearch and FAISS both employ the same HNSW algorithm, but they differ significantly in their design principles.
-USearch is compact and broadly compatible without sacrificing performance, with a primary focus on user-defined metrics and fewer dependencies.
+USearch is compact and broadly compatible without sacrificing performance, primarily focusing on user-defined metrics and fewer dependencies.
 
-|                     | FAISS                         | USearch                            |
-| :------------------ | :---------------------------- | :--------------------------------- |
-| Implementation      | 84 K [SLOC][sloc] in `faiss/` | 3 K [SLOC][sloc] in `usearch/`     |
-| Supported metrics   | 9 fixed metrics               | Any User-Defined metrics           |
-| Supported languages | C++, Python                   | 10 languages                       |
-| Supported ID types  | `uint32_t`, `uint64_t`        | `uint32_t`, `uint40_t`, `uint64_t` |
-| Dependencies        | BLAS, OpenMP                  | None                               |
-| Bindings            | SWIG                          | Native                             |
-| Acceleration        | Learned Quantization          | Downcasting                        |
+|                                              |                         FAISS |                        USearch |              Improvement |
+| :------------------------------------------- | ----------------------------: | -----------------------------: | -----------------------: |
+| Indexing time                                |                               |                                |                          |
+| 100 Million 96d `f32`, `f16`, `i8` vectors   |           2.6 h, 2.6 h, 2.6 h |            0.3 h, 0.2 h, 0.2 h | __9.6x, 10.4x, 10.7x__ ⁰ |
+| 100 Million 1536d `f32`, `f16`, `i8` vectors |           5.0 h, 4.1 h, 3.8 h |            2.1 h, 1.1 h, 0.8 h |    __2.3x 3.6x, 4.4x__ ⁰ |
+|                                              |                               |                                |                          |
+| Codebase length                              | 84 K [SLOC][sloc] in `faiss/` | 3 K [SLOC][sloc] in `usearch/` |           maintainable ¹ |
+| Supported metrics                            |               9 fixed metrics |       any user-defined metrics |             extendible ² |
+| Supported languages                          |                   C++, Python |                   10 languages |               portable ³ |
+| Supported ID types                           |                32-bit, 64-bit |         32-bit, 40-bit, 64-bit |              efficient ⁴ |
+| Required dependencies                        |                  BLAS, OpenMP |                              - |           light-weight ⁵ |
+| Bindings                                     |                          SWIG |                         Native |            low-latency ⁶ |
 
 [sloc]: https://en.wikipedia.org/wiki/Source_lines_of_code
+
+> ⁰ [Tested][intel-benchmarks] on Intel Sapphire Rapids, with the simplest inner-product distance, equivalent recall, and memory consumption, while also providing far superior search speed.
+> ¹ A shorter codebase makes the project easier to maintain and audit.
+> ² User-defined metrics allow you to customize your search for various applications, from GIS to creating custom metrics for composite embeddings from multiple AI models or hybrid full-text and semantic search.
+> ³ With USearch, you can reuse the same preconstructed index in various programming languages.
+> ⁴ The 40-bit integer allows you to store 4B+ vectors without allocating 8 bytes for every neighbor reference in the proximity graph.
+> ⁵ Lack of obligatory dependencies makes USearch much more portable.
+> ⁶ Native bindings introduce lower call latencies than more straightforward approaches.
+
+[intel-benchmarks]: https://www.unum.cloud/blog/2023-11-11-scaling-vector-search
 
 Base functionality is identical to FAISS, and the interface must be familiar if you have ever investigated Approximate Nearest Neighbors search:
 
@@ -88,6 +105,21 @@ $ pip install usearch
 import numpy as np
 from usearch.index import Index
 
+index = Index(ndim=3)
+
+vector = np.array([0.2, 0.6, 0.4])
+index.add(42, vector)
+
+matches = index.search(vector, 10)
+
+assert matches[0].key == 42
+assert matches[0].distance <= 0.001
+assert np.allclose(index[42], vector)
+```
+
+More settings are always available, and the API is designed to be as flexible as possible.
+
+```py
 index = Index(
     ndim=3, # Define the number of dimensions in input vectors
     metric='cos', # Choose 'l2sq', 'haversine' or other metric, default = 'ip'
@@ -96,36 +128,7 @@ index = Index(
     expansion_add=128, # Optional: Control the recall of indexing
     expansion_search=64, # Optional: Control the quality of search
 )
-
-vector = np.array([0.2, 0.6, 0.4])
-index.add(42, vector)
-matches = index.search(vector, 10)
-
-assert len(index) == 1
-assert len(matches) == 1
-assert matches[0].key == 42
-assert matches[0].distance <= 0.001
-assert np.allclose(index[42], vector)
 ```
-
-Comparing the performance of FAISS against USearch on 1 Million 96-dimensional vectors from the famous Deep1B dataset, once can expect the following numbers on modern AWS `c7g.metal` instances.
-
-|              | FAISS, `f32` | USearch, `f32` | USearch, `f16` |     USearch, `i8` |
-| :----------- | -----------: | -------------: | -------------: | ----------------: |
-| Batch Insert |       16 K/s |         73 K/s |        100 K/s | 104 K/s __+550%__ |
-| Batch Search |       82 K/s |        103 K/s |        113 K/s |  134 K/s __+63%__ |
-| Bulk Insert  |       76 K/s |        105 K/s |        115 K/s | 202 K/s __+165%__ |
-| Bulk Search  |      118 K/s |        174 K/s |        173 K/s | 304 K/s __+157%__ |
-| Recall @ 10  |          99% |          99.2% |          99.1% |             99.2% |
-
-> HNSW was configured with identical hyper-parameters:
-> connectivity `M=16`,
-> expansion @ construction `efConstruction=128`,
-> and expansion @ search `ef=64`.
-> Batch size is 256.
-> Jump to the [Performance Tuning][benchmarking] section to read about the effects of those hyper-parameters.
-
-[benchmarking]: https://github.com/unum-cloud/usearch/blob/main/docs/benchmarks.md
 
 ## User-Defined Functions
 
@@ -220,7 +223,7 @@ multi_index.search(...)
 ## Clustering
 
 Once the index is constructed, it can be used to cluster entries much faster.
-In essense, the `Index` itself can be seen as a clustering, and it allows iterative deepening.
+In essence, the `Index` itself can be seen as a clustering, and it allows iterative deepening.
 
 ```py
 clustering = index.cluster(
@@ -241,7 +244,7 @@ g = clustering.network
 # Get members of a specific cluster
 first_members = clustering.members_of(centroid_keys[0])
 
-# Deepen into that cluster spliting it into more parts, all same arguments supported
+# Deepen into that cluster splitting it into more parts, all same arguments supported
 sub_clustering = clustering.subcluster(min_count=..., max_count=...)
 ```
 
@@ -342,7 +345,7 @@ Comparing molecule graphs and searching for similar structures is expensive and 
 It can be seen as a special case of the NP-Complete Subgraph Isomorphism problem.
 Luckily, domain-specific approximate methods exist.
 The one commonly used in Chemistry, is to generate structures from [SMILES][smiles], and later hash them into binary fingerprints.
-The latter are searchable with bitwise similarity metrics, like the Tanimoto coefficient.
+The latter are searchable with binary similarity metrics, like the Tanimoto coefficient.
 Below is an example using the RDKit package.
 
 ```python
@@ -380,9 +383,10 @@ The search is based on the Haversine distance metric, but can easily be extended
 ## Integrations
 
 - [x] GPTCache: [Python](https://github.com/zilliztech/GPTCache/releases/tag/0.1.29).
-- [x] LangChain: [Python](https://github.com/langchain-ai/langchain/releases/tag/v0.0.257) and [JavaScipt](https://github.com/hwchase17/langchainjs/releases/tag/0.0.125).
+- [x] LangChain: [Python](https://github.com/langchain-ai/langchain/releases/tag/v0.0.257) and [JavaScript](https://github.com/hwchase17/langchainjs/releases/tag/0.0.125).
 - [x] ClickHouse: [C++](https://github.com/ClickHouse/ClickHouse/pull/53447).
 - [x] Microsoft Semantic Kernel: [Python](https://github.com/microsoft/semantic-kernel/releases/tag/python-0.3.9.dev) and C#.
+- [x] LanternDB: [C++](https://github.com/lanterndata/lantern) and [Rust](https://github.com/lanterndata/lantern_extras).
 
 ## Citations
 

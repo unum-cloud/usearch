@@ -147,6 +147,7 @@
         "pytest",
         "Quickstart",
         "rtype",
+        "SIMD",
         "simsimd",
         "SLOC",
         "sorensen",
