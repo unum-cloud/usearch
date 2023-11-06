@@ -57,7 +57,7 @@ Linux • MacOS • Windows • iOS • WebAssembly
 - ✅ Variable dimensionality vectors for unique applications, including search over compressed data.
 - ✅ Binary Tanimoto and Sorensen coefficients for [Genomics and Chemistry applications](#usearch--rdkit--molecular-search).
 - ✅ Space-efficient point-clouds with `uint40_t`, accommodating 4B+ size.
-- ✅ Compatible with OpenMP and custom "executors", for fine-grained control over CPU utilization.
+- ✅ Compatible with OpenMP and custom "executors" for fine-grained control over CPU utilization.
 - ✅ Near-real-time [clustering and sub-clustering](#clustering) for Tens or Millions of clusters.
 - ✅ [Semantic Search](#usearch--ai--multi-modal-semantic-search) and [Joins](#joins).
 
@@ -73,22 +73,22 @@ FAISS is a widely recognized standard for high-performance vector search engines
 USearch and FAISS both employ the same HNSW algorithm, but they differ significantly in their design principles.
 USearch is compact and broadly compatible without sacrificing performance, primarily focusing on user-defined metrics and fewer dependencies.
 
-|                                              |                         FAISS |                        USearch |              Improvement |
-| :------------------------------------------- | ----------------------------: | -----------------------------: | -----------------------: |
-| Indexing time                                |                               |                                |                          |
-| 100 Million 96d `f32`, `f16`, `i8` vectors   |           2.6 h, 2.6 h, 2.6 h |            0.3 h, 0.2 h, 0.2 h | __9.6x, 10.4x, 10.7x__ ⁰ |
-| 100 Million 1536d `f32`, `f16`, `i8` vectors |           5.0 h, 4.1 h, 3.8 h |            2.1 h, 1.1 h, 0.8 h |    __2.3x 3.6x, 4.4x__ ⁰ |
-|                                              |                               |                                |                          |
-| Codebase length                              | 84 K [SLOC][sloc] in `faiss/` | 3 K [SLOC][sloc] in `usearch/` |           maintainable ¹ |
-| Supported metrics                            |               9 fixed metrics |       any user-defined metrics |             extendible ² |
-| Supported languages                          |                   C++, Python |                   10 languages |               portable ³ |
-| Supported ID types                           |                32-bit, 64-bit |         32-bit, 40-bit, 64-bit |              efficient ⁴ |
-| Required dependencies                        |                  BLAS, OpenMP |                              - |           light-weight ⁵ |
-| Bindings                                     |                          SWIG |                         Native |            low-latency ⁶ |
+|                                              |                         FAISS |                        USearch |            Improvement |
+| :------------------------------------------- | ----------------------------: | -----------------------------: | ---------------------: |
+| Indexing time ⁰                              |                               |                                |                        |
+| 100 Million 96d `f32`, `f16`, `i8` vectors   |           2.6 h, 2.6 h, 2.6 h |            0.3 h, 0.2 h, 0.2 h | __9.6x, 10.4x, 10.7x__ |
+| 100 Million 1536d `f32`, `f16`, `i8` vectors |           5.0 h, 4.1 h, 3.8 h |            2.1 h, 1.1 h, 0.8 h |    __2.3x 3.6x, 4.4x__ |
+|                                              |                               |                                |                        |
+| Codebase length ¹                            | 84 K [SLOC][sloc] in `faiss/` | 3 K [SLOC][sloc] in `usearch/` |           maintainable |
+| Supported metrics ²                          |               9 fixed metrics |       any user-defined metrics |             extendible |
+| Supported languages ³                        |                   C++, Python |                   10 languages |               portable |
+| Supported ID types ⁴                         |                32-bit, 64-bit |         32-bit, 40-bit, 64-bit |              efficient |
+| Required dependencies ⁵                      |                  BLAS, OpenMP |                              - |           light-weight |
+| Bindings ⁶                                   |                          SWIG |                         Native |            low-latency |
 
 [sloc]: https://en.wikipedia.org/wiki/Source_lines_of_code
 
-> ⁰ [Tested][intel-benchmarks] on Intel Sapphire Rapids, with the simplest inner-product distance, equivalent recall, and memory consumption, while also providing far superior search speed.
+> ⁰ [Tested][intel-benchmarks] on Intel Sapphire Rapids, with the simplest inner-product distance, equivalent recall, and memory consumption while also providing far superior search speed.
 > ¹ A shorter codebase makes the project easier to maintain and audit.
 > ² User-defined metrics allow you to customize your search for various applications, from GIS to creating custom metrics for composite embeddings from multiple AI models or hybrid full-text and semantic search.
 > ³ With USearch, you can reuse the same preconstructed index in various programming languages.
@@ -101,7 +101,7 @@ USearch is compact and broadly compatible without sacrificing performance, prima
 Base functionality is identical to FAISS, and the interface must be familiar if you have ever investigated Approximate Nearest Neighbors search:
 
 ```py
-$ pip install usearch
+$ pip install numpy usearch
 
 import numpy as np
 from usearch.index import Index
@@ -125,16 +125,16 @@ index = Index(
     ndim=3, # Define the number of dimensions in input vectors
     metric='cos', # Choose 'l2sq', 'haversine' or other metric, default = 'ip'
     dtype='f32', # Quantize to 'f16' or 'i8' if needed, default = 'f32'
-    connectivity=16, # Optional: How frequent should the connections in the graph be
+    connectivity=16, # Optional: Limit number of neighbors per graph node
     expansion_add=128, # Optional: Control the recall of indexing
-    expansion_search=64, # Optional: Control the quality of search
+    expansion_search=64, # Optional: Control the quality of the search
 )
 ```
 
 ## User-Defined Functions
 
-While most vector search packages concentrate on just a couple of metrics - "Inner Product distance" and "Euclidean distance," USearch extends this list to include any user-defined metrics.
-This flexibility allows you to customize your search for a myriad of applications, from computing geo-spatial coordinates with the rare [Haversine][haversine] distance to creating custom metrics for composite embeddings from multiple AI models.
+While most vector search packages concentrate on just a few metrics - "Inner Product distance" and "Euclidean distance," USearch extends this list to include any user-defined metrics.
+This flexibility allows you to customize your search for various applications, from computing geospatial coordinates with the rare [Haversine][haversine] distance to creating custom metrics for composite embeddings from multiple AI models.
 
 ![USearch: Vector Search Approaches](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-approaches-white.png?raw=true)
 
@@ -165,7 +165,7 @@ USearch supports multiple forms of serialization:
 
 - Into a __file__ defined with a path.
 - Into a __stream__ defined with a callback, serializing or reconstructing incrementally.
-- Into a __buffer__ of fixed length, or a memory-mapped file, that supports random access.
+- Into a __buffer__ of fixed length or a memory-mapped file that supports random access.
 
 The latter allows you to serve indexes from external memory, enabling you to optimize your server choices for indexing speed and serving costs.
 This can result in __20x cost reduction__ on AWS and other public clouds.
@@ -198,7 +198,7 @@ one_in_many: Matches = search(vectors, vector, 50, MetricKind.L2sq, exact=True)
 many_in_many: BatchMatches = search(vectors, vectors, 50, MetricKind.L2sq, exact=True)
 ```
 
-By passing the `exact=True` argument, the system bypasses indexing altogether and performs a brute-force search through the entire dataset using SIMD-optimized similarity metrics from [SimSIMD](https://github.com/ashvardanian/simsimd).
+If you pass the `exact=True` argument, the system bypasses indexing altogether and performs a brute-force search through the entire dataset using SIMD-optimized similarity metrics from [SimSIMD](https://github.com/ashvardanian/simsimd).
 When compared to FAISS's `IndexFlatL2` in Google Colab, __[USearch may offer up to a 20x performance improvement](https://github.com/unum-cloud/usearch/issues/176#issuecomment-1666650778)__:
 
 - `faiss.IndexFlatL2`: __55.3 ms__.
@@ -207,7 +207,7 @@ When compared to FAISS's `IndexFlatL2` in Google Colab, __[USearch may offer up 
 ## `Indexes` for Multi-Index Lookups
 
 For larger workloads targeting billions or even trillions of vectors, parallel multi-index lookups become invaluable.
-These lookups prevent the need to construct a single, massive index, allowing users to query multiple smaller ones instead.
+Instead of constructing one extensive index, you can build multiple smaller ones and view them together.
 
 ```py
 from usearch.index import Indexes
@@ -223,8 +223,8 @@ multi_index.search(...)
 
 ## Clustering
 
-Once the index is constructed, it can be used to cluster entries much faster.
-In essence, the `Index` itself can be seen as a clustering, and it allows iterative deepening.
+Once the index is constructed, it can cluster entries much faster than using a separate clustering algorithm implementation.
+Essentially, the `Index` itself can be seen as a clustering, allowing iterative deepening.
 
 ```py
 clustering = index.cluster(
@@ -236,7 +236,7 @@ clustering = index.cluster(
 # Get the clusters and their sizes
 centroid_keys, sizes = clustering.centroids_popularity
 
-# Use Matplotlib draw a histogram
+# Use Matplotlib to draw a histogram
 clustering.plot_centroids_popularity()
 
 # Export a NetworkX graph of the clusters
@@ -245,24 +245,26 @@ g = clustering.network
 # Get members of a specific cluster
 first_members = clustering.members_of(centroid_keys[0])
 
-# Deepen into that cluster splitting it into more parts, all same arguments supported
+# Deepen into that cluster, splitting it into more parts, all the same arguments supported
 sub_clustering = clustering.subcluster(min_count=..., max_count=...)
 ```
 
-Using Scikit-Learn, on a 1 Million point dataset, one may expect queries to take anywhere from minutes to hours, depending on the number of clusters you want to highlight. For 50'000 clusters the performance difference between USearch and conventional clustering methods may easily reach 100x.
+The resulting clustering isn't identical to K-Means or other conventional approaches but serves the same purpose.
+Alternatively, using Scikit-Learn on a 1 Million point dataset, one may expect queries to take anywhere from minutes to hours, depending on the number of clusters you want to highlight.
+For 50'000 clusters, the performance difference between USearch and conventional clustering methods may easily reach 100x.
 
 ## Joins, One-to-One, One-to-Many, and Many-to-Many Mappings
 
-One of the big questions these days is how will AI change the world of databases and data management.
+One of the big questions these days is how AI will change the world of databases and data management.
 Most databases are still struggling to implement high-quality fuzzy search, and the only kind of joins they know are deterministic.
-A `join` is different from searching for every entry, as it requires a one-to-one mapping, banning collisions among separate search results.
+A `join` differs from searching for every entry, requiring a one-to-one mapping banning collisions among separate search results.
 
 | Exact Search | Fuzzy Search | Semantic Search ? |
 | :----------: | :----------: | :---------------: |
 |  Exact Join  | Fuzzy Join ? | Semantic Join ??  |
 
-Using USearch one can implement sub-quadratic complexity approximate, fuzzy, and semantic joins.
-This can come in handy in any fuzzy-matching tasks, common to Database Management Software.
+Using USearch, one can implement sub-quadratic complexity approximate, fuzzy, and semantic joins.
+This can be useful in any fuzzy-matching tasks common to Database Management Software.
 
 ```py
 men = Index(...)
@@ -270,7 +272,7 @@ women = Index(...)
 pairs: dict = men.join(women, max_proposals=0, exact=False)
 ```
 
-> Read more in post: [From Dating to Vector Search - "Stable Marriages" on a Planetary Scale 👩‍❤️‍👨](https://ashvardanian.com/posts/searching-stable-marriages)
+> Read more in the post: [Combinatorial Stable Marriages for Semantic Search 💍](https://ashvardanian.com/posts/searching-stable-marriages)
 
 ## Functionality
 
@@ -345,7 +347,7 @@ We have pre-processed some commonly used datasets, cleaned the images, produced 
 Comparing molecule graphs and searching for similar structures is expensive and slow.
 It can be seen as a special case of the NP-Complete Subgraph Isomorphism problem.
 Luckily, domain-specific approximate methods exist.
-The one commonly used in Chemistry, is to generate structures from [SMILES][smiles], and later hash them into binary fingerprints.
+The one commonly used in Chemistry is to generate structures from [SMILES][smiles] and later hash them into binary fingerprints.
 The latter are searchable with binary similarity metrics, like the Tanimoto coefficient.
 Below is an example using the RDKit package.
 
@@ -379,7 +381,7 @@ matches = index.search(fingerprints, 10)
 With Objective-C and Swift iOS bindings, USearch can be easily used in mobile applications.
 The [SwiftVectorSearch](https://github.com/ashvardanian/SwiftVectorSearch) project illustrates how to build a dynamic, real-time search system on iOS.
 In this example, we use 2-dimensional vectors—encoded as latitude and longitude—to find the closest Points of Interest (POIs) on a map.
-The search is based on the Haversine distance metric, but can easily be extended to support high-dimensional vectors.
+The search is based on the Haversine distance metric but can easily be extended to support high-dimensional vectors.
 
 ## Integrations
 
