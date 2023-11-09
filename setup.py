@@ -5,19 +5,49 @@ from setuptools import setup
 
 from pybind11.setup_helpers import Pybind11Extension
 
-
 compile_args = []
 link_args = []
 macros_args = []
 
-def is_gcc():
+
+def get_bool_env(name: str, preference: bool) -> bool:
+    return os.environ.get(name, "1" if preference else "0") == "1"
+
+
+def get_bool_env_w_name(name: str, preference: bool) -> bool:
+    return name, get_bool_env(name, preference)
+
+
+def get_is_gcc():
     try:
-        compiler_version = subprocess.check_output(["c++", "--version"], universal_newlines=True)
+        compiler_version = subprocess.check_output(
+            ["c++", "--version"], universal_newlines=True
+        )
         return "gcc" in compiler_version.lower()
     except Exception:
         return False
 
-if sys.platform == "linux":
+
+# Check the environment variables
+is_linux: bool = sys.platform == "linux"
+is_macos: bool = sys.platform == "darwin"
+is_windows: bool = sys.platform == "win32"
+
+prefer_simsimd: bool = is_linux or is_macos
+prefer_fp16lib: bool = True
+prefer_openmp: bool = is_linux and get_is_gcc()
+
+use_simsimd: bool = get_bool_env("USEARCH_USE_SIMSIMD", prefer_simsimd)
+use_fp16lib: bool = get_bool_env("USEARCH_USE_FP16LIB", prefer_fp16lib)
+use_openmp: bool = get_bool_env("USEARCH_USE_OPENMP", prefer_openmp)
+
+
+# Common arguments for all platforms
+macros_args.append(("USEARCH_USE_OPENMP", "1" if use_openmp else "0"))
+macros_args.append(("USEARCH_USE_SIMSIMD", "1" if use_simsimd else "0"))
+macros_args.append(("USEARCH_USE_FP16LIB", "1" if use_fp16lib else "0"))
+
+if is_linux:
     compile_args.append("-std=c++17")
     compile_args.append("-O3")  # Maximize performance
     compile_args.append("-ffast-math")  # Maximize floating-point performance
@@ -27,17 +57,21 @@ if sys.platform == "linux":
     # Simplify debugging, but the normal `-g` may make builds much longer!
     compile_args.append("-g1")
 
-    macros_args.append(("USEARCH_USE_NATIVE_F16", "0"))
-    macros_args.append(("USEARCH_USE_SIMSIMD", "1"))
-
-    if is_gcc():
-        macros_args.append(("USEARCH_USE_OPENMP", "1"))
+    if use_openmp:
         compile_args.append("-fopenmp")
         link_args.append("-lgomp")
-    else:
-        macros_args.append(("USEARCH_USE_OPENMP", "0"))
 
-if sys.platform == "darwin":
+    if use_simsimd:
+        macros_args.extend(
+            [
+                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX512", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_ARM_SVE", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX2", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_ARM_NEON", True),
+            ]
+        )
+
+if is_macos:
     # MacOS 10.15 or higher is needed for `aligned_alloc` support.
     # https://github.com/unum-cloud/usearch/actions/runs/4975434891/jobs/8902603392
     compile_args.append("-mmacosx-version-min=10.15")
@@ -61,11 +95,33 @@ if sys.platform == "darwin":
     #     link_args.append("-lomp")
     #     macros_args.append(("USEARCH_USE_OPENMP", "1"))
 
-if sys.platform == "win32":
+    if use_simsimd:
+        macros_args.extend(
+            [
+                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX512", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_ARM_SVE", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX2", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_ARM_NEON", True),
+            ]
+        )
+
+if is_windows:
     compile_args.append("/std:c++17")
     compile_args.append("/O2")
     compile_args.append("/fp:fast")  # Enable fast math for MSVC
     compile_args.append("/W1")  # Reduce warnings verbosity
+
+    # We don't actually want to use any SimSIMD stuff,
+    # as GCC attributes aren't compatible with MSVC
+    if use_simsimd:
+        macros_args.extend(
+            [
+                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX512", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_ARM_SVE", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX2", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_ARM_NEON", False),
+            ]
+        )
 
 ext_modules = [
     Pybind11Extension(
@@ -80,11 +136,16 @@ ext_modules = [
 __version__ = open("VERSION", "r").read().strip()
 __lib_name__ = "usearch"
 
-
 this_directory = os.path.abspath(os.path.dirname(__file__))
 with open(os.path.join(this_directory, "README.md")) as f:
     long_description = f.read()
 
+# Depending on the macros, adjust the include directories
+include_dirs = ["include"]
+if use_simsimd:
+    include_dirs.append("simsimd/include")
+if use_fp16lib:
+    include_dirs.append("fp16/include")
 
 setup(
     name=__lib_name__,
@@ -118,7 +179,7 @@ setup(
         "Topic :: Database :: Database Engines/Servers",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
-    include_dirs=["include", "fp16/include", "simsimd/include"],
+    include_dirs=include_dirs,
     ext_modules=ext_modules,
     install_requires=[
         "numpy",

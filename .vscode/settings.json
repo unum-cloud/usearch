@@ -136,6 +136,7 @@
     "linalg",
     "longlong",
     "memmap",
+    "MSVC",
     "Napi",
     "ndarray",
     "ndim",

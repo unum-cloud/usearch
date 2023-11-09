@@ -19,7 +19,7 @@ option(USEARCH_INSTALL "Install CMake targets" OFF)
 option(USEARCH_USE_OPENMP "Use OpenMP for a thread pool" OFF)
 option(USEARCH_USE_SIMSIMD "Use SimSIMD hardware-accelerated metrics" OFF)
 option(USEARCH_USE_JEMALLOC "Use JeMalloc for faster memory allocations" OFF)
-option(USEARCH_USE_NATIVE_F16 "Use native half-precision types" OFF)
+option(USEARCH_USE_FP16LIB "Use software emulation for half-precision types" ON)
 
 option(USEARCH_BUILD_TEST_CPP "Compile a native unit test in C++" ${USEARCH_IS_MAIN_PROJECT})
 option(USEARCH_BUILD_BENCH_CPP "Compile a native benchmark in C++" ${USEARCH_IS_MAIN_PROJECT})
@@ -69,7 +69,7 @@ target_compile_definitions(
 
 # Supplementary compilation settings affecting "index_plugins.hpp"
 target_compile_definitions(
-    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${USEARCH_USE_NATIVE_F16}>>:USEARCH_USE_NATIVE_F16=0>
+    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${USEARCH_USE_FP16LIB}>>:USEARCH_USE_FP16LIB=1>
 )
 
 target_compile_definitions(
@@ -302,7 +302,7 @@ function (setup_target TARGET_NAME)
 
     # Supplementary compilation settings affecting "index_plugins.hpp"
     target_compile_definitions(
-        ${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_NATIVE_F16}>>:USEARCH_USE_NATIVE_F16=0>
+        ${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_FP16LIB}>>:USEARCH_USE_FP16LIB=1>
     )
 
     target_compile_definitions(${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_SIMSIMD}>>:USEARCH_USE_SIMSIMD=0>)
