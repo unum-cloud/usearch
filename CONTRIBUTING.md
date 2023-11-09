@@ -144,6 +144,29 @@ node --test ./javascript/usearch.test.js
 npm publish
 ```
 
+To compile for AWS Lambda you'd need to recompile the binding.
+You can test the setup locally, overriding some of the compilation variables in Docker image:
+
+```Dockerfile
+FROM public.ecr.aws/lambda/nodejs:18-x86_64
+RUN npm init -y
+RUN yum install tar git python3 cmake gcc-c++ -y && yum groupinstall "Development Tools" -y
+
+# Assuming AWS Linux 2 uses old compilers:
+ENV USEARCH_USE_FP16LIB 1
+ENV DUSEARCH_USE_SIMSIMD 1
+ENV SIMSIMD_TARGET_X86_AVX2 1
+ENV SIMSIMD_TARGET_X86_AVX512 0
+ENV SIMSIMD_TARGET_ARM_NEON 1
+ENV SIMSIMD_TARGET_ARM_SVE 0
+
+# For specific PR:
+# RUN npm install --build-from-source unum-cloud/usearch#pull/302/head
+# For specific version:
+# RUN npm install --build-from-source usearch@2.8.8
+RUN npm install --build-from-source usearch
+```
+
 To compile to WebAssembly make sure you have `emscripten` installed and run the following script:
 
 ```sh
