@@ -36,6 +36,21 @@ test('Batch operations', () => {
     assert.deepEqual(results.distances, new Float32Array([45, 130]), 'distances should be 45 and 130');
 });
 
+test("Expected results", () => {
+    var index = new usearch.Index({
+        metric: "cos",
+        connectivity: 16,
+        dimensions: 3,
+    });
+    index.add(42n, new Float32Array([0.2, 0.6, 0.4]));
+    var results = index.search(new Float32Array([0.2, 0.6, 0.4]), 10);
+
+    assert.equal(index.size(), 1);
+    assert.deepEqual(results.keys, new BigUint64Array([42n]));
+    assert.deepEqual(results.distances, new Float32Array([0]));
+});
+
+
 
 test('Operations with invalid values', () => {
     const indexBatch = new usearch.Index(2, 'l2sq');
