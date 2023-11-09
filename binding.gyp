@@ -6,11 +6,14 @@
             "include_dirs": [
                 "<!@(node -p \"require('node-addon-api').include\")",
                 "include",
-                "fp16/include",
-                "simsimd/include",
+                "<!(echo $USEARCH_USE_SIMSIMD == '1' ? 'simsimd/include' : '')",
+                "<!(echo $USEARCH_USE_NATIVE_F16 == '1' ? 'fp16/include' : '')",
             ],
             "dependencies": ["<!(node -p \"require('node-addon-api').gyp\")"],
-            "defines": ["USEARCH_USE_SIMSIMD=1", "USEARCH_USE_NATIVE_F16=0"],
+            "defines": [
+                "<!(echo $USEARCH_USE_SIMSIMD == '1' ? 'USEARCH_USE_SIMSIMD=1' : 'USEARCH_USE_SIMSIMD=0')",
+                "<!(echo $USEARCH_USE_NATIVE_F16 == '1' ? 'USEARCH_USE_NATIVE_F16=1' : 'USEARCH_USE_NATIVE_F16=0')"
+            ],
             "cflags": [
                 "-fexceptions",
                 "-Wno-unknown-pragmas",

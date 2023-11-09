@@ -5,17 +5,28 @@ from setuptools import setup
 
 from pybind11.setup_helpers import Pybind11Extension
 
-
 compile_args = []
 link_args = []
 macros_args = []
 
+# Check the environment variables
+use_simsimd = os.environ.get("USEARCH_USE_SIMSIMD", "1") == "1"
+use_native_f16 = os.environ.get("USEARCH_USE_NATIVE_F16", "0") == "1"
+
+
 def is_gcc():
     try:
-        compiler_version = subprocess.check_output(["c++", "--version"], universal_newlines=True)
+        compiler_version = subprocess.check_output(
+            ["c++", "--version"], universal_newlines=True
+        )
         return "gcc" in compiler_version.lower()
     except Exception:
         return False
+
+
+# Common arguments for all platforms
+macros_args.append(("USEARCH_USE_SIMSIMD", "1" if use_simsimd else "0"))
+macros_args.append(("USEARCH_USE_NATIVE_F16", "1" if use_native_f16 else "0"))
 
 if sys.platform == "linux":
     compile_args.append("-std=c++17")
@@ -26,9 +37,6 @@ if sys.platform == "linux":
 
     # Simplify debugging, but the normal `-g` may make builds much longer!
     compile_args.append("-g1")
-
-    macros_args.append(("USEARCH_USE_NATIVE_F16", "0"))
-    macros_args.append(("USEARCH_USE_SIMSIMD", "1"))
 
     if is_gcc():
         macros_args.append(("USEARCH_USE_OPENMP", "1"))
@@ -80,11 +88,16 @@ ext_modules = [
 __version__ = open("VERSION", "r").read().strip()
 __lib_name__ = "usearch"
 
-
 this_directory = os.path.abspath(os.path.dirname(__file__))
 with open(os.path.join(this_directory, "README.md")) as f:
     long_description = f.read()
 
+# Depending on the macros, adjust the include directories
+include_dirs = ["include"]
+if use_simsimd:
+    include_dirs.append("simsimd/include")
+if use_native_f16:
+    include_dirs.append("fp16/include")
 
 setup(
     name=__lib_name__,
@@ -118,7 +131,7 @@ setup(
         "Topic :: Database :: Database Engines/Servers",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
-    include_dirs=["include", "fp16/include", "simsimd/include"],
+    include_dirs=include_dirs,
     ext_modules=ext_modules,
     install_requires=[
         "numpy",

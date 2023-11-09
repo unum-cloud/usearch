@@ -24,7 +24,6 @@
         "node-addon-api": "^3.0.0"
     },
     "scripts": {
-        "preinstall": "git submodule update --init --recursive",
         "test": "node --test ./javascript/usearch.test.js",
         "install": "node-gyp rebuild"
     },
