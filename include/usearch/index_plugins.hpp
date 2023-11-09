@@ -13,6 +13,10 @@
 
 #include <usearch/index.hpp> // `expected_gt` and macros
 
+#if !defined(USEARCH_USE_OPENMP)
+#define USEARCH_USE_OPENMP 0
+#endif
+
 #if USEARCH_USE_OPENMP
 #include <omp.h> // `omp_get_num_threads()`
 #endif
@@ -21,18 +25,18 @@
 #include <sys/auxv.h> // `getauxval()`
 #endif
 
-#if !defined(USEARCH_USE_NATIVE_F16)
+#if !defined(USEARCH_USE_FP16LIB)
 #if defined(__AVX512F__)
-#define USEARCH_USE_NATIVE_F16 1
+#define USEARCH_USE_FP16LIB 0
 #elif defined(USEARCH_DEFINED_ARM)
 #include <arm_fp16.h> // `__fp16`
-#define USEARCH_USE_NATIVE_F16 1
+#define USEARCH_USE_FP16LIB 0
 #else
-#define USEARCH_USE_NATIVE_F16 0
+#define USEARCH_USE_FP16LIB 1
 #endif
 #endif
 
-#if !USEARCH_USE_NATIVE_F16
+#if USEARCH_USE_FP16LIB
 #include <fp16/fp16.h>
 #endif
 
@@ -41,27 +45,27 @@
 #endif
 
 #if USEARCH_USE_SIMSIMD
+
 // Propagate the `f16` settings
-#define SIMSIMD_NATIVE_F16 USEARCH_USE_NATIVE_F16
-#if defined(USEARCH_DEFINED_LINUX)
+#define SIMSIMD_NATIVE_F16 !USEARCH_USE_FP16LIB
+
+#if !defined(SIMSIMD_TARGET_X86_AVX512) && defined(USEARCH_DEFINED_LINUX)
 #define SIMSIMD_TARGET_X86_AVX512 1
-#define SIMSIMD_TARGET_ARM_SVE 1
-#define SIMSIMD_TARGET_X86_AVX2 1
-#define SIMSIMD_TARGET_ARM_NEON 1
-#include <simsimd/simsimd.h>
-#elif defined(USEARCH_DEFINED_APPLE)
-#define SIMSIMD_TARGET_X86_AVX512 0
-#define SIMSIMD_TARGET_ARM_SVE 0
-#define SIMSIMD_TARGET_X86_AVX2 1
-#define SIMSIMD_TARGET_ARM_NEON 1
-#include <simsimd/simsimd.h>
-#else
-#define SIMSIMD_TARGET_X86_AVX512 0
-#define SIMSIMD_TARGET_ARM_SVE 0
-#define SIMSIMD_TARGET_X86_AVX2 0
-#define SIMSIMD_TARGET_ARM_NEON 0
-#include <simsimd/simsimd.h>
 #endif
+
+#if !defined(SIMSIMD_TARGET_ARM_SVE) && defined(USEARCH_DEFINED_LINUX)
+#define SIMSIMD_TARGET_ARM_SVE 1
+#endif
+
+#if !defined(SIMSIMD_TARGET_X86_AVX2) && (defined(USEARCH_DEFINED_LINUX) || defined(USEARCH_DEFINED_APPLE))
+#define SIMSIMD_TARGET_X86_AVX2 1
+#endif
+
+#if !defined(SIMSIMD_TARGET_ARM_NEON) && (defined(USEARCH_DEFINED_LINUX) || defined(USEARCH_DEFINED_APPLE))
+#define SIMSIMD_TARGET_ARM_NEON 1
+#endif
+
+#include <simsimd/simsimd.h>
 #endif
 
 namespace unum {
@@ -77,7 +81,7 @@ struct uuid_t {
 class f16_bits_t;
 class i8_converted_t;
 
-#if USEARCH_USE_NATIVE_F16
+#if !USEARCH_USE_FP16LIB
 #if defined(USEARCH_DEFINED_ARM)
 using f16_native_t = __fp16;
 #else
@@ -298,7 +302,7 @@ inline expected_gt<metric_kind_t> metric_from_name(char const* name) {
 }
 
 inline float f16_to_f32(std::uint16_t u16) noexcept {
-#if USEARCH_USE_NATIVE_F16
+#if !USEARCH_USE_FP16LIB
     f16_native_t f16;
     std::memcpy(&f16, &u16, sizeof(std::uint16_t));
     return float(f16);
@@ -308,7 +312,7 @@ inline float f16_to_f32(std::uint16_t u16) noexcept {
 }
 
 inline std::uint16_t f32_to_f16(float f32) noexcept {
-#if USEARCH_USE_NATIVE_F16
+#if !USEARCH_USE_FP16LIB
     f16_native_t f16 = f16_native_t(f32);
     std::uint16_t u16;
     std::memcpy(&u16, &f16, sizeof(std::uint16_t));

@@ -850,7 +850,7 @@ PYBIND11_MODULE(compiled, m) {
 
     m.attr("USES_OPENMP") = py::int_(USEARCH_USE_OPENMP);
     m.attr("USES_SIMSIMD") = py::int_(USEARCH_USE_SIMSIMD);
-    m.attr("USES_NATIVE_F16") = py::int_(USEARCH_USE_NATIVE_F16);
+    m.attr("USES_FP16LIB") = py::int_(USEARCH_USE_FP16LIB);
 
     py::enum_<metric_punned_signature_t>(m, "MetricSignature")
         .value("ArrayArray", metric_punned_signature_t::array_array_k)

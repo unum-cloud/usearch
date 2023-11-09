@@ -49,7 +49,7 @@ The CMakeLists.txt file has a number of options you can pass:
   - `USEARCH_USE_OPENMP` - use OpenMP for parallelism
   - `USEARCH_USE_SIMSIMD` - use SimSIMD for vectorization
   - `USEARCH_USE_JEMALLOC` - use Jemalloc for memory management
-  - `USEARCH_USE_NATIVE_F16` - use native half-precision floating point
+  - `USEARCH_USE_FP16LIB` - use software emulation for half-precision floating point
 
 Putting all of this together on Ubuntu and compiling the "release" version using the GCC 12 compiler:
 
@@ -58,7 +58,7 @@ cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_C_COMPILER=gcc-12 \
     -DCMAKE_CXX_COMPILER=g++-12 \
-    -DUSEARCH_USE_NATIVE_F16=1 \
+    -DUSEARCH_USE_FP16LIB=1 \
     -DUSEARCH_USE_OPENMP=1 \
     -DUSEARCH_USE_SIMSIMD=1 \
     -DUSEARCH_USE_JEMALLOC=1 \
@@ -80,7 +80,7 @@ cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_C_COMPILER="/opt/homebrew/opt/llvm/bin/clang" \
     -DCMAKE_CXX_COMPILER="/opt/homebrew/opt/llvm/bin/clang++" \
-    -DUSEARCH_USE_NATIVE_F16=1 \
+    -DUSEARCH_USE_FP16LIB=1 \
     -DUSEARCH_USE_OPENMP=1 \
     -DUSEARCH_USE_SIMSIMD=1 \
     -DUSEARCH_USE_JEMALLOC=1 \

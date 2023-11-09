@@ -44,7 +44,7 @@ from usearch.compiled import (
     DEFAULT_EXPANSION_SEARCH,
     USES_OPENMP,
     USES_SIMSIMD,
-    USES_NATIVE_F16,
+    USES_FP16LIB,
 )
 
 MetricKindBitwise = (
@@ -1204,7 +1204,7 @@ class Index:
             "path": self.path,
             "compiled_with_openmp": USES_OPENMP,
             "compiled_with_simsimd": USES_SIMSIMD,
-            "compiled_with_native_f16": USES_NATIVE_F16,
+            "compiled_with_native_f16": USES_FP16LIB,
         }
 
     def __repr__(self) -> str:
@@ -1242,7 +1242,7 @@ class Index:
                 "- binary",
                 f"-- uses OpenMP: {USES_OPENMP}",
                 f"-- uses SimSIMD: {USES_SIMSIMD}",
-                f"-- supports half-precision: {USES_NATIVE_F16}",
+                f"-- supports half-precision: {USES_FP16LIB}",
                 f"-- uses hardware acceleration: {self.hardware_acceleration}",
                 "- state",
                 f"-- size: {self.size:,} vectors",
