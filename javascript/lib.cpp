@@ -181,7 +181,7 @@ Napi::Value CompiledIndex::Search(Napi::CallbackInfo const& ctx) {
     std::size_t tasks = queries.ElementLength() / native_->dimensions();
     std::size_t wanted = napi_argument_to_size(ctx[1]);
 
-    auto run_parallel = [&](auto vectors) {
+    auto run_parallel = [&](auto vectors) -> Napi::Value {
         Napi::Array result_js = Napi::Array::New(env, 3);
         Napi::BigUint64Array matches_js = Napi::BigUint64Array::New(env, tasks * wanted);
         Napi::Float32Array distances_js = Napi::Float32Array::New(env, tasks * wanted);
@@ -192,21 +192,29 @@ Napi::Value CompiledIndex::Search(Napi::CallbackInfo const& ctx) {
         auto counts_data = counts_js.Data();
 
         try {
+            bool failed = false;
             executor_stl_t executor;
             executor.fixed(tasks, [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
                 auto result = native_->search(vectors + task_idx * native_->dimensions(), wanted);
                 if (!result) {
-                    // Handle the error appropriately
-                    // For example, log the error or set some flag in the result_js object
+                    failed = true;
+                    Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
                 } else {
                     counts_data[task_idx] = result.dump_to(matches_data + task_idx * native_->dimensions(),
                                                            distances_data + task_idx * native_->dimensions());
                 }
             });
+
+            if (failed)
+                return env.Null();
+
         } catch (std::bad_alloc const&) {
             Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
+            return env.Null();
+
         } catch (...) {
             Napi::TypeError::New(env, "Search failed").ThrowAsJavaScriptException();
+            return env.Null();
         }
 
         result_js.Set(0u, matches_js);

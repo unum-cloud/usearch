@@ -1419,7 +1419,7 @@ class metric_punned_t {
         if (simd_metric == nullptr)
             return false;
 
-        raw_ptr_ = (punned_ptr_t)simd_metric;
+        std::memcpy(&raw_ptr_, &simd_metric, sizeof(simd_metric));
         isa_kind_ = simd_kind;
         return true;
     }
