@@ -196,8 +196,8 @@ Napi::Value CompiledIndex::Search(Napi::CallbackInfo const& ctx) {
             executor.fixed(tasks, [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
                 auto result = native_->search(vectors + task_idx * native_->dimensions(), wanted);
                 if (!result) {
-                    // Handle the error appropriately
-                    // For example, log the error or set some flag in the result_js object
+                    Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
+                    return env.Null();
                 } else {
                     counts_data[task_idx] = result.dump_to(matches_data + task_idx * native_->dimensions(),
                                                            distances_data + task_idx * native_->dimensions());

@@ -247,10 +247,12 @@ class Index {
         // Call the compiled method and create Matches or BatchMatches object with the result
         const result = this._compiledIndex.search(normalizedVectors, k);
         const countInQueries = normalizedVectors.length / Number(this._compiledIndex.dimensions());
+        const batchMatches = new BatchMatches(result[0], result[1], result[2], k);
+
         if (countInQueries === 1) {
-            return new Matches(result[0], result[1]);
+            return batchMatches.get(0);
         } else {
-            return new BatchMatches(result[0], result[1], result[2], k);
+            return batchMatches;
         }
     }
 
