@@ -1,5 +1,7 @@
 package cloud.unum.usearch;
 
+import java.io.IOException;
+
 /**
  * Java bindings for Unum USearch.
  * <p>
@@ -286,7 +288,15 @@ public class Index {
   }
 
   static {
-    System.loadLibrary("usearch");
+    try {
+      System.loadLibrary("usearch"); // used for tests. This library in classpath only
+    } catch (UnsatisfiedLinkError e) {
+      try {
+        NativeUtils.loadLibraryFromJar("/usearch/libusearch.so");
+      } catch (IOException e1) {
+        throw new RuntimeException(e1);
+      }
+    }
   }
 
   /**
