@@ -1402,6 +1402,7 @@ class metric_punned_t {
         case metric_kind_t::cos_k: kind = simsimd_metric_cos_k; break;
         case metric_kind_t::l2sq_k: kind = simsimd_metric_l2sq_k; break;
         case metric_kind_t::hamming_k: kind = simsimd_metric_hamming_k; break;
+        case metric_kind_t::tanimoto_k: kind = simsimd_metric_jaccard_k; break;
         case metric_kind_t::jaccard_k: kind = simsimd_metric_jaccard_k; break;
         default: break;
         }

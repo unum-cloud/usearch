@@ -1,6 +1,6 @@
 import os
 import sys
-import subprocess
+import platform
 from setuptools import setup
 
 from pybind11.setup_helpers import Pybind11Extension
@@ -14,28 +14,19 @@ def get_bool_env(name: str, preference: bool) -> bool:
     return os.environ.get(name, "1" if preference else "0") == "1"
 
 
-def get_bool_env_w_name(name: str, preference: bool) -> bool:
-    return name, get_bool_env(name, preference)
-
-
-def get_is_gcc():
-    try:
-        compiler_version = subprocess.check_output(
-            ["c++", "--version"], universal_newlines=True
-        )
-        return "gcc" in compiler_version.lower()
-    except Exception:
-        return False
+def get_bool_env_w_name(name: str, preference: bool) -> tuple:
+    return name, "1" if get_bool_env(name, preference) else "0"
 
 
 # Check the environment variables
+is_gcc = "GCC" in platform.python_compiler().upper()
 is_linux: bool = sys.platform == "linux"
 is_macos: bool = sys.platform == "darwin"
 is_windows: bool = sys.platform == "win32"
 
 prefer_simsimd: bool = is_linux or is_macos
 prefer_fp16lib: bool = True
-prefer_openmp: bool = is_linux and get_is_gcc()
+prefer_openmp: bool = is_linux and is_gcc
 
 use_simsimd: bool = get_bool_env("USEARCH_USE_SIMSIMD", prefer_simsimd)
 use_fp16lib: bool = get_bool_env("USEARCH_USE_FP16LIB", prefer_fp16lib)
@@ -122,6 +113,8 @@ if is_windows:
                 get_bool_env_w_name("SIMSIMD_TARGET_ARM_NEON", False),
             ]
         )
+
+print("macros_args", macros_args)
 
 ext_modules = [
     Pybind11Extension(

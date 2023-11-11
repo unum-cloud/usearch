@@ -9,7 +9,7 @@ xfail_strict = true
 filterwarnings = ["error"]
 
 # Avoid running tests, as everything is happening in a super slow container
-# We have already run all the relavent Python tests in `prerelease.yml`
+# We have already run all the relavent Python tests in `prerelease.yml`
 #   test-requires = ["pytest", "numpy"]
 #   test-command = "pytest {project}/python/scripts"
 [tool.cibuildwheel]
