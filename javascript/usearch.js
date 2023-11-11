@@ -137,7 +137,7 @@ class Index {
     /**
      * Constructs a new index.
      * 
-     * @param {number} dimensionsOrConfigs
+     * @param {(number | {dimensions: number, metric: MetricKind = MetricKind.Cos, quantization: ScalarKind = ScalarKind.F32, connectivity: number = 0, expansion_add: number = 0, expansion_search: number = 0, multi: boolean = false})} dimensionsOrConfigs
      * @param {MetricKind} [metric=MetricKind.Cos] - Optional, default is 'cos'.
      * @param {ScalarKind} [quantization=ScalarKind.F32] - Optional, default is 'f32'.
      * @param {number} [connectivity=0] - Optional, default is 0.
