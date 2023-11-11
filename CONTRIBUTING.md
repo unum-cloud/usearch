@@ -261,7 +261,7 @@ g++ -std=c++11 -c -fPIC \
 g++ -dynamiclib -o libusearch.dylib cloud_unum_usearch_Index.o -lc
 
 # Run linking to that directory
-cd ../../../..
+cd ../../..
 cp cloud/unum/usearch/libusearch.* .
 java -cp . -Djava.library.path="$(pwd)" cloud.unum.usearch.Index
 ```
