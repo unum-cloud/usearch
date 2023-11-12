@@ -432,6 +432,7 @@ jobs:
           npm install
           npm ci
           npm test
+          npm run typegen
 
       - name: Publish
         uses: JS-DevTools/npm-publish@v2

@@ -25,9 +25,24 @@
     },
     "scripts": {
         "test": "node --test ./javascript/usearch.test.js",
-        "install": "node-gyp rebuild"
+        "install": "node-gyp rebuild",
+        "typegen": "npx tsc"
     },
     "devDependencies": {
         "typescript": "^5.1.6"
-    }
+    },
+    "exports": {
+        ".": {
+            "types": "./javascript/types/usearch.d.ts",
+            "require": "./javascript/usearch.js"
+        },
+        "./package.json": "./package.json"
+    },
+    "typesVersions": {
+      "*": {
+          "*": [
+              "./javascript/types/usearch.d.ts"
+          ]
+      }
+  }
 }
