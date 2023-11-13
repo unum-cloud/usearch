@@ -232,7 +232,13 @@ Afterwards, in a new terminal:
 
 ```sh
 gradle clean build
-java -cp . -Djava.library.path="$(pwd)/build/libs/usearch/shared" java/cloud/unum/usearch/Index.java
+gradle test
+```
+
+Alternatively, to run the `Index.main`:
+
+```sh
+java -cp "$(pwd)/build/classes/java/main" -Djava.library.path="$(pwd)/build/libs/usearch/shared" java/cloud/unum/usearch/Index.java
 ```
 
 Or step by-step:

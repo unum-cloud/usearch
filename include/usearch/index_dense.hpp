@@ -108,13 +108,10 @@ struct index_dense_config_t : public index_config_t {
 
     index_dense_config_t(index_config_t base) noexcept : index_config_t(base) {}
 
-    index_dense_config_t(                                  //
-        std::size_t connectivity = default_connectivity(), //
-        std::size_t expansion_add = default_expansion_add(),
-        std::size_t expansion_search = default_expansion_search()) noexcept
-        : index_config_t(connectivity), //
-          expansion_add(expansion_add ? expansion_add : default_expansion_add()),
-          expansion_search(expansion_search ? expansion_search : default_expansion_search()) {}
+    index_dense_config_t(std::size_t c = default_connectivity(), std::size_t ea = default_expansion_add(),
+                         std::size_t es = default_expansion_search()) noexcept
+        : index_config_t(c), expansion_add(ea ? ea : default_expansion_add()),
+          expansion_search(es ? es : default_expansion_search()) {}
 };
 
 struct index_dense_clustering_config_t {
