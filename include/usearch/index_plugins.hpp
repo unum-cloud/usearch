@@ -1343,11 +1343,13 @@ class metric_punned_t {
           scalar_kind_(scalar_kind) {
 
 #if USEARCH_USE_SIMSIMD
-        if (configure_with_simsimd())
-            return;
+        if (!configure_with_simsimd())
+            configure_with_auto_vectorized();
 #endif
-
         configure_with_auto_vectorized();
+
+        if (scalar_kind == scalar_kind_t::b1x8_k)
+            raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_);
     }
 
     inline metric_punned_t(                                                 //
@@ -1499,18 +1501,9 @@ class metric_punned_t {
             break;
         }
         case metric_kind_t::jaccard_k: // Equivalent to Tanimoto
-        case metric_kind_t::tanimoto_k:
-            raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_tanimoto_gt<b1x8_t>>,
-            raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_), scalar_kind_ = scalar_kind_t::b1x8_k;
-            break;
-        case metric_kind_t::hamming_k:
-            raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_hamming_gt<b1x8_t>>,
-            raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_), scalar_kind_ = scalar_kind_t::b1x8_k;
-            break;
-        case metric_kind_t::sorensen_k:
-            raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_sorensen_gt<b1x8_t>>,
-            raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_), scalar_kind_ = scalar_kind_t::b1x8_k;
-            break;
+        case metric_kind_t::tanimoto_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_tanimoto_gt<b1x8_t>>; break;
+        case metric_kind_t::hamming_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_hamming_gt<b1x8_t>>; break;
+        case metric_kind_t::sorensen_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_sorensen_gt<b1x8_t>>; break;
         default: return;
         }
     }
