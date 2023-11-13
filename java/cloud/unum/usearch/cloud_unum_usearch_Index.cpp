@@ -22,18 +22,14 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
     char const* quantization_cstr{};
     try {
 
-        std::size_t connectivity = static_cast<std::size_t>(connectivity);
-        std::size_t expansion_add = static_cast<std::size_t>(expansion_add);
-        std::size_t expansion_search = static_cast<std::size_t>(expansion_search);
-
         metric_cstr = (*env).GetStringUTFChars(metric, 0);
         std::size_t metric_length = (*env).GetStringUTFLength(metric);
         quantization_cstr = (*env).GetStringUTFChars(quantization, 0);
         std::size_t quantization_length = (*env).GetStringUTFLength(quantization);
-
         metric_kind_t metric_kind = metric_from_name(metric_cstr, metric_length);
         scalar_kind_t quantization = scalar_kind_from_name(quantization_cstr, quantization_length);
-        index_dense_config_t config(connectivity, expansion_add, expansion_search);
+        index_dense_config_t config(static_cast<std::size_t>(connectivity), static_cast<std::size_t>(expansion_add),
+                                    static_cast<std::size_t>(expansion_search));
         metric_punned_t metric(static_cast<std::size_t>(dimensions), metric_kind, quantization);
         index_dense_t index = index_dense_t::make(metric, config);
         if (!index.reserve(static_cast<std::size_t>(capacity))) {
@@ -126,6 +122,7 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add( //
 
     using vector_key_t = typename index_dense_t::vector_key_t;
     using add_result_t = typename index_dense_t::add_result_t;
+    printf("Adding %zu dims \n", (size_t)vector_dims);
 
     add_result_t result = reinterpret_cast<index_dense_t*>(c_ptr)->add(static_cast<vector_key_t>(key), vector_span);
     if (!result) {
@@ -158,7 +155,7 @@ JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search( //
     search_result_t result =
         reinterpret_cast<index_dense_t*>(c_ptr)->search(vector_span, static_cast<std::size_t>(wanted));
     if (result) {
-        std::size_t found = result.dump_to(reinterpret_cast<vector_key_t*>(matches_data), NULL);
+        std::size_t found = result.dump_to(reinterpret_cast<vector_key_t*>(matches_data));
         (*env).SetIntArrayRegion(matches, 0, found, matches_data);
     } else {
         jclass jc = (*env).FindClass("java/lang/Error");
@@ -171,7 +168,7 @@ JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search( //
     return matches;
 }
 
-JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1remove(JNIEnv* env, jclass, jlong c_ptr, jlong key) {
+JNIEXPORT jboolean JNICALL Java_cloud_unum_usearch_Index_c_1remove(JNIEnv* env, jclass, jlong c_ptr, jint key) {
     using vector_key_t = typename index_dense_t::vector_key_t;
     using labeling_result_t = typename index_dense_t::labeling_result_t;
     labeling_result_t result = reinterpret_cast<index_dense_t*>(c_ptr)->remove(static_cast<vector_key_t>(key));
@@ -183,7 +180,8 @@ JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1remove(JNIEnv* env, jcla
     return result.completed;
 }
 
-JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1rename(JNIEnv* env, jclass, jlong c_ptr, jlong from, jlong to) {
+JNIEXPORT jboolean JNICALL Java_cloud_unum_usearch_Index_c_1rename(JNIEnv* env, jclass, jlong c_ptr, jint from,
+                                                                   jint to) {
     using vector_key_t = typename index_dense_t::vector_key_t;
     using labeling_result_t = typename index_dense_t::labeling_result_t;
     labeling_result_t result =

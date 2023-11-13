@@ -232,21 +232,30 @@ Afterwards, in a new terminal:
 
 ```sh
 gradle clean build
-java -cp . -Djava.library.path="$(pwd)/build/libs/usearch/shared" java/cloud/unum/usearch/Index.java
+gradle test
+```
+
+Alternatively, to run the `Index.main`:
+
+```sh
+java -cp "$(pwd)/build/classes/java/main" -Djava.library.path="$(pwd)/build/libs/usearch/shared" java/cloud/unum/usearch/Index.java
 ```
 
 Or step by-step:
 
 ```sh
-cs java/unum/cloud/usearch
-javac -h . Index.java
+cd java/cloud/unum/usearch
+javac -h . Index.java NativeUtils.java
+
+# Ensure JAVA_HOME system environment variable has been set
+# e.g. export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
 
 # Ubuntu:
-g++ -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
-g++ -shared -fPIC -o libusearch_c.so cloud_unum_usearch_Index.o -lc
+g++ -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux -I../../../../include cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
+g++ -shared -fPIC -o libusearch.so cloud_unum_usearch_Index.o -lc
 
 # Windows
-g++ -c -I%JAVA_HOME%\include -I%JAVA_HOME%\include\win32 cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
+g++ -c -I%JAVA_HOME%\include -I%JAVA_HOME%\include\win32 cloud_unum_usearch_Index.cpp -I..\..\..\..\include -o cloud_unum_usearch_Index.o
 g++ -shared -o USearchJNI.dll cloud_unum_usearch_Index.o -Wl,--add-stdcall-alias
 
 # MacOS
@@ -256,9 +265,11 @@ g++ -std=c++11 -c -fPIC \
     -I../../../../simsimd/include \
     -I${JAVA_HOME}/include -I${JAVA_HOME}/include/darwin cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
 g++ -dynamiclib -o libusearch.dylib cloud_unum_usearch_Index.o -lc
+
 # Run linking to that directory
-java -cp . -Djava.library.path="$(pwd)/java/cloud/unum/usearch/" Index.java
-java -cp . -Djava.library.path="$(pwd)/java" cloud.unum.usearch.Index
+cd ../../../..
+cp cloud/unum/usearch/libusearch.* .
+java -cp . -Djava.library.path="$(pwd)" cloud.unum.usearch.Index
 ```
 
 ## Wolfram

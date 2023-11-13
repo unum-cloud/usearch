@@ -23,6 +23,11 @@ sourceSets {
             srcDir "java/"
             exclude "test/"
         }
+        // Ensure native libraries are included in the main source set
+        resources {
+            srcDirs "$buildDir/libs"
+            include "usearch/**"
+        }
     }
     test {
         java {
@@ -98,15 +103,25 @@ test {
 
     // Rearrange test classpath, add compiled JAR instead of main classes
     classpath = project.sourceSets.test.output + configurations.testRuntimeClasspath + files(jar.archiveFile)
+
+    // Enable detailed test logging
+    testLogging {
+        // Ensure that we get output from all tests, not just failing ones
+        showStandardStreams = true
+        exceptionFormat = 'full' // Can be 'short', 'full', or 'summary'
+
+        // More detailed test result logging
+        events "passed", "skipped", "failed"
+    }
 }
 
 jar {
     dependsOn("usearchSharedLibrary")
-    into("usearch") {
-        from("$buildDir/libs/usearch/shared/libusearch.dylib")
-        from("$buildDir/libs/usearch/shared/libusearch.dll")
-        from("$buildDir/libs/usearch/shared/libusearch.so")
+    from("$buildDir/libs/usearch/shared") {
+        include "libusearch.so", "libusearch.dylib", "libusearch.dll"
+        into "usearch"
     }
+    from sourceSets.main.output
 }
 
 signing {
@@ -180,4 +195,10 @@ publishing {
             }
         }
     }
+}
+
+// Ensure that the native library is built before the Java code
+compileJava.dependsOn tasks.withType(SharedLibraryBinarySpec)
+tasks.named("processResources").configure {
+    dependsOn tasks.named("linkUsearchSharedLibrary")
 }

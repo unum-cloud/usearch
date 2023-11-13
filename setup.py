@@ -1,6 +1,6 @@
 import os
 import sys
-import platform
+import subprocess
 from setuptools import setup
 
 from pybind11.setup_helpers import Pybind11Extension
@@ -19,10 +19,23 @@ def get_bool_env_w_name(name: str, preference: bool) -> tuple:
 
 
 # Check the environment variables
-is_gcc = "GCC" in platform.python_compiler().upper()
 is_linux: bool = sys.platform == "linux"
 is_macos: bool = sys.platform == "darwin"
 is_windows: bool = sys.platform == "win32"
+
+
+is_gcc = False
+if is_linux:
+    cxx = os.environ.get("CXX")
+    if cxx:
+        try:
+            command = "where" if os.name == "nt" else "which"
+            full_path = subprocess.check_output([command, cxx], text=True).strip()
+            compiler_name = os.path.basename(full_path)
+            is_gcc = ("g++" in compiler_name) and ("clang++" not in compiler_name)
+        except subprocess.CalledProcessError:
+            pass
+
 
 prefer_simsimd: bool = is_linux or is_macos
 prefer_fp16lib: bool = True

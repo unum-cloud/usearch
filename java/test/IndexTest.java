@@ -20,10 +20,11 @@ public class IndexTest {
         String path = "./tmp/";
         deleteDirectoryFiles(path);
 
-        // Index index = new Index.Config().metric("cos").dimensions(2).build();
-        // float vec[] = {10, 20};
-        // index.add(42, vec);
-        // int[] keys = index.search(vec, 5);
+        Index index = new Index.Config().metric("cos").dimensions(2).build();
+        float vec[] = { 10, 20 };
+        index.reserve(10);
+        index.add(42, vec);
+        int[] keys = index.search(vec, 5);
 
         System.out.println("Java Tests Passed!");
     }
