@@ -127,7 +127,7 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 16
-          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DDUSEARCH_USE_OPENMP=0 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_OPENMP=0 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
           cmake --build build_artifacts --config RelWithDebInfo
       - name: Test C++
         run: ./build_artifacts/test_cpp
