@@ -168,7 +168,7 @@ JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search( //
     return matches;
 }
 
-JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1remove(JNIEnv* env, jclass, jlong c_ptr, jlong key) {
+JNIEXPORT jboolean JNICALL Java_cloud_unum_usearch_Index_c_1remove(JNIEnv* env, jclass, jlong c_ptr, jint key) {
     using vector_key_t = typename index_dense_t::vector_key_t;
     using labeling_result_t = typename index_dense_t::labeling_result_t;
     labeling_result_t result = reinterpret_cast<index_dense_t*>(c_ptr)->remove(static_cast<vector_key_t>(key));
@@ -180,7 +180,8 @@ JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1remove(JNIEnv* env, jcla
     return result.completed;
 }
 
-JNIEXPORT bool JNICALL Java_cloud_unum_usearch_Index_c_1rename(JNIEnv* env, jclass, jlong c_ptr, jlong from, jlong to) {
+JNIEXPORT jboolean JNICALL Java_cloud_unum_usearch_Index_c_1rename(JNIEnv* env, jclass, jlong c_ptr, jint from,
+                                                                   jint to) {
     using vector_key_t = typename index_dense_t::vector_key_t;
     using labeling_result_t = typename index_dense_t::labeling_result_t;
     labeling_result_t result =
