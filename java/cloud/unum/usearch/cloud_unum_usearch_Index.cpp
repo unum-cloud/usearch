@@ -155,7 +155,7 @@ JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search( //
     search_result_t result =
         reinterpret_cast<index_dense_t*>(c_ptr)->search(vector_span, static_cast<std::size_t>(wanted));
     if (result) {
-        std::size_t found = result.dump_to(reinterpret_cast<vector_key_t*>(matches_data), NULL);
+        std::size_t found = result.dump_to(reinterpret_cast<vector_key_t*>(matches_data));
         (*env).SetIntArrayRegion(matches, 0, found, matches_data);
     } else {
         jclass jc = (*env).FindClass("java/lang/Error");
