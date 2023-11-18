@@ -798,7 +798,7 @@ template <typename index_at> std::vector<typename index_at::stats_t> compute_lev
 }
 
 template <typename internal_at, typename external_at = internal_at, typename index_at = void>
-static py::tuple get_typed_vectors_for_keys(index_at const& index, py::buffer keys) {
+static py::object get_typed_vectors_for_keys(index_at const& index, py::buffer keys) {
 
     py::buffer_info keys_info = keys.request();
     if (keys_info.ndim != 1)
@@ -806,27 +806,37 @@ static py::tuple get_typed_vectors_for_keys(index_at const& index, py::buffer ke
 
     Py_ssize_t keys_count = keys_info.shape[0];
     byte_t const* keys_data = reinterpret_cast<byte_t const*>(keys_info.ptr);
-    py::tuple results(keys_count);
 
-    for (Py_ssize_t task_idx = 0; task_idx != keys_count; ++task_idx) {
-        dense_key_t key = *reinterpret_cast<dense_key_t const*>(keys_data + task_idx * keys_info.strides[0]);
-        std::size_t vectors_count = index.count(key);
-        if (!vectors_count) {
-            results[task_idx] = py::none();
-            continue;
+    if (index.multi()) {
+        py::tuple results(keys_count);
+
+        for (Py_ssize_t task_idx = 0; task_idx != keys_count; ++task_idx) {
+            dense_key_t key = *reinterpret_cast<dense_key_t const*>(keys_data + task_idx * keys_info.strides[0]);
+            std::size_t vectors_count = index.count(key);
+            if (!vectors_count) {
+                results[task_idx] = py::none();
+                continue;
+            }
+
+            py::array_t<external_at> result_py({static_cast<Py_ssize_t>(vectors_count), //
+                                                static_cast<Py_ssize_t>(index.scalar_words())});
+            auto result_py2d = result_py.template mutable_unchecked<2>();
+            index.get(key, (internal_at*)&result_py2d(0, 0), vectors_count);
+            results[task_idx] = result_py;
         }
-
-        py::array_t<external_at> result_py({static_cast<Py_ssize_t>(vectors_count), //
-                                            static_cast<Py_ssize_t>(index.scalar_words())});
+        return results;
+    } else {
+        py::array_t<external_at> result_py({keys_count, static_cast<Py_ssize_t>(index.scalar_words())});
         auto result_py2d = result_py.template mutable_unchecked<2>();
-        index.get(key, (internal_at*)&result_py2d(0, 0), vectors_count);
-        results[task_idx] = result_py;
+        for (Py_ssize_t task_idx = 0; task_idx != keys_count; ++task_idx) {
+            dense_key_t key = *reinterpret_cast<dense_key_t const*>(keys_data + task_idx * keys_info.strides[0]);
+            index.get(key, (internal_at*)&result_py2d(task_idx, 0), 1);
+        }
+        return result_py;
     }
-
-    return results;
 }
 
-template <typename index_at> py::tuple get_many(index_at const& index, py::buffer keys, scalar_kind_t scalar_kind) {
+template <typename index_at> py::object get_many(index_at const& index, py::buffer keys, scalar_kind_t scalar_kind) {
     if (scalar_kind == scalar_kind_t::f32_k)
         return get_typed_vectors_for_keys<f32_t>(index, keys);
     else if (scalar_kind == scalar_kind_t::f64_k)
