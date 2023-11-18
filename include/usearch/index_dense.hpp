@@ -1309,11 +1309,10 @@ class index_dense_gt {
         shared_lock_t lock(slot_lookup_mutex_);
         offset = (std::min)(offset, slot_lookup_.size());
         slot_lookup_.for_each([&](key_and_slot_t const& key_and_slot) {
-            if (offset) {
+            if (offset)
+                // Skip the first `offset` entries
                 --offset;
-                return;
-            }
-            if (limit) {
+            else if (limit) {
                 *keys = key_and_slot.key;
                 ++keys;
                 --limit;

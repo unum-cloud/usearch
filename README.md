@@ -36,18 +36,18 @@ Linux • MacOS • Windows • iOS • WebAssembly
 </p>
 
 <div align="center">
-<a href="https://pypi.org/project/usearch/"> <img alt="PyPI" src="https://img.shields.io/pypi/dm/usearch?label=PyPi%20pulls"> </a>
-<a href="https://www.npmjs.com/package/usearch"> <img alt="NPM" src="https://img.shields.io/npm/dy/usearch?label=NPM%20pulls"> </a>
-<a href="https://crates.io/crates/usearch"> <img alt="Crate" src="https://img.shields.io/crates/d/usearch?label=Crate%20pulls"> </a>
-<a href="https://www.nuget.org/packages/Cloud.Unum.USearch"> <img alt="NuGet" src="https://img.shields.io/nuget/dt/Cloud.Unum.USearch?label=NuGet%20pulls"> </a>
+<a href="https://pepy.tech/project/usearch"> <img alt="PyPI" src="https://static.pepy.tech/personalized-badge/usearch?period=month&units=abbreviation&left_color=black&right_color=blue&left_text=Python%20monthly%20installs"> </a>
+<a href="https://www.npmjs.com/package/usearch"> <img alt="NPM" src="https://img.shields.io/npm/dy/usearch?label=NPM%20installs"> </a>
+<a href="https://crates.io/crates/usearch"> <img alt="Crate" src="https://img.shields.io/crates/d/usearch?label=Crate%20installs"> </a>
+<a href="https://www.nuget.org/packages/Cloud.Unum.USearch"> <img alt="NuGet" src="https://img.shields.io/nuget/dt/Cloud.Unum.USearch?label=NuGet%20installs"> </a>
 <a href="https://central.sonatype.com/artifact/cloud.unum/usearch/overview"> <img alt="Maven" src="https://img.shields.io/nexus/r/cloud.unum/usearch?server=https%3A%2F%2Fs01.oss.sonatype.org%2F&label=Maven%20version"> </a>
-<a href="https://hub.docker.com/r/unum/usearch"> <img alt="Docker" src="https://img.shields.io/docker/pulls/unum/usearch?label=Docker%20pulls"> </a>
+<a href="https://hub.docker.com/r/unum/usearch"> <img alt="Docker" src="https://img.shields.io/docker/pulls/unum/usearch?label=Docker%20installs"> </a>
 <img alt="GitHub code size in bytes" src="https://img.shields.io/github/languages/code-size/unum-cloud/usearch?label=Repo%20size">
 </div>
 
 ---
 
-- ✅ [20x faster than][faster-than-faiss] [FAISS][faiss] implementation of [HNSW algorithm][hnsw-algorithm].
+- ✅ [10x faster][faster-than-faiss] [HNSW][hnsw-algorithm] implementation than [FAISS][faiss].
 - ✅ Simple and extensible [single C++11 header][usearch-header] implementation.
 - ✅ Compatible with a dozen programming languages out of the box.
 - ✅ [Trusted](#integrations) by some of the most loved Datalakes and Databases, like [ClickHouse][clickhouse-docs].
@@ -86,28 +86,32 @@ FAISS is a widely recognized standard for high-performance vector search engines
 USearch and FAISS both employ the same HNSW algorithm, but they differ significantly in their design principles.
 USearch is compact and broadly compatible without sacrificing performance, primarily focusing on user-defined metrics and fewer dependencies.
 
-|                                              |                         FAISS |                        USearch |            Improvement |
-| :------------------------------------------- | ----------------------------: | -----------------------------: | ---------------------: |
-| Indexing time ⁰                              |                               |                                |                        |
-| 100 Million 96d `f32`, `f16`, `i8` vectors   |           2.6 h, 2.6 h, 2.6 h |            0.3 h, 0.2 h, 0.2 h | __9.6x, 10.4x, 10.7x__ |
-| 100 Million 1536d `f32`, `f16`, `i8` vectors |           5.0 h, 4.1 h, 3.8 h |            2.1 h, 1.1 h, 0.8 h |    __2.3x 3.6x, 4.4x__ |
-|                                              |                               |                                |                        |
-| Codebase length ¹                            | 84 K [SLOC][sloc] in `faiss/` | 3 K [SLOC][sloc] in `usearch/` |           maintainable |
-| Supported metrics ²                          |               9 fixed metrics |       any user-defined metrics |             extendible |
-| Supported languages ³                        |                   C++, Python |                   10 languages |               portable |
-| Supported ID types ⁴                         |                32-bit, 64-bit |         32-bit, 40-bit, 64-bit |              efficient |
-| Required dependencies ⁵                      |                  BLAS, OpenMP |                              - |           light-weight |
-| Bindings ⁶                                   |                          SWIG |                         Native |            low-latency |
+|                                              |                   FAISS |                  USearch |             Improvement |
+| :------------------------------------------- | ----------------------: | -----------------------: | ----------------------: |
+| Indexing time ⁰                              |                         |                          |                         |
+| 100 Million 96d `f32`, `f16`, `i8` vectors   |       2.6 · 2.6 · 2.6 h |        0.3 · 0.2 · 0.2 h | __9.6 · 10.4 · 10.7 x__ |
+| 100 Million 1536d `f32`, `f16`, `i8` vectors |       5.0 · 4.1 · 3.8 h |        2.1 · 1.1 · 0.8 h |   __2.3 · 3.6 · 4.4 x__ |
+|                                              |                         |                          |                         |
+| Codebase length ¹                            |       84 K [SLOC][sloc] |         3 K [SLOC][sloc] |            maintainable |
+| Supported metrics ²                          |         9 fixed metrics |               any metric |              extendible |
+| Supported languages ³                        |             C++, Python |             10 languages |                portable |
+| Supported ID types ⁴                         |          32-bit, 64-bit |   32-bit, 40-bit, 64-bit |               efficient |
+| Required dependencies ⁵                      |            BLAS, OpenMP |                        - |            light-weight |
+| Bindings ⁶                                   |                    SWIG |                   Native |             low-latency |
+| Python binding size ⁷                        | [~ 10 MB][faiss-weight] | [< 1 MB][usearch-weight] |              deployable |
 
 [sloc]: https://en.wikipedia.org/wiki/Source_lines_of_code
+[faiss-weight]: https://pypi.org/project/faiss-cpu/#files
+[usearch-weight]: https://pypi.org/project/usearch/#files
 
 > ⁰ [Tested][intel-benchmarks] on Intel Sapphire Rapids, with the simplest inner-product distance, equivalent recall, and memory consumption while also providing far superior search speed.
-> ¹ A shorter codebase makes the project easier to maintain and audit.
+> ¹ A shorter codebase of `usearch/` over `faiss/` makes the project easier to maintain and audit.
 > ² User-defined metrics allow you to customize your search for various applications, from GIS to creating custom metrics for composite embeddings from multiple AI models or hybrid full-text and semantic search.
 > ³ With USearch, you can reuse the same preconstructed index in various programming languages.
 > ⁴ The 40-bit integer allows you to store 4B+ vectors without allocating 8 bytes for every neighbor reference in the proximity graph.
 > ⁵ Lack of obligatory dependencies makes USearch much more portable.
 > ⁶ Native bindings introduce lower call latencies than more straightforward approaches.
+> ⁷ Lighter bindings make downloads and deployments faster.
 
 [intel-benchmarks]: https://www.unum.cloud/blog/2023-11-07-scaling-vector-search-with-intel
 
@@ -141,6 +145,7 @@ index = Index(
     connectivity=16, # Optional: Limit number of neighbors per graph node
     expansion_add=128, # Optional: Control the recall of indexing
     expansion_search=64, # Optional: Control the quality of the search
+    multi=False, # Optional: Allow multiple vectors per key, default = False
 )
 ```
 
@@ -161,7 +166,7 @@ index.save("index.usearch")
 loaded_copy = index.load("index.usearch")
 view = Index.restore("index.usearch", view=True)
 
-other_view = Index(ndim=..., metric=CompiledMetric(...))
+other_view = Index(ndim=..., metric=...)
 other_view.view("index.usearch")
 ```
 
@@ -208,7 +213,9 @@ multi_index.search(...)
 
 ## Clustering
 
-Once the index is constructed, it can cluster entries much faster than using a separate clustering algorithm implementation.
+Once the index is constructed, USearch can perform K-Nearest Neighbors Clustering much faster than standalone clustering libraries, like SciPy, 
+UMap, and tSNE.
+Same for dimensionality reduction with PCA. 
 Essentially, the `Index` itself can be seen as a clustering, allowing iterative deepening.
 
 ```py
@@ -395,6 +402,8 @@ keys = np.arange(len(molecules))
 index.add(keys, fingerprints)
 matches = index.search(fingerprints, 10)
 ```
+
+That method was used to build the ["USearch Molecules"](https://github.com/ashvardanian/usearch-molecules), one of the largest Chem-Informatics datasets, containing 7 billion small molecules and 28 billion fingerprints.
 
 [smiles]: https://en.wikipedia.org/wiki/Simplified_molecular-input_line-entry_system
 [rdkit-fingerprints]: https://www.rdkit.org/docs/RDKit_Book.html#additional-information-about-the-fingerprints
