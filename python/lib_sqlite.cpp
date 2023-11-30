@@ -79,7 +79,7 @@ static void sqlite_dense(sqlite3_context* context, int argc, sqlite3_value** arg
 
             // Parse the floating-point numbers
             std::from_chars_result result1 = std::from_chars(vec1, vec1 + bytes1, parsed1[i]);
-            std::from_chars_result result2 = std::from_chars(vec2, vec2 + bytes2, parsed1[i]);
+            std::from_chars_result result2 = std::from_chars(vec2, vec2 + bytes2, parsed2[i]);
             if (result1.ec != std::errc() || result2.ec != std::errc()) {
                 sqlite3_result_error(context, "Number can't be parsed", -1);
                 return;
