@@ -864,6 +864,10 @@ PYBIND11_MODULE(compiled, m) {
     m.attr("USES_SIMSIMD") = py::int_(USEARCH_USE_SIMSIMD);
     m.attr("USES_FP16LIB") = py::int_(USEARCH_USE_FP16LIB);
 
+    m.attr("VERSION_MAJOR") = py::int_(USEARCH_VERSION_MAJOR);
+    m.attr("VERSION_MINOR") = py::int_(USEARCH_VERSION_MINOR);
+    m.attr("VERSION_PATCH") = py::int_(USEARCH_VERSION_PATCH);
+
     py::enum_<metric_punned_signature_t>(m, "MetricSignature")
         .value("ArrayArray", metric_punned_signature_t::array_array_k)
         .value("ArrayArraySize", metric_punned_signature_t::array_array_size_k);

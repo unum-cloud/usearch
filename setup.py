@@ -151,7 +151,6 @@ include_dirs = [
     "include",
     "python",
     "stringzilla",
-    pa.get_include(),
 ]
 if use_simsimd:
     include_dirs.append("simsimd/include")
