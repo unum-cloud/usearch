@@ -1072,6 +1072,7 @@ PYBIND11_MODULE(compiled, m) {
 
     i.def("__len__", &dense_index_py_t::size);
     i.def_property_readonly("size", &dense_index_py_t::size);
+    i.def_property_readonly("multi", &dense_index_py_t::multi);
     i.def_property_readonly("connectivity", &dense_index_py_t::connectivity);
     i.def_property_readonly("capacity", &dense_index_py_t::capacity);
     i.def_property_readonly("ndim",
