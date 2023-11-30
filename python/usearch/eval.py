@@ -89,15 +89,15 @@ class SearchStats:
         return self.count_matches / self.count_queries
 
 
-def self_recall(index: Index, sample: float = 1, **kwargs) -> SearchStats:
+def self_recall(index: Index, sample: Union[float, int] = 1.0, **kwargs) -> SearchStats:
     """Simplest benchmark for a quality of search, which queries every
     existing member of the index, to make sure approximate search finds
     the point itself.
 
     :param index: Non-empty pre-constructed index
     :type index: Index
-    :param sample: Share of vectors to search, defaults to 1
-    :type sample: float
+    :param sample: Share (or number) of vectors to search, defaults to 1.0
+    :type sample: Union[float, int]
     :return: Evaluation report with key metrics
     :rtype: SearchStats
     """
@@ -107,16 +107,22 @@ def self_recall(index: Index, sample: float = 1, **kwargs) -> SearchStats:
         kwargs["count"] = 1
 
     if "keys" in kwargs:
-        keys = kwargs["keys"]
+        keys = kwargs.pop("keys")
     else:
         keys = np.array(index.keys)
 
-    if sample != 1:
-        keys = np.random.choice(keys, int(ceil(len(keys) * sample)))
+    if sample != 1.0:
+        if isinstance(sample, float):
+            sample = int(ceil(len(keys) * sample))
+        keys = np.random.choice(keys, sample)
 
     queries = index.get(keys, index.dtype)
-    matches: BatchMatches = index.search(queries, **kwargs)
-    count_matches: float = matches.count_matches(keys)
+    matches = index.search(queries, **kwargs)
+    count_matches: int = (
+        matches.count_matches(keys)
+        if isinstance(matches, BatchMatches)
+        else int(matches.keys[0] == keys[0])
+    )
     return SearchStats(
         index_size=len(index),
         count_queries=len(keys),
@@ -255,13 +261,13 @@ class Dataset:
                 if k is not None:
                     d.neighbors = d.neighbors[:, :k]
             else:
-                assert k is None, "Cant ovveride `k`, will retrieve one neighbor"
+                assert k is None, "Cant override `k`, will retrieve one neighbor"
                 d.neighbors = np.reshape(d.keys, (count, 1))
 
         else:
             assert ndim is not None
             assert count is not None
-            assert k is None, "Cant ovveride `k`, will retrieve one neighbor"
+            assert k is None, "Cant override `k`, will retrieve one neighbor"
 
             d.vectors = random_vectors(count=count, ndim=ndim)
             d.queries = d.vectors
