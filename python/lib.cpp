@@ -1,16 +1,14 @@
 /**
- *  @file python.cpp
- *  @author Ash Vardanian
- *  @brief Python bindings for Unum USearch.
- *  @date 2023-04-26
- *
+ *  @brief      Python bindings for Unum USearch.
+ *  @file       lib.cpp
+ *  @author     Ash Vardanian
+ *  @date       April 26, 2023
+ *  @copyright  Copyright (c) 2023
  *
  *  https://pythoncapi.readthedocs.io/type_object.html
  *  https://numpy.org/doc/stable/reference/c-api/types-and-structures.html
  *  https://pythonextensionpatterns.readthedocs.io/en/latest/refcount.html
  *  https://docs.python.org/3/extending/newtypes_tutorial.html#adding-data-and-methods-to-the-basic-example
- *
- *  @copyright Copyright (c) 2023
  */
 #if !defined(__cpp_exceptions)
 #define __cpp_exceptions 1
@@ -26,6 +24,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <arrow/python/pyarrow.h>
+
 #include <usearch/index_dense.hpp>
 #include <usearch/index_plugins.hpp>
 
@@ -34,6 +34,8 @@ using namespace unum;
 
 namespace py = pybind11;
 using py_shape_t = py::array::ShapeContainer;
+
+namespace pa = arrow::py;
 
 using metric_t = metric_punned_t;
 using distance_t = distance_punned_t;
@@ -445,6 +447,10 @@ static py::tuple search_many_in_index( //
     return results;
 }
 
+/**
+ *  @brief  Brute-force exact search implementation, compatible with Apache Arrow,
+ *          NumPy-like Tensors and other objects supporting Buffer Protocol.
+ */
 static py::tuple search_many_brute_force(       //
     py::buffer dataset, py::buffer queries,     //
     std::size_t wanted, std::size_t threads,    //
@@ -862,6 +868,8 @@ PYBIND11_MODULE(compiled, m) {
     m.attr("USES_SIMSIMD") = py::int_(USEARCH_USE_SIMSIMD);
     m.attr("USES_FP16LIB") = py::int_(USEARCH_USE_FP16LIB);
 
+    pa::import_pyarrow();
+
     py::enum_<metric_punned_signature_t>(m, "MetricSignature")
         .value("ArrayArray", metric_punned_signature_t::array_array_k)
         .value("ArrayArraySize", metric_punned_signature_t::array_array_size_k);
@@ -1224,3 +1232,5 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("progress") = nullptr                             //
     );
 }
+
+#include "lib_sqlite.cpp"
