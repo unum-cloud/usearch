@@ -5,7 +5,7 @@
  *  @date       November 28, 2023
  *  @copyright  Copyright (c) 2023
  */
-#include <stringzilla/stringzilla.h>
+#include <stringzilla.h>
 
 #include <charconv>
 

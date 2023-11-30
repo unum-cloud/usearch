@@ -150,7 +150,7 @@ with open(os.path.join(this_directory, "README.md")) as f:
 include_dirs = [
     "include",
     "python",
-    "stringzilla",
+    "stringzilla/stringzilla",
 ]
 if use_simsimd:
     include_dirs.append("simsimd/include")
