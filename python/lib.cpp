@@ -24,8 +24,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include <arrow/python/pyarrow.h>
-
 #include <usearch/index_dense.hpp>
 #include <usearch/index_plugins.hpp>
 
@@ -34,8 +32,6 @@ using namespace unum;
 
 namespace py = pybind11;
 using py_shape_t = py::array::ShapeContainer;
-
-namespace pa = arrow::py;
 
 using metric_t = metric_punned_t;
 using distance_t = distance_punned_t;
@@ -448,7 +444,7 @@ static py::tuple search_many_in_index( //
 }
 
 /**
- *  @brief  Brute-force exact search implementation, compatible with Apache Arrow,
+ *  @brief  Brute-force exact search implementation, compatible with
  *          NumPy-like Tensors and other objects supporting Buffer Protocol.
  */
 static py::tuple search_many_brute_force(       //
@@ -867,8 +863,6 @@ PYBIND11_MODULE(compiled, m) {
     m.attr("USES_OPENMP") = py::int_(USEARCH_USE_OPENMP);
     m.attr("USES_SIMSIMD") = py::int_(USEARCH_USE_SIMSIMD);
     m.attr("USES_FP16LIB") = py::int_(USEARCH_USE_FP16LIB);
-
-    pa::import_pyarrow();
 
     py::enum_<metric_punned_signature_t>(m, "MetricSignature")
         .value("ArrayArray", metric_punned_signature_t::array_array_k)

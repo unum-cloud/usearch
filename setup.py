@@ -3,9 +3,6 @@ import sys
 import subprocess
 from setuptools import setup
 
-# On connecting to Apache Arrow
-# https://arrow.apache.org/docs/python/integration/extending.html
-import pyarrow as pa
 from pybind11.setup_helpers import Pybind11Extension
 
 compile_args = []
@@ -154,6 +151,7 @@ include_dirs = [
     "include",
     "python",
     "stringzilla",
+    pa.get_include(),
 ]
 if use_simsimd:
     include_dirs.append("simsimd/include")
