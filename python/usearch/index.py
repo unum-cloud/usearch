@@ -177,6 +177,7 @@ def _search_in_compiled(
         progress, [int, int], bool
     ), "Invalid callback"
 
+    original_ndim = vectors.ndim
     if vectors.ndim == 1:
         vectors = vectors.reshape(1, len(vectors))
     count_vectors = vectors.shape[0]
@@ -184,7 +185,7 @@ def _search_in_compiled(
     def distill_batch(
         batch_matches: BatchMatches,
     ) -> Union[BatchMatches, Matches]:
-        return batch_matches[0] if count_vectors == 1 else batch_matches
+        return batch_matches[0] if original_ndim == 1 else batch_matches
 
     # Create progress bar if needed
     if log:

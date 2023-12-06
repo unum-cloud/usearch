@@ -69,7 +69,7 @@ def test_exact_search(rows: int, cols: int, k: int, reordered: bool):
 
     matches: BatchMatches = search(original, original[reordered_keys], k, exact=True)
     top_matches = (
-        [int(m.keys[0]) for m in matches] if rows > 1 else [int(matches.keys[0])]
+        [int(m.keys[0]) for m in matches] if rows > 1 else [int(matches.keys[0][0])]
     )
     assert top_matches == list(reordered_keys)
 
