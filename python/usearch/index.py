@@ -177,6 +177,7 @@ def _search_in_compiled(
         progress, [int, int], bool
     ), "Invalid callback"
 
+    original_ndim = vectors.ndim
     if vectors.ndim == 1:
         vectors = vectors.reshape(1, len(vectors))
     count_vectors = vectors.shape[0]
@@ -184,7 +185,7 @@ def _search_in_compiled(
     def distill_batch(
         batch_matches: BatchMatches,
     ) -> Union[BatchMatches, Matches]:
-        return batch_matches[0] if count_vectors == 1 else batch_matches
+        return batch_matches[0] if original_ndim == 1 else batch_matches
 
     # Create progress bar if needed
     if log:
@@ -760,7 +761,11 @@ class Index:
             keys = keys.astype(Key)
 
         results = self._compiled.get_many(keys, dtype)
-        results = [cast(result) for result in results]
+        results = (
+            cast(results)
+            if isinstance(results, np.ndarray)
+            else [cast(result) for result in results]
+        )
         return results[0] if is_one else results
 
     def __getitem__(
@@ -1143,6 +1148,10 @@ class Index:
         return self._compiled.max_level + 1
 
     @property
+    def multi(self) -> bool:
+        return self._compiled.multi
+
+    @property
     def stats(self) -> _CompiledIndexStats:
         """Get the accumulated statistics for the entire multi-level graph.
 
@@ -1193,6 +1202,7 @@ class Index:
         return {
             "type": "usearch.Index",
             "ndim": self.ndim,
+            "multi": self.multi,
             "connectivity": self.connectivity,
             "expansion_add": self.expansion_add,
             "expansion_search": self.expansion_search,
@@ -1210,11 +1220,12 @@ class Index:
     def __repr__(self) -> str:
         if not hasattr(self, "_compiled"):
             return "usearch.Index(failed)"
-        f = "usearch.Index({} x {}, {}, connectivity: {}, expansion: {} & {}, {:,} vectors in {} levels, {} hardware acceleration)"
+        f = "usearch.Index({} x {}, {}, multi: {}, connectivity: {}, expansion: {} & {}, {:,} vectors in {} levels, {} hardware acceleration)"
         return f.format(
             self.dtype,
             self.ndim,
             self.metric_kind,
+            self.multi,
             self.connectivity,
             self.expansion_add,
             self.expansion_search,
@@ -1236,6 +1247,7 @@ class Index:
                 f"-- data type: {self.dtype}",
                 f"-- dimensions: {self.ndim}",
                 f"-- metric: {self.metric_kind}",
+                f"-- multi: {self.multi}",
                 f"-- connectivity: {self.connectivity}",
                 f"-- expansion on addition:{self.expansion_add} candidates",
                 f"-- expansion on search: {self.expansion_search} candidates",

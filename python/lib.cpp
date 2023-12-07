@@ -1,16 +1,14 @@
 /**
- *  @file python.cpp
- *  @author Ash Vardanian
- *  @brief Python bindings for Unum USearch.
- *  @date 2023-04-26
- *
+ *  @brief      Python bindings for Unum USearch.
+ *  @file       lib.cpp
+ *  @author     Ash Vardanian
+ *  @date       April 26, 2023
+ *  @copyright  Copyright (c) 2023
  *
  *  https://pythoncapi.readthedocs.io/type_object.html
  *  https://numpy.org/doc/stable/reference/c-api/types-and-structures.html
  *  https://pythonextensionpatterns.readthedocs.io/en/latest/refcount.html
  *  https://docs.python.org/3/extending/newtypes_tutorial.html#adding-data-and-methods-to-the-basic-example
- *
- *  @copyright Copyright (c) 2023
  */
 #if !defined(__cpp_exceptions)
 #define __cpp_exceptions 1
@@ -445,6 +443,10 @@ static py::tuple search_many_in_index( //
     return results;
 }
 
+/**
+ *  @brief  Brute-force exact search implementation, compatible with
+ *          NumPy-like Tensors and other objects supporting Buffer Protocol.
+ */
 static py::tuple search_many_brute_force(       //
     py::buffer dataset, py::buffer queries,     //
     std::size_t wanted, std::size_t threads,    //
@@ -1072,6 +1074,7 @@ PYBIND11_MODULE(compiled, m) {
 
     i.def("__len__", &dense_index_py_t::size);
     i.def_property_readonly("size", &dense_index_py_t::size);
+    i.def_property_readonly("multi", &dense_index_py_t::multi);
     i.def_property_readonly("connectivity", &dense_index_py_t::connectivity);
     i.def_property_readonly("capacity", &dense_index_py_t::capacity);
     i.def_property_readonly("ndim",
@@ -1228,3 +1231,5 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("progress") = nullptr                             //
     );
 }
+
+#include "lib_sqlite.cpp"

@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 
 from usearch.io import load_matrix, save_matrix
-from usearch.eval import random_vectors
+from usearch.eval import random_vectors, self_recall, SearchStats
 from usearch.index import search
 
 from usearch.index import (
@@ -81,19 +81,48 @@ def test_index_search(ndim, metric, quantization, dtype, batch_size):
     vectors = random_vectors(count=batch_size, ndim=ndim, dtype=dtype)
     index.add(keys, vectors, threads=threads)
 
-    if batch_size == 1:
-        matches: Matches = index.search(vectors, 10, threads=threads)
-        assert matches.keys.ndim == 1
-        assert matches.keys.shape[0] == matches.distances.shape[0]
-        assert len(matches) == batch_size
-        assert np.all(np.sort(index.keys) == np.sort(keys))
+    matches: BatchMatches = index.search(vectors, 10, threads=threads)
+    assert matches.keys.ndim == 2
+    assert matches.keys.shape[0] == matches.distances.shape[0]
+    assert len(matches) == batch_size
+    assert np.all(np.sort(index.keys) == np.sort(keys))
 
-    else:
-        matches: BatchMatches = index.search(vectors, 10, threads=threads)
-        assert matches.keys.ndim == 2
-        assert matches.keys.shape[0] == matches.distances.shape[0]
-        assert len(matches) == batch_size
-        assert np.all(np.sort(index.keys) == np.sort(keys))
+
+@pytest.mark.parametrize("ndim", [3, 97, 256])
+@pytest.mark.parametrize("metric", [MetricKind.Cos, MetricKind.L2sq])
+@pytest.mark.parametrize("quantization", [ScalarKind.F32, ScalarKind.I8])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64, np.float16])
+def test_index_search_by_single_query(ndim, metric, quantization, dtype):
+    num_vectors = 64
+    index = Index(ndim=ndim, metric=metric, dtype=quantization, multi=False)
+    keys = np.arange(num_vectors)
+    vectors = random_vectors(count=num_vectors, ndim=ndim, dtype=dtype)
+    index.add(keys, vectors, threads=threads)
+
+    matches: Matches = index.search(vectors[0], 10, threads=threads)
+    assert matches.keys.ndim == 1
+    assert matches.keys.shape[0] == matches.distances.shape[0]
+    assert len(matches) == 10
+    assert np.all(np.sort(index.keys) == np.sort(keys))
+
+
+@pytest.mark.parametrize("ndim", [3, 97, 256])
+@pytest.mark.parametrize("batch_size", [1, 7, 1024])
+def test_index_self_recall(ndim: int, batch_size: int):
+    """
+    Test self-recall evaluation scripts.
+    """
+    original = np.random.rand(batch_size, ndim)
+    index = Index(ndim=ndim, multi=False)
+    keys = np.arange(batch_size)
+    vectors = random_vectors(count=batch_size, ndim=ndim)
+    index.add(keys, vectors, threads=threads)
+
+    stats_all: SearchStats = self_recall(index, keys=keys)
+    stats_quarter: SearchStats = self_recall(index, sample=0.25, count=10)
+
+    assert stats_all.computed_distances > 0
+    assert stats_quarter.computed_distances > 0
 
 
 @pytest.mark.parametrize("batch_size", [1, 7, 1024])

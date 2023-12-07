@@ -104,7 +104,8 @@
     "ranges": "cpp",
     "span": "cpp",
     "format": "cpp",
-    "charconv": "cpp"
+    "charconv": "cpp",
+    "strstream": "cpp"
   },
   "cSpell.words": [
     "allclose",
@@ -153,7 +154,9 @@
     "SLOC",
     "Sonatype",
     "sorensen",
+    "sqeuclidean",
     "Struct",
+    "swar",
     "tanimoto",
     "tqdm",
     "uninitialize",

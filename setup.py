@@ -147,7 +147,11 @@ with open(os.path.join(this_directory, "README.md")) as f:
     long_description = f.read()
 
 # Depending on the macros, adjust the include directories
-include_dirs = ["include"]
+include_dirs = [
+    "include",
+    "python",
+    "stringzilla/stringzilla",
+]
 if use_simsimd:
     include_dirs.append("simsimd/include")
 if use_fp16lib:
@@ -190,6 +194,5 @@ setup(
     install_requires=[
         "numpy",
         "tqdm",
-        'ucall; python_version >= "3.9"',
     ],
 )

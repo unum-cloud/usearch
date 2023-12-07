@@ -1,7 +1,4 @@
 # Ignore all files without an extension
-*
-!/**/
-!*.*
 
 # Temporary files
 .DS_Store
