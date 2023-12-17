@@ -303,7 +303,7 @@ class Index {
      */
     remove(keys) {
         let normalizedKeys = normalizeKeys(keys);
-        normalizedResults = this._compiledIndex.remove(normalizedKeys);
+        let normalizedResults = this._compiledIndex.remove(normalizedKeys);
         if (isOneKey(keys))
             return normalizedResults[0];
         else
