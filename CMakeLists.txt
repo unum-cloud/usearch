@@ -186,9 +186,7 @@ function (setup_target TARGET_NAME)
             target_link_libraries(${TARGET_NAME} PRIVATE OpenMP::OpenMP_CXX)
         endif ()
 
-        if (CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin")
-            target_link_libraries(${TARGET_NAME} PRIVATE Threads::Threads)
-        endif ()
+        target_link_libraries(${TARGET_NAME} PRIVATE Threads::Threads)
 
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         target_compile_options(
