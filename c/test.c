@@ -32,6 +32,7 @@ usearch_init_options_t create_options(size_t const dimensions) {
     opts.dimensions = dimensions;
     opts.expansion_add = 40;    // 40 in faiss
     opts.expansion_search = 16; // 10 in faiss
+    opts.multi = false;
     opts.metric_kind = usearch_metric_ip_k;
     opts.metric = NULL;
     opts.quantization = usearch_scalar_f32_k;

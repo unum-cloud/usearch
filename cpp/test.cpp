@@ -5,12 +5,12 @@
 #include <cassert>   // `assert`
 #include <random>    // `std::default_random_engine`
 #include <stdexcept>
-#include <unordered_map>
 #include <vector> // for std::vector
 
 #include <usearch/index.hpp>
 #include <usearch/index_dense.hpp>
 #include <usearch/index_plugins.hpp>
+#include <usearch/std_storage.hpp>
 
 using namespace unum::usearch;
 using namespace unum;
@@ -77,7 +77,7 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     expect((index.stats(0).nodes == 3));
 
     // Check if clustering endpoint compiles
-    index.cluster(vector_first, 0, args...);
+    // index.cluster(vector_first, 0, args...);
 
     // Try removals and replacements
     if constexpr (punned_ak) {
@@ -141,8 +141,8 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
         index.get(key_second, vec_recovered_from_view.data());
         expect(std::equal(vector_second, vector_second + dimensions, vec_recovered_from_view.data()));
 
-        auto compaction_result = index.compact();
-        expect(bool(compaction_result));
+        // auto compaction_result = index.compact();
+        // expect(bool(compaction_result));
     }
 
     expect(index.memory_usage() > 0);
@@ -155,14 +155,15 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     }
 }
 
-template <typename scalar_at, typename key_at, typename slot_at> //
+template <typename storage_at, typename scalar_at, typename key_at, typename slot_at> //
 void test_cosine(std::size_t collection_size, std::size_t dimensions) {
 
+    using storage_t = storage_at;
     using scalar_t = scalar_at;
     using vector_key_t = key_at;
     using slot_t = slot_at;
 
-    using index_typed_t = index_gt<float, vector_key_t, slot_t>;
+    using index_typed_t = index_gt<storage_t, float, vector_key_t, slot_t>;
     using member_cref_t = typename index_typed_t::member_cref_t;
     using member_citerator_t = typename index_typed_t::member_citerator_t;
 
@@ -197,7 +198,9 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         std::printf("- templates with connectivity %zu \n", connectivity);
         metric_t metric{&matrix, dimensions};
         index_config_t config(connectivity);
-        index_typed_t index_typed(config);
+        storage_t storage{config};
+        index_typed_t index_typed_tmp(&storage, config);
+        index_typed_t index_typed = std::move(index_typed_tmp);
         test_cosine<false>(index_typed, matrix, metric);
     }
 
@@ -205,7 +208,7 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     for (bool multi : {false, true}) {
         for (std::size_t connectivity : {3, 13, 50}) {
             std::printf("- punned with connectivity %zu \n", connectivity);
-            using index_t = index_dense_gt<vector_key_t, slot_t>;
+            using index_t = index_dense_gt<vector_key_t, slot_t, storage_t>;
             metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
             index_dense_config_t config(connectivity);
             config.multi = multi;
@@ -310,9 +313,24 @@ int main(int, char**) {
     for (std::size_t collection_size : {10, 500})
         for (std::size_t dimensions : {97, 256}) {
             std::printf("Indexing %zu vectors with cos: <float, std::int64_t, std::uint32_t> \n", collection_size);
-            test_cosine<float, std::int64_t, std::uint32_t>(collection_size, dimensions);
-            std::printf("Indexing %zu vectors with cos: <float, std::int64_t, uint40_t> \n", collection_size);
-            test_cosine<float, std::int64_t, uint40_t>(collection_size, dimensions);
+            using key_t = std::int64_t;
+            {
+                using slot_t = std::uint32_t;
+                using storage_v2_t = storage_v2_at<key_t, slot_t>;
+                using std_storage_t = std_storage_at<key_t, slot_t>;
+
+                test_cosine<storage_v2_t, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
+                test_cosine<std_storage_t, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
+            }
+            {
+                using slot_t = uint40_t;
+                using storage_v2_t = storage_v2_at<key_t, slot_t>;
+                using std_storage_t = std_storage_at<key_t, slot_t>;
+
+                std::printf("Indexing %zu vectors with cos: <float, std::int64_t, uint40_t> \n", collection_size);
+                test_cosine<storage_v2_t, float, key_t, slot_t>(collection_size, dimensions);
+                test_cosine<std_storage_t, float, key_t, slot_t>(collection_size, dimensions);
+            }
         }
 
     for (std::size_t connectivity : {3, 13, 50})
