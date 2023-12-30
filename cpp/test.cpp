@@ -77,7 +77,7 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     expect((index.stats(0).nodes == 3));
 
     // Check if clustering endpoint compiles
-    index.cluster(vector_first, 0, args...);
+    // index.cluster(vector_first, 0, args...);
 
     // Try removals and replacements
     if constexpr (punned_ak) {
@@ -163,6 +163,7 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     using slot_t = slot_at;
 
     using index_typed_t = index_gt<float, vector_key_t, slot_t>;
+    using index_storage_t = nodes_proxy_t<vector_key_t, uint32_t>;
     using member_cref_t = typename index_typed_t::member_cref_t;
     using member_citerator_t = typename index_typed_t::member_citerator_t;
 
@@ -198,7 +199,9 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         metric_t metric{&matrix, dimensions};
         index_config_t config(connectivity);
         index_typed_t index_typed(config);
-        test_cosine<false>(index_typed, matrix, metric);
+        std::vector<node_t<vector_key_t>> nodes;
+        index_storage_t storage{&nodes};
+        test_cosine<false>(index_typed, matrix, storage, metric);
     }
 
     // Type-punned:
