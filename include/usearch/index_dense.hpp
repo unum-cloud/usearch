@@ -1792,9 +1792,9 @@ class index_dense_gt {
 
         auto prox = nodes_proxy_t<vector_key_t, compressed_slot_t>();
         metric_proxy_t metric{*this};
-        return reuse_node ? typed_->update(prox, typed_->iterator_at(free_slot), key, vector_data, metric,
+        return reuse_node ? typed_->update(typed_->iterator_at(free_slot), key, vector_data, prox, metric,
                                            update_config, on_success)
-                          : typed_->add(prox, key, vector_data, metric, update_config, on_success);
+                          : typed_->add(key, vector_data, prox, metric, update_config, on_success);
     }
 
     template <typename scalar_at>
@@ -1820,7 +1820,7 @@ class index_dense_gt {
         auto allow = [=](member_cref_t const& member) noexcept { return member.key != free_key_; };
 
         auto prox = nodes_proxy_t<vector_key_t>();
-        return typed_->search(prox, vector_data, wanted, metric_proxy_t{*this}, search_config, allow);
+        return typed_->search(vector_data, wanted, prox, metric_proxy_t{*this}, search_config, allow);
     }
 
     template <typename scalar_at>
