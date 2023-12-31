@@ -1,4 +1,5 @@
 #pragma once
+#include <cstring>
 #include <stdlib.h> // `aligned_alloc`
 
 #include <functional> // `std::function`
@@ -293,6 +294,7 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
     using neighbors_count_t = std::uint32_t;
     // index_dense_gt const* index_ = nullptr;
     nodes_t* nodes_;
+    index_config_t config_;
     /// @brief  Mutex, that limits concurrent access to `nodes_`.
     mutable nodes_mutexes_t nodes_mutexes_{};
     struct node_lock_t {
@@ -321,17 +323,25 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
     storage_proxy_t(nodes_t* nodes, index_config_t config) noexcept {
         nodes_ = nodes;
         pre_ = precompute_(config);
+        config_ = config;
     }
+    // copy constructor. todo:: safety??
+    storage_proxy_t(storage_proxy_t& other) noexcept : nodes_(other.nodes_), pre_(other.pre_), config_(other.config_) {}
 
     // warning: key_t is used in sys/types.h
     inline node_t<vector_key_t> operator()(std::size_t slot) const noexcept { /*return index_->nodes_[];*/
         nodes_t v = *nodes_;
-        if (slot >= v.size())
-            v.resize(slot + 1);
+        usearch_assert_m(slot < v.size(), "Storage node index out of bounds");
         return v[slot];
     }
 
     inline node_t<vector_key_t> node_at_(std::size_t idx) const noexcept { return (*this)(idx); }
+
+    void clear() { nodes_->clear(); }
+    void reset() {
+        nodes_->clear();
+        nodes_->shrink_to_fit();
+    }
 
     using span_bytes_t = span_gt<byte_t>;
 
@@ -349,6 +359,7 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
     span_bytes_t node_malloc_(level_t level) noexcept {
         std::size_t node_bytes = node_bytes_(level);
         byte_t* data = (byte_t*)malloc(node_bytes);
+        std::memset(data, 0, node_bytes);
         return data ? span_bytes_t{data, node_bytes} : span_bytes_t{};
     }
 
@@ -369,11 +380,14 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
         nodes_->push_back(node_make_(key, level));
     }
 
+    void node_append_(node_t node) { nodes_->push_back(node); }
+
     inline node_lock_t node_lock_(std::size_t slot) const noexcept {
         // while (nodes_mutexes_.atomic_set(slot))
         //     ;
         return {nodes_mutexes_, slot};
     }
+    inline size_t size() { return nodes_->size(); }
 };
 // template <typename key_at = default_key_t, typename compressed_slot_at = default_slot_t> //
 // nodes_proxy_t<vector_key_t> make_storage(index_dense_gt<key_at, compressed_slot_at>index) { return
@@ -402,6 +416,7 @@ class index_dense_gt {
     using key_t = vector_key_t;
     using compressed_slot_t = compressed_slot_at;
     using distance_t = distance_punned_t;
+    using storage_t = storage_proxy_t<vector_key_t>;
     using metric_t = metric_punned_t;
 
     using member_ref_t = member_ref_gt<vector_key_t>;
@@ -421,6 +436,7 @@ class index_dense_gt {
     using cast_t = std::function<bool(byte_t const*, std::size_t, byte_t*)>;
     /// @brief Punned index.
     using index_t = index_gt<                        //
+        storage_t,                                   //
         distance_t, vector_key_t, compressed_slot_t, //
         dynamic_allocator_t, tape_allocator_t>;
     using index_allocator_t = aligned_allocator_gt<index_t, 64>;
@@ -480,6 +496,7 @@ class index_dense_gt {
 
     /// @brief  C-style array of `node_t` smart-pointers.
     std::vector<node_t<key_t>> nodes_;
+    storage_t storage_{&nodes_, config_};
 
     /// @brief Originally forms and array of integers [0, threads], marking all
     mutable std::vector<std::size_t> available_threads_;
@@ -616,7 +633,7 @@ class index_dense_gt {
 
         // Available since C11, but only C++17, so we use the C version.
         index_t* raw = index_allocator_t{}.allocate(1);
-        new (raw) index_t(config);
+        new (raw) index_t({&result.nodes_, config}, config);
         result.typed_ = raw;
         return result;
     }
@@ -1860,11 +1877,10 @@ class index_dense_gt {
         update_config.thread = lock.thread_id;
         update_config.expansion = config_.expansion_add;
 
-        storage_proxy_t<vector_key_t, compressed_slot_t> prox(&this->nodes_, config_);
         metric_proxy_t metric{*this};
-        return reuse_node ? typed_->update(typed_->iterator_at(free_slot), key, vector_data, prox, metric,
+        return reuse_node ? typed_->update(typed_->iterator_at(free_slot), key, vector_data, storage_, metric,
                                            update_config, on_success)
-                          : typed_->add(key, vector_data, prox, metric, update_config, on_success);
+                          : typed_->add(key, vector_data, storage_, metric, update_config, on_success);
     }
 
     template <typename scalar_at>
@@ -1889,8 +1905,7 @@ class index_dense_gt {
 
         auto allow = [=](member_cref_t const& member) noexcept { return member.key != free_key_; };
 
-        auto prox = storage_proxy_t<vector_key_t>(&this->nodes_, config_);
-        return typed_->search(vector_data, wanted, prox, metric_proxy_t{*this}, search_config, allow);
+        return typed_->search(vector_data, wanted, storage_, metric_proxy_t{*this}, search_config, allow);
     }
 
     template <typename scalar_at>

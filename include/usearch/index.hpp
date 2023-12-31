@@ -1722,7 +1722,8 @@ static_assert(std::is_trivially_destructible<node_t<default_key_t>>::value, "Nod
  *      -   `member_gt` contains an already prefetched copy of the key.
  *
  */
-template <typename distance_at = default_distance_t,              //
+template <typename storage_at1,                                   //
+          typename distance_at = default_distance_t,              //
           typename key_at = default_key_t,                        //
           typename compressed_slot_at = default_slot_t,           //
           typename dynamic_allocator_at = std::allocator<byte_t>, //
@@ -1742,6 +1743,8 @@ class index_gt {
 
     template <typename v> using o_node_t = node_t<v>;
     using node_t = node_t<vector_key_t>;
+
+    using storage_t = storage_at1;
 
     template <typename ref_at, typename index_at> class member_iterator_gt {
         using ref_t = ref_at;
@@ -1915,6 +1918,7 @@ class index_gt {
     };
 
     index_config_t config_{};
+    storage_at1 storage_;
     index_limits_t limits_{};
 
     mutable dynamic_allocator_t dynamic_allocator_{};
@@ -1942,7 +1946,7 @@ class index_gt {
     using nodes_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<node_t>;
 
     /// @brief  C-style array of `node_t` smart-pointers.
-    buffer_gt<node_t, nodes_allocator_t> nodes_{};
+    // buffer_gt<node_t, nodes_allocator_t> nodes_{};
 
     /// @brief  Mutex, that limits concurrent access to `nodes_`.
     mutable nodes_mutexes_t nodes_mutexes_{};
@@ -1965,12 +1969,13 @@ class index_gt {
      *  @section Exceptions
      *      Doesn't throw, unless the ::metric's and ::allocators's throw on copy-construction.
      */
-    explicit index_gt( //
+    explicit index_gt(       //
+        storage_at1 storage, //
         index_config_t config = {}, dynamic_allocator_t dynamic_allocator = {},
         tape_allocator_t tape_allocator = {}) noexcept
-        : config_(config), limits_(0, 0), dynamic_allocator_(std::move(dynamic_allocator)),
+        : storage_(storage), config_(config), limits_(0, 0), dynamic_allocator_(std::move(dynamic_allocator)),
           tape_allocator_(std::move(tape_allocator)), pre_(precompute_(config)), nodes_count_(0u), max_level_(-1),
-          entry_slot_(0u), nodes_(), nodes_mutexes_(), contexts_() {}
+          entry_slot_(0u), nodes_mutexes_(), contexts_() {}
 
     /**
      *  @brief  Clones the structure with the same hyper-parameters, but without contents.
@@ -2006,12 +2011,14 @@ class index_gt {
 
         // Now all is left - is to allocate new `node_t` instances and populate
         // the `other.nodes_` array into it.
-        for (std::size_t i = 0; i != nodes_count_; ++i)
-            other.nodes_[i] = other.node_make_copy_(node_bytes_(nodes_[i]));
 
-        other.nodes_count_ = nodes_count_.load();
-        other.max_level_ = max_level_;
-        other.entry_slot_ = entry_slot_;
+        assert(false);
+        // for (std::size_t i = 0; i != nodes_count_; ++i)
+        //     other.nodes_[i] = other.node_make_copy_(node_bytes_(nodes_[i]));
+
+        // other.nodes_count_ = nodes_count_.load();
+        // other.max_level_ = max_level_;
+        // other.entry_slot_ = entry_slot_;
 
         // This controls nothing for now :)
         (void)config;
@@ -2025,8 +2032,8 @@ class index_gt {
     member_iterator_t begin() noexcept { return {this, 0}; }
     member_iterator_t end() noexcept { return {this, size()}; }
 
-    member_ref_t at(std::size_t slot) noexcept { return {nodes_[slot].key(), slot}; }
-    member_cref_t at(std::size_t slot) const noexcept { return {nodes_[slot].ckey(), slot}; }
+    member_ref_t at(std::size_t slot) noexcept { return {storage_.node_at_(slot).key(), slot}; }
+    member_cref_t at(std::size_t slot) const noexcept { return {storage_.node_at_(slot).ckey(), slot}; }
     member_iterator_t iterator_at(std::size_t slot) noexcept { return {this, slot}; }
     member_citerator_t citerator_at(std::size_t slot) const noexcept { return {this, slot}; }
 
@@ -2042,12 +2049,14 @@ class index_gt {
      *  Will keep the number of available threads/contexts the same as it was.
      */
     void clear() noexcept {
-        if (!has_reset<tape_allocator_t>()) {
-            std::size_t n = nodes_count_;
-            for (std::size_t i = 0; i != n; ++i)
-                node_free_(i);
-        } else
-            tape_allocator_.deallocate(nullptr, 0);
+        // if (!has_reset<tape_allocator_t>()) {
+        //     std::size_t n = nodes_count_;
+        //     for (std::size_t i = 0; i != n; ++i)
+        //         node_free_(i);
+        // } else
+        //     tape_allocator_.deallocate(nullptr, 0);
+        storage_.clear();
+
         nodes_count_ = 0;
         max_level_ = -1;
         entry_slot_ = 0u;
@@ -2063,7 +2072,7 @@ class index_gt {
     void reset() noexcept {
         clear();
 
-        nodes_ = {};
+        storage_.reset();
         contexts_ = {};
         nodes_mutexes_ = {};
         limits_ = index_limits_t{0, 0};
@@ -2084,7 +2093,7 @@ class index_gt {
         std::swap(viewed_file_, other.viewed_file_);
         std::swap(max_level_, other.max_level_);
         std::swap(entry_slot_, other.entry_slot_);
-        std::swap(nodes_, other.nodes_);
+        // std::swap(nodes_, other.nodes_);
         std::swap(nodes_mutexes_, other.nodes_mutexes_);
         std::swap(contexts_, other.contexts_);
 
@@ -2109,18 +2118,17 @@ class index_gt {
             return true;
 
         nodes_mutexes_t new_mutexes(limits.members);
-        buffer_gt<node_t, nodes_allocator_t> new_nodes(limits.members);
+        // buffer_gt<node_t, nodes_allocator_t> new_nodes(limits.members);
         buffer_gt<context_t, contexts_allocator_t> new_contexts(limits.threads());
-        if (!new_nodes || !new_contexts || !new_mutexes)
+        if (!new_contexts || !new_mutexes)
             return false;
 
         // Move the nodes info, and deallocate previous buffers.
-        if (nodes_)
-            std::memcpy(new_nodes.data(), nodes_.data(), sizeof(node_t) * size());
+        // if (nodes_)
+        //     std::memcpy(new_nodes.data(), nodes_.data(), sizeof(node_t) * size());
 
         limits_ = limits;
         nodes_capacity_ = limits.members;
-        nodes_ = std::move(new_nodes);
         contexts_ = std::move(new_contexts);
         nodes_mutexes_ = std::move(new_mutexes);
         return true;
@@ -2176,12 +2184,12 @@ class index_gt {
     };
 
     class search_result_t {
-        node_t const* nodes_{};
+        storage_t const* storage_{};
         top_candidates_t const* top_{};
 
         friend class index_gt;
         inline search_result_t(index_gt const& index, top_candidates_t& top) noexcept
-            : nodes_(index.nodes_), top_(&top) {}
+            : storage_(&index.storage_), top_(&top) {}
 
       public:
         /** @brief  Number of search results found. */
@@ -2217,7 +2225,8 @@ class index_gt {
         inline match_t at(std::size_t i) const noexcept {
             candidate_t const* top_ordered = top_->data();
             candidate_t candidate = top_ordered[i];
-            node_t node = nodes_[candidate.slot];
+            // node_t node = nodes_[candidate.slot];
+            node_t node = storage_->node_at_(candidate.slot);
             return {member_cref_t{node.ckey(), candidate.slot}, candidate.distance};
         }
         inline std::size_t merge_into(                 //
@@ -2346,7 +2355,7 @@ class index_gt {
         if (target_level <= max_level_copy)
             new_level_lock.unlock();
 
-        nodes_[new_slot] = node;
+        // nodes_[new_slot] = node;
         storage.node_append_(key, target_level);
         node = storage.node_at_(new_slot);
 
@@ -2598,21 +2607,18 @@ class index_gt {
     stats_t stats() const noexcept {
         stats_t result{};
 
-        assert(false);
-        /*
-            for (std::size_t i = 0; i != size(); ++i) {
-                node_t node = node_at_(i);
-                std::size_t max_edges = node.level() * config_.connectivity + config_.connectivity_base;
-                std::size_t edges = 0;
-                for (level_t level = 0; level <= node.level(); ++level)
-                    edges += neighbors_(node, level).size();
+        for (std::size_t i = 0; i != size(); ++i) {
+            node_t node = storage_.node_at_(i);
+            std::size_t max_edges = node.level() * config_.connectivity + config_.connectivity_base;
+            std::size_t edges = 0;
+            for (level_t level = 0; level <= node.level(); ++level)
+                edges += neighbors_(node, level).size();
 
-                ++result.nodes;
-                result.allocated_bytes += node_bytes_(node).size();
-                result.edges += edges;
-                result.max_edges += max_edges;
-            }
-            */
+            ++result.nodes;
+            result.allocated_bytes += node_bytes_(node).size();
+            result.edges += edges;
+            result.max_edges += max_edges;
+        }
         return result;
     }
 
@@ -2620,48 +2626,44 @@ class index_gt {
         stats_t result{};
 
         std::size_t neighbors_bytes = !level ? pre_.neighbors_base_bytes : pre_.neighbors_bytes;
-        assert(false);
-        /*
-            for (std::size_t i = 0; i != size(); ++i) {
-                node_t node = node_at_(i);
-                if (static_cast<std::size_t>(node.level()) < level)
-                    continue;
+        for (std::size_t i = 0; i != size(); ++i) {
+            node_t node = storage_.node_at_(i);
+            if (static_cast<std::size_t>(node.level()) < level)
+                continue;
 
-                ++result.nodes;
-                result.edges += neighbors_(node, level).size();
-                result.allocated_bytes += node_head_bytes_() + neighbors_bytes;
-            }
+            ++result.nodes;
+            result.edges += neighbors_(node, level).size();
+            result.allocated_bytes += node_head_bytes_() + neighbors_bytes;
+        }
 
-            std::size_t max_edges_per_node = level ? config_.connectivity_base : config_.connectivity;
-            result.max_edges = result.nodes * max_edges_per_node;
-            */
+        std::size_t max_edges_per_node = level ? config_.connectivity_base : config_.connectivity;
+        result.max_edges = result.nodes * max_edges_per_node;
         return result;
     }
 
     stats_t stats(stats_t* stats_per_level, std::size_t max_level) const noexcept {
 
         std::size_t head_bytes = node_head_bytes_();
-        assert(false);
-        /*
-            for (std::size_t i = 0; i != size(); ++i) {
-                node_t node = node_at_(i);
+        for (std::size_t i = 0; i != size(); ++i) {
+            node_t node = storage_.node_at_(i);
 
-                stats_per_level[0].nodes++;
-                stats_per_level[0].edges += neighbors_(node, 0).size();
-                stats_per_level[0].allocated_bytes += pre_.neighbors_base_bytes + head_bytes;
+            stats_per_level[0].nodes++;
+            stats_per_level[0].edges += neighbors_(node, 0).size();
+            stats_per_level[0].allocated_bytes += pre_.neighbors_base_bytes + head_bytes;
 
-                level_t node_level = static_cast<level_t>(node.level());
-                for (level_t l = 1; l <= (std::min)(node_level, static_cast<level_t>(max_level)); ++l) {
-                    stats_per_level[l].nodes++;
-                    stats_per_level[l].edges += neighbors_(node, l).size();
-                    stats_per_level[l].allocated_bytes += pre_.neighbors_bytes;
-                }
+            level_t node_level = static_cast<level_t>(node.level());
+            for (level_t l = 1; l <= (std::min)(node_level, static_cast<level_t>(max_level)); ++l) {
+                stats_per_level[l].nodes++;
+                stats_per_level[l].edges += neighbors_(node, l).size();
+                stats_per_level[l].allocated_bytes += pre_.neighbors_bytes;
             }
+        }
         // The `max_edges` parameter can be inferred from `nodes`
         stats_per_level[0].max_edges = stats_per_level[0].nodes * config_.connectivity_base;
         for (std::size_t l = 1; l <= max_level; ++l)
             stats_per_level[l].max_edges = stats_per_level[l].nodes * config_.connectivity;
 
+        stats_t result{};
         // Aggregate stats across levels
         for (std::size_t l = 0; l <= max_level; ++l)
             result.nodes += stats_per_level[l].nodes,                         //
@@ -2669,8 +2671,6 @@ class index_gt {
                 result.allocated_bytes += stats_per_level[l].allocated_bytes, //
                 result.max_edges += stats_per_level[l].max_edges;             //
 
-    */
-        stats_t result{};
         return result;
     }
 
@@ -2707,12 +2707,9 @@ class index_gt {
      */
     std::size_t serialized_length() const noexcept {
         std::size_t neighbors_length = 0;
-        assert(false);
 
-        /*
-            for (std::size_t i = 0; i != size(); ++i)
-                neighbors_length += node_bytes_(node_at_(i).level()) + sizeof(level_t);
-            */
+        for (std::size_t i = 0; i != size(); ++i)
+            neighbors_length += node_bytes_(storage_.node_at_(i).level()) + sizeof(level_t);
         return sizeof(index_serialized_header_t) + neighbors_length;
     }
 
@@ -2741,26 +2738,24 @@ class index_gt {
         // Export the number of levels per node
         // That is both enough to estimate the overall memory consumption,
         // and to be able to estimate the offsets of every entry in the file.
-        /*
-            for (std::size_t i = 0; i != header.size; ++i) {
-                node_t node = node_at_(i);
-                level_t level = node.level();
-                if (!output(&level, sizeof(level)))
-                    return result.failed("Failed to serialize into stream");
-                if (!progress(++processed, total))
-                    return result.failed("Terminated by user");
-            }
+        for (std::size_t i = 0; i != header.size; ++i) {
+            node_t node = storage_.node_at_(i);
+            level_t level = node.level();
+            if (!output(&level, sizeof(level)))
+                return result.failed("Failed to serialize into stream");
+            if (!progress(++processed, total))
+                return result.failed("Terminated by user");
+        }
 
-            // After that dump the nodes themselves
-            for (std::size_t i = 0; i != header.size; ++i) {
-                span_bytes_t node_bytes = node_bytes_(node_at_(i));
-                if (!output(node_bytes.data(), node_bytes.size()))
-                    return result.failed("Failed to serialize into stream");
-                if (!progress(++processed, total))
-                    return result.failed("Terminated by user");
-            }
+        // After that dump the nodes themselves
+        for (std::size_t i = 0; i != header.size; ++i) {
+            span_bytes_t node_bytes = node_bytes_(storage_.node_at_(i));
+            if (!output(node_bytes.data(), node_bytes.size()))
+                return result.failed("Failed to serialize into stream");
+            if (!progress(++processed, total))
+                return result.failed("Terminated by user");
+        }
 
-    */
         return {};
     }
 
@@ -2810,12 +2805,14 @@ class index_gt {
 
         // Load the nodes
         for (std::size_t i = 0; i != header.size; ++i) {
-            span_bytes_t node_bytes = node_malloc_(levels[i]);
+            span_bytes_t node_bytes = storage_.node_malloc_(levels[i]);
             if (!input(node_bytes.data(), node_bytes.size())) {
                 reset();
                 return result.failed("Failed to pull nodes from the stream");
             }
-            nodes_[i] = node_t{node_bytes.data()};
+            // nodes_[i] = node_t{node_bytes.data()};
+            storage_.node_append_(node_t{node_bytes.data()});
+
             if (!progress(i + 1, header.size))
                 return result.failed("Terminated by user");
         }
@@ -2987,9 +2984,10 @@ class index_gt {
         max_level_ = static_cast<level_t>(header.max_level);
         entry_slot_ = static_cast<compressed_slot_t>(header.entry_slot);
 
+        assert(false);
         // Rapidly address all the nodes
         for (std::size_t i = 0; i != header.size; ++i) {
-            nodes_[i] = node_t{(byte_t*)file.data() + offsets[i]};
+            storage_.node_append_(node_t{(byte_t*)file.data() + offsets[i]});
             if (!progress(i + 1, header.size))
                 return result.failed("Terminated by user");
         }
@@ -3096,6 +3094,7 @@ class index_gt {
         return pre;
     }
 
+    // move these to storage
     using span_bytes_t = span_gt<byte_t>;
 
     inline span_bytes_t node_bytes_(node_t node) const noexcept { return {node.tape(), node_bytes_(node.level())}; }
@@ -3137,12 +3136,12 @@ class index_gt {
         if (viewed_file_)
             return;
 
-        node_t& node = nodes_[idx];
-        tape_allocator_.deallocate(node.tape(), node_bytes_(node).size());
-        node = node_t{};
+        // node_t& node = nodes_[idx];
+        // tape_allocator_.deallocate(node.tape(), node_bytes_(node).size());
+        // node = node_t{};
     }
 
-    inline node_t node_at_11_(std::size_t idx) const noexcept { return nodes_[idx]; }
+    inline node_t node_at_11_(std::size_t idx) const noexcept { return storage_.node_at_(idx); /* nodes_[idx]; */ }
     inline neighbors_ref_t neighbors_base_(node_t node) const noexcept { return {node.neighbors_tape()}; }
 
     inline neighbors_ref_t neighbors_non_base_(node_t node, level_t level) const noexcept {
@@ -3171,7 +3170,6 @@ class index_gt {
         storage_at&& storage, value_at&& value, metric_at&& metric, prefetch_at&& prefetch,     //
         std::size_t node_slot, std::size_t entry_slot, level_t max_level, level_t target_level, //
         index_update_config_t const& config, context_t& context) usearch_noexcept_m {
-        using vv = typename std::decay<decltype(*this)>::type::vector_key_t;
 
         // Go down the level, tracking only the closest match
         std::size_t closest_slot = search_for_one_( //
@@ -3350,7 +3348,6 @@ class index_gt {
 
                 using vvv = typename std::decay<decltype(*this)>::type::vector_key_t;
                 static_assert(std::is_same<vvv, vector_key_t>::value, "this cannot happen");
-                node_t a = storage(closest_slot);
 
                 // Optional prefetching
                 if (!is_dummy<prefetch_at>()) {
