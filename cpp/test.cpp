@@ -5,7 +5,6 @@
 #include <cassert>   // `assert`
 #include <random>    // `std::default_random_engine`
 #include <stdexcept>
-#include <unordered_map>
 #include <vector> // for std::vector
 
 #include <usearch/index.hpp>
@@ -163,7 +162,7 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     using slot_t = slot_at;
 
     using index_typed_t = index_gt<float, vector_key_t, slot_t>;
-    using index_storage_t = nodes_proxy_t<vector_key_t, uint32_t>;
+    using index_storage_t = storage_proxy_t<vector_key_t, uint32_t>;
     using member_cref_t = typename index_typed_t::member_cref_t;
     using member_citerator_t = typename index_typed_t::member_citerator_t;
 
@@ -200,7 +199,7 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         index_config_t config(connectivity);
         index_typed_t index_typed(config);
         std::vector<node_t<vector_key_t>> nodes;
-        index_storage_t storage{&nodes};
+        index_storage_t storage{&nodes, config};
         test_cosine<false>(index_typed, matrix, storage, metric);
     }
 
