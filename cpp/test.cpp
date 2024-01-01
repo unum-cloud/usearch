@@ -161,7 +161,7 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     using vector_key_t = key_at;
     using slot_t = slot_at;
 
-    using index_storage_t = storage_proxy_t<vector_key_t, uint32_t>;
+    using index_storage_t = storage_proxy_t<vector_key_t, slot_t>;
     using index_typed_t = index_gt<index_storage_t, float, vector_key_t, slot_t>;
     using member_cref_t = typename index_typed_t::member_cref_t;
     using member_citerator_t = typename index_typed_t::member_citerator_t;
@@ -198,8 +198,10 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         metric_t metric{&matrix, dimensions};
         index_config_t config(connectivity);
         std::vector<node_t<vector_key_t>> nodes;
-        index_storage_t storage{&nodes, config};
-        index_typed_t index_typed({&nodes, config}, config);
+        std::mutex vector_lock;
+        bitset_gt nodes_mutexes;
+        index_storage_t storage{&nodes, &vector_lock, &nodes_mutexes, config};
+        index_typed_t index_typed(storage, config);
         test_cosine<false>(index_typed, matrix, storage, metric);
     }
 

@@ -1827,8 +1827,6 @@ class index_gt {
      */
     static constexpr std::size_t node_head_bytes_() { return sizeof(vector_key_t) + sizeof(level_t); }
 
-    using nodes_mutexes_t = bitset_gt<dynamic_allocator_t>;
-
     using visits_hash_set_t = growing_hash_set_gt<compressed_slot_t, hash_gt<compressed_slot_t>, dynamic_allocator_t>;
 
     struct precomputed_constants_t {
@@ -1948,8 +1946,6 @@ class index_gt {
     /// @brief  C-style array of `node_t` smart-pointers.
     // buffer_gt<node_t, nodes_allocator_t> nodes_{};
 
-    /// @brief  Mutex, that limits concurrent access to `nodes_`.
-    mutable nodes_mutexes_t nodes_mutexes_{};
 
     using contexts_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<context_t>;
 
@@ -1975,7 +1971,7 @@ class index_gt {
         tape_allocator_t tape_allocator = {}) noexcept
         : storage_(storage), config_(config), limits_(0, 0), dynamic_allocator_(std::move(dynamic_allocator)),
           tape_allocator_(std::move(tape_allocator)), pre_(precompute_(config)), nodes_count_(0u), max_level_(-1),
-          entry_slot_(0u), nodes_mutexes_(), contexts_() {}
+          entry_slot_(0u), contexts_() {}
 
     /**
      *  @brief  Clones the structure with the same hyper-parameters, but without contents.
@@ -2074,7 +2070,6 @@ class index_gt {
 
         storage_.reset();
         contexts_ = {};
-        nodes_mutexes_ = {};
         limits_ = index_limits_t{0, 0};
         nodes_capacity_ = 0;
         viewed_file_ = memory_mapped_file_t{};
@@ -2094,7 +2089,7 @@ class index_gt {
         std::swap(max_level_, other.max_level_);
         std::swap(entry_slot_, other.entry_slot_);
         // std::swap(nodes_, other.nodes_);
-        std::swap(nodes_mutexes_, other.nodes_mutexes_);
+        // std::swap(nodes_mutexes_, other.nodes_mutexes_);
         std::swap(contexts_, other.contexts_);
 
         // Non-atomic parts.
@@ -2117,10 +2112,10 @@ class index_gt {
             && limits.members <= limits_.members)
             return true;
 
-        nodes_mutexes_t new_mutexes(limits.members);
+        bool storage_reserved = storage_.reserve(limits.members);
         // buffer_gt<node_t, nodes_allocator_t> new_nodes(limits.members);
         buffer_gt<context_t, contexts_allocator_t> new_contexts(limits.threads());
-        if (!new_contexts || !new_mutexes)
+        if (!new_contexts || !storage_reserved)
             return false;
 
         // Move the nodes info, and deallocate previous buffers.
@@ -2130,7 +2125,6 @@ class index_gt {
         limits_ = limits;
         nodes_capacity_ = limits.members;
         contexts_ = std::move(new_contexts);
-        nodes_mutexes_ = std::move(new_mutexes);
         return true;
     }
 
@@ -2356,13 +2350,13 @@ class index_gt {
             new_level_lock.unlock();
 
         // nodes_[new_slot] = node;
-        storage.node_append_(key, target_level);
-        node = storage.node_at_(new_slot);
+        storage_.node_append_(new_slot, key, target_level);
+        node = storage_.node_at_(new_slot);
 
         result.new_size = new_slot + 1;
         result.slot = new_slot;
         callback(at(new_slot));
-        node_lock_t new_lock = node_lock_(new_slot);
+        auto new_lock = storage_.node_lock_(new_slot);
 
         // Do nothing for the first element
         if (!new_slot) {
@@ -2449,8 +2443,8 @@ class index_gt {
         if (!next.reserve(config.expansion))
             return result.failed("Out of memory!");
 
-        node_lock_t new_lock = node_lock_(old_slot);
-        node_t node = storage.node_at_(old_slot);
+        auto new_lock = storage_.node_lock_(old_slot);
+        node_t node = storage_.node_at_(old_slot);
 
         level_t node_level = node.level();
         span_bytes_t node_bytes = node_bytes_(node);
@@ -2811,7 +2805,7 @@ class index_gt {
                 return result.failed("Failed to pull nodes from the stream");
             }
             // nodes_[i] = node_t{node_bytes.data()};
-            storage_.node_append_(node_t{node_bytes.data()});
+            storage_.node_append_(i, node_t{node_bytes.data()});
 
             if (!progress(i + 1, header.size))
                 return result.failed("Terminated by user");
@@ -2984,10 +2978,9 @@ class index_gt {
         max_level_ = static_cast<level_t>(header.max_level);
         entry_slot_ = static_cast<compressed_slot_t>(header.entry_slot);
 
-        assert(false);
         // Rapidly address all the nodes
         for (std::size_t i = 0; i != header.size; ++i) {
-            storage_.node_append_(node_t{(byte_t*)file.data() + offsets[i]});
+            storage_.node_append_(i, node_t{(byte_t*)file.data() + offsets[i]});
             if (!progress(i + 1, header.size))
                 return result.failed("Terminated by user");
         }
@@ -3152,17 +3145,17 @@ class index_gt {
         return level ? neighbors_non_base_(node, level) : neighbors_base_(node);
     }
 
-    struct node_lock_t {
-        nodes_mutexes_t& mutexes;
-        std::size_t slot;
-        inline ~node_lock_t() noexcept { mutexes.atomic_reset(slot); }
-    };
+    // struct node_lock_t {
+    //     nodes_mutexes_t& mutexes;
+    //     std::size_t slot;
+    //     inline ~node_lock_t() noexcept { mutexes.atomic_reset(slot); }
+    // };
 
-    inline node_lock_t node_lock_(std::size_t slot) const noexcept {
-        while (nodes_mutexes_.atomic_set(slot))
-            ;
-        return {nodes_mutexes_, slot};
-    }
+    // inline node_lock_t node_lock_(std::size_t slot) const noexcept {
+    //     while (nodes_mutexes_.atomic_set(slot))
+    //         ;
+    //     return {nodes_mutexes_, slot};
+    // }
     // ^^^ move these to storage
 
     template <typename storage_at, typename value_at, typename metric_at, typename prefetch_at>
@@ -3191,7 +3184,7 @@ class index_gt {
         storage_at&& storage, metric_at&& metric, //
         std::size_t new_slot, level_t level, context_t& context) usearch_noexcept_m {
 
-        node_t new_node = storage.node_at_(new_slot);
+        node_t new_node = storage_.node_at_(new_slot);
         top_candidates_t& top = context.top_candidates;
 
         // Outgoing links from `new_slot`:
@@ -3202,7 +3195,7 @@ class index_gt {
 
             for (std::size_t idx = 0; idx != top_view.size(); idx++) {
                 usearch_assert_m(!new_neighbors[idx], "Possible memory corruption");
-                usearch_assert_m(level <= storage.node_at_(top_view[idx].slot).level(), "Linking to missing level");
+                usearch_assert_m(level <= storage_.node_at_(top_view[idx].slot).level(), "Linking to missing level");
                 new_neighbors.push_back(top_view[idx].slot);
             }
         }
@@ -3215,7 +3208,7 @@ class index_gt {
         storage_at&& storage, metric_at&& metric, //
         std::size_t new_slot, value_at&& value, level_t level, context_t& context) usearch_noexcept_m {
 
-        node_t new_node = storage.node_at_(new_slot);
+        node_t new_node = storage_.node_at_(new_slot);
         top_candidates_t& top = context.top_candidates;
         neighbors_ref_t new_neighbors = neighbors_(new_node, level);
 
@@ -3224,8 +3217,12 @@ class index_gt {
         for (compressed_slot_t close_slot : new_neighbors) {
             if (close_slot == new_slot)
                 continue;
-            node_lock_t close_lock = node_lock_(close_slot);
-            node_t close_node = storage.node_at_(close_slot);
+            // todo:: q:: I do not know all the idiosyncrasies of 'auto'. Is this a proper usage of this?
+            // I chose auto here to allow storage define its own lock smart pointer, without making assumptions
+            // about it here. BUt are there cases where, e.g. auto will pick up the lock in the wrong way and instantly
+            // drop it for example?
+            auto close_lock = storage_.node_lock_(close_slot);
+            node_t close_node = storage_.node_at_(close_slot);
 
             neighbors_ref_t close_header = neighbors_(close_node, level);
             usearch_assert_m(close_header.size() <= connectivity_max, "Possible corruption");
@@ -3342,9 +3339,8 @@ class index_gt {
             bool changed;
             do {
                 changed = false;
-                node_lock_t closest_lock = node_lock_(closest_slot);
-                storage.node_lock_(closest_slot);
-                neighbors_ref_t closest_neighbors = neighbors_non_base_(storage.node_at_(closest_slot), level);
+                auto closest_lock = storage_.node_lock_(closest_slot);
+                neighbors_ref_t closest_neighbors = neighbors_non_base_(storage_.node_at_(closest_slot), level);
 
                 using vvv = typename std::decay<decltype(*this)>::type::vector_key_t;
                 static_assert(std::is_same<vvv, vector_key_t>::value, "this cannot happen");
@@ -3412,8 +3408,8 @@ class index_gt {
             compressed_slot_t candidate_slot = candidacy.slot;
             if (new_slot == candidate_slot)
                 continue;
-            node_t candidate_ref = storage.node_at_(candidate_slot);
-            node_lock_t candidate_lock = node_lock_(candidate_slot);
+            node_t candidate_ref = storage_.node_at_(candidate_slot);
+            auto candidate_lock = storage_.node_lock_(candidate_slot);
             neighbors_ref_t candidate_neighbors = neighbors_(candidate_ref, level);
 
             // Optional prefetching
@@ -3483,7 +3479,7 @@ class index_gt {
             next.pop();
             context.iteration_cycles++;
 
-            neighbors_ref_t candidate_neighbors = neighbors_base_(storage.node_at_(candidate.slot));
+            neighbors_ref_t candidate_neighbors = neighbors_base_(storage_.node_at_(candidate.slot));
 
             // Optional prefetching
             if (!is_dummy<prefetch_at>()) {
@@ -3504,7 +3500,7 @@ class index_gt {
                     // This can substantially grow our priority queue:
                     next.insert({-successor_dist, successor_slot});
                     if (!is_dummy<predicate_at>())
-                        if (!predicate(member_cref_t{storage.node_at_(successor_slot).ckey(), successor_slot}))
+                        if (!predicate(member_cref_t{storage_.node_at_(successor_slot).ckey(), successor_slot}))
                             continue;
 
                     // This will automatically evict poor matches:
