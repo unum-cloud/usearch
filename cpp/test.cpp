@@ -202,7 +202,7 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         bitset_gt nodes_mutexes;
         index_storage_t storage{&nodes, &vector_lock, &nodes_mutexes, config};
         index_typed_t index_typed(storage, config);
-        test_cosine<false>(index_typed, matrix, storage, metric);
+        test_cosine<false>(index_typed, matrix, metric);
     }
 
     // Type-punned:

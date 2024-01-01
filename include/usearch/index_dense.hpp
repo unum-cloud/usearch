@@ -1922,9 +1922,9 @@ class index_dense_gt {
         update_config.expansion = config_.expansion_add;
 
         metric_proxy_t metric{*this};
-        return reuse_node ? typed_->update(typed_->iterator_at(free_slot), key, vector_data, storage_, metric,
-                                           update_config, on_success)
-                          : typed_->add(key, vector_data, storage_, metric, update_config, on_success);
+        return reuse_node
+                   ? typed_->update(typed_->iterator_at(free_slot), key, vector_data, metric, update_config, on_success)
+                   : typed_->add(key, vector_data, metric, update_config, on_success);
     }
 
     template <typename scalar_at>
@@ -1949,7 +1949,7 @@ class index_dense_gt {
 
         auto allow = [=](member_cref_t const& member) noexcept { return member.key != free_key_; };
 
-        return typed_->search(vector_data, wanted, storage_, metric_proxy_t{*this}, search_config, allow);
+        return typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow);
     }
 
     template <typename scalar_at>

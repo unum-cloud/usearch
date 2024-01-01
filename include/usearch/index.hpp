@@ -1727,7 +1727,7 @@ static_assert(std::is_trivially_destructible<node_t<default_key_t>>::value, "Nod
  *      -   `member_gt` contains an already prefetched copy of the key.
  *
  */
-template <typename storage_at1,                                   //
+template <typename storage_at,                                    //
           typename distance_at = default_distance_t,              //
           typename key_at = default_key_t,                        //
           typename compressed_slot_at = default_slot_t,           //
@@ -1748,8 +1748,6 @@ class index_gt {
 
     template <typename v> using o_node_t = node_t<v>;
     using node_t = node_t<vector_key_t>;
-
-    using storage_t = storage_at1;
 
     template <typename ref_at, typename index_at> class member_iterator_gt {
         using ref_t = ref_at;
@@ -1921,7 +1919,7 @@ class index_gt {
     };
 
     index_config_t config_{};
-    storage_at1 storage_;
+    storage_at storage_;
     index_limits_t limits_{};
 
     mutable dynamic_allocator_t dynamic_allocator_{};
@@ -1951,7 +1949,6 @@ class index_gt {
     /// @brief  C-style array of `node_t` smart-pointers.
     // buffer_gt<node_t, nodes_allocator_t> nodes_{};
 
-
     using contexts_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<context_t>;
 
     /// @brief  Array of thread-specific buffers for temporary data.
@@ -1970,8 +1967,8 @@ class index_gt {
      *  @section Exceptions
      *      Doesn't throw, unless the ::metric's and ::allocators's throw on copy-construction.
      */
-    explicit index_gt(       //
-        storage_at1 storage, //
+    explicit index_gt(      //
+        storage_at storage, //
         index_config_t config = {}, dynamic_allocator_t dynamic_allocator = {},
         tape_allocator_t tape_allocator = {}) noexcept
         : storage_(storage), config_(config), limits_(0, 0), dynamic_allocator_(std::move(dynamic_allocator)),
@@ -2298,14 +2295,12 @@ class index_gt {
      */
     template <                                   //
         typename value_at,                       //
-        typename storage_at,                     //
         typename metric_at,                      //
         typename callback_at = dummy_callback_t, //
         typename prefetch_at = dummy_prefetch_t  //
         >
     add_result_t add(                           //
         vector_key_t key, value_at&& value,     //
-        storage_at&& storage,                   //
         metric_at&& metric,                     //
         index_update_config_t config = {},      //
         callback_at&& callback = callback_at{}, //
@@ -2375,7 +2370,6 @@ class index_gt {
         result.visited_members = context.iteration_cycles;
 
         connect_node_across_levels_(                                //
-            storage,                                                //
             value, metric, prefetch,                                //
             new_slot, entry_idx_copy, max_level_copy, target_level, //
             config, context);
@@ -2413,7 +2407,6 @@ class index_gt {
      */
     template <                                   //
         typename value_at,                       //
-        typename storage_at,                     //
         typename metric_at,                      //
         typename callback_at = dummy_callback_t, //
         typename prefetch_at = dummy_prefetch_t  //
@@ -2422,7 +2415,6 @@ class index_gt {
         member_iterator_t iterator,             //
         vector_key_t key,                       //
         value_at&& value,                       //
-        storage_at&& storage,                   //
         metric_at&& metric,                     //
         index_update_config_t config = {},      //
         callback_at&& callback = callback_at{}, //
@@ -2461,7 +2453,6 @@ class index_gt {
         result.visited_members = context.iteration_cycles;
 
         connect_node_across_levels_(                       //
-            storage,                                       //
             value, metric, prefetch,                       //
             old_slot, entry_slot_, max_level_, node_level, //
             config, context);
@@ -2487,7 +2478,6 @@ class index_gt {
      */
     template <                                     //
         typename value_at,                         //
-        typename storage_at,                       //
         typename metric_at,                        //
         typename predicate_at = dummy_predicate_t, //
         typename prefetch_at = dummy_prefetch_t    //
@@ -2495,7 +2485,6 @@ class index_gt {
     search_result_t search(                        //
         value_at&& query,                          //
         std::size_t wanted,                        //
-        storage_at&& storage,                      //
         metric_at&& metric,                        //
         index_search_config_t config = {},         //
         predicate_at&& predicate = predicate_at{}, //
@@ -2523,11 +2512,10 @@ class index_gt {
             if (!top.reserve(expansion))
                 return result.failed("Out of memory!");
 
-            std::size_t closest_slot =
-                search_for_one_(query, storage, metric, prefetch, entry_slot_, max_level_, 0, context);
+            std::size_t closest_slot = search_for_one_(query, metric, prefetch, entry_slot_, max_level_, 0, context);
 
             // For bottom layer we need a more optimized procedure
-            if (!search_to_find_in_base_(query, storage, metric, predicate, prefetch, closest_slot, expansion, context))
+            if (!search_to_find_in_base_(query, metric, predicate, prefetch, closest_slot, expansion, context))
                 return result.failed("Out of memory!");
         }
 
@@ -2552,7 +2540,6 @@ class index_gt {
      */
     template <                                     //
         typename value_at,                         //
-        typename storage_at,                       //
         typename metric_at,                        //
         typename predicate_at = dummy_predicate_t, //
         typename prefetch_at = dummy_prefetch_t    //
@@ -2560,7 +2547,6 @@ class index_gt {
     cluster_result_t cluster(                      //
         value_at&& query,                          //
         std::size_t level,                         //
-        storage_at&& storage,                      //
         metric_at&& metric,                        //
         index_cluster_config_t config = {},        //
         predicate_at&& predicate = predicate_at{}, //
@@ -2581,7 +2567,7 @@ class index_gt {
             return result.failed("Out of memory!");
 
         result.cluster.member =
-            at(search_for_one_(query, storage, metric, prefetch, entry_slot_, max_level_, level - 1, context));
+            at(search_for_one_(query, metric, prefetch, entry_slot_, max_level_, level - 1, context));
         result.cluster.distance = context.measure(query, result.cluster.member, metric);
 
         // Normalize stats
@@ -3084,6 +3070,7 @@ class index_gt {
     }
 
   private:
+    // todo:: only needed in storage
     inline static precomputed_constants_t precompute_(index_config_t const& config) noexcept {
         precomputed_constants_t pre;
         pre.inverse_log_connectivity = 1.0 / std::log(static_cast<double>(config.connectivity));
@@ -3163,30 +3150,29 @@ class index_gt {
     // }
     // ^^^ move these to storage
 
-    template <typename storage_at, typename value_at, typename metric_at, typename prefetch_at>
+    template <typename value_at, typename metric_at, typename prefetch_at>
     void connect_node_across_levels_(                                                           //
-        storage_at&& storage, value_at&& value, metric_at&& metric, prefetch_at&& prefetch,     //
+        value_at&& value, metric_at&& metric, prefetch_at&& prefetch,                           //
         std::size_t node_slot, std::size_t entry_slot, level_t max_level, level_t target_level, //
         index_update_config_t const& config, context_t& context) usearch_noexcept_m {
 
         // Go down the level, tracking only the closest match
         std::size_t closest_slot = search_for_one_( //
-            value, storage, metric, prefetch,       //
+            value, metric, prefetch,                //
             entry_slot, max_level, target_level, context);
 
         // From `target_level` down perform proper extensive search
         for (level_t level = (std::min)(target_level, max_level); level >= 0; --level) {
             // TODO: Handle out of memory conditions
-            search_to_insert_(value, storage, metric, prefetch, closest_slot, node_slot, level, config.expansion,
-                              context);
-            closest_slot = connect_new_node_(storage, metric, node_slot, level, context);
-            reconnect_neighbor_nodes_(storage, metric, node_slot, value, level, context);
+            search_to_insert_(value, metric, prefetch, closest_slot, node_slot, level, config.expansion, context);
+            closest_slot = connect_new_node_(metric, node_slot, level, context);
+            reconnect_neighbor_nodes_(metric, node_slot, value, level, context);
         }
     }
 
-    template <typename storage_at, typename metric_at>
-    std::size_t connect_new_node_(                //
-        storage_at&& storage, metric_at&& metric, //
+    template <typename metric_at>
+    std::size_t connect_new_node_( //
+        metric_at&& metric,        //
         std::size_t new_slot, level_t level, context_t& context) usearch_noexcept_m {
 
         node_t new_node = storage_.node_at_(new_slot);
@@ -3208,9 +3194,9 @@ class index_gt {
         return new_neighbors[0];
     }
 
-    template <typename value_at, typename storage_at, typename metric_at>
-    void reconnect_neighbor_nodes_(               //
-        storage_at&& storage, metric_at&& metric, //
+    template <typename value_at, typename metric_at>
+    void reconnect_neighbor_nodes_( //
+        metric_at&& metric,         //
         std::size_t new_slot, value_at&& value, level_t level, context_t& context) usearch_noexcept_m {
 
         node_t new_node = storage_.node_at_(new_slot);
@@ -3326,10 +3312,10 @@ class index_gt {
         candidates_iterator_t end() const noexcept { return {index, neighbors, visits, neighbors.size()}; }
     };
 
-    template <typename value_at, typename storage_at, typename metric_at, typename prefetch_at = dummy_prefetch_t>
-    std::size_t search_for_one_(                                          //
-        value_at&& query,                                                 //
-        storage_at&& storage, metric_at&& metric, prefetch_at&& prefetch, //
+    template <typename value_at, typename metric_at, typename prefetch_at = dummy_prefetch_t>
+    std::size_t search_for_one_(                    //
+        value_at&& query,                           //
+        metric_at&& metric, prefetch_at&& prefetch, //
         std::size_t closest_slot, level_t begin_level, level_t end_level, context_t& context) const noexcept {
 
         visits_hash_set_t& visits = context.visits;
@@ -3376,9 +3362,9 @@ class index_gt {
      *          Locks the nodes in the process, assuming other threads are updating neighbors lists.
      *  @return `true` if procedure succeeded, `false` if run out of memory.
      */
-    template <typename value_at, typename storage_at, typename metric_at, typename prefetch_at = dummy_prefetch_t>
-    bool search_to_insert_(                                                                 //
-        value_at&& query, storage_at&& storage, metric_at&& metric, prefetch_at&& prefetch, //
+    template <typename value_at, typename metric_at, typename prefetch_at = dummy_prefetch_t>
+    bool search_to_insert_(                                           //
+        value_at&& query, metric_at&& metric, prefetch_at&& prefetch, //
         std::size_t start_slot, std::size_t new_slot, level_t level, std::size_t top_limit,
         context_t& context) noexcept {
 
@@ -3450,9 +3436,9 @@ class index_gt {
      *          Doesn't lock any nodes, assuming read-only simultaneous access.
      *  @return `true` if procedure succeeded, `false` if run out of memory.
      */
-    template <typename value_at, typename storage_at, typename metric_at, typename predicate_at, typename prefetch_at>
-    bool search_to_find_in_base_(                                                                                     //
-        value_at&& query, storage_at&& storage, metric_at&& metric, predicate_at&& predicate, prefetch_at&& prefetch, //
+    template <typename value_at, typename metric_at, typename predicate_at, typename prefetch_at>
+    bool search_to_find_in_base_(                                                               //
+        value_at&& query, metric_at&& metric, predicate_at&& predicate, prefetch_at&& prefetch, //
         std::size_t start_slot, std::size_t expansion, context_t& context) const noexcept {
 
         visits_hash_set_t& visits = context.visits;
