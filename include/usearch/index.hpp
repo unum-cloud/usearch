@@ -402,6 +402,8 @@ template <typename allocator_at = std::allocator<byte_t>> class bitset_gt {
     static constexpr std::size_t slots(std::size_t bits) { return divide_round_up<bits_per_slot()>(bits); }
 
     compressed_slot_t* slots_{};
+    /// @brief capacitiy - number of bits in the bitset
+    std::size_t capacity_{};
     /// @brief Number of slots.
     std::size_t count_{};
 
@@ -410,6 +412,7 @@ template <typename allocator_at = std::allocator<byte_t>> class bitset_gt {
     ~bitset_gt() noexcept { reset(); }
 
     explicit operator bool() const noexcept { return slots_; }
+    std::size_t size() const noexcept { return capacity_; }
     void clear() noexcept {
         if (slots_)
             std::memset(slots_, 0, count_ * sizeof(compressed_slot_t));
@@ -424,18 +427,20 @@ template <typename allocator_at = std::allocator<byte_t>> class bitset_gt {
 
     bitset_gt(std::size_t capacity) noexcept
         : slots_((compressed_slot_t*)allocator_t{}.allocate(slots(capacity) * sizeof(compressed_slot_t))),
-          count_(slots_ ? slots(capacity) : 0u) {
+          capacity_(slots_ ? capacity : 0u), count_(slots_ ? slots(capacity) : 0u) {
         clear();
     }
 
     bitset_gt(bitset_gt&& other) noexcept {
         slots_ = exchange(other.slots_, nullptr);
         count_ = exchange(other.count_, 0);
+        capacity_ = exchange(other.capacity_, 0);
     }
 
     bitset_gt& operator=(bitset_gt&& other) noexcept {
         std::swap(slots_, other.slots_);
         std::swap(count_, other.count_);
+        std::swap(capacity_, other.capacity_);
         return *this;
     }
 
