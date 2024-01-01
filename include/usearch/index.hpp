@@ -1735,6 +1735,7 @@ template <typename storage_at,                                    //
           typename tape_allocator_at = dynamic_allocator_at>      //
 class index_gt {
   public:
+    using storage_t = storage_at;
     using distance_t = distance_at;
     using vector_key_t = key_at;
     using key_t = vector_key_t;

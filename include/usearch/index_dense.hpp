@@ -293,10 +293,9 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
      *          alignment in most common cases.
      */
     using neighbors_count_t = std::uint32_t;
-    // index_dense_gt const* index_ = nullptr;
+
     nodes_t* nodes_;
     index_config_t config_;
-    mutable std::mutex* vector_lock_;
     /// @brief  Mutex, that limits concurrent access to `nodes_`.
     mutable nodes_mutexes_t* nodes_mutexes_{};
     struct node_lock_t {
@@ -321,10 +320,8 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
     }
 
   public:
-    storage_proxy_t(nodes_t* nodes, std::mutex* vector_lock, nodes_mutexes_t* nodes_mutexes,
-                    index_config_t config) noexcept {
+    storage_proxy_t(nodes_t* nodes, nodes_mutexes_t* nodes_mutexes, index_config_t config) noexcept {
         nodes_ = nodes;
-        vector_lock_ = vector_lock;
         nodes_mutexes_ = nodes_mutexes;
         pre_ = precompute_(config);
         config_ = config;
@@ -335,7 +332,6 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
 
     // warning: key_t is used in sys/types.h
     inline node_t<vector_key_t> operator()(std::size_t slot) const noexcept { /*return index_->nodes_[];*/
-        std::unique_lock<std::mutex> lock(*vector_lock_);
         nodes_t v = *nodes_;
         usearch_assert_m(slot < v.size(), "Storage node index out of bounds");
         return v[slot];
@@ -344,7 +340,6 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
     inline node_t<vector_key_t> node_at_(std::size_t idx) const noexcept { return (*this)(idx); }
     // todo:: reserve is not thread safe if another thread is running search or insert
     bool reserve(std::size_t count) {
-        std::unique_lock<std::mutex> lock(*vector_lock_);
         if (count < nodes_mutexes_->size())
             return true;
         nodes_mutexes_t new_mutexes(count);
@@ -354,12 +349,10 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
     }
 
     void clear() {
-        std::unique_lock<std::mutex> lock(*vector_lock_);
         nodes_mutexes_->clear();
         // std::fill(nodes_->begin(), nodes_->end(), 0);
     }
     void reset() {
-        std::unique_lock<std::mutex> lock(*vector_lock_);
         *nodes_mutexes_ = {};
         nodes_->clear();
         nodes_->shrink_to_fit();
@@ -398,8 +391,6 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
     }
 
     void node_append_(size_t slot, vector_key_t key, level_t level) {
-        std::unique_lock<std::mutex> lock(*vector_lock_);
-
         auto count = nodes_->size();
         if (count > nodes_mutexes_->size()) {
             assert(false);
@@ -410,8 +401,6 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
     }
 
     void node_append_(size_t slot, node_t node) {
-        std::unique_lock<std::mutex> lock(*vector_lock_);
-
         auto count = nodes_->size();
         if (count > nodes_mutexes_->size()) {
             assert(false);
@@ -538,7 +527,7 @@ class index_dense_gt {
     std::vector<node_t<key_t>> nodes_;
     std::mutex vector_mutex_;
     bitset_t nodes_mutexes_;
-    storage_t storage_{&nodes_, &vector_mutex_, &nodes_mutexes_, config_};
+    storage_t storage_{&nodes_, &nodes_mutexes_, config_};
 
     /// @brief Originally forms and array of integers [0, threads], marking all
     mutable std::vector<std::size_t> available_threads_;
@@ -675,8 +664,8 @@ class index_dense_gt {
 
         // Available since C11, but only C++17, so we use the C version.
         index_t* raw = index_allocator_t{}.allocate(1);
-        result.storage_ = storage_proxy_t<vector_key_t, compressed_slot_t>{&result.nodes_, &result.vector_mutex_,
-                                                                           &result.nodes_mutexes_, config};
+        result.storage_ =
+            storage_proxy_t<vector_key_t, compressed_slot_t>{&result.nodes_, &result.nodes_mutexes_, config};
         new (raw) index_t(result.storage_, config);
         result.typed_ = raw;
         return result;
