@@ -281,6 +281,26 @@ inline index_dense_metadata_result_t index_dense_metadata_from_buffer(memory_map
     return result.failed("Not a dense USearch index!");
 }
 
+/**
+ * @brief   Storage abstraction for HNSW graph and associated vector data
+ *
+ *  @tparam key_at
+ *      The type of primary objects stored in the index.
+ *      The values, to which those map, are not managed by the same index structure.
+ *
+ *  @tparam compressed_slot_at
+ *      The smallest unsigned integer type to address indexed elements.
+ *      It is used internally to maximize space-efficiency and is generally
+ *      up-casted to @b `std::size_t` in public interfaces.
+ *      Can be a built-in @b `uint32_t`, `uint64_t`, or our custom @b `uint40_t`.
+ *      Which makes the most sense for 4B+ entry indexes.
+ *
+ *  @tparam tape_allocator_at
+ *      Potentially different memory allocator for primary allocations of nodes and vectors.
+ *      It would never `deallocate` separate entries, and would only free all the space at once.
+ *      The allocated buffers may be uninitialized.
+ *
+ **/
 template <typename key_at, typename compressed_slot_at,
           typename tape_allocator_at = std::allocator<byte_t>> //
 class dummy_storage_single_threaded {
@@ -289,18 +309,32 @@ class dummy_storage_single_threaded {
 
     nodes_t nodes_{};
     precomputed_constants_t pre_{};
-    tape_allocator_at tape_allocator_;
+    tape_allocator_at tape_allocator_{};
     using tape_allocator_traits_t = std::allocator_traits<tape_allocator_at>;
     static_assert(                                                 //
         sizeof(typename tape_allocator_traits_t::value_type) == 1, //
         "Tape allocator must allocate separate addressable bytes");
 
   public:
-    dummy_storage_single_threaded(index_config_t config) : pre_(node_t::precompute_(config)) {}
+    dummy_storage_single_threaded(index_config_t config, tape_allocator_at tape_allocator = {})
+        : pre_(node_t::precompute_(config)), tape_allocator_(tape_allocator) {}
 
     inline node_t node_at(std::size_t idx) const noexcept { return nodes_[idx]; }
 
     inline size_t node_size_bytes(std::size_t idx) const noexcept { return node_at(idx).node_size_bytes(pre_); }
+
+    // exported for client-side lock-declaration
+    // alternatively, could just use auto in client side
+    // ideally, there would be a way to make this "void", but I could not make it work
+    // as client side ends up declaring a void variable
+    // the downside of passing a primitive like "int" here is the "unused variable" compiler warning
+    // for the dummy lock guard variable.
+    struct dummy_lock {
+        // destructor necessary to avoid "unused variable warning"
+        // will this get properly optimized away?
+        ~dummy_lock() {}
+    };
+    using lock_type = dummy_lock;
 
     bool reserve(std::size_t count) {
         if (count < nodes_.size())
@@ -326,7 +360,11 @@ class dummy_storage_single_threaded {
         return data ? span_bytes_t{data, node_size} : span_bytes_t{};
     }
     void node_free(size_t slot, node_t node) {
-        tape_allocator_.deallocate(node.tape(), node.node_size_bytes(pre_));
+        if (!has_reset<tape_allocator_at>()) {
+            tape_allocator_.deallocate(node.tape(), node.node_size_bytes(pre_));
+        } else {
+            tape_allocator_.deallocate(nullptr, 0);
+        }
         nodes_[slot] = node_t{};
     }
     node_t node_make(key_at key, level_t level) noexcept {
@@ -354,8 +392,9 @@ class dummy_storage_single_threaded {
         nodes_[slot] = node;
     }
     inline size_t size() { return nodes_.size(); }
+    tape_allocator_at const& node_allocator() const noexcept { return tape_allocator_; }
     // dummy lock just to satisfy the interface
-    constexpr inline int node_lock(std::size_t) noexcept { return 0; }
+    constexpr inline lock_type node_lock(std::size_t) noexcept { return dummy_lock{}; }
 };
 
 template <typename key_at, typename compressed_slot_at> class storage_v1 {
@@ -381,119 +420,6 @@ template <typename key_at, typename compressed_slot_at> class storage_v2 {
     using nodes_t = std::vector<node_t>;
 };
 
-template <typename key_at, typename compressed_slot_at> class storage_proxy_t {
-    using vector_key_t = key_at;
-    using node_t = node_at<vector_key_t, compressed_slot_at>;
-    using dynamic_allocator_t = aligned_allocator_gt<byte_t, 64>;
-    // using nodes_mutexes_t = bitset_gt<dynamic_allocator_t>;
-    using nodes_mutexes_t = bitset_gt<>;
-    using nodes_t = std::vector<node_t>;
-
-    nodes_t* nodes_{};
-    index_config_t config_{};
-    /// @brief  Mutex, that limits concurrent access to `nodes_`.
-    mutable nodes_mutexes_t* nodes_mutexes_{};
-    struct node_lock_t {
-        nodes_mutexes_t& mutexes;
-        std::size_t slot;
-        inline ~node_lock_t() noexcept { mutexes.atomic_reset(slot); }
-    };
-
-    precomputed_constants_t pre_{};
-
-  public:
-    storage_proxy_t(nodes_t* nodes, nodes_mutexes_t* nodes_mutexes, index_config_t config) noexcept {
-        nodes_ = nodes;
-        nodes_mutexes_ = nodes_mutexes;
-        pre_ = node_t::precompute_(config);
-        config_ = config;
-    }
-
-    // warning: key_t is used in sys/types.h
-    inline node_t operator()(std::size_t slot) const noexcept { /*return index_->nodes_[];*/
-        nodes_t v = *nodes_;
-        usearch_assert_m(slot < v.size(), "Storage node index out of bounds");
-        return v[slot];
-    }
-
-    inline node_t node_at_(std::size_t idx) const noexcept { return (*this)(idx); }
-
-    inline size_t node_size_bytes(std::size_t idx) const noexcept { return node_at_(idx).node_size_bytes(pre_); }
-    // todo:: reserve is not thread safe if another thread is running search or insert
-    bool reserve(std::size_t count) {
-        assert(nodes_mutexes_->size() == nodes_->size());
-        if (count < nodes_mutexes_->size())
-            return true;
-        nodes_mutexes_t new_mutexes(count);
-        *nodes_mutexes_ = std::move(new_mutexes);
-        nodes_->resize(count);
-        return true;
-    }
-
-    void clear() {
-        nodes_mutexes_->clear();
-        if (nodes_->data())
-            std::memset(nodes_->data(), 0, nodes_->size());
-    }
-    void reset() {
-        *nodes_mutexes_ = {};
-        nodes_->clear();
-        nodes_->shrink_to_fit();
-    }
-
-    using span_bytes_t = span_gt<byte_t>;
-
-    // todo:: make these private
-    span_bytes_t node_malloc_(level_t level) noexcept {
-        std::size_t node_bytes = node_t::node_size_bytes(pre_, level);
-        byte_t* data = (byte_t*)malloc(node_bytes);
-        assert(data);
-
-        std::memset(data, 0, node_bytes);
-        return data ? span_bytes_t{data, node_bytes} : span_bytes_t{};
-    }
-    void node_free_(size_t slot, node_t node) {
-        free(node.tape());
-        (*nodes_)[slot] = node_t{};
-        //  assert(false);
-        //    tape_allocator_.deallocate(node.tape(), node_bytes_(node).size());
-        //    node = node_t{};
-    }
-
-    node_t node_make_(vector_key_t key, level_t level) noexcept {
-        span_bytes_t node_bytes = node_malloc_(level);
-        if (!node_bytes)
-            return {};
-
-        std::memset(node_bytes.data(), 0, node_bytes.size());
-        node_t node{(byte_t*)node_bytes.data()};
-        node.key(key);
-        node.level(level);
-        return node;
-    }
-
-    // node_t node_make_copy_(span_bytes_t old_bytes) noexcept {
-    //     byte_t* data = (byte_t*)tape_allocator_.allocate(old_bytes.size());
-    //     if (!data)
-    //         return {};
-    //     std::memcpy(data, old_bytes.data(), old_bytes.size());
-    //     return node_t{data};
-    // }
-
-    void node_store(size_t slot, node_t node) noexcept {
-        auto count = nodes_->size();
-        node_t* slot_ref = &(*nodes_)[slot];
-        *slot_ref = node;
-    }
-
-    /// -------- node locking logic
-    inline node_lock_t node_lock_(std::size_t slot) const noexcept {
-        while (nodes_mutexes_->atomic_set(slot))
-            ;
-        return {*nodes_mutexes_, slot};
-    }
-    inline size_t size() { return nodes_->size(); }
-};
 // template <typename key_at = default_key_t, typename compressed_slot_at = default_slot_t> //
 // nodes_proxy_t<vector_key_t> make_storage(index_dense_gt<key_at, compressed_slot_at>index) { return
 // nodes_proxy_t<vector_key_t>(index); }
@@ -521,10 +447,6 @@ class index_dense_gt {
     using key_t = vector_key_t;
     using compressed_slot_t = compressed_slot_at;
     using distance_t = distance_punned_t;
-    // todo:: relationship betwen storage_t and node_t is strange
-    //  have to define the type twice.. storage_proxy_ assumes storage is in node_ts
-    // using storage_t = storage_proxy_t<vector_key_t, compressed_slot_at>;
-    using storage2_t = dummy_storage_single_threaded<vector_key_t, compressed_slot_at>;
     using node_t = node_at<vector_key_t, compressed_slot_at>;
     using metric_t = metric_punned_t;
 
@@ -539,15 +461,16 @@ class index_dense_gt {
 
     using dynamic_allocator_t = aligned_allocator_gt<byte_t, 64>;
     using tape_allocator_t = memory_mapping_allocator_gt<64>;
+    using storage_t = dummy_storage_single_threaded<vector_key_t, compressed_slot_t, tape_allocator_t>;
 
   private:
     /// @brief Schema: input buffer, bytes in input buffer, output buffer.
     using cast_t = std::function<bool(byte_t const*, std::size_t, byte_t*)>;
     /// @brief Punned index.
     using index_t = index_gt<                        //
-        storage2_t,                                  //
+        storage_t,                                   //
         distance_t, vector_key_t, compressed_slot_t, //
-        dynamic_allocator_t, tape_allocator_t>;
+        dynamic_allocator_t>;
     using index_allocator_t = aligned_allocator_gt<index_t, 64>;
 
     using member_iterator_t = typename index_t::member_iterator_t;
@@ -608,7 +531,7 @@ class index_dense_gt {
     std::mutex vector_mutex_;
     bitset_t nodes_mutexes_;
     // storage_t storage_{&nodes_, &nodes_mutexes_, config_};
-    storage2_t storage_{config_};
+    storage_t storage_{config_};
 
     /// @brief Originally forms and array of integers [0, threads], marking all
     mutable std::vector<std::size_t> available_threads_;
@@ -749,9 +672,7 @@ class index_dense_gt {
 
         // Available since C11, but only C++17, so we use the C version.
         index_t* raw = index_allocator_t{}.allocate(1);
-        // result.storage_ =
-        //     storage_proxy_t<vector_key_t, compressed_slot_t>{&result.nodes_, &result.nodes_mutexes_, config};
-        result.storage_ = dummy_storage_single_threaded<vector_key_t, compressed_slot_t>(config);
+        result.storage_ = storage_t(config);
         new (raw) index_t(result.storage_, config);
         result.typed_ = raw;
         return result;
@@ -819,10 +740,10 @@ class index_dense_gt {
      *  @see    `serialized_length` for the length of the binary serialized representation.
      */
     std::size_t memory_usage() const {
-        return                                          //
-            typed_->memory_usage(0) +                   //
-            typed_->tape_allocator().total_wasted() +   //
-            typed_->tape_allocator().total_reserved() + //
+        return                                           //
+            typed_->memory_usage(0) +                    //
+            storage_.node_allocator().total_wasted() +   //
+            storage_.node_allocator().total_reserved() + //
             vectors_tape_allocator_.total_allocated();
     }
 
@@ -1997,7 +1918,7 @@ class index_dense_gt {
         update_config.expansion = config_.expansion_add;
 
         metric_proxy_t metric{*this};
-        return reuse_node
+        return reuse_node //
                    ? typed_->update(typed_->iterator_at(free_slot), key, vector_data, metric, update_config, on_success)
                    : typed_->add(key, vector_data, metric, update_config, on_success);
     }
@@ -2023,7 +1944,6 @@ class index_dense_gt {
         search_config.exact = exact;
 
         auto allow = [=](member_cref_t const& member) noexcept { return member.key != free_key_; };
-
         return typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow);
     }
 

@@ -1723,10 +1723,6 @@ static_assert(std::is_trivially_destructible<node_at<default_key_t, default_slot
  *      priority queues, needed during construction and traversals of graphs.
  *      The allocated buffers may be uninitialized.
  *
- *  @tparam tape_allocator_at
- *      Potentially different memory allocator for primary allocations of nodes and vectors.
- *      It would never `deallocate` separate entries, and would only free all the space at once.
- *      The allocated buffers may be uninitialized.
  *
  *  @section Features
  *
@@ -1781,17 +1777,16 @@ template <typename storage_at,                                    //
           typename distance_at = default_distance_t,              //
           typename key_at = default_key_t,                        //
           typename compressed_slot_at = default_slot_t,           //
-          typename dynamic_allocator_at = std::allocator<byte_t>, //
-          typename tape_allocator_at = dynamic_allocator_at>      //
+          typename dynamic_allocator_at = std::allocator<byte_t>> //
 class index_gt {
   public:
     using storage_t = storage_at;
+    using node_lock_t = typename storage_t::lock_type;
     using distance_t = distance_at;
     using vector_key_t = key_at;
     using key_t = vector_key_t;
     using compressed_slot_t = compressed_slot_at;
     using dynamic_allocator_t = dynamic_allocator_at;
-    using tape_allocator_t = tape_allocator_at;
     using span_bytes_t = span_gt<byte_t>;
     static_assert(sizeof(vector_key_t) >= sizeof(compressed_slot_t), "Having tiny keys doesn't make sense.");
 
@@ -1862,11 +1857,6 @@ class index_gt {
     static_assert(           //
         sizeof(byte_t) == 1, //
         "Primary allocator must allocate separate addressable bytes");
-
-    using tape_allocator_traits_t = std::allocator_traits<tape_allocator_t>;
-    static_assert(                                                 //
-        sizeof(typename tape_allocator_traits_t::value_type) == 1, //
-        "Tape allocator must allocate separate addressable bytes");
 
   private:
     /**
@@ -1969,7 +1959,6 @@ class index_gt {
     index_limits_t limits_{};
 
     mutable dynamic_allocator_t dynamic_allocator_{};
-    tape_allocator_t tape_allocator_{};
 
     precomputed_constants_t pre_{};
     memory_mapped_file_t viewed_file_{};
@@ -2015,16 +2004,14 @@ class index_gt {
      */
     explicit index_gt(       //
         storage_at& storage, //
-        index_config_t config = {}, dynamic_allocator_t dynamic_allocator = {},
-        tape_allocator_t tape_allocator = {}) noexcept
+        index_config_t config = {}, dynamic_allocator_t dynamic_allocator = {}) noexcept
         : storage_(storage), config_(config), limits_(0, 0), dynamic_allocator_(std::move(dynamic_allocator)),
-          tape_allocator_(std::move(tape_allocator)), pre_(precompute_(config)), nodes_count_(0u), max_level_(-1),
-          entry_slot_(0u), contexts_() {}
+          pre_(precompute_(config)), nodes_count_(0u), max_level_(-1), entry_slot_(0u), contexts_() {}
 
     /**
      *  @brief  Clones the structure with the same hyper-parameters, but without contents.
      */
-    index_gt fork() noexcept { return index_gt{config_, dynamic_allocator_, tape_allocator_}; }
+    index_gt fork() noexcept { return index_gt{config_, dynamic_allocator_}; }
 
     ~index_gt() noexcept { reset(); }
 
@@ -2049,7 +2036,7 @@ class index_gt {
     copy_result_t copy(index_copy_config_t config = {}) const noexcept {
         copy_result_t result;
         index_gt& other = result.index;
-        other = index_gt(config_, dynamic_allocator_, tape_allocator_);
+        other = index_gt(config_, dynamic_allocator_);
         if (!other.reserve(limits_))
             return result.failed("Failed to reserve the contexts");
 
@@ -2082,7 +2069,6 @@ class index_gt {
     member_citerator_t citerator_at(std::size_t slot) const noexcept { return {this, slot}; }
 
     dynamic_allocator_t const& dynamic_allocator() const noexcept { return dynamic_allocator_; }
-    tape_allocator_t const& tape_allocator() const noexcept { return tape_allocator_; }
 
 #pragma region Adjusting Configuration
 
@@ -2126,7 +2112,6 @@ class index_gt {
         limits_ = index_limits_t{0, 0};
         nodes_capacity_ = 0;
         viewed_file_ = memory_mapped_file_t{};
-        tape_allocator_ = {};
     }
 
     /**
@@ -2136,7 +2121,6 @@ class index_gt {
         std::swap(config_, other.config_);
         std::swap(limits_, other.limits_);
         std::swap(dynamic_allocator_, other.dynamic_allocator_);
-        std::swap(tape_allocator_, other.tape_allocator_);
         std::swap(pre_, other.pre_);
         std::swap(viewed_file_, other.viewed_file_);
         std::swap(max_level_, other.max_level_);
@@ -2405,7 +2389,7 @@ class index_gt {
         result.new_size = new_slot + 1;
         result.slot = new_slot;
         callback(at(new_slot));
-        auto new_lock = storage_.node_lock(new_slot);
+        node_lock_t new_lock = storage_.node_lock(new_slot);
 
         // Do nothing for the first element
         if (!new_slot) {
@@ -2489,7 +2473,7 @@ class index_gt {
         if (!next.reserve(config.expansion))
             return result.failed("Out of memory!");
 
-        auto new_lock = storage_.node_lock(old_slot);
+        node_lock_t new_lock = storage_.node_lock(old_slot);
         node_t node = storage_.node_at(old_slot);
 
         level_t node_level = node.level();
@@ -3200,7 +3184,7 @@ class index_gt {
             // I chose auto here to allow storage define its own lock smart pointer, without making assumptions
             // about it here. BUt are there cases where, e.g. auto will pick up the lock in the wrong way and instantly
             // drop it for example?
-            auto close_lock = storage_.node_lock(close_slot);
+            node_lock_t close_lock = storage_.node_lock(close_slot);
             node_t close_node = storage_.node_at(close_slot);
 
             neighbors_ref_t close_header = neighbors_(close_node, level);
@@ -3318,7 +3302,7 @@ class index_gt {
             bool changed;
             do {
                 changed = false;
-                auto closest_lock = storage_.node_lock(closest_slot);
+                node_lock_t closest_lock = storage_.node_lock(closest_slot);
                 neighbors_ref_t closest_neighbors = neighbors_non_base_(storage_.node_at(closest_slot), level);
 
                 using vvv = typename std::decay<decltype(*this)>::type::vector_key_t;
@@ -3388,7 +3372,7 @@ class index_gt {
             if (new_slot == candidate_slot)
                 continue;
             node_t candidate_ref = storage_.node_at(candidate_slot);
-            auto candidate_lock = storage_.node_lock(candidate_slot);
+            node_lock_t candidate_lock = storage_.node_lock(candidate_slot);
             neighbors_ref_t candidate_neighbors = neighbors_(candidate_ref, level);
 
             // Optional prefetching
