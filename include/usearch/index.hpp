@@ -1606,6 +1606,13 @@ template <typename key_at> inline std::size_t get_slot(member_ref_gt<key_at> con
 template <typename key_at> inline key_at get_key(member_ref_gt<key_at> const& m) noexcept { return m.key; }
 
 using level_t = std::int16_t;
+
+struct precomputed_constants_t {
+    double inverse_log_connectivity{};
+    std::size_t neighbors_bytes{};
+    std::size_t neighbors_base_bytes{};
+};
+
 // todo:: this is public, but then we make assumptions which are not communicated via this interface
 // clean these up later
 //
@@ -1627,10 +1634,25 @@ template <typename key_at> class node_t {
 
   public:
     using vector_key_t = key_at;
+    using span_bytes_t = span_gt<byte_t>;
     explicit node_t(byte_t* tape) noexcept : tape_(tape) {}
     byte_t* tape() const noexcept { return tape_; }
     byte_t* neighbors_tape() const noexcept { return tape_ + node_head_bytes_(); }
     explicit operator bool() const noexcept { return tape_; }
+
+    inline span_bytes_t node_bytes_(const precomputed_constants_t& pre, node_t node) const noexcept {
+        return {node.tape(), node_bytes_(pre, node.level())};
+    }
+
+    inline std::size_t node_bytes_(const precomputed_constants_t& pre, level_t level) const noexcept {
+        return node_head_bytes_() + node_neighbors_bytes_(pre, level);
+    }
+    inline std::size_t node_neighbors_bytes_(const precomputed_constants_t& pre, node_t node) const noexcept {
+        return node_neighbors_bytes_(pre, node.level());
+    }
+    inline std::size_t node_neighbors_bytes_(const precomputed_constants_t& pre, level_t level) const noexcept {
+        return pre.neighbors_base_bytes + pre.neighbors_bytes * level;
+    }
 
     node_t() = default;
     node_t(node_t const&) = default;
@@ -1742,6 +1764,7 @@ class index_gt {
     using compressed_slot_t = compressed_slot_at;
     using dynamic_allocator_t = dynamic_allocator_at;
     using tape_allocator_t = tape_allocator_at;
+    using span_bytes_t = span_gt<byte_t>;
     static_assert(sizeof(vector_key_t) >= sizeof(compressed_slot_t), "Having tiny keys doesn't make sense.");
 
     using member_cref_t = member_cref_gt<vector_key_t>;
@@ -1769,8 +1792,8 @@ class index_gt {
         using reference = ref_t;
 
         // todo:: take care of these to use external storage
-        reference operator*() const noexcept { return {index_->node_at_11_(slot_).key(), slot_}; }
-        vector_key_t key() const noexcept { return index_->node_at_11_(slot_).key(); }
+        reference operator*() const noexcept { return {index_->storage_.node_at_(slot_).key(), slot_}; }
+        vector_key_t key() const noexcept { return index_->storage_.node_at_(slot_).key(); }
 
         friend inline std::size_t get_slot(member_iterator_gt const& it) noexcept { return it.slot_; }
         friend inline vector_key_t get_key(member_iterator_gt const& it) noexcept { return it.key(); }
@@ -1833,11 +1856,6 @@ class index_gt {
 
     using visits_hash_set_t = growing_hash_set_gt<compressed_slot_t, hash_gt<compressed_slot_t>, dynamic_allocator_t>;
 
-    struct precomputed_constants_t {
-        double inverse_log_connectivity{};
-        std::size_t neighbors_bytes{};
-        std::size_t neighbors_base_bytes{};
-    };
     /// @brief A space-efficient internal data-structure used in graph traversal queues.
     struct candidate_t {
         distance_t distance;
@@ -2448,7 +2466,7 @@ class index_gt {
         node_t node = storage_.node_at_(old_slot);
 
         level_t node_level = node.level();
-        span_bytes_t node_bytes = node_bytes_(node);
+        span_bytes_t node_bytes = node.node_bytes_(pre_, node);
         std::memset(node_bytes.data(), 0, node_bytes.size());
         node.level(node_level);
 
@@ -2604,7 +2622,7 @@ class index_gt {
                 edges += neighbors_(node, level).size();
 
             ++result.nodes;
-            result.allocated_bytes += node_bytes_(node).size();
+            result.allocated_bytes += storage_.node_size_bytes(i);
             result.edges += edges;
             result.max_edges += max_edges;
         }
@@ -2685,7 +2703,7 @@ class index_gt {
         return total;
     }
 
-    std::size_t memory_usage_per_node(level_t level) const noexcept { return node_bytes_(level); }
+    std::size_t memory_usage_per_node(level_t level) const noexcept { return node_t{}.node_bytes_(pre_, level); }
 
 #pragma endregion
 
@@ -2698,7 +2716,7 @@ class index_gt {
         std::size_t neighbors_length = 0;
 
         for (std::size_t i = 0; i != size(); ++i)
-            neighbors_length += node_bytes_(storage_.node_at_(i).level()) + sizeof(level_t);
+            neighbors_length += node_bytes_(pre_, storage_.node_at_(i).level()) + sizeof(level_t);
         return sizeof(index_serialized_header_t) + neighbors_length;
     }
 
@@ -2738,7 +2756,7 @@ class index_gt {
 
         // After that dump the nodes themselves
         for (std::size_t i = 0; i != header.size; ++i) {
-            span_bytes_t node_bytes = node_bytes_(storage_.node_at_(i));
+            span_bytes_t node_bytes = node_t{}.node_bytes_(pre_, storage_.node_at_(i));
             if (!output(node_bytes.data(), node_bytes.size()))
                 return result.failed("Failed to serialize into stream");
             if (!progress(++processed, total))
@@ -2954,9 +2972,9 @@ class index_gt {
         misaligned_ptr_gt<level_t> levels{(byte_t*)file.data() + offset + sizeof(header)};
         offsets[0u] = offset + sizeof(header) + sizeof(level_t) * header.size;
         for (std::size_t i = 1; i < header.size; ++i)
-            offsets[i] = offsets[i - 1] + node_bytes_(levels[i - 1]);
+            offsets[i] = offsets[i - 1] + node_t{}.node_bytes_(pre_, levels[i - 1]);
 
-        std::size_t total_bytes = offsets[header.size - 1] + node_bytes_(levels[header.size - 1]);
+        std::size_t total_bytes = offsets[header.size - 1] + node_t{}.node_bytes_(pre_, levels[header.size - 1]);
         if (file.size() < total_bytes) {
             reset();
             return result.failed("File is corrupted and can't fit all the nodes");
@@ -3081,44 +3099,6 @@ class index_gt {
         pre.neighbors_bytes = config.connectivity * sizeof(compressed_slot_t) + sizeof(neighbors_count_t);
         pre.neighbors_base_bytes = config.connectivity_base * sizeof(compressed_slot_t) + sizeof(neighbors_count_t);
         return pre;
-    }
-
-    // move these to storage
-    using span_bytes_t = span_gt<byte_t>;
-
-    inline span_bytes_t node_bytes_(node_t node) const noexcept { return {node.tape(), node_bytes_(node.level())}; }
-    inline std::size_t node_bytes_(level_t level) const noexcept {
-        return node_head_bytes_() + node_neighbors_bytes_(level);
-    }
-    inline std::size_t node_neighbors_bytes_(node_t node) const noexcept { return node_neighbors_bytes_(node.level()); }
-    inline std::size_t node_neighbors_bytes_(level_t level) const noexcept {
-        return pre_.neighbors_base_bytes + pre_.neighbors_bytes * level;
-    }
-
-    span_bytes_t node_malloc_(level_t level) noexcept {
-        std::size_t node_bytes = node_bytes_(level);
-        byte_t* data = (byte_t*)tape_allocator_.allocate(node_bytes);
-        return data ? span_bytes_t{data, node_bytes} : span_bytes_t{};
-    }
-
-    node_t node_make_(vector_key_t key, level_t level) noexcept {
-        span_bytes_t node_bytes = node_malloc_(level);
-        if (!node_bytes)
-            return {};
-
-        std::memset(node_bytes.data(), 0, node_bytes.size());
-        node_t node{(byte_t*)node_bytes.data()};
-        node.key(key);
-        node.level(level);
-        return node;
-    }
-
-    node_t node_make_copy_(span_bytes_t old_bytes) noexcept {
-        byte_t* data = (byte_t*)tape_allocator_.allocate(old_bytes.size());
-        if (!data)
-            return {};
-        std::memcpy(data, old_bytes.data(), old_bytes.size());
-        return node_t{data};
     }
 
     inline node_t node_at_11_(std::size_t idx) const noexcept { return storage_.node_at_(idx); /* nodes_[idx]; */ }

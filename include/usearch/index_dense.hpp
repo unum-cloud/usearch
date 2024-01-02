@@ -303,11 +303,6 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
         std::size_t slot;
         inline ~node_lock_t() noexcept { mutexes.atomic_reset(slot); }
     };
-    struct precomputed_constants_t {
-        double inverse_log_connectivity{};
-        std::size_t neighbors_bytes{};
-        std::size_t neighbors_base_bytes{};
-    };
 
     precomputed_constants_t pre_{};
 
@@ -326,9 +321,6 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
         pre_ = precompute_(config);
         config_ = config;
     }
-    // copy constructor. todo:: safety??
-    // storage_proxy_t(storage_proxy_t& other) noexcept : nodes_(other.nodes_), pre_(other.pre_), config_(other.config_)
-    // {}
 
     // warning: key_t is used in sys/types.h
     inline node_t<vector_key_t> operator()(std::size_t slot) const noexcept { /*return index_->nodes_[];*/
@@ -338,13 +330,19 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
     }
 
     inline node_t<vector_key_t> node_at_(std::size_t idx) const noexcept { return (*this)(idx); }
+
+    inline size_t node_size_bytes(std::size_t idx) const noexcept {
+        return node_at_(idx).node_bytes_(pre_, node_at_(idx));
+    }
     // todo:: reserve is not thread safe if another thread is running search or insert
     bool reserve(std::size_t count) {
+        assert(nodes_mutexes_->size() == nodes_->size());
         if (count < nodes_mutexes_->size())
             return true;
         nodes_mutexes_t new_mutexes(count);
         *nodes_mutexes_ = std::move(new_mutexes);
-        nodes_->resize(count);
+        if (count > nodes_->size())
+            nodes_->resize(count);
         return true;
     }
 
@@ -363,17 +361,8 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
 
     // todo:: make these private
     using node_t = node_t<vector_key_t>;
-    inline span_bytes_t node_bytes_(node_t node) const noexcept { return {node.tape(), node_bytes_(node.level())}; }
-    static constexpr std::size_t node_head_bytes_() { return sizeof(vector_key_t) + sizeof(level_t); }
-    inline std::size_t node_neighbors_bytes_(node_t node) const noexcept { return node_neighbors_bytes_(node.level()); }
-    inline std::size_t node_neighbors_bytes_(level_t level) const noexcept {
-        return pre_.neighbors_base_bytes + pre_.neighbors_bytes * level;
-    }
-    inline std::size_t node_bytes_(level_t level) const noexcept {
-        return node_head_bytes_() + node_neighbors_bytes_(level);
-    }
     span_bytes_t node_malloc_(level_t level) noexcept {
-        std::size_t node_bytes = node_bytes_(level);
+        std::size_t node_bytes = node_t{}.node_bytes_(pre_, level);
         byte_t* data = (byte_t*)malloc(node_bytes);
         assert(data);
 
@@ -399,6 +388,14 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
         node.level(level);
         return node;
     }
+
+    // node_t node_make_copy_(span_bytes_t old_bytes) noexcept {
+    //     byte_t* data = (byte_t*)tape_allocator_.allocate(old_bytes.size());
+    //     if (!data)
+    //         return {};
+    //     std::memcpy(data, old_bytes.data(), old_bytes.size());
+    //     return node_t{data};
+    // }
 
     void node_append_(size_t slot, vector_key_t key, level_t level) {
         auto count = nodes_->size();
