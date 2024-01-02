@@ -298,9 +298,9 @@ class dummy_storage_single_threaded {
   public:
     dummy_storage_single_threaded(index_config_t config) : pre_(node_t::precompute_(config)) {}
 
-    inline node_t node_at_(std::size_t idx) const noexcept { return nodes_[idx]; }
+    inline node_t node_at(std::size_t idx) const noexcept { return nodes_[idx]; }
 
-    inline size_t node_size_bytes(std::size_t idx) const noexcept { return node_at_(idx).node_size_bytes(pre_); }
+    inline size_t node_size_bytes(std::size_t idx) const noexcept { return node_at(idx).node_size_bytes(pre_); }
 
     bool reserve(std::size_t count) {
         if (count < nodes_.size())
@@ -320,17 +320,17 @@ class dummy_storage_single_threaded {
 
     using span_bytes_t = span_gt<byte_t>;
 
-    span_bytes_t node_malloc_(level_t level) noexcept {
+    span_bytes_t node_malloc(level_t level) noexcept {
         std::size_t node_size = node_t::node_size_bytes(pre_, level);
         byte_t* data = (byte_t*)tape_allocator_.allocate(node_size);
         return data ? span_bytes_t{data, node_size} : span_bytes_t{};
     }
-    void node_free_(size_t slot, node_t node) {
+    void node_free(size_t slot, node_t node) {
         tape_allocator_.deallocate(node.tape(), node.node_size_bytes(pre_));
         nodes_[slot] = node_t{};
     }
-    node_t node_make_(key_at key, level_t level) noexcept {
-        span_bytes_t node_bytes = node_malloc_(level);
+    node_t node_make(key_at key, level_t level) noexcept {
+        span_bytes_t node_bytes = node_malloc(level);
         if (!node_bytes)
             return {};
 
@@ -354,7 +354,8 @@ class dummy_storage_single_threaded {
         nodes_[slot] = node;
     }
     inline size_t size() { return nodes_.size(); }
-    inline int node_lock_(std::size_t) const noexcept { return 0; }
+    // dummy lock just to satisfy the interface
+    constexpr inline int node_lock(std::size_t) noexcept { return 0; }
 };
 
 template <typename key_at, typename compressed_slot_at> class storage_v1 {

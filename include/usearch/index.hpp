@@ -1703,7 +1703,10 @@ static_assert(std::is_trivially_destructible<node_at<default_key_t, default_slot
  *      The storage provider for index_gt. The index uses the storage_at
  *      API to store and retrieve hnsw index nodes and vectors.
  *      see `dummy_storage_single_threaded` for a minimal storage implementation
- *      and interface reference for storage_at
+ *      and interface reference for storage_at.
+ *      NOTE: Storage object is taken by reference. It is the caller's responsibility
+ *      to make sure the reference is valid whenever the index is being used
+ *
  *  @tparam key_at
  *      The type of primary objects stored in the index.
  *      The values, to which those map, are not managed by the same index structure.
@@ -1816,8 +1819,8 @@ class index_gt {
         using reference = ref_t;
 
         // todo:: take care of these to use external storage
-        reference operator*() const noexcept { return {index_->storage_.node_at_(slot_).key(), slot_}; }
-        vector_key_t key() const noexcept { return index_->storage_.node_at_(slot_).key(); }
+        reference operator*() const noexcept { return {index_->storage_.node_at(slot_).key(), slot_}; }
+        vector_key_t key() const noexcept { return index_->storage_.node_at(slot_).key(); }
 
         friend inline std::size_t get_slot(member_iterator_gt const& it) noexcept { return it.slot_; }
         friend inline vector_key_t get_key(member_iterator_gt const& it) noexcept { return it.key(); }
@@ -2073,8 +2076,8 @@ class index_gt {
     member_iterator_t begin() noexcept { return {this, 0}; }
     member_iterator_t end() noexcept { return {this, size()}; }
 
-    member_ref_t at(std::size_t slot) noexcept { return {storage_.node_at_(slot).key(), slot}; }
-    member_cref_t at(std::size_t slot) const noexcept { return {storage_.node_at_(slot).ckey(), slot}; }
+    member_ref_t at(std::size_t slot) noexcept { return {storage_.node_at(slot).key(), slot}; }
+    member_cref_t at(std::size_t slot) const noexcept { return {storage_.node_at(slot).ckey(), slot}; }
     member_iterator_t iterator_at(std::size_t slot) noexcept { return {this, slot}; }
     member_citerator_t citerator_at(std::size_t slot) const noexcept { return {this, slot}; }
 
@@ -2093,9 +2096,9 @@ class index_gt {
         if (!viewed_file_) {
             std::size_t n = nodes_count_;
             for (std::size_t i = 0; i != n; ++i) {
-                node_t node = storage_.node_at_(i);
+                node_t node = storage_.node_at(i);
                 // if (!has_reset<tape_allocator_t>()) {
-                storage_.node_free_(i, node);
+                storage_.node_free(i, node);
                 // } else
                 //     tape_allocator_.deallocate(nullptr, 0);
             }
@@ -2155,6 +2158,7 @@ class index_gt {
      *  @brief  Increases the `capacity()` of the index to allow adding more vectors.
      *  @return `true` on success, `false` on memory allocation errors.
      */
+    // todo:: reserve is not thread safe if another thread is running search or insert
     bool reserve(index_limits_t limits) usearch_noexcept_m {
 
         if (limits.threads_add <= limits_.threads_add          //
@@ -2270,7 +2274,7 @@ class index_gt {
             candidate_t const* top_ordered = top_->data();
             candidate_t candidate = top_ordered[i];
             // node_t node = nodes_[candidate.slot];
-            node_t node = storage_->node_at_(candidate.slot);
+            node_t node = storage_->node_at(candidate.slot);
             return {member_cref_t{node.ckey(), candidate.slot}, candidate.distance};
         }
         inline std::size_t merge_into(                 //
@@ -2389,7 +2393,7 @@ class index_gt {
         }
 
         // Allocate the neighbors
-        node_t node = storage_.node_make_(key, target_level);
+        node_t node = storage_.node_make(key, target_level);
         storage_.node_store(new_slot, node);
         if (!node) {
             nodes_count_.fetch_sub(1);
@@ -2401,7 +2405,7 @@ class index_gt {
         result.new_size = new_slot + 1;
         result.slot = new_slot;
         callback(at(new_slot));
-        auto new_lock = storage_.node_lock_(new_slot);
+        auto new_lock = storage_.node_lock(new_slot);
 
         // Do nothing for the first element
         if (!new_slot) {
@@ -2485,8 +2489,8 @@ class index_gt {
         if (!next.reserve(config.expansion))
             return result.failed("Out of memory!");
 
-        auto new_lock = storage_.node_lock_(old_slot);
-        node_t node = storage_.node_at_(old_slot);
+        auto new_lock = storage_.node_lock(old_slot);
+        node_t node = storage_.node_at(old_slot);
 
         level_t node_level = node.level();
         span_bytes_t node_bytes = node.node_bytes(pre_);
@@ -2638,7 +2642,7 @@ class index_gt {
         stats_t result{};
 
         for (std::size_t i = 0; i != size(); ++i) {
-            node_t node = storage_.node_at_(i);
+            node_t node = storage_.node_at(i);
             std::size_t max_edges = node.level() * config_.connectivity + config_.connectivity_base;
             std::size_t edges = 0;
             for (level_t level = 0; level <= node.level(); ++level)
@@ -2657,7 +2661,7 @@ class index_gt {
 
         std::size_t neighbors_bytes = !level ? pre_.neighbors_base_bytes : pre_.neighbors_bytes;
         for (std::size_t i = 0; i != size(); ++i) {
-            node_t node = storage_.node_at_(i);
+            node_t node = storage_.node_at(i);
             if (static_cast<std::size_t>(node.level()) < level)
                 continue;
 
@@ -2675,7 +2679,7 @@ class index_gt {
 
         std::size_t head_bytes = node_head_bytes_();
         for (std::size_t i = 0; i != size(); ++i) {
-            node_t node = storage_.node_at_(i);
+            node_t node = storage_.node_at(i);
 
             stats_per_level[0].nodes++;
             stats_per_level[0].edges += neighbors_(node, 0).size();
@@ -2739,7 +2743,7 @@ class index_gt {
         std::size_t neighbors_length = 0;
 
         for (std::size_t i = 0; i != size(); ++i)
-            neighbors_length += node_t::node_size_bytes(pre_, storage_.node_at_(i).level()) + sizeof(level_t);
+            neighbors_length += node_t::node_size_bytes(pre_, storage_.node_at(i).level()) + sizeof(level_t);
         return sizeof(index_serialized_header_t) + neighbors_length;
     }
 
@@ -2769,7 +2773,7 @@ class index_gt {
         // That is both enough to estimate the overall memory consumption,
         // and to be able to estimate the offsets of every entry in the file.
         for (std::size_t i = 0; i != header.size; ++i) {
-            node_t node = storage_.node_at_(i);
+            node_t node = storage_.node_at(i);
             level_t level = node.level();
             if (!output(&level, sizeof(level)))
                 return result.failed("Failed to serialize into stream");
@@ -2779,7 +2783,7 @@ class index_gt {
 
         // After that dump the nodes themselves
         for (std::size_t i = 0; i != header.size; ++i) {
-            span_bytes_t node_bytes = storage_.node_at_(i).node_bytes(pre_);
+            span_bytes_t node_bytes = storage_.node_at(i).node_bytes(pre_);
             if (!output(node_bytes.data(), node_bytes.size()))
                 return result.failed("Failed to serialize into stream");
             if (!progress(++processed, total))
@@ -2835,7 +2839,7 @@ class index_gt {
 
         // Load the nodes
         for (std::size_t i = 0; i != header.size; ++i) {
-            span_bytes_t node_bytes = storage_.node_malloc_(levels[i]);
+            span_bytes_t node_bytes = storage_.node_malloc(levels[i]);
             if (!input(node_bytes.data(), node_bytes.size())) {
                 reset();
                 return result.failed("Failed to pull nodes from the stream");
@@ -3091,14 +3095,14 @@ class index_gt {
             // Erase all the incoming links
             std::size_t nodes_count = size();
             executor.dynamic(nodes_count, [&](std::size_t thread_idx, std::size_t node_idx) {
-                node_t node = node_at_(node_idx);
+                node_t node = node_at(node_idx);
                 for (level_t level = 0; level <= node.level(); ++level) {
                     neighbors_ref_t neighbors = neighbors_(node, level);
                     std::size_t old_size = neighbors.size();
                     neighbors.clear();
                     for (std::size_t i = 0; i != old_size; ++i) {
                         compressed_slot_t neighbor_slot = neighbors[i];
-                        node_t neighbor = node_at_(neighbor_slot);
+                        node_t neighbor = node_at(neighbor_slot);
                         if (allow_member(member_cref_t{neighbor.ckey(), neighbor_slot}))
                             neighbors.push_back(neighbor_slot);
                     }
@@ -3124,7 +3128,6 @@ class index_gt {
         return pre;
     }
 
-    inline node_t node_at_11_(std::size_t idx) const noexcept { return storage_.node_at_(idx); /* nodes_[idx]; */ }
     inline neighbors_ref_t neighbors_base_(node_t node) const noexcept { return {node.neighbors_tape()}; }
 
     inline neighbors_ref_t neighbors_non_base_(node_t node, level_t level) const noexcept {
@@ -3134,19 +3137,6 @@ class index_gt {
     inline neighbors_ref_t neighbors_(node_t node, level_t level) const noexcept {
         return level ? neighbors_non_base_(node, level) : neighbors_base_(node);
     }
-
-    // struct node_lock_t {
-    //     nodes_mutexes_t& mutexes;
-    //     std::size_t slot;
-    //     inline ~node_lock_t() noexcept { mutexes.atomic_reset(slot); }
-    // };
-
-    // inline node_lock_t node_lock_(std::size_t slot) const noexcept {
-    //     while (nodes_mutexes_.atomic_set(slot))
-    //         ;
-    //     return {nodes_mutexes_, slot};
-    // }
-    // ^^^ move these to storage
 
     template <typename value_at, typename metric_at, typename prefetch_at>
     void connect_node_across_levels_(                                                           //
@@ -3173,7 +3163,7 @@ class index_gt {
         metric_at&& metric,        //
         std::size_t new_slot, level_t level, context_t& context) usearch_noexcept_m {
 
-        node_t new_node = storage_.node_at_(new_slot);
+        node_t new_node = storage_.node_at(new_slot);
         top_candidates_t& top = context.top_candidates;
 
         // Outgoing links from `new_slot`:
@@ -3184,7 +3174,7 @@ class index_gt {
 
             for (std::size_t idx = 0; idx != top_view.size(); idx++) {
                 usearch_assert_m(!new_neighbors[idx], "Possible memory corruption");
-                usearch_assert_m(level <= storage_.node_at_(top_view[idx].slot).level(), "Linking to missing level");
+                usearch_assert_m(level <= storage_.node_at(top_view[idx].slot).level(), "Linking to missing level");
                 new_neighbors.push_back(top_view[idx].slot);
             }
         }
@@ -3197,7 +3187,7 @@ class index_gt {
         metric_at&& metric,         //
         std::size_t new_slot, value_at&& value, level_t level, context_t& context) usearch_noexcept_m {
 
-        node_t new_node = storage_.node_at_(new_slot);
+        node_t new_node = storage_.node_at(new_slot);
         top_candidates_t& top = context.top_candidates;
         neighbors_ref_t new_neighbors = neighbors_(new_node, level);
 
@@ -3210,8 +3200,8 @@ class index_gt {
             // I chose auto here to allow storage define its own lock smart pointer, without making assumptions
             // about it here. BUt are there cases where, e.g. auto will pick up the lock in the wrong way and instantly
             // drop it for example?
-            auto close_lock = storage_.node_lock_(close_slot);
-            node_t close_node = storage_.node_at_(close_slot);
+            auto close_lock = storage_.node_lock(close_slot);
+            node_t close_node = storage_.node_at(close_slot);
 
             neighbors_ref_t close_header = neighbors_(close_node, level);
             usearch_assert_m(close_header.size() <= connectivity_max, "Possible corruption");
@@ -3293,7 +3283,7 @@ class index_gt {
         bool operator==(candidates_iterator_t const& other) noexcept { return current_ == other.current_; }
         bool operator!=(candidates_iterator_t const& other) noexcept { return current_ != other.current_; }
 
-        // vector_key_t key() const noexcept { return index_->node_at_(slot()).key(); }
+        // vector_key_t key() const noexcept { return index_->node_at(slot()).key(); }
         compressed_slot_t slot() const noexcept { return neighbors_[current_]; }
         friend inline std::size_t get_slot(candidates_iterator_t const& it) noexcept { return it.slot(); }
         friend inline vector_key_t get_key(candidates_iterator_t const& it) noexcept { return it.key(); }
@@ -3328,8 +3318,8 @@ class index_gt {
             bool changed;
             do {
                 changed = false;
-                auto closest_lock = storage_.node_lock_(closest_slot);
-                neighbors_ref_t closest_neighbors = neighbors_non_base_(storage_.node_at_(closest_slot), level);
+                auto closest_lock = storage_.node_lock(closest_slot);
+                neighbors_ref_t closest_neighbors = neighbors_non_base_(storage_.node_at(closest_slot), level);
 
                 using vvv = typename std::decay<decltype(*this)>::type::vector_key_t;
                 static_assert(std::is_same<vvv, vector_key_t>::value, "this cannot happen");
@@ -3397,8 +3387,8 @@ class index_gt {
             compressed_slot_t candidate_slot = candidacy.slot;
             if (new_slot == candidate_slot)
                 continue;
-            node_t candidate_ref = storage_.node_at_(candidate_slot);
-            auto candidate_lock = storage_.node_lock_(candidate_slot);
+            node_t candidate_ref = storage_.node_at(candidate_slot);
+            auto candidate_lock = storage_.node_lock(candidate_slot);
             neighbors_ref_t candidate_neighbors = neighbors_(candidate_ref, level);
 
             // Optional prefetching
@@ -3468,7 +3458,7 @@ class index_gt {
             next.pop();
             context.iteration_cycles++;
 
-            neighbors_ref_t candidate_neighbors = neighbors_base_(storage_.node_at_(candidate.slot));
+            neighbors_ref_t candidate_neighbors = neighbors_base_(storage_.node_at(candidate.slot));
 
             // Optional prefetching
             if (!is_dummy<prefetch_at>()) {
@@ -3489,7 +3479,7 @@ class index_gt {
                     // This can substantially grow our priority queue:
                     next.insert({-successor_dist, successor_slot});
                     if (!is_dummy<predicate_at>())
-                        if (!predicate(member_cref_t{storage_.node_at_(successor_slot).ckey(), successor_slot}))
+                        if (!predicate(member_cref_t{storage_.node_at(successor_slot).ckey(), successor_slot}))
                             continue;
 
                     // This will automatically evict poor matches:
