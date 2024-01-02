@@ -1624,14 +1624,14 @@ struct precomputed_constants_t {
  *          then the { `neighbors_count_t`, `compressed_slot_t`, `compressed_slot_t` ... } sequences
  *          for @b each-level.
  */
-template <typename key_at> class node_t {
+template <typename key_at, typename slot_at> class node_at {
     byte_t* tape_{};
 
     /**
      *  @brief  How many bytes of memory are needed to form the "head" of the node.
      */
     static constexpr std::size_t node_head_bytes_() { return sizeof(vector_key_t) + sizeof(level_t); }
-    inline std::size_t node_neighbors_bytes_(const precomputed_constants_t& pre, node_t node) const noexcept {
+    inline std::size_t node_neighbors_bytes_(const precomputed_constants_t& pre, node_at node) const noexcept {
         return node_neighbors_bytes_(pre, node.level());
     }
     static inline std::size_t node_neighbors_bytes_(const precomputed_constants_t& pre, level_t level) noexcept {
@@ -1640,8 +1640,15 @@ template <typename key_at> class node_t {
 
   public:
     using vector_key_t = key_at;
+    using slot_t = slot_at;
+    /**
+     *  @brief  Integer for the number of node neighbors at a specific level of the
+     *          multi-level graph. It's selected to be `std::uint32_t` to improve the
+     *          alignment in most common cases.
+     */
+    using neighbors_count_t = std::uint32_t;
     using span_bytes_t = span_gt<byte_t>;
-    explicit node_t(byte_t* tape) noexcept : tape_(tape) {}
+    explicit node_at(byte_t* tape) noexcept : tape_(tape) {}
     byte_t* tape() const noexcept { return tape_; }
     byte_t* neighbors_tape() const noexcept { return tape_ + node_head_bytes_(); }
     explicit operator bool() const noexcept { return tape_; }
@@ -1656,9 +1663,19 @@ template <typename key_at> class node_t {
         return node_head_bytes_() + node_neighbors_bytes_(pre, level);
     }
 
-    node_t() = default;
-    node_t(node_t const&) = default;
-    node_t& operator=(node_t const&) = default;
+    inline static precomputed_constants_t precompute_(index_config_t const& config) noexcept {
+        precomputed_constants_t pre;
+        // todo:: ask-Ashot:: inverse_log_connectibity does not relly belong here, but the other two do.
+        // maybe we can separate these?
+        pre.inverse_log_connectivity = 1.0 / std::log(static_cast<double>(config.connectivity));
+        pre.neighbors_bytes = config.connectivity * sizeof(slot_t) + sizeof(neighbors_count_t);
+        pre.neighbors_base_bytes = config.connectivity_base * sizeof(slot_t) + sizeof(neighbors_count_t);
+        return pre;
+    }
+
+    node_at() = default;
+    node_at(node_at const&) = default;
+    node_at& operator=(node_at const&) = default;
 
     misaligned_ref_gt<vector_key_t const> ckey() const noexcept { return {tape_}; }
     misaligned_ref_gt<vector_key_t> key() const noexcept { return {tape_}; }
@@ -1668,8 +1685,9 @@ template <typename key_at> class node_t {
     void level(level_t v) noexcept { return misaligned_store<level_t>(tape_ + sizeof(vector_key_t), v); }
 };
 
-static_assert(std::is_trivially_copy_constructible<node_t<default_key_t>>::value, "Nodes must be light!");
-static_assert(std::is_trivially_destructible<node_t<default_key_t>>::value, "Nodes must be light!");
+static_assert(std::is_trivially_copy_constructible<node_at<default_key_t, default_slot_t>>::value,
+              "Nodes must be light!");
+static_assert(std::is_trivially_destructible<node_at<default_key_t, default_slot_t>>::value, "Nodes must be light!");
 
 /**
  *  @brief  Approximate Nearest Neighbors Search @b index-structure using the
@@ -1772,8 +1790,7 @@ class index_gt {
     using member_cref_t = member_cref_gt<vector_key_t>;
     using member_ref_t = member_ref_gt<vector_key_t>;
 
-    template <typename v> using o_node_t = node_t<v>;
-    using node_t = node_t<vector_key_t>;
+    using node_t = node_at<vector_key_t, compressed_slot_t>;
 
     template <typename ref_at, typename index_at> class member_iterator_gt {
         using ref_t = ref_at;

@@ -197,7 +197,7 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         std::printf("- templates with connectivity %zu \n", connectivity);
         metric_t metric{&matrix, dimensions};
         index_config_t config(connectivity);
-        std::vector<node_t<vector_key_t>> nodes;
+        std::vector<node_at<vector_key_t, slot_t>> nodes;
         bitset_gt nodes_mutexes;
         index_storage_t storage{&nodes, &nodes_mutexes, config};
         index_typed_t index_typed(storage, config);

@@ -281,18 +281,13 @@ inline index_dense_metadata_result_t index_dense_metadata_from_buffer(memory_map
     return result.failed("Not a dense USearch index!");
 }
 
-template <typename storage_proxy_key_t, typename compressed_slot_at = default_slot_t> class storage_proxy_t {
-    using vector_key_t = storage_proxy_key_t;
+template <typename key_at, typename compressed_slot_at> class storage_proxy_t {
+    using vector_key_t = key_at;
+    using node_t = node_at<vector_key_t, compressed_slot_at>;
     using dynamic_allocator_t = aligned_allocator_gt<byte_t, 64>;
     // using nodes_mutexes_t = bitset_gt<dynamic_allocator_t>;
     using nodes_mutexes_t = bitset_gt<>;
-    using nodes_t = std::vector<node_t<vector_key_t>>;
-    /**
-     *  @brief  Integer for the number of node neighbors at a specific level of the
-     *          multi-level graph. It's selected to be `std::uint32_t` to improve the
-     *          alignment in most common cases.
-     */
-    using neighbors_count_t = std::uint32_t;
+    using nodes_t = std::vector<node_t>;
 
     nodes_t* nodes_{};
     index_config_t config_{};
@@ -306,30 +301,22 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
 
     precomputed_constants_t pre_{};
 
-    inline static precomputed_constants_t precompute_(index_config_t const& config) noexcept {
-        precomputed_constants_t pre;
-        pre.inverse_log_connectivity = 1.0 / std::log(static_cast<double>(config.connectivity));
-        pre.neighbors_bytes = config.connectivity * sizeof(compressed_slot_at) + sizeof(neighbors_count_t);
-        pre.neighbors_base_bytes = config.connectivity_base * sizeof(compressed_slot_at) + sizeof(neighbors_count_t);
-        return pre;
-    }
-
   public:
     storage_proxy_t(nodes_t* nodes, nodes_mutexes_t* nodes_mutexes, index_config_t config) noexcept {
         nodes_ = nodes;
         nodes_mutexes_ = nodes_mutexes;
-        pre_ = precompute_(config);
+        pre_ = node_t::precompute_(config);
         config_ = config;
     }
 
     // warning: key_t is used in sys/types.h
-    inline node_t<vector_key_t> operator()(std::size_t slot) const noexcept { /*return index_->nodes_[];*/
+    inline node_t operator()(std::size_t slot) const noexcept { /*return index_->nodes_[];*/
         nodes_t v = *nodes_;
         usearch_assert_m(slot < v.size(), "Storage node index out of bounds");
         return v[slot];
     }
 
-    inline node_t<vector_key_t> node_at_(std::size_t idx) const noexcept { return (*this)(idx); }
+    inline node_t node_at_(std::size_t idx) const noexcept { return (*this)(idx); }
 
     inline size_t node_size_bytes(std::size_t idx) const noexcept { return node_at_(idx).node_size_bytes(pre_); }
     // todo:: reserve is not thread safe if another thread is running search or insert
@@ -357,7 +344,6 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
     using span_bytes_t = span_gt<byte_t>;
 
     // todo:: make these private
-    using node_t = node_t<vector_key_t>;
     span_bytes_t node_malloc_(level_t level) noexcept {
         std::size_t node_bytes = node_t::node_size_bytes(pre_, level);
         byte_t* data = (byte_t*)malloc(node_bytes);
@@ -457,7 +443,10 @@ class index_dense_gt {
     using key_t = vector_key_t;
     using compressed_slot_t = compressed_slot_at;
     using distance_t = distance_punned_t;
+    // todo:: relationship betwen storage_t and node_t is strange
+    //  have to define the type twice.. storage_proxy_ assumes storage is in node_ts
     using storage_t = storage_proxy_t<vector_key_t, compressed_slot_at>;
+    using node_t = node_at<vector_key_t, compressed_slot_at>;
     using metric_t = metric_punned_t;
 
     using member_ref_t = member_ref_gt<vector_key_t>;
@@ -536,7 +525,7 @@ class index_dense_gt {
     mutable std::vector<byte_t*> vectors_lookup_;
 
     /// @brief  C-style array of `node_t` smart-pointers.
-    std::vector<node_t<key_t>> nodes_;
+    std::vector<node_t> nodes_;
     std::mutex vector_mutex_;
     bitset_t nodes_mutexes_;
     storage_t storage_{&nodes_, &nodes_mutexes_, config_};
