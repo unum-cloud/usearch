@@ -162,7 +162,8 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     using slot_t = slot_at;
 
     // using index_storage_t = storage_proxy_t<vector_key_t, slot_t>;
-    using index_storage_t = dummy_storage_single_threaded<vector_key_t, slot_t>;
+    // using index_storage_t = dummy_storage_single_threaded<vector_key_t, slot_t>;
+    using index_storage_t = storage_v2<vector_key_t, slot_t>;
     using index_typed_t = index_gt<index_storage_t, float, vector_key_t, slot_t>;
     using member_cref_t = typename index_typed_t::member_cref_t;
     using member_citerator_t = typename index_typed_t::member_citerator_t;

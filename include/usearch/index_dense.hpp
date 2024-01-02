@@ -411,18 +411,106 @@ template <typename key_at, typename compressed_slot_at> class storage_v1 {
     mutable nodes_mutexes_t nodes_mutexes_{};
 };
 
-template <typename key_at, typename compressed_slot_at> class storage_v2 {
-    using vector_key_t = key_at;
-    using node_t = node_at<vector_key_t, compressed_slot_at>;
-    using dynamic_allocator_t = aligned_allocator_gt<byte_t, 64>;
-    // using nodes_mutexes_t = bitset_gt<dynamic_allocator_t>;
-    using nodes_mutexes_t = bitset_gt<>;
+template <typename key_at, typename compressed_slot_at,
+          typename tape_allocator_at = std::allocator<byte_t>> //
+class storage_v2 {
+    using node_t = node_at<key_at, compressed_slot_at>;
     using nodes_t = std::vector<node_t>;
-};
+    using nodes_mutexes_t = bitset_gt<>;
 
-// template <typename key_at = default_key_t, typename compressed_slot_at = default_slot_t> //
-// nodes_proxy_t<vector_key_t> make_storage(index_dense_gt<key_at, compressed_slot_at>index) { return
-// nodes_proxy_t<vector_key_t>(index); }
+    nodes_t nodes_{};
+    /// @brief  Mutex, that limits concurrent access to `nodes_`.
+    mutable nodes_mutexes_t nodes_mutexes_{};
+    precomputed_constants_t pre_{};
+    tape_allocator_at tape_allocator_{};
+    using tape_allocator_traits_t = std::allocator_traits<tape_allocator_at>;
+    static_assert(                                                 //
+        sizeof(typename tape_allocator_traits_t::value_type) == 1, //
+        "Tape allocator must allocate separate addressable bytes");
+
+    struct node_lock_t {
+        nodes_mutexes_t& mutexes;
+        std::size_t slot;
+        inline ~node_lock_t() noexcept { mutexes.atomic_reset(slot); }
+    };
+
+  public:
+    storage_v2(index_config_t config, tape_allocator_at tape_allocator = {})
+        : pre_(node_t::precompute_(config)), tape_allocator_(tape_allocator) {}
+
+    inline node_t node_at(std::size_t idx) const noexcept { return nodes_[idx]; }
+
+    inline size_t node_size_bytes(std::size_t idx) const noexcept { return node_at(idx).node_size_bytes(pre_); }
+
+    using lock_type = node_lock_t;
+
+    bool reserve(std::size_t count) {
+        if (count < nodes_.size())
+            return true;
+        nodes_mutexes_t new_mutexes = nodes_mutexes_t(count);
+        nodes_mutexes_ = std::move(new_mutexes);
+        nodes_.resize(count);
+        return true;
+    }
+
+    void clear() {
+        if (nodes_.data())
+            std::memset(nodes_.data(), 0, nodes_.size());
+    }
+    void reset() {
+        nodes_.clear();
+        nodes_mutexes_ = {};
+        nodes_.shrink_to_fit();
+    }
+
+    using span_bytes_t = span_gt<byte_t>;
+
+    span_bytes_t node_malloc(level_t level) noexcept {
+        std::size_t node_size = node_t::node_size_bytes(pre_, level);
+        byte_t* data = (byte_t*)tape_allocator_.allocate(node_size);
+        return data ? span_bytes_t{data, node_size} : span_bytes_t{};
+    }
+    void node_free(size_t slot, node_t node) {
+        if (!has_reset<tape_allocator_at>()) {
+            tape_allocator_.deallocate(node.tape(), node.node_size_bytes(pre_));
+        } else {
+            tape_allocator_.deallocate(nullptr, 0);
+        }
+        nodes_[slot] = node_t{};
+    }
+    node_t node_make(key_at key, level_t level) noexcept {
+        span_bytes_t node_bytes = node_malloc(level);
+        if (!node_bytes)
+            return {};
+
+        std::memset(node_bytes.data(), 0, node_bytes.size());
+        node_t node{(byte_t*)node_bytes.data()};
+        node.key(key);
+        node.level(level);
+        return node;
+    }
+
+    // node_t node_make_copy_(span_bytes_t old_bytes) noexcept {
+    //     byte_t* data = (byte_t*)tape_allocator_.allocate(old_bytes.size());
+    //     if (!data)
+    //         return {};
+    //     std::memcpy(data, old_bytes.data(), old_bytes.size());
+    //     return node_t{data};
+    // }
+
+    void node_store(size_t slot, node_t node) noexcept {
+        auto count = nodes_.size();
+        nodes_[slot] = node;
+    }
+    inline size_t size() { return nodes_.size(); }
+    tape_allocator_at const& node_allocator() const noexcept { return tape_allocator_; }
+    // dummy lock just to satisfy the interface
+    constexpr inline lock_type node_lock(std::size_t slot) const noexcept {
+        while (nodes_mutexes_.atomic_set(slot))
+            ;
+        return {nodes_mutexes_, slot};
+    }
+};
 
 /**
  *  @brief  Oversimplified type-punned index for equidimensional vectors
@@ -461,7 +549,8 @@ class index_dense_gt {
 
     using dynamic_allocator_t = aligned_allocator_gt<byte_t, 64>;
     using tape_allocator_t = memory_mapping_allocator_gt<64>;
-    using storage_t = dummy_storage_single_threaded<vector_key_t, compressed_slot_t, tape_allocator_t>;
+    // using storage_t = dummy_storage_single_threaded<vector_key_t, compressed_slot_t, tape_allocator_t>;
+    using storage_t = storage_v2<vector_key_t, compressed_slot_t, tape_allocator_t>;
 
   private:
     /// @brief Schema: input buffer, bytes in input buffer, output buffer.
