@@ -286,7 +286,7 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
     using dynamic_allocator_t = aligned_allocator_gt<byte_t, 64>;
     // using nodes_mutexes_t = bitset_gt<dynamic_allocator_t>;
     using nodes_mutexes_t = bitset_gt<>;
-    using nodes_t = std::vector<node_t<storage_proxy_key_t>>;
+    using nodes_t = std::vector<node_t<vector_key_t>>;
     /**
      *  @brief  Integer for the number of node neighbors at a specific level of the
      *          multi-level graph. It's selected to be `std::uint32_t` to improve the
@@ -294,8 +294,8 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
      */
     using neighbors_count_t = std::uint32_t;
 
-    nodes_t* nodes_;
-    index_config_t config_;
+    nodes_t* nodes_{};
+    index_config_t config_{};
     /// @brief  Mutex, that limits concurrent access to `nodes_`.
     mutable nodes_mutexes_t* nodes_mutexes_{};
     struct node_lock_t {
@@ -309,7 +309,7 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
         std::size_t neighbors_base_bytes{};
     };
 
-    precomputed_constants_t pre_;
+    precomputed_constants_t pre_{};
 
     inline static precomputed_constants_t precompute_(index_config_t const& config) noexcept {
         precomputed_constants_t pre;
@@ -350,7 +350,8 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
 
     void clear() {
         nodes_mutexes_->clear();
-        // std::fill(nodes_->begin(), nodes_->end(), 0);
+        if (nodes_->data())
+            std::memset(nodes_->data(), 0, nodes_->size());
     }
     void reset() {
         *nodes_mutexes_ = {};
@@ -374,8 +375,17 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
     span_bytes_t node_malloc_(level_t level) noexcept {
         std::size_t node_bytes = node_bytes_(level);
         byte_t* data = (byte_t*)malloc(node_bytes);
+        assert(data);
+
         std::memset(data, 0, node_bytes);
         return data ? span_bytes_t{data, node_bytes} : span_bytes_t{};
+    }
+    void node_free_(size_t slot, node_t node) {
+        free(node.tape());
+        (*nodes_)[slot] = node_t{};
+        //  assert(false);
+        //    tape_allocator_.deallocate(node.tape(), node_bytes_(node).size());
+        //    node = node_t{};
     }
 
     node_t node_make_(vector_key_t key, level_t level) noexcept {
@@ -397,7 +407,11 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
             nodes_mutexes_t new_mutexes(count);
             *nodes_mutexes_ = std::move(new_mutexes);
         }
-        (*nodes_)[slot] = node_make_(key, level);
+        node_t* slot_ref = &(*nodes_)[slot];
+        if (*slot_ref) {
+            assert(false);
+        }
+        *slot_ref = node_make_(key, level);
     }
 
     void node_append_(size_t slot, node_t node) {
@@ -407,7 +421,11 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
             nodes_mutexes_t new_mutexes(count);
             *nodes_mutexes_ = std::move(new_mutexes);
         }
-        (*nodes_)[slot] = node;
+        node_t* slot_ref = &(*nodes_)[slot];
+        if (*slot_ref) {
+            assert(false);
+        }
+        *slot_ref = node;
     }
 
     /// -------- node locking logic

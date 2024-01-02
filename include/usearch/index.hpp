@@ -1920,7 +1920,7 @@ class index_gt {
     };
 
     index_config_t config_{};
-    storage_at storage_;
+    storage_t storage_{};
     index_limits_t limits_{};
 
     mutable dynamic_allocator_t dynamic_allocator_{};
@@ -2048,12 +2048,17 @@ class index_gt {
      *  Will keep the number of available threads/contexts the same as it was.
      */
     void clear() noexcept {
-        // if (!has_reset<tape_allocator_t>()) {
-        //     std::size_t n = nodes_count_;
-        //     for (std::size_t i = 0; i != n; ++i)
-        //         node_free_(i);
-        // } else
-        //     tape_allocator_.deallocate(nullptr, 0);
+        if (!viewed_file_) {
+            std::size_t n = nodes_count_;
+            for (std::size_t i = 0; i != n; ++i) {
+                node_t node = storage_.node_at_(i);
+                // if (!has_reset<tape_allocator_t>()) {
+                storage_.node_free_(i, node);
+                // } else
+                //     tape_allocator_.deallocate(nullptr, 0);
+            }
+        }
+
         storage_.clear();
 
         nodes_count_ = 0;
@@ -2342,17 +2347,15 @@ class index_gt {
         }
 
         // Allocate the neighbors
-        node_t node = node_make_(key, target_level);
+        // nodes_[new_slot] = node;
+        storage_.node_append_(new_slot, key, target_level);
+        node_t node = storage_.node_at_(new_slot);
         if (!node) {
             nodes_count_.fetch_sub(1);
             return result.failed("Out of memory!");
         }
         if (target_level <= max_level_copy)
             new_level_lock.unlock();
-
-        // nodes_[new_slot] = node;
-        storage_.node_append_(new_slot, key, target_level);
-        node = storage_.node_at_(new_slot);
 
         result.new_size = new_slot + 1;
         result.slot = new_slot;
@@ -3116,15 +3119,6 @@ class index_gt {
             return {};
         std::memcpy(data, old_bytes.data(), old_bytes.size());
         return node_t{data};
-    }
-
-    void node_free_(std::size_t idx) noexcept {
-        if (viewed_file_)
-            return;
-
-        // node_t& node = nodes_[idx];
-        // tape_allocator_.deallocate(node.tape(), node_bytes_(node).size());
-        // node = node_t{};
     }
 
     inline node_t node_at_11_(std::size_t idx) const noexcept { return storage_.node_at_(idx); /* nodes_[idx]; */ }
