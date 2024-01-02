@@ -670,7 +670,11 @@ class index_dense_gt {
     index_dense_gt(index_dense_gt&& other)
         : config_(std::move(other.config_)),
 
-          typed_(exchange(other.typed_, nullptr)),     //
+          // todo:: ask-Ashot: is the following change ok? why is it needed
+          // for some reason exchange stopped working after I added allocator to strage
+          // it was complaining about some ambiguity
+          // typed_(exchange(other.typed_, nullptr)),     //
+          typed_(std::move(other.typed_)),             //
           cast_buffer_(std::move(other.cast_buffer_)), //
           casts_(std::move(other.casts_)),             //
           metric_(std::move(other.metric_)),           //
