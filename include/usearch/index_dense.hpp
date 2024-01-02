@@ -281,6 +281,105 @@ inline index_dense_metadata_result_t index_dense_metadata_from_buffer(memory_map
     return result.failed("Not a dense USearch index!");
 }
 
+template <typename key_at, typename compressed_slot_at,
+          typename tape_allocator_at = std::allocator<byte_t>> //
+class dummy_storage_single_threaded {
+    using node_t = node_at<key_at, compressed_slot_at>;
+    using nodes_t = std::vector<node_t>;
+
+    nodes_t nodes_{};
+    precomputed_constants_t pre_{};
+    tape_allocator_at tape_allocator_;
+    using tape_allocator_traits_t = std::allocator_traits<tape_allocator_at>;
+    static_assert(                                                 //
+        sizeof(typename tape_allocator_traits_t::value_type) == 1, //
+        "Tape allocator must allocate separate addressable bytes");
+
+  public:
+    dummy_storage_single_threaded(index_config_t config) : pre_(node_t::precompute_(config)) {}
+
+    inline node_t node_at_(std::size_t idx) const noexcept { return nodes_[idx]; }
+
+    inline size_t node_size_bytes(std::size_t idx) const noexcept { return node_at_(idx).node_size_bytes(pre_); }
+
+    bool reserve(std::size_t count) {
+        if (count < nodes_.size())
+            return true;
+        nodes_.resize(count);
+        return true;
+    }
+
+    void clear() {
+        if (nodes_.data())
+            std::memset(nodes_.data(), 0, nodes_.size());
+    }
+    void reset() {
+        nodes_.clear();
+        nodes_.shrink_to_fit();
+    }
+
+    using span_bytes_t = span_gt<byte_t>;
+
+    span_bytes_t node_malloc_(level_t level) noexcept {
+        std::size_t node_size = node_t::node_size_bytes(pre_, level);
+        byte_t* data = (byte_t*)tape_allocator_.allocate(node_size);
+        return data ? span_bytes_t{data, node_size} : span_bytes_t{};
+    }
+    void node_free_(size_t slot, node_t node) {
+        tape_allocator_.deallocate(node.tape(), node.node_size_bytes(pre_));
+        nodes_[slot] = node_t{};
+    }
+    node_t node_make_(key_at key, level_t level) noexcept {
+        span_bytes_t node_bytes = node_malloc_(level);
+        if (!node_bytes)
+            return {};
+
+        std::memset(node_bytes.data(), 0, node_bytes.size());
+        node_t node{(byte_t*)node_bytes.data()};
+        node.key(key);
+        node.level(level);
+        return node;
+    }
+
+    // node_t node_make_copy_(span_bytes_t old_bytes) noexcept {
+    //     byte_t* data = (byte_t*)tape_allocator_.allocate(old_bytes.size());
+    //     if (!data)
+    //         return {};
+    //     std::memcpy(data, old_bytes.data(), old_bytes.size());
+    //     return node_t{data};
+    // }
+
+    void node_store(size_t slot, node_t node) noexcept {
+        auto count = nodes_.size();
+        nodes_[slot] = node;
+    }
+    inline size_t size() { return nodes_.size(); }
+    inline int node_lock_(std::size_t) const noexcept { return 0; }
+};
+
+template <typename key_at, typename compressed_slot_at> class storage_v1 {
+    using vector_key_t = key_at;
+    using node_t = node_at<vector_key_t, compressed_slot_at>;
+    using dynamic_allocator_t = aligned_allocator_gt<byte_t, 64>;
+    // using nodes_mutexes_t = bitset_gt<dynamic_allocator_t>;
+    using nodes_mutexes_t = bitset_gt<>;
+    using nodes_t = std::vector<node_t>;
+
+    index_config_t config_{};
+    nodes_t nodes_{};
+    /// @brief  Mutex, that limits concurrent access to `nodes_`.
+    mutable nodes_mutexes_t nodes_mutexes_{};
+};
+
+template <typename key_at, typename compressed_slot_at> class storage_v2 {
+    using vector_key_t = key_at;
+    using node_t = node_at<vector_key_t, compressed_slot_at>;
+    using dynamic_allocator_t = aligned_allocator_gt<byte_t, 64>;
+    // using nodes_mutexes_t = bitset_gt<dynamic_allocator_t>;
+    using nodes_mutexes_t = bitset_gt<>;
+    using nodes_t = std::vector<node_t>;
+};
+
 template <typename key_at, typename compressed_slot_at> class storage_proxy_t {
     using vector_key_t = key_at;
     using node_t = node_at<vector_key_t, compressed_slot_at>;
@@ -423,7 +522,8 @@ class index_dense_gt {
     using distance_t = distance_punned_t;
     // todo:: relationship betwen storage_t and node_t is strange
     //  have to define the type twice.. storage_proxy_ assumes storage is in node_ts
-    using storage_t = storage_proxy_t<vector_key_t, compressed_slot_at>;
+    // using storage_t = storage_proxy_t<vector_key_t, compressed_slot_at>;
+    using storage2_t = dummy_storage_single_threaded<vector_key_t, compressed_slot_at>;
     using node_t = node_at<vector_key_t, compressed_slot_at>;
     using metric_t = metric_punned_t;
 
@@ -444,7 +544,7 @@ class index_dense_gt {
     using cast_t = std::function<bool(byte_t const*, std::size_t, byte_t*)>;
     /// @brief Punned index.
     using index_t = index_gt<                        //
-        storage_t,                                   //
+        storage2_t,                                  //
         distance_t, vector_key_t, compressed_slot_t, //
         dynamic_allocator_t, tape_allocator_t>;
     using index_allocator_t = aligned_allocator_gt<index_t, 64>;
@@ -506,7 +606,8 @@ class index_dense_gt {
     std::vector<node_t> nodes_;
     std::mutex vector_mutex_;
     bitset_t nodes_mutexes_;
-    storage_t storage_{&nodes_, &nodes_mutexes_, config_};
+    // storage_t storage_{&nodes_, &nodes_mutexes_, config_};
+    storage2_t storage_{config_};
 
     /// @brief Originally forms and array of integers [0, threads], marking all
     mutable std::vector<std::size_t> available_threads_;
@@ -643,8 +744,9 @@ class index_dense_gt {
 
         // Available since C11, but only C++17, so we use the C version.
         index_t* raw = index_allocator_t{}.allocate(1);
-        result.storage_ =
-            storage_proxy_t<vector_key_t, compressed_slot_t>{&result.nodes_, &result.nodes_mutexes_, config};
+        // result.storage_ =
+        //     storage_proxy_t<vector_key_t, compressed_slot_t>{&result.nodes_, &result.nodes_mutexes_, config};
+        result.storage_ = dummy_storage_single_threaded<vector_key_t, compressed_slot_t>(config);
         new (raw) index_t(result.storage_, config);
         result.typed_ = raw;
         return result;

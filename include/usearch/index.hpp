@@ -1699,6 +1699,11 @@ static_assert(std::is_trivially_destructible<node_at<default_key_t, default_slot
  *  not just within equi-dimensional vectors. Examples range from texts to similar Chess
  *  positions.
  *
+ *  @tparam storage_at
+ *      The storage provider for index_gt. The index uses the storage_at
+ *      API to store and retrieve hnsw index nodes and vectors.
+ *      see `dummy_storage_single_threaded` for a minimal storage implementation
+ *      and interface reference for storage_at
  *  @tparam key_at
  *      The type of primary objects stored in the index.
  *      The values, to which those map, are not managed by the same index structure.
@@ -1956,8 +1961,8 @@ class index_gt {
         }
     };
 
+    const storage_t& storage_;
     index_config_t config_{};
-    storage_t storage_{};
     index_limits_t limits_{};
 
     mutable dynamic_allocator_t dynamic_allocator_{};
@@ -2005,8 +2010,8 @@ class index_gt {
      *  @section Exceptions
      *      Doesn't throw, unless the ::metric's and ::allocators's throw on copy-construction.
      */
-    explicit index_gt(      //
-        storage_at storage, //
+    explicit index_gt(       //
+        storage_at& storage, //
         index_config_t config = {}, dynamic_allocator_t dynamic_allocator = {},
         tape_allocator_t tape_allocator = {}) noexcept
         : storage_(storage), config_(config), limits_(0, 0), dynamic_allocator_(std::move(dynamic_allocator)),
