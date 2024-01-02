@@ -1631,6 +1631,12 @@ template <typename key_at> class node_t {
      *  @brief  How many bytes of memory are needed to form the "head" of the node.
      */
     static constexpr std::size_t node_head_bytes_() { return sizeof(vector_key_t) + sizeof(level_t); }
+    inline std::size_t node_neighbors_bytes_(const precomputed_constants_t& pre, node_t node) const noexcept {
+        return node_neighbors_bytes_(pre, node.level());
+    }
+    static inline std::size_t node_neighbors_bytes_(const precomputed_constants_t& pre, level_t level) noexcept {
+        return pre.neighbors_base_bytes + pre.neighbors_bytes * level;
+    }
 
   public:
     using vector_key_t = key_at;
@@ -1640,18 +1646,14 @@ template <typename key_at> class node_t {
     byte_t* neighbors_tape() const noexcept { return tape_ + node_head_bytes_(); }
     explicit operator bool() const noexcept { return tape_; }
 
-    inline span_bytes_t node_bytes_(const precomputed_constants_t& pre, node_t node) const noexcept {
-        return {node.tape(), node_bytes_(pre, node.level())};
+    inline span_bytes_t node_bytes(const precomputed_constants_t& pre) const noexcept {
+        return {tape(), node_size_bytes(pre, level())};
     }
-
-    inline std::size_t node_bytes_(const precomputed_constants_t& pre, level_t level) const noexcept {
+    inline std::size_t node_size_bytes(const precomputed_constants_t& pre) noexcept {
+        return node_head_bytes_() + node_neighbors_bytes_(pre, level());
+    }
+    static inline std::size_t node_size_bytes(const precomputed_constants_t& pre, level_t level) noexcept {
         return node_head_bytes_() + node_neighbors_bytes_(pre, level);
-    }
-    inline std::size_t node_neighbors_bytes_(const precomputed_constants_t& pre, node_t node) const noexcept {
-        return node_neighbors_bytes_(pre, node.level());
-    }
-    inline std::size_t node_neighbors_bytes_(const precomputed_constants_t& pre, level_t level) const noexcept {
-        return pre.neighbors_base_bytes + pre.neighbors_bytes * level;
     }
 
     node_t() = default;
@@ -2466,7 +2468,7 @@ class index_gt {
         node_t node = storage_.node_at_(old_slot);
 
         level_t node_level = node.level();
-        span_bytes_t node_bytes = node.node_bytes_(pre_, node);
+        span_bytes_t node_bytes = node.node_bytes(pre_);
         std::memset(node_bytes.data(), 0, node_bytes.size());
         node.level(node_level);
 
@@ -2703,7 +2705,7 @@ class index_gt {
         return total;
     }
 
-    std::size_t memory_usage_per_node(level_t level) const noexcept { return node_t{}.node_bytes_(pre_, level); }
+    std::size_t memory_usage_per_node(level_t level) const noexcept { return node_t::node_size_bytes(pre_, level); }
 
 #pragma endregion
 
@@ -2716,7 +2718,7 @@ class index_gt {
         std::size_t neighbors_length = 0;
 
         for (std::size_t i = 0; i != size(); ++i)
-            neighbors_length += node_bytes_(pre_, storage_.node_at_(i).level()) + sizeof(level_t);
+            neighbors_length += node_t::node_size_bytes(pre_, storage_.node_at_(i).level()) + sizeof(level_t);
         return sizeof(index_serialized_header_t) + neighbors_length;
     }
 
@@ -2756,7 +2758,7 @@ class index_gt {
 
         // After that dump the nodes themselves
         for (std::size_t i = 0; i != header.size; ++i) {
-            span_bytes_t node_bytes = node_t{}.node_bytes_(pre_, storage_.node_at_(i));
+            span_bytes_t node_bytes = storage_.node_at_(i).node_bytes(pre_);
             if (!output(node_bytes.data(), node_bytes.size()))
                 return result.failed("Failed to serialize into stream");
             if (!progress(++processed, total))
@@ -2972,9 +2974,9 @@ class index_gt {
         misaligned_ptr_gt<level_t> levels{(byte_t*)file.data() + offset + sizeof(header)};
         offsets[0u] = offset + sizeof(header) + sizeof(level_t) * header.size;
         for (std::size_t i = 1; i < header.size; ++i)
-            offsets[i] = offsets[i - 1] + node_t{}.node_bytes_(pre_, levels[i - 1]);
+            offsets[i] = offsets[i - 1] + node_t::node_size_bytes(pre_, levels[i - 1]);
 
-        std::size_t total_bytes = offsets[header.size - 1] + node_t{}.node_bytes_(pre_, levels[header.size - 1]);
+        std::size_t total_bytes = offsets[header.size - 1] + node_t::node_size_bytes(pre_, levels[header.size - 1]);
         if (file.size() < total_bytes) {
             reset();
             return result.failed("File is corrupted and can't fit all the nodes");

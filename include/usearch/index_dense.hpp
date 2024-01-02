@@ -331,9 +331,7 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
 
     inline node_t<vector_key_t> node_at_(std::size_t idx) const noexcept { return (*this)(idx); }
 
-    inline size_t node_size_bytes(std::size_t idx) const noexcept {
-        return node_at_(idx).node_bytes_(pre_, node_at_(idx));
-    }
+    inline size_t node_size_bytes(std::size_t idx) const noexcept { return node_at_(idx).node_size_bytes(pre_); }
     // todo:: reserve is not thread safe if another thread is running search or insert
     bool reserve(std::size_t count) {
         assert(nodes_mutexes_->size() == nodes_->size());
@@ -361,7 +359,7 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
     // todo:: make these private
     using node_t = node_t<vector_key_t>;
     span_bytes_t node_malloc_(level_t level) noexcept {
-        std::size_t node_bytes = node_t{}.node_bytes_(pre_, level);
+        std::size_t node_bytes = node_t::node_size_bytes(pre_, level);
         byte_t* data = (byte_t*)malloc(node_bytes);
         assert(data);
 
