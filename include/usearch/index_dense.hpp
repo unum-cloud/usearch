@@ -341,8 +341,7 @@ template <typename storage_proxy_key_t, typename compressed_slot_at = default_sl
             return true;
         nodes_mutexes_t new_mutexes(count);
         *nodes_mutexes_ = std::move(new_mutexes);
-        if (count > nodes_->size())
-            nodes_->resize(count);
+        nodes_->resize(count);
         return true;
     }
 
