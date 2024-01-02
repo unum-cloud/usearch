@@ -380,31 +380,9 @@ template <typename key_at, typename compressed_slot_at> class storage_proxy_t {
     //     return node_t{data};
     // }
 
-    void node_append_(size_t slot, vector_key_t key, level_t level) {
+    void node_store(size_t slot, node_t node) noexcept {
         auto count = nodes_->size();
-        if (count > nodes_mutexes_->size()) {
-            assert(false);
-            nodes_mutexes_t new_mutexes(count);
-            *nodes_mutexes_ = std::move(new_mutexes);
-        }
         node_t* slot_ref = &(*nodes_)[slot];
-        if (*slot_ref) {
-            assert(false);
-        }
-        *slot_ref = node_make_(key, level);
-    }
-
-    void node_append_(size_t slot, node_t node) {
-        auto count = nodes_->size();
-        if (count > nodes_mutexes_->size()) {
-            assert(false);
-            nodes_mutexes_t new_mutexes(count);
-            *nodes_mutexes_ = std::move(new_mutexes);
-        }
-        node_t* slot_ref = &(*nodes_)[slot];
-        if (*slot_ref) {
-            assert(false);
-        }
         *slot_ref = node;
     }
 

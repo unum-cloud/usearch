@@ -2384,9 +2384,8 @@ class index_gt {
         }
 
         // Allocate the neighbors
-        // nodes_[new_slot] = node;
-        storage_.node_append_(new_slot, key, target_level);
-        node_t node = storage_.node_at_(new_slot);
+        node_t node = storage_.node_make_(key, target_level);
+        storage_.node_store(new_slot, node);
         if (!node) {
             nodes_count_.fetch_sub(1);
             return result.failed("Out of memory!");
@@ -2837,7 +2836,7 @@ class index_gt {
                 return result.failed("Failed to pull nodes from the stream");
             }
             // nodes_[i] = node_t{node_bytes.data()};
-            storage_.node_append_(i, node_t{node_bytes.data()});
+            storage_.node_store(i, node_t{node_bytes.data()});
 
             if (!progress(i + 1, header.size))
                 return result.failed("Terminated by user");
@@ -3012,7 +3011,7 @@ class index_gt {
 
         // Rapidly address all the nodes
         for (std::size_t i = 0; i != header.size; ++i) {
-            storage_.node_append_(i, node_t{(byte_t*)file.data() + offsets[i]});
+            storage_.node_store(i, node_t{(byte_t*)file.data() + offsets[i]});
             if (!progress(i + 1, header.size))
                 return result.failed("Terminated by user");
         }
