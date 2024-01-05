@@ -319,9 +319,9 @@ class dummy_storage_single_threaded {
     dummy_storage_single_threaded(index_config_t config, tape_allocator_at tape_allocator = {})
         : pre_(node_t::precompute_(config)), tape_allocator_(tape_allocator) {}
 
-    inline node_t node_at(std::size_t idx) const noexcept { return nodes_[idx]; }
+    inline node_t get_node_at(std::size_t idx) const noexcept { return nodes_[idx]; }
 
-    inline size_t node_size_bytes(std::size_t idx) const noexcept { return node_at(idx).node_size_bytes(pre_); }
+    inline size_t node_size_bytes(std::size_t idx) const noexcept { return get_node_at(idx).node_size_bytes(pre_); }
 
     // exported for client-side lock-declaration
     // alternatively, could just use auto in client side
@@ -332,7 +332,7 @@ class dummy_storage_single_threaded {
     struct dummy_lock {
         // destructor necessary to avoid "unused variable warning"
         // will this get properly optimized away?
-        ~dummy_lock() = default;
+        ~dummy_lock() {}
     };
     using lock_type = dummy_lock;
 
@@ -345,7 +345,7 @@ class dummy_storage_single_threaded {
 
     void clear() {
         if (nodes_.data())
-            std::memset(nodes_.data(), 0, nodes_.size());
+            std::fill(nodes_.begin(), nodes_.end(), node_t{});
     }
     void reset() {
         nodes_.clear();
@@ -417,7 +417,7 @@ template <typename key_at, typename compressed_slot_at,        //
 class storage_v2 {
     using node_t = node_at<key_at, compressed_slot_at>;
     using nodes_t = std::vector<node_t>;
-    using vectors_t = std::vector<const byte_t*>;
+    using vectors_t = std::vector<byte_t*>;
     using nodes_mutexes_t = bitset_gt<>;
 
     nodes_t nodes_{};
@@ -441,9 +441,9 @@ class storage_v2 {
     storage_v2(index_config_t config, tape_allocator_at tape_allocator = {})
         : pre_(node_t::precompute_(config)), tape_allocator_(tape_allocator) {}
 
-    inline node_t node_at(std::size_t idx) const noexcept { return nodes_[idx]; }
+    inline node_t get_node_at(std::size_t idx) const noexcept { return nodes_[idx]; }
 
-    inline size_t node_size_bytes(std::size_t idx) const noexcept { return node_at(idx).node_size_bytes(pre_); }
+    inline size_t node_size_bytes(std::size_t idx) const noexcept { return get_node_at(idx).node_size_bytes(pre_); }
 
     using lock_type = node_lock_t;
     vectors_t vectors_lookup_{};
@@ -459,7 +459,7 @@ class storage_v2 {
 
     void clear() {
         if (nodes_.data())
-            std::memset(nodes_.data(), 0, nodes_.size());
+            std::fill(nodes_.begin(), nodes_.end(), node_t{});
     }
     void reset() {
         nodes_.clear();
@@ -502,10 +502,7 @@ class storage_v2 {
     //     return node_t{data};
     // }
 
-    void node_store(size_t slot, node_t node) noexcept {
-        auto count = nodes_.size();
-        nodes_[slot] = node;
-    }
+    void node_store(size_t slot, node_t node) noexcept { nodes_[slot] = node; }
     inline size_t size() { return nodes_.size(); }
     tape_allocator_at const& node_allocator() const noexcept { return tape_allocator_; }
     // dummy lock just to satisfy the interface
@@ -620,6 +617,7 @@ class index_dense_gt {
 
     /// @brief For every managed `compressed_slot_t` stores a pointer to the allocated vector copy.
     // ask-Ashot: why is this mutable?
+    // mutable std::vector<byte_t*> vectors_lookup_;
 
     /// @brief  C-style array of `node_t` smart-pointers.
     std::vector<node_t> nodes_;
@@ -699,12 +697,15 @@ class index_dense_gt {
           metric_(std::move(other.metric_)),           //
 
           vectors_tape_allocator_(std::move(other.vectors_tape_allocator_)), //
-          vectors_lookup_(std::move(other.vectors_lookup_)),                 //
+          // vectors_lookup_(std::move(other.vectors_lookup_)),                 //
 
           available_threads_(std::move(other.available_threads_)), //
           slot_lookup_(std::move(other.slot_lookup_)),             //
           free_keys_(std::move(other.free_keys_)),                 //
-          free_key_(std::move(other.free_key_)) {}                 //
+          free_key_(std::move(other.free_key_)) {
+
+        assert(false);
+    } //
 
     index_dense_gt& operator=(index_dense_gt&& other) {
         swap(other);
@@ -724,12 +725,13 @@ class index_dense_gt {
         std::swap(metric_, other.metric_);
 
         std::swap(vectors_tape_allocator_, other.vectors_tape_allocator_);
-        std::swap(vectors_lookup_, other.vectors_lookup_);
+        // std::swap(vectors_lookup_, other.vectors_lookup_);
 
         std::swap(available_threads_, other.available_threads_);
         std::swap(slot_lookup_, other.slot_lookup_);
         std::swap(free_keys_, other.free_keys_);
         std::swap(free_key_, other.free_key_);
+        assert(false);
     }
 
     ~index_dense_gt() {
@@ -901,9 +903,9 @@ class index_dense_gt {
                 return result;
 
             key_and_slot_t a_key_and_slot = *a_it;
-            byte_t const* a_vector = vectors_lookup_[a_key_and_slot.slot];
+            byte_t const* a_vector = storage_.vectors_lookup_[a_key_and_slot.slot];
             key_and_slot_t b_key_and_slot = *b_it;
-            byte_t const* b_vector = vectors_lookup_[b_key_and_slot.slot];
+            byte_t const* b_vector = storage_.vectors_lookup_[b_key_and_slot.slot];
             distance_t a_b_distance = metric_(a_vector, b_vector);
 
             result.mean = result.min = result.max = a_b_distance;
@@ -925,10 +927,10 @@ class index_dense_gt {
 
         while (a_range.first != a_range.second) {
             key_and_slot_t a_key_and_slot = *a_range.first;
-            byte_t const* a_vector = vectors_lookup_[a_key_and_slot.slot];
+            byte_t const* a_vector = storage_.vectors_lookup_[a_key_and_slot.slot];
             while (b_range.first != b_range.second) {
                 key_and_slot_t b_key_and_slot = *b_range.first;
-                byte_t const* b_vector = vectors_lookup_[b_key_and_slot.slot];
+                byte_t const* b_vector = storage_.vectors_lookup_[b_key_and_slot.slot];
                 distance_t a_b_distance = metric_(a_vector, b_vector);
 
                 result.mean += a_b_distance;
@@ -968,7 +970,7 @@ class index_dense_gt {
         // Find the closest cluster for any vector under that key.
         while (key_range.first != key_range.second) {
             key_and_slot_t key_and_slot = *key_range.first;
-            byte_t const* vector_data = vectors_lookup_[key_and_slot.slot];
+            byte_t const* vector_data = storage_.vectors_lookup_[key_and_slot.slot];
             cluster_result_t new_result = typed_->cluster(vector_data, level, metric, cluster_config, allow);
             if (!new_result)
                 return new_result;
@@ -991,7 +993,8 @@ class index_dense_gt {
         {
             unique_lock_t lock(slot_lookup_mutex_);
             slot_lookup_.reserve(limits.members);
-            vectors_lookup_.resize(limits.members);
+            // done by typed_
+            storage_.vectors_lookup_.resize(limits.members);
         }
         return typed_->reserve(limits);
     }
@@ -1008,7 +1011,9 @@ class index_dense_gt {
         std::unique_lock<std::mutex> free_lock(free_keys_mutex_);
         typed_->clear();
         slot_lookup_.clear();
-        vectors_lookup_.clear();
+
+        // should by run by storage_->clear which is run by typed_->clear()
+        // storage_.vectors_lookup_.clear();
         free_keys_.clear();
         vectors_tape_allocator_.reset();
     }
@@ -1027,7 +1032,8 @@ class index_dense_gt {
         std::unique_lock<std::mutex> available_threads_lock(available_threads_mutex_);
         typed_->reset();
         slot_lookup_.clear();
-        vectors_lookup_.clear();
+        // // run by typed_->reset();
+        // vectors_lookup_.clear();
         free_keys_.clear();
         vectors_tape_allocator_.reset();
 
@@ -1071,7 +1077,7 @@ class index_dense_gt {
 
             // Dump the vectors one after another
             for (std::uint64_t i = 0; i != matrix_rows; ++i) {
-                byte_t* vector = vectors_lookup_[i];
+                byte_t* vector = storage_.vectors_lookup_[i];
                 if (!output(vector, matrix_cols))
                     return result.failed("Failed to serialize into stream");
             }
@@ -1158,14 +1164,16 @@ class index_dense_gt {
                 matrix_cols = dimensions[1];
             }
             // Load the vectors one after another
-            vectors_lookup_.resize(matrix_rows);
+            // most of this logic should move within storage class
+            storage_.vectors_lookup_.resize(matrix_rows);
             for (std::uint64_t slot = 0; slot != matrix_rows; ++slot) {
                 byte_t* vector = vectors_tape_allocator_.allocate(matrix_cols);
                 if (!input(vector, matrix_cols))
                     return result.failed("Failed to read vectors");
-                vectors_lookup_[slot] = vector;
+                storage_.vectors_lookup_[slot] = vector;
             }
         }
+        // assert(false && "serialization and deserialization of streams must be moved to storage");
 
         // Load metadata and choose the right metric
         {
@@ -1284,10 +1292,10 @@ class index_dense_gt {
             return result.failed("Index size and the number of vectors doesn't match");
 
         // Address the vectors
-        vectors_lookup_.resize(matrix_rows);
+        storage_.vectors_lookup_.resize(matrix_rows);
         if (!config.exclude_vectors)
             for (std::uint64_t slot = 0; slot != matrix_rows; ++slot)
-                vectors_lookup_[slot] = (byte_t*)vectors_buffer.data() + matrix_cols * slot;
+                storage_.vectors_lookup_[slot] = (byte_t*)vectors_buffer.data() + matrix_cols * slot;
 
         reindex_keys_();
         return result;
@@ -1611,17 +1619,18 @@ class index_dense_gt {
             copy.free_keys_.push(free_keys_[i]);
 
         // Allocate buffers and move the vectors themselves
-        if (!config.force_vector_copy && copy.config_.exclude_vectors)
-            copy.vectors_lookup_ = vectors_lookup_;
-        else {
-            copy.vectors_lookup_.resize(vectors_lookup_.size());
-            for (std::size_t slot = 0; slot != vectors_lookup_.size(); ++slot)
-                copy.vectors_lookup_[slot] = copy.vectors_tape_allocator_.allocate(copy.metric_.bytes_per_vector());
-            if (std::count(copy.vectors_lookup_.begin(), copy.vectors_lookup_.end(), nullptr))
-                return result.failed("Out of memory!");
-            for (std::size_t slot = 0; slot != vectors_lookup_.size(); ++slot)
-                std::memcpy(copy.vectors_lookup_[slot], vectors_lookup_[slot], metric_.bytes_per_vector());
-        }
+        // if (!config.force_vector_copy && copy.config_.exclude_vectors)
+        //     copy.vectors_lookup_ = vectors_lookup_;
+        // else {
+        //     copy.vectors_lookup_.resize(vectors_lookup_.size());
+        //     for (std::size_t slot = 0; slot != vectors_lookup_.size(); ++slot)
+        //         copy.vectors_lookup_[slot] = copy.vectors_tape_allocator_.allocate(copy.metric_.bytes_per_vector());
+        //     if (std::count(copy.vectors_lookup_.begin(), copy.vectors_lookup_.end(), nullptr))
+        //         return result.failed("Out of memory!");
+        //     for (std::size_t slot = 0; slot != vectors_lookup_.size(); ++slot)
+        //         std::memcpy(copy.vectors_lookup_[slot], vectors_lookup_[slot], metric_.bytes_per_vector());
+        // }
+        assert(false);
 
         copy.slot_lookup_ = slot_lookup_;
         *copy.typed_ = std::move(typed_result.index);
@@ -1691,8 +1700,12 @@ class index_dense_gt {
 
       public:
         values_proxy_t(index_dense_gt const& index) noexcept : index_(&index) {}
-        byte_t const* operator[](compressed_slot_t slot) const noexcept { return index_->vectors_lookup_[slot]; }
-        byte_t const* operator[](member_citerator_t it) const noexcept { return index_->vectors_lookup_[get_slot(it)]; }
+        byte_t const* operator[](compressed_slot_t slot) const noexcept {
+            return index_->storage_.vectors_lookup_[slot];
+        }
+        byte_t const* operator[](member_citerator_t it) const noexcept {
+            return index_->storage_.vectors_lookup_[get_slot(it)];
+        }
     };
 
     /**
@@ -1707,18 +1720,18 @@ class index_dense_gt {
     compaction_result_t compact(executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
         compaction_result_t result;
 
-        std::vector<byte_t*> new_vectors_lookup(vectors_lookup_.size());
+        std::vector<byte_t*> new_vectors_lookup(storage_.vectors_lookup_.size());
         vectors_tape_allocator_t new_vectors_allocator;
 
         auto track_slot_change = [&](vector_key_t, compressed_slot_t old_slot, compressed_slot_t new_slot) {
             byte_t* new_vector = new_vectors_allocator.allocate(metric_.bytes_per_vector());
-            byte_t* old_vector = vectors_lookup_[old_slot];
+            byte_t* old_vector = storage_.vectors_lookup_[old_slot];
             std::memcpy(new_vector, old_vector, metric_.bytes_per_vector());
             new_vectors_lookup[new_slot] = new_vector;
         };
         typed_->compact(values_proxy_t{*this}, metric_proxy_t{*this}, track_slot_change,
                         std::forward<executor_at>(executor), std::forward<progress_at>(progress));
-        vectors_lookup_ = std::move(new_vectors_lookup);
+        storage_.vectors_lookup_ = std::move(new_vectors_lookup);
         vectors_tape_allocator_ = std::move(new_vectors_allocator);
         return result;
     }
@@ -1840,7 +1853,7 @@ class index_dense_gt {
 
             // Export in case we need to refine afterwards
             clusters[query_idx].centroid = result.cluster.member.key;
-            clusters[query_idx].vector = vectors_lookup_[result.cluster.member.slot];
+            clusters[query_idx].vector = storage_.vectors_lookup_[result.cluster.member.slot];
             clusters[query_idx].merged_into = free_key();
             clusters[query_idx].popularity = 1;
 
@@ -2005,10 +2018,11 @@ class index_dense_gt {
             slot_lookup_.try_emplace(key_and_slot_t{key, static_cast<compressed_slot_t>(member.slot)});
             if (copy_vector) {
                 if (!reuse_node)
-                    vectors_lookup_[member.slot] = vectors_tape_allocator_.allocate(metric_.bytes_per_vector());
-                std::memcpy(vectors_lookup_[member.slot], vector_data, metric_.bytes_per_vector());
+                    storage_.vectors_lookup_[member.slot] =
+                        vectors_tape_allocator_.allocate(metric_.bytes_per_vector());
+                std::memcpy(storage_.vectors_lookup_[member.slot], vector_data, metric_.bytes_per_vector());
             } else
-                vectors_lookup_[member.slot] = (byte_t*)vector_data;
+                storage_.vectors_lookup_[member.slot] = (byte_t*)vector_data;
         };
 
         index_update_config_t update_config;
@@ -2097,7 +2111,7 @@ class index_dense_gt {
 
         while (key_range.first != key_range.second) {
             key_and_slot_t key_and_slot = *key_range.first;
-            byte_t const* a_vector = vectors_lookup_[key_and_slot.slot];
+            byte_t const* a_vector = storage_.vectors_lookup_[key_and_slot.slot];
             byte_t const* b_vector = vector_data;
             distance_t a_b_distance = metric_(a_vector, b_vector);
 
@@ -2158,7 +2172,7 @@ class index_dense_gt {
                 slot = (*it).slot;
             }
             // Export the entry
-            byte_t const* punned_vector = reinterpret_cast<byte_t const*>(vectors_lookup_[slot]);
+            byte_t const* punned_vector = reinterpret_cast<byte_t const*>(storage_.vectors_lookup_[slot]);
             bool casted = cast(punned_vector, dimensions(), (byte_t*)reconstructed);
             if (!casted)
                 std::memcpy(reconstructed, punned_vector, metric_.bytes_per_vector());
@@ -2171,7 +2185,7 @@ class index_dense_gt {
                  begin != equal_range_pair.second && count_exported != vectors_limit; ++begin, ++count_exported) {
                 //
                 compressed_slot_t slot = (*begin).slot;
-                byte_t const* punned_vector = reinterpret_cast<byte_t const*>(vectors_lookup_[slot]);
+                byte_t const* punned_vector = reinterpret_cast<byte_t const*>(storage_.vectors_lookup_[slot]);
                 byte_t* reconstructed_vector = (byte_t*)reconstructed + metric_.bytes_per_vector() * count_exported;
                 bool casted = cast(punned_vector, dimensions(), reconstructed_vector);
                 if (!casted)

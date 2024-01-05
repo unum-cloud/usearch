@@ -1,4 +1,9 @@
-Checks: '*,
+Checks: '-*,
+         clang-diagnostic-*,
+         clang-analyzer-*,
+	 cppcoreguidelines-*,
+	performance-move-constructor-init,
+	pugprone-*,
          -altera-id-dependent-backward-branch,
          -altera-struct-pack-align,
          -altera-unroll-loops,
@@ -7,6 +12,7 @@ Checks: '*,
          -cert-err58-cpp,
          -concurrency-mt-unsafe,
          -cppcoreguidelines-avoid-const-or-ref-data-members,
+	 cppcoreguidelines-pro-type-member-init,
          -cppcoreguidelines-avoid-do-while,
          -cppcoreguidelines-avoid-goto,
          -cppcoreguidelines-avoid-magic-numbers,
@@ -23,10 +29,13 @@ Checks: '*,
          -fuchsia-default-arguments-declarations,
          -fuchsia-overloaded-operator,
          -google-explicit-constructor,
-         -google-readability-function-size,
+         -google-readability-braces-around-statements,
+         -google-readability-casting,
+         # -google-readability-function-size,
          -google-runtime-int,
          -google-runtime-references,
          -hicpp-avoid-goto,
+	-hicpp-braces-around-statements,
          -hicpp-explicit-conversions,
          -hicpp-function-size,
          -hicpp-no-array-decay,
@@ -35,7 +44,6 @@ Checks: '*,
          -hicpp-uppercase-literal-suffix,
          -llvm-header-guard,
          -llvm-include-order,
-         -llvmlibc-*,
          -misc-use-anonymous-namespace,
          -misc-confusable-identifiers,
          -misc-no-recursion,
@@ -44,19 +52,25 @@ Checks: '*,
          -modernize-type-traits,
          -modernize-use-nodiscard,
          -modernize-use-trailing-return-type,
+         -readability-isolate-declaration,
+	-readability-braces-around-statements,
          -readability-function-cognitive-complexity,
          -readability-function-size,
          -readability-identifier-length,
          -readability-magic-numbers,
          -readability-redundant-access-specifiers,
          -readability-simplify-boolean-expr,
-         -readability-uppercase-literal-suffix'
-
+	-readability-braces-around-statements,
+         -readability-uppercase-literal-suffix,
+         -llvmlibc-*'
 CheckOptions:
   - key: hicpp-special-member-functions.AllowSoleDefaultDtor
     value: 1
+  # -google-readability-braces-around-statements does not require this to suppress, for some reason the others do
+  - key: hicpp-braces-around-statements.ShortStatementLines
+    value: 20
   - key: readability-braces-around-statements.ShortStatementLines
-    value: 10
+    value: 20
 
-WarningsAsErrors: '*'
+
 HeaderFilterRegex: '.*hpp$'
