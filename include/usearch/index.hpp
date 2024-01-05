@@ -2784,60 +2784,29 @@ class index_gt {
 
     /**
      *  @brief  Symmetric to `save_from_stream`, pulls data from a stream.
+     *  Note: assumes storage is properly reset and ready for loading the hnsw graph
      */
     template <typename input_callback_at, typename progress_at = dummy_progress_t>
     serialization_result_t load_from_stream(input_callback_at&& input, progress_at&& progress = {}) noexcept {
 
         serialization_result_t result;
 
-        // Remove previously stored objects
-        reset();
-
         // Pull basic metadata
         index_serialized_header_t header;
-        if (!input(&header, sizeof(header)))
-            return result.failed("Failed to pull the header from the stream");
-
-        // We are loading an empty index, no more work to do
-        if (!header.size) {
-            reset();
-            return result;
-        }
-
-        // Allocate some dynamic memory to read all the levels
-        using levels_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<level_t>;
-        buffer_gt<level_t, levels_allocator_t> levels(header.size);
-        if (!levels)
-            return result.failed("Out of memory");
-        if (!input(levels, header.size * sizeof(level_t)))
-            return result.failed("Failed to pull nodes levels from the stream");
-
+        storage_.load_nodes_from_stream(input, header, progress);
         // Submit metadata
         config_.connectivity = header.connectivity;
         config_.connectivity_base = header.connectivity_base;
         pre_ = precompute_(config_);
+        nodes_count_ = header.size;
+        max_level_ = static_cast<level_t>(header.max_level);
+        entry_slot_ = static_cast<compressed_slot_t>(header.entry_slot);
+        // allocate dynamic contexts for queries (storage has already been allocated for the deserialization process)
         index_limits_t limits;
         limits.members = header.size;
         if (!reserve(limits)) {
             reset();
             return result.failed("Out of memory");
-        }
-        nodes_count_ = header.size;
-        max_level_ = static_cast<level_t>(header.max_level);
-        entry_slot_ = static_cast<compressed_slot_t>(header.entry_slot);
-
-        // Load the nodes
-        for (std::size_t i = 0; i != header.size; ++i) {
-            span_bytes_t node_bytes = storage_.node_malloc(levels[i]);
-            if (!input(node_bytes.data(), node_bytes.size())) {
-                reset();
-                return result.failed("Failed to pull nodes from the stream");
-            }
-            // nodes_[i] = node_t{node_bytes.data()};
-            storage_.node_store(i, node_t{node_bytes.data()});
-
-            if (!progress(i + 1, header.size))
-                return result.failed("Terminated by user");
         }
         return {};
     }
@@ -2911,6 +2880,9 @@ class index_gt {
         if (!io_result)
             return io_result;
 
+        // Remove previously stored objects
+        reset();
+
         serialization_result_t stream_result = load_from_stream(
             [&](void* buffer, std::size_t length) {
                 io_result = file.read(buffer, length);
@@ -2935,6 +2907,9 @@ class index_gt {
         serialization_result_t io_result = file.open_if_not();
         if (!io_result)
             return io_result;
+
+        // Remove previously stored objects
+        reset();
 
         serialization_result_t stream_result = load_from_stream(
             [&](void* buffer, std::size_t length) {

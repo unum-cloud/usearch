@@ -9,7 +9,49 @@ namespace usearch {
 template <typename key_at, typename compressed_slot_at,        //
           typename tape_allocator_at = std::allocator<byte_t>, //
           typename vectors_allocator_at = tape_allocator_at>   //
-class storage_v2 {
+class storage_interface {
+  public:
+    using node_t = node_at<key_at, compressed_slot_at>;
+    // storage_interface(index_config_t conig, tape_allocator_at allocator = {});
+
+    struct lock_type;
+
+    // q:: can I enforce this interface function in inherited storages somehow?
+    constexpr inline lock_type node_lock(std::size_t slot) const noexcept;
+
+    virtual inline node_t get_node_at(std::size_t idx) const noexcept = 0;
+    virtual inline std::size_t node_size_bytes(std::size_t idx) const noexcept = 0;
+    virtual inline byte_t* get_vector_at(std::size_t idx) const noexcept = 0;
+
+    inline void set_at(std::size_t idx, node_t node, byte_t* vector_data, std::size_t vector_size, bool reuse_node);
+
+    // virtual void load_vectors_from_stream() = 0;
+    // virtual void load_nodes_from_stream() = 0;
+
+    void store_vectors_to_stream();
+    void store_nodes_to_stream();
+
+    std::size_t size();
+    bool reserve(std::size_t count);
+    void clear();
+    void reset();
+
+    std::size_t memory_usage();
+};
+
+struct index_dense_serialization_config_t {
+    // We may not want to fetch the vectors from the same file, or allow attaching them afterwards
+    bool exclude_vectors = false;
+    bool use_64_bit_dimensions = false;
+};
+using index_dense_head_buffer_t = byte_t[64];
+static_assert(sizeof(index_dense_head_buffer_t) == 64, "File header should be exactly 64 bytes");
+using serialization_config_t = index_dense_serialization_config_t;
+
+template <typename key_at, typename compressed_slot_at,        //
+          typename tape_allocator_at = std::allocator<byte_t>, //
+          typename vectors_allocator_at = tape_allocator_at>   //
+class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_allocator_at, vectors_allocator_at> {
     using node_t = node_at<key_at, compressed_slot_at>;
     using nodes_t = std::vector<node_t>;
     using vectors_t = std::vector<byte_t*>;
@@ -25,6 +67,10 @@ class storage_v2 {
     tape_allocator_at tape_allocator_{};
     /// @brief Allocator for the copied vectors, aligned to widest double-precision scalars.
     vectors_allocator_at vectors_allocator_{};
+
+    std::uint64_t matrix_rows_ = 0;
+    std::uint64_t matrix_cols_ = 0;
+    bool vectors_loaded_{};
     using tape_allocator_traits_t = std::allocator_traits<tape_allocator_at>;
     static_assert(                                                 //
         sizeof(typename tape_allocator_traits_t::value_type) == 1, //
@@ -141,6 +187,116 @@ class storage_v2 {
             ;
         return {nodes_mutexes_, slot};
     }
+
+#pragma region Storage Serialization and Deserialization
+
+    /**
+     *  @brief Parses the index from file to RAM.
+     *  @param[in] path The path to the file.
+     *  @param[in] config Configuration parameters for imports.
+     *  @return Outcome descriptor explicitly convertible to boolean.
+     */
+    template <typename input_callback_at, typename vectors_metadata_at>
+    serialization_result_t load_vectors_from_stream(input_callback_at& input, //
+                                                    vectors_metadata_at& metadata_buffer,
+                                                    serialization_config_t config = {}) {
+
+        reset();
+
+        // Infer the new index size
+        serialization_result_t result;
+        std::uint64_t matrix_rows = 0;
+        std::uint64_t matrix_cols = 0;
+
+        // We may not want to load the vectors from the same file, or allow attaching them afterwards
+        if (!config.exclude_vectors) {
+            // Save the matrix size
+            if (!config.use_64_bit_dimensions) {
+                std::uint32_t dimensions[2];
+                if (!input(&dimensions, sizeof(dimensions)))
+                    return result.failed("Failed to read 32-bit dimensions of the matrix");
+                matrix_rows = dimensions[0];
+                matrix_cols = dimensions[1];
+            } else {
+                std::uint64_t dimensions[2];
+                if (!input(&dimensions, sizeof(dimensions)))
+                    return result.failed("Failed to read 64-bit dimensions of the matrix");
+                matrix_rows = dimensions[0];
+                matrix_cols = dimensions[1];
+            }
+            // Load the vectors one after another
+            // most of this logic should move within storage class
+            reserve(matrix_rows);
+            for (std::uint64_t slot = 0; slot != matrix_rows; ++slot) {
+                byte_t* vector = vectors_allocator_.allocate(matrix_cols);
+                if (!input(vector, matrix_cols))
+                    return result.failed("Failed to read vectors");
+                vectors_lookup_[slot] = vector;
+            }
+            vectors_loaded_ = true;
+        }
+        matrix_rows_ = matrix_rows;
+        matrix_cols_ = matrix_cols;
+
+        if (!input(metadata_buffer, sizeof(metadata_buffer)))
+            return result.failed("Failed to read the index vector metadata");
+
+        return result;
+    }
+
+    /**
+     *  @brief  Symmetric to `save_from_stream`, pulls data from a stream.
+     */
+    template <typename input_callback_at, typename progress_at = dummy_progress_t>
+    serialization_result_t load_nodes_from_stream(input_callback_at& input, index_serialized_header_t& header,
+                                                  progress_at&& progress = {}) noexcept {
+
+        using dynamic_allocator_traits_t = std::allocator_traits<vectors_allocator_at>;
+        serialization_result_t result;
+
+        // Pull basic metadata directly into the return paramter
+        if (!input(&header, sizeof(header)))
+            return result.failed("Failed to pull the header from the stream");
+
+        // We are loading an empty index, no more work to do
+        if (!header.size) {
+            reset();
+            return result;
+        }
+
+        // Allocate some dynamic memory to read all the levels
+        // using levels_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<level_t>;
+        // // todo:: fix the allocator above
+        buffer_gt<level_t> levels(header.size);
+        if (!levels)
+            return result.failed("Out of memory");
+        if (!input(levels, header.size * sizeof(level_t)))
+            return result.failed("Failed to pull nodes levels from the stream");
+
+        if (!reserve(header.size)) {
+            reset();
+            return result.failed("Out of memory");
+        }
+
+        // Load the nodes
+        for (std::size_t i = 0; i != header.size; ++i) {
+            span_bytes_t node_bytes = node_malloc(levels[i]);
+            if (!input(node_bytes.data(), node_bytes.size())) {
+                reset();
+                return result.failed("Failed to pull nodes from the stream");
+            }
+            node_store(i, node_t{node_bytes.data()});
+
+            if (!progress(i + 1, header.size))
+                return result.failed("Terminated by user");
+        }
+
+        if (vectors_loaded_ && header.size != static_cast<std::size_t>(matrix_rows_))
+            return result.failed("Index size and the number of vectors doesn't match");
+        return {};
+    }
+
+#pragma endregion
 };
 
 } // namespace usearch

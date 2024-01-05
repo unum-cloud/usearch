@@ -126,11 +126,6 @@ struct index_dense_clustering_config_t {
     } mode = merge_smallest_k;
 };
 
-struct index_dense_serialization_config_t {
-    bool exclude_vectors = false;
-    bool use_64_bit_dimensions = false;
-};
-
 struct index_dense_copy_config_t : public index_copy_config_t {
     bool force_vector_copy = true;
 
@@ -903,43 +898,11 @@ class index_dense_gt {
 
         // Infer the new index size
         serialization_result_t result;
-        std::uint64_t matrix_rows = 0;
-        std::uint64_t matrix_cols = 0;
-
-        // We may not want to load the vectors from the same file, or allow attaching them afterwards
-        if (!config.exclude_vectors) {
-            // Save the matrix size
-            if (!config.use_64_bit_dimensions) {
-                std::uint32_t dimensions[2];
-                if (!input(&dimensions, sizeof(dimensions)))
-                    return result.failed("Failed to read 32-bit dimensions of the matrix");
-                matrix_rows = dimensions[0];
-                matrix_cols = dimensions[1];
-            } else {
-                std::uint64_t dimensions[2];
-                if (!input(&dimensions, sizeof(dimensions)))
-                    return result.failed("Failed to read 64-bit dimensions of the matrix");
-                matrix_rows = dimensions[0];
-                matrix_cols = dimensions[1];
-            }
-            // Load the vectors one after another
-            // most of this logic should move within storage class
-            storage_.reserve(matrix_rows);
-            byte_t vector[matrix_cols];
-            for (std::uint64_t slot = 0; slot != matrix_rows; ++slot) {
-                if (!input(vector, matrix_cols))
-                    return result.failed("Failed to read vectors");
-                storage_.set_vector_at(slot, vector, matrix_cols, true, false);
-            }
-        }
-        // assert(false && "serialization and deserialization of streams must be moved to storage");
+        index_dense_head_buffer_t buffer;
+        storage_.load_vectors_from_stream(input, buffer, config);
 
         // Load metadata and choose the right metric
         {
-            index_dense_head_buffer_t buffer;
-            if (!input(buffer, sizeof(buffer)))
-                return result.failed("Failed to read the index ");
-
             index_dense_head_t head{buffer};
             if (std::memcmp(buffer, default_magic(), std::strlen(default_magic())) != 0)
                 return result.failed("Magic header mismatch - the file isn't an index");
@@ -962,8 +925,6 @@ class index_dense_gt {
         result = typed_->load_from_stream(std::forward<input_callback_at>(input), std::forward<progress_at>(progress));
         if (!result)
             return result;
-        if (typed_->size() != static_cast<std::size_t>(matrix_rows))
-            return result.failed("Index size and the number of vectors doesn't match");
 
         reindex_keys_();
         return result;
