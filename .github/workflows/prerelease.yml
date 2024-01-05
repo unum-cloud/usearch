@@ -61,9 +61,9 @@ jobs:
         with:
           node-version: 18
       - name: Build JavaScript
-        run: npm install
+        run: npm ci
       - name: Test JavaScript
-        run: npm ci && npm test
+        run: npm test
 
         # Rust
       - name: Test Rust
@@ -154,7 +154,6 @@ jobs:
           node-version: 18
       - name: Build and test JavaScript
         run: |
-          npm install
           npm ci
           npm test
 
@@ -212,9 +211,9 @@ jobs:
         with:
           node-version: 18
       - name: Build JavaScript
-        run: npm install
+        run: npm ci
       - name: Test JavaScript
-        run: npm ci && npm test
+        run: npm test
 
         # ObjC/Swift
       - name: Build ObjC/Swift
@@ -274,9 +273,9 @@ jobs:
         with:
           node-version: 18
       - name: Build JavaScript
-        run: npm install
+        run: npm ci
       - name: Test JavaScript
-        run: npm ci && npm test
+        run: npm test
 
         # C#
       - name: Setup .NET ${{ env.DOTNET_VERSION }}

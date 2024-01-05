@@ -33,7 +33,6 @@ wheelhouse/
 venv/
 
 # JS wrappers
-package-lock.json
 node_modules/
 
 # Rust builds
