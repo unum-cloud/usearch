@@ -60,7 +60,7 @@ Linux • MacOS • Windows • iOS • WebAssembly
 - ✅ Space-efficient point-clouds with `uint40_t`, accommodating 4B+ size.
 - ✅ Compatible with OpenMP and custom "executors" for fine-grained control over CPU utilization.
 - ✅ Near-real-time [clustering and sub-clustering](#clustering) for Tens or Millions of clusters.
-- ✅ [Semantic Search](#usearch--ai--multi-modal-semantic-search) and [Joins](#joins).
+- ✅ [Semantic Search](#usearch--ai--multi-modal-semantic-search) and [Joins](#joins-one-to-one-one-to-many-and-many-to-many-mappings).
 
 [faiss]: https://github.com/facebookresearch/faiss
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/index.hpp
