@@ -6,9 +6,10 @@
 namespace unum {
 namespace usearch {
 
-template <typename key_at, typename compressed_slot_at,        //
-          typename tape_allocator_at = std::allocator<byte_t>, //
-          typename vectors_allocator_at = tape_allocator_at>   //
+template <typename key_at, typename compressed_slot_at, //
+          typename tape_allocator_at,                   //
+          typename vectors_allocator_at,                //
+          typename dynamic_allocator_at>                //
 class storage_interface {
   public:
     using node_t = node_at<key_at, compressed_slot_at>;
@@ -48,14 +49,24 @@ using index_dense_head_buffer_t = byte_t[64];
 static_assert(sizeof(index_dense_head_buffer_t) == 64, "File header should be exactly 64 bytes");
 using serialization_config_t = index_dense_serialization_config_t;
 
-template <typename key_at, typename compressed_slot_at,        //
-          typename tape_allocator_at = std::allocator<byte_t>, //
-          typename vectors_allocator_at = tape_allocator_at>   //
-class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_allocator_at, vectors_allocator_at> {
+template <typename key_at, typename compressed_slot_at,           //
+          typename tape_allocator_at = std::allocator<byte_t>,    //
+          typename vectors_allocator_at = tape_allocator_at,      //
+          typename dynamic_allocator_at = std::allocator<byte_t>> //
+class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_allocator_at, vectors_allocator_at,
+                                            dynamic_allocator_at> {
     using node_t = node_at<key_at, compressed_slot_at>;
+    // todo:: ask-Ashot: why can I not use dynamic_allocator_at in std::vector<node_t, dynamic_allocator_at> ?
+    // Getting the following error:
+    // /usr/include/c++/10/bits/stl_vector.h:285:16: error: no matching function for call to
+    // ‘unum::usearch::aligned_allocator_gt<>::aligned_allocator_gt(const _Tp_alloc_type&)’
+    // 285 |       { return allocator_type(_M_get_Tp_allocator()); }
+
     using nodes_t = std::vector<node_t>;
     using vectors_t = std::vector<byte_t*>;
     using nodes_mutexes_t = bitset_gt<>;
+    using dynamic_allocator_traits_t = std::allocator_traits<dynamic_allocator_at>;
+    using levels_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<level_t>;
 
     nodes_t nodes_{};
 
@@ -192,7 +203,9 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
 
     /**
      *  @brief Parses the index from file to RAM.
-     *  @param[in] path The path to the file.
+     *  @param[in] input Input stream from which vectors will be loaded according to this storage format.
+     *  @param[out] metadata_buffer A buffer opaque to Storage, into which previously stored metadata will be
+     *  loaded from input stream
      *  @param[in] config Configuration parameters for imports.
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
@@ -251,7 +264,6 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
     serialization_result_t load_nodes_from_stream(input_callback_at& input, index_serialized_header_t& header,
                                                   progress_at&& progress = {}) noexcept {
 
-        using dynamic_allocator_traits_t = std::allocator_traits<vectors_allocator_at>;
         serialization_result_t result;
 
         // Pull basic metadata directly into the return paramter
@@ -265,9 +277,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
         }
 
         // Allocate some dynamic memory to read all the levels
-        // using levels_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<level_t>;
-        // // todo:: fix the allocator above
-        buffer_gt<level_t> levels(header.size);
+        buffer_gt<level_t, levels_allocator_t> levels(header.size);
         if (!levels)
             return result.failed("Out of memory");
         if (!input(levels, header.size * sizeof(level_t)))

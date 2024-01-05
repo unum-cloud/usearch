@@ -316,7 +316,8 @@ class index_dense_gt {
 
   private:
     using vectors_tape_allocator_t = memory_mapping_allocator_gt<8>;
-    using storage_t = storage_v2<vector_key_t, compressed_slot_t, tape_allocator_t, vectors_tape_allocator_t>;
+    using storage_t =
+        storage_v2<vector_key_t, compressed_slot_t, tape_allocator_t, vectors_tape_allocator_t, dynamic_allocator_t>;
     /// @brief Schema: input buffer, bytes in input buffer, output buffer.
     using cast_t = std::function<bool(byte_t const*, std::size_t, byte_t*)>;
     /// @brief Punned index.
