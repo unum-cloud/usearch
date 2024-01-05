@@ -1954,7 +1954,7 @@ class index_gt {
         }
     };
 
-    const storage_t& storage_;
+    storage_t& storage_;
     index_config_t config_{};
     index_limits_t limits_{};
 
@@ -2002,8 +2002,8 @@ class index_gt {
      *  @section Exceptions
      *      Doesn't throw, unless the ::metric's and ::allocators's throw on copy-construction.
      */
-    explicit index_gt(       //
-        storage_at& storage, //
+    explicit index_gt(      //
+        storage_t& storage, //
         index_config_t config = {}, dynamic_allocator_t dynamic_allocator = {}) noexcept
         : storage_(storage), config_(config), limits_(0, 0), dynamic_allocator_(std::move(dynamic_allocator)),
           pre_(precompute_(config)), nodes_count_(0u), max_level_(-1), entry_slot_(0u), contexts_() {}

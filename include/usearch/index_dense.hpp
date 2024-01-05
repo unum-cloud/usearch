@@ -332,7 +332,7 @@ class dummy_storage_single_threaded {
     struct dummy_lock {
         // destructor necessary to avoid "unused variable warning"
         // will this get properly optimized away?
-        ~dummy_lock() {}
+        ~dummy_lock() = default;
     };
     using lock_type = dummy_lock;
 
@@ -394,7 +394,7 @@ class dummy_storage_single_threaded {
     inline size_t size() { return nodes_.size(); }
     tape_allocator_at const& node_allocator() const noexcept { return tape_allocator_; }
     // dummy lock just to satisfy the interface
-    constexpr inline lock_type node_lock(std::size_t) noexcept { return dummy_lock{}; }
+    constexpr inline lock_type node_lock(std::size_t) const noexcept { return dummy_lock{}; }
 };
 
 template <typename key_at, typename compressed_slot_at> class storage_v1 {
@@ -411,11 +411,13 @@ template <typename key_at, typename compressed_slot_at> class storage_v1 {
     mutable nodes_mutexes_t nodes_mutexes_{};
 };
 
-template <typename key_at, typename compressed_slot_at,
-          typename tape_allocator_at = std::allocator<byte_t>> //
+template <typename key_at, typename compressed_slot_at,        //
+          typename tape_allocator_at = std::allocator<byte_t>, //
+          typename vectors_allocator_at = tape_allocator_at>   //
 class storage_v2 {
     using node_t = node_at<key_at, compressed_slot_at>;
     using nodes_t = std::vector<node_t>;
+    using vectors_t = std::vector<const byte_t*>;
     using nodes_mutexes_t = bitset_gt<>;
 
     nodes_t nodes_{};
@@ -423,6 +425,7 @@ class storage_v2 {
     mutable nodes_mutexes_t nodes_mutexes_{};
     precomputed_constants_t pre_{};
     tape_allocator_at tape_allocator_{};
+    vectors_allocator_at vectors_allocator_{};
     using tape_allocator_traits_t = std::allocator_traits<tape_allocator_at>;
     static_assert(                                                 //
         sizeof(typename tape_allocator_traits_t::value_type) == 1, //
@@ -443,6 +446,7 @@ class storage_v2 {
     inline size_t node_size_bytes(std::size_t idx) const noexcept { return node_at(idx).node_size_bytes(pre_); }
 
     using lock_type = node_lock_t;
+    vectors_t vectors_lookup_{};
 
     bool reserve(std::size_t count) {
         if (count < nodes_.size())
@@ -582,8 +586,10 @@ class index_dense_gt {
 
         inline distance_t operator()(byte_t const* a, byte_t const* b) const noexcept { return f(a, b); }
 
-        inline byte_t const* v(member_cref_t m) const noexcept { return index_->vectors_lookup_[get_slot(m)]; }
-        inline byte_t const* v(member_citerator_t m) const noexcept { return index_->vectors_lookup_[get_slot(m)]; }
+        inline byte_t const* v(member_cref_t m) const noexcept { return index_->storage_.vectors_lookup_[get_slot(m)]; }
+        inline byte_t const* v(member_citerator_t m) const noexcept {
+            return index_->storage_.vectors_lookup_[get_slot(m)];
+        }
         inline distance_t f(byte_t const* a, byte_t const* b) const noexcept { return index_->metric_(a, b); }
     };
 
@@ -613,7 +619,7 @@ class index_dense_gt {
     vectors_tape_allocator_t vectors_tape_allocator_;
 
     /// @brief For every managed `compressed_slot_t` stores a pointer to the allocated vector copy.
-    mutable std::vector<byte_t*> vectors_lookup_;
+    // ask-Ashot: why is this mutable?
 
     /// @brief  C-style array of `node_t` smart-pointers.
     std::vector<node_t> nodes_;
@@ -979,6 +985,9 @@ class index_dense_gt {
      *  @return `true` if the memory reservation was successful, `false` otherwise.
      */
     bool reserve(index_limits_t limits) {
+        // this seems to allow search() and add() on the dense index, concurrent to this reserve
+        // But that is not safe on typed_ as typed_->reserve() reallocates the lock buffer, discarding the old one
+        // without checking if anything is locked
         {
             unique_lock_t lock(slot_lookup_mutex_);
             slot_lookup_.reserve(limits.members);
