@@ -1813,7 +1813,6 @@ class index_gt {
         using pointer = void;
         using reference = ref_t;
 
-        // todo:: take care of these to use external storage
         reference operator*() const noexcept { return {index_->storage_.get_node_at(slot_).key(), slot_}; }
         vector_key_t key() const noexcept { return index_->storage_.get_node_at(slot_).key(); }
 
@@ -2083,17 +2082,6 @@ class index_gt {
      *  Will keep the number of available threads/contexts the same as it was.
      */
     void clear() noexcept {
-        if (!viewed_file_) {
-            std::size_t n = nodes_count_;
-            for (std::size_t i = 0; i != n; ++i) {
-                node_t node = storage_.get_node_at(i);
-                // if (!has_reset<tape_allocator_t>()) {
-                storage_.node_free(i, node);
-                // } else
-                //     tape_allocator_.deallocate(nullptr, 0);
-            }
-        }
-
         storage_.clear();
 
         nodes_count_ = 0;
@@ -2989,6 +2977,7 @@ class index_gt {
                 return result.failed("Terminated by user");
         }
         viewed_file_ = std::move(file);
+        storage_.view_file_ = true;
         return {};
     }
 

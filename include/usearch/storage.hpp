@@ -67,6 +67,10 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
     using nodes_mutexes_t = bitset_gt<>;
     using dynamic_allocator_traits_t = std::allocator_traits<dynamic_allocator_at>;
     using levels_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<level_t>;
+    using nodes_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<node_t>;
+
+    /// @brief  C-style array of `node_t` smart-pointers.
+    // buffer_gt<node_t, nodes_allocator_t> nodes_{};
 
     nodes_t nodes_{};
 
@@ -97,6 +101,8 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
     storage_v2(index_config_t config, tape_allocator_at tape_allocator = {})
         : pre_(node_t::precompute_(config)), tape_allocator_(tape_allocator) {}
 
+    bool view_file_{};
+
     inline node_t get_node_at(std::size_t idx) const noexcept { return nodes_[idx]; }
     // todo:: most of the time this is called for const* vector, maybe add a separate interface for const?
     inline byte_t* get_vector_at(std::size_t idx) const noexcept { return vectors_lookup_[idx]; }
@@ -126,32 +132,37 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
         return true;
     }
 
-    /*
-    void clear() noexcept {
-        if (!has_reset<tape_allocator_t>()) {
-            std::size_t n = nodes_count_;
-            for (std::size_t i = 0; i != n; ++i)
-                node_free_(i);
-        } else
-            tape_allocator_.deallocate(nullptr, 0);
-        nodes_count_ = 0;
-        max_level_ = -1;
-        entry_slot_ = 0u;
-    }
-    ****/
     void clear() {
-        if (nodes_.data()) {
-            std::fill(nodes_.begin(), nodes_.end(), node_t{});
-            //   std::fill(vectors_lookup_.begin(), vectors_lookup_.end(), nullptr);
+        if (!view_file_) {
+            if (!has_reset<tape_allocator_at>()) {
+                std::size_t n = nodes_.size();
+                for (std::size_t i = 0; i != n; ++i) {
+                    // we do not know which slots have been filled and which ones - no
+                    // so we iterate over full reserved space
+                    if (nodes_[i])
+                        node_free(i, nodes_[i]);
+                }
+            } else
+                tape_allocator_.deallocate(nullptr, 0);
+
+            if (!has_reset<vectors_allocator_at>()) {
+                std::size_t n = vectors_lookup_.size();
+                for (std::size_t i = 0; i != n; ++i) {
+                    if (vectors_lookup_[i])
+                        vectors_allocator_.deallocate(vectors_lookup_[i], matrix_cols_);
+                }
+            } else
+                tape_allocator_.deallocate(nullptr, 0);
         }
+        std::fill(nodes_.begin(), nodes_.end(), node_t{});
     }
     void reset() {
         nodes_mutexes_ = {};
         nodes_.clear();
         nodes_.shrink_to_fit();
 
-        // vectors_lookup_.clear();
-        // vectors_lookup_.shrink_to_fit();
+        vectors_lookup_.clear();
+        vectors_lookup_.shrink_to_fit();
     }
 
     using span_bytes_t = span_gt<byte_t>;
@@ -162,11 +173,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
         return data ? span_bytes_t{data, node_size} : span_bytes_t{};
     }
     void node_free(size_t slot, node_t node) {
-        if (!has_reset<tape_allocator_at>()) {
-            tape_allocator_.deallocate(node.tape(), node.node_size_bytes(pre_));
-        } else {
-            tape_allocator_.deallocate(nullptr, 0);
-        }
+        tape_allocator_.deallocate(node.tape(), node.node_size_bytes(pre_));
         nodes_[slot] = node_t{};
     }
     node_t node_make(key_at key, level_t level) noexcept {

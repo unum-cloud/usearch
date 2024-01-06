@@ -375,14 +375,12 @@ class index_dense_gt {
     /// @brief An instance of a potentially stateful `metric_t` used to initialize copies and forks.
     metric_t metric_;
 
-    /// @brief  C-style array of `node_t` smart-pointers.
-    std::vector<node_t> nodes_;
-    std::mutex vector_mutex_;
-    bitset_t nodes_mutexes_;
-    // storage_t storage_{&nodes_, &nodes_mutexes_, config_};
+    /// @brief The underlying storage provider for this index that determines file storage layout,
+    /// implements serialization/deserialization routines, and provides an API to add, update and
+    /// retrieve vectors and hnsw graph nodes.
     storage_t storage_{config_};
 
-    /// @brief Originally forms and array of integers [0, threads], marking all
+    /// @brief Originally forms and array of integers [0, threads], marking all.
     mutable std::vector<std::size_t> available_threads_;
 
     /// @brief Mutex, controlling concurrent access to `available_threads_`.
@@ -452,9 +450,6 @@ class index_dense_gt {
           casts_(std::move(other.casts_)),             //
           metric_(std::move(other.metric_)),           //
 
-          // vectors_tape_allocator_(std::move(other.vectors_tape_allocator_)), //
-          //  vectors_lookup_(std::move(other.vectors_lookup_)),                 //
-
           available_threads_(std::move(other.available_threads_)), //
           slot_lookup_(std::move(other.slot_lookup_)),             //
           free_keys_(std::move(other.free_keys_)),                 //
@@ -479,9 +474,6 @@ class index_dense_gt {
         std::swap(cast_buffer_, other.cast_buffer_);
         std::swap(casts_, other.casts_);
         std::swap(metric_, other.metric_);
-
-        // std::swap(vectors_tape_allocator_, other.vectors_tape_allocator_);
-        //  std::swap(vectors_lookup_, other.vectors_lookup_);
 
         std::swap(available_threads_, other.available_threads_);
         std::swap(slot_lookup_, other.slot_lookup_);
@@ -764,13 +756,10 @@ class index_dense_gt {
         unique_lock_t lookup_lock(slot_lookup_mutex_);
 
         std::unique_lock<std::mutex> free_lock(free_keys_mutex_);
+        // storage_ cleared by typed_ todo:: is this confusing?
         typed_->clear();
         slot_lookup_.clear();
-
-        // should by run by storage_->clear which is run by typed_->clear()
-        // storage_.vectors_lookup_.clear();
         free_keys_.clear();
-        // vectors_tape_allocator_.reset();
     }
 
     /**
@@ -787,10 +776,7 @@ class index_dense_gt {
         std::unique_lock<std::mutex> available_threads_lock(available_threads_mutex_);
         typed_->reset();
         slot_lookup_.clear();
-        // // run by typed_->reset();
-        // vectors_lookup_.clear();
         free_keys_.clear();
-        // vectors_tape_allocator_.reset();
 
         // Reset the thread IDs.
         available_threads_.resize(std::thread::hardware_concurrency());
@@ -894,7 +880,7 @@ class index_dense_gt {
                                             serialization_config_t config = {}, //
                                             progress_at&& progress = {}) {
 
-        // Discard all previous memory allocations of `vectors_tape_allocator_`
+        // Discard all previous memory allocations of
         reset();
 
         // Infer the new index size
@@ -942,7 +928,7 @@ class index_dense_gt {
                                 std::size_t offset = 0, serialization_config_t config = {}, //
                                 progress_at&& progress = {}) {
 
-        // Discard all previous memory allocations of `vectors_tape_allocator_`
+        // Discard all previous memory allocations.
         reset();
 
         serialization_result_t result = file.open_if_not();
