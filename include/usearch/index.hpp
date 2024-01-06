@@ -2820,7 +2820,7 @@ class index_gt {
             return io_result;
 
         serialization_result_t stream_result = save_to_stream(
-            [&](void* buffer, std::size_t length) {
+            [&](const void* buffer, std::size_t length) {
                 io_result = file.write(buffer, length);
                 return !!io_result;
             },
@@ -2844,7 +2844,7 @@ class index_gt {
             return io_result;
 
         serialization_result_t stream_result = save_to_stream(
-            [&](void* buffer, std::size_t length) {
+            [&](const void* buffer, std::size_t length) {
                 if (offset + length > file.size())
                     return false;
                 std::memcpy(file.data() + offset, buffer, length);
