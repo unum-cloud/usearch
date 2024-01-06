@@ -2734,35 +2734,8 @@ class index_gt {
         header.connectivity_base = config_.connectivity_base;
         header.max_level = max_level_;
         header.entry_slot = entry_slot_;
-        if (!output(&header, sizeof(header)))
-            return result.failed("Failed to serialize the header into stream");
 
-        // Progress status
-        std::size_t processed = 0;
-        std::size_t const total = 2 * header.size;
-
-        // Export the number of levels per node
-        // That is both enough to estimate the overall memory consumption,
-        // and to be able to estimate the offsets of every entry in the file.
-        for (std::size_t i = 0; i != header.size; ++i) {
-            node_t node = storage_.get_node_at(i);
-            level_t level = node.level();
-            if (!output(&level, sizeof(level)))
-                return result.failed("Failed to serialize into stream");
-            if (!progress(++processed, total))
-                return result.failed("Terminated by user");
-        }
-
-        // After that dump the nodes themselves
-        for (std::size_t i = 0; i != header.size; ++i) {
-            span_bytes_t node_bytes = storage_.get_node_at(i).node_bytes(pre_);
-            if (!output(node_bytes.data(), node_bytes.size()))
-                return result.failed("Failed to serialize into stream");
-            if (!progress(++processed, total))
-                return result.failed("Terminated by user");
-        }
-
-        return {};
+        return storage_.save_nodes_to_stream(output, header, progress);
     }
 
     /**
@@ -2776,7 +2749,12 @@ class index_gt {
 
         // Pull basic metadata
         index_serialized_header_t header;
-        storage_.load_nodes_from_stream(input, header, progress);
+        result = storage_.load_nodes_from_stream(input, header, progress);
+        if (!result) {
+            reset();
+            return result;
+        }
+
         // Submit metadata
         config_.connectivity = header.connectivity;
         config_.connectivity_base = header.connectivity_base;

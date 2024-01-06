@@ -209,6 +209,97 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
 #pragma region Storage Serialization and Deserialization
 
     /**
+     *  @brief  Saves serialized binary index vectors to a stream.
+     *  @param[in] output Output stream to which vectors will be saved to according to this storage format.
+     *  @param[in] metadata_buffer A buffer opaque to Storage, that will be serialized into output stream
+     *  @param[in] config Configuration parameters for imports.
+     *  @return Outcome descriptor explicitly convertible to boolean.
+     */
+    template <typename output_callback_at, typename vectors_metadata_at>
+    serialization_result_t save_vectors_to_stream(output_callback_at& output, std::uint64_t vector_size_bytes,
+                                                  std::uint64_t node_count, //
+                                                  const vectors_metadata_at& metadata_buffer,
+                                                  serialization_config_t config = {}) {
+
+        serialization_result_t result;
+        std::uint64_t matrix_rows = 0;
+        std::uint64_t matrix_cols = 0;
+
+        // We may not want to put the vectors into the same file
+        if (!config.exclude_vectors) {
+            // Save the matrix size
+            if (!config.use_64_bit_dimensions) {
+                std::uint32_t dimensions[2];
+                dimensions[0] = static_cast<std::uint32_t>(node_count);
+                dimensions[1] = static_cast<std::uint32_t>(vector_size_bytes);
+                if (!output(&dimensions, sizeof(dimensions)))
+                    return result.failed("Failed to serialize into stream");
+                matrix_rows = dimensions[0];
+                matrix_cols = dimensions[1];
+            } else {
+                std::uint64_t dimensions[2];
+                dimensions[0] = static_cast<std::uint64_t>(node_count);
+                dimensions[1] = static_cast<std::uint64_t>(vector_size_bytes);
+                if (!output(&dimensions, sizeof(dimensions)))
+                    return result.failed("Failed to serialize into stream");
+                matrix_rows = dimensions[0];
+                matrix_cols = dimensions[1];
+            }
+
+            // Dump the vectors one after another
+            for (std::uint64_t i = 0; i != matrix_rows; ++i) {
+                const byte_t* vector = get_vector_at(i);
+                if (!output(vector, matrix_cols))
+                    return result.failed("Failed to serialize into stream");
+            }
+        }
+
+        if (!output(&metadata_buffer, sizeof(metadata_buffer)))
+            return result.failed("Failed to read the index vector metadata");
+
+        return result;
+    }
+
+    /**
+     *  @brief  Symmetric to `save_from_stream`, pulls data from a stream.
+     */
+    template <typename output_callback_at, typename progress_at = dummy_progress_t>
+    serialization_result_t save_nodes_to_stream(output_callback_at& output, const index_serialized_header_t& header,
+                                                progress_at& progress = {}) noexcept {
+
+        serialization_result_t result;
+
+        if (!output(&header, sizeof(header)))
+            return result.failed("Failed to serialize the header into stream");
+
+        // Progress status
+        std::size_t processed = 0;
+        std::size_t const total = 2 * header.size;
+
+        // Export the number of levels per node
+        // That is both enough to estimate the overall memory consumption,
+        // and to be able to estimate the offsets of every entry in the file.
+        for (std::size_t i = 0; i != header.size; ++i) {
+            node_t node = get_node_at(i);
+            level_t level = node.level();
+            if (!output(&level, sizeof(level)))
+                return result.failed("Failed to serialize into stream");
+            if (!progress(++processed, total))
+                return result.failed("Terminated by user");
+        }
+
+        // After that dump the nodes themselves
+        for (std::size_t i = 0; i != header.size; ++i) {
+            span_bytes_t node_bytes = get_node_at(i).node_bytes(pre_);
+            if (!output(node_bytes.data(), node_bytes.size()))
+                return result.failed("Failed to serialize into stream");
+            if (!progress(++processed, total))
+                return result.failed("Terminated by user");
+        }
+        return result;
+    }
+
+    /**
      *  @brief Parses the index from file to RAM.
      *  @param[in] input Input stream from which vectors will be loaded according to this storage format.
      *  @param[out] metadata_buffer A buffer opaque to Storage, into which previously stored metadata will be
@@ -269,7 +360,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
      */
     template <typename input_callback_at, typename progress_at = dummy_progress_t>
     serialization_result_t load_nodes_from_stream(input_callback_at& input, index_serialized_header_t& header,
-                                                  progress_at&& progress = {}) noexcept {
+                                                  progress_at& progress = {}) noexcept {
 
         serialization_result_t result;
 

@@ -792,41 +792,9 @@ class index_dense_gt {
                                           progress_at&& progress = {}) const {
 
         serialization_result_t result;
-        std::uint64_t matrix_rows = 0;
-        std::uint64_t matrix_cols = 0;
-
-        // We may not want to put the vectors into the same file
-        if (!config.exclude_vectors) {
-            // Save the matrix size
-            if (!config.use_64_bit_dimensions) {
-                std::uint32_t dimensions[2];
-                dimensions[0] = static_cast<std::uint32_t>(typed_->size());
-                dimensions[1] = static_cast<std::uint32_t>(metric_.bytes_per_vector());
-                if (!output(&dimensions, sizeof(dimensions)))
-                    return result.failed("Failed to serialize into stream");
-                matrix_rows = dimensions[0];
-                matrix_cols = dimensions[1];
-            } else {
-                std::uint64_t dimensions[2];
-                dimensions[0] = static_cast<std::uint64_t>(typed_->size());
-                dimensions[1] = static_cast<std::uint64_t>(metric_.bytes_per_vector());
-                if (!output(&dimensions, sizeof(dimensions)))
-                    return result.failed("Failed to serialize into stream");
-                matrix_rows = dimensions[0];
-                matrix_cols = dimensions[1];
-            }
-
-            // Dump the vectors one after another
-            for (std::uint64_t i = 0; i != matrix_rows; ++i) {
-                const byte_t* vector = storage_.get_vector_at(i);
-                if (!output(vector, matrix_cols))
-                    return result.failed("Failed to serialize into stream");
-            }
-        }
-
-        // Augment metadata
+        index_dense_head_buffer_t buffer;
+        // Prepare opaque header for Storage
         {
-            index_dense_head_buffer_t buffer;
             std::memset(buffer, 0, sizeof(buffer));
             index_dense_head_t head{buffer};
             std::memcpy(buffer, default_magic(), std::strlen(default_magic()));
@@ -847,10 +815,10 @@ class index_dense_gt {
             head.count_deleted = typed_->size() - size();
             head.dimensions = dimensions();
             head.multi = multi();
-
-            if (!output(&buffer, sizeof(buffer)))
-                return result.failed("Failed to serialize into stream");
         }
+
+        // save vectors and metadata to storage
+        storage_.save_vectors_to_stream(output, metric_.bytes_per_vector(), typed_->size(), buffer, config);
 
         // Save the actual proximity graph
         return typed_->save_to_stream(std::forward<output_callback_at>(output), std::forward<progress_at>(progress));
