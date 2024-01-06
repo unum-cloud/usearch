@@ -1982,11 +1982,6 @@ class index_gt {
     /// @brief  The slot in which the only node of the top-level graph is stored.
     std::size_t entry_slot_{};
 
-    using nodes_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<node_t>;
-
-    /// @brief  C-style array of `node_t` smart-pointers.
-    // buffer_gt<node_t, nodes_allocator_t> nodes_{};
-
     using contexts_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<context_t>;
 
     /// @brief  Array of thread-specific buffers for temporary data.
