@@ -878,6 +878,7 @@ class index_dense_gt {
 
         // Pull the actual proximity graph
         result = typed_->load_from_stream(std::forward<input_callback_at>(input), std::forward<progress_at>(progress));
+
         if (!result)
             return result;
 
@@ -898,49 +899,15 @@ class index_dense_gt {
 
         // Discard all previous memory allocations.
         reset();
-
-        serialization_result_t result = file.open_if_not();
+        serialization_result_t result;
+        index_dense_head_buffer_t buffer;
+        result = storage_.view_vectors_from_stream(file, buffer, offset, config);
         if (!result)
             return result;
-
-        // Infer the new index size
-        std::uint64_t matrix_rows = 0;
-        std::uint64_t matrix_cols = 0;
-        span_punned_t vectors_buffer;
-
-        // We may not want to fetch the vectors from the same file, or allow attaching them afterwards
-        if (!config.exclude_vectors) {
-            // Save the matrix size
-            if (!config.use_64_bit_dimensions) {
-                std::uint32_t dimensions[2];
-                if (file.size() - offset < sizeof(dimensions))
-                    return result.failed("File is corrupted and lacks matrix dimensions");
-                std::memcpy(&dimensions, file.data() + offset, sizeof(dimensions));
-                matrix_rows = dimensions[0];
-                matrix_cols = dimensions[1];
-                offset += sizeof(dimensions);
-            } else {
-                std::uint64_t dimensions[2];
-                if (file.size() - offset < sizeof(dimensions))
-                    return result.failed("File is corrupted and lacks matrix dimensions");
-                std::memcpy(&dimensions, file.data() + offset, sizeof(dimensions));
-                matrix_rows = dimensions[0];
-                matrix_cols = dimensions[1];
-                offset += sizeof(dimensions);
-            }
-            vectors_buffer = {file.data() + offset, static_cast<std::size_t>(matrix_rows * matrix_cols)};
-            offset += vectors_buffer.size();
-        }
-
         // Load metadata and choose the right metric
         {
-            index_dense_head_buffer_t buffer;
-            if (file.size() - offset < sizeof(buffer))
-                return result.failed("File is corrupted and lacks a header");
-
-            std::memcpy(buffer, file.data() + offset, sizeof(buffer));
-
             index_dense_head_t head{buffer};
+
             if (std::memcmp(buffer, default_magic(), std::strlen(default_magic())) != 0)
                 return result.failed("Magic header mismatch - the file isn't an index");
 
@@ -956,22 +923,12 @@ class index_dense_gt {
 
             metric_ = metric_t(head.dimensions, head.kind_metric, head.kind_scalar);
             config_.multi = head.multi;
-            offset += sizeof(buffer);
         }
 
         // Pull the actual proximity graph
-        result = typed_->view(std::move(file), offset, std::forward<progress_at>(progress));
+        result = typed_->view_internal(std::move(file), offset, std::forward<progress_at>(progress));
         if (!result)
             return result;
-        if (typed_->size() != static_cast<std::size_t>(matrix_rows))
-            return result.failed("Index size and the number of vectors doesn't match");
-
-        // Address the vectors
-        storage_.reserve(matrix_rows);
-        if (!config.exclude_vectors)
-            for (std::uint64_t slot = 0; slot != matrix_rows; ++slot)
-                storage_.set_vector_at(slot, vectors_buffer.data() + matrix_cols * slot, matrix_cols, //
-                                       false, false);
 
         reindex_keys_();
         return result;

@@ -68,6 +68,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
     using dynamic_allocator_traits_t = std::allocator_traits<dynamic_allocator_at>;
     using levels_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<level_t>;
     using nodes_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<node_t>;
+    using offsets_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<std::size_t>;
 
     /// @brief  C-style array of `node_t` smart-pointers.
     // buffer_gt<node_t, nodes_allocator_t> nodes_{};
@@ -123,7 +124,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
     using lock_type = node_lock_t;
 
     bool reserve(std::size_t count) {
-        if (count < nodes_.size())
+        if (count < nodes_.size() && count < nodes_mutexes_.size())
             return true;
         nodes_mutexes_t new_mutexes = nodes_mutexes_t(count);
         nodes_mutexes_ = std::move(new_mutexes);
@@ -219,7 +220,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
     serialization_result_t save_vectors_to_stream(output_callback_at& output, std::uint64_t vector_size_bytes,
                                                   std::uint64_t node_count, //
                                                   const vectors_metadata_at& metadata_buffer,
-                                                  serialization_config_t config = {}) {
+                                                  serialization_config_t config = {}) const {
 
         serialization_result_t result;
         std::uint64_t matrix_rows = 0;
@@ -265,7 +266,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
      */
     template <typename output_callback_at, typename progress_at = dummy_progress_t>
     serialization_result_t save_nodes_to_stream(output_callback_at& output, const index_serialized_header_t& header,
-                                                progress_at& progress = {}) noexcept {
+                                                progress_at& progress = {}) const {
 
         serialization_result_t result;
 
@@ -401,6 +402,141 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
 
         if (vectors_loaded_ && header.size != static_cast<std::size_t>(matrix_rows_))
             return result.failed("Index size and the number of vectors doesn't match");
+        return {};
+    }
+
+    /**
+     *  @brief Parses the index from file to RAM.
+     *  @param[in] file Memory mapped file from which vectors will be viewed according to this storage format.
+     *  @param[out] metadata_buffer A buffer opaque to Storage, into which previously stored metadata will be
+     *  loaded from input stream
+     *  @param[in] config Configuration parameters for imports.
+     *  @return Outcome descriptor explicitly convertible to boolean.
+     */
+    template <typename vectors_metadata_at>
+    serialization_result_t view_vectors_from_stream(
+        memory_mapped_file_t& file, //
+                                    //// todo!! document that offset is a reference, or better - do not do it this way
+        vectors_metadata_at& metadata_buffer, std::size_t& offset, serialization_config_t config = {}) {
+
+        reset();
+
+        serialization_result_t result = file.open_if_not();
+        if (!result)
+            return result;
+
+        // Infer the new index size
+        std::uint64_t matrix_rows = 0;
+        std::uint64_t matrix_cols = 0;
+        span_punned_t vectors_buffer;
+
+        // We may not want to fetch the vectors from the same file, or allow attaching them afterwards
+        if (!config.exclude_vectors) {
+            // Save the matrix size
+            if (!config.use_64_bit_dimensions) {
+                std::uint32_t dimensions[2];
+                if (file.size() - offset < sizeof(dimensions))
+                    return result.failed("File is corrupted and lacks matrix dimensions");
+                std::memcpy(&dimensions, file.data() + offset, sizeof(dimensions));
+                matrix_rows = dimensions[0];
+                matrix_cols = dimensions[1];
+                offset += sizeof(dimensions);
+            } else {
+                std::uint64_t dimensions[2];
+                if (file.size() - offset < sizeof(dimensions))
+                    return result.failed("File is corrupted and lacks matrix dimensions");
+                std::memcpy(&dimensions, file.data() + offset, sizeof(dimensions));
+                matrix_rows = dimensions[0];
+                matrix_cols = dimensions[1];
+                offset += sizeof(dimensions);
+            }
+            vectors_buffer = {file.data() + offset, static_cast<std::size_t>(matrix_rows * matrix_cols)};
+            offset += vectors_buffer.size();
+            vectors_loaded_ = true;
+        }
+        matrix_rows_ = matrix_rows;
+        matrix_cols_ = matrix_cols;
+        // q:: how does this work when vectors are excluded?
+        // Address the vectors
+        reserve(matrix_rows);
+        if (!config.exclude_vectors)
+            for (std::uint64_t slot = 0; slot != matrix_rows; ++slot)
+                set_vector_at(slot, vectors_buffer.data() + matrix_cols * slot, matrix_cols, //
+                              false, false);
+
+        if (file.size() - offset < sizeof(metadata_buffer))
+            return result.failed("File is corrupted and lacks a header");
+
+        std::memcpy(metadata_buffer, file.data() + offset, sizeof(metadata_buffer));
+        offset += sizeof(metadata_buffer);
+
+        return result;
+    }
+
+    /**
+     *  @brief  Symmetric to `save_from_stream`, pulls data from a stream.
+     */
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t view_nodes_from_stream(memory_mapped_file_t& file, index_serialized_header_t& header,
+                                                  std::size_t offset = 0, progress_at& progress = {}) noexcept {
+
+        serialization_result_t result = file.open_if_not();
+        if (!result)
+            return result;
+
+        // Pull basic metadata
+        if (file.size() - offset < sizeof(header))
+            return result.failed("File is corrupted and lacks a header");
+        std::memcpy(&header, file.data() + offset, sizeof(header));
+
+        if (!header.size) {
+            reset();
+            return result;
+        }
+
+        // update config_ and pre_ for correct node_t size calculations below
+        index_config_t config;
+        config.connectivity = header.connectivity;
+        config.connectivity_base = header.connectivity_base;
+        pre_ = node_t::precompute_(config);
+
+        buffer_gt<std::size_t, offsets_allocator_t> offsets(header.size);
+
+        if (!offsets)
+            return result.failed("Out of memory");
+
+        // before mapping levels[] from file, let's make sure the file is large enough
+        if (file.size() - offset - sizeof(header) - header.size * sizeof(level_t) < 0)
+            return result.failed("File is corrupted. Unable to parse node levels from file");
+
+        misaligned_ptr_gt<level_t> levels{(byte_t*)file.data() + offset + sizeof(header)};
+        offsets[0u] = offset + sizeof(header) + sizeof(level_t) * header.size;
+
+        for (std::size_t i = 1; i < header.size; ++i)
+            offsets[i] = offsets[i - 1] + node_t::node_size_bytes(pre_, levels[i - 1]);
+
+        std::size_t total_bytes = offsets[header.size - 1] + node_t::node_size_bytes(pre_, levels[header.size - 1]);
+        if (file.size() < total_bytes) {
+            reset();
+            return result.failed("File is corrupted and can't fit all the nodes");
+        }
+
+        if (!reserve(header.size)) {
+            reset();
+            return result.failed("Out of memory");
+        }
+
+        // Rapidly address all the nodes
+        for (std::size_t i = 0; i != header.size; ++i) {
+            node_store(i, node_t{(byte_t*)file.data() + offsets[i]});
+            if (!progress(i + 1, header.size))
+                return result.failed("Terminated by user");
+        }
+        view_file_ = true;
+
+        if (vectors_loaded_ && header.size != static_cast<std::size_t>(matrix_rows_))
+            return result.failed("Index size and the number of vectors doesn't match");
+
         return {};
     }
 

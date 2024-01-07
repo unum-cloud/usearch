@@ -2893,44 +2893,23 @@ class index_gt {
     serialization_result_t view(memory_mapped_file_t file, std::size_t offset = 0,
                                 progress_at&& progress = {}) noexcept {
 
-        // Remove previously stored objects
         reset();
-
-        serialization_result_t result = file.open_if_not();
+        return view_internal(std::move(file), offset, progress);
+    }
+    template <typename progress_at = dummy_progress_t>
+    serialization_result_t view_internal(memory_mapped_file_t file, std::size_t offset = 0,
+                                         progress_at&& progress = {}) noexcept {
+        // shall not call reset()
+        // storage_ may already have some relevant stuff...
+        serialization_result_t result;
+        index_serialized_header_t header;
+        result = storage_.view_nodes_from_stream(file, header, offset, progress);
         if (!result)
             return result;
-
-        // Pull basic metadata
-        index_serialized_header_t header;
-        if (file.size() - offset < sizeof(header))
-            return result.failed("File is corrupted and lacks a header");
-        std::memcpy(&header, file.data() + offset, sizeof(header));
-
-        if (!header.size) {
-            reset();
-            return result;
-        }
-
-        // Precompute offsets of every node, but before that we need to update the configs
-        // This could have been done with `std::exclusive_scan`, but it's only available from C++17.
-        using offsets_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<std::size_t>;
-        buffer_gt<std::size_t, offsets_allocator_t> offsets(header.size);
-        if (!offsets)
-            return result.failed("Out of memory");
 
         config_.connectivity = header.connectivity;
         config_.connectivity_base = header.connectivity_base;
         pre_ = precompute_(config_);
-        misaligned_ptr_gt<level_t> levels{(byte_t*)file.data() + offset + sizeof(header)};
-        offsets[0u] = offset + sizeof(header) + sizeof(level_t) * header.size;
-        for (std::size_t i = 1; i < header.size; ++i)
-            offsets[i] = offsets[i - 1] + node_t::node_size_bytes(pre_, levels[i - 1]);
-
-        std::size_t total_bytes = offsets[header.size - 1] + node_t::node_size_bytes(pre_, levels[header.size - 1]);
-        if (file.size() < total_bytes) {
-            reset();
-            return result.failed("File is corrupted and can't fit all the nodes");
-        }
 
         // Submit metadata and reserve memory
         index_limits_t limits;
@@ -2943,14 +2922,7 @@ class index_gt {
         max_level_ = static_cast<level_t>(header.max_level);
         entry_slot_ = static_cast<compressed_slot_t>(header.entry_slot);
 
-        // Rapidly address all the nodes
-        for (std::size_t i = 0; i != header.size; ++i) {
-            storage_.node_store(i, node_t{(byte_t*)file.data() + offsets[i]});
-            if (!progress(i + 1, header.size))
-                return result.failed("Terminated by user");
-        }
         viewed_file_ = std::move(file);
-        storage_.view_file_ = true;
         return {};
     }
 
