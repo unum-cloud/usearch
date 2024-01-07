@@ -1628,10 +1628,6 @@ struct precomputed_constants_t {
 template <typename key_at, typename slot_at> class node_at {
     byte_t* tape_{};
 
-    /**
-     *  @brief  How many bytes of memory are needed to form the "head" of the node.
-     */
-    static constexpr std::size_t node_head_bytes_() { return sizeof(vector_key_t) + sizeof(level_t); }
     inline std::size_t node_neighbors_bytes_(const precomputed_constants_t& pre, node_at node) const noexcept {
         return node_neighbors_bytes_(pre, node.level());
     }
@@ -1651,17 +1647,21 @@ template <typename key_at, typename slot_at> class node_at {
     using span_bytes_t = span_gt<byte_t>;
     explicit node_at(byte_t* tape) noexcept : tape_(tape) {}
     byte_t* tape() const noexcept { return tape_; }
-    byte_t* neighbors_tape() const noexcept { return tape_ + node_head_bytes_(); }
+    /**
+     *  @brief  How many bytes of memory are needed to form the "head" of the node.
+     */
+    static constexpr std::size_t head_size_bytes() { return sizeof(vector_key_t) + sizeof(level_t); }
+    byte_t* neighbors_tape() const noexcept { return tape_ + head_size_bytes(); }
     explicit operator bool() const noexcept { return tape_; }
 
     inline span_bytes_t node_bytes(const precomputed_constants_t& pre) const noexcept {
         return {tape(), node_size_bytes(pre, level())};
     }
     inline std::size_t node_size_bytes(const precomputed_constants_t& pre) noexcept {
-        return node_head_bytes_() + node_neighbors_bytes_(pre, level());
+        return head_size_bytes() + node_neighbors_bytes_(pre, level());
     }
     static inline std::size_t node_size_bytes(const precomputed_constants_t& pre, level_t level) noexcept {
-        return node_head_bytes_() + node_neighbors_bytes_(pre, level);
+        return head_size_bytes() + node_neighbors_bytes_(pre, level);
     }
 
     inline static precomputed_constants_t precompute_(index_config_t const& config) noexcept {
@@ -1866,12 +1866,6 @@ class index_gt {
      *          alignment in most common cases.
      */
     using neighbors_count_t = std::uint32_t;
-
-    // todo:: move near the rest of these functions
-    /**
-     *  @brief  How many bytes of memory are needed to form the "head" of the node.
-     */
-    static constexpr std::size_t node_head_bytes_() { return sizeof(vector_key_t) + sizeof(level_t); }
 
     using visits_hash_set_t = growing_hash_set_gt<compressed_slot_t, hash_gt<compressed_slot_t>, dynamic_allocator_t>;
 
@@ -2639,7 +2633,7 @@ class index_gt {
 
             ++result.nodes;
             result.edges += neighbors_(node, level).size();
-            result.allocated_bytes += node_head_bytes_() + neighbors_bytes;
+            result.allocated_bytes += node_t::head_size_bytes() + neighbors_bytes;
         }
 
         std::size_t max_edges_per_node = level ? config_.connectivity_base : config_.connectivity;
@@ -2649,7 +2643,7 @@ class index_gt {
 
     stats_t stats(stats_t* stats_per_level, std::size_t max_level) const noexcept {
 
-        std::size_t head_bytes = node_head_bytes_();
+        std::size_t head_bytes = node_t::head_size_bytes();
         for (std::size_t i = 0; i != size(); ++i) {
             node_t node = storage_.get_node_at(i);
 
