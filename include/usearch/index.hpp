@@ -2123,7 +2123,6 @@ class index_gt {
      *  @brief  Increases the `capacity()` of the index to allow adding more vectors.
      *  @return `true` on success, `false` on memory allocation errors.
      */
-    // todo:: reserve is not thread safe if another thread is running search or insert
     bool reserve(index_limits_t limits) usearch_noexcept_m {
 
         if (limits.threads_add <= limits_.threads_add          //

@@ -1,12 +1,10 @@
 #pragma once
-#include <cstring>
 #include <stdlib.h> // `aligned_alloc`
 
 #include <functional> // `std::function`
-#include <iostream>
-#include <numeric> // `std::iota`
-#include <thread>  // `std::thread`
-#include <vector>  // `std::vector`
+#include <numeric>    // `std::iota`
+#include <thread>     // `std::thread`
+#include <vector>     // `std::vector`
 
 #include <usearch/index.hpp>
 #include <usearch/index_plugins.hpp>
@@ -441,11 +439,7 @@ class index_dense_gt {
     index_dense_gt(index_dense_gt&& other)
         : config_(std::move(other.config_)),
 
-          // todo:: ask-Ashot: is the following change ok? why is it needed
-          // for some reason exchange stopped working after I added allocator to strage
-          // it was complaining about some ambiguity
-          // typed_(exchange(other.typed_, nullptr)),     //
-          typed_(std::move(other.typed_)),             //
+          typed_(exchange(other.typed_, nullptr)),     //
           cast_buffer_(std::move(other.cast_buffer_)), //
           casts_(std::move(other.casts_)),             //
           metric_(std::move(other.metric_)),           //
@@ -736,7 +730,7 @@ class index_dense_gt {
      *  @return `true` if the memory reservation was successful, `false` otherwise.
      */
     bool reserve(index_limits_t limits) {
-        // this seems to allow search() and add() on the dense index, concurrent to this reserve
+        // todo:: ask-Ashot this seems to allow search() and add() on the dense index, concurrent to this reserve
         // But that is not safe on typed_ as typed_->reserve() reallocates the lock buffer, discarding the old one
         // without checking if anything is locked
         {
@@ -774,6 +768,7 @@ class index_dense_gt {
 
         std::unique_lock<std::mutex> free_lock(free_keys_mutex_);
         std::unique_lock<std::mutex> available_threads_lock(available_threads_mutex_);
+        // storage is reset by typed_
         typed_->reset();
         slot_lookup_.clear();
         free_keys_.clear();
@@ -878,7 +873,6 @@ class index_dense_gt {
 
         // Pull the actual proximity graph
         result = typed_->load_from_stream(std::forward<input_callback_at>(input), std::forward<progress_at>(progress));
-
         if (!result)
             return result;
 
@@ -900,6 +894,7 @@ class index_dense_gt {
         // Discard all previous memory allocations.
         reset();
         serialization_result_t result;
+        // Note that buffer and offset are passed by reference
         index_dense_head_buffer_t buffer;
         result = storage_.view_vectors_from_stream(file, buffer, offset, config);
         if (!result)
@@ -907,7 +902,6 @@ class index_dense_gt {
         // Load metadata and choose the right metric
         {
             index_dense_head_t head{buffer};
-
             if (std::memcmp(buffer, default_magic(), std::strlen(default_magic())) != 0)
                 return result.failed("Magic header mismatch - the file isn't an index");
 
