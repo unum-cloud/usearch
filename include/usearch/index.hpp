@@ -77,10 +77,9 @@
 #include <atomic>    // `std::atomic`
 #include <bitset>    // `std::bitset`
 #include <cassert>
-#include <climits> // `CHAR_BIT`
-#include <cmath>   // `std::sqrt`
-#include <cstring> // `std::memset`
-#include <iostream>
+#include <climits>   // `CHAR_BIT`
+#include <cmath>     // `std::sqrt`
+#include <cstring>   // `std::memset`
 #include <iterator>  // `std::reverse_iterator`
 #include <mutex>     // `std::unique_lock` - replacement candidate
 #include <random>    // `std::default_random_engine` - replacement candidate
