@@ -6,6 +6,48 @@
 namespace unum {
 namespace usearch {
 
+// taken from has_reset_gt
+// but added a C macro to make it generic for other function names
+// Can I do this in C++?
+#define HAS_FUNCTION_TEMPLATE(CHECK_AT, NAME_AK, SIGNATURE_AT)                                                         \
+    template <typename, typename at> struct has_##NAME_AK##_gt {                                                       \
+        static_assert(std::integral_constant<at, false>::value,                                                        \
+                      "Second template parameter needs to be of function type.");                                      \
+    };                                                                                                                 \
+                                                                                                                       \
+    template <typename check_at, typename return_at, typename... args_at>                                              \
+    struct has_##NAME_AK##_gt<check_at, return_at(args_at...)> {                                                       \
+      private:                                                                                                         \
+        template <typename at>                                                                                         \
+        static constexpr auto check(at*) ->                                                                            \
+            typename std::is_same<decltype(std::declval<at>().NAME_AK(std::declval<args_at>()...)), return_at>::type;  \
+        template <typename> static constexpr std::false_type check(...);                                               \
+                                                                                                                       \
+        typedef decltype(check<check_at>(0)) type;                                                                     \
+                                                                                                                       \
+      public:                                                                                                          \
+        static constexpr bool value = type::value;                                                                     \
+    };
+
+// note:: adding CHECK_AT based namespace so if the template can be used for multiple types
+#define ASSERT_HAS_FUNCTION(CHECK_AT, NAME_AK, SIGNATURE_AT)                                                           \
+    namespace CHECK_AT##__##NAME_AK {                                                                                  \
+        HAS_FUNCTION_TEMPLATE(CHECK_AT, NAME_AK, SIGNATURE_AT)                                                         \
+    }                                                                                                                  \
+    static_assert(CHECK_AT##__##NAME_AK::has_##NAME_AK##_gt<CHECK_AT, SIGNATURE_AT>::value, " nope")
+
+#define HAS_FUNCTION(CHECK_AT, NAME_AK, SIGNATURE_AT) has_##NAME_AK##_gt<CHECK_AT, SIGNATURE_AT>::value
+
+// todo:: enforce const-ness
+#define ASSERT_VALID_STORAGE(CHECK_AT)                                                                                 \
+    ASSERT_HAS_FUNCTION(CHECK_AT, node_lock, CHECK_AT::lock_type(std::size_t idx));                                    \
+    ASSERT_HAS_FUNCTION(CHECK_AT, get_node_at, CHECK_AT::node_t(std::size_t idx));                                     \
+    ASSERT_HAS_FUNCTION(CHECK_AT, get_vector_at, byte_t*(std::size_t idx));                                            \
+    ASSERT_HAS_FUNCTION(CHECK_AT, node_size_bytes, std::size_t(std::size_t idx));                                      \
+    ASSERT_HAS_FUNCTION(                                                                                               \
+        CHECK_AT, set_at,                                                                                              \
+        void(std::size_t idx, CHECK_AT::node_t node, byte_t * vector_data, std::size_t vector_size, bool reuse_node));
+
 template <typename key_at, typename compressed_slot_at, //
           typename tape_allocator_at,                   //
           typename vectors_allocator_at,                //
@@ -55,8 +97,11 @@ template <typename key_at, typename compressed_slot_at,           //
           typename dynamic_allocator_at = std::allocator<byte_t>> //
 class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_allocator_at, vectors_allocator_at,
                                             dynamic_allocator_at> {
-    using node_t = node_at<key_at, compressed_slot_at>;
     // todo:: ask-Ashot: why can I not use dynamic_allocator_at in std::vector<node_t, dynamic_allocator_at> ?
+  public:
+    using node_t = node_at<key_at, compressed_slot_at>;
+
+  private:
     // Getting the following error:
     // /usr/include/c++/10/bits/stl_vector.h:285:16: error: no matching function for call to
     // ‘unum::usearch::aligned_allocator_gt<>::aligned_allocator_gt(const _Tp_alloc_type&)’
@@ -121,6 +166,8 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
 
     inline size_t node_size_bytes(std::size_t idx) const noexcept { return get_node_at(idx).node_size_bytes(pre_); }
 
+    HAS_FUNCTION_TEMPLATE(storage_v2, get_node_at, node_t(std::size_t))
+    static constexpr bool typecheck() { return HAS_FUNCTION(storage_v2, get_node_at, node_t(std::size_t)); };
     using lock_type = node_lock_t;
 
     bool reserve(std::size_t count) {
@@ -542,6 +589,11 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
 
 #pragma endregion
 };
+
+using dummy_storage = storage_v2<default_key_t, default_slot_t>;
+
+static_assert(dummy_storage::typecheck());
+ASSERT_VALID_STORAGE(dummy_storage);
 
 } // namespace usearch
 } // namespace unum
