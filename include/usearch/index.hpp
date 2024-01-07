@@ -2133,14 +2133,9 @@ class index_gt {
             return true;
 
         bool storage_reserved = storage_.reserve(limits.members);
-        // buffer_gt<node_t, nodes_allocator_t> new_nodes(limits.members);
         buffer_gt<context_t, contexts_allocator_t> new_contexts(limits.threads());
         if (!new_contexts || !storage_reserved)
             return false;
-
-        // Move the nodes info, and deallocate previous buffers.
-        // if (nodes_)
-        //     std::memcpy(new_nodes.data(), nodes_.data(), sizeof(node_t) * size());
 
         limits_ = limits;
         nodes_capacity_ = limits.members;
@@ -2239,7 +2234,6 @@ class index_gt {
         inline match_t at(std::size_t i) const noexcept {
             candidate_t const* top_ordered = top_->data();
             candidate_t candidate = top_ordered[i];
-            // node_t node = nodes_[candidate.slot];
             node_t node = storage_->get_node_at(candidate.slot);
             return {member_cref_t{node.ckey(), candidate.slot}, candidate.distance};
         }
@@ -2317,11 +2311,10 @@ class index_gt {
         typename callback_at = dummy_callback_t, //
         typename prefetch_at = dummy_prefetch_t  //
         >
-    add_result_t add(                           //
-        vector_key_t key, value_at&& value,     //
-        metric_at&& metric,                     //
-        index_update_config_t config = {},      //
-        callback_at&& callback = callback_at{}, //
+    add_result_t add(                                           //
+        vector_key_t key, value_at&& value, metric_at&& metric, //
+        index_update_config_t config = {},                      //
+        callback_at&& callback = callback_at{},                 //
         prefetch_at&& prefetch = prefetch_at{}) usearch_noexcept_m {
 
         add_result_t result;
@@ -2360,7 +2353,6 @@ class index_gt {
 
         // Allocate the neighbors
         node_t node = storage_.node_make(key, target_level);
-        storage_.node_store(new_slot, node);
         if (!node) {
             nodes_count_.fetch_sub(1);
             return result.failed("Out of memory!");
@@ -2368,6 +2360,7 @@ class index_gt {
         if (target_level <= max_level_copy)
             new_level_lock.unlock();
 
+        storage_.node_store(new_slot, node);
         result.new_size = new_slot + 1;
         result.slot = new_slot;
         callback(at(new_slot));
@@ -2663,8 +2656,8 @@ class index_gt {
         for (std::size_t l = 1; l <= max_level; ++l)
             stats_per_level[l].max_edges = stats_per_level[l].nodes * config_.connectivity;
 
-        stats_t result{};
         // Aggregate stats across levels
+        stats_t result{};
         for (std::size_t l = 0; l <= max_level; ++l)
             result.nodes += stats_per_level[l].nodes,                         //
                 result.edges += stats_per_level[l].edges,                     //
@@ -2707,7 +2700,6 @@ class index_gt {
      */
     std::size_t serialized_length() const noexcept {
         std::size_t neighbors_length = 0;
-
         for (std::size_t i = 0; i != size(); ++i)
             neighbors_length += node_t::node_size_bytes(pre_, storage_.get_node_at(i).level()) + sizeof(level_t);
         return sizeof(index_serialized_header_t) + neighbors_length;
@@ -2887,6 +2879,7 @@ class index_gt {
     serialization_result_t view(memory_mapped_file_t file, std::size_t offset = 0,
                                 progress_at&& progress = {}) noexcept {
 
+        // Remove previously stored objects
         reset();
         return view_internal(std::move(file), offset, progress);
     }
