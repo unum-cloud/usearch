@@ -2915,59 +2915,6 @@ class index_gt {
 
 #pragma endregion
 
-    /**
-     *  @brief  Scans the whole collection, removing the links leading towards
-     *          banned entries. This essentially isolates some nodes from the rest
-     *          of the graph, while keeping their outgoing links, in case the node
-     *          is structurally relevant and has a crucial role in the index.
-     *          It won't reclaim the memory.
-     *
-     *  @param[in] allow_member Predicate to mark nodes for isolation.
-     *  @param[in] executor Thread-pool to execute the job in parallel.
-     *  @param[in] progress Callback to report the execution progress.
-     */
-    template <                                        //
-        typename allow_member_at = dummy_predicate_t, //
-        typename executor_at = dummy_executor_t,      //
-        typename progress_at = dummy_progress_t       //
-        >
-    void isolate(                               //
-        allow_member_at&& allow_member,         //
-        executor_at&& executor = executor_at{}, //
-        progress_at&& progress = progress_at{}) noexcept {
-
-        // Progress status
-        std::atomic<bool> do_tasks{true};
-        std::atomic<std::size_t> processed{0};
-        assert(false);
-
-        /*
-            // Erase all the incoming links
-            std::size_t nodes_count = size();
-            executor.dynamic(nodes_count, [&](std::size_t thread_idx, std::size_t node_idx) {
-                node_t node = get_node_at(node_idx);
-                for (level_t level = 0; level <= node.level(); ++level) {
-                    neighbors_ref_t neighbors = neighbors_(node, level);
-                    std::size_t old_size = neighbors.size();
-                    neighbors.clear();
-                    for (std::size_t i = 0; i != old_size; ++i) {
-                        compressed_slot_t neighbor_slot = neighbors[i];
-                        node_t neighbor = get_node_at(neighbor_slot);
-                        if (allow_member(member_cref_t{neighbor.ckey(), neighbor_slot}))
-                            neighbors.push_back(neighbor_slot);
-                    }
-                }
-                ++processed;
-                if (thread_idx == 0)
-                    do_tasks = progress(processed.load(), nodes_count);
-                return do_tasks.load();
-            });
-
-            // At the end report the latest numbers, because the reporter thread may be finished earlier
-            progress(processed.load(), nodes_count);
-            */
-    }
-
   private:
     // todo:: these can also be moved to node_at, along with class neighbors_ref_t definition
     inline neighbors_ref_t neighbors_base_(node_t node) const noexcept { return {node.neighbors_tape()}; }
@@ -3002,8 +2949,7 @@ class index_gt {
 
     template <typename metric_at>
     std::size_t connect_new_node_( //
-        metric_at&& metric,        //
-        std::size_t new_slot, level_t level, context_t& context) usearch_noexcept_m {
+        metric_at&& metric, std::size_t new_slot, level_t level, context_t& context) usearch_noexcept_m {
 
         node_t new_node = storage_.get_node_at(new_slot);
         top_candidates_t& top = context.top_candidates;
@@ -3026,8 +2972,8 @@ class index_gt {
 
     template <typename value_at, typename metric_at>
     void reconnect_neighbor_nodes_( //
-        metric_at&& metric,         //
-        std::size_t new_slot, value_at&& value, level_t level, context_t& context) usearch_noexcept_m {
+        metric_at&& metric, std::size_t new_slot, value_at&& value, level_t level,
+        context_t& context) usearch_noexcept_m {
 
         node_t new_node = storage_.get_node_at(new_slot);
         top_candidates_t& top = context.top_candidates;
@@ -3038,10 +2984,6 @@ class index_gt {
         for (compressed_slot_t close_slot : new_neighbors) {
             if (close_slot == new_slot)
                 continue;
-            // todo:: q:: I do not know all the idiosyncrasies of 'auto'. Is this a proper usage of this?
-            // I chose auto here to allow storage define its own lock smart pointer, without making assumptions
-            // about it here. BUt are there cases where, e.g. auto will pick up the lock in the wrong way and instantly
-            // drop it for example?
             node_lock_t close_lock = storage_.node_lock(close_slot);
             node_t close_node = storage_.get_node_at(close_slot);
 
@@ -3125,7 +3067,7 @@ class index_gt {
         bool operator==(candidates_iterator_t const& other) noexcept { return current_ == other.current_; }
         bool operator!=(candidates_iterator_t const& other) noexcept { return current_ != other.current_; }
 
-        // vector_key_t key() const noexcept { return index_->get_node_at(slot()).key(); }
+        vector_key_t key() const noexcept { return index_->get_node_at(slot()).key(); }
         compressed_slot_t slot() const noexcept { return neighbors_[current_]; }
         friend inline std::size_t get_slot(candidates_iterator_t const& it) noexcept { return it.slot(); }
         friend inline vector_key_t get_key(candidates_iterator_t const& it) noexcept { return it.key(); }
@@ -3143,9 +3085,8 @@ class index_gt {
     };
 
     template <typename value_at, typename metric_at, typename prefetch_at = dummy_prefetch_t>
-    std::size_t search_for_one_(                    //
-        value_at&& query,                           //
-        metric_at&& metric, prefetch_at&& prefetch, //
+    std::size_t search_for_one_(                                      //
+        value_at&& query, metric_at&& metric, prefetch_at&& prefetch, //
         std::size_t closest_slot, level_t begin_level, level_t end_level, context_t& context) const noexcept {
 
         visits_hash_set_t& visits = context.visits;
@@ -3162,9 +3103,6 @@ class index_gt {
                 changed = false;
                 node_lock_t closest_lock = storage_.node_lock(closest_slot);
                 neighbors_ref_t closest_neighbors = neighbors_non_base_(storage_.get_node_at(closest_slot), level);
-
-                using vvv = typename std::decay<decltype(*this)>::type::vector_key_t;
-                static_assert(std::is_same<vvv, vector_key_t>::value, "this cannot happen");
 
                 // Optional prefetching
                 if (!is_dummy<prefetch_at>()) {
