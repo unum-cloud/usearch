@@ -140,8 +140,8 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
         index.get(key_second, vec_recovered_from_view.data());
         expect(std::equal(vector_second, vector_second + dimensions, vec_recovered_from_view.data()));
 
-        auto compaction_result = index.compact();
-        expect(bool(compaction_result));
+        // auto compaction_result = index.compact();
+        // expect(bool(compaction_result));
     }
 
     expect(index.memory_usage() > 0);

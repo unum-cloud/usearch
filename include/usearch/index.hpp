@@ -2915,41 +2915,6 @@ class index_gt {
 
 #pragma endregion
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-    /**
-     *  @brief  Performs compaction on the whole HNSW index, purging some entries
-     *          and links to them, while also generating a more efficient mapping,
-     *          putting the more frequently used entries closer together.
-     *
-     *
-     * Scans the whole collection, removing the links leading towards
-     *          banned entries. This essentially isolates some nodes from the rest
-     *          of the graph, while keeping their outgoing links, in case the node
-     *          is structurally relevant and has a crucial role in the index.
-     *          It won't reclaim the memory.
-     *
-     *  @param[in] allow_member Predicate to mark nodes for isolation.
-     *  @param[in] executor Thread-pool to execute the job in parallel.
-     *  @param[in] progress Callback to report the execution progress.
-     */
-    template <typename values_at, typename metric_at,                   //
-              typename slot_transition_at = dummy_key_to_key_mapping_t, //
-              typename executor_at = dummy_executor_t,                  //
-              typename progress_at = dummy_progress_t,                  //
-              typename prefetch_at = dummy_prefetch_t>
-    void compact(                             //
-        values_at&& values,                   //
-        metric_at&& metric,                   //
-        slot_transition_at&& slot_transition, //
-
-        executor_at&& executor = executor_at{}, //
-        progress_at&& progress = progress_at{}, //
-        prefetch_at&& prefetch = prefetch_at{}) noexcept {
-        return;
-    }
-#pragma GCC diagnostic pop
-
     /**
      *  @brief  Scans the whole collection, removing the links leading towards
      *          banned entries. This essentially isolates some nodes from the rest
