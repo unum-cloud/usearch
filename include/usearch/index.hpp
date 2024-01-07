@@ -2004,7 +2004,7 @@ class index_gt {
         storage_t& storage, //
         index_config_t config = {}, dynamic_allocator_t dynamic_allocator = {}) noexcept
         : storage_(storage), config_(config), limits_(0, 0), dynamic_allocator_(std::move(dynamic_allocator)),
-          pre_(precompute_(config)), nodes_count_(0u), max_level_(-1), entry_slot_(0u), contexts_() {}
+          pre_(node_t::precompute_(config)), nodes_count_(0u), max_level_(-1), entry_slot_(0u), contexts_() {}
 
     /**
      *  @brief  Clones the structure with the same hyper-parameters, but without contents.
@@ -2758,7 +2758,7 @@ class index_gt {
         // Submit metadata
         config_.connectivity = header.connectivity;
         config_.connectivity_base = header.connectivity_base;
-        pre_ = precompute_(config_);
+        pre_ = node_t::precompute_(config_);
         nodes_count_ = header.size;
         max_level_ = static_cast<level_t>(header.max_level);
         entry_slot_ = static_cast<compressed_slot_t>(header.entry_slot);
@@ -2909,7 +2909,7 @@ class index_gt {
 
         config_.connectivity = header.connectivity;
         config_.connectivity_base = header.connectivity_base;
-        pre_ = precompute_(config_);
+        pre_ = node_t::precompute_(config_);
 
         // Submit metadata and reserve memory
         index_limits_t limits;
@@ -3017,15 +3017,6 @@ class index_gt {
     }
 
   private:
-    // todo:: only needed in storage
-    inline static precomputed_constants_t precompute_(index_config_t const& config) noexcept {
-        precomputed_constants_t pre;
-        pre.inverse_log_connectivity = 1.0 / std::log(static_cast<double>(config.connectivity));
-        pre.neighbors_bytes = config.connectivity * sizeof(compressed_slot_t) + sizeof(neighbors_count_t);
-        pre.neighbors_base_bytes = config.connectivity_base * sizeof(compressed_slot_t) + sizeof(neighbors_count_t);
-        return pre;
-    }
-
     // todo:: these can also be moved to node_at, along with class neighbors_ref_t definition
     inline neighbors_ref_t neighbors_base_(node_t node) const noexcept { return {node.neighbors_tape()}; }
 
