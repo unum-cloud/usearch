@@ -15,6 +15,65 @@ namespace usearch {
 // 2. Replace .reset with dynamic NAME_AK to support methods with other names
 // 3. Add option to enforce noexcept
 //  method: https://stackoverflow.com/questions/56510130/unit-test-to-check-for-noexcept-property-for-a-c-method
+
+/**
+ *  @brief  This macro, `HAS_FUNCTION_TEMPLATE`, is a utility to heck at
+ * compile-time whether a given type (CHECK_AT) has a member function with a specific name (NAME_AK), signature
+ * (SIGNATURE_AT=return_at(args_at...)), constness (CONST_AK=const|[empty]), and exception specification
+ * (NOEXCEPT_AK=true|false).
+ *
+ *  @param[in] CHECK_AT Placeholder type used within the template instantiation to denote the type to be checked.
+ *  @param[in] NAME_AK Name of the member function to be checked for. This name is incorporated in the generated
+ * structure's name and used in the check.
+ *  @param[in] SIGNATURE_AT Placeholder for the function signature, employed in specializing the template for function
+ * types.
+ *  @param[in] CONST_AK Indicates if the member function should be a const function. This forms part of the function
+ * call signature within the check.
+ *  @param[in] NOEXCEPT_AK Indicates if the member function should be noexcept. This affects the check, particularly
+ * important for ensuring exception safety in certain contexts.
+ *
+ *  generates a structure structure named `has_##NAME_AK##_gt` with a static constexpr boolean member `value`. This
+ * member is true if the specified type has a member function that matches the name, signature, constness, and noexcept
+ * status provided in the macro's arguments. Otherwise, it is false.
+ *
+ *  @example
+ *  Suppose you have a class `Foo` with that has an interface requirement of a const noexcept member function `bar` that
+ * returns an `int` and takes a `const double`. To enforce the interface requirement, if this function exists, is const,
+ * and noexcept, you would instantiate the generated template like so:
+ *  ```cpp
+ * struct Foo {
+ *    // CHECK CATCHES: expected double, got double*
+ *    // int bar(const double*) const noexcept { return 42; }
+ *    // CHECK CATCHES: wrong const-ness
+ *    // int bar(const double) noexcept { return 42; }
+ *    // CHECK CATCHES: wrong excempt-ness
+ *    // int bar(const double) const { return 42; }
+ *    // CHECK CATCHES because required int can be cast to double
+ *    // double bar(const double) const noexcept { return 42; }
+ *    // CHECK CATHCES wrong returned value
+ *    // int* bar(const double) const noexcept { return nullptr; }
+ *    // CHECK CATHCES wrong signature
+ *    // int bar(const double, int) const { return 42; }
+ *    //
+ *    // SUCCESS! the invariant  we wanted
+ *
+ *    int bar(const double) const noexcept { return 42; }
+ *
+ *    //
+ *    // Some PROBLEMS
+ *    // CHECK **DOES NOT** CATCH. assertion succeeds
+ *    // int bar(const double&) const noexcept { return 42; }
+ *    // CHECK **DOES NOT** CATCH. assertion succeeds
+ *    // int bar(const double&&) const noexcept { return 42; }
+ * };
+ *
+ * HAS_FUNCTION_TEMPLATE(Foo, bar, int(const double), const, true);
+ * static_assert(has_bar_gt<Foo, int(double)>::value);
+ *  ```
+ *  If `Foo` indeed has a const noexcept member function `bar` matching this signature, the static assertion succeeds
+ * Otherwise, it will cause a compile failure
+ */
+
 #define HAS_FUNCTION_TEMPLATE(CHECK_AT, NAME_AK, SIGNATURE_AT, CONST_AK, NOEXCEPT_AK)                                  \
     template <typename, typename at> struct has_##NAME_AK##_gt {                                                       \
         static_assert(std::integral_constant<at, false>::value,                                                        \
@@ -40,7 +99,18 @@ namespace usearch {
         static constexpr bool value = type::value && (!NOEXCEPT_AK || f_is_noexcept<check_at>(0));                     \
     };
 
-// note:: adding CHECK_AT based namespace so if the template can be used for multiple types
+/**
+ * This is a wrapper around the macro above that allows getting less cryptic error messages
+ * in particular, it:
+ * 1. Wraps the defined template in a unique namespace to avoid collisions. If this ends up being used elsewhere,
+ *    probably it would be worth it to add a __FILE__ prefix to the namespace name as well
+ * 2. Regarless of the requrement, it runs signature check without taking into account const-ness and exception
+ *    requirement.
+ * 3. Only after the initial signature check succeeds, it takes into acount const and noexcept and runs relevant checks,
+ * printing descriptive error messages is the constraints are not satisfied
+ *
+ * The macro takes the same parameters as the one above
+ **/
 #define ASSERT_HAS_FUNCTION_GM(CHECK_AT, NAME_AK, SIGNATURE_AT, CONST_AK, NOEXCEPT_AK)                                 \
     /************ check function signature without const or noexcept*/                                                 \
     namespace CHECK_AT##__##NAME_AK {                                                                                  \
@@ -64,7 +134,9 @@ namespace usearch {
         !NOEXCEPT_AK || CHECK_AT##__##NAME_AK##_const_noexcept::has_##NAME_AK##_gt<CHECK_AT, SIGNATURE_AT>::value,     \
         " Function \"" #CHECK_AT "::" #NAME_AK "\" exists but does not satisfy noexcept requirement of storage API")
 
-/* NOCONST in comments indicates intentional lack of const qualifier*/
+/** Various commonly used shortcusts for the assertion macro above
+ * Note: NOCONST in comments indicates intentional lack of const qualifier
+ **/
 #define ASSERT_HAS_FUNCTION(CHECK_AT, NAME_AK, SIGNATURE_AT)                                                           \
     ASSERT_HAS_FUNCTION_GM(CHECK_AT, NAME_AK, SIGNATURE_AT, /*NOCONST*/, false)
 #define ASSERT_HAS_CONST_FUNCTION(CHECK_AT, NAME_AK, SIGNATURE_AT)                                                     \
@@ -76,9 +148,12 @@ namespace usearch {
 
 #define HAS_FUNCTION(CHECK_AT, NAME_AK, SIGNATURE_AT) has_##NAME_AK##_gt<CHECK_AT, SIGNATURE_AT>::value
 
-// N.B: the validation does notenforce reference argument types properly
-// Validation succeeds even when in the sertions below an interface is required to take a reference type
-// but the actual implementation takes a copy
+/**
+ * The macro takes in a usearch Storage-provider type, and makes sure the type provides the necessary interface assumed
+ *in usearch internals N.B: the validation does notenforce reference argument types properly Validation succeeds even
+ *when in the sertions below an interface is required to take a reference type but the actual implementation takes a
+ *copy
+ **/
 #define ASSERT_VALID_STORAGE(CHECK_AT)                                                                                 \
     ASSERT_HAS_CONST_NOEXCEPT_FUNCTION(CHECK_AT, node_lock, CHECK_AT::lock_type(std::size_t idx));                     \
     ASSERT_HAS_CONST_FUNCTION(CHECK_AT, get_node_at, CHECK_AT::node_t(std::size_t idx));                               \
