@@ -644,7 +644,6 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
 
 using dummy_storage = storage_v2<default_key_t, default_slot_t>;
 
-static_assert(dummy_storage::typecheck());
 ASSERT_VALID_STORAGE(dummy_storage);
 
 } // namespace usearch
