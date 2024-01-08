@@ -1793,6 +1793,7 @@ class index_gt {
     using member_ref_t = member_ref_gt<vector_key_t>;
 
     using node_t = node_at<vector_key_t, compressed_slot_t>;
+    // using node_t = typename storage_t::node_t;
 
     template <typename ref_at, typename index_at> class member_iterator_gt {
         using ref_t = ref_at;

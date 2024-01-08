@@ -305,6 +305,7 @@ class index_dense_gt {
     using key_t = vector_key_t;
     using compressed_slot_t = compressed_slot_at;
     using distance_t = distance_punned_t;
+    // using node_t = typename storage_at::node_t;
     using node_t = node_at<vector_key_t, compressed_slot_at>;
     using metric_t = metric_punned_t;
 
@@ -442,6 +443,7 @@ class index_dense_gt {
     index_dense_gt(index_dense_gt&& other)
         : config_(std::move(other.config_)),
 
+          // exchange does not work for typed_ when one of its template allocator types is
           typed_(exchange(other.typed_, nullptr)),     //
           cast_buffer_(std::move(other.cast_buffer_)), //
           casts_(std::move(other.casts_)),             //
