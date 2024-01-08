@@ -193,6 +193,11 @@ using serialization_config_t = index_dense_serialization_config_t;
     ASSERT_HAS_CONST_FUNCTION(CHECK_AT, node_size_bytes, std::size_t(std::size_t idx));                                \
     ASSERT_HAS_CONST_NOEXCEPT_FUNCTION(CHECK_AT, is_immutable, bool());                                                \
                                                                                                                        \
+    /*Setters*/                                                                                                        \
+    ASSERT_HAS_FUNCTION(CHECK_AT, set_vector_at,                                                                       \
+                        void(std::size_t idx, const byte_t* vector_data, std::size_t vector_bytes, bool copy_vector,   \
+                             bool reuse_node));                                                                        \
+    /*Container methods */                                                                                             \
     ASSERT_HAS_FUNCTION(CHECK_AT, reserve, bool(std::size_t count));                                                   \
     ASSERT_HAS_NOEXCEPT_FUNCTION(CHECK_AT, clear, void());                                                             \
     ASSERT_HAS_NOEXCEPT_FUNCTION(CHECK_AT, reset, void());                                                             \
@@ -300,7 +305,7 @@ template <typename key_at, typename compressed_slot_at,           //
           typename tape_allocator_at = std::allocator<byte_t>,    //
           typename vectors_allocator_at = tape_allocator_at,      //
           typename dynamic_allocator_at = std::allocator<byte_t>> //
-class storage_v2 {
+class storage_v2_at {
   public:
     using node_t = node_at<key_at, compressed_slot_at>;
 
@@ -347,7 +352,7 @@ class storage_v2 {
     };
 
   public:
-    storage_v2(index_config_t config, tape_allocator_at tape_allocator = {})
+    storage_v2_at(index_config_t config, tape_allocator_at tape_allocator = {})
         : pre_(node_t::precompute_(config)), tape_allocator_(tape_allocator) {}
 
     inline node_t get_node_at(std::size_t idx) const noexcept { return nodes_[idx]; }
@@ -378,7 +383,7 @@ class storage_v2 {
         if (!new_mutexes || !new_nodes)
             return false;
         if (nodes_)
-            std::memcpy(new_nodes.data(), nodes_.data(), sizeof(node_t) * size());
+            std::memcpy(new_nodes.data(), nodes_.data(), sizeof(node_t) * nodes_.size());
 
         nodes_mutexes_ = std::move(new_mutexes);
         nodes_ = std::move(new_nodes);
@@ -455,7 +460,6 @@ class storage_v2 {
     // }
 
     void node_store(size_t slot, node_t node) noexcept { nodes_[slot] = node; }
-    inline size_t size() const noexcept { return nodes_.size(); }
     tape_allocator_at const& node_allocator() const noexcept { return tape_allocator_; }
     // dummy lock just to satisfy the interface
     constexpr inline lock_type node_lock(std::size_t slot) const noexcept {
@@ -800,7 +804,7 @@ class storage_v2 {
 #pragma endregion
 };
 
-using dummy_storage = storage_v2<default_key_t, default_slot_t>;
+using dummy_storage = storage_v2_at<default_key_t, default_slot_t>;
 
 ASSERT_VALID_STORAGE(dummy_storage);
 
