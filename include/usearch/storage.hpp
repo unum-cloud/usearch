@@ -284,23 +284,21 @@ template <typename key_at, typename compressed_slot_at,           //
           typename vectors_allocator_at = tape_allocator_at,      //
           typename dynamic_allocator_at = std::allocator<byte_t>> //
 class storage_v2 {
-    // todo:: ask-Ashot: why can I not use dynamic_allocator_at in std::vector<node_t, dynamic_allocator_at> ?
   public:
     using node_t = node_at<key_at, compressed_slot_at>;
 
   private:
-    // Getting the following error:
-    // /usr/include/c++/10/bits/stl_vector.h:285:16: error: no matching function for call to
-    // ‘unum::usearch::aligned_allocator_gt<>::aligned_allocator_gt(const _Tp_alloc_type&)’
-    // 285 |       { return allocator_type(_M_get_Tp_allocator()); }
-
-    using nodes_t = std::vector<node_t>;
-    using vectors_t = std::vector<byte_t*>;
-    using nodes_mutexes_t = bitset_gt<>;
+    using nodes_mutexes_t = bitset_gt<dynamic_allocator_at>;
     using dynamic_allocator_traits_t = std::allocator_traits<dynamic_allocator_at>;
     using levels_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<level_t>;
     using nodes_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<node_t>;
     using offsets_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<std::size_t>;
+    using vectors_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<byte_t*>;
+    using nodes_t = buffer_gt<node_t, nodes_allocator_t>;
+    // todo:: ask-Ashot: in the older version vectors_lookup_ was using the default vector allocator,
+    // and not the dynamic_allocator_at that was passed it.
+    // Can remove this if the previous approach was intentional
+    using vectors_t = std::vector<byte_t*, vectors_allocator_t>;
 
     /// @brief  C-style array of `node_t` smart-pointers.
     // buffer_gt<node_t, nodes_allocator_t> nodes_{};
@@ -358,9 +356,17 @@ class storage_v2 {
     bool reserve(std::size_t count) {
         if (count < nodes_.size() && count < nodes_mutexes_.size())
             return true;
-        nodes_mutexes_t new_mutexes = nodes_mutexes_t(count);
+        nodes_mutexes_t new_mutexes(count);
+        nodes_t new_nodes(count);
+        if (!new_mutexes || !new_nodes)
+            return false;
+        if (nodes_)
+            std::memcpy(new_nodes.data(), nodes_.data(), sizeof(node_t) * size());
+
         nodes_mutexes_ = std::move(new_mutexes);
-        nodes_.resize(count);
+        nodes_ = std::move(new_nodes);
+        // todo:: make sure to only reserve this if vectors are not stored externally
+        // will probably need to pass the fact as storage config parameter
         vectors_lookup_.resize(count);
         return true;
     }
@@ -390,10 +396,10 @@ class storage_v2 {
         std::fill(nodes_.begin(), nodes_.end(), node_t{});
         viewed_file_ = {};
     }
+
     void reset() noexcept {
         nodes_mutexes_ = {};
-        nodes_.clear();
-        nodes_.shrink_to_fit();
+        nodes_ = {};
 
         vectors_lookup_.clear();
         vectors_lookup_.shrink_to_fit();
