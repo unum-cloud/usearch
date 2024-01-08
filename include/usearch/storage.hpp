@@ -6,40 +6,37 @@
 namespace unum {
 namespace usearch {
 
-// taken from has_reset_gt
-// but added a C macro to make it generic for other function names
-// Can I do this in C++?
-// Changes from the above:
-// 1. Replace declval<at> with declval<OPTIONAL_CONST at&> to enforce function const-ness
-//  method: https://stackoverflow.com/questions/30407754/how-to-test-if-a-method-is-const
-// 2. Replace .reset with dynamic NAME_AK to support methods with other names
-// 3. Add option to enforce noexcept
-//  method: https://stackoverflow.com/questions/56510130/unit-test-to-check-for-noexcept-property-for-a-c-method
-
 /**
- *  @brief  This macro, `HAS_FUNCTION_TEMPLATE`, is a utility to heck at
- * compile-time whether a given type (CHECK_AT) has a member function with a specific name (NAME_AK), signature
- * (SIGNATURE_AT=return_at(args_at...)), constness (CONST_AK=const|[empty]), and exception specification
- * (NOEXCEPT_AK=true|false).
+ *  @brief  This macro, `HAS_FUNCTION_TEMPLATE`, is a utility to check at
+ *  compile-time whether a given type (CHECK_AT) has a member function with a specific name (NAME_AK), signature
+ *  (SIGNATURE_AT=return_at(args_at...)), constness (CONST_AK=const|[empty]), and exception specification
+ *  (NOEXCEPT_AK=true|false).
+ *
+ *  It is based on has_reset_gt template:
+ *    1. Replace declval<at> with declval<OPTIONAL_CONST at&> to enforce function const-ness
+ *     method: https://stackoverflow.com/questions/30407754/how-to-test-if-a-method-is-const
+ *    2. Replace .reset with dynamic NAME_AK to support methods with other names
+ *    3. Add option to enforce noexcept
+ *  method: https://stackoverflow.com/questions/56510130/unit-test-to-check-for-noexcept-property-for-a-c-method
  *
  *  @param[in] CHECK_AT Placeholder type used within the template instantiation to denote the type to be checked.
  *  @param[in] NAME_AK Name of the member function to be checked for. This name is incorporated in the generated
- * structure's name and used in the check.
+ *  structure's name and used in the check.
  *  @param[in] SIGNATURE_AT Placeholder for the function signature, employed in specializing the template for function
- * types.
+ *  types.
  *  @param[in] CONST_AK Indicates if the member function should be a const function. This forms part of the function
- * call signature within the check.
+ *  call signature within the check.
  *  @param[in] NOEXCEPT_AK Indicates if the member function should be noexcept. This affects the check, particularly
- * important for ensuring exception safety in certain contexts.
+ *  important for ensuring exception safety in certain contexts.
  *
  *  generates a structure structure named `has_##NAME_AK##_gt` with a static constexpr boolean member `value`. This
- * member is true if the specified type has a member function that matches the name, signature, constness, and noexcept
- * status provided in the macro's arguments. Otherwise, it is false.
+ *  member is true if the specified type has a member function that matches the name, signature, constness, and noexcept
+ *  status provided in the macro's arguments. Otherwise, it is false.
  *
  *  @example
  *  Suppose you have a class `Foo` with that has an interface requirement of a const noexcept member function `bar` that
- * returns an `int` and takes a `const double`. To enforce the interface requirement, if this function exists, is const,
- * and noexcept, you would instantiate the generated template like so:
+ *  returns an `int` and takes a `const double`. To enforce the interface requirement, if this function exists, is
+ *  const, and noexcept, you would instantiate the generated template like so:
  *  ```cpp
  * struct Foo {
  *    // CHECK CATCHES: expected double, got double*
@@ -70,10 +67,9 @@ namespace usearch {
  * HAS_FUNCTION_TEMPLATE(Foo, bar, int(const double), const, true);
  * static_assert(has_bar_gt<Foo, int(double)>::value);
  *  ```
- *  If `Foo` indeed has a const noexcept member function `bar` matching this signature, the static assertion succeeds
+ * If `Foo` indeed has a const noexcept member function `bar` matching this signature, the static assertion succeeds
  * Otherwise, it will cause a compile failure
  */
-
 #define HAS_FUNCTION_TEMPLATE(CHECK_AT, NAME_AK, SIGNATURE_AT, CONST_AK, NOEXCEPT_AK)                                  \
     template <typename, typename at> struct has_##NAME_AK##_gt {                                                       \
         static_assert(std::integral_constant<at, false>::value,                                                        \
@@ -149,10 +145,46 @@ namespace usearch {
 #define HAS_FUNCTION(CHECK_AT, NAME_AK, SIGNATURE_AT) has_##NAME_AK##_gt<CHECK_AT, SIGNATURE_AT>::value
 
 /**
- * The macro takes in a usearch Storage-provider type, and makes sure the type provides the necessary interface assumed
- *in usearch internals N.B: the validation does notenforce reference argument types properly Validation succeeds even
- *when in the sertions below an interface is required to take a reference type but the actual implementation takes a
- *copy
+ *  @brief  An example of what a USearch-Storage-compatible output callback should look like.
+ *  The callback is called to store arbitrarily serialized usearch index data in the underlying
+ *  storage medium managed in the callback implementation
+ *
+ */
+struct dummy_output_callback_t {
+    inline bool operator()(const void* /*source memory*/, std::size_t /*size of the source*/) { return true; }
+};
+
+/**
+ *  @brief  An example of what a USearch-Storage-compatible input callback should look like.
+ *  The callback is called to read arbitrarily serialized usearch index data from the underlying
+ *  storage medium managed in the callback implementation
+ *
+ */
+struct dummy_input_callback_t {
+    inline bool operator()(void* /*destination memory*/, std::size_t /*size of the destination*/) { return true; }
+};
+
+/**
+ *  @brief  A dummy metadata buffer used in serialization/deserialization API checks below
+ *  An actual index implementation might need to keep some app-level constants in here to be serialized on the
+ *  stored index binary, but we do not need its structure for type-checking
+ *
+ */
+struct dummy_vectors_metadata_buffer_t {};
+
+struct index_dense_serialization_config_t {
+    // We may not want to fetch the vectors from the same file, or allow attaching them afterwards
+    bool exclude_vectors = false;
+    bool use_64_bit_dimensions = false;
+};
+
+using serialization_config_t = index_dense_serialization_config_t;
+
+/**
+ * @brief The macro takes in a usearch Storage-provider type, and makes sure the type provides the necessary interface
+ * assumed in usearch internals N.B: the validation does notenforce reference argument types properly Validation
+ *succeeds even when in the sertions below an interface is required to take a reference type but the actual
+ *implementation takes a copy
  **/
 #define ASSERT_VALID_STORAGE(CHECK_AT)                                                                                 \
     ASSERT_HAS_CONST_NOEXCEPT_FUNCTION(CHECK_AT, node_lock, CHECK_AT::lock_type(std::size_t idx));                     \
@@ -167,8 +199,37 @@ namespace usearch {
     ASSERT_HAS_FUNCTION(                                                                                               \
         CHECK_AT, set_at,                                                                                              \
         void(std::size_t idx, CHECK_AT::node_t node, byte_t * vector_data, std::size_t vector_size, bool reuse_node)); \
+    /*Save/Restore API enforcement*/                                                                                   \
+    ASSERT_HAS_FUNCTION(CHECK_AT, save_vectors_to_stream,                                                              \
+                        serialization_result_t(                                                                        \
+                            dummy_output_callback_t& cb, std::size_t vector_size_bytes, std::uint64_t node_count,      \
+                            const dummy_vectors_metadata_buffer_t& metadata_buffer, serialization_config_t config));   \
+    ASSERT_HAS_CONST_FUNCTION(CHECK_AT, save_nodes_to_stream,                                                          \
+                              serialization_result_t(dummy_output_callback_t& cb,                                      \
+                                                     const index_serialized_header_t& header,                          \
+                                                     dummy_progress_t& progress));                                     \
+    ASSERT_HAS_FUNCTION(CHECK_AT, load_vectors_from_stream,                                                            \
+                        serialization_result_t(dummy_input_callback_t& cb,                                             \
+                                               const dummy_vectors_metadata_buffer_t& metadata_buffer,                 \
+                                               serialization_config_t config));                                        \
+    ASSERT_HAS_FUNCTION(CHECK_AT, load_nodes_from_stream,                                                              \
+                        serialization_result_t(dummy_input_callback_t& cb, index_serialized_header_t& header,          \
+                                               dummy_progress_t& progress));                                           \
+                                                                                                                       \
+    /* View from file API*/                                                                                            \
+    ASSERT_HAS_FUNCTION(CHECK_AT, view_vectors_from_stream,                                                            \
+                        serialization_result_t(memory_mapped_file_t& file,                                             \
+                                               dummy_vectors_metadata_buffer_t& metadata_buffer, std::size_t& offset,  \
+                                               serialization_config_t config));                                        \
+    ASSERT_HAS_FUNCTION(CHECK_AT, view_nodes_from_stream,                                                              \
+                        serialization_result_t(memory_mapped_file_t& file, index_serialized_header_t& metadata_buffer, \
+                                               std::size_t& offset, dummy_progress_t& progress));                      \
     static_assert(true, "this is to require a semicolon at the end of macro call")
 
+/** I initially used this abstract class as a way to enforce storage API but ran into several limitations mentioned
+ * below I switched to macro+template based approach in the end, but left this around, in case there are ways to work
+ * around the issues below that I am not aware of.
+ **/
 template <typename key_at, typename compressed_slot_at, //
           typename tape_allocator_at,                   //
           typename vectors_allocator_at,                //
@@ -195,6 +256,7 @@ class storage_interface {
     inline void set_at(std::size_t idx, node_t node, byte_t* vector_data, std::size_t vector_size, bool reuse_node);
 
     // the following functions take template arguments so cannot be type-enforced via virtual function inheritence
+    // as far as I can tell.
     // virtual void load_vectors_from_stream() = 0;
     // virtual void load_nodes_from_stream() = 0;
 
@@ -210,15 +272,6 @@ class storage_interface {
     virtual void reset() noexcept = 0;
     std::size_t memory_usage();
 };
-
-struct index_dense_serialization_config_t {
-    // We may not want to fetch the vectors from the same file, or allow attaching them afterwards
-    bool exclude_vectors = false;
-    bool use_64_bit_dimensions = false;
-};
-using index_dense_head_buffer_t = byte_t[64];
-static_assert(sizeof(index_dense_head_buffer_t) == 64, "File header should be exactly 64 bytes");
-using serialization_config_t = index_dense_serialization_config_t;
 
 template <typename key_at, typename compressed_slot_at,           //
           typename tape_allocator_at = std::allocator<byte_t>,    //
