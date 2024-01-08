@@ -41,11 +41,38 @@ namespace usearch {
     };
 
 // note:: adding CHECK_AT based namespace so if the template can be used for multiple types
-#define ASSERT_HAS_FUNCTION(CHECK_AT, NAME_AK, SIGNATURE_AT)                                                           \
+#define ASSERT_HAS_FUNCTION_GM(CHECK_AT, NAME_AK, SIGNATURE_AT, CONST_AK, NOEXCEPT_AK)                                 \
+    /************ check function signature without const or noexcept*/                                                 \
     namespace CHECK_AT##__##NAME_AK {                                                                                  \
-        HAS_FUNCTION_TEMPLATE(CHECK_AT, NAME_AK, SIGNATURE_AT)                                                         \
+        HAS_FUNCTION_TEMPLATE(CHECK_AT, NAME_AK, SIGNATURE_AT, , false)                                                \
     }                                                                                                                  \
-    static_assert(CHECK_AT##__##NAME_AK::has_##NAME_AK##_gt<CHECK_AT, SIGNATURE_AT>::value, " nope")
+    static_assert(CHECK_AT##__##NAME_AK::has_##NAME_AK##_gt<CHECK_AT, SIGNATURE_AT>::value,                            \
+                  " Function \"" #CHECK_AT "::" #NAME_AK                                                               \
+                  "\" does not exist or does not satisfy storage API signature");                                      \
+    /************ check function signature with const requirement but without noexcept*/                               \
+    namespace CHECK_AT##__##NAME_AK##_const {                                                                          \
+        HAS_FUNCTION_TEMPLATE(CHECK_AT, NAME_AK, SIGNATURE_AT, CONST_AK, false)                                        \
+    }                                                                                                                  \
+    static_assert(CHECK_AT##__##NAME_AK##_const::has_##NAME_AK##_gt<CHECK_AT, SIGNATURE_AT>::value,                    \
+                  " Function \"" #CHECK_AT "::" #NAME_AK                                                               \
+                  "\" exists but does not satisfy const-requirement of storage API");                                  \
+    /************ check function signature with const and noexcept requirements */                                     \
+    namespace CHECK_AT##__##NAME_AK##_const_noexcept {                                                                 \
+        HAS_FUNCTION_TEMPLATE(CHECK_AT, NAME_AK, SIGNATURE_AT, CONST_AK, NOEXCEPT_AK)                                  \
+    }                                                                                                                  \
+    static_assert(                                                                                                     \
+        !NOEXCEPT_AK || CHECK_AT##__##NAME_AK##_const_noexcept::has_##NAME_AK##_gt<CHECK_AT, SIGNATURE_AT>::value,     \
+        " Function \"" #CHECK_AT "::" #NAME_AK "\" exists but does not satisfy noexcept requirement of storage API")
+
+/* NOCONST in comments indicates intentional lack of const qualifier*/
+#define ASSERT_HAS_FUNCTION(CHECK_AT, NAME_AK, SIGNATURE_AT)                                                           \
+    ASSERT_HAS_FUNCTION_GM(CHECK_AT, NAME_AK, SIGNATURE_AT, /*NOCONST*/, false)
+#define ASSERT_HAS_CONST_FUNCTION(CHECK_AT, NAME_AK, SIGNATURE_AT)                                                     \
+    ASSERT_HAS_FUNCTION_GM(CHECK_AT, NAME_AK, SIGNATURE_AT, const, false)
+#define ASSERT_HAS_NOEXCEPT_FUNCTION(CHECK_AT, NAME_AK, SIGNATURE_AT)                                                  \
+    ASSERT_HAS_FUNCTION_GM(CHECK_AT, NAME_AK, SIGNATURE_AT, /*NOCONST*/, true)
+#define ASSERT_HAS_CONST_NOEXCEPT_FUNCTION(CHECK_AT, NAME_AK, SIGNATURE_AT)                                            \
+    ASSERT_HAS_FUNCTION_GM(CHECK_AT, NAME_AK, SIGNATURE_AT, const, true)
 
 #define HAS_FUNCTION(CHECK_AT, NAME_AK, SIGNATURE_AT) has_##NAME_AK##_gt<CHECK_AT, SIGNATURE_AT>::value
 
