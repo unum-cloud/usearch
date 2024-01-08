@@ -76,15 +76,23 @@ namespace usearch {
 
 #define HAS_FUNCTION(CHECK_AT, NAME_AK, SIGNATURE_AT) has_##NAME_AK##_gt<CHECK_AT, SIGNATURE_AT>::value
 
-// todo:: enforce const-ness
+// N.B: the validation does notenforce reference argument types properly
+// Validation succeeds even when in the sertions below an interface is required to take a reference type
+// but the actual implementation takes a copy
 #define ASSERT_VALID_STORAGE(CHECK_AT)                                                                                 \
-    ASSERT_HAS_FUNCTION(CHECK_AT, node_lock, CHECK_AT::lock_type(std::size_t idx));                                    \
-    ASSERT_HAS_FUNCTION(CHECK_AT, get_node_at, CHECK_AT::node_t(std::size_t idx));                                     \
-    ASSERT_HAS_FUNCTION(CHECK_AT, get_vector_at, byte_t*(std::size_t idx));                                            \
-    ASSERT_HAS_FUNCTION(CHECK_AT, node_size_bytes, std::size_t(std::size_t idx));                                      \
+    ASSERT_HAS_CONST_NOEXCEPT_FUNCTION(CHECK_AT, node_lock, CHECK_AT::lock_type(std::size_t idx));                     \
+    ASSERT_HAS_CONST_FUNCTION(CHECK_AT, get_node_at, CHECK_AT::node_t(std::size_t idx));                               \
+    ASSERT_HAS_CONST_FUNCTION(CHECK_AT, get_vector_at, byte_t*(std::size_t idx));                                      \
+    ASSERT_HAS_CONST_FUNCTION(CHECK_AT, node_size_bytes, std::size_t(std::size_t idx));                                \
+    ASSERT_HAS_CONST_NOEXCEPT_FUNCTION(CHECK_AT, size, std::size_t());                                                 \
+                                                                                                                       \
+    ASSERT_HAS_FUNCTION(CHECK_AT, reserve, bool(std::size_t count));                                                   \
+    ASSERT_HAS_NOEXCEPT_FUNCTION(CHECK_AT, clear, void());                                                             \
+    ASSERT_HAS_NOEXCEPT_FUNCTION(CHECK_AT, reset, void());                                                             \
     ASSERT_HAS_FUNCTION(                                                                                               \
         CHECK_AT, set_at,                                                                                              \
-        void(std::size_t idx, CHECK_AT::node_t node, byte_t * vector_data, std::size_t vector_size, bool reuse_node));
+        void(std::size_t idx, CHECK_AT::node_t node, byte_t * vector_data, std::size_t vector_size, bool reuse_node)); \
+    static_assert(true, "this is to require a semicolon at the end of macro call")
 
 template <typename key_at, typename compressed_slot_at, //
           typename tape_allocator_at,                   //
@@ -97,7 +105,12 @@ class storage_interface {
 
     struct lock_type;
 
-    // q:: can I enforce this interface function in inherited storages somehow?
+    // q:: ask-Ashot can I enforce this interface function in inherited storages somehow?
+    // currently impossible because
+    // 1. can do virtual constexpr after c++2a
+    // 2. making this virtual would enforce this particular lock_type struct as the return type,
+    //  and not an equivalently named one in the child class
+    // I currently enforice it via macros
     constexpr inline lock_type node_lock(std::size_t slot) const noexcept;
 
     virtual inline node_t get_node_at(std::size_t idx) const noexcept = 0;
@@ -106,17 +119,20 @@ class storage_interface {
 
     inline void set_at(std::size_t idx, node_t node, byte_t* vector_data, std::size_t vector_size, bool reuse_node);
 
+    // the following functions take template arguments so cannot be type-enforced via virtual function inheritence
     // virtual void load_vectors_from_stream() = 0;
     // virtual void load_nodes_from_stream() = 0;
 
-    void store_vectors_to_stream();
-    void store_nodes_to_stream();
+    // serialization_result_t save_vectors_to_stream() const;
+    // serialization_result_t save_nodes_to_stream() const;
 
-    std::size_t size();
-    bool reserve(std::size_t count);
-    void clear();
-    void reset();
+    // serialization_result_t view_vectors_from_file() const;
+    // serialization_result_t view_nodes_from_file() const;
 
+    virtual std::size_t size() const noexcept = 0;
+    virtual bool reserve(std::size_t count) = 0;
+    virtual void clear() noexcept = 0;
+    virtual void reset() noexcept = 0;
     std::size_t memory_usage();
 };
 
@@ -218,7 +234,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
         return true;
     }
 
-    void clear() {
+    void clear() noexcept {
         if (!view_file_) {
             if (!has_reset<tape_allocator_at>()) {
                 std::size_t n = nodes_.size();
@@ -242,7 +258,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
         }
         std::fill(nodes_.begin(), nodes_.end(), node_t{});
     }
-    void reset() {
+    void reset() noexcept {
         nodes_mutexes_ = {};
         nodes_.clear();
         nodes_.shrink_to_fit();
@@ -283,7 +299,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
     // }
 
     void node_store(size_t slot, node_t node) noexcept { nodes_[slot] = node; }
-    inline size_t size() { return nodes_.size(); }
+    inline size_t size() const noexcept { return nodes_.size(); }
     tape_allocator_at const& node_allocator() const noexcept { return tape_allocator_; }
     // dummy lock just to satisfy the interface
     constexpr inline lock_type node_lock(std::size_t slot) const noexcept {
