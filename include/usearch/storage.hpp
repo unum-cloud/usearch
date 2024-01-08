@@ -191,7 +191,6 @@ using serialization_config_t = index_dense_serialization_config_t;
     ASSERT_HAS_CONST_FUNCTION(CHECK_AT, get_node_at, CHECK_AT::node_t(std::size_t idx));                               \
     ASSERT_HAS_CONST_FUNCTION(CHECK_AT, get_vector_at, byte_t*(std::size_t idx));                                      \
     ASSERT_HAS_CONST_FUNCTION(CHECK_AT, node_size_bytes, std::size_t(std::size_t idx));                                \
-    ASSERT_HAS_CONST_NOEXCEPT_FUNCTION(CHECK_AT, size, std::size_t());                                                 \
     ASSERT_HAS_CONST_NOEXCEPT_FUNCTION(CHECK_AT, is_immutable, bool());                                                \
                                                                                                                        \
     ASSERT_HAS_FUNCTION(CHECK_AT, reserve, bool(std::size_t count));                                                   \
@@ -272,6 +271,24 @@ class storage_interface {
 };
 
 /**
+ * @brief   Storage abstraction for HNSW graph and associated vector data
+ *
+ *  @tparam key_at
+ *      The type of primary objects stored in the index.
+ *      The values, to which those map, are not managed by the same index structure.
+ *
+ *  @tparam compressed_slot_at
+ *      The smallest unsigned integer type to address indexed elements.
+ *      It is used internally to maximize space-efficiency and is generally
+ *      up-casted to @b `std::size_t` in public interfaces.
+ *      Can be a built-in @b `uint32_t`, `uint64_t`, or our custom @b `uint40_t`.
+ *      Which makes the most sense for 4B+ entry indexes.
+ *
+ *  @tparam tape_allocator_at
+ *      Potentially different memory allocator for primary allocations of nodes and vectors.
+ *      It would never `deallocate` separate entries, and would only free all the space at once.
+ *      The allocated buffers may be uninitialized.
+ *
  * NOTE:
  * The class below used to inherit from storage_interface via:
  * class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_allocator_at, vectors_allocator_at,
