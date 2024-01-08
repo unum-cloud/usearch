@@ -211,7 +211,7 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     for (bool multi : {false, true}) {
         for (std::size_t connectivity : {3, 13, 50}) {
             std::printf("- punned with connectivity %zu \n", connectivity);
-            using index_t = index_dense_gt<vector_key_t, slot_t>;
+            using index_t = index_dense_gt<vector_key_t, slot_t, storage_t>;
             metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
             index_dense_config_t config(connectivity);
             config.multi = multi;
@@ -319,15 +319,17 @@ int main(int, char**) {
             using key_t = std::int64_t;
             {
                 using slot_t = std::uint32_t;
-                using v2 = storage_v2<key_t, slot_t>;
-                using ss = std_storage_at<key_t, slot_t>;
+                using v2 =
+                    storage_v2_at<key_t, slot_t, tape_allocator_t, vectors_tape_allocator_t, dynamic_allocator_t>;
+                using std_storage_t =
+                    std_storage_at<key_t, slot_t, tape_allocator_t, vectors_tape_allocator_t, dynamic_allocator_t>;
 
                 test_cosine<v2, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
-                test_cosine<ss, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
+                test_cosine<std_storage_t, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
             }
             {
                 using slot_t = uint40_t;
-                using v2 = storage_v2<key_t, slot_t>;
+                using v2 = storage_v2_at<key_t, slot_t>;
                 using ss = std_storage_at<key_t, slot_t>;
 
                 std::printf("Indexing %zu vectors with cos: <float, std::int64_t, uint40_t> \n", collection_size);
