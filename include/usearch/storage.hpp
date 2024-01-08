@@ -197,9 +197,6 @@ using serialization_config_t = index_dense_serialization_config_t;
     ASSERT_HAS_FUNCTION(CHECK_AT, reserve, bool(std::size_t count));                                                   \
     ASSERT_HAS_NOEXCEPT_FUNCTION(CHECK_AT, clear, void());                                                             \
     ASSERT_HAS_NOEXCEPT_FUNCTION(CHECK_AT, reset, void());                                                             \
-    ASSERT_HAS_FUNCTION(                                                                                               \
-        CHECK_AT, set_at,                                                                                              \
-        void(std::size_t idx, CHECK_AT::node_t node, byte_t * vector_data, std::size_t vector_size, bool reuse_node)); \
     /*Save/Restore API enforcement*/                                                                                   \
     ASSERT_HAS_FUNCTION(CHECK_AT, save_vectors_to_stream,                                                              \
                         serialization_result_t(                                                                        \
@@ -274,12 +271,19 @@ class storage_interface {
     std::size_t memory_usage();
 };
 
+/**
+ * NOTE:
+ * The class below used to inherit from storage_interface via:
+ * class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_allocator_at, vectors_allocator_at,
+ *                                            dynamic_allocator_at>
+ * I disabled inheritence for now as interface compatibility is more
+ * thoroughly enforced via the macros at the beginning of this file
+ **/
 template <typename key_at, typename compressed_slot_at,           //
           typename tape_allocator_at = std::allocator<byte_t>,    //
           typename vectors_allocator_at = tape_allocator_at,      //
           typename dynamic_allocator_at = std::allocator<byte_t>> //
-class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_allocator_at, vectors_allocator_at,
-                                            dynamic_allocator_at> {
+class storage_v2 {
     // todo:: ask-Ashot: why can I not use dynamic_allocator_at in std::vector<node_t, dynamic_allocator_at> ?
   public:
     using node_t = node_at<key_at, compressed_slot_at>;
