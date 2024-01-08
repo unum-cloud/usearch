@@ -80,7 +80,7 @@ class std_storage_at {
      *      };
      *      using lock_type = dummy_lock;
      */
-    using lock_type = std::unique_lock<std::mutex>;
+    using lock_type = std::unique_lock<std::mutex>;
 
     bool reserve(std::size_t count) {
         if (count < nodes_.size())

@@ -586,11 +586,9 @@ class index_dense_gt {
      *  @see    `serialized_length` for the length of the binary serialized representation.
      */
     std::size_t memory_usage() const {
-            typed_->memory_usage(0) +                   //
-            storage_.node_allocator().total_wasted() +  //
-            storage_.node_allocator().total_reserved(); //
-
-        // vectors_tape_allocator_.total_allocated();
+        size_t res = typed_->memory_usage(0);
+        // todo:: add some memory_usage() interface to storage_
+        return res;
     }
 
     static constexpr std::size_t any_thread() { return std::numeric_limits<std::size_t>::max(); }
