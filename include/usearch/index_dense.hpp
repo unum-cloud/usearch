@@ -444,7 +444,9 @@ class index_dense_gt {
         : config_(std::move(other.config_)),
 
           // exchange does not work for typed_ when one of its template allocator types is
-          typed_(exchange(other.typed_, nullptr)),     //
+          // the std::allocator
+          // todo:: ask-Ashot: not sure why, but this seems to fix it
+          typed_(std::move(other.typed_)),             //
           cast_buffer_(std::move(other.cast_buffer_)), //
           casts_(std::move(other.casts_)),             //
           metric_(std::move(other.metric_)),           //
@@ -584,7 +586,6 @@ class index_dense_gt {
      *  @see    `serialized_length` for the length of the binary serialized representation.
      */
     std::size_t memory_usage() const {
-        return                                          //
             typed_->memory_usage(0) +                   //
             storage_.node_allocator().total_wasted() +  //
             storage_.node_allocator().total_reserved(); //
