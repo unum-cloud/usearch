@@ -321,8 +321,7 @@ int main(int, char**) {
                 using slot_t = std::uint32_t;
                 using v2 =
                     storage_v2_at<key_t, slot_t, tape_allocator_t, vectors_tape_allocator_t, dynamic_allocator_t>;
-                using std_storage_t =
-                    std_storage_at<key_t, slot_t, tape_allocator_t, vectors_tape_allocator_t, dynamic_allocator_t>;
+                using std_storage_t = default_allocator_std_storage_at<key_t, slot_t>;
 
                 test_cosine<v2, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
                 test_cosine<std_storage_t, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
