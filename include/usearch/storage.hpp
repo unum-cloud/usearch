@@ -9,7 +9,13 @@ namespace usearch {
 // taken from has_reset_gt
 // but added a C macro to make it generic for other function names
 // Can I do this in C++?
-#define HAS_FUNCTION_TEMPLATE(CHECK_AT, NAME_AK, SIGNATURE_AT)                                                         \
+// Changes from the above:
+// 1. Replace declval<at> with declval<OPTIONAL_CONST at&> to enforce function const-ness
+//  method: https://stackoverflow.com/questions/30407754/how-to-test-if-a-method-is-const
+// 2. Replace .reset with dynamic NAME_AK to support methods with other names
+// 3. Add option to enforce noexcept
+//  method: https://stackoverflow.com/questions/56510130/unit-test-to-check-for-noexcept-property-for-a-c-method
+#define HAS_FUNCTION_TEMPLATE(CHECK_AT, NAME_AK, SIGNATURE_AT, CONST_AK, NOEXCEPT_AK)                                  \
     template <typename, typename at> struct has_##NAME_AK##_gt {                                                       \
         static_assert(std::integral_constant<at, false>::value,                                                        \
                       "Second template parameter needs to be of function type.");                                      \
@@ -20,13 +26,18 @@ namespace usearch {
       private:                                                                                                         \
         template <typename at>                                                                                         \
         static constexpr auto check(at*) ->                                                                            \
-            typename std::is_same<decltype(std::declval<at>().NAME_AK(std::declval<args_at>()...)), return_at>::type;  \
+            typename std::is_same<decltype(std::declval<CONST_AK at&>().NAME_AK(std::declval<args_at>()...)),          \
+                                  return_at>::type;                                                                    \
         template <typename> static constexpr std::false_type check(...);                                               \
+                                                                                                                       \
+        template <typename at> static constexpr bool f_is_noexcept(at*) {                                              \
+            return noexcept(std::declval<CONST_AK at&>().NAME_AK(std::declval<args_at>()...));                         \
+        }                                                                                                              \
                                                                                                                        \
         typedef decltype(check<check_at>(0)) type;                                                                     \
                                                                                                                        \
-      public:                                                                                                          \
-        static constexpr bool value = type::value;                                                                     \
+      public: /*                                    if NOEXCEPT_AK then f_is_noexcept(0)    */                         \
+        static constexpr bool value = type::value && (!NOEXCEPT_AK || f_is_noexcept<check_at>(0));                     \
     };
 
 // note:: adding CHECK_AT based namespace so if the template can be used for multiple types
