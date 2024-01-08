@@ -11,7 +11,8 @@ namespace unum {
 namespace usearch {
 
 /**
- * @brief   Storage abstraction for HNSW graph and associated vector data
+ * @brief  A simple Storage implementation that uses standard cpp containers and complies with the usearch storage
+ *abstraction for HNSW graph and associated vector data
  *
  *  @tparam key_at
  *      The type of primary objects stored in the index.
@@ -32,7 +33,7 @@ namespace usearch {
  **/
 template <typename key_at, typename compressed_slot_at,
           typename tape_allocator_at = std::allocator<byte_t>> //
-class dummy_storage_single_threaded {
+class std_storage_at {
   public:
     using node_t = node_at<key_at, compressed_slot_at>;
 
@@ -50,7 +51,7 @@ class dummy_storage_single_threaded {
         "Tape allocator must allocate separate addressable bytes");
 
   public:
-    dummy_storage_single_threaded(index_config_t config, tape_allocator_at tape_allocator = {})
+    std_storage_at(index_config_t config, tape_allocator_at tape_allocator = {})
         : pre_(node_t::precompute_(config)), tape_allocator_(tape_allocator) {}
 
     inline node_t get_node_at(std::size_t idx) const noexcept { return nodes_[idx]; }
@@ -58,17 +59,15 @@ class dummy_storage_single_threaded {
     inline size_t node_size_bytes(std::size_t idx) const noexcept { return get_node_at(idx).node_size_bytes(pre_); }
     bool is_immutable() const noexcept { return bool(viewed_file_); }
 
-    // exported for client-side lock-declaration
-    // alternatively, could just use auto in client side
-    // ideally, there would be a way to make this "void", but I could not make it work
-    // as client side ends up declaring a void variable
-    // the downside of passing a primitive like "int" here is the "unused variable" compiler warning
-    // for the dummy lock guard variable.
-    struct dummy_lock {
-        // destructor necessary to avoid "unused variable warning"
-        // will this get properly optimized away?
-        ~dummy_lock() {}
-    };
+    /* To get a single-threaded implementation of storage with no locking, replace lock_type
+     *  with the following and return dummy_lock{} from node_lock()
+     *      struct dummy_lock {
+     *          // destructor necessary to avoid "unused variable warning"
+     *          // at callcites of node_lock()
+     *          ~dummy_lock() = default;
+     *      };
+     *      using lock_type = dummy_lock;
+     */
     using lock_type = std::unique_lock<std::mutex>;
 
     bool reserve(std::size_t count) {
@@ -130,7 +129,7 @@ class dummy_storage_single_threaded {
 
     void node_store(size_t slot, node_t node) noexcept { nodes_[slot] = node; }
     tape_allocator_at const& node_allocator() const noexcept { return tape_allocator_; }
-    // dummy lock just to satisfy the interface
+
     inline lock_type node_lock(std::size_t i) const noexcept { return std::unique_lock(locks_[i]); }
 
     // serialization
@@ -253,8 +252,8 @@ class dummy_storage_single_threaded {
     }
 };
 
-using dummy_dummy_storage = dummy_storage_single_threaded<default_key_t, default_slot_t>;
-ASSERT_VALID_STORAGE(dummy_dummy_storage);
+using dummy_std_storage_t = std_storage_at<default_key_t, default_slot_t>;
+ASSERT_VALID_STORAGE(dummy_std_storage_t);
 
 } // namespace usearch
 } // namespace unum

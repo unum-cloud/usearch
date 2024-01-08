@@ -10,7 +10,7 @@
 #include <usearch/index.hpp>
 #include <usearch/index_dense.hpp>
 #include <usearch/index_plugins.hpp>
-#include <usearch/simple_storage.hpp>
+#include <usearch/std_storage.hpp>
 
 using namespace unum::usearch;
 using namespace unum;
@@ -320,7 +320,7 @@ int main(int, char**) {
             {
                 using slot_t = std::uint32_t;
                 using v2 = storage_v2<key_t, slot_t>;
-                using ss = simple_storage<key_t, slot_t>;
+                using ss = std_storage_at<key_t, slot_t>;
 
                 test_cosine<v2, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
                 test_cosine<ss, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
@@ -328,7 +328,7 @@ int main(int, char**) {
             {
                 using slot_t = uint40_t;
                 using v2 = storage_v2<key_t, slot_t>;
-                using ss = simple_storage<key_t, slot_t>;
+                using ss = std_storage_at<key_t, slot_t>;
 
                 std::printf("Indexing %zu vectors with cos: <float, std::int64_t, uint40_t> \n", collection_size);
                 test_cosine<v2, float, key_t, slot_t>(collection_size, dimensions);
