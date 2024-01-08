@@ -192,6 +192,7 @@ using serialization_config_t = index_dense_serialization_config_t;
     ASSERT_HAS_CONST_FUNCTION(CHECK_AT, get_vector_at, byte_t*(std::size_t idx));                                      \
     ASSERT_HAS_CONST_FUNCTION(CHECK_AT, node_size_bytes, std::size_t(std::size_t idx));                                \
     ASSERT_HAS_CONST_NOEXCEPT_FUNCTION(CHECK_AT, size, std::size_t());                                                 \
+    ASSERT_HAS_CONST_NOEXCEPT_FUNCTION(CHECK_AT, is_immutable, bool());                                                \
                                                                                                                        \
     ASSERT_HAS_FUNCTION(CHECK_AT, reserve, bool(std::size_t count));                                                   \
     ASSERT_HAS_NOEXCEPT_FUNCTION(CHECK_AT, clear, void());                                                             \
@@ -222,7 +223,7 @@ using serialization_config_t = index_dense_serialization_config_t;
                                                dummy_vectors_metadata_buffer_t& metadata_buffer, std::size_t& offset,  \
                                                serialization_config_t config));                                        \
     ASSERT_HAS_FUNCTION(CHECK_AT, view_nodes_from_stream,                                                              \
-                        serialization_result_t(memory_mapped_file_t& file, index_serialized_header_t& metadata_buffer, \
+                        serialization_result_t(memory_mapped_file_t file, index_serialized_header_t& metadata_buffer,  \
                                                std::size_t& offset, dummy_progress_t& progress));                      \
     static_assert(true, "this is to require a semicolon at the end of macro call")
 
@@ -314,6 +315,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
     std::uint64_t matrix_rows_ = 0;
     std::uint64_t matrix_cols_ = 0;
     bool vectors_loaded_{};
+    memory_mapped_file_t viewed_file_{};
     using tape_allocator_traits_t = std::allocator_traits<tape_allocator_at>;
     static_assert(                                                 //
         sizeof(typename tape_allocator_traits_t::value_type) == 1, //
@@ -328,8 +330,6 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
   public:
     storage_v2(index_config_t config, tape_allocator_at tape_allocator = {})
         : pre_(node_t::precompute_(config)), tape_allocator_(tape_allocator) {}
-
-    bool view_file_{};
 
     inline node_t get_node_at(std::size_t idx) const noexcept { return nodes_[idx]; }
     // todo:: most of the time this is called for const* vector, maybe add a separate interface for const?
@@ -347,6 +347,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
     }
 
     inline size_t node_size_bytes(std::size_t idx) const noexcept { return get_node_at(idx).node_size_bytes(pre_); }
+    bool is_immutable() const noexcept { return bool(viewed_file_); }
 
     using lock_type = node_lock_t;
 
@@ -361,7 +362,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
     }
 
     void clear() noexcept {
-        if (!view_file_) {
+        if (!viewed_file_) {
             if (!has_reset<tape_allocator_at>()) {
                 std::size_t n = nodes_.size();
                 for (std::size_t i = 0; i != n; ++i) {
@@ -383,6 +384,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
                 tape_allocator_.deallocate(nullptr, 0);
         }
         std::fill(nodes_.begin(), nodes_.end(), node_t{});
+        viewed_file_ = {};
     }
     void reset() noexcept {
         nodes_mutexes_ = {};
@@ -391,6 +393,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
 
         vectors_lookup_.clear();
         vectors_lookup_.shrink_to_fit();
+        viewed_file_ = {};
     }
 
     using span_bytes_t = span_gt<byte_t>;
@@ -704,7 +707,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
      *  @brief  Symmetric to `save_from_stream`, pulls data from a stream.
      */
     template <typename progress_at = dummy_progress_t>
-    serialization_result_t view_nodes_from_stream(memory_mapped_file_t& file, index_serialized_header_t& header,
+    serialization_result_t view_nodes_from_stream(memory_mapped_file_t file, index_serialized_header_t& header,
                                                   std::size_t offset = 0, progress_at& progress = {}) noexcept {
 
         serialization_result_t result = file.open_if_not();
@@ -759,7 +762,7 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
             if (!progress(i + 1, header.size))
                 return result.failed("Terminated by user");
         }
-        view_file_ = true;
+        viewed_file_ = std::move(file);
 
         if (vectors_loaded_ && header.size != static_cast<std::size_t>(matrix_rows_))
             return result.failed("Index size and the number of vectors doesn't match");

@@ -1957,7 +1957,6 @@ class index_gt {
     mutable dynamic_allocator_t dynamic_allocator_{};
 
     precomputed_constants_t pre_{};
-    memory_mapped_file_t viewed_file_{};
 
     /// @brief  Number of "slots" available for `node_t` objects. Equals to @b `limits_.members`.
     usearch_align_m mutable std::atomic<std::size_t> nodes_capacity_{};
@@ -1987,7 +1986,7 @@ class index_gt {
     std::size_t max_level() const noexcept { return nodes_count_ ? static_cast<std::size_t>(max_level_) : 0; }
     index_config_t const& config() const noexcept { return config_; }
     index_limits_t const& limits() const noexcept { return limits_; }
-    bool is_immutable() const noexcept { return bool(viewed_file_); }
+    bool is_immutable() const noexcept { return storage_.is_immutable(); }
 
     /**
      *  @section Exceptions
@@ -2091,7 +2090,6 @@ class index_gt {
         contexts_ = {};
         limits_ = index_limits_t{0, 0};
         nodes_capacity_ = 0;
-        viewed_file_ = memory_mapped_file_t{};
     }
 
     /**
@@ -2102,7 +2100,6 @@ class index_gt {
         std::swap(limits_, other.limits_);
         std::swap(dynamic_allocator_, other.dynamic_allocator_);
         std::swap(pre_, other.pre_);
-        std::swap(viewed_file_, other.viewed_file_);
         std::swap(max_level_, other.max_level_);
         std::swap(entry_slot_, other.entry_slot_);
         assert(false);
@@ -2673,7 +2670,7 @@ class index_gt {
      */
     std::size_t memory_usage(std::size_t allocator_entry_bytes = default_allocator_entry_bytes()) const noexcept {
         std::size_t total = 0;
-        if (!viewed_file_) {
+        if (!storage_.is_immutable()) {
             stats_t s = stats();
             total += s.allocated_bytes;
             total += s.nodes * allocator_entry_bytes;
@@ -2888,7 +2885,7 @@ class index_gt {
         // storage_ may already have some relevant stuff...
         serialization_result_t result;
         index_serialized_header_t header;
-        result = storage_.view_nodes_from_stream(file, header, offset, progress);
+        result = storage_.view_nodes_from_stream(std::move(file), header, offset, progress);
         if (!result)
             return result;
 
@@ -2907,7 +2904,6 @@ class index_gt {
         max_level_ = static_cast<level_t>(header.max_level);
         entry_slot_ = static_cast<compressed_slot_t>(header.entry_slot);
 
-        viewed_file_ = std::move(file);
         return {};
     }
 
