@@ -10,6 +10,7 @@
 #include <usearch/index.hpp>
 #include <usearch/index_dense.hpp>
 #include <usearch/index_plugins.hpp>
+#include <usearch/simple_storage.hpp>
 
 using namespace unum::usearch;
 using namespace unum;
@@ -154,17 +155,16 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     }
 }
 
-template <typename scalar_at, typename key_at, typename slot_at> //
+template <typename storage_at, typename scalar_at, typename key_at, typename slot_at> //
 void test_cosine(std::size_t collection_size, std::size_t dimensions) {
 
+    using storage_t = storage_at;
     using scalar_t = scalar_at;
     using vector_key_t = key_at;
     using slot_t = slot_at;
 
     // using index_storage_t = storage_proxy_t<vector_key_t, slot_t>;
-    // using index_storage_t = dummy_storage_single_threaded<vector_key_t, slot_t>;
-    using index_storage_t = storage_v2<vector_key_t, slot_t>;
-    using index_typed_t = index_gt<index_storage_t, float, vector_key_t, slot_t>;
+    using index_typed_t = index_gt<storage_t, float, vector_key_t, slot_t>;
     using member_cref_t = typename index_typed_t::member_cref_t;
     using member_citerator_t = typename index_typed_t::member_citerator_t;
 
@@ -202,7 +202,7 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         std::vector<node_at<vector_key_t, slot_t>> nodes;
         bitset_gt nodes_mutexes;
         // index_storage_t storage{&nodes, &nodes_mutexes, config};
-        index_storage_t storage{config};
+        storage_t storage{config};
         index_typed_t index_typed(storage, config);
         test_cosine<false>(index_typed, matrix, metric);
     }
@@ -316,9 +316,24 @@ int main(int, char**) {
     for (std::size_t collection_size : {10, 500})
         for (std::size_t dimensions : {97, 256}) {
             std::printf("Indexing %zu vectors with cos: <float, std::int64_t, std::uint32_t> \n", collection_size);
-            test_cosine<float, std::int64_t, std::uint32_t>(collection_size, dimensions);
-            std::printf("Indexing %zu vectors with cos: <float, std::int64_t, uint40_t> \n", collection_size);
-            test_cosine<float, std::int64_t, uint40_t>(collection_size, dimensions);
+            using key_t = std::int64_t;
+            {
+                using slot_t = std::uint32_t;
+                using v2 = storage_v2<key_t, slot_t>;
+                using ss = simple_storage<key_t, slot_t>;
+
+                test_cosine<v2, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
+                test_cosine<ss, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
+            }
+            {
+                using slot_t = uint40_t;
+                using v2 = storage_v2<key_t, slot_t>;
+                using ss = simple_storage<key_t, slot_t>;
+
+                std::printf("Indexing %zu vectors with cos: <float, std::int64_t, uint40_t> \n", collection_size);
+                test_cosine<v2, float, key_t, slot_t>(collection_size, dimensions);
+                test_cosine<ss, float, key_t, slot_t>(collection_size, dimensions);
+            }
         }
 
     for (std::size_t connectivity : {3, 13, 50})
