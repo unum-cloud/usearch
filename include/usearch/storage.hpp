@@ -220,8 +220,6 @@ class storage_v2 : public storage_interface<key_at, compressed_slot_at, tape_all
 
     inline size_t node_size_bytes(std::size_t idx) const noexcept { return get_node_at(idx).node_size_bytes(pre_); }
 
-    HAS_FUNCTION_TEMPLATE(storage_v2, get_node_at, node_t(std::size_t))
-    static constexpr bool typecheck() { return HAS_FUNCTION(storage_v2, get_node_at, node_t(std::size_t)); };
     using lock_type = node_lock_t;
 
     bool reserve(std::size_t count) {
