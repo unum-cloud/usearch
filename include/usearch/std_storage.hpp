@@ -57,12 +57,25 @@ class std_storage_at {
     mutable size_t vector_size_{};
     // defaulted to true because that is what test.cpp assumes when using this storage directly
     mutable bool exclude_vectors_ = true;
+    // used to maintain proper alignment in stored indexes to make sure view() does not result in misaligned accesses
+    mutable size_t file_offset_{};
 
     // used in place of error handling throughout the class
     static void expect(bool must_be_true) {
         if (!must_be_true)
             throw std::runtime_error("Failed!");
     }
+    // padding buffer, some prefix of which will be used every time we need padding in the serialization
+    // of the index.
+    // Rest of the array will be zeros but we will also never need paddings that large
+    // The pattern is to help in debugging
+    constexpr static byte_t padding_buffer[64] = {0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42};
+
+    template <typename A, typename T> size_t align(T v) const {
+        return (sizeof(A) - (size_t)v % sizeof(A)) % sizeof(A);
+    }
+
+    template <typename T> size_t align4(T v) const { return align<float>(v); }
 
   public:
     std_storage_at(index_config_t config, allocator_at allocator = {})
@@ -163,6 +176,7 @@ class std_storage_at {
         expect(!config.use_64_bit_dimensions);
         expect(output(metadata_buffer, sizeof(metadata_buffer)));
 
+        file_offset_ = sizeof(metadata_buffer);
         vector_size_ = vector_size_bytes;
         node_count_ = node_count;
         exclude_vectors_ = config.exclude_vectors;
@@ -175,19 +189,29 @@ class std_storage_at {
         expect(output(&header, sizeof(header)));
         expect(output(&vector_size_, sizeof(vector_size_)));
         expect(output(&node_count_, sizeof(node_count_)));
+        file_offset_ += sizeof(header) + sizeof(vector_size_) + sizeof(node_count_);
+        // Save node levels, for offset calculation
         for (std::size_t i = 0; i != header.size; ++i) {
             node_t node = get_node_at(i);
             level_t level = node.level();
             expect(output(&level, sizeof(level)));
         }
 
+        file_offset_ += header.size * sizeof(level_t);
+
         // After that dump the nodes themselves
         for (std::size_t i = 0; i != header.size; ++i) {
             span_bytes_t node_bytes = get_node_at(i).node_bytes(pre_);
             expect(output(node_bytes.data(), node_bytes.size()));
+            file_offset_ += node_bytes.size();
             if (!exclude_vectors_) {
+                // add padding for proper alignment
+                int16_t padding_size = align4(file_offset_);
+                expect(output(&padding_buffer, padding_size));
+                file_offset_ += padding_size;
                 byte_t* vector_bytes = get_vector_at(i);
                 expect(output(vector_bytes, vector_size_));
+                file_offset_ += vector_size_;
             }
         }
         return {};
@@ -199,6 +223,7 @@ class std_storage_at {
                                                     serialization_config_t config = {}) {
         expect(!config.use_64_bit_dimensions);
         expect(input(metadata_buffer, sizeof(metadata_buffer)));
+        file_offset_ = sizeof(metadata_buffer);
         exclude_vectors_ = config.exclude_vectors;
         return {};
     }
@@ -206,9 +231,11 @@ class std_storage_at {
     template <typename input_callback_at, typename progress_at = dummy_progress_t>
     serialization_result_t load_nodes_from_stream(input_callback_at& input, index_serialized_header_t& header,
                                                   progress_at& = {}) noexcept {
+        byte_t in_padding_buffer[64] = {0};
         expect(input(&header, sizeof(header)));
         expect(input(&vector_size_, sizeof(vector_size_)));
         expect(input(&node_count_, sizeof(node_count_)));
+        file_offset_ += sizeof(header) + sizeof(vector_size_) + sizeof(node_count_);
         if (!header.size) {
             reset();
             return {};
@@ -218,14 +245,21 @@ class std_storage_at {
         expect(input(levels, header.size * sizeof(level_t)));
         expect(reserve(header.size));
 
+        file_offset_ += header.size * sizeof(level_t);
         // Load the nodes
         for (std::size_t i = 0; i != header.size; ++i) {
             span_bytes_t node_bytes = node_malloc(levels[i]);
             expect(input(node_bytes.data(), node_bytes.size()));
+            file_offset_ += node_bytes.size();
             node_store(i, node_t{node_bytes.data()});
             if (!exclude_vectors_) {
+                int16_t padding_size = align4(file_offset_);
+                expect(input(&in_padding_buffer, padding_size));
+                file_offset_ += padding_size;
+                expect(std::memcmp(in_padding_buffer, padding_buffer, padding_size) == 0);
                 byte_t* vector_bytes = allocator_.allocate(vector_size_);
                 expect(input(vector_bytes, vector_size_));
+                file_offset_ += vector_size_;
                 set_vector_at(i, vector_bytes, vector_size_, false, false);
             }
         }
@@ -243,6 +277,7 @@ class std_storage_at {
 
         expect(bool(file.open_if_not()));
         std::memcpy(metadata_buffer, file.data() + offset, sizeof(metadata_buffer));
+        file_offset_ = sizeof(metadata_buffer);
         offset += sizeof(metadata_buffer);
         return {};
     }
@@ -270,14 +305,31 @@ class std_storage_at {
         misaligned_ptr_gt<level_t> levels{(byte_t*)file.data() + offset};
         offset += sizeof(level_t) * header.size;
         offsets[0u] = offset;
-        for (std::size_t i = 1; i < header.size; ++i)
-            offsets[i] = offsets[i - 1] + node_t::node_size_bytes(pre_, levels[i - 1]) + vector_size_;
+        for (std::size_t i = 1; i < header.size; ++i) {
+            offsets[i] = offsets[i - 1] + node_t::node_size_bytes(pre_, levels[i - 1]);
+            if (!exclude_vectors_) {
+                // add room for vector alignment
+                offsets[i] += align4(offsets[i]);
+                offsets[i] += vector_size_;
+            }
+        }
         expect(reserve(header.size));
 
-        // Rapidly address all the nodes
+        // Rapidly address all the nodes and vectors
         for (std::size_t i = 0; i != header.size; ++i) {
             node_store(i, node_t{(byte_t*)file.data() + offsets[i]});
-            set_vector_at(i, (byte_t*)file.data() + offsets[i] + node_size_bytes(i), vector_size_, false, false);
+            expect(node_size_bytes(i) == node_t::node_size_bytes(pre_, levels[i]));
+
+            if (!exclude_vectors_) {
+                size_t vector_offset = offsets[i] + node_size_bytes(i);
+                expect(std::memcmp((byte_t*)file.data() + vector_offset, padding_buffer, align4(vector_offset)) == 0);
+                vector_offset += align4(vector_offset);
+
+                // expect proper alignment
+                expect(align4(vector_offset) == 0);
+                expect(align4((byte_t*)file.data() + vector_offset) == 0);
+                set_vector_at(i, (byte_t*)file.data() + vector_offset, vector_size_, false, false);
+            }
         }
         viewed_file_ = std::move(file);
         return {};
