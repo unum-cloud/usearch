@@ -34,11 +34,12 @@ namespace usearch {
 template <typename key_at, typename compressed_slot_at, typename allocator_at = std::allocator<byte_t>> //
 class std_storage_at {
   public:
-    using node_t = node_at<key_at, compressed_slot_at>;
+    using key_t = key_at;
+    using node_t = node_at<key_t, compressed_slot_at>;
+    using span_bytes_t = span_gt<byte_t>;
 
   private:
     using nodes_t = std::vector<node_t>;
-    using span_bytes_t = span_gt<byte_t>;
     using vectors_t = std::vector<span_bytes_t>;
 
     nodes_t nodes_{};

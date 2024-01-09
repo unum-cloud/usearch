@@ -187,20 +187,25 @@ using serialization_config_t = index_dense_serialization_config_t;
  *implementation takes a copy
  **/
 #define ASSERT_VALID_STORAGE(CHECK_AT)                                                                                 \
-    ASSERT_HAS_CONST_NOEXCEPT_FUNCTION(CHECK_AT, node_lock, CHECK_AT::lock_type(std::size_t idx));                     \
     ASSERT_HAS_CONST_FUNCTION(CHECK_AT, get_node_at, CHECK_AT::node_t(std::size_t idx));                               \
     ASSERT_HAS_CONST_FUNCTION(CHECK_AT, get_vector_at, byte_t*(std::size_t idx));                                      \
     ASSERT_HAS_CONST_FUNCTION(CHECK_AT, node_size_bytes, std::size_t(std::size_t idx));                                \
     ASSERT_HAS_CONST_NOEXCEPT_FUNCTION(CHECK_AT, is_immutable, bool());                                                \
                                                                                                                        \
-    /*Setters*/                                                                                                        \
-    ASSERT_HAS_FUNCTION(CHECK_AT, set_vector_at,                                                                       \
-                        void(std::size_t idx, const byte_t* vector_data, std::size_t vector_bytes, bool copy_vector,   \
-                             bool reuse_node));                                                                        \
     /*Container methods */                                                                                             \
     ASSERT_HAS_FUNCTION(CHECK_AT, reserve, bool(std::size_t count));                                                   \
     ASSERT_HAS_NOEXCEPT_FUNCTION(CHECK_AT, clear, void());                                                             \
     ASSERT_HAS_NOEXCEPT_FUNCTION(CHECK_AT, reset, void());                                                             \
+    /*Setters*/                                                                                                        \
+    ASSERT_HAS_FUNCTION(CHECK_AT, node_malloc, CHECK_AT::span_bytes_t(level_t level));                                 \
+    ASSERT_HAS_FUNCTION(CHECK_AT, node_free, void(std::size_t slot, CHECK_AT::node_t node));                           \
+    ASSERT_HAS_FUNCTION(CHECK_AT, node_make, CHECK_AT::node_t(CHECK_AT::key_t key, level_t level));                    \
+    ASSERT_HAS_FUNCTION(CHECK_AT, node_store, void(std::size_t slot, CHECK_AT::node_t node));                          \
+    ASSERT_HAS_FUNCTION(CHECK_AT, set_vector_at,                                                                       \
+                        void(std::size_t idx, const byte_t* vector_data, std::size_t vector_bytes, bool copy_vector,   \
+                             bool reuse_node));                                                                        \
+    /*Locking*/                                                                                                        \
+    ASSERT_HAS_CONST_NOEXCEPT_FUNCTION(CHECK_AT, node_lock, CHECK_AT::lock_type(std::size_t idx));                     \
     /*Save/Restore API enforcement*/                                                                                   \
     ASSERT_HAS_FUNCTION(CHECK_AT, save_vectors_to_stream,                                                              \
                         serialization_result_t(                                                                        \
@@ -238,7 +243,8 @@ template <typename key_at, typename compressed_slot_at, //
           typename dynamic_allocator_at>                //
 class storage_interface {
   public:
-    using node_t = node_at<key_at, compressed_slot_at>;
+    using key_t = key_at;
+    using node_t = node_at<key_t, compressed_slot_at>;
     // storage_interface(index_config_t conig, tape_allocator_at allocator = {});
 
     struct lock_type;
@@ -307,7 +313,8 @@ template <typename key_at, typename compressed_slot_at,           //
           typename dynamic_allocator_at = std::allocator<byte_t>> //
 class storage_v2_at {
   public:
-    using node_t = node_at<key_at, compressed_slot_at>;
+    using key_t = key_at;
+    using node_t = node_at<key_t, compressed_slot_at>;
 
   private:
     using nodes_mutexes_t = bitset_gt<dynamic_allocator_at>;
