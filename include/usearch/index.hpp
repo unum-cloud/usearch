@@ -2885,7 +2885,7 @@ class index_gt {
         // storage_ may already have some relevant stuff...
         serialization_result_t result;
         index_serialized_header_t header;
-        result = storage_.view_nodes_from_stream(std::move(file), header, offset, progress);
+        result = storage_.view_nodes_from_file(std::move(file), header, offset, progress);
         if (!result)
             return result;
 

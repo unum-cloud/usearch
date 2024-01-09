@@ -219,11 +219,11 @@ using serialization_config_t = index_dense_serialization_config_t;
                                                dummy_progress_t& progress));                                           \
                                                                                                                        \
     /* View from file API*/                                                                                            \
-    ASSERT_HAS_FUNCTION(CHECK_AT, view_vectors_from_stream,                                                            \
+    ASSERT_HAS_FUNCTION(CHECK_AT, view_vectors_from_file,                                                              \
                         serialization_result_t(memory_mapped_file_t& file,                                             \
                                                dummy_vectors_metadata_buffer_t& metadata_buffer, std::size_t& offset,  \
                                                serialization_config_t config));                                        \
-    ASSERT_HAS_FUNCTION(CHECK_AT, view_nodes_from_stream,                                                              \
+    ASSERT_HAS_FUNCTION(CHECK_AT, view_nodes_from_file,                                                                \
                         serialization_result_t(memory_mapped_file_t file, index_serialized_header_t& metadata_buffer,  \
                                                std::size_t& offset, dummy_progress_t& progress));                      \
     static_assert(true, "this is to require a semicolon at the end of macro call")
@@ -675,7 +675,7 @@ class storage_v2_at {
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
     template <typename vectors_metadata_at>
-    serialization_result_t view_vectors_from_stream(
+    serialization_result_t view_vectors_from_file(
         memory_mapped_file_t& file, //
                                     //// todo!! document that offset is a reference, or better - do not do it this way
         vectors_metadata_at& metadata_buffer, std::size_t& offset, serialization_config_t config = {}) {
@@ -738,8 +738,8 @@ class storage_v2_at {
      *  @brief  Symmetric to `save_from_stream`, pulls data from a stream.
      */
     template <typename progress_at = dummy_progress_t>
-    serialization_result_t view_nodes_from_stream(memory_mapped_file_t file, index_serialized_header_t& header,
-                                                  std::size_t offset = 0, progress_at& progress = {}) noexcept {
+    serialization_result_t view_nodes_from_file(memory_mapped_file_t file, index_serialized_header_t& header,
+                                                std::size_t offset = 0, progress_at& progress = {}) noexcept {
 
         serialization_result_t result = file.open_if_not();
         if (!result)

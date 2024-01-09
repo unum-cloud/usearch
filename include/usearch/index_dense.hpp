@@ -901,7 +901,7 @@ class index_dense_gt {
         serialization_result_t result;
         // Note that buffer and offset are passed by reference
         index_dense_head_buffer_t buffer;
-        result = storage_.view_vectors_from_stream(file, buffer, offset, config);
+        result = storage_.view_vectors_from_file(file, buffer, offset, config);
         if (!result)
             return result;
         // Load metadata and choose the right metric

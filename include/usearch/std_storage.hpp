@@ -231,7 +231,7 @@ class std_storage_at {
     }
 
     template <typename vectors_metadata_at>
-    serialization_result_t view_vectors_from_stream(
+    serialization_result_t view_vectors_from_file(
         memory_mapped_file_t& file, //
                                     //// todo!! document that offset is a reference, or better - do not do it this way
         vectors_metadata_at& metadata_buffer, std::size_t& offset, serialization_config_t config = {}) {
@@ -246,8 +246,8 @@ class std_storage_at {
     }
 
     template <typename progress_at = dummy_progress_t>
-    serialization_result_t view_nodes_from_stream(memory_mapped_file_t file, index_serialized_header_t& header,
-                                                  std::size_t offset = 0, progress_at& = {}) noexcept {
+    serialization_result_t view_nodes_from_file(memory_mapped_file_t file, index_serialized_header_t& header,
+                                                std::size_t offset = 0, progress_at& = {}) noexcept {
         serialization_result_t result = file.open_if_not();
         std::memcpy(&header, file.data() + offset, sizeof(header));
         offset += sizeof(header);
