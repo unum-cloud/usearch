@@ -25,9 +25,8 @@ namespace usearch {
  *      Can be a built-in @b `uint32_t`, `uint64_t`, or our custom @b `uint40_t`.
  *      Which makes the most sense for 4B+ entry indexes.
  *
- *  @tparam tape_allocator_at
+ *  @tparam allocator_at
  *      Potentially different memory allocator for primary allocations of nodes and vectors.
- *      It would never `deallocate` separate entries, and would only free all the space at once.
  *      The allocated buffers may be uninitialized.
  *
  **/
