@@ -153,7 +153,6 @@ function (setup_target TARGET_NAME)
                     >
                     -ffast-math
                     -fPIC
-		    -fpermissive
                     -Wall
                     -Wextra
                     -Wno-conversion
