@@ -28,9 +28,11 @@ namespace usearch {
  *  @tparam allocator_at
  *      Potentially different memory allocator for primary allocations of nodes and vectors.
  *      The allocated buffers may be uninitialized.
+ *      Note that we are using a memory aaligned allocator in place of std::allocator<byte_t>
+ *      Because of scalar_t memory requirements in index_*
  *
  **/
-template <typename key_at, typename compressed_slot_at, typename allocator_at = std::allocator<byte_t>> //
+template <typename key_at, typename compressed_slot_at, typename allocator_at = aligned_allocator_gt<byte_t, 64>> //
 class std_storage_at {
   public:
     using key_t = key_at;
@@ -283,8 +285,6 @@ class std_storage_at {
 };
 
 using default_std_storage_t = std_storage_at<default_key_t, default_slot_t>;
-
-template <typename key_at, typename slot_at> using default_allocator_std_storage_at = std_storage_at<key_at, slot_at>;
 ASSERT_VALID_STORAGE(default_std_storage_t);
 
 } // namespace usearch

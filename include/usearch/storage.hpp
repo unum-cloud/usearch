@@ -281,6 +281,10 @@ class storage_interface {
     std::size_t memory_usage();
 };
 
+/*Default allocators for storage_v2 */
+using dynamic_allocator_t = aligned_allocator_gt<byte_t, 64>;
+using tape_allocator_t = memory_mapping_allocator_gt<64>;
+using vectors_tape_allocator_t = memory_mapping_allocator_gt<8>;
 /**
  * @brief   Storage abstraction for HNSW graph and associated vector data
  *
@@ -307,10 +311,10 @@ class storage_interface {
  * I disabled inheritence for now as interface compatibility is more
  * thoroughly enforced via the macros at the beginning of this file
  **/
-template <typename key_at, typename compressed_slot_at,           //
-          typename tape_allocator_at = std::allocator<byte_t>,    //
-          typename vectors_allocator_at = tape_allocator_at,      //
-          typename dynamic_allocator_at = std::allocator<byte_t>> //
+template <typename key_at, typename compressed_slot_at,             //
+          typename tape_allocator_at = tape_allocator_t,            //
+          typename vectors_allocator_at = vectors_tape_allocator_t, //
+          typename dynamic_allocator_at = dynamic_allocator_t>      //
 class storage_v2_at {
   public:
     using key_t = key_at;

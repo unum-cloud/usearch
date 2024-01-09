@@ -275,9 +275,6 @@ inline index_dense_metadata_result_t index_dense_metadata_from_buffer(memory_map
     return result.failed("Not a dense USearch index!");
 }
 
-using dynamic_allocator_t = aligned_allocator_gt<byte_t, 64>;
-using tape_allocator_t = memory_mapping_allocator_gt<64>;
-using vectors_tape_allocator_t = memory_mapping_allocator_gt<8>;
 /**
  *  @brief  Oversimplified type-punned index for equidimensional vectors
  *          with automatic @b down-casting, hardware-specific @b SIMD metrics,
@@ -294,11 +291,9 @@ using vectors_tape_allocator_t = memory_mapping_allocator_gt<8>;
  *  The second (2.) starts with @b "usearch"-magic-string, used to infer the file type on open.
  *  The third (3.) is implemented by the underlying `index_gt` class.
  */
-template <typename key_at = default_key_t,                                                //
-          typename compressed_slot_at = default_slot_t,                                   //
-          typename storage_at = storage_v2_at<key_at, compressed_slot_at,                 //
-                                              tape_allocator_t, vectors_tape_allocator_t, //
-                                              dynamic_allocator_t>>                       //
+template <typename key_at = default_key_t,                                 //
+          typename compressed_slot_at = default_slot_t,                    //
+          typename storage_at = storage_v2_at<key_at, compressed_slot_at>> //
 class index_dense_gt {
   public:
     using vector_key_t = key_at;
