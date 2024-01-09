@@ -2103,10 +2103,9 @@ class index_gt {
         std::swap(pre_, other.pre_);
         std::swap(max_level_, other.max_level_);
         std::swap(entry_slot_, other.entry_slot_);
-        assert(false);
-        // std::swap(nodes_, other.nodes_);
-        // std::swap(nodes_mutexes_, other.nodes_mutexes_);
         std::swap(contexts_, other.contexts_);
+        // not movable because of storage_t& reference-member
+        assert(false);
 
         // Non-atomic parts.
         std::size_t capacity_copy = nodes_capacity_;

@@ -480,6 +480,7 @@ class index_dense_gt {
         std::swap(slot_lookup_, other.slot_lookup_);
         std::swap(free_keys_, other.free_keys_);
         std::swap(free_key_, other.free_key_);
+        // not movable because of storage_t& reference-member
         assert(false);
     }
 
