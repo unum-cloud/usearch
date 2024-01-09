@@ -163,7 +163,6 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     using vector_key_t = key_at;
     using slot_t = slot_at;
 
-    // using index_storage_t = storage_proxy_t<vector_key_t, slot_t>;
     using index_typed_t = index_gt<storage_t, float, vector_key_t, slot_t>;
     using member_cref_t = typename index_typed_t::member_cref_t;
     using member_citerator_t = typename index_typed_t::member_citerator_t;
@@ -199,9 +198,6 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         std::printf("- templates with connectivity %zu \n", connectivity);
         metric_t metric{&matrix, dimensions};
         index_config_t config(connectivity);
-        std::vector<node_at<vector_key_t, slot_t>> nodes;
-        bitset_gt nodes_mutexes;
-        // index_storage_t storage{&nodes, &nodes_mutexes, config};
         storage_t storage{config};
         index_typed_t index_typed(storage, config);
         test_cosine<false>(index_typed, matrix, metric);
@@ -319,21 +315,20 @@ int main(int, char**) {
             using key_t = std::int64_t;
             {
                 using slot_t = std::uint32_t;
-                using v2 =
-                    storage_v2_at<key_t, slot_t, tape_allocator_t, vectors_tape_allocator_t, dynamic_allocator_t>;
-                using std_storage_t = default_allocator_std_storage_at<key_t, slot_t>;
+                using storage_v2_t = storage_v2_at<key_t, slot_t>;
+                using std_storage_t = std_storage_at<key_t, slot_t>;
 
-                test_cosine<v2, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
+                test_cosine<storage_v2_t, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
                 test_cosine<std_storage_t, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
             }
             {
                 using slot_t = uint40_t;
-                using v2 = storage_v2_at<key_t, slot_t>;
-                using ss = std_storage_at<key_t, slot_t>;
+                using storage_v2_t = storage_v2_at<key_t, slot_t>;
+                using std_storage_t = std_storage_at<key_t, slot_t>;
 
                 std::printf("Indexing %zu vectors with cos: <float, std::int64_t, uint40_t> \n", collection_size);
-                test_cosine<v2, float, key_t, slot_t>(collection_size, dimensions);
-                test_cosine<ss, float, key_t, slot_t>(collection_size, dimensions);
+                test_cosine<storage_v2_t, float, key_t, slot_t>(collection_size, dimensions);
+                test_cosine<std_storage_t, float, key_t, slot_t>(collection_size, dimensions);
             }
         }
 
