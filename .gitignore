@@ -34,6 +34,12 @@ venv/
 
 # JS wrappers
 node_modules/
+javascript/dist/
+
+
+# Wasm
+
+wasi-sdk-*
 
 # Rust builds
 Cargo.lock
