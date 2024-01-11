@@ -11,10 +11,10 @@ interface CompiledSearchResult {
 }
 
 interface CompiledIndex {
-  add(keys: BigUint64Array, vectors: Float32Array): void;
+  add(keys: BigUint64Array, vectors: Vector): void;
   search(vectors: VectorOrMatrix, k: number): CompiledSearchResult;
   contains(keys: BigUint64Array): boolean[];
-  count(keys: BigUint64Array): number;
+  count(keys: BigUint64Array): number | number[];
   remove(keys: BigUint64Array): number[];
   dimensions(): number;
   connectivity(): number;
@@ -116,7 +116,7 @@ export class BatchMatches {
   }
 }
 
-function isOneKey(keys): boolean {
+function isOneKey(keys: number | bigint | BigUint64Array | bigint[]): boolean {
   return (
     (!Number.isNaN(keys) && typeof keys === "number") ||
     typeof keys === "bigint"
@@ -164,11 +164,17 @@ function isVector(vectors: unknown) {
   );
 }
 
-function normalizeVectors(vectors, dimensions, targetType = Float32Array) {
-  let flattenedVectors;
+function normalizeVectors(
+  vectors: VectorOrMatrix,
+  dimensions: number,
+  targetType: NumberArrayConstructor = Float32Array
+): Vector {
+  let flattenedVectors: Vector;
   if (isVector(vectors)) {
     flattenedVectors =
-      vectors.constructor === targetType ? vectors : new targetType(vectors);
+      vectors.constructor === targetType
+        ? vectors
+        : new targetType(vectors as Vector);
   } else if (Array.isArray(vectors)) {
     let totalLength = 0;
     for (const vec of vectors) totalLength += vec.length;
@@ -426,7 +432,7 @@ export class Index {
   count(keys: bigint | bigint[] | BigUint64Array): number | number[] {
     let normalizedKeys = normalizeKeys(keys);
     let normalizedResults = this.#compiledIndex.count(normalizedKeys);
-    if (isOneKey(keys)) return normalizedResults[0];
+    if (isOneKey(keys)) return (normalizedResults as unknown as number[])[0];
     else return normalizedResults;
   }
 
@@ -519,6 +525,10 @@ export class Index {
   }
 }
 
+type NumberArrayConstructor =
+  | Float64ArrayConstructor
+  | Float32ArrayConstructor
+  | Int8ArrayConstructor;
 /**
  * Performs an exact search on the given dataset to find the best matching vectors for each query.
  *
@@ -572,7 +582,7 @@ function exactSearch(
   }
 
   // Flatten and normalize dataset and queries if they are arrays of arrays
-  let targetType;
+  let targetType: NumberArrayConstructor;
   if (dataset instanceof Float64Array) targetType = Float64Array;
   else if (dataset instanceof Int8Array) targetType = Int8Array;
   else targetType = Float32Array; // default to Float32Array if dataset is not Float64Array or Int8Array
@@ -598,9 +608,14 @@ function exactSearch(
 
   // Create and return a Matches or BatchMatches object with the result
   if (countInQueries == 1) {
-    return new Matches(result[0], result[1]);
+    return new Matches(result.keys, result.distances);
   } else {
-    return new BatchMatches(result[0], result[1], result[2], count);
+    return new BatchMatches(
+      result.keys,
+      result.distances,
+      result.counts,
+      count
+    );
   }
 }
 
