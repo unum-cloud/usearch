@@ -2,9 +2,9 @@ name: Pre-Release
 
 on:
   push:
-    branches: ["main-dev"]
+    branches: ["main-dev", "test-ga-*"]
   pull_request:
-    branches: ["main-dev"]
+    branches: ["main-dev", "test-ga-*"]
 
 env:
   GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
@@ -19,6 +19,7 @@ permissions:
 jobs:
   test_ubuntu_gcc:
     name: Ubuntu (GCC 12)
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-22.04
     env:
       CC: gcc-12
@@ -107,6 +108,7 @@ jobs:
 
   test_ubuntu_clang:
     name: Ubuntu (Clang 16)
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-22.04
     env:
       CC: clang-16
@@ -236,6 +238,7 @@ jobs:
 
   test_windows:
     name: Windows
+    if: github.ref == 'refs/heads/main'
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v3
@@ -292,6 +295,7 @@ jobs:
 
   build_docker:
     name: Docker
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
