@@ -331,7 +331,10 @@ class storage_v2_at {
     // todo:: ask-Ashot: in the older version vectors_lookup_ was using the default vector allocator,
     // and not the dynamic_allocator_at that was passed it.
     // Can remove this if the previous approach was intentional
-    using vectors_t = std::vector<byte_t*, vectors_allocator_t>;
+    // Update (Jan 10): It seems giving vectors_allocator_t as vectors_t
+    // allocator below only works when CMAKE_HAVE_LIBC_PTHREAD is false
+    // otherwise, I get a compile error
+    using vectors_t = std::vector<byte_t*>;
 
     /// @brief  C-style array of `node_t` smart-pointers.
     // buffer_gt<node_t, nodes_allocator_t> nodes_{};
@@ -815,9 +818,9 @@ class storage_v2_at {
 #pragma endregion
 };
 
-using dummy_storage = storage_v2_at<default_key_t, default_slot_t>;
+using default_storage_v2_t = storage_v2_at<default_key_t, default_slot_t>;
 
-ASSERT_VALID_STORAGE(dummy_storage);
+ASSERT_VALID_STORAGE(default_storage_v2_t);
 
 } // namespace usearch
 } // namespace unum
