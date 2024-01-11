@@ -26,6 +26,7 @@
     "scripts": {
         "test": "node --test ./javascript/usearch.test.js",
         "install": "node-gyp rebuild",
+        "build-js": "rm -fr javascript/dist/* && tsc -p javascript/tsconfig-esm.json && tsc -p javascript/tsconfig-cjs.json && cp javascript/dist-package-esm.json javascript/dist/esm/package.json && cp javascript/dist-package-cjs.json javascript/dist/cjs/package.json",
         "typegen": "npx tsc"
     },
     "devDependencies": {

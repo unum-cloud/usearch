@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const usearch = require('./usearch.js');
+const usearch = require('./dist/cjs/usearch.js');
 
 test('Single-entry operations', () => {
     const index = new usearch.Index(2, 'l2sq');
