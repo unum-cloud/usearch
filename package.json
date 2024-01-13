@@ -3,7 +3,6 @@
     "version": "2.8.14",
     "description": "Smaller & Faster Single-File Vector Search Engine from Unum",
     "author": "Ash Vardanian (https://ashvardanian.com/)",
-    "contributors": ["Steven Roussey <sroussey@gmail.com>"],
     "license": "Apache 2.0",
     "homepage": "https://unum-cloud.github.io/usearch/",
     "repository": {
@@ -24,16 +23,16 @@
     "scripts": {
         "test": "node --test ./javascript/usearch.test.js",
         "install": "node-gyp-build",
-        "prebuild-single": "prebuildify --napi --strip --target=10.4.0",
-        "prebuild-arm64": "prebuildify --arch arm64 --napi --strip --target=10.4.0",
-        "prebuild-darwin-x64+arm64": "prebuildify --arch arm64+x64 --napi --strip --target=10.4.0",
+        "prebuild-single": "prebuildify --napi --strip",
+        "prebuild-arm64": "prebuildify --arch arm64 --napi --strip",
+        "prebuild-darwin-x64+arm64": "prebuildify --arch arm64+x64 --napi --strip",
         "build-js": "rm -fr javascript/dist/* && tsc -p javascript/tsconfig-esm.json && tsc -p javascript/tsconfig-cjs.json && cp javascript/dist-package-esm.json javascript/dist/esm/package.json && cp javascript/dist-package-cjs.json javascript/dist/cjs/package.json"
     },
     "devDependencies": {
-        "@types/node": "^20.4.5",
-        "prebuildify": "^6.0.0",
+        "@types/node": "^20.11.0",
         "node-gyp": "^10.0.1",
-        "typescript": "^5.1.6"
+        "prebuildify": "^6.0.0",
+        "typescript": "^5.3.3"
     },
     "main": "javascript/dist/cjs/usearch.js",
     "module": "javascript/dist/esm/usearch.js",
@@ -43,5 +42,4 @@
             "require": "./javascript/dist/cjs/usearch.js"
         }
     }
-   
 }

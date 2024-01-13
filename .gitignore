@@ -35,6 +35,7 @@ venv/
 # JS wrappers
 node_modules/
 javascript/dist/
+prebuilds/
 
 
 # Wasm
