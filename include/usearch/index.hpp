@@ -1362,7 +1362,7 @@ class output_file_t {
     serialization_result_t write(void const* begin, std::size_t length) noexcept {
         serialization_result_t result;
         std::size_t written = std::fwrite(begin, length, 1, file_);
-        if (!written)
+        if (length && !written)
             return result.failed(std::strerror(errno));
         return result;
     }
@@ -1404,7 +1404,7 @@ class input_file_t {
     serialization_result_t read(void* begin, std::size_t length) noexcept {
         serialization_result_t result;
         std::size_t read = std::fread(begin, length, 1, file_);
-        if (!read)
+        if (length && !read)
             return result.failed(std::feof(file_) ? "End of file reached!" : std::strerror(errno));
         return result;
     }

@@ -1819,7 +1819,8 @@ class flat_hash_multi_set_gt {
         }
 
         // Reset populated slots count
-        std::memset(data_, 0, buckets_ * bytes_per_bucket());
+        if (data_)
+            std::memset(data_, 0, buckets_ * bytes_per_bucket());
         populated_slots_ = 0;
     }
 

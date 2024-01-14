@@ -13,6 +13,11 @@ if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     set(USEARCH_IS_MAIN_PROJECT ON)
 endif ()
 
+# Allow CMake 3.13+ to override options when using FetchContent / add_subdirectory
+if (POLICY CMP0077)
+    cmake_policy(SET CMP0077 NEW)
+endif ()
+
 # Options
 option(USEARCH_INSTALL "Install CMake targets" OFF)
 
@@ -30,11 +35,6 @@ option(USEARCH_BUILD_WOLFRAM "Compile Wolfram Language bindings" OFF)
 # Includes
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 include(ExternalProject)
-
-# Allow CMake 3.13+ to override options when using FetchContent / add_subdirectory
-if (POLICY CMP0077)
-    cmake_policy(SET CMP0077 NEW)
-endif ()
 
 # Configuration
 include(GNUInstallDirs)
