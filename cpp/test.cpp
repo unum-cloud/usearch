@@ -209,7 +209,14 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
             metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
             index_dense_config_t config(connectivity);
             config.multi = multi;
-            index_t index = index_t::make(metric, config);
+            index_t index;
+            {
+                index_t index_tmp1 = index_t::make(metric, config);
+                // move construction
+                index_t index_tmp2 = std::move(index_tmp1);
+                // move assignment
+                index = std::move(index_tmp2);
+            }
             test_cosine<true>(index, matrix);
         }
     }
