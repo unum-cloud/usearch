@@ -2100,9 +2100,15 @@ class index_gt {
     }
 
     /**
+     * @brief replace internal storage pointer with the new one
+     */
+    void reset_storage(storage_t* storage) { storage_ = storage; }
+
+    /**
      *  @brief  Swaps the underlying memory buffers and thread contexts.
      */
     void swap(index_gt& other) noexcept {
+        std::swap(storage_, other.storage_);
         std::swap(config_, other.config_);
         std::swap(limits_, other.limits_);
         std::swap(dynamic_allocator_, other.dynamic_allocator_);
@@ -2110,8 +2116,6 @@ class index_gt {
         std::swap(max_level_, other.max_level_);
         std::swap(entry_slot_, other.entry_slot_);
         std::swap(contexts_, other.contexts_);
-        // not movable because of storage_t& reference-member
-        assert(false);
 
         // Non-atomic parts.
         std::size_t capacity_copy = nodes_capacity_;

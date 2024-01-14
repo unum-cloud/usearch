@@ -436,22 +436,20 @@ class index_dense_gt {
 
     index_dense_gt() = default;
     index_dense_gt(index_dense_gt&& other)
-        : config_(std::move(other.config_)),
-
-          // exchange does not work for typed_ when one of its template allocator types is
-          // the std::allocator
-          // todo:: ask-Ashot: not sure why, but this seems to fix it
-          typed_(std::move(other.typed_)),             //
+        : config_(std::move(other.config_)),           //
+          typed_(exchange(other.typed_, nullptr)),     //
           cast_buffer_(std::move(other.cast_buffer_)), //
           casts_(std::move(other.casts_)),             //
           metric_(std::move(other.metric_)),           //
+          storage_(std::move(other.storage_)),         //
 
           available_threads_(std::move(other.available_threads_)), //
           slot_lookup_(std::move(other.slot_lookup_)),             //
           free_keys_(std::move(other.free_keys_)),                 //
           free_key_(std::move(other.free_key_)) {
-
-        assert(false);
+        // Could do this in the _proxy pattern to void this
+        // The problem will also go away if/when we make typed_ not do any allocations
+        typed_->reset_storage(&storage_);
     } //
 
     index_dense_gt& operator=(index_dense_gt&& other) {
@@ -470,13 +468,17 @@ class index_dense_gt {
         std::swap(cast_buffer_, other.cast_buffer_);
         std::swap(casts_, other.casts_);
         std::swap(metric_, other.metric_);
+        std::swap(storage_, other.storage_);
 
         std::swap(available_threads_, other.available_threads_);
         std::swap(slot_lookup_, other.slot_lookup_);
         std::swap(free_keys_, other.free_keys_);
         std::swap(free_key_, other.free_key_);
-        // not movable because of storage_t& reference-member
-        assert(false);
+        // Could do this in the _proxy pattern to void this
+        // The problem will also go away if/when we make typed_ not do any allocations
+        typed_->reset_storage(&storage_);
+        if (other.typed_)
+            other.typed_->reset_storage(&other.storage_);
     }
 
     ~index_dense_gt() {

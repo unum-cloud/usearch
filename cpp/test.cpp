@@ -199,7 +199,8 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         metric_t metric{&matrix, dimensions};
         index_config_t config(connectivity);
         storage_t storage{config};
-        index_typed_t index_typed(storage, config);
+        index_typed_t index_typed_tmp(&storage, config);
+        index_typed_t index_typed = std::move(index_typed_tmp);
         test_cosine<false>(index_typed, matrix, metric);
     }
 
