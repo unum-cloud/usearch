@@ -515,7 +515,7 @@ class index_dense_gt {
         // Available since C11, but only C++17, so we use the C version.
         index_t* raw = index_allocator_t{}.allocate(1);
         result.storage_ = storage_t(config);
-        new (raw) index_t(result.storage_, config);
+        new (raw) index_t(&result.storage_, config);
         result.typed_ = raw;
         return result;
     }
