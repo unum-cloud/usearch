@@ -1,4 +1,5 @@
 #pragma once
+#include "usearch/std_storage.hpp"
 #include <stdlib.h> // `aligned_alloc`
 
 #include <functional> // `std::function`
@@ -25,9 +26,9 @@ template <typename, typename, typename> class index_dense_gt;
  */
 constexpr char const* default_magic() { return "usearch"; }
 
-using index_dense_head_buffer_t = byte_t[64];
+using index_dense_head_buffer_t = byte_t[80];
 
-static_assert(sizeof(index_dense_head_buffer_t) == 64, "File header should be exactly 64 bytes");
+static_assert(sizeof(index_dense_head_buffer_t) == 80, "File header should be exactly 64 bytes");
 
 /**
  *  @brief  Serialized binary representations of the USearch index start with metadata.
@@ -433,6 +434,7 @@ class index_dense_gt {
     using add_result_t = typename index_t::add_result_t;
     using stats_t = typename index_t::stats_t;
     using match_t = typename index_t::match_t;
+    using node_retriever_t = typename index_t::node_retriever_t;
 
     index_dense_gt() = default;
     index_dense_gt(index_dense_gt&& other)
@@ -545,6 +547,7 @@ class index_dense_gt {
     index_dense_config_t const& config() const { return config_; }
     index_limits_t const& limits() const { return typed_->limits(); }
     bool multi() const { return config_.multi; }
+    precomputed_constants_t pre() { return typed_->pre(); }
 
     // The metric and its properties
     metric_t const& metric() const { return metric_; }
@@ -928,6 +931,33 @@ class index_dense_gt {
 
         reindex_keys_();
         return result;
+    }
+
+    serialization_result_t view_mem(char* memory) {
+        serialization_result_t result;
+#if USEARCH_LOOKUP_LABEL
+        return result.failed("Usearch does not support label lookup and member removals for external memory indexes.");
+#endif
+        result = typed_->view_mem(memory);
+        return result;
+    }
+
+    serialization_result_t view_mem_lazy(char* memory) {
+        serialization_result_t result;
+#if USEARCH_LOOKUP_LABEL
+        return result.failed("Usearch does not support label lookup and member removals for external memory indexes.");
+#endif
+        result = typed_->view_mem_lazy(memory);
+        return result;
+    }
+
+    serialization_result_t update_header(char* headerp) {
+        serialization_result_t result = typed_->update_header(headerp);
+        return result;
+    }
+
+    void set_node_retriever(void* retriever_ctx, node_retriever_t node_retriever, node_retriever_t node_retriever_mut) {
+        typed_->set_node_retriever(retriever_ctx, node_retriever, node_retriever_mut);
     }
 
     /**
@@ -1588,7 +1618,7 @@ class index_dense_gt {
     }
 };
 
-using index_dense_t = index_dense_gt<>;
+using index_dense_ta = index_dense_gt<>;
 using index_dense_big_t = index_dense_gt<uuid_t, uint40_t>;
 
 /**

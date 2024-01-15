@@ -1989,6 +1989,7 @@ class index_gt {
     index_config_t const& config() const noexcept { return config_; }
     index_limits_t const& limits() const noexcept { return limits_; }
     bool is_immutable() const noexcept { return storage_->is_immutable(); }
+    precomputed_constants_t pre() { return pre_; }
 
     /**
      *  @section Exceptions

@@ -1,6 +1,8 @@
 #include <cassert>
+#include <vector>
 
 #include <usearch/index_dense.hpp>
+#include <usearch/std_storage.hpp>
 
 extern "C" {
 #include "usearch.h"
@@ -8,6 +10,8 @@ extern "C" {
 
 using namespace unum::usearch;
 using namespace unum;
+
+using index_dense_t = index_dense_gt<default_key_t, default_slot_t, default_std_storage_t>;
 
 using add_result_t = typename index_dense_t::add_result_t;
 using search_result_t = typename index_dense_t::search_result_t;
@@ -32,6 +36,7 @@ metric_kind_t metric_kind_to_cpp(usearch_metric_kind_t kind) {
     }
 }
 
+// use this. called to_usearch_metric in our codebase
 usearch_metric_kind_t metric_kind_to_c(metric_kind_t kind) {
     switch (kind) {
     case metric_kind_t::ip_k: return usearch_metric_ip_k;
@@ -69,9 +74,10 @@ usearch_scalar_kind_t scalar_kind_to_c(scalar_kind_t kind) {
     }
 }
 
-add_result_t add_(index_dense_t* index, usearch_key_t key, void const* vector, scalar_kind_t kind) {
+add_result_t add_(index_dense_t* index, usearch_key_t key, void const* vector, scalar_kind_t kind, int32_t level = -1,
+                  void* tape = nullptr) {
     switch (kind) {
-    case scalar_kind_t::f32_k: return index->add(key, (f32_t const*)vector);
+    case scalar_kind_t::f32_k: return index->add(key, (f32_t const*)vector, level, (byte_t*)tape);
     case scalar_kind_t::f64_k: return index->add(key, (f64_t const*)vector);
     case scalar_kind_t::f16_k: return index->add(key, (f16_t const*)vector);
     case scalar_kind_t::i8_k: return index->add(key, (i8_t const*)vector);
@@ -91,6 +97,7 @@ std::size_t get_(index_dense_t* index, usearch_key_t key, size_t count, void* ve
     }
 }
 
+// todo:: add ef optional parameter
 search_result_t search_(index_dense_t* index, void const* vector, scalar_kind_t kind, size_t n) {
     switch (kind) {
     case scalar_kind_t::f32_k: return index->search((f32_t const*)vector, n);
@@ -121,6 +128,14 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
                                            metric_kind, scalar_kind);
 
     index_dense_t index = index_dense_t::make(metric, config);
+
+    if (options->retriever != nullptr || options->retriever_mut != nullptr) {
+        if (options->retriever == nullptr || options->retriever_mut == nullptr) {
+            *error = "External mut and non-mut retrievers must be either both-set or both-null.";
+        }
+        index.set_node_retriever(options->retriever_ctx, options->retriever, options->retriever_mut);
+    }
+
     index_dense_t* result_ptr = new index_dense_t(std::move(index));
     if (!result_ptr || !*result_ptr)
         *error = "Out of memory!";
@@ -136,12 +151,18 @@ USEARCH_EXPORT size_t usearch_serialized_length(usearch_index_t index, usearch_e
     return reinterpret_cast<index_dense_t*>(index)->serialized_length();
 }
 
-USEARCH_EXPORT void usearch_save(usearch_index_t index, char const* path, usearch_error_t* error) {
+USEARCH_EXPORT void usearch_save(usearch_index_t index, char const* path, char const* mem, usearch_error_t* error) {
 
-    assert(index && path && error);
-    serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->save(path);
-    if (!result)
-        *error = result.error.release();
+    assert(index && error);
+    assert(path || mem);
+    assert(!(path && mem));
+    if (path) {
+        serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->save(path);
+        if (!result)
+            *error = result.error.release();
+    }
+    if (mem)
+        assert(false);
 }
 
 USEARCH_EXPORT void usearch_load(usearch_index_t index, char const* path, usearch_error_t* error) {
@@ -160,22 +181,48 @@ USEARCH_EXPORT void usearch_view(usearch_index_t index, char const* path, usearc
         *error = result.error.release();
 }
 
-USEARCH_EXPORT void usearch_metadata(char const* path, usearch_init_options_t* options, usearch_error_t* error) {
+void usearch_view_mem(usearch_index_t index, char* data, usearch_error_t* error) {
+    serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->view_mem(data);
+    if (!result) {
+        *error = result.error.what();
+        result.error = nullptr;
+    }
+}
 
-    assert(path && options && error);
-    index_dense_metadata_result_t result = index_dense_metadata_from_path(path);
-    if (!result)
-        *error = result.error.release();
+void usearch_view_mem_lazy(usearch_index_t index, char* data, usearch_error_t* error) {
+    serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->view_mem_lazy(data);
+    if (!result) {
+        *error = result.error.what();
+        // error needs to be reset. otherwise error_t destructor will raise.
+        // todo:: fix for the rest of the interface
+        result.error = nullptr;
+    }
+}
 
-    options->metric_kind = metric_kind_to_c(result.head.kind_metric);
-    options->quantization = scalar_kind_to_c(result.head.kind_scalar);
-    options->dimensions = result.head.dimensions;
-    options->multi = result.head.multi;
+void usearch_update_header(usearch_index_t index, char* headerp, usearch_error_t* error) {
+    serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->update_header(headerp);
+    if (!result) {
+        *error = result.error.what();
+        result.error = nullptr;
+    }
+}
 
-    options->connectivity = 0;
-    options->expansion_add = 0;
-    options->expansion_search = 0;
-    options->metric = NULL;
+// ready!
+USEARCH_EXPORT usearch_metadata_t usearch_metadata(usearch_index_t index, usearch_error_t* error) {
+    usearch_metadata_t res;
+    precomputed_constants_t pre = reinterpret_cast<index_dense_t*>(index)->pre();
+
+    res.inverse_log_connectivity = pre.inverse_log_connectivity;
+    // res.connectivity_max_base = pre.connectivity_max_base;
+    res.neighbors_bytes = pre.neighbors_bytes;
+    res.neighbors_base_bytes = pre.neighbors_base_bytes;
+    res.dimensions = reinterpret_cast<index_dense_t*>(index)->dimensions();
+    res.expansion_add = reinterpret_cast<index_dense_t*>(index)->expansion_add();
+    res.expansion_search = reinterpret_cast<index_dense_t*>(index)->expansion_search();
+    res.connectivity = reinterpret_cast<index_dense_t*>(index)->connectivity();
+    res.metric_kind = metric_kind_to_c(reinterpret_cast<index_dense_t*>(index)->metric().metric_kind());
+
+    return res;
 }
 
 USEARCH_EXPORT void usearch_save_buffer(usearch_index_t index, void* buffer, size_t length, usearch_error_t* error) {
@@ -230,6 +277,17 @@ USEARCH_EXPORT void usearch_metadata_buffer(void const* buffer, size_t length, u
 USEARCH_EXPORT size_t usearch_size(usearch_index_t index, usearch_error_t*) { //
     return reinterpret_cast<index_dense_t*>(index)->size();
 }
+// USEARCH_EXPORT size_t usearch_expansion_add(usearch_index_t index, usearch_error_t*) {
+//     return reinterpret_cast<index_t*>(index)->expansion_add();
+// }
+//
+// USEARCH_EXPORT size_t usearch_expansion_search(usearch_index_t index, usearch_error_t*) {
+//     return reinterpret_cast<index_t*>(index)->expansion_search();
+// }
+//
+// USEARCH_EXPORT usearch_metric_kind_t usearch_metric_kind(usearch_index_t index, usearch_error_t*) {
+//     return to_usearch_metric(reinterpret_cast<index_t*>(index)->metric().kind());
+// }
 
 USEARCH_EXPORT size_t usearch_capacity(usearch_index_t index, usearch_error_t*) {
     return reinterpret_cast<index_dense_t*>(index)->capacity();
@@ -259,6 +317,16 @@ USEARCH_EXPORT void usearch_add(                                                
         *error = result.error.release();
 }
 
+void usearch_add_external(                                                                                    //
+    usearch_index_t index, usearch_label_t label, void const* vector, void* tape, usearch_scalar_kind_t kind, //
+    int32_t level, usearch_error_t* error) {
+    add_result_t result =
+        add_(reinterpret_cast<index_dense_t*>(index), label, vector, scalar_kind_to_cpp(kind), level, tape);
+    if (!result)
+        *error = result.error.what();
+}
+// usearch_set_node_retriever function used to exist, but is not used
+
 USEARCH_EXPORT bool usearch_contains(usearch_index_t index, usearch_key_t key, usearch_error_t*) {
     assert(index);
     return reinterpret_cast<index_dense_t*>(index)->contains(key);
@@ -271,8 +339,9 @@ USEARCH_EXPORT size_t usearch_count(usearch_index_t index, usearch_key_t key, us
 
 USEARCH_EXPORT size_t usearch_search(                                                            //
     usearch_index_t index, void const* vector, usearch_scalar_kind_t kind, size_t results_limit, //
-    usearch_key_t* found_keys, usearch_distance_t* found_distances, usearch_error_t* error) {
+    size_t ef, usearch_key_t* found_keys, usearch_distance_t* found_distances, usearch_error_t* error) {
 
+    // todo:: come back and use the custom EF
     assert(index && vector && error);
     search_result_t result =
         search_(reinterpret_cast<index_dense_t*>(index), vector, scalar_kind_to_cpp(kind), results_limit);
@@ -284,9 +353,10 @@ USEARCH_EXPORT size_t usearch_search(                                           
     return result.dump_to(found_keys, found_distances);
 }
 
+// not used in lantern
 USEARCH_EXPORT size_t usearch_get(                          //
     usearch_index_t index, usearch_key_t key, size_t count, //
-    void* vectors, usearch_scalar_kind_t kind, usearch_error_t*) {
+    void* vectors, usearch_scalar_kind_t kind, usearch_error_t* error) {
 
     assert(index && vectors);
     return get_(reinterpret_cast<index_dense_t*>(index), key, count, vectors, scalar_kind_to_cpp(kind));
@@ -319,6 +389,14 @@ USEARCH_EXPORT usearch_distance_t usearch_distance(       //
     (void)error;
     metric_punned_t metric(dimensions, metric_kind_to_cpp(metric_kind), scalar_kind_to_cpp(scalar_kind));
     return metric((byte_t const*)vector_first, (byte_t const*)vector_second);
+}
+
+USEARCH_EXPORT float usearch_dist(void const* a, void const* b, usearch_metric_kind_t metric, int dims,
+                                  usearch_scalar_kind_t kind) {
+    usearch_error_t error = nullptr;
+    float res = usearch_distance(a, b, kind, dims, metric, &error);
+    assert(!error);
+    return res;
 }
 
 USEARCH_EXPORT void usearch_exact_search(                             //

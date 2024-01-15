@@ -19,7 +19,11 @@ extern "C" {
 
 USEARCH_EXPORT typedef void* usearch_index_t;
 USEARCH_EXPORT typedef uint64_t usearch_key_t;
+// todo:: remove before release
+// here to check incremental lantern compatibility
+USEARCH_EXPORT typedef usearch_key_t usearch_label_t;
 USEARCH_EXPORT typedef float usearch_distance_t;
+USEARCH_EXPORT typedef void* (*usearch_node_retriever_t)(void* ctx, int index);
 
 /**
  *  @brief  Pointer to a null-terminated error message.
@@ -95,7 +99,25 @@ USEARCH_EXPORT typedef struct usearch_init_options_t {
      *  @brief When set allows multiple vectors to map to the same key.
      */
     bool multi;
+
+    void* retriever_ctx;
+    usearch_node_retriever_t retriever;
+    usearch_node_retriever_t retriever_mut;
 } usearch_init_options_t;
+
+USEARCH_EXPORT typedef struct {
+    // todo:: embed usearch_init_options_t in this, in stead of repeating fields
+    double inverse_log_connectivity;
+    // size_t connectivity_max_base;
+    size_t neighbors_bytes;
+    size_t neighbors_base_bytes;
+    size_t dimensions;
+    size_t expansion_search;
+    size_t expansion_add;
+    size_t connectivity;
+    usearch_metric_kind_t metric_kind;
+
+} usearch_metadata_t;
 
 /**
  *  @brief Initializes a new instance of the index.
@@ -122,7 +144,7 @@ USEARCH_EXPORT size_t usearch_serialized_length(usearch_index_t, usearch_error_t
  *  @param[in] path The file path where the index will be saved.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
-USEARCH_EXPORT void usearch_save(usearch_index_t, char const* path, usearch_error_t* error);
+USEARCH_EXPORT void usearch_save(usearch_index_t, char const* path, char const* mem, usearch_error_t* error);
 
 /**
  *  @brief Loads the index from a file.
@@ -145,7 +167,7 @@ USEARCH_EXPORT void usearch_view(usearch_index_t, char const* path, usearch_erro
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  *  @return A handle to the initialized USearch index, or `NULL` on failure.
  */
-USEARCH_EXPORT void usearch_metadata(char const* path, usearch_init_options_t* options, usearch_error_t* error);
+USEARCH_EXPORT usearch_metadata_t usearch_metadata(usearch_index_t, usearch_error_t* error);
 
 /**
  *  @brief Saves the index to an in-memory buffer.
@@ -182,6 +204,8 @@ USEARCH_EXPORT size_t usearch_size(usearch_index_t, usearch_error_t* error);
 USEARCH_EXPORT size_t usearch_capacity(usearch_index_t, usearch_error_t* error);
 USEARCH_EXPORT size_t usearch_dimensions(usearch_index_t, usearch_error_t* error);
 USEARCH_EXPORT size_t usearch_connectivity(usearch_index_t, usearch_error_t* error);
+USEARCH_EXPORT size_t usearch_expansion_add(usearch_index_t, usearch_error_t* error);
+USEARCH_EXPORT size_t usearch_expansion_search(usearch_index_t, usearch_error_t* error);
 
 /**
  *  @brief Reserves memory for a specified number of incoming vectors.
@@ -217,10 +241,12 @@ USEARCH_EXPORT bool usearch_contains(usearch_index_t, usearch_key_t, usearch_err
  */
 USEARCH_EXPORT size_t usearch_count(usearch_index_t, usearch_key_t, usearch_error_t* error);
 
+#define USEARCH_SEARCH_EF_INVALID_VALUE 0
 /**
  *  @brief Performs k-Approximate Nearest Neighbors (kANN) Search for closest vectors to query.
  *  @param[in] query_vector Pointer to the query vector data.
  *  @param[in] query_kind The scalar type used in the query vector data.
+ *  @param[in] ef The @ef optional exploration factor used for search (if passed 0, uses the default for this index).
  *  @param[in] count Upper bound on the number of neighbors to search, the "k" in "kANN".
  *  @param[out] keys Output buffer for up to `count` nearest neighbors keys.
  *  @param[out] distances Output buffer for up to `count` distances to nearest neighbors.
@@ -230,8 +256,7 @@ USEARCH_EXPORT size_t usearch_count(usearch_index_t, usearch_key_t, usearch_erro
 USEARCH_EXPORT size_t usearch_search(                           //
     usearch_index_t,                                            //
     void const* query_vector, usearch_scalar_kind_t query_kind, //
-    size_t count, usearch_key_t* keys, usearch_distance_t* distances, usearch_error_t* error);
-
+    size_t count, size_t ef, usearch_key_t* keys, usearch_distance_t* distances, usearch_error_t* error);
 /**
  *  @brief Retrieves the vector associated with the given key from the index.
  *  @param[in] key The key of the vector to retrieve.
@@ -278,6 +303,22 @@ USEARCH_EXPORT usearch_distance_t usearch_distance(       //
     usearch_metric_kind_t metric_kind, usearch_error_t* error);
 
 /**
+ * @brief Generates the random level of the next inserted node, according to the current index state.
+ * @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ * @return The random level of the next inserted node.
+ */
+USEARCH_EXPORT int32_t usearch_newnode_level(usearch_index_t, usearch_error_t* error);
+
+/**
+ * @brief Sets the node retriever function for the externally managed index.
+ */
+USEARCH_EXPORT void usearch_set_node_retriever(usearch_index_t, void* retriever_ctx, usearch_node_retriever_t retriever,
+                                               usearch_node_retriever_t retriever_mut, usearch_error_t* error);
+USEARCH_EXPORT void usearch_add_external(                                                                 //
+    usearch_index_t index, usearch_key_t key, void const* vector, void* tape, usearch_scalar_kind_t kind, //
+    int32_t level, usearch_error_t* error);
+
+/**
  *  @brief Multi-threaded exact nearest neighbors search for equi-dimensional vectors.
  *  @param[in] dataset Pointer to the first scalar of the dataset matrix.
  *  @param[in] queries Pointer to the first scalar of the queries matrix.
@@ -303,6 +344,9 @@ USEARCH_EXPORT void usearch_exact_search(                            //
     usearch_key_t* keys, size_t keys_stride,                         //
     usearch_distance_t* distances, size_t distances_stride,          //
     usearch_error_t* error);
+
+USEARCH_EXPORT void usearch_cast(usearch_scalar_kind_t from, void const* vector, usearch_scalar_kind_t to, void* result,
+                                 size_t result_size, int dims, usearch_error_t* error);
 
 #ifdef __cplusplus
 }
