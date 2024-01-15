@@ -69,7 +69,10 @@ class std_storage_at {
     // of the index.
     // Rest of the array will be zeros but we will also never need paddings that large
     // The pattern is to help in debugging
-    constexpr static byte_t padding_buffer[64] = {0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42};
+    // Note: 'inline' is crucial to let this compile into C environments (todo:: why?)
+    // otherwise symbol _ZN4unum7usearch14std_storage_atImjNS0_20aligned_allocator_gtIcLm64EEEE14padding_bufferE
+    // leaks out
+    constexpr static inline byte_t padding_buffer[64] = {0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42};
 
     template <typename A, typename T> size_t align(T v) const {
         return (sizeof(A) - (size_t)v % sizeof(A)) % sizeof(A);
@@ -164,7 +167,7 @@ class std_storage_at {
 
     allocator_at const& node_allocator() const noexcept { return allocator_; }
 
-    inline lock_type node_lock(std::size_t i) const noexcept { return std::unique_lock(locks_[i]); }
+    inline lock_type node_lock(std::size_t i) const noexcept { return std::unique_lock<std::mutex>(locks_[i]); }
 
     // serialization
 
