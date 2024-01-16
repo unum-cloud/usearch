@@ -603,11 +603,11 @@ class index_dense_gt {
     };
 
     // clang-format off
-    add_result_t add(vector_key_t key, b1x8_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_b1x8); }
-    add_result_t add(vector_key_t key, i8_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_i8); }
-    add_result_t add(vector_key_t key, f16_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_f16); }
-    add_result_t add(vector_key_t key, f32_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_f32); }
-    add_result_t add(vector_key_t key, f64_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_f64); }
+    add_result_t add(vector_key_t key, b1x8_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true, level_t level = -1) { return add_(key, vector, thread, force_vector_copy, casts_.from_b1x8, level); }
+    add_result_t add(vector_key_t key, i8_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true,   level_t level = -1) { return add_(key, vector, thread, force_vector_copy, casts_.from_i8, level); }
+    add_result_t add(vector_key_t key, f16_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true,  level_t level = -1) { return add_(key, vector, thread, force_vector_copy, casts_.from_f16, level); }
+    add_result_t add(vector_key_t key, f32_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true,  level_t level = -1) { return add_(key, vector, thread, force_vector_copy, casts_.from_f32, level); }
+    add_result_t add(vector_key_t key, f64_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true,  level_t level = -1) { return add_(key, vector, thread, force_vector_copy, casts_.from_f64, level); }
 
     search_result_t search(b1x8_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, thread, exact, casts_.from_b1x8); }
     search_result_t search(i8_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, thread, exact, casts_.from_i8); }
@@ -1387,7 +1387,7 @@ class index_dense_gt {
     template <typename scalar_at>
     add_result_t add_(                             //
         vector_key_t key, scalar_at const* vector, //
-        std::size_t thread, bool force_vector_copy, cast_t const& cast) {
+        std::size_t thread, bool force_vector_copy, cast_t const& cast, level_t level) {
 
         if (!multi() && contains(key))
             return add_result_t{}.failed("Duplicate keys not allowed in high-level wrappers");
@@ -1423,9 +1423,10 @@ class index_dense_gt {
         update_config.expansion = config_.expansion_add;
 
         metric_proxy_t metric{*this};
+        usearch_assert_m(!reuse_node, "Updates not supported with Lantern");
         return reuse_node //
                    ? typed_->update(typed_->iterator_at(free_slot), key, vector_data, metric, update_config, on_success)
-                   : typed_->add(key, vector_data, metric, update_config, on_success);
+                   : typed_->add(key, level, vector_data, metric, update_config, on_success);
     }
 
     template <typename scalar_at>

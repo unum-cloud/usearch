@@ -2317,10 +2317,10 @@ class index_gt {
         typename callback_at = dummy_callback_t, //
         typename prefetch_at = dummy_prefetch_t  //
         >
-    add_result_t add(                                           //
-        vector_key_t key, value_at&& value, metric_at&& metric, //
-        index_update_config_t config = {},                      //
-        callback_at&& callback = callback_at{},                 //
+    add_result_t add(                                                          //
+        vector_key_t key, level_t level, value_at&& value, metric_at&& metric, //
+        index_update_config_t config = {},                                     //
+        callback_at&& callback = callback_at{},                                //
         prefetch_at&& prefetch = prefetch_at{}) usearch_noexcept_m {
 
         add_result_t result;
@@ -2347,7 +2347,7 @@ class index_gt {
         std::unique_lock<std::mutex> new_level_lock(global_mutex_);
         level_t max_level_copy = max_level_;      // Copy under lock
         std::size_t entry_idx_copy = entry_slot_; // Copy under lock
-        level_t target_level = choose_random_level_(context.level_generator);
+        level_t target_level = level != -1 ? level : choose_random_level_(context.level_generator);
 
         // Make sure we are not overflowing
         std::size_t capacity = nodes_capacity_.load();

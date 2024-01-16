@@ -74,10 +74,9 @@ usearch_scalar_kind_t scalar_kind_to_c(scalar_kind_t kind) {
     }
 }
 
-add_result_t add_(index_dense_t* index, usearch_key_t key, void const* vector, scalar_kind_t kind, int32_t level = -1,
-                  void* tape = nullptr) {
+add_result_t add_(index_dense_t* index, usearch_key_t key, void const* vector, scalar_kind_t kind, int16_t level = -1) {
     switch (kind) {
-    case scalar_kind_t::f32_k: return index->add(key, (f32_t const*)vector, level, (byte_t*)tape);
+    case scalar_kind_t::f32_k: return index->add(key, (f32_t const*)vector, 0, true, level);
     case scalar_kind_t::f64_k: return index->add(key, (f64_t const*)vector);
     case scalar_kind_t::f16_k: return index->add(key, (f16_t const*)vector);
     case scalar_kind_t::i8_k: return index->add(key, (i8_t const*)vector);

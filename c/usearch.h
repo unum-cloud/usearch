@@ -316,7 +316,7 @@ USEARCH_EXPORT void usearch_set_node_retriever(usearch_index_t, void* retriever_
                                                usearch_node_retriever_t retriever_mut, usearch_error_t* error);
 USEARCH_EXPORT void usearch_add_external(                                                                 //
     usearch_index_t index, usearch_key_t key, void const* vector, void* tape, usearch_scalar_kind_t kind, //
-    int32_t level, usearch_error_t* error);
+    int16_t level, usearch_error_t* error);
 
 /**
  *  @brief Multi-threaded exact nearest neighbors search for equi-dimensional vectors.
