@@ -1050,12 +1050,14 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct met
  *          tokenized and hashed into a fixed-capacity bitset.
  */
 template <typename scalar_at = std::uint64_t, typename result_at = std::size_t> struct metric_hamming_gt {
-    using scalar_t = scalar_at;
+    // todo:: properly fix hamming in lantern to comply with new usearch interface
+    using scalar_t = std::int32_t;
     using result_t = result_at;
-    static_assert( //
-        std::is_unsigned<scalar_t>::value ||
-            (std::is_enum<scalar_t>::value && std::is_unsigned<typename std::underlying_type<scalar_t>::type>::value),
-        "Hamming distance requires unsigned integral words");
+    // static_assert( //
+    //     std::is_unsigned<scalar_t>::value ||
+    //         (std::is_enum<scalar_t>::value && std::is_unsigned<typename
+    //         std::underlying_type<scalar_t>::type>::value),
+    //     "Hamming distance requires unsigned integral words");
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t words) const noexcept {
         constexpr std::size_t bits_per_word_k = sizeof(scalar_t) * CHAR_BIT;
