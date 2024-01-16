@@ -881,7 +881,7 @@ class index_dense_gt {
         if (!result)
             return result;
 
-        reindex_keys_();
+        // reindex_keys_();
         return result;
     }
 
@@ -942,18 +942,14 @@ class index_dense_gt {
         return result;
     }
 
-    serialization_result_t view_mem_lazy(char* memory) {
-        serialization_result_t result;
-#if USEARCH_LOOKUP_LABEL
-        return result.failed("Usearch does not support label lookup and member removals for external memory indexes.");
-#endif
-        result = typed_->view_mem_lazy(memory);
-        return result;
+    serialization_result_t update_header(char* headerp) {
+        memory_mapped_file_t mmapped_file{headerp, 136};
+        return save(std::move(mmapped_file));
     }
 
-    serialization_result_t update_header(char* headerp) {
-        serialization_result_t result = typed_->update_header(headerp);
-        return result;
+    serialization_result_t view_mem_lazy(char* memory) {
+        memory_mapped_file_t mapped_file{memory, 200};
+        return load(std::move(mapped_file));
     }
 
     void set_node_retriever(void* retriever_ctx, node_retriever_t node_retriever, node_retriever_t node_retriever_mut) {

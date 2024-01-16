@@ -348,6 +348,8 @@ USEARCH_EXPORT void usearch_exact_search(                            //
 USEARCH_EXPORT void usearch_cast(usearch_scalar_kind_t from, void const* vector, usearch_scalar_kind_t to, void* result,
                                  size_t result_size, int dims, usearch_error_t* error);
 
+USEARCH_EXPORT float usearch_dist(void const* a, void const* b, usearch_metric_kind_t metric, int dims,
+                                  usearch_scalar_kind_t kind);
 #ifdef __cplusplus
 }
 #endif

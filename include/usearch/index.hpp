@@ -1574,6 +1574,7 @@ struct index_serialized_header_t {
     std::uint64_t max_level = 0;
     std::uint64_t entry_slot = 0;
 };
+static_assert(sizeof(index_serialized_header_t) == 40, "asd");
 
 using default_key_t = std::uint64_t;
 using default_slot_t = std::uint32_t;
@@ -2757,6 +2758,7 @@ class index_gt {
         // allocate dynamic contexts for queries (storage has already been allocated for the deserialization process)
         index_limits_t limits;
         limits.members = header.size;
+        assert(header.size < 1000000);
         if (!reserve(limits)) {
             reset();
             return result.failed("Out of memory");
@@ -2920,6 +2922,10 @@ class index_gt {
 
 #pragma endregion
     using node_retriever_t = void* (*)(void* ctx, int index);
+    void set_node_retriever(void* retriever_ctx, node_retriever_t external_node_retriever,
+                            node_retriever_t external_node_retriever_mut) noexcept {
+        storage_->set_node_retriever(retriever_ctx, external_node_retriever, external_node_retriever_mut);
+    }
 
   private:
     // todo:: these can also be moved to node_at, along with class neighbors_ref_t definition

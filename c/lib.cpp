@@ -180,30 +180,16 @@ USEARCH_EXPORT void usearch_view(usearch_index_t index, char const* path, usearc
         *error = result.error.release();
 }
 
-void usearch_view_mem(usearch_index_t index, char* data, usearch_error_t* error) {
-    serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->view_mem(data);
-    if (!result) {
-        *error = result.error.what();
-        result.error = nullptr;
-    }
-}
-
 void usearch_view_mem_lazy(usearch_index_t index, char* data, usearch_error_t* error) {
     serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->view_mem_lazy(data);
-    if (!result) {
-        *error = result.error.what();
-        // error needs to be reset. otherwise error_t destructor will raise.
-        // todo:: fix for the rest of the interface
-        result.error = nullptr;
-    }
+    if (!result)
+        *error = result.error.release();
 }
 
 void usearch_update_header(usearch_index_t index, char* headerp, usearch_error_t* error) {
     serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->update_header(headerp);
-    if (!result) {
-        *error = result.error.what();
-        result.error = nullptr;
-    }
+    if (!result)
+        *error = result.error.release();
 }
 
 // ready!
@@ -318,11 +304,10 @@ USEARCH_EXPORT void usearch_add(                                                
 
 void usearch_add_external(                                                                                    //
     usearch_index_t index, usearch_label_t label, void const* vector, void* tape, usearch_scalar_kind_t kind, //
-    int32_t level, usearch_error_t* error) {
-    add_result_t result =
-        add_(reinterpret_cast<index_dense_t*>(index), label, vector, scalar_kind_to_cpp(kind), level, tape);
+    int16_t level, usearch_error_t* error) {
+    add_result_t result = add_(reinterpret_cast<index_dense_t*>(index), label, vector, scalar_kind_to_cpp(kind), level);
     if (!result)
-        *error = result.error.what();
+        *error = result.error.release();
 }
 // usearch_set_node_retriever function used to exist, but is not used
 

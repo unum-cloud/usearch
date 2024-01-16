@@ -2,6 +2,7 @@
 #pragma once
 
 #include <deque>
+#include <iostream>
 #include <mutex>
 #include <usearch/index.hpp>
 #include <usearch/index_plugins.hpp>
@@ -40,11 +41,16 @@ class std_storage_at {
     using span_bytes_t = span_gt<byte_t>;
 
   private:
+    using node_retriever_t = void* (*)(void* ctx, int index);
     using nodes_t = std::vector<node_t>;
     using vectors_t = std::vector<span_bytes_t>;
 
     nodes_t nodes_{};
     vectors_t vectors_{};
+    void* retriever_ctx_{};
+    node_retriever_t external_node_retriever_;
+    node_retriever_t external_node_retriever_mut_;
+
     precomputed_constants_t pre_{};
     allocator_at allocator_{};
     static_assert(!has_reset<allocator_at>(), "reset()-able memory allocators not supported for this storage provider");
@@ -54,6 +60,7 @@ class std_storage_at {
     // since this is only for serde/vars are marked mutable to still allow const-ness of saving method interface on
     // storage instance
     mutable size_t node_count_{};
+    bool loaded_ = false;
     mutable size_t vector_size_{};
     // defaulted to true because that is what test.cpp assumes when using this storage directly
     mutable bool exclude_vectors_ = true;
@@ -78,17 +85,45 @@ class std_storage_at {
         return (sizeof(A) - (size_t)v % sizeof(A)) % sizeof(A);
     }
 
-    template <typename T> size_t align4(T v) const { return align<float>(v); }
+    template <typename T> size_t align4(T v) const {
+        return 0;
+        // return align<float>(v);
+    }
 
   public:
     std_storage_at(index_config_t config, allocator_at allocator = {})
         : pre_(node_t::precompute_(config)), allocator_(allocator) {}
 
-    inline node_t get_node_at(std::size_t idx) const noexcept { return nodes_[idx]; }
-    inline byte_t* get_vector_at(std::size_t idx) const noexcept { return vectors_[idx].data(); }
+    inline node_t get_node_at(std::size_t idx) const noexcept {
+        // std::cerr << "getting node at" << std::to_string(idx) << std::endl;
+        if (loaded_) {
+            assert(retriever_ctx_ != nullptr);
+            char* tape = (char*)external_node_retriever_(retriever_ctx_, idx);
+            return node_t{tape};
+        }
+
+        return nodes_[idx];
+    }
+    inline byte_t* get_vector_at(std::size_t idx) const noexcept {
+        if (loaded_) {
+            assert(retriever_ctx_ != nullptr);
+            char* tape = (char*)external_node_retriever_(retriever_ctx_, idx);
+            node_t node{tape};
+            return tape + node.node_size_bytes(pre_);
+        }
+
+        // return loaded_ ? external_node_retriever_(retriever_ctx_, idx).node_bytes() : vectors_[idx].data();
+        return vectors_[idx].data();
+    }
     inline size_t node_size_bytes(std::size_t idx) const noexcept { return get_node_at(idx).node_size_bytes(pre_); }
     bool is_immutable() const noexcept { return bool(viewed_file_); }
 
+    void set_node_retriever(void* retriever_ctx, node_retriever_t external_node_retriever,
+                            node_retriever_t external_node_retriever_mut) noexcept {
+        retriever_ctx_ = retriever_ctx;
+        external_node_retriever_ = external_node_retriever;
+        external_node_retriever_mut_ = external_node_retriever_mut;
+    }
     /* To get a single-threaded implementation of storage with no locking, replace lock_type
      *  with the following and return dummy_lock{} from node_lock()
      *      struct dummy_lock {
@@ -98,7 +133,13 @@ class std_storage_at {
      *      };
      *      using lock_type = dummy_lock;
      */
-    using lock_type = std::unique_lock<std::mutex>;
+    struct dummy_lock {
+        // destructor necessary to avoid "unused variable warning"
+        // at callcites of node_lock()
+        ~dummy_lock() = default;
+    };
+    using lock_type = dummy_lock;
+    // using lock_type = std::unique_lock<std::mutex>;
 
     bool reserve(std::size_t count) {
         if (count < nodes_.size())
@@ -142,6 +183,8 @@ class std_storage_at {
         nodes_[slot] = node_t{};
     }
     node_t node_make(key_at key, level_t level) noexcept {
+        if (loaded_)
+            return node_t{(char*)0x42};
         span_bytes_t node_bytes = node_malloc(level);
         if (!node_bytes)
             return {};
@@ -152,8 +195,14 @@ class std_storage_at {
         node.level(level);
         return node;
     }
-    void node_store(size_t slot, node_t node) noexcept { nodes_[slot] = node; }
+    void node_store(size_t slot, node_t node) noexcept {
+        if (loaded_)
+            return;
+        nodes_[slot] = node;
+    }
     void set_vector_at(size_t slot, const byte_t* vector_data, size_t vector_size, bool copy_vector, bool reuse_node) {
+        if (loaded_)
+            return;
 
         usearch_assert_m(!(reuse_node && !copy_vector),
                          "Cannot reuse node when not copying as there is no allocation needed");
@@ -167,7 +216,13 @@ class std_storage_at {
 
     allocator_at const& node_allocator() const noexcept { return allocator_; }
 
-    inline lock_type node_lock(std::size_t i) const noexcept { return std::unique_lock<std::mutex>(locks_[i]); }
+    constexpr inline lock_type node_lock(std::size_t i) const noexcept {
+        return lock_type{};
+        // if (loaded_)
+        //     return;
+        //
+        // return std::unique_lock<std::mutex>(locks_[i]);
+    }
 
     // serialization
 
@@ -193,20 +248,26 @@ class std_storage_at {
         expect(output(&vector_size_, sizeof(vector_size_)));
         expect(output(&node_count_, sizeof(node_count_)));
         file_offset_ += sizeof(header) + sizeof(vector_size_) + sizeof(node_count_);
-        // Save node levels, for offset calculation
-        for (std::size_t i = 0; i != header.size; ++i) {
-            node_t node = get_node_at(i);
-            level_t level = node.level();
-            expect(output(&level, sizeof(level)));
+        if (loaded_ && file_offset_ >= 136) {
+            return {};
         }
+        // Save node levels, for offset calculation
+        // for (std::size_t i = 0; i != header.size; ++i) {
+        //     node_t node = get_node_at(i);
+        //     level_t level = node.level();
+        //     expect(output(&level, sizeof(level)));
+        // }
 
-        file_offset_ += header.size * sizeof(level_t);
+        // file_offset_ += header.size * sizeof(level_t);
 
         // After that dump the nodes themselves
         for (std::size_t i = 0; i != header.size; ++i) {
             span_bytes_t node_bytes = get_node_at(i).node_bytes(pre_);
             expect(output(node_bytes.data(), node_bytes.size()));
+            // std::fprintf(stderr, "node %d level %d size %d offset %d\n", (int)i, (int)get_node_at(i).level(),
+            //              (int)node_bytes.size(), (int)file_offset_);
             file_offset_ += node_bytes.size();
+
             if (!exclude_vectors_) {
                 // add padding for proper alignment
                 int16_t padding_size = align4(file_offset_);
@@ -223,7 +284,7 @@ class std_storage_at {
     template <typename input_callback_at, typename vectors_metadata_at>
     serialization_result_t load_vectors_from_stream(input_callback_at& input, //
                                                     vectors_metadata_at& metadata_buffer,
-                                                    serialization_config_t config = {}) {
+                                                    serialization_config_t config = {}, bool = false) {
         expect(!config.use_64_bit_dimensions);
         expect(input(metadata_buffer, sizeof(metadata_buffer)));
         file_offset_ = sizeof(metadata_buffer);
@@ -233,16 +294,19 @@ class std_storage_at {
 
     template <typename input_callback_at, typename progress_at = dummy_progress_t>
     serialization_result_t load_nodes_from_stream(input_callback_at& input, index_serialized_header_t& header,
-                                                  progress_at& = {}) noexcept {
+                                                  progress_at& = {}, bool lazy = true) noexcept {
         byte_t in_padding_buffer[64] = {0};
         expect(input(&header, sizeof(header)));
         expect(input(&vector_size_, sizeof(vector_size_)));
         expect(input(&node_count_, sizeof(node_count_)));
+        loaded_ = true;
         file_offset_ += sizeof(header) + sizeof(vector_size_) + sizeof(node_count_);
         if (!header.size) {
             reset();
             return {};
         }
+        if (lazy)
+            return {};
         buffer_gt<level_t> levels(header.size);
         expect(levels);
         expect(input(levels, header.size * sizeof(level_t)));
