@@ -57,8 +57,6 @@ jobs:
         # JavaScript
       - name: Set up Node.js
         uses: actions/setup-node@v4
-        with:
-          node-version: 18
       - name: Build JavaScript
         run: npm ci
       - name: Test JavaScript
@@ -135,8 +133,6 @@ jobs:
         # JavaScript
       - name: Set up Node.js
         uses: actions/setup-node@v4
-        with:
-          node-version: 18
       - name: Build and test JavaScript
         run: |
           npm ci
@@ -267,8 +263,6 @@ jobs:
         # JavaScript
       - name: Set up Node.js
         uses: actions/setup-node@v4
-        with:
-          node-version: 18
       - name: Build JavaScript
         run: npm ci
       - name: Test JavaScript
