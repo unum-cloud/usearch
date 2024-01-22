@@ -1,14 +1,19 @@
-const compiled: Compiled = require("bindings")("usearch");
+import build from "node-gyp-build";
+import * as path from "node:path";
+import { existsSync } from "node:fs";
+import { getFileName, getRoot } from "bindings";
+
+const compiled: Compiled = build(getBuildDir(getDirName()));
 
 type Vector = Float32Array | Float64Array | Int8Array;
 type Matrix = Vector[];
 type VectorOrMatrix = Vector | Matrix;
 
-interface CompiledSearchResult {
-  keys: BigUint64Array;
-  distances: Float32Array;
-  counts: BigUint64Array;
-}
+type CompiledSearchResult = [
+  keys: BigUint64Array,
+  distances: Float32Array,
+  counts: BigUint64Array
+];
 
 interface CompiledIndex {
   add(keys: BigUint64Array, vectors: Vector): void;
@@ -123,7 +128,10 @@ function isOneKey(keys: number | bigint | BigUint64Array | bigint[]): boolean {
   );
 }
 
-function normalizeKeys(keys: unknown) {
+function normalizeKeys(keys: unknown): BigUint64Array {
+  if (keys instanceof BigUint64Array) {
+    return keys;
+  }
   let normalizedKeys: BigUint64Array;
   if (
     (typeof keys === "number" && !Number.isNaN(keys)) ||
@@ -145,9 +153,6 @@ function normalizeKeys(keys: unknown) {
       throw new Error("All keys must be positive integers or bigints.");
     });
     normalizedKeys = BigUint64Array.from(bigintkeys);
-  }
-  if (keys instanceof BigUint64Array) {
-    normalizedKeys = keys;
   } else {
     throw new Error(
       "Keys must be a number, bigint, an array of numbers or bigints, or a BigUint64Array."
@@ -391,12 +396,7 @@ export class Index {
     const result = this.#compiledIndex.search(normalizedVectors, k);
     const countInQueries =
       normalizedVectors.length / Number(this.#compiledIndex.dimensions());
-    const batchMatches = new BatchMatches(
-      result.keys,
-      result.distances,
-      result.counts,
-      k
-    );
+    const batchMatches = new BatchMatches(...result, k);
 
     if (countInQueries === 1) {
       return batchMatches.get(0);
@@ -608,14 +608,9 @@ function exactSearch(
 
   // Create and return a Matches or BatchMatches object with the result
   if (countInQueries == 1) {
-    return new Matches(result.keys, result.distances);
+    return new Matches(result[0], result[1]);
   } else {
-    return new BatchMatches(
-      result.keys,
-      result.distances,
-      result.counts,
-      count
-    );
+    return new BatchMatches(...result, count);
   }
 }
 
@@ -627,3 +622,24 @@ module.exports = {
   BatchMatches,
   exactSearch,
 };
+
+// utility functions to help find native builds
+
+function getBuildDir(dir: string) {
+  if (existsSync(path.join(dir, "build"))) return dir;
+  if (existsSync(path.join(dir, "prebuilds"))) return dir;
+  if (path.basename(dir) === ".next") {
+    // special case for next.js on custom node (not vercel)
+    const sideways = path.join(dir, "..", "node_modules", "usearch");
+    if (existsSync(sideways)) return getBuildDir(sideways);
+  }
+  if (dir === "/") throw new Error("Could not find native build for usearch");
+  return getBuildDir(path.join(dir, ".."));
+}
+
+function getDirName() {
+  try {
+    if (__dirname) return __dirname;
+  } catch (e) {}
+  return getRoot(getFileName());
+}

@@ -1,7 +1,4 @@
 {
-    "variables": {
-        "openssl_fips": ""
-    },
     "targets": [
         {
             "target_name": "usearch",
