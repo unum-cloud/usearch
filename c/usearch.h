@@ -25,6 +25,9 @@ USEARCH_EXPORT typedef usearch_key_t usearch_label_t;
 USEARCH_EXPORT typedef float usearch_distance_t;
 USEARCH_EXPORT typedef void* (*usearch_node_retriever_t)(void* ctx, int index);
 
+// this is an upper bound. the actual index is smaller.
+#define USEARCH_EMPTY_INDEX_SIZE 512
+
 /**
  *  @brief  Pointer to a null-terminated error message.
  *          Returned error messages @b don't need to be deallocated.
@@ -117,7 +120,9 @@ USEARCH_EXPORT typedef struct {
     size_t connectivity;
     usearch_metric_kind_t metric_kind;
 
-} usearch_metadata_t;
+} usearch_index_metadata_t;
+
+USEARCH_EXPORT typedef usearch_index_metadata_t metadata_t;
 
 /**
  *  @brief Initializes a new instance of the index.
@@ -144,7 +149,7 @@ USEARCH_EXPORT size_t usearch_serialized_length(usearch_index_t, usearch_error_t
  *  @param[in] path The file path where the index will be saved.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
-USEARCH_EXPORT void usearch_save(usearch_index_t, char const* path, char const* mem, usearch_error_t* error);
+USEARCH_EXPORT void usearch_save(usearch_index_t, char const* path, usearch_error_t* error);
 
 /**
  *  @brief Loads the index from a file.
@@ -159,6 +164,8 @@ USEARCH_EXPORT void usearch_load(usearch_index_t, char const* path, usearch_erro
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
 USEARCH_EXPORT void usearch_view(usearch_index_t, char const* path, usearch_error_t* error);
+USEARCH_EXPORT void usearch_view_mem_lazy(usearch_index_t, char* data, usearch_error_t* error);
+USEARCH_EXPORT void usearch_update_header(usearch_index_t, char* headerp, usearch_error_t* error);
 
 /**
  *  @brief Loads index metadata from a file.
@@ -167,7 +174,12 @@ USEARCH_EXPORT void usearch_view(usearch_index_t, char const* path, usearch_erro
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  *  @return A handle to the initialized USearch index, or `NULL` on failure.
  */
-USEARCH_EXPORT usearch_metadata_t usearch_metadata(usearch_index_t, usearch_error_t* error);
+USEARCH_EXPORT void usearch_metadata(char const* path, usearch_init_options_t* options, usearch_error_t* error);
+
+/**
+ * @ returns index metadata from argument index
+ */
+USEARCH_EXPORT usearch_index_metadata_t usearch_index_metadata(usearch_index_t, usearch_error_t* error);
 
 /**
  *  @brief Saves the index to an in-memory buffer.
@@ -246,7 +258,22 @@ USEARCH_EXPORT size_t usearch_count(usearch_index_t, usearch_key_t, usearch_erro
  *  @brief Performs k-Approximate Nearest Neighbors (kANN) Search for closest vectors to query.
  *  @param[in] query_vector Pointer to the query vector data.
  *  @param[in] query_kind The scalar type used in the query vector data.
+ *  @param[in] count Upper bound on the number of neighbors to search, the "k" in "kANN".
  *  @param[in] ef The @ef optional exploration factor used for search (if passed 0, uses the default for this index).
+ *  @param[out] keys Output buffer for up to `count` nearest neighbors keys.
+ *  @param[out] distances Output buffer for up to `count` distances to nearest neighbors.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ *  @return Number of found matches.
+ */
+USEARCH_EXPORT size_t usearch_search_ef(                        //
+    usearch_index_t,                                            //
+    void const* query_vector, usearch_scalar_kind_t query_kind, //
+    size_t count, size_t ef, usearch_key_t* keys, usearch_distance_t* distances, usearch_error_t* error);
+
+/** @brief Performs k-Approximate Nearest Neighbors (kANN) Search for closest vectors to query.
+ *  Same as above, but using the default ef parameter value or the value provided during index construction
+ *  @param[in] query_vector Pointer to the query vector data.
+ *  @param[in] query_kind The scalar type used in the query vector data.
  *  @param[in] count Upper bound on the number of neighbors to search, the "k" in "kANN".
  *  @param[out] keys Output buffer for up to `count` nearest neighbors keys.
  *  @param[out] distances Output buffer for up to `count` distances to nearest neighbors.
@@ -256,7 +283,7 @@ USEARCH_EXPORT size_t usearch_count(usearch_index_t, usearch_key_t, usearch_erro
 USEARCH_EXPORT size_t usearch_search(                           //
     usearch_index_t,                                            //
     void const* query_vector, usearch_scalar_kind_t query_kind, //
-    size_t count, size_t ef, usearch_key_t* keys, usearch_distance_t* distances, usearch_error_t* error);
+    size_t count, usearch_key_t* keys, usearch_distance_t* distances, usearch_error_t* error);
 /**
  *  @brief Retrieves the vector associated with the given key from the index.
  *  @param[in] key The key of the vector to retrieve.
@@ -347,9 +374,6 @@ USEARCH_EXPORT void usearch_exact_search(                            //
 
 USEARCH_EXPORT void usearch_cast(usearch_scalar_kind_t from, void const* vector, usearch_scalar_kind_t to, void* result,
                                  size_t result_size, int dims, usearch_error_t* error);
-
-USEARCH_EXPORT float usearch_dist(void const* a, void const* b, usearch_metric_kind_t metric, int dims,
-                                  usearch_scalar_kind_t kind);
 #ifdef __cplusplus
 }
 #endif

@@ -4,7 +4,9 @@
 using namespace unum::usearch;
 using namespace unum;
 
+using index_dense_t = NativeIndex::index_dense_t;
 using index_t = index_dense_t;
+
 using add_result_t = typename index_t::add_result_t;
 using search_result_t = typename index_t::search_result_t;
 using labeling_result_t = typename index_t::labeling_result_t;

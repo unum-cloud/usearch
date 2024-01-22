@@ -150,18 +150,12 @@ USEARCH_EXPORT size_t usearch_serialized_length(usearch_index_t index, usearch_e
     return reinterpret_cast<index_dense_t*>(index)->serialized_length();
 }
 
-USEARCH_EXPORT void usearch_save(usearch_index_t index, char const* path, char const* mem, usearch_error_t* error) {
+USEARCH_EXPORT void usearch_save(usearch_index_t index, char const* path, usearch_error_t* error) {
 
-    assert(index && error);
-    assert(path || mem);
-    assert(!(path && mem));
-    if (path) {
-        serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->save(path);
-        if (!result)
-            *error = result.error.release();
-    }
-    if (mem)
-        assert(false);
+    assert(index && path && error);
+    serialization_result_t result = reinterpret_cast<index_dense_t*>(index)->save(path);
+    if (!result)
+        *error = result.error.release();
 }
 
 USEARCH_EXPORT void usearch_load(usearch_index_t index, char const* path, usearch_error_t* error) {
@@ -193,12 +187,11 @@ void usearch_update_header(usearch_index_t index, char* headerp, usearch_error_t
 }
 
 // ready!
-USEARCH_EXPORT usearch_metadata_t usearch_metadata(usearch_index_t index, usearch_error_t* error) {
-    usearch_metadata_t res;
+USEARCH_EXPORT usearch_index_metadata_t usearch_index_metadata(usearch_index_t index, usearch_error_t* error) {
+    usearch_index_metadata_t res;
     precomputed_constants_t pre = reinterpret_cast<index_dense_t*>(index)->pre();
 
     res.inverse_log_connectivity = pre.inverse_log_connectivity;
-    // res.connectivity_max_base = pre.connectivity_max_base;
     res.neighbors_bytes = pre.neighbors_bytes;
     res.neighbors_base_bytes = pre.neighbors_base_bytes;
     res.dimensions = reinterpret_cast<index_dense_t*>(index)->dimensions();
@@ -208,6 +201,24 @@ USEARCH_EXPORT usearch_metadata_t usearch_metadata(usearch_index_t index, usearc
     res.metric_kind = metric_kind_to_c(reinterpret_cast<index_dense_t*>(index)->metric().metric_kind());
 
     return res;
+}
+
+USEARCH_EXPORT void usearch_metadata(char const* path, usearch_init_options_t* options, usearch_error_t* error) {
+
+    assert(path && options && error);
+    index_dense_metadata_result_t result = index_dense_metadata_from_path(path);
+    if (!result)
+        *error = result.error.release();
+
+    options->metric_kind = metric_kind_to_c(result.head.kind_metric);
+    options->quantization = scalar_kind_to_c(result.head.kind_scalar);
+    options->dimensions = result.head.dimensions;
+    options->multi = result.head.multi;
+
+    options->connectivity = 0;
+    options->expansion_add = 0;
+    options->expansion_search = 0;
+    options->metric = NULL;
 }
 
 USEARCH_EXPORT void usearch_save_buffer(usearch_index_t index, void* buffer, size_t length, usearch_error_t* error) {
@@ -262,17 +273,6 @@ USEARCH_EXPORT void usearch_metadata_buffer(void const* buffer, size_t length, u
 USEARCH_EXPORT size_t usearch_size(usearch_index_t index, usearch_error_t*) { //
     return reinterpret_cast<index_dense_t*>(index)->size();
 }
-// USEARCH_EXPORT size_t usearch_expansion_add(usearch_index_t index, usearch_error_t*) {
-//     return reinterpret_cast<index_t*>(index)->expansion_add();
-// }
-//
-// USEARCH_EXPORT size_t usearch_expansion_search(usearch_index_t index, usearch_error_t*) {
-//     return reinterpret_cast<index_t*>(index)->expansion_search();
-// }
-//
-// USEARCH_EXPORT usearch_metric_kind_t usearch_metric_kind(usearch_index_t index, usearch_error_t*) {
-//     return to_usearch_metric(reinterpret_cast<index_t*>(index)->metric().kind());
-// }
 
 USEARCH_EXPORT size_t usearch_capacity(usearch_index_t index, usearch_error_t*) {
     return reinterpret_cast<index_dense_t*>(index)->capacity();
@@ -321,7 +321,7 @@ USEARCH_EXPORT size_t usearch_count(usearch_index_t index, usearch_key_t key, us
     return reinterpret_cast<index_dense_t*>(index)->count(key);
 }
 
-USEARCH_EXPORT size_t usearch_search(                                                            //
+USEARCH_EXPORT size_t usearch_search_ef(                                                         //
     usearch_index_t index, void const* vector, usearch_scalar_kind_t kind, size_t results_limit, //
     size_t ef, usearch_key_t* found_keys, usearch_distance_t* found_distances, usearch_error_t* error) {
 
@@ -335,6 +335,12 @@ USEARCH_EXPORT size_t usearch_search(                                           
     }
 
     return result.dump_to(found_keys, found_distances);
+}
+
+USEARCH_EXPORT size_t usearch_search( //
+    usearch_index_t index, void const* vector, usearch_scalar_kind_t kind, size_t results_limit,
+    usearch_key_t* found_keys, usearch_distance_t* found_distances, usearch_error_t* error) {
+    return usearch_search_ef(index, vector, kind, results_limit, 0, found_keys, found_distances, error);
 }
 
 // not used in lantern
@@ -373,14 +379,6 @@ USEARCH_EXPORT usearch_distance_t usearch_distance(       //
     (void)error;
     metric_punned_t metric(dimensions, metric_kind_to_cpp(metric_kind), scalar_kind_to_cpp(scalar_kind));
     return metric((byte_t const*)vector_first, (byte_t const*)vector_second);
-}
-
-USEARCH_EXPORT float usearch_dist(void const* a, void const* b, usearch_metric_kind_t metric, int dims,
-                                  usearch_scalar_kind_t kind) {
-    usearch_error_t error = nullptr;
-    float res = usearch_distance(a, b, kind, dims, metric, &error);
-    assert(!error);
-    return res;
 }
 
 USEARCH_EXPORT void usearch_exact_search(                             //

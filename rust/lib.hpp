@@ -4,15 +4,17 @@
 #include <memory> // `std::shared_ptr`
 
 #include <usearch/index_dense.hpp>
+#include <usearch/std_storage.hpp>
 
 struct Matches;
 struct IndexOptions;
-
+using namespace unum::usearch;
 class NativeIndex {
+
   public:
     using metric_t = unum::usearch::metric_punned_t;
     using distance_t = unum::usearch::distance_punned_t;
-    using index_dense_t = unum::usearch::index_dense_t;
+    using index_dense_t = index_dense_gt<default_key_t, default_slot_t, default_std_storage_t>;
     using add_result_t = typename index_dense_t::add_result_t;
     using search_result_t = typename index_dense_t::search_result_t;
     using vector_key_t = typename index_dense_t::vector_key_t;
