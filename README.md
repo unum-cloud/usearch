@@ -36,7 +36,7 @@ Linux • MacOS • Windows • iOS • WebAssembly
 </p>
 
 <div align="center">
-<a href="https://pepy.tech/project/usearch"> <img alt="PyPI" src="https://static.pepy.tech/personalized-badge/usearch?period=month&units=abbreviation&left_color=black&right_color=blue&left_text=Python%20monthly%20installs"> </a>
+<a href="https://pepy.tech/project/usearch"> <img alt="PyPI" src="https://static.pepy.tech/personalized-badge/usearch?period=total&units=abbreviation&left_color=black&right_color=blue&left_text=USearch%20Python%20installs"> </a>
 <a href="https://www.npmjs.com/package/usearch"> <img alt="NPM" src="https://img.shields.io/npm/dy/usearch?label=NPM%20installs"> </a>
 <a href="https://crates.io/crates/usearch"> <img alt="Crate" src="https://img.shields.io/crates/d/usearch?label=Crate%20installs"> </a>
 <a href="https://www.nuget.org/packages/Cloud.Unum.USearch"> <img alt="NuGet" src="https://img.shields.io/nuget/dt/Cloud.Unum.USearch?label=NuGet%20installs"> </a>
