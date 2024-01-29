@@ -50,7 +50,9 @@
 #define SIMSIMD_NATIVE_F16 !USEARCH_USE_FP16LIB
 
 #if !defined(SIMSIMD_TARGET_X86_AVX512) && defined(USEARCH_DEFINED_LINUX)
+#if defined(__AVX512F__) && defined(__AVX512FP16__) && defined(__AVX512VNNI__) && defined(__AVX512VPOPCNTDQ__)
 #define SIMSIMD_TARGET_X86_AVX512 1
+#endif
 #endif
 
 #if !defined(SIMSIMD_TARGET_ARM_SVE) && defined(USEARCH_DEFINED_LINUX)

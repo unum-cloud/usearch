@@ -20,6 +20,10 @@ if (USEARCH_BUILD_LIB_C)
     endif ()
 
     setup_target(usearch_c)
+    # Note: -static-libstdc++ is only meaningful for dynamic builds
+    # to bundle up the c++ standard library, we need to explicitly link it as below
+    target_link_libraries(usearch_static_c PRIVATE "libstdc++.a")
+
     setup_target(usearch_static_c)
 
 endif ()
