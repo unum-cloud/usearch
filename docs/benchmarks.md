@@ -64,6 +64,8 @@ To achieve best highest results we suggest compiling locally for the target arch
 cmake -B ./build_release \
     -DCMAKE_BUILD_TYPE=Release \
     -DUSEARCH_USE_OPENMP=1 \
+    -DUSEARCH_USE_SIMSIMD=1 \
+    -DUSEARCH_USE_FP16LIB=0 \
     -DUSEARCH_USE_JEMALLOC=1 && \
     make -C ./build_release -j
 
