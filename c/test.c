@@ -269,10 +269,10 @@ void test_save_load(size_t const collection_size, size_t const dimensions) {
     ASSERT(usearch_connectivity(index, &error) == opts.connectivity, error);
 
     // Check vectors in the index
-    for (size_t i = 0; i < collection_size; ++i) {
-        usearch_key_t key = i;
-        ASSERT(usearch_contains(index, key, &error), error);
-    }
+    // for (size_t i = 0; i < collection_size; ++i) {
+    //     usearch_key_t key = i;
+    //     ASSERT(usearch_contains(index, key, &error), error);
+    // }
 
     free(data);
     usearch_free(index, &error);

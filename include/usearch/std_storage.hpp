@@ -48,8 +48,8 @@ class std_storage_at {
     nodes_t nodes_{};
     vectors_t vectors_{};
     void* retriever_ctx_{};
-    node_retriever_t external_node_retriever_;
-    node_retriever_t external_node_retriever_mut_;
+    node_retriever_t external_node_retriever_{};
+    node_retriever_t external_node_retriever_mut_{};
 
     precomputed_constants_t pre_{};
     allocator_at allocator_{};
@@ -294,7 +294,7 @@ class std_storage_at {
 
     template <typename input_callback_at, typename progress_at = dummy_progress_t>
     serialization_result_t load_nodes_from_stream(input_callback_at& input, index_serialized_header_t& header,
-                                                  progress_at& = {}, bool lazy = true) noexcept {
+                                                  progress_at& = {}) noexcept {
         byte_t in_padding_buffer[64] = {0};
         expect(input(&header, sizeof(header)));
         expect(input(&vector_size_, sizeof(vector_size_)));
@@ -305,7 +305,7 @@ class std_storage_at {
             reset();
             return {};
         }
-        if (lazy)
+        if (external_node_retriever_)
             return {};
         buffer_gt<level_t> levels(header.size);
         expect(levels);
