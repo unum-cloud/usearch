@@ -79,15 +79,16 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     // Check if clustering endpoint compiles
     // index.cluster(vector_first, 0, args...);
 
+    //     Lantern does not support updates
     // Try removals and replacements
-    if constexpr (punned_ak) {
-        using labeling_result_t = typename index_t::labeling_result_t;
-        labeling_result_t result = index.remove(key_third);
-        expect(bool(result));
-        expect(index.size() == 2);
-        index.add(key_third, vector_third, args...);
-        expect(index.size() == 3);
-    }
+    // if constexpr (punned_ak) {
+    //     using labeling_result_t = typename index_t::labeling_result_t;
+    //     labeling_result_t result = index.remove(key_third);
+    //     expect(bool(result));
+    //     expect(index.size() == 2);
+    //     index.add(key_third, vector_third, args...);
+    //     expect(index.size() == 3);
+    // }
 
     // Search again over reconstructed index
     index.save("tmp.usearch");
@@ -97,11 +98,12 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     expect(matched_keys[0] == key_first);
     expect(std::abs(matched_distances[0]) < 0.01);
 
-    if constexpr (punned_ak) {
-        std::vector<scalar_t> vec_recovered_from_load(dimensions);
-        index.get(key_second, vec_recovered_from_load.data());
-        expect(std::equal(vector_second, vector_second + dimensions, vec_recovered_from_load.data()));
-    }
+    // Lantern does not support get via usearch
+    // if constexpr (punned_ak) {
+    //     std::vector<scalar_t> vec_recovered_from_load(dimensions);
+    //     index.get(key_second, vec_recovered_from_load.data());
+    //     expect(std::equal(vector_second, vector_second + dimensions, vec_recovered_from_load.data()));
+    // }
 
     // Try batch requests
     executor_default_t executor;
@@ -117,15 +119,16 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     });
 
     // Check for duplicates
-    if constexpr (punned_ak) {
-        index.reserve({vectors.size() + 1u, executor.size()});
-        auto result = index.add(key_first, vector_first, args...);
-        expect(!!result == index.multi());
-        result.error.release();
-
-        std::size_t first_key_count = index.count(key_first);
-        expect(first_key_count == (1ul + index.multi()));
-    }
+    // Lantern does not support get, so duplicates are not relevant
+    // if constexpr (punned_ak) {
+    //     index.reserve({vectors.size() + 1u, executor.size()});
+    //     auto result = index.add(key_first, vector_first, args...);
+    //     expect(!!result == index.multi());
+    //     result.error.release();
+    //
+    //     std::size_t first_key_count = index.count(key_first);
+    //     expect(first_key_count == (1ul + index.multi()));
+    // }
 
     // Search again over mapped index
     // file_head_result_t head = index_dense_metadata_from_path("tmp.usearch");
