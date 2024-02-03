@@ -1,7 +1,7 @@
 fn main() {
     cxx_build::bridge("rust/lib.rs")
         .file("rust/lib.cpp")
-        .flag_if_supported("-std=c++11")
+        .flag_if_supported("-std=c++17")
         .flag_if_supported("-Wno-unknown-pragmas")
         .include("include")
         .include("rust")
