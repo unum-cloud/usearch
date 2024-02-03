@@ -1574,7 +1574,7 @@ struct index_serialized_header_t {
     std::uint64_t max_level = 0;
     std::uint64_t entry_slot = 0;
 };
-static_assert(sizeof(index_serialized_header_t) == 40, "asd");
+static_assert(sizeof(index_serialized_header_t) == 40, "Serialized header assumed to be 40 bytes");
 
 using default_key_t = std::uint64_t;
 using default_slot_t = std::uint32_t;
@@ -1951,8 +1951,6 @@ class index_gt {
         }
     };
 
-    // todo:: do I have to init this?
-    // A: Yes! matters a lot in move constructors!!
     storage_t* storage_{};
     index_config_t config_{};
     index_limits_t limits_{};
@@ -2399,6 +2397,23 @@ class index_gt {
             max_level_ = target_level;
         }
         return result;
+    }
+
+    /*
+     * Same as above but does not take a level argument and assumes nodes are generated internally
+     **/
+    template <                                   //
+        typename value_at,                       //
+        typename metric_at,                      //
+        typename callback_at = dummy_callback_t, //
+        typename prefetch_at = dummy_prefetch_t  //
+        >
+    add_result_t add(                                           //
+        vector_key_t key, value_at&& value, metric_at&& metric, //
+        index_update_config_t config = {},                      //
+        callback_at&& callback = callback_at{},                 //
+        prefetch_at&& prefetch = prefetch_at{}) usearch_noexcept_m {
+        return add(key, -1, value, metric, config, callback, prefetch);
     }
 
     /**

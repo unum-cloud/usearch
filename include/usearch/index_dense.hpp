@@ -28,7 +28,7 @@ constexpr char const* default_magic() { return "usearch"; }
 
 using index_dense_head_buffer_t = byte_t[80];
 
-static_assert(sizeof(index_dense_head_buffer_t) == 80, "File header should be exactly 64 bytes");
+static_assert(sizeof(index_dense_head_buffer_t) == 80, "File header should be exactly 80 bytes");
 
 /**
  *  @brief  Serialized binary representations of the USearch index start with metadata.
@@ -301,7 +301,6 @@ class index_dense_gt {
     using key_t = vector_key_t;
     using compressed_slot_t = compressed_slot_at;
     using distance_t = distance_punned_t;
-    // using node_t = typename storage_at::node_t;
     using node_t = node_at<vector_key_t, compressed_slot_at>;
     using metric_t = metric_punned_t;
 

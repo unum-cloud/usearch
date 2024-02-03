@@ -36,7 +36,6 @@ metric_kind_t metric_kind_to_cpp(usearch_metric_kind_t kind) {
     }
 }
 
-// use this. called to_usearch_metric in our codebase
 usearch_metric_kind_t metric_kind_to_c(metric_kind_t kind) {
     switch (kind) {
     case metric_kind_t::ip_k: return usearch_metric_ip_k;

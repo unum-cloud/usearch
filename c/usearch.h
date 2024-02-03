@@ -19,8 +19,8 @@ extern "C" {
 
 USEARCH_EXPORT typedef void* usearch_index_t;
 USEARCH_EXPORT typedef uint64_t usearch_key_t;
-// todo:: remove before release
-// here to check incremental lantern compatibility
+// in older versions this used to be called usearch_label_t and lantern inherited that
+// this just sets up an alias so the names are interchangable
 USEARCH_EXPORT typedef usearch_key_t usearch_label_t;
 USEARCH_EXPORT typedef float usearch_distance_t;
 USEARCH_EXPORT typedef void* (*usearch_node_retriever_t)(void* ctx, int index);
@@ -284,6 +284,7 @@ USEARCH_EXPORT size_t usearch_search(                           //
     usearch_index_t,                                            //
     void const* query_vector, usearch_scalar_kind_t query_kind, //
     size_t count, usearch_key_t* keys, usearch_distance_t* distances, usearch_error_t* error);
+
 /**
  *  @brief Retrieves the vector associated with the given key from the index.
  *  @param[in] key The key of the vector to retrieve.
