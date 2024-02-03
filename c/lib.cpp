@@ -11,7 +11,13 @@ extern "C" {
 using namespace unum::usearch;
 using namespace unum;
 
-using index_dense_t = index_dense_gt<default_key_t, default_slot_t, default_std_storage_t>;
+// the macro is defined in lantern.so builds to tell usearch to not deal with storage internally,
+// and assume postgres handles storage
+#ifdef LANTERN_INSIDE_POSTGRES
+using index_dense_t = index_dense_gt<default_key_t, default_slot_t, lantern_external_storage_t>;
+#else
+using index_dense_t = index_dense_gt<default_key_t, default_slot_t, lantern_internal_storage_t>;
+#endif
 
 using add_result_t = typename index_dense_t::add_result_t;
 using search_result_t = typename index_dense_t::search_result_t;

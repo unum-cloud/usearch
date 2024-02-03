@@ -33,16 +33,23 @@ namespace usearch {
  *      Because of scalar_t memory requirements in index_*
  *
  **/
-template <typename key_at, typename compressed_slot_at, typename allocator_at = aligned_allocator_gt<byte_t, 64>> //
-class std_storage_at {
+template <bool external_storage_ak, typename key_at, typename compressed_slot_at,
+          typename allocator_at = aligned_allocator_gt<byte_t, 64>> //
+class std_storage_gt {
   public:
     using key_t = key_at;
     using node_t = node_at<key_t, compressed_slot_at>;
     using span_bytes_t = span_gt<byte_t>;
 
   private:
+    using nodes_mutexes_t = bitset_gt<dynamic_allocator_t>;
+    using dynamic_allocator_traits_t = std::allocator_traits<dynamic_allocator_t>;
+    using levels_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<level_t>;
+    using nodes_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<node_t>;
+    using offsets_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<std::size_t>;
+    using vectors_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<byte_t*>;
+    using nodes_t = buffer_gt<node_t, nodes_allocator_t>;
     using node_retriever_t = void* (*)(void* ctx, int index);
-    using nodes_t = std::vector<node_t>;
     using vectors_t = std::vector<span_bytes_t>;
 
     nodes_t nodes_{};
@@ -55,7 +62,7 @@ class std_storage_at {
     allocator_at allocator_{};
     static_assert(!has_reset<allocator_at>(), "reset()-able memory allocators not supported for this storage provider");
     memory_mapped_file_t viewed_file_{};
-    mutable std::deque<std::mutex> locks_{};
+    mutable nodes_mutexes_t nodes_mutexes_{};
     // the next three are used only in serialization/deserialization routines to know how to serialize vectors
     // since this is only for serde/vars are marked mutable to still allow const-ness of saving method interface on
     // storage instance
@@ -91,12 +98,12 @@ class std_storage_at {
     }
 
   public:
-    std_storage_at(index_config_t config, allocator_at allocator = {})
+    std_storage_gt(index_config_t config, allocator_at allocator = {})
         : pre_(node_t::precompute_(config)), allocator_(allocator) {}
 
     inline node_t get_node_at(std::size_t idx) const noexcept {
         // std::cerr << "getting node at" << std::to_string(idx) << std::endl;
-        if (loaded_) {
+        if (loaded_ && external_storage_ak) {
             assert(retriever_ctx_ != nullptr);
             char* tape = (char*)external_node_retriever_(retriever_ctx_, idx);
             return node_t{tape};
@@ -105,14 +112,13 @@ class std_storage_at {
         return nodes_[idx];
     }
     inline byte_t* get_vector_at(std::size_t idx) const noexcept {
-        if (loaded_) {
+        if (loaded_ && external_storage_ak) {
             assert(retriever_ctx_ != nullptr);
             char* tape = (char*)external_node_retriever_(retriever_ctx_, idx);
             node_t node{tape};
             return tape + node.node_size_bytes(pre_);
         }
 
-        // return loaded_ ? external_node_retriever_(retriever_ctx_, idx).node_bytes() : vectors_[idx].data();
         return vectors_[idx].data();
     }
     inline size_t node_size_bytes(std::size_t idx) const noexcept { return get_node_at(idx).node_size_bytes(pre_); }
@@ -124,29 +130,35 @@ class std_storage_at {
         external_node_retriever_ = external_node_retriever;
         external_node_retriever_mut_ = external_node_retriever_mut;
     }
-    /* To get a single-threaded implementation of storage with no locking, replace lock_type
-     *  with the following and return dummy_lock{} from node_lock()
-     *      struct dummy_lock {
-     *          // destructor necessary to avoid "unused variable warning"
-     *          // at callcites of node_lock()
-     *          ~dummy_lock() = default;
-     *      };
-     *      using lock_type = dummy_lock;
-     */
+
     struct dummy_lock {
         // destructor necessary to avoid "unused variable warning"
         // at callcites of node_lock()
         ~dummy_lock() = default;
     };
-    using lock_type = dummy_lock;
-    // using lock_type = std::unique_lock<std::mutex>;
+
+    struct node_lock_t {
+        nodes_mutexes_t& mutexes;
+        std::size_t slot;
+        inline ~node_lock_t() noexcept { mutexes.atomic_reset(slot); }
+    };
+
+    using lock_type = std::conditional_t<external_storage_ak, dummy_lock, node_lock_t>;
 
     bool reserve(std::size_t count) {
-        if (count < nodes_.size())
+        if (count < nodes_.size() && count < nodes_mutexes_.size())
             return true;
-        nodes_.resize(count);
+        nodes_mutexes_t new_mutexes(count);
+        nodes_t new_nodes(count);
+        if (!new_mutexes || !new_nodes)
+            return false;
+        if (nodes_)
+            std::memcpy(new_nodes.data(), nodes_.data(), sizeof(node_t) * nodes_.size());
+
+        nodes_mutexes_ = std::move(new_mutexes);
+        nodes_ = std::move(new_nodes);
         vectors_.resize(count);
-        locks_.resize(count);
+
         return true;
     }
     void clear() noexcept {
@@ -183,7 +195,7 @@ class std_storage_at {
         nodes_[slot] = node_t{};
     }
     node_t node_make(key_at key, level_t level) noexcept {
-        if (loaded_)
+        if (loaded_ && external_storage_ak)
             return node_t{(char*)0x42};
         span_bytes_t node_bytes = node_malloc(level);
         if (!node_bytes)
@@ -196,12 +208,12 @@ class std_storage_at {
         return node;
     }
     void node_store(size_t slot, node_t node) noexcept {
-        if (loaded_)
+        if (loaded_ && external_storage_ak)
             return;
         nodes_[slot] = node;
     }
     void set_vector_at(size_t slot, const byte_t* vector_data, size_t vector_size, bool copy_vector, bool reuse_node) {
-        if (loaded_)
+        if (loaded_ && external_storage_ak)
             return;
 
         usearch_assert_m(!(reuse_node && !copy_vector),
@@ -217,11 +229,13 @@ class std_storage_at {
     allocator_at const& node_allocator() const noexcept { return allocator_; }
 
     constexpr inline lock_type node_lock(std::size_t i) const noexcept {
-        return lock_type{};
-        // if (loaded_)
-        //     return;
-        //
-        // return std::unique_lock<std::mutex>(locks_[i]);
+        if constexpr (external_storage_ak) {
+            return {};
+        } else {
+            while (nodes_mutexes_.atomic_set(i))
+                ;
+            return {nodes_mutexes_, i};
+        }
     }
 
     // serialization
@@ -248,17 +262,21 @@ class std_storage_at {
         expect(output(&vector_size_, sizeof(vector_size_)));
         expect(output(&node_count_, sizeof(node_count_)));
         file_offset_ += sizeof(header) + sizeof(vector_size_) + sizeof(node_count_);
-        if (loaded_ && file_offset_ >= 136) {
+        if (loaded_ && file_offset_ >= 136 && external_storage_ak) {
             return {};
         }
-        // Save node levels, for offset calculation
-        // for (std::size_t i = 0; i != header.size; ++i) {
-        //     node_t node = get_node_at(i);
-        //     level_t level = node.level();
-        //     expect(output(&level, sizeof(level)));
-        // }
+        // Save node levels, for offset calculation, only in non-external case
+        // these are needed for fast viewing, but when storage is external, these offsets
+        // are of no use, since external storage takes care of fast access implementation
+        if constexpr (!external_storage_ak) {
+            for (std::size_t i = 0; i != header.size; ++i) {
+                node_t node = get_node_at(i);
+                level_t level = node.level();
+                expect(output(&level, sizeof(level)));
+            }
 
-        // file_offset_ += header.size * sizeof(level_t);
+            file_offset_ += header.size * sizeof(level_t);
+        }
 
         // After that dump the nodes themselves
         for (std::size_t i = 0; i != header.size; ++i) {
@@ -295,7 +313,6 @@ class std_storage_at {
     template <typename input_callback_at, typename progress_at = dummy_progress_t>
     serialization_result_t load_nodes_from_stream(input_callback_at& input, index_serialized_header_t& header,
                                                   progress_at& = {}) noexcept {
-        byte_t in_padding_buffer[64] = {0};
         expect(input(&header, sizeof(header)));
         expect(input(&vector_size_, sizeof(vector_size_)));
         expect(input(&node_count_, sizeof(node_count_)));
@@ -305,14 +322,18 @@ class std_storage_at {
             reset();
             return {};
         }
-        if (external_node_retriever_)
+        if (external_node_retriever_ && external_storage_ak)
             return {};
+        byte_t in_padding_buffer[64] = {0};
+        expect(reserve(header.size));
         buffer_gt<level_t> levels(header.size);
         expect(levels);
-        expect(input(levels, header.size * sizeof(level_t)));
-        expect(reserve(header.size));
 
-        file_offset_ += header.size * sizeof(level_t);
+        if constexpr (!external_storage_ak) {
+            expect(input(levels, header.size * sizeof(level_t)));
+            file_offset_ += header.size * sizeof(level_t);
+        }
+
         // Load the nodes
         for (std::size_t i = 0; i != header.size; ++i) {
             span_bytes_t node_bytes = node_malloc(levels[i]);
@@ -338,6 +359,9 @@ class std_storage_at {
         memory_mapped_file_t& file, //
                                     //// todo!! document that offset is a reference, or better - do not do it this way
         vectors_metadata_at& metadata_buffer, std::size_t& offset, serialization_config_t config = {}) {
+        if constexpr (external_storage_ak) {
+            return serialization_result_t{}.failed("cannot view vectors when storage is external");
+        }
         reset();
         exclude_vectors_ = config.exclude_vectors;
         expect(!config.use_64_bit_dimensions);
@@ -352,6 +376,9 @@ class std_storage_at {
     template <typename progress_at = dummy_progress_t>
     serialization_result_t view_nodes_from_file(memory_mapped_file_t file, index_serialized_header_t& header,
                                                 std::size_t offset = 0, progress_at& = {}) noexcept {
+        if constexpr (external_storage_ak) {
+            return serialization_result_t{}.failed("cannot view vectors when storage is external");
+        }
         serialization_result_t result = file.open_if_not();
         std::memcpy(&header, file.data() + offset, sizeof(header));
         offset += sizeof(header);
@@ -403,8 +430,14 @@ class std_storage_at {
     }
 };
 
-using default_std_storage_t = std_storage_at<default_key_t, default_slot_t>;
-ASSERT_VALID_STORAGE(default_std_storage_t);
+template <typename key_at, typename compressed_slot_at, typename allocator_at = aligned_allocator_gt<byte_t, 64>>
+using std_storage_at = std_storage_gt<false, key_at, compressed_slot_at, allocator_at>;
+
+using lantern_external_storage_t = std_storage_gt<true, default_key_t, default_slot_t>;
+using lantern_internal_storage_t = std_storage_gt<false, default_key_t, default_slot_t>;
+
+ASSERT_VALID_STORAGE(lantern_external_storage_t);
+ASSERT_VALID_STORAGE(lantern_internal_storage_t);
 
 } // namespace usearch
 } // namespace unum
