@@ -37,6 +37,8 @@ usearch_init_options_t create_options(size_t const dimensions) {
     opts.metric_kind = usearch_metric_ip_k;
     opts.metric = NULL;
     opts.quantization = usearch_scalar_f32_k;
+    // go with default number of threads = hardware_concurrency()
+    opts.num_threads = 0;
     return opts;
 }
 

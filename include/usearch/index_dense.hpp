@@ -496,23 +496,23 @@ class index_dense_gt {
      *  @param[in] free_key The key used for freed vectors (optional).
      *  @return An instance of ::index_dense_gt.
      */
-    static index_dense_gt make(           //
-        metric_t metric,                  //
-        index_dense_config_t config = {}, //
+    static index_dense_gt make(                                        //
+        metric_t metric,                                               //
+        index_dense_config_t config = {},                              //
+        std::size_t num_threads = std::thread::hardware_concurrency(), //
         vector_key_t free_key = default_free_value<vector_key_t>()) {
 
         scalar_kind_t scalar_kind = metric.scalar_kind();
-        std::size_t hardware_threads = std::thread::hardware_concurrency();
 
         index_dense_gt result;
         result.config_ = config;
-        result.cast_buffer_.resize(hardware_threads * metric.bytes_per_vector());
+        result.cast_buffer_.resize(num_threads * metric.bytes_per_vector());
         result.casts_ = make_casts_(scalar_kind);
         result.metric_ = metric;
         result.free_key_ = free_key;
 
         // Fill the thread IDs.
-        result.available_threads_.resize(hardware_threads);
+        result.available_threads_.resize(num_threads);
         std::iota(result.available_threads_.begin(), result.available_threads_.end(), 0ul);
 
         // Available since C11, but only C++17, so we use the C version.

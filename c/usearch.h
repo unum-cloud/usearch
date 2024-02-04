@@ -106,6 +106,7 @@ USEARCH_EXPORT typedef struct usearch_init_options_t {
     void* retriever_ctx;
     usearch_node_retriever_t retriever;
     usearch_node_retriever_t retriever_mut;
+    size_t num_threads;
 } usearch_init_options_t;
 
 USEARCH_EXPORT typedef struct {

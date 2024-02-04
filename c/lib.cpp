@@ -131,7 +131,13 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
                                            metric_punned_signature_t::array_array_k,          //
                                            metric_kind, scalar_kind);
 
-    index_dense_t index = index_dense_t::make(metric, config);
+    index_dense_t index;
+    if (options->num_threads != 0) {
+        assert(options->num_threads <= std::thread::hardware_concurrency());
+        index = index_dense_t::make(metric, config, options->num_threads);
+    } else {
+        index = index_dense_t::make(metric, config);
+    }
 
     if (options->retriever != nullptr || options->retriever_mut != nullptr) {
         if (options->retriever == nullptr || options->retriever_mut == nullptr) {
