@@ -83,7 +83,7 @@ class std_storage_gt {
     // of the index.
     // Rest of the array will be zeros but we will also never need paddings that large
     // The pattern is to help in debugging
-    // Note: 'inline' is crucial to let this compile into C environments (todo:: why?)
+    // Note: 'inline' is crucial to let this compile into C environments (why?)
     // otherwise symbol _ZN4unum7usearch14std_storage_atImjNS0_20aligned_allocator_gtIcLm64EEEE14padding_bufferE
     // leaks out
     constexpr static inline byte_t padding_buffer[64] = {0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42};
@@ -92,7 +92,8 @@ class std_storage_gt {
         return (sizeof(A) - (size_t)v % sizeof(A)) % sizeof(A);
     }
 
-    template <typename T> size_t align4(T v) const {
+    template <typename T> size_t align4(T) const {
+        // todo:: fix alignment issues in lantern;
         return 0;
         // return align<float>(v);
     }
@@ -143,6 +144,9 @@ class std_storage_gt {
         inline ~node_lock_t() noexcept { mutexes.atomic_reset(slot); }
     };
 
+    // when using external storage, the external storage is responsible for doing appropriate locking before passing
+    // objects to us, so we use a dummy lock here When allocating nodes ourselves, however, we do proper per=node
+    // locking with a bitfield, identical to how upstream usearch storeage does it
     using lock_type = std::conditional_t<external_storage_ak, dummy_lock, node_lock_t>;
 
     bool reserve(std::size_t count) {
@@ -265,18 +269,10 @@ class std_storage_gt {
         if (loaded_ && file_offset_ >= 136 && external_storage_ak) {
             return {};
         }
-        // Save node levels, for offset calculation, only in non-external case
-        // these are needed for fast viewing, but when storage is external, these offsets
-        // are of no use, since external storage takes care of fast access implementation
-        if constexpr (!external_storage_ak) {
-            for (std::size_t i = 0; i != header.size; ++i) {
-                node_t node = get_node_at(i);
-                level_t level = node.level();
-                expect(output(&level, sizeof(level)));
-            }
 
-            file_offset_ += header.size * sizeof(level_t);
-        }
+        // N.B: unlike upstream usearch storage, lantern storage does not save level info of all nodes as part of the
+        // header This in upstream storage speeds up view()-ing index from disc, but that API is not relevant in lantern
+        // and having level info here unnecessarily bloats our index, so we do not do it.
 
         // After that dump the nodes themselves
         for (std::size_t i = 0; i != header.size; ++i) {
@@ -325,19 +321,27 @@ class std_storage_gt {
         if (external_node_retriever_ && external_storage_ak)
             return {};
         byte_t in_padding_buffer[64] = {0};
-        expect(reserve(header.size));
-        buffer_gt<level_t> levels(header.size);
-        expect(levels);
 
-        if constexpr (!external_storage_ak) {
-            expect(input(levels, header.size * sizeof(level_t)));
-            file_offset_ += header.size * sizeof(level_t);
-        }
+        expect(reserve(header.size));
+
+        // N.B: unlike upstream usearch storage, lantern storage does not save level info of all nodes as part of the
+        // header This in upstream storage speeds up view()-ing index from disc, but that API is not relevant in lantern
+        // and having level info here unnecessarily bloats our index, so we do not do it.
+
+        std::array<byte_t, node_t::head_size_bytes()> node_header;
+        level_t extracted_node_level = -1;
 
         // Load the nodes
         for (std::size_t i = 0; i != header.size; ++i) {
-            span_bytes_t node_bytes = node_malloc(levels[i]);
-            expect(input(node_bytes.data(), node_bytes.size()));
+            // extract just the node header first, to know its level, then extract the rest
+            expect(input(node_header.data(), node_header.size()));
+            extracted_node_level = node_t{node_header.data()}.level();
+            span_bytes_t node_bytes = node_malloc(extracted_node_level);
+
+            std::memcpy(node_bytes.data(), node_header.data(), node_t::head_size_bytes());
+            expect(input(node_bytes.data() + node_t::head_size_bytes(), //
+                         node_bytes.size() - node_t::head_size_bytes()));
+
             file_offset_ += node_bytes.size();
             node_store(i, node_t{node_bytes.data()});
             if (!exclude_vectors_) {
@@ -396,33 +400,37 @@ class std_storage_gt {
         pre_ = node_t::precompute_(config);
         buffer_gt<std::size_t> offsets(header.size);
         expect(offsets);
-        misaligned_ptr_gt<level_t> levels{(byte_t*)file.data() + offset};
-        offset += sizeof(level_t) * header.size;
-        offsets[0u] = offset;
-        for (std::size_t i = 1; i < header.size; ++i) {
-            offsets[i] = offsets[i - 1] + node_t::node_size_bytes(pre_, levels[i - 1]);
-            if (!exclude_vectors_) {
-                // add room for vector alignment
-                offsets[i] += align4(offsets[i]);
-                offsets[i] += vector_size_;
-            }
-        }
+
         expect(reserve(header.size));
+        // N.B: unlike upstream usearch storage, lantern storage does not save level info of all nodes as part of the
+        // header This in upstream storage speeds up view()-ing index from disc, but that API is not relevant in lantern
+        // and having level info here unnecessarily bloats our index, so we do not do it.
+
+        offsets[0u] = offset;
 
         // Rapidly address all the nodes and vectors
         for (std::size_t i = 0; i != header.size; ++i) {
-            node_store(i, node_t{(byte_t*)file.data() + offsets[i]});
-            expect(node_size_bytes(i) == node_t::node_size_bytes(pre_, levels[i]));
+            // offset of 0th is already above, offset of each next one comes from the node before
+            if (i > 0) {
+                offsets[i] = offsets[i - 1] + get_node_at(i - 1).node_size_bytes(pre_);
+                // node_t::node_size_bytes(pre_, levels[i - 1]);
+                if (!exclude_vectors_) {
+                    // add room for vector alignment
+                    offsets[i] += align4(offsets[i]);
+                    offsets[i] += vector_size_;
+                }
+            }
+            node_store(i, node_t{file.data() + offsets[i]});
 
             if (!exclude_vectors_) {
                 size_t vector_offset = offsets[i] + node_size_bytes(i);
-                expect(std::memcmp((byte_t*)file.data() + vector_offset, padding_buffer, align4(vector_offset)) == 0);
+                expect(std::memcmp(file.data() + vector_offset, padding_buffer, align4(vector_offset)) == 0);
                 vector_offset += align4(vector_offset);
 
                 // expect proper alignment
                 expect(align4(vector_offset) == 0);
-                expect(align4((byte_t*)file.data() + vector_offset) == 0);
-                set_vector_at(i, (byte_t*)file.data() + vector_offset, vector_size_, false, false);
+                expect(align4(file.data() + vector_offset) == 0);
+                set_vector_at(i, file.data() + vector_offset, vector_size_, false, false);
             }
         }
         viewed_file_ = std::move(file);
