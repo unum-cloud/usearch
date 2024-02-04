@@ -42,27 +42,30 @@ class std_storage_gt {
     using span_bytes_t = span_gt<byte_t>;
 
   private:
-    using nodes_mutexes_t = bitset_gt<dynamic_allocator_t>;
     using dynamic_allocator_traits_t = std::allocator_traits<dynamic_allocator_t>;
     using levels_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<level_t>;
     using nodes_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<node_t>;
     using offsets_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<std::size_t>;
     using vectors_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<byte_t*>;
-    using nodes_t = buffer_gt<node_t, nodes_allocator_t>;
+
     using node_retriever_t = void* (*)(void* ctx, int index);
+
+    using nodes_mutexes_t = bitset_gt<dynamic_allocator_t>;
+    using nodes_t = buffer_gt<node_t, nodes_allocator_t>;
     using vectors_t = std::vector<span_bytes_t>;
 
     nodes_t nodes_{};
     vectors_t vectors_{};
-    void* retriever_ctx_{};
+    mutable nodes_mutexes_t nodes_mutexes_{};
+
     node_retriever_t external_node_retriever_{};
     node_retriever_t external_node_retriever_mut_{};
+    void* retriever_ctx_{};
 
     precomputed_constants_t pre_{};
     allocator_at allocator_{};
     static_assert(!has_reset<allocator_at>(), "reset()-able memory allocators not supported for this storage provider");
     memory_mapped_file_t viewed_file_{};
-    mutable nodes_mutexes_t nodes_mutexes_{};
     // the next three are used only in serialization/deserialization routines to know how to serialize vectors
     // since this is only for serde/vars are marked mutable to still allow const-ness of saving method interface on
     // storage instance
@@ -150,6 +153,11 @@ class std_storage_gt {
     using lock_type = std::conditional_t<external_storage_ak, dummy_lock, node_lock_t>;
 
     bool reserve(std::size_t count) {
+        if (loaded_ && retriever_ctx_ != nullptr && external_storage_ak) {
+            // we will be using external storage, no need to reserve
+            return true;
+        }
+
         if (count < nodes_.size() && count < nodes_mutexes_.size())
             return true;
         nodes_mutexes_t new_mutexes(count);
