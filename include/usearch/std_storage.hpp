@@ -1,7 +1,9 @@
 
 #pragma once
 
+#include <cstdio>
 #include <deque>
+#include <exception>
 #include <iostream>
 #include <mutex>
 #include <usearch/index.hpp>
@@ -80,7 +82,15 @@ class std_storage_gt {
     // used in place of error handling throughout the class
     static void expect(bool must_be_true) {
         if (!must_be_true)
-            throw std::runtime_error("Failed!");
+            if constexpr (external_storage_ak) {
+                // no good way to get out of here, or even log, since caller may be in postgres
+                // the fprintf will appear in server logs
+                fprintf(stderr, "LANTERN STORAGE: unexpected invariant violation in storage layer");
+                std::terminate();
+            } else {
+
+                throw std::runtime_error("LANTERN STORAGE: unexpected invariant violation in storage layer");
+            }
     }
     // padding buffer, some prefix of which will be used every time we need padding in the serialization
     // of the index.
