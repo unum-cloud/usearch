@@ -35,7 +35,7 @@ namespace usearch {
  *      Because of scalar_t memory requirements in index_*
  *
  **/
-template <bool external_storage_ak, typename key_at, typename compressed_slot_at,
+template <bool is_external_ak, typename key_at, typename compressed_slot_at,
           typename allocator_at = aligned_allocator_gt<byte_t, 64>> //
 class std_storage_gt {
   public:
@@ -81,16 +81,17 @@ class std_storage_gt {
 
     // used in place of error handling throughout the class
     static void expect(bool must_be_true) {
-        if (!must_be_true)
-            if constexpr (external_storage_ak) {
-                // no good way to get out of here, or even log, since caller may be in postgres
-                // the fprintf will appear in server logs
-                fprintf(stderr, "LANTERN STORAGE: unexpected invariant violation in storage layer");
-                std::terminate();
-            } else {
+        if (must_be_true)
+            return;
+        if constexpr (is_external_ak) {
+            // no good way to get out of here, or even log, since caller may be in postgres
+            // the fprintf will appear in server logs
+            fprintf(stderr, "LANTERN STORAGE: unexpected invariant violation in storage layer");
+            std::terminate();
+        } else {
 
-                throw std::runtime_error("LANTERN STORAGE: unexpected invariant violation in storage layer");
-            }
+            throw std::runtime_error("LANTERN STORAGE: unexpected invariant violation in storage layer");
+        }
     }
     // padding buffer, some prefix of which will be used every time we need padding in the serialization
     // of the index.
@@ -117,7 +118,7 @@ class std_storage_gt {
 
     inline node_t get_node_at(std::size_t idx) const noexcept {
         // std::cerr << "getting node at" << std::to_string(idx) << std::endl;
-        if (loaded_ && external_storage_ak) {
+        if (loaded_ && is_external_ak) {
             assert(retriever_ctx_ != nullptr);
             char* tape = (char*)external_node_retriever_(retriever_ctx_, idx);
             return node_t{tape};
@@ -126,7 +127,7 @@ class std_storage_gt {
         return nodes_[idx];
     }
     inline byte_t* get_vector_at(std::size_t idx) const noexcept {
-        if (loaded_ && external_storage_ak) {
+        if (loaded_ && is_external_ak) {
             assert(retriever_ctx_ != nullptr);
             char* tape = (char*)external_node_retriever_(retriever_ctx_, idx);
             node_t node{tape};
@@ -160,10 +161,10 @@ class std_storage_gt {
     // when using external storage, the external storage is responsible for doing appropriate locking before passing
     // objects to us, so we use a dummy lock here When allocating nodes ourselves, however, we do proper per=node
     // locking with a bitfield, identical to how upstream usearch storeage does it
-    using lock_type = std::conditional_t<external_storage_ak, dummy_lock, node_lock_t>;
+    using lock_type = std::conditional_t<is_external_ak, dummy_lock, node_lock_t>;
 
     bool reserve(std::size_t count) {
-        if (loaded_ && retriever_ctx_ != nullptr && external_storage_ak) {
+        if (loaded_ && retriever_ctx_ != nullptr && is_external_ak) {
             // we will be using external storage, no need to reserve
             return true;
         }
@@ -217,7 +218,7 @@ class std_storage_gt {
         nodes_[slot] = node_t{};
     }
     node_t node_make(key_at key, level_t level) noexcept {
-        if (loaded_ && external_storage_ak)
+        if (loaded_ && is_external_ak)
             return node_t{(char*)0x42};
         span_bytes_t node_bytes = node_malloc(level);
         if (!node_bytes)
@@ -230,12 +231,12 @@ class std_storage_gt {
         return node;
     }
     void node_store(size_t slot, node_t node) noexcept {
-        if (loaded_ && external_storage_ak)
+        if (loaded_ && is_external_ak)
             return;
         nodes_[slot] = node;
     }
     void set_vector_at(size_t slot, const byte_t* vector_data, size_t vector_size, bool copy_vector, bool reuse_node) {
-        if (loaded_ && external_storage_ak)
+        if (loaded_ && is_external_ak)
             return;
 
         usearch_assert_m(!(reuse_node && !copy_vector),
@@ -251,7 +252,7 @@ class std_storage_gt {
     allocator_at const& node_allocator() const noexcept { return allocator_; }
 
     constexpr inline lock_type node_lock(std::size_t i) const noexcept {
-        if constexpr (external_storage_ak) {
+        if constexpr (is_external_ak) {
             return {};
         } else {
             while (nodes_mutexes_.atomic_set(i))
@@ -284,7 +285,7 @@ class std_storage_gt {
         expect(output(&vector_size_, sizeof(vector_size_)));
         expect(output(&node_count_, sizeof(node_count_)));
         file_offset_ += sizeof(header) + sizeof(vector_size_) + sizeof(node_count_);
-        if (loaded_ && file_offset_ >= 136 && external_storage_ak) {
+        if (loaded_ && file_offset_ >= 136 && is_external_ak) {
             return {};
         }
 
@@ -336,7 +337,7 @@ class std_storage_gt {
             reset();
             return {};
         }
-        if (external_node_retriever_ && external_storage_ak)
+        if (external_node_retriever_ && is_external_ak)
             return {};
         byte_t in_padding_buffer[64] = {0};
 
@@ -381,7 +382,7 @@ class std_storage_gt {
         memory_mapped_file_t& file, //
                                     //// todo!! document that offset is a reference, or better - do not do it this way
         vectors_metadata_at& metadata_buffer, std::size_t& offset, serialization_config_t config = {}) {
-        if constexpr (external_storage_ak) {
+        if constexpr (is_external_ak) {
             return serialization_result_t{}.failed("cannot view vectors when storage is external");
         }
         reset();
@@ -398,7 +399,7 @@ class std_storage_gt {
     template <typename progress_at = dummy_progress_t>
     serialization_result_t view_nodes_from_file(memory_mapped_file_t file, index_serialized_header_t& header,
                                                 std::size_t offset = 0, progress_at& = {}) noexcept {
-        if constexpr (external_storage_ak) {
+        if constexpr (is_external_ak) {
             return serialization_result_t{}.failed("cannot view vectors when storage is external");
         }
         serialization_result_t result = file.open_if_not();
