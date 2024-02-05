@@ -1312,7 +1312,8 @@ class index_dense_gt {
         if (!raw)
             return result.failed("Can't allocate the index");
 
-        new (raw) index_t(config());
+        throw std::runtime_error("for not supported with lantern storage");
+        // new (raw) index_t(config());
         other.typed_ = raw;
         return result;
     }

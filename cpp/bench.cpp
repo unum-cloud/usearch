@@ -339,42 +339,6 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
 
     std::printf("Recall@1 %.2f %%\n", recall_at_1 * 100.f / dataset.queries_count());
     std::printf("Recall %.2f %%\n", recall_full * 100.f / dataset.queries_count());
-
-    // Perform joins
-    std::vector<default_key_t> man_to_woman(dataset.vectors_count());
-    std::vector<default_key_t> woman_to_man(dataset.vectors_count());
-    std::size_t join_attempts = 0;
-    {
-        index_at& men = index;
-        index_at women = index.copy().index;
-        std::fill(man_to_woman.begin(), man_to_woman.end(), missing_key);
-        std::fill(woman_to_man.begin(), woman_to_man.end(), missing_key);
-        {
-            executor_default_t executor(index.limits().threads());
-            running_stats_printer_t printer{1, "Join"};
-            join_result_t result = join(                          //
-                men, women, index_join_config_t{executor.size()}, //
-                man_to_woman.data(), woman_to_man.data(),         //
-                executor, [&](std::size_t progress, std::size_t total) {
-                    if (progress % 1000 == 0)
-                        printer.print(progress, total);
-                    return true;
-                });
-            join_attempts = result.visited_members;
-        }
-    }
-    // Evaluate join quality
-    std::size_t recall_join = 0, unmatched_count = 0;
-    for (std::size_t i = 0; i != index.size(); ++i) {
-        recall_join += man_to_woman[i] == static_cast<default_key_t>(i);
-        unmatched_count += man_to_woman[i] == missing_key;
-    }
-    std::printf("Recall Joins %.2f %%\n", recall_join * 100.f / index.size());
-    std::printf("Unmatched %.2f %% (%zu items)\n", unmatched_count * 100.f / index.size(), unmatched_count);
-    std::printf("Proposals %.2f / man (%zu total)\n", join_attempts * 1.f / index.size(), join_attempts);
-
-    std::printf("------------\n");
-    std::printf("\n");
 }
 
 void handler(int sig) {
@@ -496,12 +460,6 @@ void run_punned(dataset_at& dataset, args_t const& args, index_config_t config, 
 
     single_shot(dataset, index, true);
     index.save(args.path_output.c_str());
-
-    std::printf("Will benchmark an on-disk view\n");
-
-    index_at index_view = index.fork().index;
-    index_view.view(args.path_output.c_str());
-    single_shot(dataset, index_view, false);
 }
 
 template <typename index_at, typename dataset_at> //
