@@ -10,7 +10,7 @@
 #include <usearch/index.hpp>
 #include <usearch/index_dense.hpp>
 #include <usearch/index_plugins.hpp>
-#include <usearch/std_storage.hpp>
+#include <usearch/lantern_storage.hpp>
 
 using namespace unum::usearch;
 using namespace unum;

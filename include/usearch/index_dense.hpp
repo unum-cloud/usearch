@@ -1,5 +1,5 @@
 #pragma once
-#include "usearch/std_storage.hpp"
+#include "usearch/lantern_storage.hpp"
 #include <stdlib.h> // `aligned_alloc`
 
 #include <functional> // `std::function`

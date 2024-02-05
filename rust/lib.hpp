@@ -4,7 +4,7 @@
 #include <memory> // `std::shared_ptr`
 
 #include <usearch/index_dense.hpp>
-#include <usearch/std_storage.hpp>
+#include <usearch/lantern_storage.hpp>
 
 struct Matches;
 struct IndexOptions;
