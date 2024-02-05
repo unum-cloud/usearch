@@ -2,10 +2,7 @@
 #pragma once
 
 #include <cstdio>
-#include <deque>
 #include <exception>
-#include <iostream>
-#include <mutex>
 #include <usearch/index.hpp>
 #include <usearch/index_plugins.hpp>
 #include <usearch/storage.hpp>
@@ -37,7 +34,7 @@ namespace usearch {
  **/
 template <bool is_external_ak, typename key_at, typename compressed_slot_at,
           typename allocator_at = aligned_allocator_gt<byte_t, 64>> //
-class std_storage_gt {
+class lantern_storage_gt {
   public:
     using key_t = key_at;
     using node_t = node_at<key_t, compressed_slot_at>;
@@ -113,7 +110,7 @@ class std_storage_gt {
     }
 
   public:
-    std_storage_gt(index_config_t config, allocator_at allocator = {})
+    lantern_storage_gt(index_config_t config, allocator_at allocator = {})
         : pre_(node_t::precompute_(config)), allocator_(allocator) {}
 
     inline node_t get_node_at(std::size_t idx) const noexcept {
@@ -458,10 +455,10 @@ class std_storage_gt {
 };
 
 template <typename key_at, typename compressed_slot_at, typename allocator_at = aligned_allocator_gt<byte_t, 64>>
-using std_storage_at = std_storage_gt<false, key_at, compressed_slot_at, allocator_at>;
+using lantern_storage_at = lantern_storage_gt<false, key_at, compressed_slot_at, allocator_at>;
 
-using lantern_external_storage_t = std_storage_gt<true, default_key_t, default_slot_t>;
-using lantern_internal_storage_t = std_storage_gt<false, default_key_t, default_slot_t>;
+using lantern_external_storage_t = lantern_storage_gt<true, default_key_t, default_slot_t>;
+using lantern_internal_storage_t = lantern_storage_gt<false, default_key_t, default_slot_t>;
 
 ASSERT_VALID_STORAGE(lantern_external_storage_t);
 ASSERT_VALID_STORAGE(lantern_internal_storage_t);

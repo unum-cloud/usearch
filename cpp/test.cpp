@@ -320,19 +320,19 @@ int main(int, char**) {
             {
                 using slot_t = std::uint32_t;
                 using storage_v2_t = storage_v2_at<key_t, slot_t>;
-                using std_storage_t = std_storage_at<key_t, slot_t>;
+                using lantern_storage_t = lantern_storage_at<key_t, slot_t>;
 
                 test_cosine<storage_v2_t, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
-                test_cosine<std_storage_t, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
+                test_cosine<lantern_storage_t, float, std::int64_t, std::uint32_t>(collection_size, dimensions);
             }
             {
                 using slot_t = uint40_t;
                 using storage_v2_t = storage_v2_at<key_t, slot_t>;
-                using std_storage_t = std_storage_at<key_t, slot_t>;
+                using lantern_storage_t = lantern_storage_at<key_t, slot_t>;
 
                 std::printf("Indexing %zu vectors with cos: <float, std::int64_t, uint40_t> \n", collection_size);
                 test_cosine<storage_v2_t, float, key_t, slot_t>(collection_size, dimensions);
-                test_cosine<std_storage_t, float, key_t, slot_t>(collection_size, dimensions);
+                test_cosine<lantern_storage_t, float, key_t, slot_t>(collection_size, dimensions);
             }
         }
 
