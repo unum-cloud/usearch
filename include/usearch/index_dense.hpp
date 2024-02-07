@@ -733,16 +733,7 @@ class index_dense_gt {
      *  @brief Reserves memory for the index and the keyed lookup.
      *  @return `true` if the memory reservation was successful, `false` otherwise.
      */
-    bool reserve(index_limits_t limits) {
-        // todo:: ask-Ashot this seems to allow search() and add() on the dense index, concurrent to this reserve
-        // But that is not safe on typed_ as typed_->reserve() reallocates the lock buffer, discarding the old one
-        // without checking if anything is locked
-        {
-            unique_lock_t lock(slot_lookup_mutex_);
-            slot_lookup_.reserve(limits.members);
-        }
-        return typed_->reserve(limits);
-    }
+    bool reserve(index_limits_t limits) { return typed_->reserve(limits); }
 
     /**
      *  @brief Erases all the vectors from the index.
@@ -1079,15 +1070,6 @@ class index_dense_gt {
     }
 
     /**
-     *  @brief Checks if a vector with specified key is present.
-     *  @return `true` if the key is present in the index, `false` otherwise.
-     */
-    bool contains(vector_key_t key) const {
-        shared_lock_t lock(slot_lookup_mutex_);
-        return slot_lookup_.contains(key_and_slot_t::any_slot(key));
-    }
-
-    /**
      *  @brief Count the number of vectors with specified key present.
      *  @return Zero if nothing is found, a positive integer otherwise.
      */
@@ -1385,9 +1367,6 @@ class index_dense_gt {
         vector_key_t key, scalar_at const* vector, //
         std::size_t thread, bool force_vector_copy, cast_t const& cast, level_t level) {
 
-        if (!multi() && contains(key))
-            return add_result_t{}.failed("Duplicate keys not allowed in high-level wrappers");
-
         // Cast the vector, if needed for compatibility with `metric_`
         thread_lock_t lock = thread_lock_(thread);
         bool copy_vector = !config_.exclude_vectors || force_vector_copy;
@@ -1399,18 +1378,10 @@ class index_dense_gt {
                 vector_data = casted_data, copy_vector = true;
         }
 
-        // Check if there are some removed entries, whose nodes we can reuse
-        compressed_slot_t free_slot = default_free_value<compressed_slot_t>();
-        {
-            std::unique_lock<std::mutex> lock(free_keys_mutex_);
-            free_keys_.try_pop(free_slot);
-        }
-
         // Perform the insertion or the update
-        bool reuse_node = free_slot != default_free_value<compressed_slot_t>();
+        bool reuse_node = false;
+
         auto on_success = [&](member_ref_t member) {
-            unique_lock_t slot_lock(slot_lookup_mutex_);
-            slot_lookup_.try_emplace(key_and_slot_t{key, static_cast<compressed_slot_t>(member.slot)});
             storage_.set_vector_at(member.slot, vector_data, metric_.bytes_per_vector(), copy_vector, reuse_node);
         };
 
@@ -1420,9 +1391,7 @@ class index_dense_gt {
 
         metric_proxy_t metric{*this};
         usearch_assert_m(!reuse_node, "Updates not supported with Lantern");
-        return reuse_node //
-                   ? typed_->update(typed_->iterator_at(free_slot), key, vector_data, metric, update_config, on_success)
-                   : typed_->add(key, level, vector_data, metric, update_config, on_success);
+        return typed_->add(key, level, vector_data, metric, update_config, on_success);
     }
 
     template <typename scalar_at>
