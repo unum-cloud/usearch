@@ -1886,6 +1886,8 @@ class index_gt {
     using neighbors_count_t = std::uint32_t;
 
     using visits_hash_set_t = growing_hash_set_gt<compressed_slot_t, hash_gt<compressed_slot_t>, dynamic_allocator_t>;
+    using visits_bitset_t = bitset_gt<>;
+    using visits_set_t = visits_bitset_t;
 
     /// @brief A space-efficient internal data-structure used in graph traversal queues.
     struct candidate_t {
@@ -1942,7 +1944,7 @@ class index_gt {
     struct usearch_align_m context_t {
         top_candidates_t top_candidates{};
         next_candidates_t next_candidates{};
-        visits_hash_set_t visits{};
+        visits_set_t visits{};
         std::default_random_engine level_generator{};
         std::size_t iteration_cycles{};
         std::size_t computed_distances_count{};
@@ -2162,6 +2164,9 @@ class index_gt {
         limits_ = limits;
         nodes_capacity_ = limits.members;
         contexts_ = std::move(new_contexts);
+        for (std::size_t i = 0; i < limits.threads(); i++) {
+            contexts_[i].visits.reserve(nodes_capacity_);
+        }
         return true;
     }
 
@@ -3073,7 +3078,7 @@ class index_gt {
 
         index_gt const& index_;
         neighbors_ref_t neighbors_;
-        visits_hash_set_t& visits_;
+        visits_set_t& visits_;
         std::size_t current_;
 
         candidates_iterator_t& skip_missing() noexcept {
@@ -3098,7 +3103,7 @@ class index_gt {
         using reference = misaligned_ref_gt<element_t>;
 
         reference operator*() const noexcept { return slot(); }
-        candidates_iterator_t(index_gt const& index, neighbors_ref_t neighbors, visits_hash_set_t& visits,
+        candidates_iterator_t(index_gt const& index, neighbors_ref_t neighbors, visits_set_t& visits,
                               std::size_t progress) noexcept
             : index_(index), neighbors_(neighbors), visits_(visits), current_(progress) {}
         candidates_iterator_t operator++(int) noexcept {
@@ -3121,7 +3126,7 @@ class index_gt {
     struct candidates_range_t {
         index_gt const& index;
         neighbors_ref_t neighbors;
-        visits_hash_set_t& visits;
+        visits_set_t& visits;
 
         candidates_iterator_t begin() const noexcept {
             return candidates_iterator_t{index, neighbors, visits, 0}.skip_missing();
@@ -3134,7 +3139,7 @@ class index_gt {
         value_at&& query, metric_at&& metric, prefetch_at&& prefetch, //
         std::size_t closest_slot, level_t begin_level, level_t end_level, context_t& context) const noexcept {
 
-        visits_hash_set_t& visits = context.visits;
+        visits_set_t& visits = context.visits;
         visits.clear();
 
         // Optional prefetching
@@ -3181,7 +3186,7 @@ class index_gt {
         std::size_t start_slot, std::size_t new_slot, level_t level, std::size_t top_limit,
         context_t& context) noexcept {
 
-        visits_hash_set_t& visits = context.visits;
+        visits_set_t& visits = context.visits;
         next_candidates_t& next = context.next_candidates; // pop min, push
         top_candidates_t& top = context.top_candidates;    // pop max, push
 
@@ -3254,7 +3259,7 @@ class index_gt {
         value_at&& query, metric_at&& metric, predicate_at&& predicate, prefetch_at&& prefetch, //
         std::size_t start_slot, std::size_t expansion, context_t& context) const noexcept {
 
-        visits_hash_set_t& visits = context.visits;
+        visits_set_t& visits = context.visits;
         next_candidates_t& next = context.next_candidates; // pop min, push
         top_candidates_t& top = context.top_candidates;    // pop max, push
         std::size_t const top_limit = expansion;
