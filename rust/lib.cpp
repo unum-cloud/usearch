@@ -63,7 +63,6 @@ size_t NativeIndex::rename(vector_key_t from, vector_key_t to) const {
 }
 
 size_t NativeIndex::count(vector_key_t key) const { return index_->count(key); }
-bool NativeIndex::contains(vector_key_t key) const { return index_->contains(key); }
 
 void NativeIndex::reserve(size_t capacity) const { index_->reserve(capacity); }
 
