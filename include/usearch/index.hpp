@@ -1657,7 +1657,7 @@ template <typename key_at, typename slot_at> class node_at {
     inline span_bytes_t node_bytes(const precomputed_constants_t& pre) const noexcept {
         return {tape(), node_size_bytes(pre, level())};
     }
-    inline std::size_t node_size_bytes(const precomputed_constants_t& pre) noexcept {
+    inline std::size_t node_size_bytes(const precomputed_constants_t& pre) const noexcept {
         return head_size_bytes() + node_neighbors_bytes_(pre, level());
     }
     static inline std::size_t node_size_bytes(const precomputed_constants_t& pre, level_t level) noexcept {
