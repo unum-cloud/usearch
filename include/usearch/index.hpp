@@ -425,6 +425,23 @@ template <typename allocator_at = std::allocator<byte_t>> class bitset_gt {
         count_ = 0;
     }
 
+    bool reserve(std::size_t capacity) {
+        if (slots(capacity) <= count_)
+            return true;
+        compressed_slot_t* new_slots =
+            (compressed_slot_t*)allocator_t{}.allocate(slots(capacity) * sizeof(compressed_slot_t));
+        if (!new_slots)
+            return false;
+        if (slots_) {
+            std::memcpy(new_slots, slots_, count_ * sizeof(compressed_slot_t));
+            allocator_t{}.deallocate((byte_t*)slots_, count_ * sizeof(compressed_slot_t));
+        }
+        slots_ = new_slots;
+        count_ = slots(capacity);
+        size_ = capacity;
+        return true;
+    }
+
     bitset_gt(std::size_t capacity) noexcept
         : slots_((compressed_slot_t*)allocator_t{}.allocate(slots(capacity) * sizeof(compressed_slot_t))),
           size_(slots_ ? capacity : 0u), count_(slots_ ? slots(capacity) : 0u) {
