@@ -320,7 +320,14 @@ void usearch_add_external(                                                      
     if (!result)
         *error = result.error.release();
 }
-// usearch_set_node_retriever function used to exist, but is not used
+USEARCH_EXPORT void usearch_set_node_retriever(usearch_index_t index, void* retriever_ctx,
+                                               usearch_node_retriever_t retriever,
+                                               usearch_node_retriever_t retriever_mut, usearch_error_t* error) {
+
+    index_dense_t* cast_index = reinterpret_cast<index_dense_t*>(index);
+    assert(retriever_ctx && retriever && retriever_mut);
+    cast_index->set_node_retriever(retriever_ctx, retriever, retriever_mut);
+}
 
 USEARCH_EXPORT size_t usearch_count(usearch_index_t index, usearch_key_t key, usearch_error_t*) {
     assert(index);

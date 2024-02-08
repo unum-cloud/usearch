@@ -2795,7 +2795,6 @@ class index_gt {
         // allocate dynamic contexts for queries (storage has already been allocated for the deserialization process)
         index_limits_t limits;
         limits.members = header.size;
-        assert(header.size < 1000000);
         if (!reserve(limits)) {
             reset();
             return result.failed("Out of memory");
