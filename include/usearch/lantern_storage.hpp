@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <cmath>
 #include <cstdio>
 #include <exception>
 #include <usearch/index.hpp>
@@ -46,6 +47,7 @@ class lantern_storage_gt {
     using span_bytes_t = span_gt<byte_t>;
 
   private:
+    using span_floats_t = span_gt<float>;
     using dynamic_allocator_traits_t = std::allocator_traits<dynamic_allocator_t>;
     using levels_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<level_t>;
     using nodes_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<node_t>;
@@ -57,6 +59,22 @@ class lantern_storage_gt {
     using nodes_mutexes_t = bitset_gt<dynamic_allocator_t>;
     using nodes_t = buffer_gt<node_t, nodes_allocator_t>;
     using vectors_t = std::vector<span_bytes_t>;
+
+    class codebook_t {
+
+        float* tape_{};
+        size_t dimensions_{};
+        size_t subvector_dim_{};
+
+      public:
+        codebook_t() = default;
+        codebook_t(float* tape, size_t dimensions, size_t subvectors)
+            : tape_(tape), dimensions_(dimensions), subvector_dim_(std::ceil((float)dimensions / subvectors)) {}
+
+        span_floats_t get(size_t centroid_id, size_t subvector_id) {
+            return span_floats_t{tape_ + centroid_id * dimensions_ + subvector_id * subvector_dim_, subvector_dim_};
+        }
+    };
 
     nodes_t nodes_{};
     vectors_t vectors_{};
@@ -77,7 +95,7 @@ class lantern_storage_gt {
     mutable size_t node_count_{};
     bool loaded_ = false;
     bool pq_{};
-    float* pq_codebook_{};
+    codebook_t pq_codebook_{};
     byte_t* pq_constant_{};
     mutable size_t vector_size_{};
     // defaulted to true because that is what test.cpp assumes when using this storage directly
@@ -129,14 +147,13 @@ class lantern_storage_gt {
         memset(pq_constant_, 0, vector_size_ * 256);
     }
     lantern_storage_gt(index_config_t config, float* codebook, allocator_at allocator = {})
-        : pre_(node_t::precompute_(config)), allocator_(allocator), pq_(config.pq) {
+        : pre_(node_t::precompute_(config)), allocator_(allocator), pq_(config.pq),
+          pq_codebook_(codebook, vector_size_, 32) {
         // if (codebook)
         //     assert(pq_ == true);
         pq_constant_ = allocator_.allocate(vector_size_ * 256);
         expect(pq_constant_);
         memset(pq_constant_, 0, vector_size_ * 256);
-
-        pq_codebook_ = codebook;
     }
 
     inline node_t get_node_at(std::size_t idx) const noexcept {
@@ -294,8 +311,8 @@ class lantern_storage_gt {
             if (pq_)
                 std::memcpy(vectors_pq_[slot].data(), vector_data + vector_size, pq_size);
 
-            std::cerr << "the 2 chars after vector: " << std::to_string(*(char*)(vector_data + vector_size)) << " "
-                      << std::to_string(*(char*)(vector_data + vector_size + 1)) << std::endl;
+            // std::cerr << "the 2 chars after vector: " << std::to_string(*(char*)(vector_data + vector_size)) << " "
+            //           << std::to_string(*(char*)(vector_data + vector_size + 1)) << std::endl;
         } else {
             vectors_[slot] = span_bytes_t{(byte_t*)vector_data, vector_size};
             if (pq_)
