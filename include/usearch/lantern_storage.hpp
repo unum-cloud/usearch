@@ -7,6 +7,11 @@
 #include <usearch/index_plugins.hpp>
 #include <usearch/storage.hpp>
 
+#ifndef NDEBUG
+#include <iostream>
+#include <string>
+#endif // !NDEBUG
+
 namespace unum {
 namespace usearch {
 
@@ -55,6 +60,7 @@ class lantern_storage_gt {
 
     nodes_t nodes_{};
     vectors_t vectors_{};
+    vectors_t vectors_pq_{};
     mutable nodes_mutexes_t nodes_mutexes_{};
 
     node_retriever_t external_node_retriever_{};
@@ -70,6 +76,8 @@ class lantern_storage_gt {
     // storage instance
     mutable size_t node_count_{};
     bool loaded_ = false;
+    bool pq_{};
+    byte_t* pq_constant_{};
     mutable size_t vector_size_{};
     // defaulted to true because that is what test.cpp assumes when using this storage directly
     mutable bool exclude_vectors_ = true;
@@ -111,7 +119,14 @@ class lantern_storage_gt {
 
   public:
     lantern_storage_gt(index_config_t config, allocator_at allocator = {})
-        : pre_(node_t::precompute_(config)), allocator_(allocator) {}
+        : pre_(node_t::precompute_(config)), allocator_(allocator), pq_(config.pq) {
+        if (pq_) {
+
+            pq_constant_ = allocator_.allocate(vector_size_ * 256);
+            expect(pq_constant_);
+        }
+        memset(pq_constant_, 0, vector_size_ * 256);
+    }
 
     inline node_t get_node_at(std::size_t idx) const noexcept {
         // std::cerr << "getting node at" << std::to_string(idx) << std::endl;
@@ -127,8 +142,14 @@ class lantern_storage_gt {
         if (loaded_ && is_external_ak) {
             assert(retriever_ctx_ != nullptr);
             char* tape = (char*)external_node_retriever_(retriever_ctx_, idx);
+            if (pq_)
+                return pq_constant_;
             node_t node{tape};
             return tape + node.node_size_bytes(pre_);
+        }
+        if (pq_) {
+            // todo:: do decompression here
+            return pq_constant_;
         }
 
         return vectors_[idx].data();
@@ -178,6 +199,8 @@ class lantern_storage_gt {
         nodes_mutexes_ = std::move(new_mutexes);
         nodes_ = std::move(new_nodes);
         vectors_.resize(count);
+        if (pq_)
+            vectors_pq_.resize(count);
 
         return true;
     }
@@ -197,9 +220,18 @@ class lantern_storage_gt {
                     allocator_.deallocate(v.data(), v.size());
                 }
             }
+            n = vectors_pq_.size();
+            for (std::size_t i = 0; i != n; ++i) {
+                span_bytes_t v = vectors_pq_[i];
+                if (v.data()) {
+                    allocator_.deallocate(v.data(), v.size());
+                }
+            }
         }
         if (vectors_.data())
             std::fill(vectors_.begin(), vectors_.end(), span_bytes_t{});
+        if (vectors_pq_.data())
+            std::fill(vectors_pq_.begin(), vectors_pq_.end(), span_bytes_t{});
         if (nodes_.data())
             std::fill(nodes_.begin(), nodes_.end(), node_t{});
     }
@@ -238,12 +270,26 @@ class lantern_storage_gt {
 
         usearch_assert_m(!(reuse_node && !copy_vector),
                          "Cannot reuse node when not copying as there is no allocation needed");
+
+        const int pq_size = vector_size / 8 / 4;
         if (copy_vector) {
-            if (!reuse_node)
+            if (!reuse_node) {
                 vectors_[slot] = span_bytes_t{allocator_.allocate(vector_size), vector_size};
+                if (pq_) {
+                    vectors_pq_[slot] = span_bytes_t{allocator_.allocate(pq_size), pq_size};
+                }
+            }
             std::memcpy(vectors_[slot].data(), vector_data, vector_size);
-        } else
+            if (pq_)
+                std::memcpy(vectors_pq_[slot].data(), vector_data + vector_size, pq_size);
+
+            std::cerr << "the 2 chars after vector: " << std::to_string(*(char*)(vector_data + vector_size)) << " "
+                      << std::to_string(*(char*)(vector_data + vector_size + 1)) << std::endl;
+        } else {
             vectors_[slot] = span_bytes_t{(byte_t*)vector_data, vector_size};
+            if (pq_)
+                vectors_pq_[slot] = span_bytes_t{(byte_t*)vector_data + vector_size, pq_size};
+        }
     }
 
     allocator_at const& node_allocator() const noexcept { return allocator_; }

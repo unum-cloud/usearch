@@ -119,7 +119,7 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
 
     assert(options && error);
 
-    index_dense_config_t config(options->connectivity, options->expansion_add, options->expansion_search);
+    index_dense_config_t config(options->connectivity, options->expansion_add, options->expansion_search, options->pq);
     config.multi = options->multi;
     metric_kind_t metric_kind = metric_kind_to_cpp(options->metric_kind);
     scalar_kind_t scalar_kind = scalar_kind_to_cpp(options->quantization);
