@@ -77,6 +77,7 @@ class lantern_storage_gt {
     mutable size_t node_count_{};
     bool loaded_ = false;
     bool pq_{};
+    float* pq_codebook_{};
     byte_t* pq_constant_{};
     mutable size_t vector_size_{};
     // defaulted to true because that is what test.cpp assumes when using this storage directly
@@ -126,6 +127,16 @@ class lantern_storage_gt {
             expect(pq_constant_);
         }
         memset(pq_constant_, 0, vector_size_ * 256);
+    }
+    lantern_storage_gt(index_config_t config, float* codebook, allocator_at allocator = {})
+        : pre_(node_t::precompute_(config)), allocator_(allocator), pq_(config.pq) {
+        // if (codebook)
+        //     assert(pq_ == true);
+        pq_constant_ = allocator_.allocate(vector_size_ * 256);
+        expect(pq_constant_);
+        memset(pq_constant_, 0, vector_size_ * 256);
+
+        pq_codebook_ = codebook;
     }
 
     inline node_t get_node_at(std::size_t idx) const noexcept {

@@ -129,10 +129,11 @@ USEARCH_EXPORT typedef usearch_index_metadata_t metadata_t;
 /**
  *  @brief Initializes a new instance of the index.
  *  @param options Pointer to the `usearch_init_options_t` structure containing initialization options.
+ *  @param codebook When creating a pq-quantized index, this points to the codebook to use, otherwise is null
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  *  @return A handle to the initialized USearch index, or `NULL` on failure.
  */
-USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, usearch_error_t* error);
+USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, float* codebook, usearch_error_t* error);
 
 /**
  *  @brief Frees the resources associated with the index.

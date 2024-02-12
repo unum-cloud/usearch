@@ -499,6 +499,7 @@ class index_dense_gt {
     static index_dense_gt make(                                        //
         metric_t metric,                                               //
         index_dense_config_t config = {},                              //
+        float* codebook = nullptr,                                     //
         std::size_t num_threads = std::thread::hardware_concurrency(), //
         vector_key_t free_key = default_free_value<vector_key_t>()) {
 
@@ -517,7 +518,11 @@ class index_dense_gt {
 
         // Available since C11, but only C++17, so we use the C version.
         index_t* raw = index_allocator_t{}.allocate(1);
-        result.storage_ = storage_t(config);
+        if (codebook != nullptr) {
+            result.storage_ = storage_t(config, codebook);
+        } else {
+            result.storage_ = storage_t(config);
+        }
         new (raw) index_t(&result.storage_, config);
         result.typed_ = raw;
         return result;

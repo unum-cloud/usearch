@@ -115,7 +115,7 @@ search_result_t search_(index_dense_t* index, void const* vector, scalar_kind_t 
 
 extern "C" {
 
-USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, usearch_error_t* error) {
+USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, float* codebook, usearch_error_t* error) {
 
     assert(options && error);
 
@@ -134,9 +134,9 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
     index_dense_t index;
     if (options->num_threads != 0) {
         assert(options->num_threads <= std::thread::hardware_concurrency());
-        index = index_dense_t::make(metric, config, options->num_threads);
+        index = index_dense_t::make(metric, config, codebook, options->num_threads);
     } else {
-        index = index_dense_t::make(metric, config);
+        index = index_dense_t::make(metric, config, codebook);
     }
 
     if (options->retriever != nullptr || options->retriever_mut != nullptr) {
