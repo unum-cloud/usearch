@@ -1,3 +1,4 @@
+#include "usearch/index_plugins.hpp"
 #include <cassert>
 #include <vector>
 
@@ -14,10 +15,11 @@ using namespace unum;
 // the macro is defined in lantern.so builds to tell usearch to not deal with storage internally,
 // and assume postgres handles storage
 #ifdef LANTERN_INSIDE_POSTGRES
-using index_dense_t = index_dense_gt<default_key_t, default_slot_t, lantern_external_storage_t>;
+using lantern_storage_t = lantern_external_storage_t;
 #else
-using index_dense_t = index_dense_gt<default_key_t, default_slot_t, lantern_internal_storage_t>;
+using lantern_storage_t = lantern_internal_storage_t;
 #endif
+using index_dense_t = index_dense_gt<default_key_t, default_slot_t, lantern_storage_t>;
 
 using add_result_t = typename index_dense_t::add_result_t;
 using search_result_t = typename index_dense_t::search_result_t;
@@ -119,7 +121,8 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, flo
 
     assert(options && error);
 
-    index_dense_config_t config(options->connectivity, options->expansion_add, options->expansion_search, options->pq);
+    index_dense_config_t config(options->connectivity, options->expansion_add, options->expansion_search);
+    std::cerr << "config pq" << std::to_string(options->pq) << "\n";
     config.multi = options->multi;
     metric_kind_t metric_kind = metric_kind_to_cpp(options->metric_kind);
     scalar_kind_t scalar_kind = scalar_kind_to_cpp(options->quantization);
@@ -131,13 +134,13 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, flo
                                            metric_punned_signature_t::array_array_k,          //
                                            metric_kind, scalar_kind);
 
-    index_dense_t index;
-    if (options->num_threads != 0) {
-        assert(options->num_threads <= std::thread::hardware_concurrency());
-        index = index_dense_t::make(metric, config, codebook, options->num_threads);
-    } else {
-        index = index_dense_t::make(metric, config, codebook);
-    }
+    storage_options opts{};
+    opts.dimensions = options->dimensions;
+    opts.pq = options->pq;
+    opts.num_centroids = options->num_centroids;
+    opts.num_subvectors = options->num_subvectors;
+    opts.scalar_bytes = bits_per_scalar(scalar_kind) / 8;
+    index_dense_t index = index_dense_t::make(metric, opts, options->num_threads, config, codebook);
 
     if (options->retriever != nullptr || options->retriever_mut != nullptr) {
         if (options->retriever == nullptr || options->retriever_mut == nullptr) {
@@ -199,8 +202,26 @@ void usearch_update_header(usearch_index_t index, char* headerp, usearch_error_t
 
 // ready!
 USEARCH_EXPORT usearch_index_metadata_t usearch_index_metadata(usearch_index_t index, usearch_error_t* error) {
-    usearch_index_metadata_t res;
+    usearch_index_metadata_t res{};
     precomputed_constants_t pre = reinterpret_cast<index_dense_t*>(index)->pre();
+    lantern_storage_t::storage_metadata storage_meta = reinterpret_cast<index_dense_t*>(index)->storage_metadata();
+    res.init_options = {
+        .metric_kind = metric_kind_to_c(reinterpret_cast<index_dense_t*>(index)->metric().metric_kind()),
+        .metric = nullptr,
+        .quantization = scalar_kind_to_c(reinterpret_cast<index_dense_t*>(index)->metric().scalar_kind()),
+        .dimensions = reinterpret_cast<index_dense_t*>(index)->dimensions(),
+        .connectivity = reinterpret_cast<index_dense_t*>(index)->connectivity(),
+        .expansion_add = reinterpret_cast<index_dense_t*>(index)->expansion_add(),
+        .expansion_search = reinterpret_cast<index_dense_t*>(index)->expansion_search(),
+        .multi = reinterpret_cast<index_dense_t*>(index)->multi(),
+        .retriever_ctx = storage_meta.retriever_ctx,
+        .retriever = storage_meta.retriever,
+        .retriever_mut = storage_meta.retriever_mut,
+        .num_threads = reinterpret_cast<index_dense_t*>(index)->limits().threads(),
+        .pq = storage_meta.pq,
+        .num_centroids = storage_meta.pq_num_centroids,
+        .num_subvectors = storage_meta.pq_num_subvectors,
+    };
 
     res.inverse_log_connectivity = pre.inverse_log_connectivity;
     res.neighbors_bytes = pre.neighbors_bytes;

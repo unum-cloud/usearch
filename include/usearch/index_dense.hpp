@@ -1,4 +1,5 @@
 #pragma once
+#include "usearch.h"
 #include "usearch/lantern_storage.hpp"
 #include <stdlib.h> // `aligned_alloc`
 
@@ -111,8 +112,8 @@ struct index_dense_config_t : public index_config_t {
     index_dense_config_t(index_config_t base) noexcept : index_config_t(base) {}
 
     index_dense_config_t(std::size_t c = default_connectivity(), std::size_t ea = default_expansion_add(),
-                         std::size_t es = default_expansion_search(), bool pq = false) noexcept
-        : index_config_t(c, pq), expansion_add(ea ? ea : default_expansion_add()),
+                         std::size_t es = default_expansion_search()) noexcept
+        : index_config_t(c), expansion_add(ea ? ea : default_expansion_add()),
           expansion_search(es ? es : default_expansion_search()) {}
 };
 
@@ -375,7 +376,7 @@ class index_dense_gt {
     /// @brief The underlying storage provider for this index that determines file storage layout,
     /// implements serialization/deserialization routines, and provides an API to add, update and
     /// retrieve vectors and hnsw graph nodes.
-    storage_t storage_{config_};
+    storage_t storage_{{}, config_};
 
     /// @brief Originally forms and array of integers [0, threads], marking all.
     mutable std::vector<std::size_t> available_threads_;
@@ -496,14 +497,20 @@ class index_dense_gt {
      *  @param[in] free_key The key used for freed vectors (optional).
      *  @return An instance of ::index_dense_gt.
      */
-    static index_dense_gt make(                                        //
-        metric_t metric,                                               //
-        index_dense_config_t config = {},                              //
-        float* codebook = nullptr,                                     //
-        std::size_t num_threads = std::thread::hardware_concurrency(), //
+    static index_dense_gt make(           //
+        metric_t metric,                  //
+        const storage_options& options,   //
+        size_t num_threads,               //
+        index_dense_config_t config = {}, //
+        const float* codebook = nullptr,  //
         vector_key_t free_key = default_free_value<vector_key_t>()) {
 
         scalar_kind_t scalar_kind = metric.scalar_kind();
+        if (num_threads == 0) {
+            num_threads = std::thread::hardware_concurrency();
+        } else {
+            assert(num_threads <= std::thread::hardware_concurrency());
+        }
 
         index_dense_gt result;
         result.config_ = config;
@@ -519,9 +526,9 @@ class index_dense_gt {
         // Available since C11, but only C++17, so we use the C version.
         index_t* raw = index_allocator_t{}.allocate(1);
         if (codebook != nullptr) {
-            result.storage_ = storage_t(config, codebook);
+            result.storage_ = storage_t(options, config, codebook);
         } else {
-            result.storage_ = storage_t(config);
+            result.storage_ = storage_t(options, config);
         }
         new (raw) index_t(&result.storage_, config);
         result.typed_ = raw;
@@ -950,6 +957,8 @@ class index_dense_gt {
     void set_node_retriever(void* retriever_ctx, node_retriever_t node_retriever, node_retriever_t node_retriever_mut) {
         typed_->set_node_retriever(retriever_ctx, node_retriever, node_retriever_mut);
     }
+
+    typename storage_t::storage_metadata storage_metadata() { return typed_->storage_metadata(); }
 
     /**
      *  @brief Saves the index to a file.

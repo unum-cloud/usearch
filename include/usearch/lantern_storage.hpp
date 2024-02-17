@@ -1,8 +1,11 @@
 
 #pragma once
 
+#include "usearch.h"
 #include <cmath>
+#include <csignal>
 #include <cstdio>
+#include <cstring>
 #include <exception>
 #include <usearch/index.hpp>
 #include <usearch/index_plugins.hpp>
@@ -15,6 +18,14 @@
 
 namespace unum {
 namespace usearch {
+
+struct storage_options {
+    size_t dimensions;
+    size_t scalar_bytes;
+    bool pq;
+    size_t num_centroids;
+    size_t num_subvectors;
+};
 
 /**
  * @brief  A simple Storage implementation that uses standard cpp containers and complies with the usearch storage
@@ -45,16 +56,26 @@ class lantern_storage_gt {
     using key_t = key_at;
     using node_t = node_at<key_t, compressed_slot_at>;
     using span_bytes_t = span_gt<byte_t>;
+    using node_retriever_t = void* (*)(void* ctx, int index);
+
+    struct storage_metadata {
+        bool pq;
+        size_t pq_num_centroids;
+        size_t pq_num_subvectors;
+        void* retriever_ctx;
+        node_retriever_t retriever;
+        node_retriever_t retriever_mut;
+    };
+
+    using storage_metadata_t = storage_metadata;
 
   private:
-    using span_floats_t = span_gt<float>;
+    using span_floats_t = span_gt<const float>;
     using dynamic_allocator_traits_t = std::allocator_traits<dynamic_allocator_t>;
     using levels_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<level_t>;
     using nodes_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<node_t>;
     using offsets_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<std::size_t>;
     using vectors_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<byte_t*>;
-
-    using node_retriever_t = void* (*)(void* ctx, int index);
 
     using nodes_mutexes_t = bitset_gt<dynamic_allocator_t>;
     using nodes_t = buffer_gt<node_t, nodes_allocator_t>;
@@ -62,17 +83,73 @@ class lantern_storage_gt {
 
     class codebook_t {
 
-        float* tape_{};
+        const float* tape_{};
         size_t dimensions_{};
         size_t subvector_dim_{};
+        size_t num_centroids_{};
 
       public:
         codebook_t() = default;
-        codebook_t(float* tape, size_t dimensions, size_t subvectors)
-            : tape_(tape), dimensions_(dimensions), subvector_dim_(std::ceil((float)dimensions / subvectors)) {}
+        codebook_t(const float* tape, size_t dimensions, size_t num_centroids, size_t num_subvectors)
+            : tape_(tape), dimensions_(dimensions), num_centroids_(num_centroids) {
+            subvector_dim_ = dimensions / num_subvectors;
+            expect(dimensions_ < 2000, "vectors larger than 2k dimensions not supported");
+            expect(num_centroids <= 256, "number of centroids must fit in a byte");
+            expect(num_centroids > 0 && num_subvectors > 0, "subvector and centroid counts must be larger than zero");
+        }
 
-        span_floats_t get(size_t centroid_id, size_t subvector_id) {
+        size_t num_subvectors() const { return dimensions_ / subvector_dim_; }
+        size_t num_centroids() const { return num_centroids_; }
+
+        span_floats_t get(size_t centroid_id, size_t subvector_id) const {
             return span_floats_t{tape_ + centroid_id * dimensions_ + subvector_id * subvector_dim_, subvector_dim_};
+        }
+
+        static float distance(span_floats_t v1, span_floats_t v2) {
+            float dist = 0;
+            expect(v1.size() == v2.size());
+            for (int i = 0; i < v1.size(); i++) {
+                dist += std::pow(v1[i] - v2[i], 2.f);
+            }
+            return dist;
+        }
+
+        void compress(const float* vector, byte_t* dst) const {
+            expect(tape_ != nullptr, "compress called on uninitialized codebook");
+            expect(num_centroids_ <= 256, "num centroids must fit in a byte");
+            std::vector<byte_t> quantized;
+            quantized.reserve(std::ceil(dimensions_ / subvector_dim_));
+
+            for (int i = 0, id = 0; i < dimensions_; i += subvector_dim_, id++) {
+                const span_floats_t subvector{vector + i, subvector_dim_};
+                float min_dist = std::numeric_limits<float>::max();
+                byte_t min_centroid = 0;
+
+                for (byte_t c = 0; c < num_centroids_; c++) {
+                    span_floats_t ci = get(c, id);
+                    float dist = distance(subvector, ci);
+                    if (dist < min_dist) {
+                        min_dist = dist;
+                        min_centroid = c;
+                    }
+                }
+                quantized.push_back(min_centroid);
+            }
+            assert(quantized.size() == num_subvectors());
+            std::memcpy(dst, quantized.data(), quantized.size() * sizeof(byte_t));
+        }
+
+        void decompress(const byte_t* quantized, float* vector) const {
+            expect(tape_ != nullptr, "decompress called on uninitialized codebook");
+            for (size_t i = 0, subvector_id = 0; i < dimensions_; i += subvector_dim_, subvector_id++) {
+                byte_t centroid_id = quantized[subvector_id]; // Get the centroid id for this subvector
+                expect(centroid_id < num_centroids_, "corrupted centroid id");
+                span_floats_t centroid = get(centroid_id, subvector_id); // Retrieve the centroid values
+
+                // Copy the centroid values into the correct position in the output vector
+                expect(subvector_dim_ == centroid.size(), "unexpected centroid size");
+                std::memcpy(vector + i, centroid.data(), subvector_dim_ * sizeof(float));
+            }
         }
     };
 
@@ -95,25 +172,25 @@ class lantern_storage_gt {
     mutable size_t node_count_{};
     bool loaded_ = false;
     bool pq_{};
+    mutable size_t vector_size_bytes{};
     codebook_t pq_codebook_{};
-    byte_t* pq_constant_{};
-    mutable size_t vector_size_{};
     // defaulted to true because that is what test.cpp assumes when using this storage directly
     mutable bool exclude_vectors_ = true;
     // used to maintain proper alignment in stored indexes to make sure view() does not result in misaligned accesses
     mutable size_t file_offset_{};
+    static constexpr char* default_error = "unknown lantern_storage error";
 
     // used in place of error handling throughout the class
-    static void expect(bool must_be_true) {
+    static void expect(bool must_be_true, const char* msg = default_error) {
         if (must_be_true)
             return;
         if constexpr (is_external_ak) {
             // no good way to get out of here, or even log, since caller may be in postgres
             // the fprintf will appear in server logs
-            fprintf(stderr, "LANTERN STORAGE: unexpected invariant violation in storage layer");
+            fprintf(stderr, "LANTERN STORAGE: unexpected invariant violation in storage layer: %s", msg);
             std::terminate();
         } else {
-
+            fprintf(stderr, "LANTERN STORAGE: unexpected invariant violation in storage layer: %s", msg);
             throw std::runtime_error("LANTERN STORAGE: unexpected invariant violation in storage layer");
         }
     }
@@ -137,23 +214,21 @@ class lantern_storage_gt {
     }
 
   public:
-    lantern_storage_gt(index_config_t config, allocator_at allocator = {})
-        : pre_(node_t::precompute_(config)), allocator_(allocator), pq_(config.pq) {
-        if (pq_) {
-
-            pq_constant_ = allocator_.allocate(vector_size_ * 256);
-            expect(pq_constant_);
-        }
-        memset(pq_constant_, 0, vector_size_ * 256);
+    lantern_storage_gt(storage_options options, index_config_t config, allocator_at allocator = {})
+        : pre_(node_t::precompute_(config)), allocator_(allocator), pq_(false),
+          vector_size_bytes(options.dimensions * options.scalar_bytes) {
+        assert(options.pq == false);
     }
-    lantern_storage_gt(index_config_t config, float* codebook, allocator_at allocator = {})
-        : pre_(node_t::precompute_(config)), allocator_(allocator), pq_(config.pq),
-          pq_codebook_(codebook, vector_size_, 32) {
+
+    lantern_storage_gt(storage_options options, index_config_t config, const float* codebook,
+                       allocator_at allocator = {})
+        : pre_(node_t::precompute_(config)), allocator_(allocator), pq_(options.pq),
+          vector_size_bytes(options.dimensions * options.scalar_bytes),
+          pq_codebook_(codebook, vector_size_bytes / sizeof(float), options.num_centroids, options.num_subvectors) {
+        assert(options.num_centroids > 0);
+        assert(0 < options.num_subvectors && options.num_subvectors < options.dimensions);
         // if (codebook)
         //     assert(pq_ == true);
-        pq_constant_ = allocator_.allocate(vector_size_ * 256);
-        expect(pq_constant_);
-        memset(pq_constant_, 0, vector_size_ * 256);
     }
 
     inline node_t get_node_at(std::size_t idx) const noexcept {
@@ -166,21 +241,43 @@ class lantern_storage_gt {
 
         return nodes_[idx];
     }
+
     inline byte_t* get_vector_at(std::size_t idx) const noexcept {
+        byte_t* res = nullptr;
         if (loaded_ && is_external_ak) {
             assert(retriever_ctx_ != nullptr);
             char* tape = (char*)external_node_retriever_(retriever_ctx_, idx);
-            if (pq_)
-                return pq_constant_;
             node_t node{tape};
-            return tape + node.node_size_bytes(pre_);
-        }
-        if (pq_) {
-            // todo:: do decompression here
-            return pq_constant_;
+            res = tape + node.node_size_bytes(pre_);
+        } else {
+            if (pq_) {
+                res = vectors_pq_[idx].data();
+            } else {
+                res = vectors_[idx].data();
+            }
         }
 
-        return vectors_[idx].data();
+        if (pq_) {
+            byte_t* expanded = allocator_.allocate(vector_size_bytes);
+
+            pq_codebook_.decompress(res, (float*)expanded);
+            if (loaded_) {
+                std::cerr << "vector#" << std::to_string(idx) << " compressed: {";
+                for (int i = 0; i < pq_codebook_.num_subvectors(); i++) {
+                    std::cerr << std::to_string(res[i]) << ", ";
+                }
+                std::cerr << "}\n";
+
+                std::cerr << "decompressed: [";
+                for (int i = 0; i < vector_size_bytes / sizeof(float); i++) {
+                    std::cerr << std::to_string(((float*)(expanded))[i]) << ", ";
+                }
+                std::cerr << "]\n";
+            }
+
+            return expanded;
+        }
+        return res;
     }
     inline size_t node_size_bytes(std::size_t idx) const noexcept { return get_node_at(idx).node_size_bytes(pre_); }
     bool is_immutable() const noexcept { return bool(viewed_file_); }
@@ -190,6 +287,22 @@ class lantern_storage_gt {
         retriever_ctx_ = retriever_ctx;
         external_node_retriever_ = external_node_retriever;
         external_node_retriever_mut_ = external_node_retriever_mut;
+    }
+
+    storage_metadata_t metadata() {
+        storage_metadata_t res = {
+            .pq = pq_,
+            .pq_num_centroids = 0,
+            .pq_num_subvectors = 0,
+            .retriever_ctx = retriever_ctx_,
+            .retriever = external_node_retriever_,
+            .retriever_mut = external_node_retriever_mut_,
+        };
+        if (pq_) {
+            res.pq_num_centroids = pq_codebook_.num_centroids();
+            res.pq_num_subvectors = pq_codebook_.num_subvectors();
+        }
+        return res;
     }
 
     struct dummy_lock {
@@ -299,24 +412,29 @@ class lantern_storage_gt {
         usearch_assert_m(!(reuse_node && !copy_vector),
                          "Cannot reuse node when not copying as there is no allocation needed");
 
-        const int pq_size = vector_size / 8 / 4;
         if (copy_vector) {
             if (!reuse_node) {
                 vectors_[slot] = span_bytes_t{allocator_.allocate(vector_size), vector_size};
                 if (pq_) {
+                    const size_t pq_size = pq_codebook_.num_subvectors();
                     vectors_pq_[slot] = span_bytes_t{allocator_.allocate(pq_size), pq_size};
                 }
             }
             std::memcpy(vectors_[slot].data(), vector_data, vector_size);
-            if (pq_)
-                std::memcpy(vectors_pq_[slot].data(), vector_data + vector_size, pq_size);
+            if (pq_) {
+                std::cerr << "setting pq vector at slot: %d" << std::to_string(slot) << std::endl;
+                pq_codebook_.compress((const float*)vector_data, vectors_pq_[slot]);
+                std::cerr << "compressed!\n";
+            }
 
             // std::cerr << "the 2 chars after vector: " << std::to_string(*(char*)(vector_data + vector_size)) << " "
             //           << std::to_string(*(char*)(vector_data + vector_size + 1)) << std::endl;
         } else {
             vectors_[slot] = span_bytes_t{(byte_t*)vector_data, vector_size};
-            if (pq_)
-                vectors_pq_[slot] = span_bytes_t{(byte_t*)vector_data + vector_size, pq_size};
+            if (pq_) {
+                // cannot avoid copy when doing pq quantization
+                expect(false);
+            }
         }
     }
 
@@ -343,7 +461,7 @@ class lantern_storage_gt {
         expect(output(metadata_buffer, sizeof(metadata_buffer)));
 
         file_offset_ = sizeof(metadata_buffer);
-        vector_size_ = vector_size_bytes;
+        vector_size_bytes = vector_size_bytes;
         node_count_ = node_count;
         exclude_vectors_ = config.exclude_vectors;
         return {};
@@ -353,9 +471,9 @@ class lantern_storage_gt {
     serialization_result_t save_nodes_to_stream(output_callback_at& output, const index_serialized_header_t& header,
                                                 progress_at& = {}) const {
         expect(output(&header, sizeof(header)));
-        expect(output(&vector_size_, sizeof(vector_size_)));
+        expect(output(&vector_size_bytes, sizeof(vector_size_bytes)));
         expect(output(&node_count_, sizeof(node_count_)));
-        file_offset_ += sizeof(header) + sizeof(vector_size_) + sizeof(node_count_);
+        file_offset_ += sizeof(header) + sizeof(vector_size_bytes) + sizeof(node_count_);
         if (loaded_ && file_offset_ >= 136 && is_external_ak) {
             return {};
         }
@@ -377,9 +495,22 @@ class lantern_storage_gt {
                 int16_t padding_size = align4(file_offset_);
                 expect(output(&padding_buffer, padding_size));
                 file_offset_ += padding_size;
-                byte_t* vector_bytes = get_vector_at(i);
-                expect(output(vector_bytes, vector_size_));
-                file_offset_ += vector_size_;
+                span_bytes_t vector_span = pq_ ? vectors_pq_[i] : vectors_[i];
+                std::cerr << "outputting node" << std::to_string(vector_span.size()) << "vector bytes at %d"
+                          << std::to_string(i) << std::endl;
+                if (pq_) {
+                    std::cerr << "saving vector#" << std::to_string(i) << "@" << std::to_string(file_offset_)
+                              << "compressed: {";
+                    for (int i = 0; i < pq_codebook_.num_subvectors(); i++) {
+                        std::cerr << std::to_string(vector_span[i]) << ", ";
+                    }
+                    std::cerr << "}\n";
+                    for (int ii = 0; ii < vector_span.size(); ii++)
+                        expect(vector_span[ii] < pq_codebook_.num_centroids());
+                }
+
+                expect(output(vector_span.data(), vector_span.size()));
+                file_offset_ += vector_span.size();
             }
         }
         return {};
@@ -400,10 +531,10 @@ class lantern_storage_gt {
     serialization_result_t load_nodes_from_stream(input_callback_at& input, index_serialized_header_t& header,
                                                   progress_at& = {}) noexcept {
         expect(input(&header, sizeof(header)));
-        expect(input(&vector_size_, sizeof(vector_size_)));
+        expect(input(&vector_size_bytes, sizeof(vector_size_bytes)));
         expect(input(&node_count_, sizeof(node_count_)));
         loaded_ = true;
-        file_offset_ += sizeof(header) + sizeof(vector_size_) + sizeof(node_count_);
+        file_offset_ += sizeof(header) + sizeof(vector_size_bytes) + sizeof(node_count_);
         if (!header.size) {
             reset();
             return {};
@@ -412,6 +543,7 @@ class lantern_storage_gt {
             return {};
         byte_t in_padding_buffer[64] = {0};
 
+        expect(false);
         expect(reserve(header.size));
 
         // N.B: unlike upstream usearch storage, lantern storage does not save level info of all nodes as part of the
@@ -439,10 +571,10 @@ class lantern_storage_gt {
                 expect(input(&in_padding_buffer, padding_size));
                 file_offset_ += padding_size;
                 expect(std::memcmp(in_padding_buffer, padding_buffer, padding_size) == 0);
-                byte_t* vector_bytes = allocator_.allocate(vector_size_);
-                expect(input(vector_bytes, vector_size_));
-                file_offset_ += vector_size_;
-                set_vector_at(i, vector_bytes, vector_size_, false, false);
+                byte_t* vector_bytes = allocator_.allocate(vector_size_bytes);
+                expect(input(vector_bytes, vector_size_bytes));
+                file_offset_ += vector_size_bytes;
+                set_vector_at(i, vector_bytes, vector_size_bytes, false, false);
             }
         }
         return {};
@@ -476,8 +608,8 @@ class lantern_storage_gt {
         serialization_result_t result = file.open_if_not();
         std::memcpy(&header, file.data() + offset, sizeof(header));
         offset += sizeof(header);
-        std::memcpy(&vector_size_, file.data() + offset, sizeof(vector_size_));
-        offset += sizeof(vector_size_);
+        std::memcpy(&vector_size_bytes, file.data() + offset, sizeof(vector_size_bytes));
+        offset += sizeof(vector_size_bytes);
         std::memcpy(&node_count_, file.data() + offset, sizeof(node_count_));
         offset += sizeof(node_count_);
         if (!header.size) {
@@ -507,7 +639,7 @@ class lantern_storage_gt {
                 if (!exclude_vectors_) {
                     // add room for vector alignment
                     offsets[i] += align4(offsets[i]);
-                    offsets[i] += vector_size_;
+                    offsets[i] += vector_size_bytes;
                 }
             }
             node_store(i, node_t{file.data() + offsets[i]});
@@ -520,7 +652,7 @@ class lantern_storage_gt {
                 // expect proper alignment
                 expect(align4(vector_offset) == 0);
                 expect(align4(file.data() + vector_offset) == 0);
-                set_vector_at(i, file.data() + vector_offset, vector_size_, false, false);
+                set_vector_at(i, file.data() + vector_offset, vector_size_bytes, false, false);
             }
         }
         viewed_file_ = std::move(file);

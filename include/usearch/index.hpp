@@ -1135,12 +1135,9 @@ struct index_config_t {
     /// > It is called `M0` in the paper.
     std::size_t connectivity_base = default_connectivity() * 2;
 
-    bool pq = false;
-
     inline index_config_t() = default;
-    inline index_config_t(std::size_t c, bool pq = false) noexcept
-        : connectivity(c ? c : default_connectivity()), connectivity_base(c ? c * 2 : default_connectivity() * 2),
-          pq(pq) {}
+    inline index_config_t(std::size_t c) noexcept
+        : connectivity(c ? c : default_connectivity()), connectivity_base(c ? c * 2 : default_connectivity() * 2) {}
     inline index_config_t(std::size_t c, std::size_t cb) noexcept
         : connectivity(c), connectivity_base((std::max)(c, cb)) {}
 };
@@ -2965,6 +2962,8 @@ class index_gt {
                             node_retriever_t external_node_retriever_mut) noexcept {
         storage_->set_node_retriever(retriever_ctx, external_node_retriever, external_node_retriever_mut);
     }
+
+    typename storage_t::storage_metadata storage_metadata() noexcept { return storage_->metadata(); }
 
   private:
     // todo:: these can also be moved to node_at, along with class neighbors_ref_t definition
