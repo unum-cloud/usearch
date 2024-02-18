@@ -122,7 +122,12 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, flo
     assert(options && error);
 
     index_dense_config_t config(options->connectivity, options->expansion_add, options->expansion_search);
-    std::cerr << "config pq" << std::to_string(options->pq) << "\n";
+    if (options->pq) {
+        if (options->num_centroids == 0 || options->num_subvectors == 0) {
+            *error = "Must provide nonzero values for centroids and subvectors when pq-quantization option is set";
+            return nullptr;
+        }
+    }
     config.multi = options->multi;
     metric_kind_t metric_kind = metric_kind_to_cpp(options->metric_kind);
     scalar_kind_t scalar_kind = scalar_kind_to_cpp(options->quantization);
@@ -145,6 +150,7 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, flo
     if (options->retriever != nullptr || options->retriever_mut != nullptr) {
         if (options->retriever == nullptr || options->retriever_mut == nullptr) {
             *error = "External mut and non-mut retrievers must be either both-set or both-null.";
+            return nullptr;
         }
         index.set_node_retriever(options->retriever_ctx, options->retriever, options->retriever_mut);
     }
