@@ -262,17 +262,6 @@ class lantern_storage_gt {
 
             pq_codebook_.decompress(res, (float*)expanded);
             if (loaded_) {
-                std::cerr << "vector#" << std::to_string(idx) << " compressed: {";
-                for (int i = 0; i < pq_codebook_.num_subvectors(); i++) {
-                    std::cerr << std::to_string(res[i]) << ", ";
-                }
-                std::cerr << "}\n";
-
-                std::cerr << "decompressed: [";
-                for (int i = 0; i < vector_size_bytes / sizeof(float); i++) {
-                    std::cerr << std::to_string(((float*)(expanded))[i]) << ", ";
-                }
-                std::cerr << "]\n";
             }
 
             return expanded;
@@ -433,9 +422,7 @@ class lantern_storage_gt {
             }
             std::memcpy(vectors_[slot].data(), vector_data, vector_size);
             if (pq_) {
-                std::cerr << "setting pq vector at slot: %d" << std::to_string(slot) << std::endl;
                 pq_codebook_.compress((const float*)vector_data, vectors_pq_[slot]);
-                std::cerr << "compressed!\n";
             }
 
             // std::cerr << "the 2 chars after vector: " << std::to_string(*(char*)(vector_data + vector_size)) << " "
@@ -507,15 +494,7 @@ class lantern_storage_gt {
                 expect(output(&padding_buffer, padding_size));
                 file_offset_ += padding_size;
                 span_bytes_t vector_span = pq_ ? vectors_pq_[i] : vectors_[i];
-                std::cerr << "outputting node" << std::to_string(vector_span.size()) << "vector bytes at %d"
-                          << std::to_string(i) << std::endl;
                 if (pq_) {
-                    std::cerr << "saving vector#" << std::to_string(i) << "@" << std::to_string(file_offset_)
-                              << "compressed: {";
-                    for (int i = 0; i < pq_codebook_.num_subvectors(); i++) {
-                        std::cerr << std::to_string(vector_span[i]) << ", ";
-                    }
-                    std::cerr << "}\n";
                     for (int ii = 0; ii < vector_span.size(); ii++)
                         expect(vector_span[ii] < pq_codebook_.num_centroids());
                 }
