@@ -406,8 +406,19 @@ class lantern_storage_gt {
         nodes_[slot] = node;
     }
     void set_vector_at(size_t slot, const byte_t* vector_data, size_t vector_size, bool copy_vector, bool reuse_node) {
-        if (loaded_ && is_external_ak)
+        if (loaded_ && is_external_ak) {
+            assert(retriever_ctx_ != nullptr);
+            char* tape = (char*)external_node_retriever_(retriever_ctx_, slot);
+            node_t node{tape};
+            byte_t* vec_loc = tape + node.node_size_bytes(pre_);
+            std::cerr << "setting vector at" << std::to_string(slot) << "\n";
+            if (pq_) {
+                pq_codebook_.compress((const float*)vector_data, vec_loc);
+            } else {
+                expect(memcmp(vec_loc, vector_data, vector_size) == 0);
+            }
             return;
+        }
 
         usearch_assert_m(!(reuse_node && !copy_vector),
                          "Cannot reuse node when not copying as there is no allocation needed");
