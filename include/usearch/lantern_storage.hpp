@@ -402,7 +402,7 @@ class lantern_storage_gt {
             if (pq_) {
                 pq_codebook_.compress((const float*)vector_data, vec_loc);
             } else {
-                expect(memcmp(vec_loc, vector_data, vector_size) == 0);
+                std::memcpy(vec_loc, vector_data, vector_size);
             }
             return;
         }
