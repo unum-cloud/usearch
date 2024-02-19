@@ -178,7 +178,7 @@ class lantern_storage_gt {
     mutable bool exclude_vectors_ = true;
     // used to maintain proper alignment in stored indexes to make sure view() does not result in misaligned accesses
     mutable size_t file_offset_{};
-    static constexpr char* default_error = "unknown lantern_storage error";
+    const static constexpr char* default_error = "unknown lantern_storage error";
 
     // used in place of error handling throughout the class
     static void expect(bool must_be_true, const char* msg = default_error) {
@@ -225,10 +225,9 @@ class lantern_storage_gt {
         : pre_(node_t::precompute_(config)), allocator_(allocator), pq_(options.pq),
           vector_size_bytes(options.dimensions * options.scalar_bytes),
           pq_codebook_(codebook, vector_size_bytes / sizeof(float), options.num_centroids, options.num_subvectors) {
+        assert(options.pq);
         assert(options.num_centroids > 0);
-        assert(0 < options.num_subvectors && options.num_subvectors < options.dimensions);
-        // if (codebook)
-        //     assert(pq_ == true);
+        assert(0 < options.num_subvectors && options.num_subvectors <= options.dimensions);
     }
 
     inline node_t get_node_at(std::size_t idx) const noexcept {
@@ -400,7 +399,6 @@ class lantern_storage_gt {
             char* tape = (char*)external_node_retriever_(retriever_ctx_, slot);
             node_t node{tape};
             byte_t* vec_loc = tape + node.node_size_bytes(pre_);
-            std::cerr << "setting vector at" << std::to_string(slot) << "\n";
             if (pq_) {
                 pq_codebook_.compress((const float*)vector_data, vec_loc);
             } else {
