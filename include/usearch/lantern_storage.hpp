@@ -171,6 +171,7 @@ class lantern_storage_gt {
     // storage instance
     mutable size_t node_count_{};
     bool loaded_ = false;
+    float* pq_decompress_buf_{};
     bool pq_{};
     mutable size_t vector_size_bytes{};
     codebook_t pq_codebook_{};
@@ -228,6 +229,7 @@ class lantern_storage_gt {
         assert(options.pq);
         assert(options.num_centroids > 0);
         assert(0 < options.num_subvectors && options.num_subvectors <= options.dimensions);
+        pq_decompress_buf_ = (float*)allocator_.allocate(vector_size_bytes);
     }
 
     inline node_t get_node_at(std::size_t idx) const noexcept {
@@ -257,13 +259,11 @@ class lantern_storage_gt {
         }
 
         if (pq_) {
-            byte_t* expanded = allocator_.allocate(vector_size_bytes);
-
-            pq_codebook_.decompress(res, (float*)expanded);
+            pq_codebook_.decompress(res, pq_decompress_buf_);
             if (loaded_) {
             }
 
-            return expanded;
+            return (byte_t*)pq_decompress_buf_;
         }
         return res;
     }
@@ -327,9 +327,11 @@ class lantern_storage_gt {
 
         nodes_mutexes_ = std::move(new_mutexes);
         nodes_ = std::move(new_nodes);
-        vectors_.resize(count);
-        if (pq_)
+        if (pq_) {
             vectors_pq_.resize(count);
+        } else {
+            vectors_.resize(count);
+        }
 
         return true;
     }
@@ -412,24 +414,27 @@ class lantern_storage_gt {
 
         if (copy_vector) {
             if (!reuse_node) {
-                vectors_[slot] = span_bytes_t{allocator_.allocate(vector_size), vector_size};
                 if (pq_) {
                     const size_t pq_size = pq_codebook_.num_subvectors();
                     vectors_pq_[slot] = span_bytes_t{allocator_.allocate(pq_size), pq_size};
+                } else {
+                    vectors_[slot] = span_bytes_t{allocator_.allocate(vector_size), vector_size};
                 }
             }
-            std::memcpy(vectors_[slot].data(), vector_data, vector_size);
             if (pq_) {
                 pq_codebook_.compress((const float*)vector_data, vectors_pq_[slot]);
+            } else {
+                std::memcpy(vectors_[slot].data(), vector_data, vector_size);
             }
 
             // std::cerr << "the 2 chars after vector: " << std::to_string(*(char*)(vector_data + vector_size)) << " "
             //           << std::to_string(*(char*)(vector_data + vector_size + 1)) << std::endl;
         } else {
-            vectors_[slot] = span_bytes_t{(byte_t*)vector_data, vector_size};
             if (pq_) {
                 // cannot avoid copy when doing pq quantization
                 expect(false);
+            } else {
+                vectors_[slot] = span_bytes_t{(byte_t*)vector_data, vector_size};
             }
         }
     }
