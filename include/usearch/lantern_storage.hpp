@@ -7,6 +7,8 @@
 #include <cstdio>
 #include <cstring>
 #include <exception>
+#include <mutex>
+#include <thread>
 #include <usearch/index.hpp>
 #include <usearch/index_plugins.hpp>
 #include <usearch/storage.hpp>
@@ -87,6 +89,14 @@ class lantern_storage_gt {
         size_t dimensions_{};
         size_t subvector_dim_{};
         size_t num_centroids_{};
+        // used in multicore settings and configured to 2x hardware concurrency
+        // the assumption is that not more than that many vectors will be used by the caller
+        // bad things happen if the assumption is broken (vectors overriding other vectors)
+        // so better design is necessary - this jus was faster to get out
+        mutable std::vector<float> decompress_buffers_{};
+        mutable size_t decompress_buffers_next_offset{};
+        // pointer to mutex - hack to make storage move constructable
+        mutable std::mutex* decompress_buffers_lock_{};
 
       public:
         codebook_t() = default;
@@ -96,6 +106,7 @@ class lantern_storage_gt {
             expect(dimensions_ < 2000, "vectors larger than 2k dimensions not supported");
             expect(num_centroids <= 256, "number of centroids must fit in a byte");
             expect(num_centroids > 0 && num_subvectors > 0, "subvector and centroid counts must be larger than zero");
+            decompress_buffers_lock_ = new std::mutex();
         }
 
         size_t num_subvectors() const { return dimensions_ / subvector_dim_; }
@@ -139,7 +150,10 @@ class lantern_storage_gt {
             std::memcpy(dst, quantized.data(), quantized.size() * sizeof(byte_t));
         }
 
-        void decompress(const byte_t* quantized, float* vector) const {
+        float* decompress(const byte_t* quantized, float* vector = nullptr) const {
+            if (vector == nullptr) {
+                vector = next_buffer();
+            }
             expect(tape_ != nullptr, "decompress called on uninitialized codebook");
             for (size_t i = 0, subvector_id = 0; i < dimensions_; i += subvector_dim_, subvector_id++) {
                 byte_t centroid_id = quantized[subvector_id]; // Get the centroid id for this subvector
@@ -150,6 +164,28 @@ class lantern_storage_gt {
                 expect(subvector_dim_ == centroid.size(), "unexpected centroid size");
                 std::memcpy(vector + i, centroid.data(), subvector_dim_ * sizeof(float));
             }
+            return vector;
+        }
+
+      private:
+        float* next_buffer() const {
+            std::lock_guard lock(*decompress_buffers_lock_);
+            float* res;
+            if (decompress_buffers_.data() == nullptr) {
+#ifndef NDEBUG
+                std::cerr << "WARNING: reservin decompress buffers";
+#endif
+                decompress_buffers_.resize(dimensions_ * sizeof(float) * std::thread::hardware_concurrency() * 2);
+                expect(decompress_buffers_next_offset == 0);
+            }
+
+            if (decompress_buffers_next_offset == decompress_buffers_.size()) {
+                decompress_buffers_next_offset = 0;
+            }
+            expect(decompress_buffers_next_offset + dimensions_ * sizeof(float) <= decompress_buffers_.size());
+            res = &decompress_buffers_[decompress_buffers_next_offset];
+            decompress_buffers_next_offset += dimensions_ * sizeof(float);
+            return res;
         }
     };
 
@@ -259,14 +295,23 @@ class lantern_storage_gt {
         }
 
         if (pq_) {
-            pq_codebook_.decompress(res, pq_decompress_buf_);
-            if (loaded_) {
+            float* dest_buf;
+            if (loaded_ && is_external_ak) {
+                // when access within postgres from a single thread, we can always load vectors into the same buffer
+                // since we use at most one vector at a time (we only insert a new vector or retrieve one, in both cases
+                // we compare external vector with one from the graph)
+                dest_buf = pq_decompress_buf_;
+            } else {
+                // otherwise, we let the codebook use its internal circular buffer and accomodate vector usage from
+                // different threads
+                dest_buf = nullptr;
             }
-
-            return (byte_t*)pq_decompress_buf_;
+            res = (byte_t*)pq_codebook_.decompress(res, dest_buf);
+            return res;
         }
         return res;
     }
+
     inline size_t node_size_bytes(std::size_t idx) const noexcept { return get_node_at(idx).node_size_bytes(pre_); }
     bool is_immutable() const noexcept { return bool(viewed_file_); }
 
