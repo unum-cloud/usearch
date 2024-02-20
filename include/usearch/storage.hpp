@@ -384,7 +384,11 @@ class storage_v2_at {
 
     inline node_t get_node_at(std::size_t idx) const noexcept { return nodes_[idx]; }
     // todo:: most of the time this is called for const* vector, maybe add a separate interface for const?
-    inline byte_t* get_vector_at(std::size_t idx) const noexcept { return vectors_lookup_[idx]; }
+    inline byte_t* get_vector_at(std::size_t idx, byte_t* dst = nullptr) const noexcept {
+        assert(dst == nullptr);
+        (void)dst;
+        return vectors_lookup_[idx];
+    }
     inline void set_vector_at(std::size_t idx, const byte_t* vector_data, std::size_t bytes_per_vector,
                               bool copy_vector, bool reuse_node) {
         usearch_assert_m(!(reuse_node && !copy_vector),

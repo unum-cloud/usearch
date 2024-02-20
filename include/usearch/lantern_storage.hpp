@@ -95,6 +95,7 @@ class lantern_storage_gt {
             : tape_(tape), dimensions_(dimensions), num_centroids_(num_centroids) {
             subvector_dim_ = dimensions / num_subvectors;
             expect(tape != nullptr);
+            expect(dimensions % num_subvectors == 0, "currently vector dimensions must be divisible to num_subvectors");
             expect(dimensions_ < 2000, "vectors larger than 2k dimensions not supported");
             expect(num_centroids <= 256, "number of centroids must fit in a byte");
             expect(num_centroids > 0 && num_subvectors > 0, "subvector and centroid counts must be larger than zero");
@@ -142,10 +143,7 @@ class lantern_storage_gt {
             std::memcpy(dst, quantized.data(), quantized.size() * sizeof(byte_t));
         }
 
-        float* decompress(const byte_t* quantized, float* vector = nullptr) const {
-            if (vector == nullptr) {
-                vector = next_buffer();
-            }
+        float* decompress(const byte_t* quantized, float* vector) const {
             expect(tape_ != nullptr, "decompress called on uninitialized codebook");
             for (size_t i = 0, subvector_id = 0; i < dimensions_; i += subvector_dim_, subvector_id++) {
                 byte_t centroid_id = quantized[subvector_id]; // Get the centroid id for this subvector
@@ -154,30 +152,9 @@ class lantern_storage_gt {
 
                 // Copy the centroid values into the correct position in the output vector
                 expect(subvector_dim_ == centroid.size(), "unexpected centroid size");
-                std::memcpy(vector + i, centroid.data(), subvector_dim_ * sizeof(float));
+                // std::memcpy(vector + i, centroid.data(), subvector_dim_ * sizeof(float));
             }
             return vector;
-        }
-
-      private:
-        float* next_buffer() const {
-            std::lock_guard lock(*decompress_buffers_lock_);
-            float* res;
-            if (decompress_buffers_.data() == nullptr) {
-#ifndef NDEBUG
-                std::cerr << "WARNING: reservin decompress buffers";
-#endif
-                decompress_buffers_.resize(dimensions_ * sizeof(float) * std::thread::hardware_concurrency() * 2);
-                expect(decompress_buffers_next_offset == 0);
-            }
-
-            if (decompress_buffers_next_offset == decompress_buffers_.size()) {
-                decompress_buffers_next_offset = 0;
-            }
-            expect(decompress_buffers_next_offset + dimensions_ * sizeof(float) <= decompress_buffers_.size());
-            res = &decompress_buffers_[decompress_buffers_next_offset];
-            decompress_buffers_next_offset += dimensions_ * sizeof(float);
-            return res;
         }
     };
 
@@ -269,7 +246,7 @@ class lantern_storage_gt {
         return nodes_[idx];
     }
 
-    inline byte_t* get_vector_at(std::size_t idx) const noexcept {
+    inline byte_t* get_vector_at(std::size_t idx, byte_t* dst = nullptr) const noexcept {
         byte_t* res = nullptr;
         if (loaded_ && is_external_ak) {
             assert(retriever_ctx_ != nullptr);
@@ -285,18 +262,8 @@ class lantern_storage_gt {
         }
 
         if (pq_) {
-            float* dest_buf;
-            if (loaded_ && is_external_ak) {
-                // when access within postgres from a single thread, we can always load vectors into the same buffer
-                // since we use at most one vector at a time (we only insert a new vector or retrieve one, in both cases
-                // we compare external vector with one from the graph)
-                dest_buf = pq_decompress_buf_;
-            } else {
-                // otherwise, we let the codebook use its internal circular buffer and accomodate vector usage from
-                // different threads
-                dest_buf = nullptr;
-            }
-            res = (byte_t*)pq_codebook_.decompress(res, dest_buf);
+            expect(dst, "in pq mode a destination must be given for get_vector_at");
+            res = (byte_t*)pq_codebook_.decompress(res, (float*)dst);
             return res;
         }
         return res;
@@ -493,11 +460,11 @@ class lantern_storage_gt {
                                                   std::uint64_t node_count, //
                                                   const vectors_metadata_at& metadata_buffer,
                                                   serialization_config_t config = {}) const {
-        expect(!config.use_64_bit_dimensions);
+        expect(!config.use_64_bit_dimensions, "64_bit dimensions not supported in lantern storage");
         expect(output(metadata_buffer, sizeof(metadata_buffer)));
 
         file_offset_ = sizeof(metadata_buffer);
-        expect(vector_size_bytes_ == vector_size_bytes);
+        expect(vector_size_bytes_ == vector_size_bytes, "unexpected vector size bytes");
         node_count_ = node_count;
         exclude_vectors_ = config.exclude_vectors;
         return {};
@@ -533,8 +500,6 @@ class lantern_storage_gt {
                 file_offset_ += padding_size;
                 span_bytes_t vector_span = pq_ ? vectors_pq_[i] : vectors_[i];
                 if (pq_) {
-                    for (int ii = 0; ii < vector_span.size(); ii++)
-                        expect(vector_span[ii] < pq_codebook_.num_centroids());
                 }
 
                 expect(output(vector_span.data(), vector_span.size()));
