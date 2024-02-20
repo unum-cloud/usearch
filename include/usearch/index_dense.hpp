@@ -779,7 +779,6 @@ class index_dense_gt {
         free_keys_.clear();
 
         // Reset the thread IDs.
-        available_threads_.resize(std::thread::hardware_concurrency());
         std::iota(available_threads_.begin(), available_threads_.end(), 0ul);
     }
 
