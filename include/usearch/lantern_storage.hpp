@@ -94,6 +94,7 @@ class lantern_storage_gt {
         codebook_t(const float* tape, size_t dimensions, size_t num_centroids, size_t num_subvectors)
             : tape_(tape), dimensions_(dimensions), num_centroids_(num_centroids) {
             subvector_dim_ = dimensions / num_subvectors;
+            expect(tape != nullptr);
             expect(dimensions_ < 2000, "vectors larger than 2k dimensions not supported");
             expect(num_centroids <= 256, "number of centroids must fit in a byte");
             expect(num_centroids > 0 && num_subvectors > 0, "subvector and centroid counts must be larger than zero");
@@ -110,7 +111,7 @@ class lantern_storage_gt {
         static float distance(span_floats_t v1, span_floats_t v2) {
             float dist = 0;
             expect(v1.size() == v2.size());
-            for (int i = 0; i < v1.size(); i++) {
+            for (size_t i = 0; i < v1.size(); i++) {
                 dist += std::pow(v1[i] - v2[i], 2.f);
             }
             return dist;
@@ -122,12 +123,12 @@ class lantern_storage_gt {
             std::vector<byte_t> quantized;
             quantized.reserve(std::ceil(dimensions_ / subvector_dim_));
 
-            for (int i = 0, id = 0; i < dimensions_; i += subvector_dim_, id++) {
+            for (size_t i = 0, id = 0; i < dimensions_; i += subvector_dim_, id++) {
                 const span_floats_t subvector{vector + i, subvector_dim_};
                 float min_dist = std::numeric_limits<float>::max();
                 byte_t min_centroid = 0;
 
-                for (byte_t c = 0; c < num_centroids_; c++) {
+                for (byte_t c = 0; (size_t)c < num_centroids_; c++) {
                     span_floats_t ci = get(c, id);
                     float dist = distance(subvector, ci);
                     if (dist < min_dist) {
@@ -148,7 +149,7 @@ class lantern_storage_gt {
             expect(tape_ != nullptr, "decompress called on uninitialized codebook");
             for (size_t i = 0, subvector_id = 0; i < dimensions_; i += subvector_dim_, subvector_id++) {
                 byte_t centroid_id = quantized[subvector_id]; // Get the centroid id for this subvector
-                expect(centroid_id < num_centroids_, "corrupted centroid id");
+                expect((size_t)centroid_id < num_centroids_, "corrupted centroid id");
                 span_floats_t centroid = get(centroid_id, subvector_id); // Retrieve the centroid values
 
                 // Copy the centroid values into the correct position in the output vector
@@ -244,9 +245,7 @@ class lantern_storage_gt {
   public:
     lantern_storage_gt(storage_options options, index_config_t config, allocator_at allocator = {})
         : pre_(node_t::precompute_(config)), allocator_(allocator), pq_(false),
-          vector_size_bytes_(options.dimensions * options.scalar_bytes) {
-        assert(options.pq == false);
-    }
+          vector_size_bytes_(options.dimensions * options.scalar_bytes) {}
 
     lantern_storage_gt(storage_options options, index_config_t config, const float* codebook,
                        allocator_at allocator = {})
@@ -498,7 +497,7 @@ class lantern_storage_gt {
         expect(output(metadata_buffer, sizeof(metadata_buffer)));
 
         file_offset_ = sizeof(metadata_buffer);
-        expect(vector_size_bytes_ = vector_size_bytes);
+        expect(vector_size_bytes_ == vector_size_bytes);
         node_count_ = node_count;
         exclude_vectors_ = config.exclude_vectors;
         return {};
