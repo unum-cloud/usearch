@@ -1,7 +1,6 @@
 
 #pragma once
 
-#include "usearch.h"
 #include <cmath>
 #include <csignal>
 #include <cstdio>
@@ -20,14 +19,6 @@
 
 namespace unum {
 namespace usearch {
-
-struct storage_options {
-    size_t dimensions;
-    size_t scalar_bytes;
-    bool pq;
-    size_t num_centroids;
-    size_t num_subvectors;
-};
 
 /**
  * @brief  A simple Storage implementation that uses standard cpp containers and complies with the usearch storage
@@ -209,7 +200,7 @@ class lantern_storage_gt {
     bool loaded_ = false;
     float* pq_decompress_buf_{};
     bool pq_{};
-    mutable size_t vector_size_bytes{};
+    mutable size_t vector_size_bytes_{};
     codebook_t pq_codebook_{};
     // defaulted to true because that is what test.cpp assumes when using this storage directly
     mutable bool exclude_vectors_ = true;
@@ -253,19 +244,19 @@ class lantern_storage_gt {
   public:
     lantern_storage_gt(storage_options options, index_config_t config, allocator_at allocator = {})
         : pre_(node_t::precompute_(config)), allocator_(allocator), pq_(false),
-          vector_size_bytes(options.dimensions * options.scalar_bytes) {
+          vector_size_bytes_(options.dimensions * options.scalar_bytes) {
         assert(options.pq == false);
     }
 
     lantern_storage_gt(storage_options options, index_config_t config, const float* codebook,
                        allocator_at allocator = {})
         : pre_(node_t::precompute_(config)), allocator_(allocator), pq_(options.pq),
-          vector_size_bytes(options.dimensions * options.scalar_bytes),
-          pq_codebook_(codebook, vector_size_bytes / sizeof(float), options.num_centroids, options.num_subvectors) {
+          vector_size_bytes_(options.dimensions * options.scalar_bytes),
+          pq_codebook_(codebook, vector_size_bytes_ / sizeof(float), options.num_centroids, options.num_subvectors) {
         assert(options.pq);
         assert(options.num_centroids > 0);
         assert(0 < options.num_subvectors && options.num_subvectors <= options.dimensions);
-        pq_decompress_buf_ = (float*)allocator_.allocate(vector_size_bytes);
+        pq_decompress_buf_ = (float*)allocator_.allocate(vector_size_bytes_);
     }
 
     inline node_t get_node_at(std::size_t idx) const noexcept {
@@ -507,7 +498,7 @@ class lantern_storage_gt {
         expect(output(metadata_buffer, sizeof(metadata_buffer)));
 
         file_offset_ = sizeof(metadata_buffer);
-        vector_size_bytes = vector_size_bytes;
+        expect(vector_size_bytes_ = vector_size_bytes);
         node_count_ = node_count;
         exclude_vectors_ = config.exclude_vectors;
         return {};
@@ -517,9 +508,9 @@ class lantern_storage_gt {
     serialization_result_t save_nodes_to_stream(output_callback_at& output, const index_serialized_header_t& header,
                                                 progress_at& = {}) const {
         expect(output(&header, sizeof(header)));
-        expect(output(&vector_size_bytes, sizeof(vector_size_bytes)));
+        expect(output(&vector_size_bytes_, sizeof(vector_size_bytes_)));
         expect(output(&node_count_, sizeof(node_count_)));
-        file_offset_ += sizeof(header) + sizeof(vector_size_bytes) + sizeof(node_count_);
+        file_offset_ += sizeof(header) + sizeof(vector_size_bytes_) + sizeof(node_count_);
         if (loaded_ && file_offset_ >= 136 && is_external_ak) {
             return {};
         }
@@ -569,10 +560,10 @@ class lantern_storage_gt {
     serialization_result_t load_nodes_from_stream(input_callback_at& input, index_serialized_header_t& header,
                                                   progress_at& = {}) noexcept {
         expect(input(&header, sizeof(header)));
-        expect(input(&vector_size_bytes, sizeof(vector_size_bytes)));
+        expect(input(&vector_size_bytes_, sizeof(vector_size_bytes_)));
         expect(input(&node_count_, sizeof(node_count_)));
         loaded_ = true;
-        file_offset_ += sizeof(header) + sizeof(vector_size_bytes) + sizeof(node_count_);
+        file_offset_ += sizeof(header) + sizeof(vector_size_bytes_) + sizeof(node_count_);
         if (!header.size) {
             reset();
             return {};
@@ -581,7 +572,9 @@ class lantern_storage_gt {
             return {};
         byte_t in_padding_buffer[64] = {0};
 
-        expect(false);
+        if (pq_) {
+            expect(false);
+        }
         expect(reserve(header.size));
 
         // N.B: unlike upstream usearch storage, lantern storage does not save level info of all nodes as part of the
@@ -609,10 +602,10 @@ class lantern_storage_gt {
                 expect(input(&in_padding_buffer, padding_size));
                 file_offset_ += padding_size;
                 expect(std::memcmp(in_padding_buffer, padding_buffer, padding_size) == 0);
-                byte_t* vector_bytes = allocator_.allocate(vector_size_bytes);
-                expect(input(vector_bytes, vector_size_bytes));
-                file_offset_ += vector_size_bytes;
-                set_vector_at(i, vector_bytes, vector_size_bytes, false, false);
+                byte_t* vector_bytes = allocator_.allocate(vector_size_bytes_);
+                expect(input(vector_bytes, vector_size_bytes_));
+                file_offset_ += vector_size_bytes_;
+                set_vector_at(i, vector_bytes, vector_size_bytes_, false, false);
             }
         }
         return {};
@@ -646,8 +639,8 @@ class lantern_storage_gt {
         serialization_result_t result = file.open_if_not();
         std::memcpy(&header, file.data() + offset, sizeof(header));
         offset += sizeof(header);
-        std::memcpy(&vector_size_bytes, file.data() + offset, sizeof(vector_size_bytes));
-        offset += sizeof(vector_size_bytes);
+        std::memcpy(&vector_size_bytes_, file.data() + offset, sizeof(vector_size_bytes_));
+        offset += sizeof(vector_size_bytes_);
         std::memcpy(&node_count_, file.data() + offset, sizeof(node_count_));
         offset += sizeof(node_count_);
         if (!header.size) {
@@ -677,7 +670,7 @@ class lantern_storage_gt {
                 if (!exclude_vectors_) {
                     // add room for vector alignment
                     offsets[i] += align4(offsets[i]);
-                    offsets[i] += vector_size_bytes;
+                    offsets[i] += vector_size_bytes_;
                 }
             }
             node_store(i, node_t{file.data() + offsets[i]});
@@ -690,7 +683,7 @@ class lantern_storage_gt {
                 // expect proper alignment
                 expect(align4(vector_offset) == 0);
                 expect(align4(file.data() + vector_offset) == 0);
-                set_vector_at(i, file.data() + vector_offset, vector_size_bytes, false, false);
+                set_vector_at(i, file.data() + vector_offset, vector_size_bytes_, false, false);
             }
         }
         viewed_file_ = std::move(file);

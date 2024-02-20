@@ -1,5 +1,4 @@
 #pragma once
-#include "usearch.h"
 #include "usearch/lantern_storage.hpp"
 #include <stdlib.h> // `aligned_alloc`
 

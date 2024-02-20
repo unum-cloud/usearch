@@ -180,6 +180,13 @@ struct index_dense_serialization_config_t {
 
 using serialization_config_t = index_dense_serialization_config_t;
 
+struct storage_options {
+    size_t dimensions;
+    size_t scalar_bytes;
+    bool pq;
+    size_t num_centroids;
+    size_t num_subvectors;
+};
 /**
  * @brief The macro takes in a usearch Storage-provider type, and makes sure the type provides the necessary interface
  * assumed in usearch internals N.B: the validation does notenforce reference argument types properly Validation
@@ -319,6 +326,8 @@ class storage_v2_at {
   public:
     using key_t = key_at;
     using node_t = node_at<key_t, compressed_slot_at>;
+    struct storage_metadata {};
+    using storage_metadata_t = storage_metadata;
 
   private:
     using nodes_mutexes_t = bitset_gt<dynamic_allocator_at>;
@@ -366,6 +375,10 @@ class storage_v2_at {
     };
 
   public:
+    // constructor with same API as the one from lantern storage to make sure tests and benchmarks compile
+    storage_v2_at(storage_options, index_config_t config, const float* = nullptr, tape_allocator_at tape_allocator = {})
+        : storage_v2_at(config, tape_allocator) {}
+
     storage_v2_at(index_config_t config, tape_allocator_at tape_allocator = {})
         : pre_(node_t::precompute_(config)), tape_allocator_(tape_allocator) {}
 
@@ -386,6 +399,7 @@ class storage_v2_at {
 
     inline size_t node_size_bytes(std::size_t idx) const noexcept { return get_node_at(idx).node_size_bytes(pre_); }
     bool is_immutable() const noexcept { return bool(viewed_file_); }
+    storage_metadata_t metadata() { return {}; }
 
     using lock_type = node_lock_t;
 
