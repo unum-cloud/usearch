@@ -4,6 +4,8 @@
  *  Search queries.
  */
 
+#include "usearch/index_plugins.hpp"
+#include "usearch/lantern_storage.hpp"
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
 #define NOMINMAX // define this macro to prevent the definition of min/max macros in Windows.h
 #define _USE_MATH_DEFINES
@@ -401,6 +403,10 @@ struct args_t {
 
     bool big = false;
 
+    bool pq = false;
+    std::size_t num_centroids = 250;
+    std::size_t num_subvectors = 32;
+
     bool quantize_f16 = false;
     bool quantize_i8 = false;
     bool quantize_b1 = false;
@@ -453,8 +459,35 @@ void run_punned(dataset_at& dataset, args_t const& args, index_config_t config, 
     std::printf("-- Metric: %s\n", metric_kind_name(kind));
 
     metric_punned_t metric(dataset.dimensions(), kind, quantization);
-    index_at index = index_at::make(metric, config);
+    storage_options opts;
+    opts.dimensions = metric.dimensions();
+    opts.scalar_bytes = bits_per_scalar(quantization) / 8;
+    opts.pq = args.pq;
+    opts.num_subvectors = args.num_subvectors;
+    opts.num_centroids = args.num_centroids;
+
+    std::vector<float> codebook;
+    if (opts.pq) {
+        codebook.resize(std::thread::hardware_concurrency() * opts.dimensions * opts.num_centroids);
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<> dist(0.0, 1.0);
+
+        for (int i = 0; i < codebook.size(); i++) {
+            dist(gen);
+        }
+    }
+
+    index_at index = index_at::make(metric, opts, 0, config, codebook.data());
     index.reserve(limits);
+    std::printf("-- type: %s\n", typeid(index).name());
+    std::printf("-- PQ: %s\n", args.pq ? "true" : "false");
+    if (args.pq) {
+        std::printf("-- Num subvectors: %ld\n", args.num_subvectors);
+        std::printf("-- Num centroids: %ld\n", args.num_centroids);
+    }
+    std::printf("-- Scalar Bytes %ld\n", opts.scalar_bytes);
+    std::printf("-- Hardware concurrency: %d\n", std::thread::hardware_concurrency());
     std::printf("-- Hardware acceleration: %s\n", index.metric().isa_name());
     std::printf("Will benchmark in-memory\n");
 
@@ -493,6 +526,9 @@ int main(int argc, char** argv) {
         (option("--neighbors") & value("path", args.path_neighbors)).doc(".ibin file path with ground truth"),
         (option("-o", "--output") & value("path", args.path_output)).doc(".usearch output file path"),
         (option("-b", "--big").set(args.big)).doc("Will switch to uint40_t for neighbors lists with over 4B entries"),
+        (option("--pq").set(args.pq)).doc("Create a product-quantized (PQ) index"),
+        (option("--num_subvectors") & value("integer", args.num_subvectors)).doc("Number of subvectors for PQ"),
+        (option("--num_centroids") & value("integer", args.num_centroids)).doc("Number of centroids for PQ"),
         (option("-j", "--threads") & value("integer", args.threads)).doc("Uses all available cores by default"),
         (option("-c", "--connectivity") & value("integer", args.connectivity)).doc("Index granularity"),
         (option("--expansion-add") & value("integer", args.expansion_add)).doc("Affects indexing depth"),
@@ -568,7 +604,8 @@ int main(int argc, char** argv) {
         std::printf("Error: Don't use 40 bit identifiers in 32bit environment\n");
 #endif
     else
-        run_punned<index_dense_gt<default_key_t, std::uint32_t>>(dataset, args, config, limits);
+        run_punned<index_dense_gt<default_key_t, std::uint32_t, lantern_internal_storage_t>>(dataset, args, config,
+                                                                                             limits);
 
     return 0;
 }
