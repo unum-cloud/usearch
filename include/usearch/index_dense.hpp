@@ -349,12 +349,6 @@ class index_dense_gt {
 
         inline distance_t operator()(byte_t const* a, byte_t const* b) const noexcept { return f(a, b); }
 
-        inline byte_t const* v(member_cref_t m) const noexcept {
-            byte_t* decompressed_data = index_->vector_decompress_buffer_.data() + bytes_per_vector_ * thread_;
-            assert(bytes_per_vector_ * thread_ < index_->vector_decompress_buffer_.size());
-            return index_->storage_.get_vector_at(get_slot(m), decompressed_data);
-        }
-
         inline byte_t const* v(member_citerator_t m, bool left_v) const noexcept {
             byte_t* decompressed_data =
                 index_->vector_decompress_buffer_.data() + bytes_per_vector_ * (2 * thread_ + (size_t)left_v);
