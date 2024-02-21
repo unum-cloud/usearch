@@ -130,7 +130,26 @@ Still, if you have Docker running on any desktop OS, you can use it to build and
 
 ```sh
 pip install cibuildwheel
-cibuildwheel --platform linux
+cibuildwheel
+cibuildwheel --platform linux                   # works on any OS and builds all Linux backends
+cibuildwheel --platform linux --archs x86_64    # 64-bit x86, the most common on desktop and servers
+cibuildwheel --platform linux --archs aarch64   # 64-bit Arm for mobile devices, Apple M-series, and AWS Graviton
+cibuildwheel --platform linux --archs i686      # 32-bit Linux
+cibuildwheel --platform linux --archs s390x     # emulating big-endian IBM Z
+cibuildwheel --platform macos                   # works only on MacOS
+cibuildwheel --platform windows                 # works only on Windows
+```
+
+You may need root previligies for multi-architecture builds:
+
+```sh
+sudo $(which cibuildwheel) --platform linux
+```
+
+On Windows and MacOS, to avoid frequent path resolution issues, you may want to use:
+
+```sh
+python -m cibuildwheel --platform windows
 ```
 
 ## JavaScript
