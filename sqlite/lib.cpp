@@ -1,17 +1,30 @@
 /**
  *  @brief      SQLite3 bindings for USearch.
- *  @file       lib_sqlite.cpp
+ *  @file       lib.cpp
  *  @author     Ash Vardanian
  *  @date       November 28, 2023
  *  @copyright  Copyright (c) 2023
  */
-#include <stringzilla.h>
 
 #include <charconv> // `std::from_chars`
 #include <cstdlib>  // `std::strtod`
 
 #include <sqlite3ext.h>
 SQLITE_EXTENSION_INIT1
+
+#define SZ_DYNAMIC_DISPATCH 1
+#include <stringzilla/stringzilla.hpp>
+
+#include <usearch/index_dense.hpp>
+#include <usearch/index_plugins.hpp>
+
+using namespace unum::usearch;
+using namespace unum;
+
+namespace sz = ashvardanian::stringzilla;
+
+using metric_t = metric_punned_t;
+using distance_t = distance_punned_t;
 
 template <scalar_kind_t scalar_kind_ak> struct parsed_scalar_kind_gt {
     using type = f32_t;
@@ -58,8 +71,8 @@ static void sqlite_dense(sqlite3_context* context, int argc, sqlite3_value** arg
         char* vec2 = (char*)sqlite3_value_text(argv[1]);
         size_t bytes1 = (size_t)sqlite3_value_bytes(argv[0]);
         size_t bytes2 = (size_t)sqlite3_value_bytes(argv[1]);
-        size_t commas1 = sz_count_char_swar(vec1, bytes1, ",");
-        size_t commas2 = sz_count_char_swar(vec2, bytes2, ",");
+        size_t commas1 = sz::string_view(vec1, bytes1).find_all(",").size();
+        size_t commas2 = sz::string_view(vec2, bytes2).find_all(",").size();
         if (commas1 != commas2) {
             sqlite3_result_error(context, "Vectors have different number of dimensions", -1);
             return;
@@ -167,7 +180,7 @@ static void sqlite_dense(sqlite3_context* context, int argc, sqlite3_value** arg
     }
 }
 
-extern "C" PYBIND11_MAYBE_UNUSED PYBIND11_EXPORT int sqlite3_compiled_init( //
+extern "C" SZ_DYNAMIC int sqlite3_compiled_init( //
     sqlite3* db,                                                            //
     char** error_message,                                                   //
     sqlite3_api_routines const* api) {
@@ -176,15 +189,25 @@ extern "C" PYBIND11_MAYBE_UNUSED PYBIND11_EXPORT int sqlite3_compiled_init( //
     int flags = SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS;
     int num_params = -1; // Any number will be accepted
 
+    // String similarity metrics
+    // sqlite3_create_function(db, "distance_levenshtein_bytes", num_params, flags, NULL,
+    //                         sqlite_dense<scalar_kind_t::u8_k, metric_kind_t::haversine_k>, NULL, NULL);
+    // sqlite3_create_function(db, "distance_levenshtein_unicode", num_params, flags, NULL,
+    //                         sqlite_dense<scalar_kind_t::u8_k, metric_kind_t::haversine_k>, NULL, NULL);
+    // sqlite3_create_function(db, "distance_hamming_bytes", num_params, flags, NULL,
+    //                         sqlite_dense<scalar_kind_t::u8_k, metric_kind_t::haversine_k>, NULL, NULL);
+    // sqlite3_create_function(db, "distance_hamming_unicode", num_params, flags, NULL,
+    //                         sqlite_dense<scalar_kind_t::u8_k, metric_kind_t::haversine_k>, NULL, NULL);
+
+    // Bit-wise metrics
     sqlite3_create_function(db, "distance_hamming_binary", num_params, flags, NULL,
                             sqlite_dense<scalar_kind_t::b1x8_k, metric_kind_t::hamming_k>, NULL, NULL);
     sqlite3_create_function(db, "distance_jaccard_binary", num_params, flags, NULL,
                             sqlite_dense<scalar_kind_t::b1x8_k, metric_kind_t::jaccard_k>, NULL, NULL);
     sqlite3_create_function(db, "distance_haversine_meters", num_params, flags, NULL,
                             sqlite_dense<scalar_kind_t::f64_k, metric_kind_t::haversine_k>, NULL, NULL);
-    // sqlite3_create_function(db, "distance_levenshtein", num_params, flags, NULL,
-    //                         sqlite_dense<scalar_kind_t::u8_k, metric_kind_t::haversine_k>, NULL, NULL);
 
+    // Double-precision metrics
     sqlite3_create_function(db, "distance_sqeuclidean_f64", num_params, flags, NULL,
                             sqlite_dense<scalar_kind_t::f64_k, metric_kind_t::l2sq_k>, NULL, NULL);
     sqlite3_create_function(db, "distance_cosine_f64", num_params, flags, NULL,
@@ -194,6 +217,7 @@ extern "C" PYBIND11_MAYBE_UNUSED PYBIND11_EXPORT int sqlite3_compiled_init( //
     sqlite3_create_function(db, "distance_divergence_f64", num_params, flags, NULL,
                             sqlite_dense<scalar_kind_t::f64_k, metric_kind_t::divergence_k>, NULL, NULL);
 
+    // Single-precision metrics
     sqlite3_create_function(db, "distance_sqeuclidean_f32", num_params, flags, NULL,
                             sqlite_dense<scalar_kind_t::f32_k, metric_kind_t::l2sq_k>, NULL, NULL);
     sqlite3_create_function(db, "distance_cosine_f32", num_params, flags, NULL,
@@ -203,6 +227,7 @@ extern "C" PYBIND11_MAYBE_UNUSED PYBIND11_EXPORT int sqlite3_compiled_init( //
     sqlite3_create_function(db, "distance_divergence_f32", num_params, flags, NULL,
                             sqlite_dense<scalar_kind_t::f32_k, metric_kind_t::divergence_k>, NULL, NULL);
 
+    // Half-precision metrics
     sqlite3_create_function(db, "distance_sqeuclidean_f16", num_params, flags, NULL,
                             sqlite_dense<scalar_kind_t::f16_k, metric_kind_t::l2sq_k>, NULL, NULL);
     sqlite3_create_function(db, "distance_cosine_f16", num_params, flags, NULL,
@@ -212,6 +237,7 @@ extern "C" PYBIND11_MAYBE_UNUSED PYBIND11_EXPORT int sqlite3_compiled_init( //
     sqlite3_create_function(db, "distance_divergence_f16", num_params, flags, NULL,
                             sqlite_dense<scalar_kind_t::f16_k, metric_kind_t::divergence_k>, NULL, NULL);
 
+    // Integer metrics
     sqlite3_create_function(db, "distance_sqeuclidean_i8", num_params, flags, NULL,
                             sqlite_dense<scalar_kind_t::i8_k, metric_kind_t::l2sq_k>, NULL, NULL);
     sqlite3_create_function(db, "distance_cosine_i8", num_params, flags, NULL,

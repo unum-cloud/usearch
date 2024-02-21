@@ -132,7 +132,7 @@ print("macros_args", macros_args)
 ext_modules = [
     Pybind11Extension(
         "usearch.compiled",
-        ["python/lib.cpp"],
+        ["python/lib.cpp", "sqlite/lib.cpp", "stringzilla/c/lib.c"],
         extra_compile_args=compile_args,
         extra_link_args=link_args,
         define_macros=macros_args,
@@ -150,7 +150,7 @@ with open(os.path.join(this_directory, "README.md")) as f:
 include_dirs = [
     "include",
     "python",
-    "stringzilla/stringzilla",
+    "stringzilla/include",
 ]
 if use_simsimd:
     include_dirs.append("simsimd/include")
