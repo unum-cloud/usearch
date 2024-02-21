@@ -1467,7 +1467,7 @@ class index_dense_gt {
         cluster_config.expansion = config_.expansion_search;
 
         auto allow = [=](member_cref_t const& member) noexcept { return member.key != free_key_; };
-        return typed_->cluster(vector_data, level, metric_proxy_t{*this, thread}, cluster_config, allow);
+        return typed_->cluster(vector_data, level, metric_proxy_t{*this, lock.thread_id}, cluster_config, allow);
     }
 
     template <typename scalar_at>
