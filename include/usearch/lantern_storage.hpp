@@ -111,9 +111,8 @@ class lantern_storage_gt {
 
         static float distance(span_floats_t v1, span_floats_t v2) {
             float dist = 0;
-            expect(v1.size() == v2.size());
             for (size_t i = 0; i < v1.size(); i++) {
-                dist += std::pow(v1[i] - v2[i], 2.f);
+                dist += (v1[i] - v2[i]) * (v1[i] - v2[i]);
             }
             return dist;
         }
