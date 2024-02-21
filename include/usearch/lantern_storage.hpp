@@ -152,7 +152,7 @@ class lantern_storage_gt {
 
                 // Copy the centroid values into the correct position in the output vector
                 expect(subvector_dim_ == centroid.size(), "unexpected centroid size");
-                // std::memcpy(vector + i, centroid.data(), subvector_dim_ * sizeof(float));
+                std::memcpy(vector + i, centroid.data(), subvector_dim_ * sizeof(float));
             }
             return vector;
         }
