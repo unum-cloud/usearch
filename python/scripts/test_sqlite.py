@@ -16,9 +16,150 @@ batch_sizes = [1, 3, 20]
 dimensions = [3, 97, 256]
 
 
+def test_sqlite_minimal_json_cosine_vector_search():
+    """Minimal test for searching JSON vectors in an SQLite database."""
+    conn = sqlite3.connect(":memory:")
+    conn.enable_load_extension(True)
+    conn.load_extension(usearch.sqlite)
+
+    cursor = conn.cursor()
+
+    # Create a table with a JSON column for vectors
+    cursor.executescript(
+        """
+        CREATE TABLE vectors_table (
+            id SERIAL PRIMARY KEY,
+            vector JSON NOT NULL
+        );
+        INSERT INTO vectors_table (id, vector)
+        VALUES 
+            (42, '[1.0, 2.0, 3.0]'),
+            (43, '[4.0, 5.0, 6.0]');
+    """
+    )
+    # Compute the distances to [7.0, 8.0, 9.0] using
+    # the `distance_cosine_f32` extension function
+    cursor.execute(
+        """
+        SELECT  vt.id, 
+                distance_cosine_f32(vt.vector, '[7.0, 8.0, 9.0]') AS distance
+        FROM vectors_table AS vt;
+    """
+    )
+    ids_and_distances = list(cursor.fetchall())
+    assert [ids_and_distances[0][0], ids_and_distances[1][0]] == [42, 43]
+    assert ids_and_distances[0][1] < 0.05 and ids_and_distances[1][1] < 0.002
+
+
+def test_sqlite_minimal_text_search():
+    """Minimal test for Unicode strings in an SQLite database."""
+    conn = sqlite3.connect(":memory:")
+    conn.enable_load_extension(True)
+    conn.load_extension(usearch.sqlite)
+
+    cursor = conn.cursor()
+
+    # Create a table with a TEXT column for strings
+    str42 = "école"  # 6 codepoints (runes), 7 bytes
+    str43 = "école"  # 5 codepoints (runes), 6 bytes
+    str44 = "écolé"  # 5 codepoints (runes), 7 bytes
+    assert (
+        str42 != str43
+    ), "etter 'é' as a single character vs 'e' + '´' are not the same"
+
+    # Inject the different strings into the table
+    cursor.executescript(
+        f"""
+        CREATE TABLE strings_table (
+            id SERIAL PRIMARY KEY,
+            word TEXT NOT NULL
+        );
+        INSERT INTO strings_table (id, word)
+        VALUES 
+            (42, '{str42}'),
+            (43, '{str43}');
+    """
+    )
+    cursor.execute(
+        f"""
+        SELECT  st.id, 
+
+                distance_levenshtein_bytes(st.word, '{str44}') AS levenshtein_bytes,
+                distance_levenshtein_unicode(st.word, '{str44}') AS levenshtein_unicode,
+                distance_hamming_bytes(st.word, '{str44}') AS hamming_bytes,
+                distance_hamming_unicode(st.word, '{str44}') AS hamming_unicode,
+
+                distance_levenshtein_bytes(st.word, '{str44}', 2) AS levenshtein_bytes_bounded,
+                distance_levenshtein_unicode(st.word, '{str44}', 2) AS levenshtein_unicode_bounded,
+                distance_hamming_bytes(st.word, '{str44}', 2) AS hamming_bytes_bounded,
+                distance_hamming_unicode(st.word, '{str44}', 2) AS hamming_unicode_bounded
+        FROM strings_table AS st;
+    """
+    )
+    ids_and_distances = list(cursor.fetchall())
+    assert ids_and_distances[0] == (42, 5, 3, 7, 6, 2, 2, 2, 2)
+    assert ids_and_distances[1] == (43, 2, 1, 2, 1, 2, 1, 2, 1)
+
+
+def test_sqlite_blob_bits_vector_search():
+    """Minimal test for searching binary vectors in an SQLite database."""
+
+    conn = sqlite3.connect(":memory:")
+    conn.enable_load_extension(True)
+    conn.load_extension(usearch.sqlite)
+
+    cursor = conn.cursor()
+
+    # Create a table with a BLOB column for binary vectors
+    cursor.executescript(
+        """
+        CREATE TABLE binary_vectors (
+            id SERIAL PRIMARY KEY,
+            vector BLOB NOT NULL
+        );
+        INSERT INTO binary_vectors (id, vector)
+        VALUES 
+            (42, X'FFFFFF'), -- 111111111111111111111111 in binary
+            (43, X'000000'); -- 000000000000000000000000 in binary
+        """
+    )
+
+    # Compute the distances between binary vectors and a sample vector using
+    # the `distance_hamming_binary` and `distance_jaccard_binary` extension functions
+    cursor.execute(
+        """
+        SELECT  bv.id, 
+                distance_hamming_binary(bv.vector, X'FFFF00') AS hamming_distance,
+                distance_jaccard_binary(bv.vector, X'FFFF00') AS jaccard_distance
+        FROM binary_vectors AS bv;
+        """
+    )
+
+    ids_and_distances = list(cursor.fetchall())
+    np.testing.assert_array_almost_equal(ids_and_distances[0], (42, 8.0, 1.0 / 3))
+    np.testing.assert_array_almost_equal(ids_and_distances[1], (43, 16.0, 1.0))
+
+
 @pytest.mark.parametrize("num_vectors", batch_sizes)
 @pytest.mark.parametrize("ndim", dimensions)
 def test_sqlite_distances_in_high_dimensions(num_vectors: int, ndim: int):
+    """
+    Test the computation of cosine distances in high-dimensional spaces with random vectors stored in an SQLite database.
+
+    This function tests the accuracy and consistency of cosine distance calculations between vectors in different formats:
+    - distance_cosine_f32(JSON, JSON)
+    - distance_cosine_f32(BLOB, BLOB)
+    - distance_cosine_f16(BLOB, BLOB)
+
+    The vectors are stored and retrieved as JSON strings and as binary blobs (in both 32-bit and 16-bit precision formats).
+    The function asserts that the cosine similarities computed from the different storage formats (JSON, f32 BLOB, f16 BLOB)
+    are within a certain tolerance of each other, ensuring that the distance calculations are consistent across different data formats.
+
+    Parameters:
+        num_vectors (int): The number of random vectors to generate and test.
+        ndim (int): The dimensionality of each vector.
+    """
+
     conn = sqlite3.connect(":memory:")
     conn.enable_load_extension(True)
     conn.load_extension(usearch.sqlite)
@@ -91,7 +232,7 @@ def test_sqlite_distances_in_low_dimensions(num_vectors: int):
     conn = sqlite3.connect(":memory:")
     conn.enable_load_extension(True)
     conn.load_extension(usearch.sqlite)
-    
+
     cursor = conn.cursor()
 
     # Create a table for storing vectors and their descriptions
@@ -139,8 +280,12 @@ def test_sqlite_distances_in_low_dimensions(num_vectors: int):
 
     # Validate the results of the distance computations
     for id1, id2, similarity_f32, similarity_f16, haversine_meters in cursor.fetchall():
-        assert 0 <= similarity_f32 <= 1, "Cosine similarity (f32) must be between 0 and 1"
-        assert 0 <= similarity_f16 <= 1, "Cosine similarity (f16) must be between 0 and 1"
+        assert (
+            0 <= similarity_f32 <= 1
+        ), "Cosine similarity (f32) must be between 0 and 1"
+        assert (
+            0 <= similarity_f16 <= 1
+        ), "Cosine similarity (f16) must be between 0 and 1"
         assert haversine_meters >= 0, "Haversine distance must be non-negative"
 
     # Clean up

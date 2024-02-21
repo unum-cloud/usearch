@@ -49,14 +49,16 @@ static void sqlite_dense(sqlite3_context* context, int argc, sqlite3_value** arg
 
     // Our primary case is having two BLOBs containing dense vector representations.
     if (argc == 2 && type1 == SQLITE_BLOB && type2 == SQLITE_BLOB) {
-        void const* vec1 = sqlite3_value_blob(argv[0]);
-        void const* vec2 = sqlite3_value_blob(argv[1]);
+        // The pointer obtained from `sqlite3_value_text` or `sqlite3_value_blob` can
+        // be invalidated by the next call to `sqlite3_value_bytes` according to docs, so read it first.
         int bytes1 = sqlite3_value_bytes(argv[0]);
         int bytes2 = sqlite3_value_bytes(argv[1]);
         if (bytes1 != bytes2) {
             sqlite3_result_error(context, "Vectors have different number of dimensions", -1);
             return;
         }
+        void const* vec1 = sqlite3_value_blob(argv[0]);
+        void const* vec2 = sqlite3_value_blob(argv[1]);
 
         std::size_t dimensions = (size_t)(bytes1)*CHAR_BIT / bits_per_scalar(scalar_kind_ak);
         metric_t metric = metric_t(dimensions, metric_kind_ak, scalar_kind_ak);
@@ -67,10 +69,12 @@ static void sqlite_dense(sqlite3_context* context, int argc, sqlite3_value** arg
 
     // Worst case is to have JSON arrays or comma-separated values
     else if (argc == 2 && type1 == SQLITE_TEXT && type2 == SQLITE_TEXT) {
-        char* vec1 = (char*)sqlite3_value_text(argv[0]);
-        char* vec2 = (char*)sqlite3_value_text(argv[1]);
+        // The pointer obtained from `sqlite3_value_text` or `sqlite3_value_blob` can
+        // be invalidated by the next call to `sqlite3_value_bytes` according to docs, so read it first.
         size_t bytes1 = (size_t)sqlite3_value_bytes(argv[0]);
         size_t bytes2 = (size_t)sqlite3_value_bytes(argv[1]);
+        char* vec1 = (char*)sqlite3_value_text(argv[0]);
+        char* vec2 = (char*)sqlite3_value_text(argv[1]);
         size_t commas1 = sz::string_view(vec1, bytes1).find_all(",").size();
         size_t commas2 = sz::string_view(vec2, bytes2).find_all(",").size();
         if (commas1 != commas2) {
@@ -180,9 +184,77 @@ static void sqlite_dense(sqlite3_context* context, int argc, sqlite3_value** arg
     }
 }
 
+enum class string_metric_kind_t : std::uint8_t {
+    levenshtein_bytes_k,
+    levenshtein_unicode_k,
+    hamming_bytes_k,
+    hamming_unicode_k,
+};
+
+template <string_metric_kind_t string_metric_kind_ak>
+static void sqlite_strings(sqlite3_context* context, int argc, sqlite3_value** argv) {
+
+    if (argc != 2 && argc != 3) {
+        sqlite3_result_error(context, "Distance function expects 2 or 3 arguments", -1);
+        return;
+    }
+
+    int type1 = sqlite3_value_type(argv[0]);
+    int type2 = sqlite3_value_type(argv[1]);
+    auto is_text_or_blob = [](int type) { return type == SQLITE_TEXT || type == SQLITE_BLOB; };
+    if (!is_text_or_blob(type1) || !is_text_or_blob(type2)) {
+        sqlite3_result_error(context, "Distance function expects text or blob arguments", -1);
+        return;
+    }
+
+    sz_size_t bound = 0;
+    if (argc == 3) {
+        int type3 = sqlite3_value_type(argv[2]);
+        if (type3 != SQLITE_INTEGER) {
+            sqlite3_result_error(context, "Distance function expects integer as the third argument", -1);
+            return;
+        }
+        std::int64_t signed_bound = sqlite3_value_int64(argv[2]);
+        if (signed_bound < 0) {
+            sqlite3_result_error(context, "Distance function expects non-negative integer as the third argument", -1);
+            return;
+        }
+        bound = (sz_size_t)signed_bound;
+    }
+
+    // The pointer obtained from `sqlite3_value_text` or `sqlite3_value_blob` can
+    // be invalidated by the next call to `sqlite3_value_bytes` according to docs, so read it first.
+    sz_size_t bytes1 = (sz_size_t)sqlite3_value_bytes(argv[0]);
+    sz_size_t bytes2 = (sz_size_t)sqlite3_value_bytes(argv[1]);
+    auto extract_data_pointer = [](int type, sqlite3_value* value) -> sz_cptr_t {
+        return type == SQLITE_BLOB ? (sz_cptr_t)sqlite3_value_blob(value) : (sz_cptr_t)sqlite3_value_text(value);
+    };
+    sz_cptr_t vec1 = extract_data_pointer(type1, argv[0]);
+    sz_cptr_t vec2 = extract_data_pointer(type2, argv[1]);
+    sz::string_view str1(vec1, bytes1);
+    sz::string_view str2(vec2, bytes2);
+
+    // Dispatch the right backend
+    sz_size_t result = SZ_SIZE_MAX;
+    switch (string_metric_kind_ak) {
+    case string_metric_kind_t::levenshtein_bytes_k: result = sz::edit_distance(str1, str2, bound); break;
+    case string_metric_kind_t::levenshtein_unicode_k: result = sz::edit_distance_utf8(str1, str2, bound); break;
+    case string_metric_kind_t::hamming_bytes_k: result = sz::hamming_distance(str1, str2, bound); break;
+    case string_metric_kind_t::hamming_unicode_k: result = sz::hamming_distance_utf8(str1, str2, bound); break;
+    }
+
+    // Check for errors
+    if (result == SZ_SIZE_MAX) {
+        sqlite3_result_error(context, "Distance function failed to compute the result", -1);
+        return;
+    }
+
+    sqlite3_result_int64(context, (std::int64_t)result);
+}
+
 extern "C" SZ_DYNAMIC int sqlite3_compiled_init( //
-    sqlite3* db,                                                            //
-    char** error_message,                                                   //
+    sqlite3* db,                                 //
+    char** error_message,                        //
     sqlite3_api_routines const* api) {
     SQLITE_EXTENSION_INIT2(api)
 
@@ -190,14 +262,14 @@ extern "C" SZ_DYNAMIC int sqlite3_compiled_init( //
     int num_params = -1; // Any number will be accepted
 
     // String similarity metrics
-    // sqlite3_create_function(db, "distance_levenshtein_bytes", num_params, flags, NULL,
-    //                         sqlite_dense<scalar_kind_t::u8_k, metric_kind_t::haversine_k>, NULL, NULL);
-    // sqlite3_create_function(db, "distance_levenshtein_unicode", num_params, flags, NULL,
-    //                         sqlite_dense<scalar_kind_t::u8_k, metric_kind_t::haversine_k>, NULL, NULL);
-    // sqlite3_create_function(db, "distance_hamming_bytes", num_params, flags, NULL,
-    //                         sqlite_dense<scalar_kind_t::u8_k, metric_kind_t::haversine_k>, NULL, NULL);
-    // sqlite3_create_function(db, "distance_hamming_unicode", num_params, flags, NULL,
-    //                         sqlite_dense<scalar_kind_t::u8_k, metric_kind_t::haversine_k>, NULL, NULL);
+    sqlite3_create_function(db, "distance_levenshtein_bytes", num_params, flags, NULL,
+                            sqlite_strings<string_metric_kind_t::levenshtein_bytes_k>, NULL, NULL);
+    sqlite3_create_function(db, "distance_levenshtein_unicode", num_params, flags, NULL,
+                            sqlite_strings<string_metric_kind_t::levenshtein_unicode_k>, NULL, NULL);
+    sqlite3_create_function(db, "distance_hamming_bytes", num_params, flags, NULL,
+                            sqlite_strings<string_metric_kind_t::hamming_bytes_k>, NULL, NULL);
+    sqlite3_create_function(db, "distance_hamming_unicode", num_params, flags, NULL,
+                            sqlite_strings<string_metric_kind_t::hamming_unicode_k>, NULL, NULL);
 
     // Bit-wise metrics
     sqlite3_create_function(db, "distance_hamming_binary", num_params, flags, NULL,
