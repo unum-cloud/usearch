@@ -16,7 +16,7 @@ filterwarnings = ["error"]
 test-requires = []
 test-command = ""
 build-verbosity = 0
-skip = ["*musllinux*", "*i686*", "pp*", "cp36-*", "cp312-*"]
+skip = ["*musllinux*", "*i686*", "pp*", "cp36-*"]
 
 [tool.cibuildwheel.linux]
 before-build = [
@@ -48,4 +48,4 @@ before-build = [
     "git submodule update --init --recursive",
 ]
 archs = ["x86", "AMD64"]
-skip = ["*win32*", "pp*", "cp36-*", "cp312-*"]
+skip = ["*win32*", "pp*", "cp36-*"]
