@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "test-ga-*"]
 
 env:
   BUILD_TYPE: Release
@@ -21,19 +21,20 @@ jobs:
     name: Semantic Release
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
       - run: npm install --save-dev --prefix ./package-ci @semantic-release/exec @semantic-release/git conventional-changelog-eslint semantic-release && npx --prefix ./package-ci semantic-release
 
   rebase:
     name: Rebase Dev. Branch
+    if: github.ref == 'refs/heads/main'
     needs: versioning
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout the latest code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -60,10 +61,9 @@ jobs:
       matrix:
         arch: ["linux/amd64", "linux/arm64"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: "main"
       - run: git submodule update --init --recursive
 
       - name: Setup QEMU
@@ -115,10 +115,9 @@ jobs:
       matrix:
         arch: [x64, x86]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: "main"
       - run: git submodule update --init --recursive
 
       - name: Setup CMake
@@ -164,10 +163,9 @@ jobs:
       matrix:
         arch: [arm64, x86_64]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: "main"
       - run: git submodule update --init --recursive
 
       - uses: actions/setup-go@v4
@@ -184,7 +182,7 @@ jobs:
         run: |
           cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_BENCH_CPP=0 -B ./build_release
           cmake --build ./build_release --config Release        
-          zip -r usearch_macOS_${{ matrix.arch }}_${{ steps.version.outputs.version }}.zip build_release/libusearch_c.so c/usearch.h
+          zip -r usearch_macOS_${{ matrix.arch }}_${{ steps.version.outputs.version }}.zip build_release/libusearch_c.* c/usearch.h
 
       - name: Upload archive
         uses: xresloader/upload-to-github-release@v1
@@ -203,10 +201,9 @@ jobs:
       matrix:
         os: [ubuntu-22.04, macOS-11, windows-2022]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: "main"
       - run: git submodule update --init --recursive
 
       - name: Get version
@@ -355,10 +352,8 @@ jobs:
         os: [ubuntu-22.04, macOS-11, windows-2022]
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: "main"
-      - uses: actions/setup-python@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
 
       - name: Setup Docker
         if: matrix.os == 'ubuntu-22.04'
@@ -403,49 +398,111 @@ jobs:
           verbose: true
           print-hash: true
 
-  publish_javascript:
-    name: Publish JavaScript
+  build_javascript:
+    name: Build JavaScript Native Modules
     needs: versioning
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x64
+          - x86
+        os:
+          - macos-latest
+          - ubuntu-22.04
+          - windows-latest
+        exclude:
+          - arch: x86
+            os: macos-latest
+          - arch: x86
+            os: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
     env:
       CC: gcc-12
       CXX: g++-12
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: "main"
+      - name: Checkout the latest code
+        uses: actions/checkout@v4
       - run: git submodule update --init --recursive
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          architecture: ${{ matrix.arch }}
+
       - name: Update compilers
+        if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt update
           sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev gcc-12 g++-12
+          sudo apt install gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+
+      - run: npm ci --ignore-scripts
+      - run: npm run prebuild-single
+        if: matrix.os != 'macos-latest'
+      - run: npm run prebuild-darwin-x64+arm64
+        env:
+          CC: clang
+          CXX: clang++
+        if: matrix.os == 'macos-latest'
+      - run: file prebuilds/*/*
+        if: matrix.os == 'macos-latest'
+      - name: Extra for cross build
+        if: matrix.os == 'ubuntu-22.04'
+        run: npm run prebuild-arm64
+      - uses: actions/upload-artifact@v3
+        with:
+          name: prebuilds
+          path: prebuilds
+          retention-days: 1
+
+  publish_javascript:
+    name: Publish JavaScript
+    needs: build_javascript
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+      - run: git submodule update --init --recursive
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
-      - name: Build and Test
-        run: |
-          npm ci
-          npm test
-          npm run typegen
+      - uses: actions/download-artifact@v3
+
+      - name: Look for links
+        run: find . -type f -links +1
+
+      - name: Install Dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build the JS from TS
+        run: npm run build-js
+
+      - name: Last minute test with prebuild artifact
+        run: npm run test
+
+      - name: Publish Dry Run
+        run: npm publish --dry-run
+        if: github.ref != 'refs/heads/main'
 
       - name: Publish
-        uses: JS-DevTools/npm-publish@v2
+        if: github.ref == 'refs/heads/main'
+        uses: JS-DevTools/npm-publish@v3
         with:
           token: ${{ secrets.NPM_TOKEN }}
+          access: public
 
   publish_rust:
     name: Publish Rust
     needs: versioning
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: "main"
+      - uses: actions/checkout@v4
       - run: git submodule update --init --recursive
       - uses: actions-rs/toolchain@v1
         with:
@@ -470,9 +527,7 @@ jobs:
       ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.ORG_GRADLE_PROJECT_SIGNINGPASSWORD }}
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: "main"
+      - uses: actions/checkout@v4
       - run: git submodule update --init --recursive
       - uses: actions/setup-java@v3
         with:
@@ -490,9 +545,7 @@ jobs:
     needs: versioning
     runs-on: macos-12
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: "main"
+      - uses: actions/checkout@v4
       - run: git submodule update --init --recursive
       - name: Build
         run: swift build
@@ -509,9 +562,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: "main"
+      - uses: actions/checkout@v4
       - run: git submodule update --init --recursive
       - name: Login to Docker Hub
         uses: docker/login-action@v2
@@ -554,9 +605,7 @@ jobs:
         shell: bash
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: "main"
+      - uses: actions/checkout@v4
       - run: git submodule update --init --recursive
 
       - name: Build C library for Linux
@@ -608,9 +657,7 @@ jobs:
       NUGET_SOURCE: https://api.nuget.org/v3/index.json
       GITHUB_PACKAGES_SOURCE: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: "main"
+      - uses: actions/checkout@v4
       - run: git submodule update --init --recursive
 
       - name: Download usearch libs artifact
@@ -656,9 +703,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          ref: "main"
+        uses: actions/checkout@v4
       - name: Install dependencies
         run: |
           sudo apt update && 

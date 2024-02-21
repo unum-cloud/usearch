@@ -12,3 +12,4 @@ python/
 docs/
 wasm/
 Package.swift
+_deps/

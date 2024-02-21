@@ -56,25 +56,25 @@ func (m Metric) String() string {
 type Quantization uint8
 
 const (
-	f32 Quantization = iota
-	f16
-	f64
-	i8
-	b1
+	F32 Quantization = iota
+	F16
+	F64
+	I8
+	B1
 )
 
 func (a Quantization) String() string {
 	switch a {
-	case f16:
-		return "f16"
-	case f32:
-		return "f32"
-	case f64:
-		return "f64"
-	case i8:
-		return "i8"
-	case b1:
-		return "b1"
+	case F16:
+		return "F16"
+	case F32:
+		return "F32"
+	case F64:
+		return "F64"
+	case I8:
+		return "I8"
+	case B1:
+		return "B1"
 	default:
 		panic("Unknown quantization")
 	}
@@ -156,15 +156,15 @@ func NewIndex(conf IndexConfig) (index *Index, err error) {
 
 	// Map the quantization method
 	switch conf.Quantization {
-	case f16:
+	case F16:
 		options.quantization = C.usearch_scalar_f16_k
-	case f32:
+	case F32:
 		options.quantization = C.usearch_scalar_f32_k
-	case f64:
+	case F64:
 		options.quantization = C.usearch_scalar_f64_k
-	case i8:
+	case I8:
 		options.quantization = C.usearch_scalar_i8_k
-	case b1:
+	case B1:
 		options.quantization = C.usearch_scalar_b1_k
 	default:
 		options.quantization = C.usearch_scalar_unknown_k
