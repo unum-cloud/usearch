@@ -30,7 +30,8 @@ Spatial • Binary • Probabilistic • User-Defined Metrics
 <a href="https://unum-cloud.github.io/usearch/swift">Swift</a> •
 <a href="https://unum-cloud.github.io/usearch/csharp">C#</a> •
 <a href="https://unum-cloud.github.io/usearch/golang">GoLang</a> •
-<a href="https://unum-cloud.github.io/usearch/wolfram">Wolfram</a>
+<a href="https://unum-cloud.github.io/usearch/wolfram">Wolfram</a> •
+<a href="https://unum-cloud.github.io/usearch/sqlite">SQLite3</a>
 <br/>
 Linux • MacOS • Windows • iOS • WebAssembly
 </p>
@@ -47,10 +48,10 @@ Linux • MacOS • Windows • iOS • WebAssembly
 
 ---
 
-- ✅ [10x faster][faster-than-faiss] [HNSW][hnsw-algorithm] implementation than [FAISS][faiss].
-- ✅ Simple and extensible [single C++11 header][usearch-header] implementation.
+- ✅ __[10x faster][faster-than-faiss]__ [HNSW][hnsw-algorithm] implementation than [FAISS][faiss].
+- ✅ Simple and extensible [single C++11 header][usearch-header] __library__.
 - ✅ Compatible with a dozen programming languages out of the box.
-- ✅ [Trusted](#integrations) by some of the most loved Datalakes and Databases, like [ClickHouse][clickhouse-docs].
+- ✅ [Trusted](#integrations) by giants like Google and databases like [ClickHouse][clickhouse-docs].
 - ✅ [SIMD][simd]-optimized and [user-defined metrics](#user-defined-functions) with JIT compilation.
 - ✅ Hardware-agnostic `f16` & `i8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
 - ✅ [View large indexes from disk](#serving-index-from-disk) without loading into RAM.
