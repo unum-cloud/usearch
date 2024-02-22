@@ -1,3 +1,4 @@
+﻿using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Cloud.Unum.USearch;
@@ -37,6 +38,54 @@ public class UsearchIndexTests
 
         // Assert
         Assert.Equal(controlIndexOptions, indexOptions);
+    }
+
+    [Fact]
+    public void CreateVectorIndexFile()
+    {
+
+        string pathUsearch = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "savedVectorFolder");
+        if (!Directory.Exists(pathUsearch))
+        {
+            Directory.CreateDirectory(pathUsearch);
+        };
+
+        var savedPath = Path.Combine(pathUsearch, "savedVectorIndex.usearch");
+
+        using var index = new USearchIndex(
+            metricKind: MetricKind.Cos, // Choose cosine metric
+            quantization: ScalarKind.Float32, // Only quantization to Float32, Float64 is currently supported
+            dimensions: 3,  // Define the number of dimensions in input vectors
+            connectivity: 16, // How frequent should the connections in the graph be, optional
+            expansionAdd: 128, // Control the recall of indexing, optional
+            expansionSearch: 64 // Control the quality of search, optional
+        );
+
+        var vector = new float[] { 0.2f, 0.6f, 0.4f };
+        index.Add(42, vector);
+        index.Save(savedPath);
+
+        Trace.Assert(File.Exists(savedPath));
+    }
+
+    [Fact]
+    public void LoadingVectorIndexFile()
+    {
+
+        string pathUsearch = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "savedVectorFolder");
+        var savedPath = Path.Combine(pathUsearch, "savedVectorIndex.usearch");
+
+        Trace.Assert(Directory.Exists(pathUsearch));
+        Trace.Assert(File.Exists(Path.Combine(pathUsearch, "savedVectorIndex.usearch")));
+
+        using var index = new USearchIndex(savedPath);
+
+        var vector = new float[] { 0.2f, 0.6f, 0.4f };
+        int matches = index.Search(vector, 10, out ulong[] keys, out float[] distances);
+        Trace.Assert(index.Size() == 1);
+        Trace.Assert(matches == 1);
+        Trace.Assert(keys[0] == 42);
+        Trace.Assert(distances[0] <= 0.001f);
     }
 
     [Fact]
