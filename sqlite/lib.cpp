@@ -321,3 +321,5 @@ extern "C" SZ_DYNAMIC int sqlite3_compiled_init( //
 
     return SQLITE_OK;
 }
+
+#include "../stringzilla/c/lib.c"
