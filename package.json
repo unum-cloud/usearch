@@ -34,7 +34,8 @@
     "exports": {
         ".": {
             "types": "./javascript/types/usearch.d.ts",
-            "require": "./javascript/usearch.js"
+            "require": "./javascript/usearch.js",
+            "import": "./javascript/usearch.js"
         },
         "./package.json": "./package.json"
     },
