@@ -127,12 +127,10 @@ if is_windows:
             ]
         )
 
-print("macros_args", macros_args)
-
 ext_modules = [
     Pybind11Extension(
         "usearch.compiled",
-        ["python/lib.cpp", "sqlite/lib.cpp", "stringzilla/c/lib.c"],
+        ["python/lib.cpp", "sqlite/lib.cpp"],
         extra_compile_args=compile_args,
         extra_link_args=link_args,
         define_macros=macros_args,
