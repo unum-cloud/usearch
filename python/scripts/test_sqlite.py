@@ -1,15 +1,15 @@
 import sqlite3
 import json
 import math
-import pytest
+import sys
+
 import numpy as np
+import pytest
 
 import usearch
-from usearch.io import load_matrix, save_matrix
-from usearch.index import search
-from usearch.eval import random_vectors
 
-from usearch.index import Match, Matches, BatchMatches, Index, Indexes
+if sys.platform != "linux":
+    pytest.skip(reason="Requires Linux to run", allow_module_level=True)
 
 
 batch_sizes = [1, 3, 20]
@@ -19,7 +19,7 @@ dimensions = [3, 97, 256]
 def test_sqlite_minimal_json_cosine_vector_search():
     """Minimal test for searching JSON vectors in an SQLite database."""
     conn = sqlite3.connect(":memory:")
-    conn.enable_load_extension(True)
+    conn.enable_load_extension(True)  # Not available on MacOS with default build
     conn.load_extension(usearch.sqlite)
 
     cursor = conn.cursor()
@@ -54,7 +54,7 @@ def test_sqlite_minimal_json_cosine_vector_search():
 def test_sqlite_minimal_text_search():
     """Minimal test for Unicode strings in an SQLite database."""
     conn = sqlite3.connect(":memory:")
-    conn.enable_load_extension(True)
+    conn.enable_load_extension(True)  # Not available on MacOS with default build
     conn.load_extension(usearch.sqlite)
 
     cursor = conn.cursor()
