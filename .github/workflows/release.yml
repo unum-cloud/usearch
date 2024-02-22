@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    branches: ["main", "test-ga-*"]
+    branches: ["main"]
 
 env:
   BUILD_TYPE: Release
@@ -29,7 +29,6 @@ jobs:
 
   rebase:
     name: Rebase Dev. Branch
-    if: github.ref == 'refs/heads/main'
     needs: versioning
     runs-on: ubuntu-22.04
     steps:
@@ -424,6 +423,8 @@ jobs:
     steps:
       - name: Checkout the latest code
         uses: actions/checkout@v4
+        with:
+          ref: "main"
       - run: git submodule update --init --recursive
 
       - name: Set up Node.js
@@ -465,6 +466,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: "main"
       - run: git submodule update --init --recursive
 
       - name: Set up Node.js
@@ -488,10 +491,8 @@ jobs:
 
       - name: Publish Dry Run
         run: npm publish --dry-run
-        if: github.ref != 'refs/heads/main'
-
+       
       - name: Publish
-        if: github.ref == 'refs/heads/main'
         uses: JS-DevTools/npm-publish@v3
         with:
           token: ${{ secrets.NPM_TOKEN }}
@@ -503,6 +504,8 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: "main"
       - run: git submodule update --init --recursive
       - uses: actions-rs/toolchain@v1
         with:
@@ -528,6 +531,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: "main"
       - run: git submodule update --init --recursive
       - uses: actions/setup-java@v3
         with:
@@ -546,6 +551,8 @@ jobs:
     runs-on: macos-12
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: "main"
       - run: git submodule update --init --recursive
       - name: Build
         run: swift build
@@ -563,6 +570,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: "main"
       - run: git submodule update --init --recursive
       - name: Login to Docker Hub
         uses: docker/login-action@v2
@@ -606,6 +615,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: "main"
       - run: git submodule update --init --recursive
 
       - name: Build C library for Linux
@@ -658,6 +669,8 @@ jobs:
       GITHUB_PACKAGES_SOURCE: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: "main"
       - run: git submodule update --init --recursive
 
       - name: Download usearch libs artifact
@@ -704,6 +717,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: "main"
       - name: Install dependencies
         run: |
           sudo apt update && 

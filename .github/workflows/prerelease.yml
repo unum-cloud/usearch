@@ -2,9 +2,9 @@ name: Pre-Release
 
 on:
   push:
-    branches: ["main-dev", "test-ga-*"]
+    branches: ["main-dev"]
   pull_request:
-    branches: ["main-dev", "test-ga-*"]
+    branches: ["main-dev"]
 
 env:
   GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
@@ -19,7 +19,6 @@ permissions:
 jobs:
   test_ubuntu_gcc:
     name: Ubuntu (GCC 12)
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-22.04
     env:
       CC: gcc-12
@@ -27,6 +26,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main-dev
       - run: git submodule update --init --recursive
 
         # C/C++
@@ -104,7 +105,6 @@ jobs:
 
   test_ubuntu_clang:
     name: Ubuntu (Clang 16)
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-22.04
     env:
       CC: clang-16
@@ -112,6 +112,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main-dev
       - run: git submodule update --init --recursive
 
         # C/C++
@@ -170,6 +172,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main-dev
       - run: git submodule update --init --recursive
 
         # C/C++
@@ -230,10 +234,11 @@ jobs:
 
   test_windows:
     name: Windows
-    if: github.ref == 'refs/heads/main'
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main-dev
       - run: git submodule update --init --recursive
 
         # C/C++
@@ -283,10 +288,11 @@ jobs:
 
   build_docker:
     name: Docker
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main-dev
       - run: git submodule update --init --recursive
       - name: Build
         uses: docker/build-push-action@v4
