@@ -1,5 +1,5 @@
 #include <errno.h>
-#include <stdio.h>
+#include <stdio.h> // `remove`
 #include <stdlib.h>
 #include <sys/stat.h>
 
@@ -253,6 +253,15 @@ void test_save_load(size_t const collection_size, size_t const dimensions) {
     usearch_free(index, &error);
     ASSERT(!error, error);
 
+    // Reset the options
+    opts.connectivity = 0;
+    opts.dimensions = 0;
+    opts.expansion_add = 0;
+    opts.expansion_search = 0;
+    opts.metric = NULL;
+    opts.quantization = usearch_scalar_unknown_k;
+    opts.metric_kind = usearch_metric_unknown_k;
+
     // Reinit
     index = usearch_init(&opts, &error);
     ASSERT(!error, error);
@@ -264,7 +273,7 @@ void test_save_load(size_t const collection_size, size_t const dimensions) {
     ASSERT(usearch_size(index, &error) == collection_size, error);
     ASSERT(usearch_capacity(index, &error) == collection_size, error);
     ASSERT(usearch_dimensions(index, &error) == dimensions, error);
-    ASSERT(usearch_connectivity(index, &error) == opts.connectivity, error);
+    ASSERT(usearch_connectivity(index, &error) != 0, error);
 
     // Check vectors in the index
     for (size_t i = 0; i < collection_size; ++i) {
@@ -274,6 +283,10 @@ void test_save_load(size_t const collection_size, size_t const dimensions) {
 
     free(data);
     usearch_free(index, &error);
+
+    // Remove the file from disk
+    remove("usearch_index.bin");
+
     printf("Test: Save/Load - PASSED\n");
 }
 

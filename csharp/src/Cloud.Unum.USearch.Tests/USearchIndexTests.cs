@@ -41,7 +41,7 @@ public class UsearchIndexTests
     }
 
     [Fact]
-    public void CreateVectorIndexFile()
+    public void PersistAndRestore()
     {
 
         string pathUsearch = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "savedVectorFolder");
@@ -66,26 +66,17 @@ public class UsearchIndexTests
         index.Save(savedPath);
 
         Trace.Assert(File.Exists(savedPath));
-    }
-
-    [Fact]
-    public void LoadingVectorIndexFile()
-    {
-
-        string pathUsearch = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "savedVectorFolder");
-        var savedPath = Path.Combine(pathUsearch, "savedVectorIndex.usearch");
-
-        Trace.Assert(Directory.Exists(pathUsearch));
         Trace.Assert(File.Exists(Path.Combine(pathUsearch, "savedVectorIndex.usearch")));
 
-        using var index = new USearchIndex(savedPath);
-
-        var vector = new float[] { 0.2f, 0.6f, 0.4f };
-        int matches = index.Search(vector, 10, out ulong[] keys, out float[] distances);
-        Trace.Assert(index.Size() == 1);
+        using var indexRestored = new USearchIndex(savedPath);
+        int matches = indexRestored.Search(vector, 10, out ulong[] keys, out float[] distances);
+        Trace.Assert(indexRestored.Size() == 1);
         Trace.Assert(matches == 1);
         Trace.Assert(keys[0] == 42);
         Trace.Assert(distances[0] <= 0.001f);
+
+        // Clean-up
+        File.Delete(savedPath);
     }
 
     [Fact]
