@@ -236,7 +236,13 @@ void test_save_load(size_t const collection_size, size_t const dimensions) {
 
     usearch_error_t error = NULL;
     usearch_init_options_t opts = create_options(dimensions);
-    usearch_index_t index = usearch_init(&opts, &error);
+    usearch_init_options_t weird_ops = opts;
+    weird_ops.connectivity = 11;
+    weird_ops.expansion_add = 15;
+    weird_ops.expansion_search = 19;
+    weird_ops.metric_kind = usearch_metric_pearson_k;
+    weird_ops.quantization = usearch_scalar_f64_k;
+    usearch_index_t index = usearch_init(&weird_ops, &error);
     usearch_reserve(index, collection_size, &error);
 
     // Add vectors
@@ -248,7 +254,7 @@ void test_save_load(size_t const collection_size, size_t const dimensions) {
     }
 
     // Save and free the index
-    usearch_save(index, "usearch_index.bin", &error);
+    usearch_save(index, "tmp.usearch", &error);
     ASSERT(!error, error);
     usearch_free(index, &error);
     ASSERT(!error, error);
@@ -268,12 +274,12 @@ void test_save_load(size_t const collection_size, size_t const dimensions) {
     ASSERT(usearch_size(index, &error) == 0, error);
 
     // Load
-    usearch_load(index, "usearch_index.bin", &error);
+    usearch_load(index, "tmp.usearch", &error);
     ASSERT(!error, error);
     ASSERT(usearch_size(index, &error) == collection_size, error);
     ASSERT(usearch_capacity(index, &error) == collection_size, error);
     ASSERT(usearch_dimensions(index, &error) == dimensions, error);
-    ASSERT(usearch_connectivity(index, &error) != 0, error);
+    ASSERT(usearch_connectivity(index, &error) == weird_ops.connectivity, error);
 
     // Check vectors in the index
     for (size_t i = 0; i < collection_size; ++i) {
@@ -281,11 +287,26 @@ void test_save_load(size_t const collection_size, size_t const dimensions) {
         ASSERT(usearch_contains(index, key, &error), error);
     }
 
+    // Create result buffers
+    usearch_key_t* keys = (usearch_key_t*)malloc(collection_size * sizeof(usearch_key_t));
+    float* distances = (float*)malloc(collection_size * sizeof(float));
+    ASSERT(keys && distances, "Failed to allocate memory");
+
+    // Find the vectors
+    for (size_t i = 0; i < collection_size; i++) {
+        size_t found_count = usearch_search(index, data + i * dimensions, usearch_scalar_f32_k, collection_size, keys,
+                                            distances, &error);
+        ASSERT(!error, error);
+        ASSERT(found_count >= 1 && found_count <= collection_size, "Vector is missing");
+    }
+
     free(data);
+    free(keys);
+    free(distances);
     usearch_free(index, &error);
 
     // Remove the file from disk
-    remove("usearch_index.bin");
+    remove("tmp.usearch");
 
     printf("Test: Save/Load - PASSED\n");
 }
@@ -313,7 +334,7 @@ void test_view(size_t const collection_size, size_t const dimensions) {
     }
 
     // Save and free the index
-    usearch_save(index, "usearch_index.bin", &error);
+    usearch_save(index, "tmp.usearch", &error);
     ASSERT(!error, error);
     usearch_free(index, &error);
     ASSERT(!error, error);
@@ -323,7 +344,7 @@ void test_view(size_t const collection_size, size_t const dimensions) {
     ASSERT(!error, error);
 
     // View
-    usearch_view(index, "usearch_index.bin", &error);
+    usearch_view(index, "tmp.usearch", &error);
     ASSERT(!error, error);
 
     free(data);

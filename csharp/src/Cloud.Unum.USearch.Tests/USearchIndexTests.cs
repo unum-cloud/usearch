@@ -50,15 +50,15 @@ public class UsearchIndexTests
             Directory.CreateDirectory(pathUsearch);
         };
 
-        var savedPath = Path.Combine(pathUsearch, "savedVectorIndex.usearch");
+        var savedPath = Path.Combine(pathUsearch, "tmp.usearch");
 
         using var index = new USearchIndex(
-            metricKind: MetricKind.Cos, // Choose cosine metric
-            quantization: ScalarKind.Float32, // Only quantization to Float32, Float64 is currently supported
+            metricKind: MetricKind.Pearson, // Overwrite the default metric
+            quantization: ScalarKind.Float64, // Don't quantize at all - max precision
             dimensions: 3,  // Define the number of dimensions in input vectors
-            connectivity: 16, // How frequent should the connections in the graph be, optional
-            expansionAdd: 128, // Control the recall of indexing, optional
-            expansionSearch: 64 // Control the quality of search, optional
+            connectivity: 11, // How frequent should the connections in the graph be, optional
+            expansionAdd: 15, // Control the recall of indexing, optional
+            expansionSearch: 19 // Control the quality of search, optional
         );
 
         var vector = new float[] { 0.2f, 0.6f, 0.4f };
@@ -66,7 +66,7 @@ public class UsearchIndexTests
         index.Save(savedPath);
 
         Trace.Assert(File.Exists(savedPath));
-        Trace.Assert(File.Exists(Path.Combine(pathUsearch, "savedVectorIndex.usearch")));
+        Trace.Assert(File.Exists(Path.Combine(pathUsearch, "tmp.usearch")));
 
         using var indexRestored = new USearchIndex(savedPath);
         int matches = indexRestored.Search(vector, 10, out ulong[] keys, out float[] distances);

@@ -312,6 +312,8 @@ Then, on Windows, copy the library to the CSharp project and run the tests:
 ```sh
 mkdir -p ".\csharp\lib\runtimes\win-x64\native"
 cp ".\build_artifacts\libusearch_c.dll" ".\csharp\lib\runtimes\win-x64\native"
+cd csharp
+dotnet test -c Debug --logger "console;verbosity=detailed"
 dotnet test -c Release
 ```
 

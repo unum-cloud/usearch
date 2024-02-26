@@ -64,12 +64,6 @@
             }
         },
         {
-            "name": "Unit Test C#",
-            "type": "dotnet",
-            "request": "launch",
-            "projectPath": "${workspaceFolder}/csharp/src/Cloud.Unum.USearch.Tests/Cloud.Unum.USearch.Tests.csproj"
-        },
-        {
             "name": "Debug C++ on Wiki 1M @Cos",
             "type": "cppdbg",
             "request": "launch",
