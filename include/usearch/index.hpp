@@ -10,8 +10,8 @@
 #define UNUM_USEARCH_HPP
 
 #define USEARCH_VERSION_MAJOR 2
-#define USEARCH_VERSION_MINOR 8
-#define USEARCH_VERSION_PATCH 14
+#define USEARCH_VERSION_MINOR 9
+#define USEARCH_VERSION_PATCH 0
 
 // Inferring C++ version
 // https://stackoverflow.com/a/61552074

@@ -5,6 +5,7 @@ from setuptools import setup
 
 from pybind11.setup_helpers import Pybind11Extension
 
+sources = ["python/lib.cpp"]
 compile_args = []
 link_args = []
 macros_args = []
@@ -127,10 +128,14 @@ if is_windows:
             ]
         )
 
+if is_linux or is_macos:
+    sources.append("sqlite/lib.cpp")
+    link_args.append("-lsqlite3")
+
 ext_modules = [
     Pybind11Extension(
         "usearch.compiled",
-        ["python/lib.cpp", "sqlite/lib.cpp"],
+        sources,
         extra_compile_args=compile_args,
         extra_link_args=link_args,
         define_macros=macros_args,

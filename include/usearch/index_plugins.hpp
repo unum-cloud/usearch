@@ -1355,8 +1355,9 @@ class metric_punned_t {
 #if USEARCH_USE_SIMSIMD
         if (!configure_with_simsimd())
             configure_with_auto_vectorized();
-#endif
+#else
         configure_with_auto_vectorized();
+#endif
 
         if (scalar_kind == scalar_kind_t::b1x8_k)
             raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_);

@@ -12,7 +12,7 @@ extension USearchIndex {
     public typealias Scalar = USearchScalar
 
     /// Adds a labeled vector to the index.
-    /// - Parameter key: Unique identifer for that object.
+    /// - Parameter key: Unique identifier for that object.
     /// - Parameter vector: Single-precision vector.
     /// - Throws: If runs out of memory.
     public func add(key: USearchKey, vector: ArraySlice<Float32>) {
@@ -22,7 +22,7 @@ extension USearchIndex {
     }
 
     /// Adds a labeled vector to the index.
-    /// - Parameter key: Unique identifer for that object.
+    /// - Parameter key: Unique identifier for that object.
     /// - Parameter vector: Single-precision vector.
     /// - Throws: If runs out of memory.
     public func add(key: USearchKey, vector: Array<Float32>) {
@@ -55,7 +55,7 @@ extension USearchIndex {
     }
 
     /// Adds a labeled vector to the index.
-    /// - Parameter key: Unique identifer for that object.
+    /// - Parameter key: Unique identifier for that object.
     /// - Parameter vector: Double-precision vector.
     /// - Throws: If runs out of memory.
     public func add(key: Key, vector: ArraySlice<Float64>) {
@@ -65,7 +65,7 @@ extension USearchIndex {
     }
 
     /// Adds a labeled vector to the index.
-    /// - Parameter key: Unique identifer for that object.
+    /// - Parameter key: Unique identifier for that object.
     /// - Parameter vector: Double-precision vector.
     /// - Throws: If runs out of memory.
     public func add(key: Key, vector: Array<Float64>) {
@@ -100,7 +100,7 @@ extension USearchIndex {
     #if arch(arm64)
 
         /// Adds a labeled vector to the index.
-        /// - Parameter key: Unique identifer for that object.
+        /// - Parameter key: Unique identifier for that object.
         /// - Parameter vector: Half-precision vector.
         /// - Throws: If runs out of memory.
         @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, *)
@@ -111,7 +111,7 @@ extension USearchIndex {
         }
 
         /// Adds a labeled vector to the index.
-        /// - Parameter key: Unique identifer for that object.
+        /// - Parameter key: Unique identifier for that object.
         /// - Parameter vector: Half-precision vector.
         /// - Throws: If runs out of memory.
         @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, *)

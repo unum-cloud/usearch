@@ -30,13 +30,14 @@ Spatial • Binary • Probabilistic • User-Defined Metrics
 <a href="https://unum-cloud.github.io/usearch/swift">Swift</a> •
 <a href="https://unum-cloud.github.io/usearch/csharp">C#</a> •
 <a href="https://unum-cloud.github.io/usearch/golang">GoLang</a> •
-<a href="https://unum-cloud.github.io/usearch/wolfram">Wolfram</a>
+<a href="https://unum-cloud.github.io/usearch/wolfram">Wolfram</a> •
+<a href="https://unum-cloud.github.io/usearch/sqlite">SQLite3</a>
 <br/>
 Linux • MacOS • Windows • iOS • WebAssembly
 </p>
 
 <div align="center">
-<a href="https://pepy.tech/project/usearch"> <img alt="PyPI" src="https://static.pepy.tech/personalized-badge/usearch?period=month&units=abbreviation&left_color=black&right_color=blue&left_text=Python%20monthly%20installs"> </a>
+<a href="https://pepy.tech/project/usearch"> <img alt="PyPI" src="https://static.pepy.tech/personalized-badge/usearch?period=total&units=abbreviation&left_color=black&right_color=blue&left_text=USearch%20Python%20installs"> </a>
 <a href="https://www.npmjs.com/package/usearch"> <img alt="NPM" src="https://img.shields.io/npm/dy/usearch?label=NPM%20installs"> </a>
 <a href="https://crates.io/crates/usearch"> <img alt="Crate" src="https://img.shields.io/crates/d/usearch?label=Crate%20installs"> </a>
 <a href="https://www.nuget.org/packages/Cloud.Unum.USearch"> <img alt="NuGet" src="https://img.shields.io/nuget/dt/Cloud.Unum.USearch?label=NuGet%20installs"> </a>
@@ -47,10 +48,10 @@ Linux • MacOS • Windows • iOS • WebAssembly
 
 ---
 
-- ✅ [10x faster][faster-than-faiss] [HNSW][hnsw-algorithm] implementation than [FAISS][faiss].
-- ✅ Simple and extensible [single C++11 header][usearch-header] implementation.
+- ✅ __[10x faster][faster-than-faiss]__ [HNSW][hnsw-algorithm] implementation than [FAISS][faiss].
+- ✅ Simple and extensible [single C++11 header][usearch-header] __library__.
 - ✅ Compatible with a dozen programming languages out of the box.
-- ✅ [Trusted](#integrations) by some of the most loved Datalakes and Databases, like [ClickHouse][clickhouse-docs].
+- ✅ [Trusted](#integrations) by giants like Google and databases like [ClickHouse][clickhouse-docs].
 - ✅ [SIMD][simd]-optimized and [user-defined metrics](#user-defined-functions) with JIT compilation.
 - ✅ Hardware-agnostic `f16` & `i8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
 - ✅ [View large indexes from disk](#serving-index-from-disk) without loading into RAM.
@@ -433,7 +434,7 @@ doi = {10.5281/zenodo.7949416},
 author = {Vardanian, Ash},
 title = {{USearch by Unum Cloud}},
 url = {https://github.com/unum-cloud/usearch},
-version = {2.8.14},
+version = {2.9.0},
 year = {2023},
 month = oct,
 }
