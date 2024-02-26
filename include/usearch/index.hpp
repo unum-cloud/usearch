@@ -2543,8 +2543,8 @@ class index_gt {
         if (!next.reserve(expansion))
             return result.failed("Out of memory!");
 
-        result.cluster.member =
-            at(search_for_one_(query, metric, prefetch, entry_slot_, max_level_, level - 1, context));
+        result.cluster.member = at(search_for_one_(query, metric, prefetch, entry_slot_, max_level_,
+                                                   static_cast<level_t>(level - 1), context));
         result.cluster.distance = context.measure(query, result.cluster.member, metric);
 
         // Normalize stats
@@ -3422,7 +3422,7 @@ class index_gt {
         distance_t radius = context.measure(query, citerator_at(start_slot), metric);
         next.insert_reserved({-radius, static_cast<compressed_slot_t>(start_slot)});
         top.insert_reserved({radius, static_cast<compressed_slot_t>(start_slot)});
-        visits.set(start_slot);
+        visits.set(static_cast<compressed_slot_t>(start_slot));
 
         while (!next.empty()) {
 
@@ -3496,7 +3496,7 @@ class index_gt {
         distance_t radius = context.measure(query, citerator_at(start_slot), metric);
         next.insert_reserved({-radius, static_cast<compressed_slot_t>(start_slot)});
         top.insert_reserved({radius, static_cast<compressed_slot_t>(start_slot)});
-        visits.set(start_slot);
+        visits.set(static_cast<compressed_slot_t>(start_slot));
 
         while (!next.empty()) {
 

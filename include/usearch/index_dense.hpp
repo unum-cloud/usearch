@@ -199,7 +199,7 @@ inline index_dense_metadata_result_t index_dense_metadata_from_path(char const* 
 
     // Check if it starts with 32-bit
     if (offset_if_u32 + sizeof(index_dense_head_buffer_t) < file_size) {
-        if (std::fseek(file.get(), offset_if_u32, SEEK_SET) != 0)
+        if (std::fseek(file.get(), static_cast<long>(offset_if_u32), SEEK_SET) != 0)
             return result.failed(std::strerror(errno));
         read = std::fread(result.head_buffer, sizeof(index_dense_head_buffer_t), 1, file.get());
         if (!read)
@@ -213,7 +213,7 @@ inline index_dense_metadata_result_t index_dense_metadata_from_path(char const* 
 
     // Check if it starts with 64-bit
     if (offset_if_u64 + sizeof(index_dense_head_buffer_t) < file_size) {
-        if (std::fseek(file.get(), offset_if_u64, SEEK_SET) != 0)
+        if (std::fseek(file.get(), static_cast<long>(offset_if_u64), SEEK_SET) != 0)
             return result.failed(std::strerror(errno));
         read = std::fread(result.head_buffer, sizeof(index_dense_head_buffer_t), 1, file.get());
         if (!read)
