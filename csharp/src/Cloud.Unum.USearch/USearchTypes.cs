@@ -6,25 +6,26 @@ namespace Cloud.Unum.USearch;
 public enum MetricKind : uint
 {
     Unknown = 0,
-    Cos,
-    Ip,
-    L2sq,
-    Haversine,
-    Pearson,
-    Jaccard,
-    Hamming,
-    Tanimoto,
-    Sorensen,
+    Cos = 1,
+    Ip = 2,
+    L2sq = 3,
+    Haversine = 4,
+    Divergence = 5,
+    Pearson = 6,
+    Jaccard = 7,
+    Hamming = 8,
+    Tanimoto = 9,
+    Sorensen = 10,
 }
 
 public enum ScalarKind : uint
 {
     Unknown = 0,
-    Float32,
-    Float64,
-    Float16,
-    Int8,
-    Byte1,
+    Float32 = 1,
+    Float64 = 2,
+    Float16 = 3,
+    Int8 = 4,
+    Bits1 = 5,
 }
 
 // TODO: implement custom metric delegate

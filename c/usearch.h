@@ -39,25 +39,25 @@ USEARCH_EXPORT typedef usearch_distance_t (*usearch_metric_t)(void const*, void 
  */
 USEARCH_EXPORT typedef enum usearch_metric_kind_t {
     usearch_metric_unknown_k = 0,
-    usearch_metric_cos_k,
-    usearch_metric_ip_k,
-    usearch_metric_l2sq_k,
-    usearch_metric_haversine_k,
-    usearch_metric_divergence_k,
-    usearch_metric_pearson_k,
-    usearch_metric_jaccard_k,
-    usearch_metric_hamming_k,
-    usearch_metric_tanimoto_k,
-    usearch_metric_sorensen_k,
+    usearch_metric_cos_k = 1,
+    usearch_metric_ip_k = 2,
+    usearch_metric_l2sq_k = 3,
+    usearch_metric_haversine_k = 4,
+    usearch_metric_divergence_k = 5,
+    usearch_metric_pearson_k = 6,
+    usearch_metric_jaccard_k = 7,
+    usearch_metric_hamming_k = 8,
+    usearch_metric_tanimoto_k = 9,
+    usearch_metric_sorensen_k = 10,
 } usearch_metric_kind_t;
 
 USEARCH_EXPORT typedef enum usearch_scalar_kind_t {
     usearch_scalar_unknown_k = 0,
-    usearch_scalar_f32_k,
-    usearch_scalar_f64_k,
-    usearch_scalar_f16_k,
-    usearch_scalar_i8_k,
-    usearch_scalar_b1_k,
+    usearch_scalar_f32_k = 1,
+    usearch_scalar_f64_k = 2,
+    usearch_scalar_f16_k = 3,
+    usearch_scalar_i8_k = 4,
+    usearch_scalar_b1_k = 5,
 } usearch_scalar_kind_t;
 
 USEARCH_EXPORT typedef struct usearch_init_options_t {
