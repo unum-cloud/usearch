@@ -199,7 +199,7 @@ inline index_dense_metadata_result_t index_dense_metadata_from_path(char const* 
 
     // Check if it starts with 32-bit
     if (offset_if_u32 + sizeof(index_dense_head_buffer_t) < file_size) {
-        if (std::fseek(file.get(), offset_if_u32, SEEK_SET) != 0)
+        if (std::fseek(file.get(), static_cast<long>(offset_if_u32), SEEK_SET) != 0)
             return result.failed(std::strerror(errno));
         read = std::fread(result.head_buffer, sizeof(index_dense_head_buffer_t), 1, file.get());
         if (!read)
@@ -213,7 +213,7 @@ inline index_dense_metadata_result_t index_dense_metadata_from_path(char const* 
 
     // Check if it starts with 64-bit
     if (offset_if_u64 + sizeof(index_dense_head_buffer_t) < file_size) {
-        if (std::fseek(file.get(), offset_if_u64, SEEK_SET) != 0)
+        if (std::fseek(file.get(), static_cast<long>(offset_if_u64), SEEK_SET) != 0)
             return result.failed(std::strerror(errno));
         read = std::fread(result.head_buffer, sizeof(index_dense_head_buffer_t), 1, file.get());
         if (!read)
@@ -929,8 +929,10 @@ class index_dense_gt {
             if (head.kind_compressed_slot != unum::usearch::scalar_kind<compressed_slot_t>())
                 return result.failed("Slot type doesn't match, consider rebuilding");
 
-            metric_ = metric_t(head.dimensions, head.kind_metric, head.kind_scalar);
             config_.multi = head.multi;
+            metric_ = metric_t(head.dimensions, head.kind_metric, head.kind_scalar);
+            cast_buffer_.resize(available_threads_.size() * metric_.bytes_per_vector());
+            casts_ = make_casts_(head.kind_scalar);
         }
 
         // Pull the actual proximity graph
@@ -1013,8 +1015,10 @@ class index_dense_gt {
             if (head.kind_compressed_slot != unum::usearch::scalar_kind<compressed_slot_t>())
                 return result.failed("Slot type doesn't match, consider rebuilding");
 
-            metric_ = metric_t(head.dimensions, head.kind_metric, head.kind_scalar);
             config_.multi = head.multi;
+            metric_ = metric_t(head.dimensions, head.kind_metric, head.kind_scalar);
+            cast_buffer_.resize(available_threads_.size() * metric_.bytes_per_vector());
+            casts_ = make_casts_(head.kind_scalar);
             offset += sizeof(buffer);
         }
 

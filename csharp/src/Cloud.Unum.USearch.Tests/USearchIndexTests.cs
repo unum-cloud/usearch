@@ -1,3 +1,4 @@
+﻿using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Cloud.Unum.USearch;
@@ -37,6 +38,45 @@ public class UsearchIndexTests
 
         // Assert
         Assert.Equal(controlIndexOptions, indexOptions);
+    }
+
+    [Fact]
+    public void PersistAndRestore()
+    {
+
+        string pathUsearch = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "savedVectorFolder");
+        if (!Directory.Exists(pathUsearch))
+        {
+            Directory.CreateDirectory(pathUsearch);
+        };
+
+        var savedPath = Path.Combine(pathUsearch, "tmp.usearch");
+
+        using var index = new USearchIndex(
+            metricKind: MetricKind.Pearson, // Overwrite the default metric
+            quantization: ScalarKind.Float64, // Don't quantize at all - max precision
+            dimensions: 3,  // Define the number of dimensions in input vectors
+            connectivity: 11, // How frequent should the connections in the graph be, optional
+            expansionAdd: 15, // Control the recall of indexing, optional
+            expansionSearch: 19 // Control the quality of search, optional
+        );
+
+        var vector = new float[] { 0.2f, 0.6f, 0.4f };
+        index.Add(42, vector);
+        index.Save(savedPath);
+
+        Trace.Assert(File.Exists(savedPath));
+        Trace.Assert(File.Exists(Path.Combine(pathUsearch, "tmp.usearch")));
+
+        using var indexRestored = new USearchIndex(savedPath);
+        int matches = indexRestored.Search(vector, 10, out ulong[] keys, out float[] distances);
+        Trace.Assert(indexRestored.Size() == 1);
+        Trace.Assert(matches == 1);
+        Trace.Assert(keys[0] == 42);
+        Trace.Assert(distances[0] <= 0.001f);
+
+        // Clean-up
+        File.Delete(savedPath);
     }
 
     [Fact]

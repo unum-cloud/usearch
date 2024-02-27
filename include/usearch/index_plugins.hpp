@@ -1006,10 +1006,11 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct met
 #elif defined(USEARCH_DEFINED_GCC)
 #pragma GCC ivdep
 #endif
-        for (std::size_t i = 0; i != dim; ++i)
-            ab += result_t(a[i]) * result_t(b[i]), //
-                a2 += square<result_t>(a[i]),      //
-                b2 += square<result_t>(b[i]);
+        for (std::size_t i = 0; i != dim; ++i) {
+            result_t ai = static_cast<result_t>(a[i]);
+            result_t bi = static_cast<result_t>(b[i]);
+            ab += ai * bi, a2 += square(ai), b2 += square(bi);
+        }
 
         result_t result_if_zero[2][2];
         result_if_zero[0][0] = 1 - ab / (std::sqrt(a2) * std::sqrt(b2));
@@ -1036,8 +1037,11 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct met
 #elif defined(USEARCH_DEFINED_GCC)
 #pragma GCC ivdep
 #endif
-        for (std::size_t i = 0; i != dim; ++i)
-            ab_deltas_sq += square(result_t(a[i]) - result_t(b[i]));
+        for (std::size_t i = 0; i != dim; ++i) {
+            result_t ai = static_cast<result_t>(a[i]);
+            result_t bi = static_cast<result_t>(b[i]);
+            ab_deltas_sq += square(ai - bi);
+        }
         return ab_deltas_sq;
     }
 };
@@ -1095,9 +1099,10 @@ template <typename scalar_at = std::uint64_t, typename result_at = float> struct
 #elif defined(USEARCH_DEFINED_GCC)
 #pragma GCC ivdep
 #endif
-        for (std::size_t i = 0; i != words; ++i)
-            and_count += std::bitset<bits_per_word_k>(a[i] & b[i]).count(),
-                or_count += std::bitset<bits_per_word_k>(a[i] | b[i]).count();
+        for (std::size_t i = 0; i != words; ++i) {
+            and_count += std::bitset<bits_per_word_k>(a[i] & b[i]).count();
+            or_count += std::bitset<bits_per_word_k>(a[i] | b[i]).count();
+        }
         return 1 - result_t(and_count) / or_count;
     }
 };
@@ -1126,9 +1131,10 @@ template <typename scalar_at = std::uint64_t, typename result_at = float> struct
 #elif defined(USEARCH_DEFINED_GCC)
 #pragma GCC ivdep
 #endif
-        for (std::size_t i = 0; i != words; ++i)
-            and_count += std::bitset<bits_per_word_k>(a[i] & b[i]).count(),
-                any_count += std::bitset<bits_per_word_k>(a[i]).count() + std::bitset<bits_per_word_k>(b[i]).count();
+        for (std::size_t i = 0; i != words; ++i) {
+            and_count += std::bitset<bits_per_word_k>(a[i] & b[i]).count();
+            any_count += std::bitset<bits_per_word_k>(a[i]).count() + std::bitset<bits_per_word_k>(b[i]).count();
+        }
         return 1 - 2 * result_t(and_count) / any_count;
     }
 };
@@ -1176,11 +1182,13 @@ template <typename scalar_at = float, typename result_at = float> struct metric_
 #pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i) {
-            a_sum += result_t(a[i]);
-            b_sum += result_t(b[i]);
-            ab_sum += result_t(a[i]) * result_t(b[i]);
-            a_sq_sum += result_t(a[i]) * result_t(a[i]);
-            b_sq_sum += result_t(b[i]) * result_t(b[i]);
+            result_t ai = static_cast<result_t>(a[i]);
+            result_t bi = static_cast<result_t>(b[i]);
+            a_sum += ai;
+            b_sum += bi;
+            ab_sum += ai * bi;
+            a_sq_sum += ai * ai;
+            b_sq_sum += bi * bi;
         }
         result_t denom = std::sqrt((dim * a_sq_sum - a_sum * a_sum) * (dim * b_sq_sum - b_sum * b_sum));
         result_t corr = (dim * ab_sum - a_sum * b_sum) / denom;
@@ -1197,7 +1205,7 @@ template <typename scalar_at = float, typename result_at = float> struct metric_
 
     inline result_t operator()(scalar_t const* p, scalar_t const* q, std::size_t dim) const noexcept {
         result_t kld_pm{}, kld_qm{};
-        scalar_t epsilon = std::numeric_limits<scalar_t>::epsilon();
+        result_t epsilon = std::numeric_limits<result_t>::epsilon();
 #if USEARCH_USE_OPENMP
 #pragma omp simd reduction(+ : kld_pm, kld_qm)
 #elif defined(USEARCH_DEFINED_CLANG)
@@ -1206,9 +1214,11 @@ template <typename scalar_at = float, typename result_at = float> struct metric_
 #pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i) {
-            result_t mi = result_t(p[i] + q[i]) / 2 + epsilon;
-            kld_pm += p[i] * std::log((p[i] + epsilon) / mi);
-            kld_qm += q[i] * std::log((q[i] + epsilon) / mi);
+            result_t pi = static_cast<result_t>(p[i]);
+            result_t qi = static_cast<result_t>(q[i]);
+            result_t mi = (pi + qi) / 2 + epsilon;
+            kld_pm += pi * std::log((pi + epsilon) / mi);
+            kld_qm += qi * std::log((qi + epsilon) / mi);
         }
         return (kld_pm + kld_qm) / 2;
     }
@@ -1253,7 +1263,7 @@ struct l2sq_i8_t {
 #endif
         for (std::size_t i = 0; i != dim; i++)
             ab_deltas_sq += square(std::int16_t(a[i]) - std::int16_t(b[i]));
-        return ab_deltas_sq;
+        return static_cast<result_t>(ab_deltas_sq);
     }
 };
 
