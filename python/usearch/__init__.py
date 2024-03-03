@@ -1,4 +1,5 @@
 import importlib
+import importlib.util
 
 from usearch.compiled import (
     VERSION_MAJOR,
