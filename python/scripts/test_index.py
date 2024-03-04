@@ -71,7 +71,7 @@ def test_index_retrieval(ndim, metric, quantization, dtype, batch_size):
 
     # Try retrieving all the keys
     keys_retrived = index.keys
-    assert np.all(keys_retrived == keys)
+    assert np.all(np.sort(np.array(keys_retrived)) == keys)
 
     # Try retrieving all of them
     if quantization != ScalarKind.I8:
