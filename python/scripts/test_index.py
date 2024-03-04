@@ -69,6 +69,15 @@ def test_index_retrieval(ndim, metric, quantization, dtype, batch_size):
     vectors_retrived = np.vstack(index.get(keys, dtype))
     assert np.allclose(vectors_retrived, vectors, atol=0.1)
 
+    # Try retrieving all the keys
+    keys_retrived = index.keys
+    assert np.all(keys_retrived == keys)
+
+    # Try retrieving all of them
+    if quantization != ScalarKind.I8:
+        vectors_batch_retrived = index.vectors
+        assert np.allclose(vectors_batch_retrived, vectors, atol=0.1)
+
 
 @pytest.mark.parametrize("ndim", [3, 97, 256])
 @pytest.mark.parametrize("metric", [MetricKind.Cos, MetricKind.L2sq])

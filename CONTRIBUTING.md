@@ -215,9 +215,10 @@ USearch provides both Objective-C and Swift bindings through the [Swift Package 
 The compilation settings are controlled by the `Package.swift` and are independent from CMake used for C/C++ builds.
 
 ```sh
-swift build
-swift test -v
+swift build && swift test -v
 ```
+
+Those depend on Apple's `Foundation` library and can only run on Apple devices.
 
 ## GoLang
 

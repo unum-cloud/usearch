@@ -926,7 +926,7 @@ class i8_converted_t {
     std::int8_t int8_{};
 
   public:
-    constexpr static float divisor_k = 100.f;
+    constexpr static f32_t divisor_k = 100.f;
     constexpr static std::int8_t min_k = -100;
     constexpr static std::int8_t max_k = 100;
 
@@ -938,9 +938,9 @@ class i8_converted_t {
     inline i8_converted_t(i8_converted_t const&) = default;
     inline i8_converted_t& operator=(i8_converted_t const&) = default;
 
-    inline operator float() const noexcept { return float(int8_) / divisor_k; }
-    inline operator f16_t() const noexcept { return float(int8_) / divisor_k; }
-    inline operator double() const noexcept { return double(int8_) / divisor_k; }
+    inline operator f16_t() const noexcept { return static_cast<f16_t>(f32_t(int8_) / divisor_k); }
+    inline operator f32_t() const noexcept { return f32_t(int8_) / divisor_k; }
+    inline operator f64_t() const noexcept { return f64_t(int8_) / divisor_k; }
     inline explicit operator bool() const noexcept { return int8_ > (max_k / 2); }
     inline explicit operator std::int8_t() const noexcept { return int8_; }
     inline explicit operator std::int16_t() const noexcept { return int8_; }
@@ -949,9 +949,9 @@ class i8_converted_t {
 
     inline i8_converted_t(f16_t v)
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
-    inline i8_converted_t(float v)
+    inline i8_converted_t(f32_t v)
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
-    inline i8_converted_t(double v)
+    inline i8_converted_t(f64_t v)
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
 };
 
