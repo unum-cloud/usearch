@@ -133,7 +133,7 @@ matches = index.search(vector, 10)
 
 assert matches[0].key == 42
 assert matches[0].distance <= 0.001
-assert np.allclose(index[42], vector)
+assert np.allclose(index[42], vector, atol=0.1) # Ensure high tolerance in mixed-precision comparisons
 ```
 
 More settings are always available, and the API is designed to be as flexible as possible.
