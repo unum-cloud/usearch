@@ -30,19 +30,18 @@ Spatial • Binary • Probabilistic • User-Defined Metrics
 <a href="https://unum-cloud.github.io/usearch/swift">Swift</a> •
 <a href="https://unum-cloud.github.io/usearch/csharp">C#</a> •
 <a href="https://unum-cloud.github.io/usearch/golang">GoLang</a> •
-<a href="https://unum-cloud.github.io/usearch/wolfram">Wolfram</a> •
-<a href="https://unum-cloud.github.io/usearch/sqlite">SQLite3</a>
+<a href="https://unum-cloud.github.io/usearch/wolfram">Wolfram</a>
 <br/>
-Linux • MacOS • Windows • iOS • WebAssembly
+Linux • MacOS • Windows • iOS • WebAssembly •
+<a href="https://unum-cloud.github.io/usearch/sqlite">SQLite3</a>
 </p>
 
 <div align="center">
-<a href="https://pepy.tech/project/usearch"> <img alt="PyPI" src="https://static.pepy.tech/personalized-badge/usearch?period=total&units=abbreviation&left_color=black&right_color=blue&left_text=USearch%20Python%20installs"> </a>
-<a href="https://www.npmjs.com/package/usearch"> <img alt="NPM" src="https://img.shields.io/npm/dy/usearch?label=NPM%20installs"> </a>
-<a href="https://crates.io/crates/usearch"> <img alt="Crate" src="https://img.shields.io/crates/d/usearch?label=Crate%20installs"> </a>
-<a href="https://www.nuget.org/packages/Cloud.Unum.USearch"> <img alt="NuGet" src="https://img.shields.io/nuget/dt/Cloud.Unum.USearch?label=NuGet%20installs"> </a>
-<a href="https://central.sonatype.com/artifact/cloud.unum/usearch/overview"> <img alt="Maven" src="https://img.shields.io/nexus/r/cloud.unum/usearch?server=https%3A%2F%2Fs01.oss.sonatype.org%2F&label=Maven%20version"> </a>
-<a href="https://hub.docker.com/r/unum/usearch"> <img alt="Docker" src="https://img.shields.io/docker/pulls/unum/usearch?label=Docker%20installs"> </a>
+<a href="https://pepy.tech/project/usearch"> <img alt="PyPI" src="https://static.pepy.tech/personalized-badge/usearch?period=total&units=abbreviation&left_color=black&right_color=blue&left_text=Python%20PyPi%20installs"> </a>
+<a href="https://www.npmjs.com/package/usearch"> <img alt="NPM" src="https://img.shields.io/npm/dy/usearch?label=JavaScript%20NPM%20installs"> </a>
+<a href="https://crates.io/crates/usearch"> <img alt="Crate" src="https://img.shields.io/crates/d/usearch?label=Rust%20Crate%20installs"> </a>
+<a href="https://www.nuget.org/packages/Cloud.Unum.USearch"> <img alt="NuGet" src="https://img.shields.io/nuget/dt/Cloud.Unum.USearch?label=CSharp%20NuGet%20installs"> </a>
+<a href="https://central.sonatype.com/artifact/cloud.unum/usearch/overview"> <img alt="Maven" src="https://img.shields.io/nexus/r/cloud.unum/usearch?server=https%3A%2F%2Fs01.oss.sonatype.org%2F&label=Java%20Maven%20version"> </a>
 <img alt="GitHub code size in bytes" src="https://img.shields.io/github/languages/code-size/unum-cloud/usearch?label=Repo%20size">
 </div>
 
@@ -50,18 +49,16 @@ Linux • MacOS • Windows • iOS • WebAssembly
 
 - ✅ __[10x faster][faster-than-faiss]__ [HNSW][hnsw-algorithm] implementation than [FAISS][faiss].
 - ✅ Simple and extensible [single C++11 header][usearch-header] __library__.
-- ✅ Compatible with a dozen programming languages out of the box.
 - ✅ [Trusted](#integrations) by giants like Google and databases like [ClickHouse][clickhouse-docs].
 - ✅ [SIMD][simd]-optimized and [user-defined metrics](#user-defined-functions) with JIT compilation.
 - ✅ Hardware-agnostic `f16` & `i8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
 - ✅ [View large indexes from disk](#serving-index-from-disk) without loading into RAM.
 - ✅ Heterogeneous lookups, renaming/relabeling, and on-the-fly deletions.
-- ✅ Variable dimensionality vectors for unique applications, including search over compressed data.
 - ✅ Binary Tanimoto and Sorensen coefficients for [Genomics and Chemistry applications](#usearch--rdkit--molecular-search).
 - ✅ Space-efficient point-clouds with `uint40_t`, accommodating 4B+ size.
-- ✅ Compatible with OpenMP and custom "executors" for fine-grained control over CPU utilization.
-- ✅ Near-real-time [clustering and sub-clustering](#clustering) for Tens or Millions of clusters.
+- ✅ Compatible with OpenMP and custom "executors" for fine-grained parallelism.
 - ✅ [Semantic Search](#usearch--ai--multi-modal-semantic-search) and [Joins](#joins-one-to-one-one-to-many-and-many-to-many-mappings).
+- 🔄 Near-real-time [clustering and sub-clustering](#clustering) for Tens or Millions of clusters.
 
 [faiss]: https://github.com/facebookresearch/faiss
 [usearch-header]: https://github.com/unum-cloud/usearch/blob/main/include/usearch/index.hpp
@@ -133,7 +130,7 @@ matches = index.search(vector, 10)
 
 assert matches[0].key == 42
 assert matches[0].distance <= 0.001
-assert np.allclose(index[42], vector)
+assert np.allclose(index[42], vector, atol=0.1) # Ensure high tolerance in mixed-precision comparisons
 ```
 
 More settings are always available, and the API is designed to be as flexible as possible.

@@ -104,6 +104,13 @@ cppcheck --enable=all --force --suppress=cstyleCast --suppress=unusedFunction \
     include/index_plugins.hpp
 ```
 
+I'd recommend putting the following breakpoints when debugging the code in GDB:
+
+- `__asan::ReportGenericError` - to detect illegal memory accesses.
+- `__ubsan::ScopedReport::~ScopedReport` - to catch undefined behavior.
+- `__GI_exit` - to stop at exit points - the end of running any executable.
+- `__builtin_unreachable` - to catch all the places where the code is expected to be unreachable.
+
 ## Python 3
 
 Python bindings are built using PyBind11 and are available on [PyPi](https://pypi.org/project/usearch/).
@@ -215,9 +222,10 @@ USearch provides both Objective-C and Swift bindings through the [Swift Package 
 The compilation settings are controlled by the `Package.swift` and are independent from CMake used for C/C++ builds.
 
 ```sh
-swift build
-swift test -v
+swift build && swift test -v
 ```
+
+Those depend on Apple's `Foundation` library and can only run on Apple devices.
 
 ## GoLang
 

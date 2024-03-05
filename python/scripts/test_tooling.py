@@ -57,6 +57,8 @@ def test_exact_search(rows: int, cols: int, k: int, reordered: bool):
     :param int rows: The number of rows in the matrix.
     :param int cols: The number of columns in the matrix.
     """
+    if cols < 10:
+        pytest.skip("In low dimensions collisions are likely.")
     original = np.random.rand(rows, cols)
     keys = np.arange(rows)
     k = min(k, rows)

@@ -158,7 +158,10 @@ class Index {
             throw new Error("Invalid arguments. Expected either individual arguments or a single object argument.");
         }
 
-        if (!Number.isInteger(dimensions) || !Number.isInteger(connectivity) || !Number.isInteger(expansion_add) || !Number.isInteger(expansion_search) || dimensions <= 0 || connectivity < 0 || expansion_add < 0 || expansion_search < 0) {
+        if ((typeof dimensions !== 'bigint' && (!Number.isInteger(dimensions) || dimensions <= 0)) || 
+            (typeof connectivity !== 'bigint' && (!Number.isInteger(connectivity) || connectivity < 0)) ||
+            (typeof expansion_add !== 'bigint' && (!Number.isInteger(expansion_add) || expansion_add < 0)) ||
+            (typeof expansion_search !== 'bigint' && (!Number.isInteger(expansion_search) || expansion_search < 0))) {
             throw new Error("`dimensions`, `connectivity`, `expansion_add`, and `expansion_search` must be non-negative integers, with `dimensions` being positive.");
         }
 

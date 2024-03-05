@@ -1,5 +1,6 @@
 from __future__ import annotations
 from inspect import signature
+from collections.abc import Sequence
 
 # The purpose of this file is to provide Pythonic wrapper on top
 # the native precompiled CPython module. It improves compatibility
@@ -313,7 +314,7 @@ class Matches:
 
 
 @dataclass
-class BatchMatches:
+class BatchMatches(Sequence):
     """This class contains information about multiple retrieved vectors for multiple queries,
     i.e it is a set of `Matches` instances."""
 
@@ -422,7 +423,7 @@ class Clustering:
         return g
 
 
-class IndexedKeys:
+class IndexedKeys(Sequence):
     """Smart-reference for the range of keys present in a specific `Index`"""
 
     def __init__(self, index: Index) -> None:
@@ -1136,7 +1137,7 @@ class Index:
 
     @property
     def vectors(self) -> np.ndarray:
-        return self.get(self.keys, vstack=True)
+        return self.get(self.keys)
 
     @property
     def max_level(self) -> int:
