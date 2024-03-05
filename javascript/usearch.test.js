@@ -47,7 +47,13 @@ test("Expected results", () => {
 
     assert.equal(index.size(), 1);
     assert.deepEqual(results.keys, new BigUint64Array([42n]));
-    assert.deepEqual(results.distances, new Float32Array([0]));
+
+    // When using mixed-precision, we can't expect the resulting value
+    // to be exactly 0, but it should be very close to it.
+    var actual = Number(results.distances[0]);
+    var expected = 0; // The expected value
+    var difference = Math.abs(actual - expected);
+    assert.ok(difference < 0.01);
 });
 
 
