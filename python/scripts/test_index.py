@@ -71,11 +71,15 @@ def test_index_retrieval(ndim, metric, quantization, dtype, batch_size):
 
     # Try retrieving all the keys
     keys_retrived = index.keys
-    assert np.all(np.sort(np.array(keys_retrived)) == keys)
+    keys_retrived = np.array(keys_retrived)
+    assert np.all(np.sort(keys_retrived) == keys)
 
     # Try retrieving all of them
     if quantization != ScalarKind.I8:
+        # The returned vectors can be in a different order
         vectors_batch_retrived = index.vectors
+        vectors_reordering = np.argsort(keys_retrived)
+        vectors_batch_retrived = vectors_batch_retrived[vectors_reordering]
         assert np.allclose(vectors_batch_retrived, vectors, atol=0.1)
 
 
