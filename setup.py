@@ -116,14 +116,23 @@ if is_windows:
     compile_args.append("/fp:fast")  # Enable fast math for MSVC
     compile_args.append("/W1")  # Reduce warnings verbosity
 
-    # We don't actually want to use any SimSIMD stuff,
-    # as GCC attributes aren't compatible with MSVC
-    if use_simsimd:
+    # Detect supported architectures for MSVC.
+    if "AVX512" in platform.processor():
+        macros_args.append(get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX512", True))
+        compile_args.append("/arch:AVX512")
+    else:
+        macros_args.append(get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX512", True))
+
+    if "AVX2" in platform.processor():
+        macros_args.append(get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX2", True))
+        compile_args.append("/arch:AVX2")
+    else:
+        macros_args.append(get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX2", True))
+
+        # Arm extensions aren't supported on Windows:
         macros_args.extend(
             [
-                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX512", False),
                 get_bool_env_w_name("SIMSIMD_TARGET_ARM_SVE", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX2", False),
                 get_bool_env_w_name("SIMSIMD_TARGET_ARM_NEON", False),
             ]
         )
