@@ -1165,13 +1165,20 @@ template <typename scalar_at = std::int32_t, typename result_at = float> struct 
 };
 
 /**
- *  @brief  Measures Pearson Correlation between two sequences.
+ *  @brief  Measures Pearson Correlation between two sequences in a single pass.
  */
 template <typename scalar_at = float, typename result_at = float> struct metric_pearson_gt {
     using scalar_t = scalar_at;
     using result_t = result_at;
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
+        // The correlation coefficient can't be defined for one or zero-dimensional data.
+        if (dim <= 1)
+            return 0;
+        // Conventional Pearson Correlation Coefficient definiton subtracts the mean value of each
+        // sequence from each element, before dividing them. WikiPedia article suggests a convenient
+        // single-pass algorithm for calculating sample correlations, though depending on the numbers
+        // involved, it can sometimes be numerically unstable.
         result_t a_sum{}, b_sum{}, ab_sum{};
         result_t a_sq_sum{}, b_sq_sum{};
 #if USEARCH_USE_OPENMP
@@ -1190,9 +1197,12 @@ template <typename scalar_at = float, typename result_at = float> struct metric_
             a_sq_sum += ai * ai;
             b_sq_sum += bi * bi;
         }
-        result_t denom = std::sqrt((dim * a_sq_sum - a_sum * a_sum) * (dim * b_sq_sum - b_sum * b_sum));
-        result_t corr = (dim * ab_sum - a_sum * b_sum) / denom;
-        return -corr;
+        result_t denom = (dim * a_sq_sum - a_sum * a_sum) * (dim * b_sq_sum - b_sum * b_sum);
+        if (denom == 0)
+            return 0;
+        result_t corr = dim * ab_sum - a_sum * b_sum;
+        denom = std::sqrt(denom);
+        return -corr / denom;
     }
 };
 

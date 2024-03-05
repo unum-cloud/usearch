@@ -242,7 +242,6 @@ void test_save_load(size_t const collection_size, size_t const dimensions) {
     weird_ops.connectivity = 11;
     weird_ops.expansion_add = 15;
     weird_ops.expansion_search = 19;
-    weird_ops.metric_kind = usearch_metric_l2sq_k; // Why Pearson fails?!?
     weird_ops.metric_kind = usearch_metric_pearson_k;
     weird_ops.quantization = usearch_scalar_f64_k;
 
@@ -364,7 +363,7 @@ void test_view(size_t const collection_size, size_t const dimensions) {
 int main(int argc, char const* argv[]) {
 
     size_t collection_sizes[] = {11, 512};
-    size_t dimensions[] = {83, 1};
+    size_t dimensions[] = {83, 2}; // Not all distance functions make sense for 1 dimensional data
     for (size_t index = 0; index < sizeof(collection_sizes) / sizeof(collection_sizes[0]); ++index) {
         for (size_t jdx = 0; jdx < sizeof(dimensions) / sizeof(dimensions[0]); ++jdx) {
             test_init(collection_sizes[index], dimensions[jdx]);
