@@ -1,6 +1,7 @@
 import os
 import sys
 import subprocess
+import platform
 from setuptools import setup
 
 from pybind11.setup_helpers import Pybind11Extension
