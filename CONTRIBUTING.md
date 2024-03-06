@@ -141,8 +141,6 @@ cibuildwheel
 cibuildwheel --platform linux                   # works on any OS and builds all Linux backends
 cibuildwheel --platform linux --archs x86_64    # 64-bit x86, the most common on desktop and servers
 cibuildwheel --platform linux --archs aarch64   # 64-bit Arm for mobile devices, Apple M-series, and AWS Graviton
-cibuildwheel --platform linux --archs i686      # 32-bit Linux
-cibuildwheel --platform linux --archs s390x     # emulating big-endian IBM Z
 cibuildwheel --platform macos                   # works only on MacOS
 cibuildwheel --platform windows                 # works only on Windows
 ```
