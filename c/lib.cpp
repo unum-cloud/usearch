@@ -104,6 +104,7 @@ search_result_t search_(index_dense_t* index, void const* vector, scalar_kind_t 
 
 extern "C" {
 
+__attribute__((export_name("usearch_init")))
 USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, usearch_error_t* error) {
 
     assert(options && error && "Missing arguments");
@@ -127,15 +128,18 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
     return result_ptr;
 }
 
+__attribute__((export_name("usearch_free")))
 USEARCH_EXPORT void usearch_free(usearch_index_t index, usearch_error_t*) {
     delete reinterpret_cast<index_dense_t*>(index);
 }
 
+__attribute__((export_name("usearch_serialized_length")))
 USEARCH_EXPORT size_t usearch_serialized_length(usearch_index_t index, usearch_error_t*) {
     assert(index && "Missing arguments");
     return reinterpret_cast<index_dense_t*>(index)->serialized_length();
 }
 
+__attribute__((export_name("usearch_save")))
 USEARCH_EXPORT void usearch_save(usearch_index_t index, char const* path, usearch_error_t* error) {
 
     assert(index && path && error && "Missing arguments");
@@ -144,6 +148,7 @@ USEARCH_EXPORT void usearch_save(usearch_index_t index, char const* path, usearc
         *error = result.error.release();
 }
 
+__attribute__((export_name("usearch_load")))
 USEARCH_EXPORT void usearch_load(usearch_index_t index, char const* path, usearch_error_t* error) {
 
     assert(index && path && error && "Missing arguments");
@@ -152,6 +157,7 @@ USEARCH_EXPORT void usearch_load(usearch_index_t index, char const* path, usearc
         *error = result.error.release();
 }
 
+__attribute__((export_name("usearch_view")))
 USEARCH_EXPORT void usearch_view(usearch_index_t index, char const* path, usearch_error_t* error) {
 
     assert(index && path && error && "Missing arguments");
@@ -160,6 +166,7 @@ USEARCH_EXPORT void usearch_view(usearch_index_t index, char const* path, usearc
         *error = result.error.release();
 }
 
+__attribute__((export_name("usearch_metadata")))
 USEARCH_EXPORT void usearch_metadata(char const* path, usearch_init_options_t* options, usearch_error_t* error) {
 
     assert(path && options && error && "Missing arguments");
@@ -178,6 +185,7 @@ USEARCH_EXPORT void usearch_metadata(char const* path, usearch_init_options_t* o
     options->metric = NULL;
 }
 
+__attribute__((export_name("usearch_save_buffer")))
 USEARCH_EXPORT void usearch_save_buffer(usearch_index_t index, void* buffer, size_t length, usearch_error_t* error) {
 
     assert(index && buffer && length && error && "Missing arguments");
@@ -187,6 +195,7 @@ USEARCH_EXPORT void usearch_save_buffer(usearch_index_t index, void* buffer, siz
         *error = result.error.release();
 }
 
+__attribute__((export_name("usearch_load_buffer")))
 USEARCH_EXPORT void usearch_load_buffer(usearch_index_t index, void const* buffer, size_t length,
                                         usearch_error_t* error) {
 
@@ -197,6 +206,7 @@ USEARCH_EXPORT void usearch_load_buffer(usearch_index_t index, void const* buffe
         *error = result.error.release();
 }
 
+__attribute__((export_name("usearch_view_buffer")))
 USEARCH_EXPORT void usearch_view_buffer(usearch_index_t index, void const* buffer, size_t length,
                                         usearch_error_t* error) {
 
@@ -207,6 +217,7 @@ USEARCH_EXPORT void usearch_view_buffer(usearch_index_t index, void const* buffe
         *error = result.error.release();
 }
 
+__attribute__((export_name("usearch_metadata_buffer")))
 USEARCH_EXPORT void usearch_metadata_buffer(void const* buffer, size_t length, usearch_init_options_t* options,
                                             usearch_error_t* error) {
 
@@ -227,28 +238,34 @@ USEARCH_EXPORT void usearch_metadata_buffer(void const* buffer, size_t length, u
     options->metric = NULL;
 }
 
+__attribute__((export_name("usearch_size")))
 USEARCH_EXPORT size_t usearch_size(usearch_index_t index, usearch_error_t*) { //
     return reinterpret_cast<index_dense_t*>(index)->size();
 }
 
+__attribute__((export_name("usearch_capacity")))
 USEARCH_EXPORT size_t usearch_capacity(usearch_index_t index, usearch_error_t*) {
     return reinterpret_cast<index_dense_t*>(index)->capacity();
 }
 
+__attribute__((export_name("usearch_dimensions")))
 USEARCH_EXPORT size_t usearch_dimensions(usearch_index_t index, usearch_error_t*) {
     return reinterpret_cast<index_dense_t*>(index)->dimensions();
 }
 
+__attribute__((export_name("usearch_connectivity")))
 USEARCH_EXPORT size_t usearch_connectivity(usearch_index_t index, usearch_error_t*) {
     return reinterpret_cast<index_dense_t*>(index)->connectivity();
 }
 
+__attribute__((export_name("usearch_reserve")))
 USEARCH_EXPORT void usearch_reserve(usearch_index_t index, size_t capacity, usearch_error_t* error) {
     assert(index && error && "Missing arguments");
     if (!reinterpret_cast<index_dense_t*>(index)->reserve(capacity))
         *error = "Out of memory!";
 }
 
+__attribute__((export_name("usearch_add")))
 USEARCH_EXPORT void usearch_add(                                                              //
     usearch_index_t index, usearch_key_t key, void const* vector, usearch_scalar_kind_t kind, //
     usearch_error_t* error) {
@@ -259,16 +276,19 @@ USEARCH_EXPORT void usearch_add(                                                
         *error = result.error.release();
 }
 
+__attribute__((export_name("usearch_contains")))
 USEARCH_EXPORT bool usearch_contains(usearch_index_t index, usearch_key_t key, usearch_error_t*) {
     assert(index && "Missing arguments");
     return reinterpret_cast<index_dense_t*>(index)->contains(key);
 }
 
+__attribute__((export_name("usearch_count")))
 USEARCH_EXPORT size_t usearch_count(usearch_index_t index, usearch_key_t key, usearch_error_t*) {
     assert(index && "Missing arguments");
     return reinterpret_cast<index_dense_t*>(index)->count(key);
 }
 
+__attribute__((export_name("usearch_search")))
 USEARCH_EXPORT size_t usearch_search(                                                            //
     usearch_index_t index, void const* vector, usearch_scalar_kind_t kind, size_t results_limit, //
     usearch_key_t* found_keys, usearch_distance_t* found_distances, usearch_error_t* error) {
@@ -284,6 +304,7 @@ USEARCH_EXPORT size_t usearch_search(                                           
     return result.dump_to(found_keys, found_distances);
 }
 
+__attribute__((export_name("usearch_get")))
 USEARCH_EXPORT size_t usearch_get(                          //
     usearch_index_t index, usearch_key_t key, size_t count, //
     void* vectors, usearch_scalar_kind_t kind, usearch_error_t*) {
@@ -292,6 +313,7 @@ USEARCH_EXPORT size_t usearch_get(                          //
     return get_(reinterpret_cast<index_dense_t*>(index), key, count, vectors, scalar_kind_to_cpp(kind));
 }
 
+__attribute__((export_name("usearch_remove")))
 USEARCH_EXPORT size_t usearch_remove(usearch_index_t index, usearch_key_t key, usearch_error_t* error) {
 
     assert(index && error && "Missing arguments");
@@ -301,6 +323,7 @@ USEARCH_EXPORT size_t usearch_remove(usearch_index_t index, usearch_key_t key, u
     return result.completed;
 }
 
+__attribute__((export_name("usearch_rename")))
 USEARCH_EXPORT size_t usearch_rename( //
     usearch_index_t index, usearch_key_t from, usearch_key_t to, usearch_error_t* error) {
 
@@ -311,6 +334,7 @@ USEARCH_EXPORT size_t usearch_rename( //
     return result.completed;
 }
 
+__attribute__((export_name("usearch_distance")))
 USEARCH_EXPORT usearch_distance_t usearch_distance(       //
     void const* vector_first, void const* vector_second,  //
     usearch_scalar_kind_t scalar_kind, size_t dimensions, //
@@ -321,6 +345,7 @@ USEARCH_EXPORT usearch_distance_t usearch_distance(       //
     return metric((byte_t const*)vector_first, (byte_t const*)vector_second);
 }
 
+__attribute__((export_name("usearch_exact_search")))
 USEARCH_EXPORT void usearch_exact_search(                             //
     void const* dataset, size_t dataset_count, size_t dataset_stride, //
     void const* queries, size_t queries_count, size_t queries_stride, //
