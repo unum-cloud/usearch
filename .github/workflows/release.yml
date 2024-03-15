@@ -187,7 +187,7 @@ jobs:
         run: |
           cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_BENCH_CPP=0 -B ./build_release
           cmake --build ./build_release --config Release        
-          zip -r usearch_macOS_${{ matrix.arch }}_${{ steps.version.outputs.version }}.zip build_release/libusearch_c.so c/usearch.h
+          zip -r usearch_macOS_${{ matrix.arch }}_${{ steps.version.outputs.version }}.zip build_release/libusearch_c.dylib c/usearch.h
 
       - name: Upload archive
         uses: xresloader/upload-to-github-release@v1
@@ -249,9 +249,9 @@ jobs:
           cd ./c 
           for arch in "${archs[@]}"
           do
-            ../wasi-sdk-20.0/bin/clang++ --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot -o libusearch_c.so -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared --target=wasm32-wasi-threads  -Wl,--no-entry -nostdlib -D_WASI_EMULATED_MMAN -march="$arch"
-            zip -r usearch_wasm_macos_"$arch"_${{ steps.version.outputs.version }}.zip libusearch_c.so
-            mv usearch_wasm_macos_"$arch"_${{ steps.version.outputs.version }}.zip ../ && rm -rf libusearch_c.so
+            ../wasi-sdk-20.0/bin/clang++ --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot -o libusearch_c.dylib -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared --target=wasm32-wasi-threads  -Wl,--no-entry -nostdlib -D_WASI_EMULATED_MMAN -march="$arch"
+            zip -r usearch_wasm_macos_"$arch"_${{ steps.version.outputs.version }}.zip libusearch_c.dylib
+            mv usearch_wasm_macos_"$arch"_${{ steps.version.outputs.version }}.zip ../ && rm -rf libusearch_c.dylib
           done
         if: matrix.os == 'macOS-11'
 
@@ -405,7 +405,7 @@ jobs:
           packages-dir: dist
           verbose: true
           print-hash: true
-          
+
   publish_javascript:
     name: Publish JavaScript
     needs: versioning
