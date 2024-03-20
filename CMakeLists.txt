@@ -9,6 +9,7 @@ project(
 
 # Determine if USearch is built as a subproject (using `add_subdirectory`) or if it is the main project
 set(USEARCH_IS_MAIN_PROJECT OFF)
+
 if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     set(USEARCH_IS_MAIN_PROJECT ON)
 endif ()
@@ -31,6 +32,7 @@ option(USEARCH_BUILD_BENCH_CPP "Compile a native benchmark in C++" ${USEARCH_IS_
 option(USEARCH_BUILD_LIB_C "Compile a native library for the C 99 interface" OFF)
 option(USEARCH_BUILD_TEST_C "Compile a test for the C 99 interface" OFF)
 option(USEARCH_BUILD_WOLFRAM "Compile Wolfram Language bindings" OFF)
+option(USEARCH_BUILD_SQLITE "Compile separate SQLite extension" OFF)
 
 # Includes
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
@@ -56,6 +58,7 @@ set(USEARCH_PKGCONFIG_INSTALL_DIR "${CMAKE_INSTALL_DATADIR}/pkgconfig")
 add_library(${USEARCH_TARGET_NAME} INTERFACE)
 add_library(${PROJECT_NAME}::${USEARCH_TARGET_NAME} ALIAS ${USEARCH_TARGET_NAME})
 set(USEARCH_INCLUDE_BUILD_DIR "${PROJECT_SOURCE_DIR}/include/")
+
 if (${CMAKE_VERSION} VERSION_LESS "3.8.0")
     target_compile_features(${USEARCH_TARGET_NAME} INTERFACE cxx_range_for)
 else ()
@@ -122,6 +125,7 @@ if (CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin")
     set(CMAKE_USE_PTHREADS_INIT 1)
     set(THREADS_PREFER_PTHREAD_FLAG ON)
 endif ()
+
 find_package(Threads REQUIRED)
 
 if (USEARCH_USE_OPENMP)
@@ -291,6 +295,7 @@ function (setup_target TARGET_NAME)
     # On Linux and MacOS our primary shared libraries for C are called `libusearch_c.so` and `libusearch_c.dylib`, while
     # on Windows the "lib" prefix might be missing by default, so let's ensure it's always there
     get_target_property(TARGET_TYPE ${TARGET_NAME} TYPE)
+
     if (TARGET_TYPE STREQUAL "SHARED_LIBRARY" OR TARGET_TYPE STREQUAL "STATIC_LIBRARY")
         set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "lib")
     endif ()
@@ -299,12 +304,9 @@ function (setup_target TARGET_NAME)
     target_compile_definitions(${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_OPENMP}>>:USEARCH_USE_OPENMP=0>)
 
     # Supplementary compilation settings affecting "index_plugins.hpp"
-    target_compile_definitions(
-        ${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_FP16LIB}>>:USEARCH_USE_FP16LIB=1>
-    )
+    target_compile_definitions(${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_FP16LIB}>>:USEARCH_USE_FP16LIB=1>)
 
     target_compile_definitions(${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_SIMSIMD}>>:USEARCH_USE_SIMSIMD=0>)
-
 endfunction ()
 
 if (${USEARCH_BUILD_TEST_CPP} OR ${USEARCH_BUILD_BENCH_CPP})
@@ -321,4 +323,8 @@ endif ()
 
 if (${USEARCH_BUILD_LIB_C} OR ${USEARCH_BUILD_TEST_C})
     add_subdirectory(c)
+endif ()
+
+if (${USEARCH_BUILD_SQLITE})
+    add_subdirectory(sqlite)
 endif ()
