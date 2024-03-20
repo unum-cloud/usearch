@@ -303,7 +303,6 @@ jobs:
           load: true
           push: false
 
-
   build_wheels:
     name: Build Python ${{ matrix.python-version }} for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -329,3 +328,54 @@ jobs:
         run: cibuildwheel --output-dir wheelhouse
         env:
           CIBW_BUILD: cp${{ matrix.python-version }}-*
+
+  test_ubuntu_cross_compilation:
+    name: Cross Compilation
+    runs-on: ubuntu-22.04
+    env:
+      CC: clang
+      CXX: clang++
+      AR: llvm-ar
+      NM: llvm-nm
+      RANLIB: llvm-ranlib
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            target: x86_64-linux-gnu
+          - arch: arm64
+            target: aarch64-linux-gnu
+
+    steps:
+      - uses: actions/checkout@v4
+
+        # C/C++
+        # We need to install the cross-compilation toolchain for ARM64 and ARMHF
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld make crossbuild-essential-arm64 crossbuild-essential-armhf libjemalloc-dev libsqlite3-dev
+
+      - name: Build C/C++
+        run: |
+          cmake -B build_artifacts \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
+            -DCMAKE_C_COMPILER_TARGET=${{ matrix.target }} \
+            -DCMAKE_CXX_COMPILER_TARGET=${{ matrix.target }} \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} \
+            -DUSEARCH_BUILD_LIB_C=1 \
+            -DUSEARCH_BUILD_SQLITE=1 \
+            -DUSEARCH_BUILD_TEST_CPP=0 \
+            -DUSEARCH_BUILD_BENCH_CPP=0
+
+          cmake --build build_artifacts --config RelWithDebInfo
+
+        # We can't run the produced builds, but we can make sure they exist
+      - name: Test artifacts presense
+        run: |
+          test -e build_artifacts/libusearch_c.so
+          test -e build_artifacts/libusearch_sqlite.so

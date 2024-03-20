@@ -58,48 +58,75 @@ jobs:
     name: Create Debian Package for ${{ matrix.arch }}
     runs-on: ubuntu-22.04
     needs: versioning
+    env:
+      CC: clang
+      CXX: clang++
+      AR: llvm-ar
+      NM: llvm-nm
+      RANLIB: llvm-ranlib
+
     strategy:
       fail-fast: false
       matrix:
-        arch: ["linux/amd64", "linux/arm64"]
+        include:
+          - arch: amd64
+            target: x86_64-linux-gnu
+          - arch: arm64
+            target: aarch64-linux-gnu
+
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
           ref: "main"
-      - run: git submodule update --init --recursive
 
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@v2
-
-      - name: Setup Docker
-        uses: docker/setup-buildx-action@v2
-
-      - name: Get Docker daemon IP
-        id: dockerip
+      - name: Get version
+        id: set_version
         run: |
-          docker_ip=$(ip addr show docker0 | grep -Po 'inet \K[\d.]+') && \
-          echo "docker_ip=$docker_ip" >> "$GITHUB_OUTPUT"
+          version=$(cat VERSION)
+          echo "version=$version" >> $GITHUB_OUTPUT
 
-      - name: Set runner user password
-        id: userpass
+      - name: Install dependencies
         run: |
-          user_pass="1122"
-          echo "runner:$user_pass" | sudo chpasswd
-          echo "user_pass=$user_pass" >> "$GITHUB_OUTPUT"
+          sudo apt-get update
+          sudo apt-get install -y clang lld make crossbuild-essential-arm64 crossbuild-essential-armhf libjemalloc-dev libsqlite3-dev
 
-      - name: Build library
+      - name: Build C/C++
         run: |
-          docker buildx create --use
-          docker buildx build \
-          --platform ${{ matrix.arch }} \
-          --build-arg docker_ip=${{ steps.dockerip.outputs.docker_ip }} \
-          --build-arg user_pass=${{ steps.userpass.outputs.user_pass }} \
-          --file .github/workflows/Dockerfile.libs \
-          --tag unum/usearch-library:latest \
-          --load .
-      - name: Clear Docker buildx cache
-        run: docker buildx prune --all --force
+          # Configure and build the project
+          cmake -B build_release \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
+            -DCMAKE_C_COMPILER_TARGET=${{ matrix.target }} \
+            -DCMAKE_CXX_COMPILER_TARGET=${{ matrix.target }} \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} \
+            -DUSEARCH_BUILD_LIB_C=1 \
+            -DUSEARCH_BUILD_SQLITE=1 \
+            -DUSEARCH_BUILD_TEST_CPP=0 \
+            -DUSEARCH_BUILD_BENCH_CPP=0
+
+          cmake --build build_release --config Release
+
+          cp build_release/libusearch_c.so "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.so"
+          cp build_release/libusearch_sqlite.so "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.so"
+
+          mkdir -p "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/DEBIAN"
+          touch "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/DEBIAN/control"
+          mkdir -p "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/lib"
+          mkdir "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/include"
+          cp include/usearch/usearch.h "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/include/"
+          cp build_release/libusearch_c.so "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/lib/"
+          echo -e "Package: usearch\nVersion: ${{ steps.set_version.outputs.version }}\nMaintainer: Ash Vardanian\nArchitecture: ${{ matrix.arch }}\nDescription: Faster & Smaller Single-File Search Engine for Vectors & Texts" > "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/DEBIAN/control"
+          dpkg-deb --build "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}"
+
+      - name: Upload library
+        uses: xresloader/upload-to-github-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          file: "*.so"
+          update_latest_release: true
 
       - name: Upload archive
         uses: xresloader/upload-to-github-release@v1
@@ -178,7 +205,7 @@ jobs:
           go-version: "^1.21.0"
 
       - name: Get version
-        id: version
+        id: set_version
         run: |
           version=$(cat VERSION)
           echo "version=$version" >> $GITHUB_OUTPUT
@@ -187,7 +214,7 @@ jobs:
         run: |
           cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_BENCH_CPP=0 -B ./build_release
           cmake --build ./build_release --config Release        
-          zip -r usearch_macOS_${{ matrix.arch }}_${{ steps.version.outputs.version }}.zip build_release/libusearch_c.dylib c/usearch.h
+          zip -r usearch_macos_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.zip build_release/libusearch_c.dylib c/usearch.h
 
       - name: Upload archive
         uses: xresloader/upload-to-github-release@v1
@@ -213,7 +240,7 @@ jobs:
       - run: git submodule update --init --recursive
 
       - name: Get version
-        id: version
+        id: set_version
         run: |
           version=$(cat VERSION)
           echo "version=$version" >> $GITHUB_OUTPUT
@@ -232,8 +259,8 @@ jobs:
           for arch in "${archs[@]}"
           do
             ../wasi-sdk-20.0/bin/clang++ --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot -o libusearch_c.so -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared --target=wasm32-wasi-threads  -Wl,--no-entry -nostdlib -D_WASI_EMULATED_MMAN -march="$arch"
-            tar -czvf usearch_wasm_linux_"$arch"_${{ steps.version.outputs.version }}.tar.gz libusearch_c.so
-            mv usearch_wasm_linux_"$arch"_${{ steps.version.outputs.version }}.tar.gz ../ && rm -rf libusearch_c.so
+            tar -czvf usearch_wasm_linux_"$arch"_${{ steps.set_version.outputs.version }}.tar.gz libusearch_c.so
+            mv usearch_wasm_linux_"$arch"_${{ steps.set_version.outputs.version }}.tar.gz ../ && rm -rf libusearch_c.so
           done
         if: matrix.os == 'ubuntu-22.04'
 
@@ -250,8 +277,8 @@ jobs:
           for arch in "${archs[@]}"
           do
             ../wasi-sdk-20.0/bin/clang++ --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot -o libusearch_c.dylib -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared --target=wasm32-wasi-threads  -Wl,--no-entry -nostdlib -D_WASI_EMULATED_MMAN -march="$arch"
-            zip -r usearch_wasm_macos_"$arch"_${{ steps.version.outputs.version }}.zip libusearch_c.dylib
-            mv usearch_wasm_macos_"$arch"_${{ steps.version.outputs.version }}.zip ../ && rm -rf libusearch_c.dylib
+            zip -r usearch_wasm_macos_"$arch"_${{ steps.set_version.outputs.version }}.zip libusearch_c.dylib
+            mv usearch_wasm_macos_"$arch"_${{ steps.set_version.outputs.version }}.zip ../ && rm -rf libusearch_c.dylib
           done
         if: matrix.os == 'macOS-11'
 
@@ -268,8 +295,8 @@ jobs:
           for arch in "${archs[@]}"
           do
             ../wasi-sdk-20.0+m/bin/clang++ --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot -o libusearch_c.so -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared --target=wasm32-wasi-threads  -Wl,--no-entry -nostdlib -D_WASI_EMULATED_MMAN -march="$arch"
-            tar -cvf usearch_wasm_windows_"$arch"_${{ steps.version.outputs.version }}.tar.gz libusearch_c.so
-            mv usearch_wasm_windows_"$arch"_${{ steps.version.outputs.version }}.tar.gz ../ && rm -rf libusearch_c.so
+            tar -cvf usearch_wasm_windows_"$arch"_${{ steps.set_version.outputs.version }}.tar.gz libusearch_c.so
+            mv usearch_wasm_windows_"$arch"_${{ steps.set_version.outputs.version }}.tar.gz ../ && rm -rf libusearch_c.so
           done
         shell: bash
         if: matrix.os == 'windows-2022'
