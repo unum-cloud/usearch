@@ -71,10 +71,12 @@ if is_linux:
     if use_simsimd:
         macros_args.extend(
             [
-                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX512", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_ARM_SVE", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX2", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_ARM_NEON", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_NEON", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SVE", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_HASWELL", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SKYLAKE", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_ICE", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SAPPHIRE", True),
             ]
         )
 
@@ -105,12 +107,15 @@ if is_macos:
     if use_simsimd:
         macros_args.extend(
             [
-                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX512", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_ARM_SVE", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX2", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_ARM_NEON", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_NEON", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SVE", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_HASWELL", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SKYLAKE", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_ICE", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_SAPPHIRE", False),
             ]
         )
+
 
 if is_windows:
     compile_args.append("/std:c++17")
@@ -121,10 +126,12 @@ if is_windows:
     if use_simsimd:
         macros_args.extend(
             [
-                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX512", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_ARM_SVE", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX2", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_ARM_NEON", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_NEON", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SVE", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_HASWELL", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SKYLAKE", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_ICE", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SAPPHIRE", False),
             ]
         )
 
