@@ -61,23 +61,19 @@ Within this repository you will find two commonly used utilities:
 To achieve best highest results we suggest compiling locally for the target architecture.
 
 ```sh
-cmake -B ./build_release \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DUSEARCH_USE_OPENMP=1 \
-    -DUSEARCH_USE_JEMALLOC=1 && \
-    make -C ./build_release -j
-
-./build_release/bench --help
+cmake -B ./build_release -USEARCH_BUILD_BENCH_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
+cmake --build ./build_release --config Release -j
+./build_release/bench_cpp --help
 ```
 
 Which would print the following instructions.
 
 ```txt
 SYNOPSIS
-        ./build_release/bench [--vectors <path>] [--queries <path>] [--neighbors <path>] [-b] [-j
-                              <integer>] [-c <integer>] [--expansion-add <integer>]
-                              [--expansion-search <integer>] [--native|--f16quant|--i8quant]
-                              [--ip|--l2sq|--cos|--haversine] [-h]
+        ./build_release/bench_cpp [--vectors <path>] [--queries <path>] [--neighbors <path>] [-b] [-j
+                                  <integer>] [-c <integer>] [--expansion-add <integer>]
+                                  [--expansion-search <integer>] [--native|--f16quant|--i8quant]
+                                  [--ip|--l2sq|--cos|--haversine] [-h]
 
 OPTIONS
         --vectors <path>
@@ -106,7 +102,7 @@ OPTIONS
         --f16quant  Enable `f16_t` quantization
         --i8quant   Enable `int8_t` quantization
         --ip        Choose Inner Product metric
-        --l2sq        Choose L2 Euclidean metric
+        --l2sq      Choose L2 Euclidean metric
         --cos       Choose Angular metric
         --haversine Choose Haversine metric
         -h, --help  Print this help information on this tool and exit
@@ -115,12 +111,12 @@ OPTIONS
 Here is an example of running the C++ benchmark:
 
 ```sh
-./build_release/bench \
+./build_release/bench_cpp \
     --vectors datasets/wiki_1M/base.1M.fbin \
     --queries datasets/wiki_1M/query.public.100K.fbin \
     --neighbors datasets/wiki_1M/groundtruth.public.100K.ibin
 
-./build_release/bench \
+./build_release/bench_cpp \
     --vectors datasets/t2i_1B/base.1B.fbin \
     --queries datasets/t2i_1B/query.public.100K.fbin \
     --neighbors datasets/t2i_1B/groundtruth.public.100K.ibin \

@@ -33,9 +33,17 @@ brew install libomp llvm # MacOS
 Using modern syntax, this is how you build and run the test suite:
 
 ```sh
-cmake -DUSEARCH_BUILD_TEST_CPP=1 -B ./build_debug
+cmake -DUSEARCH_BUILD_TEST_CPP=1 -DCMAKE_BUILD_TYPE=Debug -B ./build_debug
 cmake --build ./build_debug --config Debug
 ./build_debug/test_cpp
+```
+
+If there build mode is not specified, the default is `Release`.
+
+```sh
+cmake -DUSEARCH_BUILD_TEST_CPP=1 -B ./build_release
+cmake --build ./build_release --config Debug
+./build_release/test_cpp
 ```
 
 The CMakeLists.txt file has a number of options you can pass:
@@ -181,10 +189,12 @@ RUN yum install tar git python3 cmake gcc-c++ -y && yum groupinstall "Developmen
 # Assuming AWS Linux 2 uses old compilers:
 ENV USEARCH_USE_FP16LIB 1
 ENV DUSEARCH_USE_SIMSIMD 1
-ENV SIMSIMD_TARGET_X86_AVX2 1
-ENV SIMSIMD_TARGET_X86_AVX512 0
-ENV SIMSIMD_TARGET_ARM_NEON 1
-ENV SIMSIMD_TARGET_ARM_SVE 0
+ENV SIMSIMD_TARGET_HASWELL 1
+ENV SIMSIMD_TARGET_SKYLAKE 0
+ENV SIMSIMD_TARGET_ICE 0
+ENV SIMSIMD_TARGET_SAPPHIRE 0
+ENV SIMSIMD_TARGET_NEON 1
+ENV SIMSIMD_TARGET_SVE 0
 
 # For specific PR:
 # RUN npm install --build-from-source unum-cloud/usearch#pull/302/head
@@ -212,7 +222,7 @@ USearch provides Rust bindings available on [Crates.io](https://crates.io/crates
 The compilation settings are controlled by the `build.rs` and are independent from CMake used for C/C++ builds.
 
 ```sh
-cargo test -p usearch
+cargo test -p usearch -- --nocapture --test-threads=1
 cargo publish
 ```
 
