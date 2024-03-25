@@ -55,7 +55,7 @@ Also worth noting, 8-bit quantization results in almost no quantization loss and
 
 Within this repository you will find two commonly used utilities:
 
-- `cpp/bench.cpp` the produces the `bench` binary for broad USearch benchmarks.
+- `cpp/bench.cpp` the produces the `bench_cpp` binary for broad USearch benchmarks.
 - `python/bench.py` and `python/bench.ipynb` for interactive charts against FAISS.
 
 To achieve best highest results we suggest compiling locally for the target architecture.
@@ -201,17 +201,17 @@ With `perf`:
 
 ```sh
 # Pass environment variables with `-E`, and `-d` for details
-sudo -E perf stat -d ./build_release/bench ...
-sudo -E perf mem -d ./build_release/bench ...
+sudo -E perf stat -d ./build_release/bench_cpp ...
+sudo -E perf mem -d ./build_release/bench_cpp ...
 # Sample on-CPU functions for the specified command, at 1 Kilo Hertz:
-sudo -E perf record -F 1000 ./build_release/bench ...
-perf record -d -e arm_spe// -- ./build_release/bench ..
+sudo -E perf record -F 1000 ./build_release/bench_cpp ...
+perf record -d -e arm_spe// -- ./build_release/bench_cpp ..
 ```
 
 ### Caches
 
 ```sh
-sudo perf stat -e 'faults,dTLB-loads,dTLB-load-misses,cache-misses,cache-references' ./build_release/bench ...
+sudo perf stat -e 'faults,dTLB-loads,dTLB-load-misses,cache-misses,cache-references' ./build_release/bench_cpp ...
 ```
 
 Typical output on a 1M vectors dataset is:
@@ -238,4 +238,3 @@ sudo sysctl -w vm.nr_hugepages=2048
 sudo reboot
 sudo cat /proc/sys/vm/nr_hugepages
 ```
-

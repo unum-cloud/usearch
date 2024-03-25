@@ -66,18 +66,11 @@ else ()
 endif ()
 
 # Core compilation settings affecting "index.hpp"
-target_compile_definitions(
-    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${USEARCH_USE_OPENMP}>>:USEARCH_USE_OPENMP=0>
-)
+target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE "USEARCH_USE_OPENMP=$<BOOL:${USEARCH_USE_OPENMP}>")
 
 # Supplementary compilation settings affecting "index_plugins.hpp"
-target_compile_definitions(
-    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${USEARCH_USE_FP16LIB}>>:USEARCH_USE_FP16LIB=1>
-)
-
-target_compile_definitions(
-    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${USEARCH_USE_SIMSIMD}>>:USEARCH_USE_SIMSIMD=0>
-)
+target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE "USEARCH_USE_FP16LIB=$<BOOL:${USEARCH_USE_FP16LIB}>")
+target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE "USEARCH_USE_SIMSIMD=$<BOOL:${USEARCH_USE_SIMSIMD}>")
 
 target_include_directories(
     ${USEARCH_TARGET_NAME} ${USEARCH_SYSTEM_INCLUDE} INTERFACE $<BUILD_INTERFACE:${USEARCH_INCLUDE_BUILD_DIR}>
@@ -301,12 +294,11 @@ function (setup_target TARGET_NAME)
     endif ()
 
     # Core compilation settings affecting "index.hpp"
-    target_compile_definitions(${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_OPENMP}>>:USEARCH_USE_OPENMP=0>)
+    target_compile_definitions(${TARGET_NAME} PRIVATE "USEARCH_USE_OPENMP=$<BOOL:${USEARCH_USE_OPENMP}>")
 
     # Supplementary compilation settings affecting "index_plugins.hpp"
-    target_compile_definitions(${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_FP16LIB}>>:USEARCH_USE_FP16LIB=1>)
-
-    target_compile_definitions(${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_SIMSIMD}>>:USEARCH_USE_SIMSIMD=0>)
+    target_compile_definitions(${TARGET_NAME} PRIVATE "USEARCH_USE_FP16LIB=$<BOOL:${USEARCH_USE_FP16LIB}>")
+    target_compile_definitions(${TARGET_NAME} PRIVATE "USEARCH_USE_SIMSIMD=$<BOOL:${USEARCH_USE_SIMSIMD}>")
 endfunction ()
 
 if (${USEARCH_BUILD_TEST_CPP} OR ${USEARCH_BUILD_BENCH_CPP})
