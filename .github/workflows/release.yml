@@ -79,6 +79,7 @@ jobs:
         with:
           persist-credentials: false
           ref: "main"
+      - run: git submodule update --init --recursive
 
       - name: Get version
         id: set_version
