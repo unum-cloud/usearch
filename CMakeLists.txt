@@ -299,6 +299,12 @@ function (setup_target TARGET_NAME)
     # Supplementary compilation settings affecting "index_plugins.hpp"
     target_compile_definitions(${TARGET_NAME} PRIVATE "USEARCH_USE_FP16LIB=$<BOOL:${USEARCH_USE_FP16LIB}>")
     target_compile_definitions(${TARGET_NAME} PRIVATE "USEARCH_USE_SIMSIMD=$<BOOL:${USEARCH_USE_SIMSIMD}>")
+
+    # Compile SimSIMD dynamic dispatch from source
+    if (USEARCH_USE_SIMSIMD)
+        target_compile_definitions(${TARGET_NAME} PRIVATE "SIMSIMD_DYNAMIC_DISPATCH=1")
+        target_sources(${TARGET_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/simsimd/c/lib.c")
+    endif ()
 endfunction ()
 
 if (${USEARCH_BUILD_TEST_CPP} OR ${USEARCH_BUILD_BENCH_CPP})
