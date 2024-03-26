@@ -47,6 +47,7 @@
 #if USEARCH_USE_SIMSIMD
 // Propagate the `f16` settings
 #define SIMSIMD_NATIVE_F16 !USEARCH_USE_FP16LIB
+#define SIMSIMD_DYNAMIC_DISPATCH 0
 #include <simsimd/simsimd.h>
 #endif
 

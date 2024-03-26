@@ -3,7 +3,6 @@ fn main() {
 
     build
         .file("rust/lib.cpp")
-        .file("simsimd/c/lib.c")
         .flag_if_supported("-Wno-unknown-pragmas")
         .warnings(false)
         .include("include")
