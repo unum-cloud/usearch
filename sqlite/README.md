@@ -142,7 +142,7 @@ FROM binary_vectors AS bv;
 
 #### Dense Vectors
 
-Distance functions for desnse vectors can be used on both BLOBs and JSONs.
+Distance functions for dense vectors can be used on both BLOBs and JSONs.
 Every name is structured as `distance_<metric>_<type>`, where 
 
 - `<metric>` is the name of the metric, like `cosine`, `inner`, `sqeuclidean`, and `divergence`,
