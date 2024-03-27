@@ -350,6 +350,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - run: git submodule update --init --recursive
 
         # C/C++
         # We need to install the cross-compilation toolchain for ARM64 and ARMHF
