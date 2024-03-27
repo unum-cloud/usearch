@@ -121,6 +121,44 @@ I'd recommend putting the following breakpoints when debugging the code in GDB:
 - `__GI_exit` - to stop at exit points - the end of running any executable.
 - `__builtin_unreachable` - to catch all the places where the code is expected to be unreachable.
 
+### Cross Compilation
+
+Unlike GCC, LLVM handles cross compilation very easily.
+You just need to pass the right `TARGET_ARCH` and `BUILD_ARCH` to CMake.
+The [list includes](https://packages.ubuntu.com/search?keywords=crossbuild-essential&searchon=names):
+
+- `crossbuild-essential-amd64` for 64-bit x86
+- `crossbuild-essential-arm64` for 64-bit Arm
+- `crossbuild-essential-armhf` for 32-bit ARM hard-float
+- `crossbuild-essential-armel` for 32-bit ARM soft-float (emulates `float`)
+- `crossbuild-essential-riscv64` for RISC-V
+- `crossbuild-essential-powerpc` for PowerPC
+- `crossbuild-essential-s390x` for IBM Z
+- `crossbuild-essential-mips` for MIPS
+- `crossbuild-essential-ppc64el` for PowerPC 64-bit little-endian
+
+Here is an example for cross-compiling for Arm64 on an x86_64 machine:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y clang lld make crossbuild-essential-arm64 crossbuild-essential-armhf
+export CC="clang"
+export CXX="clang++"
+export AR="llvm-ar"
+export NM="llvm-nm"
+export RANLIB="llvm-ranlib"
+export TARGET_ARCH="aarch64-linux-gnu" # Or "x86_64-linux-gnu"
+export BUILD_ARCH="arm64" # Or "amd64"
+
+cmake -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_COMPILER_TARGET=${TARGET_ARCH} \
+    -DCMAKE_CXX_COMPILER_TARGET=${TARGET_ARCH} \
+    -DCMAKE_SYSTEM_NAME=Linux \
+    -DCMAKE_SYSTEM_PROCESSOR=${BUILD_ARCH} \
+    -B build_artifacts
+cmake --build build_artifacts --config Release
+```
+
 ## Python 3
 
 Python bindings are built using PyBind11 and are available on [PyPi](https://pypi.org/project/usearch/).
