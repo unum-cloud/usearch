@@ -485,7 +485,7 @@ class executor_openmp_t {
     /**
      *  @return Maximum number of threads available to the executor.
      */
-    std::size_t size() const noexcept { return omp_get_num_threads(); }
+    std::size_t size() const noexcept { return omp_get_max_threads(); }
 
     /**
      *  @brief Executes tasks in bulk using the specified thread-aware function.
