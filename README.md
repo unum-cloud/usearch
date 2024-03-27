@@ -192,6 +192,44 @@ When compared to FAISS's `IndexFlatL2` in Google Colab, __[USearch may offer up 
 - `faiss.IndexFlatL2`: __55.3 ms__.
 - `usearch.index.search`: __2.54 ms__.
 
+## User-Defined Functions
+
+While most vector search packages concentrate on just a few metrics - "Inner Product distance" and "Euclidean distance," USearch extends this list to include any user-defined metrics.
+This flexibility allows you to customize your search for various applications, from computing geospatial coordinates with the rare [Haversine][haversine] distance to creating custom metrics for composite embeddings from multiple AI models.
+
+![USearch: Vector Search Approaches](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-approaches-white.png?raw=true)
+
+Unlike older approaches indexing high-dimensional spaces, like KD-Trees and Locality Sensitive Hashing, HNSW doesn't require vectors to be identical in length.
+They only have to be comparable.
+So you can apply it in [obscure][obscure] applications, like searching for similar sets or fuzzy text matching, using [GZip][gzip-similarity] as a distance function.
+
+> Read more about [JIT and UDF in USearch Python SDK](https://unum-cloud.github.io/usearch/python#user-defined-metrics-and-jit-in-python).
+
+[haversine]: https://ashvardanian.com/posts/abusing-vector-search#geo-spatial-indexing
+[obscure]: https://ashvardanian.com/posts/abusing-vector-search
+[gzip-similarity]: https://twitter.com/LukeGessler/status/1679211291292889100?s=20
+
+## Memory Efficiency, Downcasting, and Quantization
+
+Training a quantization model and dimension-reduction is a common approach to accelerate vector search.
+Those, however, are only sometimes reliable, can significantly affect the statistical properties of your data, and require regular adjustments if your distribution shifts.
+Instead, we have focused on high-precision arithmetic over low-precision downcasted vectors.
+The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f64_t`, `f32_t`, `f16_t`, `i8_t`, and single-bit representations.
+You can use the following command to check, if hardware acceleration is enabled:
+
+```sh
+$ python -c 'from usearch.index import Index; print(Index(ndim=768, metric="cos", dtype="f16").hardware_acceleration)'
+> sapphire
+$ python -c 'from usearch.index import Index; print(Index(ndim=166, metric="tanimoto").hardware_acceleration)'
+> ice
+```
+
+Using smaller numeric types will save you RAM needed to store the vectors, but you can also compress the neighbors lists forming our proximity graphs.
+By default, 32-bit `uint32_t` is used to enumerate those, which is not enough if you need to address over 4 Billion entries.
+For such cases we provide a custom `uint40_t` type, that will still be 37.5% more space-efficient than the commonly used 8-byte integers, and will scale up to 1 Trillion entries.
+
+![USearch uint40_t support](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-neighbor-types.png?raw=true)
+
 ## `Indexes` for Multi-Index Lookups
 
 For larger workloads targeting billions or even trillions of vectors, parallel multi-index lookups become invaluable.
@@ -264,43 +302,6 @@ pairs: dict = men.join(women, max_proposals=0, exact=False)
 
 > Read more in the post: [Combinatorial Stable Marriages for Semantic Search 💍](https://ashvardanian.com/posts/searching-stable-marriages)
 
-## User-Defined Functions
-
-While most vector search packages concentrate on just a few metrics - "Inner Product distance" and "Euclidean distance," USearch extends this list to include any user-defined metrics.
-This flexibility allows you to customize your search for various applications, from computing geospatial coordinates with the rare [Haversine][haversine] distance to creating custom metrics for composite embeddings from multiple AI models.
-
-![USearch: Vector Search Approaches](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-approaches-white.png?raw=true)
-
-Unlike older approaches indexing high-dimensional spaces, like KD-Trees and Locality Sensitive Hashing, HNSW doesn't require vectors to be identical in length.
-They only have to be comparable.
-So you can apply it in [obscure][obscure] applications, like searching for similar sets or fuzzy text matching, using [GZip][gzip-similarity] as a distance function.
-
-> Read more about [JIT and UDF in USearch Python SDK](https://unum-cloud.github.io/usearch/python#user-defined-metrics-and-jit-in-python).
-
-[haversine]: https://ashvardanian.com/posts/abusing-vector-search#geo-spatial-indexing
-[obscure]: https://ashvardanian.com/posts/abusing-vector-search
-[gzip-similarity]: https://twitter.com/LukeGessler/status/1679211291292889100?s=20
-
-## Memory Efficiency, Downcasting, and Quantization
-
-Training a quantization model and dimension-reduction is a common approach to accelerate vector search.
-Those, however, are only sometimes reliable, can significantly affect the statistical properties of your data, and require regular adjustments if your distribution shifts.
-Instead, we have focused on high-precision arithmetic over low-precision downcasted vectors.
-The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f64_t`, `f32_t`, `f16_t`, `i8_t`, and single-bit representations.
-You can use the following command to check, if hardware acceleration is enabled:
-
-```sh
-$ python -c 'from usearch.index import Index; print(Index(ndim=768, metric="cos", dtype="f16").hardware_acceleration)'
-> avx512+f16
-$ python -c 'from usearch.index import Index; print(Index(ndim=166, metric="tanimoto").hardware_acceleration)'
-> avx512+popcnt
-```
-
-Using smaller numeric types will save you RAM needed to store the vectors, but you can also compress the neighbors lists forming our proximity graphs.
-By default, 32-bit `uint32_t` is used to enumerate those, which is not enough if you need to address over 4 Billion entries.
-For such cases we provide a custom `uint40_t` type, that will still be 37.5% more space-efficient than the commonly used 8-byte integers, and will scale up to 1 Trillion entries.
-
-![USearch uint40_t support](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-neighbor-types.png?raw=true)
 
 ## Functionality
 

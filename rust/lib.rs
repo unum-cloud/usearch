@@ -85,6 +85,7 @@ pub mod ffi {
         pub fn view(self: &NativeIndex, path: &str) -> Result<()>;
         pub fn reset(self: &NativeIndex) -> Result<()>;
         pub fn memory_usage(self: &NativeIndex) -> usize;
+        pub fn hardware_acceleration(self: &NativeIndex) -> *const c_char;
 
         pub fn save_to_buffer(self: &NativeIndex, buffer: &mut [u8]) -> Result<()>;
         pub fn load_from_buffer(self: &NativeIndex, buffer: &[u8]) -> Result<()>;
@@ -200,6 +201,15 @@ impl Index {
     /// Updates the expansion value used during search operations.
     pub fn change_expansion_search(self: &Index, n: usize) -> Result<(), cxx::Exception> {
         self.inner.change_expansion_search(n)
+    }
+
+    /// Retrieves the hardware acceleration information.
+    pub fn hardware_acceleration(&self) -> String {
+        use core::ffi::CStr;
+        unsafe {
+            let c_str = CStr::from_ptr(self.inner.hardware_acceleration());
+            c_str.to_string_lossy().into_owned()
+        }
     }
 
     /// Performs k-Approximate Nearest Neighbors (kANN) Search for closest vectors to the provided query.
@@ -438,6 +448,81 @@ mod tests {
     use crate::new_index;
     use crate::Index;
 
+    use std::env;
+
+    #[test]
+    fn print_specs() {
+        print!("--------------------------------------------------\n");
+        println!("OS: {}", env::consts::OS);
+        println!(
+            "Rust version: {}",
+            env::var("RUST_VERSION").unwrap_or_else(|_| "unknown".into())
+        );
+
+        // Create indexes with different configurations
+        let f64_index = Index::new(&IndexOptions {
+            dimensions: 256,
+            metric: MetricKind::Cos,
+            quantization: ScalarKind::F64,
+            ..Default::default()
+        })
+        .unwrap();
+
+        let f32_index = Index::new(&IndexOptions {
+            dimensions: 256,
+            metric: MetricKind::Cos,
+            quantization: ScalarKind::F32,
+            ..Default::default()
+        })
+        .unwrap();
+
+        let f16_index = Index::new(&IndexOptions {
+            dimensions: 256,
+            metric: MetricKind::Cos,
+            quantization: ScalarKind::F16,
+            ..Default::default()
+        })
+        .unwrap();
+
+        let i8_index = Index::new(&IndexOptions {
+            dimensions: 256,
+            metric: MetricKind::Cos,
+            quantization: ScalarKind::I8,
+            ..Default::default()
+        })
+        .unwrap();
+
+        let b1_index = Index::new(&IndexOptions {
+            dimensions: 256,
+            metric: MetricKind::Hamming,
+            quantization: ScalarKind::B1,
+            ..Default::default()
+        })
+        .unwrap();
+
+        println!(
+            "f64 hardware acceleration: {}",
+            f64_index.hardware_acceleration()
+        );
+        println!(
+            "f32 hardware acceleration: {}",
+            f32_index.hardware_acceleration()
+        );
+        println!(
+            "f16 hardware acceleration: {}",
+            f16_index.hardware_acceleration()
+        );
+        println!(
+            "i8 hardware acceleration: {}",
+            i8_index.hardware_acceleration()
+        );
+        println!(
+            "b1 hardware acceleration: {}",
+            b1_index.hardware_acceleration()
+        );
+        print!("--------------------------------------------------\n");
+    }
+
     #[test]
     fn test_add_get_vector() {
         let mut options = IndexOptions::default();
@@ -494,17 +579,17 @@ mod tests {
         let mut found_slice = [0.0 as f32; 4];
         assert_eq!(index.get(id1, &mut found_slice).unwrap(), 1);
         assert!(index.remove(id1).is_ok());
-    
+
         assert!(index.add(id2, &second).is_ok());
         let mut found_slice = [0.0 as f32; 4];
         assert_eq!(index.get(id2, &mut found_slice).unwrap(), 1);
         assert!(index.remove(id2).is_ok());
-        
+
         assert!(index.add(id3, &second).is_ok());
         let mut found_slice = [0.0 as f32; 4];
         assert_eq!(index.get(id3, &mut found_slice).unwrap(), 1);
         assert!(index.remove(id3).is_ok());
-                
+
         assert!(index.add(id4, &second).is_ok());
         let mut found_slice = [0.0 as f32; 4];
         assert_eq!(index.get(id4, &mut found_slice).unwrap(), 1);
@@ -532,6 +617,7 @@ mod tests {
         let first: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
         let second: [f32; 5] = [0.3, 0.2, 0.4, 0.0, 0.1];
 
+        print!("--------------------------------------------------\n");
         println!(
             "before add, memory_usage: {} \
             cap: {} \
@@ -566,6 +652,7 @@ mod tests {
         let results = index.search(&first, 10).unwrap();
         println!("{:?}", results);
         assert_eq!(results.keys.len(), 2);
+        print!("--------------------------------------------------\n");
 
         // Validate serialization
         assert!(index.save("index.rust.usearch").is_ok());

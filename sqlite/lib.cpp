@@ -260,6 +260,7 @@ extern "C" SZ_DYNAMIC int sqlite3_compiled_init( //
 
     int flags = SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS;
     int num_params = -1; // Any number will be accepted
+    (void)error_message; // Unused
 
     // String similarity metrics
     sqlite3_create_function(db, "distance_levenshtein_bytes", num_params, flags, NULL,

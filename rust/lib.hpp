@@ -57,6 +57,7 @@ class NativeIndex {
     void view(rust::Str path) const;
     void reset() const;
     size_t memory_usage() const;
+    char const* hardware_acceleration() const;
 
     void save_to_buffer(rust::Slice<uint8_t> buffer) const;
     void load_from_buffer(rust::Slice<uint8_t const> buffer) const;

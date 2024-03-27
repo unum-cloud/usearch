@@ -15,8 +15,10 @@ if (USEARCH_BUILD_LIB_C)
     # Set the compile options for the static library
     if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         target_compile_options(usearch_static_c PRIVATE -static-libstdc++)
+        target_link_options(usearch_static_c PRIVATE -static-libstdc++)
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         target_compile_options(usearch_static_c PRIVATE -static)
+        target_link_options(usearch_static_c PRIVATE -static)
     endif ()
 
     setup_target(usearch_c)

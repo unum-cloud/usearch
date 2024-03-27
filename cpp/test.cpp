@@ -166,17 +166,18 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     using member_cref_t = typename index_typed_t::member_cref_t;
     using member_citerator_t = typename index_typed_t::member_citerator_t;
 
-    std::vector<std::vector<scalar_at>> matrix(collection_size);
-    for (std::vector<scalar_at>& vector : matrix) {
+    using vector_of_vectors_t = std::vector<std::vector<scalar_at>>;
+    vector_of_vectors_t vector_of_vectors(collection_size);
+    for (auto& vector : vector_of_vectors) {
         vector.resize(dimensions);
         std::generate(vector.begin(), vector.end(), [=] { return float(std::rand()) / float(INT_MAX); });
     }
 
     struct metric_t {
-        std::vector<std::vector<scalar_at>> const* matrix_ptr;
-        std::size_t dimensions;
+        vector_of_vectors_t const* vector_of_vectors_ptr = nullptr;
+        std::size_t dimensions = 0;
 
-        scalar_t const* row(std::size_t i) const noexcept { return (*matrix_ptr)[i].data(); }
+        scalar_t const* row(std::size_t i) const noexcept { return (*vector_of_vectors_ptr)[i].data(); }
 
         float operator()(member_cref_t const& a, member_cref_t const& b) const {
             return metric_cos_gt<scalar_t>{}(row(get_slot(b)), row(get_slot(a)), dimensions);
@@ -195,10 +196,10 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     // Template:
     for (std::size_t connectivity : {3, 13, 50}) {
         std::printf("- templates with connectivity %zu \n", connectivity);
-        metric_t metric{&matrix, dimensions};
+        metric_t metric{&vector_of_vectors, dimensions};
         index_config_t config(connectivity);
         index_typed_t index_typed(config);
-        test_cosine<false>(index_typed, matrix, metric);
+        test_cosine<false>(index_typed, vector_of_vectors, metric);
     }
 
     // Type-punned:
@@ -217,7 +218,7 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
                 // move assignment
                 index = std::move(index_tmp2);
             }
-            test_cosine<true>(index, matrix);
+            test_cosine<true>(index, vector_of_vectors);
         }
     }
 }
