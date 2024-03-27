@@ -3,7 +3,7 @@
 if (USEARCH_BUILD_SQLITE)
     find_package(SQLite3 REQUIRED)
 
-    add_library(usearch_sqlite STATIC lib.cpp)
+    add_library(usearch_sqlite SHARED lib.cpp)
 
     # Set the compile options for the static library
     if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
