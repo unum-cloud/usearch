@@ -5,6 +5,8 @@ project(
     usearch
     VERSION 2.7.2
     LANGUAGES C CXX
+    DESCRIPTION "Smaller & Faster Single-File Vector Search Engine from Unum"
+    HOMEPAGE_URL "https://github.com/unum-cloud/usearch"
 )
 
 # Determine if USearch is built as a subproject (using `add_subdirectory`) or if it is the main project
@@ -165,7 +167,6 @@ function (setup_target TARGET_NAME)
                     -fmax-errors=1
                     -pedantic
                     -fdiagnostics-color=always
-                    -ftime-report
         )
         target_link_options(
             ${TARGET_NAME}
@@ -203,7 +204,6 @@ function (setup_target TARGET_NAME)
                     # Don't complain if the for-loops were not vectorzied
                     -Wpass-failed=transform-warning
                     -fcolor-diagnostics
-                    -ftime-trace
         )
         target_link_options(
             ${TARGET_NAME}

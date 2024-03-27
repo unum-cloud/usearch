@@ -48,7 +48,14 @@
 // Propagate the `f16` settings
 #define SIMSIMD_NATIVE_F16 !USEARCH_USE_FP16LIB
 #define SIMSIMD_DYNAMIC_DISPATCH 0
+// No problem, if some of the functions are unused or undefined
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma warning(push)
+#pragma warning(disable : 4101)
 #include <simsimd/simsimd.h>
+#pragma warning(pop)
+#pragma GCC diagnostic pop
 #endif
 
 namespace unum {
@@ -1442,7 +1449,8 @@ class metric_punned_t {
     }
     result_t invoke_simsimd(punned_arg_t a, punned_arg_t b, punned_arg_t size) const noexcept {
         simsimd_distance_t result;
-        auto function_pointer = reinterpret_cast<simsimd_metric_punned_t>(raw_ptr_);
+        // Here `reinterpret_cast` raises warning... we know what we are doing!
+        auto function_pointer = (simsimd_metric_punned_t)(void*)(raw_ptr_);
         function_pointer(reinterpret_cast<void const*>(a), reinterpret_cast<void const*>(b), size, &result);
         return (result_t)result;
     }
