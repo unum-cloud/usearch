@@ -118,23 +118,23 @@ enum class metric_kind_t : std::uint8_t {
 enum class scalar_kind_t : std::uint8_t {
     unknown_k = 0,
     // Custom:
-    b1x8_k,
-    u40_k,
-    uuid_k,
+    b1x8_k = 1,
+    u40_k = 2,
+    uuid_k = 3,
     // Common:
-    f64_k,
-    f32_k,
-    f16_k,
-    f8_k,
+    f64_k = 10,
+    f32_k = 11,
+    f16_k = 12,
+    f8_k = 13,
     // Common Integral:
-    u64_k,
-    u32_k,
-    u16_k,
-    u8_k,
-    i64_k,
-    i32_k,
-    i16_k,
-    i8_k,
+    u64_k = 14,
+    u32_k = 15,
+    u16_k = 16,
+    u8_k = 17,
+    i64_k = 20,
+    i32_k = 21,
+    i16_k = 22,
+    i8_k = 23,
 };
 
 enum class prefetching_kind_t {
