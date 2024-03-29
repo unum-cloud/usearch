@@ -252,10 +252,7 @@ static void sqlite_strings(sqlite3_context* context, int argc, sqlite3_value** a
     sqlite3_result_int64(context, (std::int64_t)result);
 }
 
-extern "C" SZ_DYNAMIC int sqlite3_compiled_init( //
-    sqlite3* db,                                 //
-    char** error_message,                        //
-    sqlite3_api_routines const* api) {
+int init_sqlite(sqlite3* db, char** error_message, sqlite3_api_routines const* api) {
     SQLITE_EXTENSION_INIT2(api)
 
     int flags = SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS;
@@ -321,6 +318,28 @@ extern "C" SZ_DYNAMIC int sqlite3_compiled_init( //
                             sqlite_dense<scalar_kind_t::i8_k, metric_kind_t::divergence_k>, NULL, NULL);
 
     return SQLITE_OK;
+}
+
+#ifndef USEARCH_EXPORT
+#if defined(_WIN32) && !defined(__MINGW32__)
+#define USEARCH_EXPORT __declspec(dllexport)
+#else
+#define USEARCH_EXPORT __attribute__((visibility("default")))
+#endif
+#endif
+
+extern "C" USEARCH_EXPORT int sqlite3_usearchsqlite_init( //
+    sqlite3* db,                                          //
+    char** error_message,                                 //
+    sqlite3_api_routines const* api) {
+    return init_sqlite(db, error_message, api);
+}
+
+extern "C" USEARCH_EXPORT int sqlite3_usearch_sqlite_init( //
+    sqlite3* db,                                           //
+    char** error_message,                                  //
+    sqlite3_api_routines const* api) {
+    return init_sqlite(db, error_message, api);
 }
 
 #include "../stringzilla/c/lib.c"

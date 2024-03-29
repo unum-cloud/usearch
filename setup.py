@@ -135,11 +135,6 @@ if is_windows:
             ]
         )
 
-
-if is_linux or is_macos:
-    sources.append("sqlite/lib.cpp")
-    link_args.append("-lsqlite3")
-
 ext_modules = [
     Pybind11Extension(
         "usearch.compiled",
