@@ -20,6 +20,7 @@ def test_index_numba(ndim: int, batch_size: int):
     try:
         from numba import cfunc, types, carray
     except ImportError:
+        pytest.skip("Numba is not installed.")
         return
 
     # Showcases how to use Numba to JIT-compile similarity measures for USearch.
@@ -30,12 +31,6 @@ def test_index_numba(ndim: int, batch_size: int):
     )
     signature_three_args = types.float32(
         types.CPointer(types.float32),
-        types.CPointer(types.float32),
-        types.uint64,
-    )
-    signature_four_args = types.float32(
-        types.CPointer(types.float32),
-        types.uint64,
         types.CPointer(types.float32),
         types.uint64,
     )
@@ -72,16 +67,20 @@ def test_index_numba(ndim: int, batch_size: int):
             kind=MetricKind.IP,
             signature=signature,
         )
-        index = Index(ndim=ndim, metric=metric)
+        index = Index(ndim=ndim, metric=metric, dtype=np.float32)
 
         keys = np.arange(batch_size)
         vectors = random_vectors(count=batch_size, ndim=ndim)
 
         index.add(keys, vectors)
-        matches = index.search(vectors, 10)
+        matches = index.search(vectors, 10, exact=True)
         assert len(matches) == batch_size
 
+        matches_keys = [match[0].key for match in matches] if batch_size > 1 else [matches[0].key]
+        assert all(matches_keys[i] == keys[i] for i in range(batch_size)), f"Received {matches_keys}"
 
+
+# Just one size for Cppyy to avoid redefining kernels in the global namespace
 @pytest.mark.parametrize("ndim", dimensions[-1:])
 @pytest.mark.parametrize("batch_size", batch_sizes[-1:])
 def test_index_cppyy(ndim: int, batch_size: int):
@@ -89,6 +88,7 @@ def test_index_cppyy(ndim: int, batch_size: int):
         import cppyy
         import cppyy.ll
     except ImportError:
+        pytest.skip("cppyy is not installed.")
         return
 
     cppyy.cppdef(
@@ -107,13 +107,6 @@ def test_index_cppyy(ndim: int, batch_size: int):
             result += a[i] * b[i];
         return 1 - result;
     }
-    
-    float inner_product_four_args(float *a, size_t an, float *b, size_t) {
-        float result = 0;
-        for (size_t i = 0; i != an; ++i)
-            result += a[i] * b[i];
-        return 1 - result;
-    }
     """.replace(
             "ndim", str(ndim)
         )
@@ -122,12 +115,10 @@ def test_index_cppyy(ndim: int, batch_size: int):
     functions = [
         cppyy.gbl.inner_product_two_args,
         cppyy.gbl.inner_product_three_args,
-        # cppyy.gbl.inner_product_four_args,
     ]
     signatures = [
         MetricSignature.ArrayArray,
         MetricSignature.ArrayArraySize,
-        # MetricSignature.ArraySizeArraySize,
     ]
     for function, signature in zip(functions, signatures):
         metric = CompiledMetric(
@@ -135,14 +126,17 @@ def test_index_cppyy(ndim: int, batch_size: int):
             kind=MetricKind.IP,
             signature=signature,
         )
-        index = Index(ndim=ndim, metric=metric)
+        index = Index(ndim=ndim, metric=metric, dtype=np.float32)
 
         keys = np.arange(batch_size)
-        vectors = random_vectors(count=batch_size, ndim=ndim)
+        vectors = random_vectors(count=batch_size, ndim=ndim, dtype=np.float32)
 
         index.add(keys, vectors)
-        matches = index.search(vectors, 10)
+        matches = index.search(vectors, 10, exact=True)
         assert len(matches) == batch_size
+
+        matches_keys = [match[0].key for match in matches] if batch_size > 1 else [matches[0].key]
+        assert all(matches_keys[i] == keys[i] for i in range(batch_size)), f"Received {matches_keys}"
 
 
 @pytest.mark.parametrize("ndim", [8])
@@ -173,14 +167,13 @@ def test_index_peachpy(ndim: int, batch_size: int):
             RETURN,
         )
     except ImportError:
+        pytest.skip("PeachPy is not installed.")
         return
 
     a = Argument(ptr(const_float_), name="a")
     b = Argument(ptr(const_float_), name="b")
 
-    with Function(
-        "InnerProduct", (a, b), float_, target=uarch.default + isa.avx + isa.avx2
-    ) as asm_function:
+    with Function("InnerProduct", (a, b), float_, target=uarch.default + isa.avx + isa.avx2) as asm_function:
         # Request two 64-bit general-purpose registers for addresses
         reg_a, reg_b = GeneralPurposeRegister64(), GeneralPurposeRegister64()
         LOAD.ARGUMENT(reg_a, a)
@@ -220,12 +213,14 @@ def test_index_peachpy(ndim: int, batch_size: int):
         kind=MetricKind.IP,
         signature=MetricSignature.ArrayArray,
     )
-    index = Index(ndim=ndim, metric=metric)
+    index = Index(ndim=ndim, metric=metric, dtype=np.float32)
 
     keys = np.arange(batch_size)
     vectors = random_vectors(count=batch_size, ndim=ndim)
 
     index.add(keys, vectors)
-    matches, distances, count = index.search(vectors, 10)
-    assert matches.shape[0] == distances.shape[0]
-    assert count.shape[0] == batch_size
+    matches = index.search(vectors, 10, exact=True)
+    assert len(matches) == batch_size
+
+    matches_keys = [match[0].key for match in matches] if batch_size > 1 else [matches[0].key]
+    assert all(matches_keys[i] == keys[i] for i in range(batch_size)), f"Received {matches_keys}"
