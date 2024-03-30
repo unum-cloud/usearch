@@ -8,8 +8,10 @@ import pytest
 
 import usearch
 
-if sys.platform != "linux":
-    pytest.skip(reason="Requires Linux to run", allow_module_level=True)
+
+found_sqlite_path = usearch.sqlite
+if found_sqlite_path is None:
+    pytest.skip(reason="Can't find an SQLite installation", allow_module_level=True)
 
 
 batch_sizes = [1, 3, 20]
@@ -63,9 +65,7 @@ def test_sqlite_minimal_text_search():
     str42 = "école"  # 6 codepoints (runes), 7 bytes
     str43 = "école"  # 5 codepoints (runes), 6 bytes
     str44 = "écolé"  # 5 codepoints (runes), 7 bytes
-    assert (
-        str42 != str43
-    ), "etter 'é' as a single character vs 'e' + '´' are not the same"
+    assert str42 != str43, "etter 'é' as a single character vs 'e' + '´' are not the same"
 
     # Inject the different strings into the table
     cursor.executescript(
@@ -280,12 +280,8 @@ def test_sqlite_distances_in_low_dimensions(num_vectors: int):
 
     # Validate the results of the distance computations
     for id1, id2, similarity_f32, similarity_f16, haversine_meters in cursor.fetchall():
-        assert (
-            0 <= similarity_f32 <= 1
-        ), "Cosine similarity (f32) must be between 0 and 1"
-        assert (
-            0 <= similarity_f16 <= 1
-        ), "Cosine similarity (f16) must be between 0 and 1"
+        assert 0 <= similarity_f32 <= 1, "Cosine similarity (f32) must be between 0 and 1"
+        assert 0 <= similarity_f16 <= 1, "Cosine similarity (f16) must be between 0 and 1"
         assert haversine_meters >= 0, "Haversine distance must be non-negative"
 
     # Clean up
