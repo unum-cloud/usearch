@@ -26,8 +26,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main-dev
       - run: git submodule update --init --recursive
 
         # C/C++
@@ -117,8 +115,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main-dev
       - run: git submodule update --init --recursive
 
         # C/C++
@@ -182,8 +178,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main-dev
       - run: git submodule update --init --recursive
 
         # C/C++
@@ -247,8 +241,6 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main-dev
       - run: git submodule update --init --recursive
 
         # C/C++
@@ -305,8 +297,6 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main-dev
       - run: git submodule update --init --recursive
       - name: Build
         uses: docker/build-push-action@v4
