@@ -26,6 +26,8 @@ namespace sz = ashvardanian::stringzilla;
 using metric_t = metric_punned_t;
 using distance_t = distance_punned_t;
 
+constexpr std::size_t max_dimensions_k = 4096;
+
 template <scalar_kind_t scalar_kind_ak> struct parsed_scalar_kind_gt {
     using type = f32_t;
     static constexpr scalar_kind_t kind = scalar_kind_t::f32_k;
@@ -93,10 +95,16 @@ static void sqlite_dense(sqlite3_context* context, int argc, sqlite3_value** arg
         // if (bytes2 && vec2[bytes2 - 1] == ']')
         //     --bytes2;
 
-        // Allocate vectors on stack and parse strings into them
-        using scalar_t = typename parsed_scalar_kind_gt<scalar_kind_ak>::type;
+        // Can we allocate enough space on the stack?
         size_t dimensions = commas1 + 1;
-        scalar_t parsed1[dimensions], parsed2[dimensions];
+        if (dimensions > max_dimensions_k) {
+            sqlite3_result_error(context, "Number of scalar values exceeds maximum allowed dimensions", -1);
+            return;
+        }
+
+        // Parse the strings
+        using scalar_t = typename parsed_scalar_kind_gt<scalar_kind_ak>::type;
+        scalar_t parsed1[max_dimensions_k], parsed2[max_dimensions_k];
         for (size_t i = 0; i != dimensions; ++i) {
             // Skip whitespace
             while (bytes1 && vec1[0] == ' ')
@@ -149,10 +157,16 @@ static void sqlite_dense(sqlite3_context* context, int argc, sqlite3_value** arg
     // Less efficient, yet still common case is to have many scalar columns
     else if (argc % 2 == 0) {
 
-        // Allocate vectors on stack and parse floating-point values into them
-        using scalar_t = typename parsed_scalar_kind_gt<scalar_kind_ak>::type;
+        // Can we allocate enough space on the stack?
         size_t dimensions = argc / 2;
-        scalar_t parsed1[dimensions], parsed2[dimensions];
+        if (dimensions > max_dimensions_k) {
+            sqlite3_result_error(context, "Number of scalar values exceeds maximum allowed dimensions", -1);
+            return;
+        }
+
+        // Parse the strings
+        using scalar_t = typename parsed_scalar_kind_gt<scalar_kind_ak>::type;
+        scalar_t parsed1[max_dimensions_k], parsed2[max_dimensions_k];
         for (size_t i = 0; i != dimensions; ++i) {
             switch (sqlite3_value_type(argv[i])) {
             case SQLITE_FLOAT: parsed1[i] = sqlite3_value_double(argv[i]); break;
