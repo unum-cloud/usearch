@@ -48,7 +48,7 @@ test('Batch operations', () => {
 
 test("Expected results", () => {
     var index = new usearch.Index({
-        metric: "cos",
+        metric: "l2sq",
         connectivity: 16,
         dimensions: 3,
     });
