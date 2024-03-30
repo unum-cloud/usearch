@@ -1219,7 +1219,7 @@ class Index:
                 f"-- metric: {self.metric_kind}",
                 f"-- multi: {self.multi}",
                 f"-- connectivity: {self.connectivity}",
-                f"-- expansion on addition:{self.expansion_add} candidates",
+                f"-- expansion on addition :{self.expansion_add} candidates",
                 f"-- expansion on search: {self.expansion_search} candidates",
                 "- binary",
                 f"-- uses OpenMP: {USES_OPENMP}",
