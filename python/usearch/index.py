@@ -78,9 +78,7 @@ PathOrBuffer = Union[str, os.PathLike, bytes]
 ProgressCallback = Callable[[int, int], bool]
 
 
-def _match_signature(
-    func: Callable[[Any], Any], arg_types: List[type], ret_type: type
-) -> bool:
+def _match_signature(func: Callable[[Any], Any], arg_types: List[type], ret_type: type) -> bool:
     assert callable(func), "Not callable"
     sig = signature(func)
     param_types = [param.annotation for param in sig.parameters.values()]
@@ -174,9 +172,7 @@ def _search_in_compiled(
     #
     assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
     assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
-    assert not progress or _match_signature(
-        progress, [int, int], bool
-    ), "Invalid callback"
+    assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback"
 
     if vectors.ndim == 1:
         vectors = vectors.reshape(1, len(vectors))
@@ -220,9 +216,7 @@ def _add_to_compiled(
 ) -> Union[int, np.ndarray]:
     #
     assert isinstance(vectors, np.ndarray), "Expects a NumPy array"
-    assert not progress or _match_signature(
-        progress, [int, int], bool
-    ), "Invalid callback"
+    assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback"
     assert vectors.ndim == 1 or vectors.ndim == 2, "Expects a matrix or vector"
     if vectors.ndim == 1:
         vectors = vectors.reshape(1, len(vectors))
@@ -555,9 +549,7 @@ class Index:
             self._metric_pointer = metric.pointer
             self._metric_signature = metric.signature
         else:
-            raise ValueError(
-                "The `metric` must be a `CompiledMetric` or a `MetricKind`"
-            )
+            raise ValueError("The `metric` must be a `CompiledMetric` or a `MetricKind`")
 
         # Validate, that the right scalar type is defined
         dtype = _normalize_dtype(dtype, ndim, self._metric_kind)
@@ -761,16 +753,10 @@ class Index:
             keys = keys.astype(Key)
 
         results = self._compiled.get_many(keys, dtype)
-        results = (
-            cast(results)
-            if isinstance(results, np.ndarray)
-            else [cast(result) for result in results]
-        )
+        results = cast(results) if isinstance(results, np.ndarray) else [cast(result) for result in results]
         return results[0] if is_one else results
 
-    def __getitem__(
-        self, keys: KeyOrKeysLike
-    ) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+    def __getitem__(self, keys: KeyOrKeysLike) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
         """Looks up one or more keys from the `Index`, retrieving corresponding vectors.
 
         Returns `None`, if one key is requested, and its not present.
@@ -897,9 +883,7 @@ class Index:
             metric_pointer = metric.pointer
             metric_signature = metric.signature
         else:
-            raise ValueError(
-                "The `metric` must be a `CompiledMetric` or a `MetricKind`"
-            )
+            raise ValueError("The `metric` must be a `CompiledMetric` or a `MetricKind`")
 
         return self._compiled.change_metric(
             metric_kind=metric_kind,
@@ -944,9 +928,7 @@ class Index:
         path_or_buffer: Union[str, os.PathLike, NoneType] = None,
         progress: Optional[ProgressCallback] = None,
     ) -> Optional[bytes]:
-        assert not progress or _match_signature(
-            progress, [int, int], bool
-        ), "Invalid callback signature"
+        assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
 
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
         if path_or_buffer is None:
@@ -959,9 +941,7 @@ class Index:
         path_or_buffer: Union[str, os.PathLike, bytes, NoneType] = None,
         progress: Optional[ProgressCallback] = None,
     ):
-        assert not progress or _match_signature(
-            progress, [int, int], bool
-        ), "Invalid callback signature"
+        assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
 
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
         if path_or_buffer is None:
@@ -982,9 +962,7 @@ class Index:
         path_or_buffer: Union[str, os.PathLike, bytes, bytearray, NoneType] = None,
         progress: Optional[ProgressCallback] = None,
     ):
-        assert not progress or _match_signature(
-            progress, [int, int], bool
-        ), "Invalid callback signature"
+        assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
 
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
         if path_or_buffer is None:
@@ -1045,9 +1023,7 @@ class Index:
         :return: Mapping from keys of `self` to keys of `other`
         :rtype: Dict[Key, Key]
         """
-        assert not progress or _match_signature(
-            progress, [int, int], bool
-        ), "Invalid callback signature"
+        assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
 
         return self._compiled.join(
             other=other._compiled,
@@ -1084,9 +1060,7 @@ class Index:
         :return: Matches for one or more queries
         :rtype: Union[Matches, BatchMatches]
         """
-        assert not progress or _match_signature(
-            progress, [int, int], bool
-        ), "Invalid callback signature"
+        assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
 
         if min_count is None:
             min_count = 0
@@ -1119,9 +1093,7 @@ class Index:
         batch_matches = BatchMatches(*results)
         return Clustering(self, batch_matches, keys)
 
-    def pairwise_distance(
-        self, left: KeyOrKeysLike, right: KeyOrKeysLike
-    ) -> Union[np.ndarray, float]:
+    def pairwise_distance(self, left: KeyOrKeysLike, right: KeyOrKeysLike) -> Union[np.ndarray, float]:
         assert isinstance(left, Iterable) == isinstance(right, Iterable)
 
         if not isinstance(left, Iterable):
@@ -1350,9 +1322,7 @@ def search(
     :return: Matches for one or more queries
     :rtype: Union[Matches, BatchMatches]
     """
-    assert not progress or _match_signature(
-        progress, [int, int], bool
-    ), "Invalid callback signature"
+    assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
     assert dataset.ndim == 2, "Dataset must be a matrix, with a vector in each row"
 
     if not exact:
