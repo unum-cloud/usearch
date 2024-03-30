@@ -1,12 +1,12 @@
 [package]
-name="unum/usearch"
-version="2.8.15"
-description="Smaller & Faster Single-File Vector Search Engine from Unum"
-license="Apache-2.0"
-readme="README.md"
-repository="https://github.com/unum-cloud/usearch"
-homepage="https://unum-cloud.github.io/usearch/javascript"
+name = "unum/usearch"
+version = "2.9.2"
+description = "Smaller & Faster Single-File Vector Search Engine from Unum"
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/unum-cloud/usearch"
+homepage = "https://unum-cloud.github.io/usearch/javascript"
 
 [[module]]
-name="index"
-source="build/wasm/index.wasm"
+name = "index"
+source = "build/wasm/index.wasm"

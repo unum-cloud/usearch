@@ -10,8 +10,8 @@
 #define UNUM_USEARCH_HPP
 
 #define USEARCH_VERSION_MAJOR 2
-#define USEARCH_VERSION_MINOR 8
-#define USEARCH_VERSION_PATCH 15
+#define USEARCH_VERSION_MINOR 9
+#define USEARCH_VERSION_PATCH 2
 
 // Inferring C++ version
 // https://stackoverflow.com/a/61552074
@@ -1362,7 +1362,7 @@ class output_file_t {
     serialization_result_t write(void const* begin, std::size_t length) noexcept {
         serialization_result_t result;
         std::size_t written = std::fwrite(begin, length, 1, file_);
-        if (!written)
+        if (length && !written)
             return result.failed(std::strerror(errno));
         return result;
     }
@@ -1404,7 +1404,7 @@ class input_file_t {
     serialization_result_t read(void* begin, std::size_t length) noexcept {
         serialization_result_t result;
         std::size_t read = std::fread(begin, length, 1, file_);
-        if (!read)
+        if (length && !read)
             return result.failed(std::feof(file_) ? "End of file reached!" : std::strerror(errno));
         return result;
     }
@@ -2543,8 +2543,8 @@ class index_gt {
         if (!next.reserve(expansion))
             return result.failed("Out of memory!");
 
-        result.cluster.member =
-            at(search_for_one_(query, metric, prefetch, entry_slot_, max_level_, level - 1, context));
+        result.cluster.member = at(search_for_one_(query, metric, prefetch, entry_slot_, max_level_,
+                                                   static_cast<level_t>(level - 1), context));
         result.cluster.distance = context.measure(query, result.cluster.member, metric);
 
         // Normalize stats
@@ -3422,7 +3422,7 @@ class index_gt {
         distance_t radius = context.measure(query, citerator_at(start_slot), metric);
         next.insert_reserved({-radius, static_cast<compressed_slot_t>(start_slot)});
         top.insert_reserved({radius, static_cast<compressed_slot_t>(start_slot)});
-        visits.set(start_slot);
+        visits.set(static_cast<compressed_slot_t>(start_slot));
 
         while (!next.empty()) {
 
@@ -3496,7 +3496,7 @@ class index_gt {
         distance_t radius = context.measure(query, citerator_at(start_slot), metric);
         next.insert_reserved({-radius, static_cast<compressed_slot_t>(start_slot)});
         top.insert_reserved({radius, static_cast<compressed_slot_t>(start_slot)});
-        visits.set(start_slot);
+        visits.set(static_cast<compressed_slot_t>(start_slot));
 
         while (!next.empty()) {
 

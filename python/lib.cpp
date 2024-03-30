@@ -1232,4 +1232,3 @@ PYBIND11_MODULE(compiled, m) {
     );
 }
 
-#include "lib_sqlite.cpp"

@@ -45,27 +45,17 @@
 #endif
 
 #if USEARCH_USE_SIMSIMD
-
 // Propagate the `f16` settings
 #define SIMSIMD_NATIVE_F16 !USEARCH_USE_FP16LIB
-
-#if !defined(SIMSIMD_TARGET_X86_AVX512) && defined(USEARCH_DEFINED_LINUX)
-#define SIMSIMD_TARGET_X86_AVX512 1
-#endif
-
-#if !defined(SIMSIMD_TARGET_ARM_SVE) && defined(USEARCH_DEFINED_LINUX)
-#define SIMSIMD_TARGET_ARM_SVE 1
-#endif
-
-#if !defined(SIMSIMD_TARGET_X86_AVX2) && (defined(USEARCH_DEFINED_LINUX) || defined(USEARCH_DEFINED_APPLE))
-#define SIMSIMD_TARGET_X86_AVX2 1
-#endif
-
-#if !defined(SIMSIMD_TARGET_ARM_NEON) && (defined(USEARCH_DEFINED_LINUX) || defined(USEARCH_DEFINED_APPLE))
-#define SIMSIMD_TARGET_ARM_NEON 1
-#endif
-
+#define SIMSIMD_DYNAMIC_DISPATCH 0
+// No problem, if some of the functions are unused or undefined
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma warning(push)
+#pragma warning(disable : 4101)
 #include <simsimd/simsimd.h>
+#pragma warning(pop)
+#pragma GCC diagnostic pop
 #endif
 
 namespace unum {
@@ -128,23 +118,23 @@ enum class metric_kind_t : std::uint8_t {
 enum class scalar_kind_t : std::uint8_t {
     unknown_k = 0,
     // Custom:
-    b1x8_k,
-    u40_k,
-    uuid_k,
+    b1x8_k = 1,
+    u40_k = 2,
+    uuid_k = 3,
     // Common:
-    f64_k,
-    f32_k,
-    f16_k,
-    f8_k,
+    f64_k = 10,
+    f32_k = 11,
+    f16_k = 12,
+    f8_k = 13,
     // Common Integral:
-    u64_k,
-    u32_k,
-    u16_k,
-    u8_k,
-    i64_k,
-    i32_k,
-    i16_k,
-    i8_k,
+    u64_k = 14,
+    u32_k = 15,
+    u16_k = 16,
+    u8_k = 17,
+    i64_k = 20,
+    i32_k = 21,
+    i16_k = 22,
+    i8_k = 23,
 };
 
 enum class prefetching_kind_t {
@@ -502,7 +492,7 @@ class executor_openmp_t {
     /**
      *  @return Maximum number of threads available to the executor.
      */
-    std::size_t size() const noexcept { return omp_get_num_threads(); }
+    std::size_t size() const noexcept { return omp_get_max_threads(); }
 
     /**
      *  @brief Executes tasks in bulk using the specified thread-aware function.
@@ -903,7 +893,17 @@ template <typename from_scalar_at> struct cast_gt<from_scalar_at, b1x8_t> {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
         unsigned char* typed_output = reinterpret_cast<unsigned char*>(output);
         for (std::size_t i = 0; i != dim; ++i)
-            typed_output[i / CHAR_BIT] |= bool(typed_input[i]) ? (128 >> (i & (CHAR_BIT - 1))) : 0;
+            // Converting from scalar types to boolean isn't trivial and depends on the type.
+            // The most common case is to consider all positive values as `true` and all others as `false`.
+            //  - `bool(0.00001f)` converts to 1
+            //  - `bool(-0.00001f)` converts to 1
+            //  - `bool(0)` converts to 0
+            //  - `bool(-0)` converts to 0
+            //  - `bool(std::numeric_limits<float>::infinity())` converts to 1
+            //  - `bool(std::numeric_limits<float>::epsilon())` converts to 1
+            //  - `bool(std::numeric_limits<float>::signaling_NaN())` converts to 1
+            //  - `bool(std::numeric_limits<float>::denorm_min())` converts to 1
+            typed_output[i / CHAR_BIT] |= bool(typed_input[i] > 0) ? (128 >> (i & (CHAR_BIT - 1))) : 0;
         return true;
     }
 };
@@ -913,6 +913,8 @@ template <typename to_scalar_at> struct cast_gt<b1x8_t, to_scalar_at> {
         unsigned char const* typed_input = reinterpret_cast<unsigned char const*>(input);
         to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
         for (std::size_t i = 0; i != dim; ++i)
+            // We can't entirely reconstruct the original scalar type from a boolean.
+            // The simplest variant would be to map set bits to ones, and unset bits to zeros.
             typed_output[i] = bool(typed_input[i / CHAR_BIT] & (128 >> (i & (CHAR_BIT - 1))));
         return true;
     }
@@ -926,7 +928,7 @@ class i8_converted_t {
     std::int8_t int8_{};
 
   public:
-    constexpr static float divisor_k = 100.f;
+    constexpr static f32_t divisor_k = 100.f;
     constexpr static std::int8_t min_k = -100;
     constexpr static std::int8_t max_k = 100;
 
@@ -938,9 +940,9 @@ class i8_converted_t {
     inline i8_converted_t(i8_converted_t const&) = default;
     inline i8_converted_t& operator=(i8_converted_t const&) = default;
 
-    inline operator float() const noexcept { return float(int8_) / divisor_k; }
-    inline operator f16_t() const noexcept { return float(int8_) / divisor_k; }
-    inline operator double() const noexcept { return double(int8_) / divisor_k; }
+    inline operator f16_t() const noexcept { return static_cast<f16_t>(f32_t(int8_) / divisor_k); }
+    inline operator f32_t() const noexcept { return f32_t(int8_) / divisor_k; }
+    inline operator f64_t() const noexcept { return f64_t(int8_) / divisor_k; }
     inline explicit operator bool() const noexcept { return int8_ > (max_k / 2); }
     inline explicit operator std::int8_t() const noexcept { return int8_; }
     inline explicit operator std::int16_t() const noexcept { return int8_; }
@@ -949,9 +951,9 @@ class i8_converted_t {
 
     inline i8_converted_t(f16_t v)
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
-    inline i8_converted_t(float v)
+    inline i8_converted_t(f32_t v)
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
-    inline i8_converted_t(double v)
+    inline i8_converted_t(f64_t v)
         : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
 };
 
@@ -1006,10 +1008,11 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct met
 #elif defined(USEARCH_DEFINED_GCC)
 #pragma GCC ivdep
 #endif
-        for (std::size_t i = 0; i != dim; ++i)
-            ab += result_t(a[i]) * result_t(b[i]), //
-                a2 += square<result_t>(a[i]),      //
-                b2 += square<result_t>(b[i]);
+        for (std::size_t i = 0; i != dim; ++i) {
+            result_t ai = static_cast<result_t>(a[i]);
+            result_t bi = static_cast<result_t>(b[i]);
+            ab += ai * bi, a2 += square(ai), b2 += square(bi);
+        }
 
         result_t result_if_zero[2][2];
         result_if_zero[0][0] = 1 - ab / (std::sqrt(a2) * std::sqrt(b2));
@@ -1036,8 +1039,11 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct met
 #elif defined(USEARCH_DEFINED_GCC)
 #pragma GCC ivdep
 #endif
-        for (std::size_t i = 0; i != dim; ++i)
-            ab_deltas_sq += square(result_t(a[i]) - result_t(b[i]));
+        for (std::size_t i = 0; i != dim; ++i) {
+            result_t ai = static_cast<result_t>(a[i]);
+            result_t bi = static_cast<result_t>(b[i]);
+            ab_deltas_sq += square(ai - bi);
+        }
         return ab_deltas_sq;
     }
 };
@@ -1095,9 +1101,10 @@ template <typename scalar_at = std::uint64_t, typename result_at = float> struct
 #elif defined(USEARCH_DEFINED_GCC)
 #pragma GCC ivdep
 #endif
-        for (std::size_t i = 0; i != words; ++i)
-            and_count += std::bitset<bits_per_word_k>(a[i] & b[i]).count(),
-                or_count += std::bitset<bits_per_word_k>(a[i] | b[i]).count();
+        for (std::size_t i = 0; i != words; ++i) {
+            and_count += std::bitset<bits_per_word_k>(a[i] & b[i]).count();
+            or_count += std::bitset<bits_per_word_k>(a[i] | b[i]).count();
+        }
         return 1 - result_t(and_count) / or_count;
     }
 };
@@ -1126,9 +1133,10 @@ template <typename scalar_at = std::uint64_t, typename result_at = float> struct
 #elif defined(USEARCH_DEFINED_GCC)
 #pragma GCC ivdep
 #endif
-        for (std::size_t i = 0; i != words; ++i)
-            and_count += std::bitset<bits_per_word_k>(a[i] & b[i]).count(),
-                any_count += std::bitset<bits_per_word_k>(a[i]).count() + std::bitset<bits_per_word_k>(b[i]).count();
+        for (std::size_t i = 0; i != words; ++i) {
+            and_count += std::bitset<bits_per_word_k>(a[i] & b[i]).count();
+            any_count += std::bitset<bits_per_word_k>(a[i]).count() + std::bitset<bits_per_word_k>(b[i]).count();
+        }
         return 1 - 2 * result_t(and_count) / any_count;
     }
 };
@@ -1159,13 +1167,20 @@ template <typename scalar_at = std::int32_t, typename result_at = float> struct 
 };
 
 /**
- *  @brief  Measures Pearson Correlation between two sequences.
+ *  @brief  Measures Pearson Correlation between two sequences in a single pass.
  */
 template <typename scalar_at = float, typename result_at = float> struct metric_pearson_gt {
     using scalar_t = scalar_at;
     using result_t = result_at;
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t dim) const noexcept {
+        // The correlation coefficient can't be defined for one or zero-dimensional data.
+        if (dim <= 1)
+            return 0;
+        // Conventional Pearson Correlation Coefficient definiton subtracts the mean value of each
+        // sequence from each element, before dividing them. WikiPedia article suggests a convenient
+        // single-pass algorithm for calculating sample correlations, though depending on the numbers
+        // involved, it can sometimes be numerically unstable.
         result_t a_sum{}, b_sum{}, ab_sum{};
         result_t a_sq_sum{}, b_sq_sum{};
 #if USEARCH_USE_OPENMP
@@ -1176,15 +1191,20 @@ template <typename scalar_at = float, typename result_at = float> struct metric_
 #pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i) {
-            a_sum += result_t(a[i]);
-            b_sum += result_t(b[i]);
-            ab_sum += result_t(a[i]) * result_t(b[i]);
-            a_sq_sum += result_t(a[i]) * result_t(a[i]);
-            b_sq_sum += result_t(b[i]) * result_t(b[i]);
+            result_t ai = static_cast<result_t>(a[i]);
+            result_t bi = static_cast<result_t>(b[i]);
+            a_sum += ai;
+            b_sum += bi;
+            ab_sum += ai * bi;
+            a_sq_sum += ai * ai;
+            b_sq_sum += bi * bi;
         }
-        result_t denom = std::sqrt((dim * a_sq_sum - a_sum * a_sum) * (dim * b_sq_sum - b_sum * b_sum));
-        result_t corr = (dim * ab_sum - a_sum * b_sum) / denom;
-        return -corr;
+        result_t denom = (dim * a_sq_sum - a_sum * a_sum) * (dim * b_sq_sum - b_sum * b_sum);
+        if (denom == 0)
+            return 0;
+        result_t corr = dim * ab_sum - a_sum * b_sum;
+        denom = std::sqrt(denom);
+        return -corr / denom;
     }
 };
 
@@ -1197,7 +1217,7 @@ template <typename scalar_at = float, typename result_at = float> struct metric_
 
     inline result_t operator()(scalar_t const* p, scalar_t const* q, std::size_t dim) const noexcept {
         result_t kld_pm{}, kld_qm{};
-        scalar_t epsilon = std::numeric_limits<scalar_t>::epsilon();
+        result_t epsilon = std::numeric_limits<result_t>::epsilon();
 #if USEARCH_USE_OPENMP
 #pragma omp simd reduction(+ : kld_pm, kld_qm)
 #elif defined(USEARCH_DEFINED_CLANG)
@@ -1206,9 +1226,11 @@ template <typename scalar_at = float, typename result_at = float> struct metric_
 #pragma GCC ivdep
 #endif
         for (std::size_t i = 0; i != dim; ++i) {
-            result_t mi = result_t(p[i] + q[i]) / 2 + epsilon;
-            kld_pm += p[i] * std::log((p[i] + epsilon) / mi);
-            kld_qm += q[i] * std::log((q[i] + epsilon) / mi);
+            result_t pi = static_cast<result_t>(p[i]);
+            result_t qi = static_cast<result_t>(q[i]);
+            result_t mi = (pi + qi) / 2 + epsilon;
+            kld_pm += pi * std::log((pi + epsilon) / mi);
+            kld_qm += qi * std::log((qi + epsilon) / mi);
         }
         return (kld_pm + kld_qm) / 2;
     }
@@ -1253,7 +1275,7 @@ struct l2sq_i8_t {
 #endif
         for (std::size_t i = 0; i != dim; i++)
             ab_deltas_sq += square(std::int16_t(a[i]) - std::int16_t(b[i]));
-        return ab_deltas_sq;
+        return static_cast<result_t>(ab_deltas_sq);
     }
 };
 
@@ -1299,7 +1321,7 @@ enum class metric_punned_signature_t {
 /**
  *  @brief  Type-punned metric class, which unlike STL's `std::function` avoids any memory allocations.
  *          It also provides additional APIs to check, if SIMD hardware-acceleration is available.
- *          Wraps the `simsimd_metric_punned_t`.
+ *          Wraps the `simsimd_metric_punned_t` when available. The auto-vectorized backend otherwise.
  */
 class metric_punned_t {
   public:
@@ -1307,12 +1329,18 @@ class metric_punned_t {
     using result_t = distance_punned_t;
 
   private:
-    using punned_arg_t = std::size_t;
-    using punned_ptr_t = result_t (*)(std::size_t, std::size_t, std::size_t, std::size_t);
+    /// In the generalized function API all the are arguments are pointer-sized.
+    using uptr_t = std::size_t;
+    /// Distance function that takes two arrays and returns a scalar.
+    using metric_array_array_t = result_t (*)(uptr_t, uptr_t);
+    /// Distance function that takes two arrays and their length and returns a scalar.
+    using metric_array_array_size_t = result_t (*)(uptr_t, uptr_t, uptr_t);
+    /// Distance function callback, like `metric_array_array_size_t`, but depends on member variables.
+    using metric_rounted_t = result_t (metric_punned_t::*)(uptr_t, uptr_t) const;
 
-    punned_ptr_t raw_ptr_ = nullptr;
-    punned_arg_t raw_arg3_ = 0;
-    punned_arg_t raw_arg4_ = 0;
+    metric_rounted_t metric_routed_ = nullptr;
+    uptr_t metric_ptr_ = 0;
+    uptr_t metric_size_arg_ = 0;
 
     std::size_t dimensions_ = 0;
     metric_kind_t metric_kind_ = metric_kind_t::unknown_k;
@@ -1329,7 +1357,7 @@ class metric_punned_t {
      *  ! This is the only relevant function in the object. Everything else is just dynamic dispatch logic.
      */
     inline result_t operator()(byte_t const* a, byte_t const* b) const noexcept {
-        return raw_ptr_(reinterpret_cast<punned_arg_t>(a), reinterpret_cast<punned_arg_t>(b), raw_arg3_, raw_arg4_);
+        return (this->*metric_routed_)(reinterpret_cast<uptr_t>(a), reinterpret_cast<uptr_t>(b));
     }
 
     inline metric_punned_t() noexcept = default;
@@ -1339,17 +1367,18 @@ class metric_punned_t {
         std::size_t dimensions,                            //
         metric_kind_t metric_kind = metric_kind_t::l2sq_k, //
         scalar_kind_t scalar_kind = scalar_kind_t::f32_k) noexcept
-        : raw_arg3_(dimensions), raw_arg4_(dimensions), dimensions_(dimensions), metric_kind_(metric_kind),
-          scalar_kind_(scalar_kind) {
+        : metric_routed_(&metric_punned_t::invoke_array_array_size), metric_size_arg_(dimensions),
+          dimensions_(dimensions), metric_kind_(metric_kind), scalar_kind_(scalar_kind) {
 
 #if USEARCH_USE_SIMSIMD
         if (!configure_with_simsimd())
-            configure_with_auto_vectorized();
+            configure_with_autovec();
+#else
+        configure_with_autovec();
 #endif
-        configure_with_auto_vectorized();
 
         if (scalar_kind == scalar_kind_t::b1x8_k)
-            raw_arg3_ = raw_arg4_ = divide_round_up<CHAR_BIT>(dimensions_);
+            metric_size_arg_ = divide_round_up<CHAR_BIT>(dimensions_);
     }
 
     inline metric_punned_t(                                                 //
@@ -1357,11 +1386,14 @@ class metric_punned_t {
         std::uintptr_t metric_uintptr, metric_punned_signature_t signature, //
         metric_kind_t metric_kind,                                          //
         scalar_kind_t scalar_kind) noexcept
-        : raw_ptr_(reinterpret_cast<punned_ptr_t>(metric_uintptr)), dimensions_(dimensions), metric_kind_(metric_kind),
+        : metric_routed_(signature == metric_punned_signature_t::array_array_k
+                             ? &metric_punned_t::invoke_array_array
+                             : &metric_punned_t::invoke_array_array_size),
+          metric_ptr_(metric_uintptr), metric_size_arg_(dimensions), dimensions_(dimensions), metric_kind_(metric_kind),
           scalar_kind_(scalar_kind) {
 
-        // We don't need to explicitly parse signature, as all of them are compatible.
-        (void)signature;
+        if (scalar_kind == scalar_kind_t::b1x8_k)
+            metric_size_arg_ = divide_round_up<CHAR_BIT>(dimensions_);
     }
 
     inline std::size_t dimensions() const noexcept { return dimensions_; }
@@ -1372,13 +1404,12 @@ class metric_punned_t {
 #if USEARCH_USE_SIMSIMD
         switch (isa_kind_) {
         case simsimd_cap_serial_k: return "serial";
-        case simsimd_cap_arm_neon_k: return "neon";
-        case simsimd_cap_arm_sve_k: return "sve";
-        case simsimd_cap_x86_avx2_k: return "avx2";
-        case simsimd_cap_x86_avx512_k: return "avx512";
-        case simsimd_cap_x86_avx2fp16_k: return "avx2+f16";
-        case simsimd_cap_x86_avx512fp16_k: return "avx512+f16";
-        case simsimd_cap_x86_avx512vpopcntdq_k: return "avx512+popcnt";
+        case simsimd_cap_neon_k: return "neon";
+        case simsimd_cap_sve_k: return "sve";
+        case simsimd_cap_haswell_k: return "haswell";
+        case simsimd_cap_skylake_k: return "skylake";
+        case simsimd_cap_ice_k: return "ice";
+        case simsimd_cap_sapphire_k: return "sapphire";
         default: return "unknown";
         }
 #endif
@@ -1400,7 +1431,7 @@ class metric_punned_t {
         simsimd_datatype_t datatype = simsimd_datatype_unknown_k;
         simsimd_capability_t allowed = simsimd_cap_any_k;
         switch (metric_kind_) {
-        case metric_kind_t::ip_k: kind = simsimd_metric_ip_k; break;
+        case metric_kind_t::ip_k: kind = simsimd_metric_dot_k; break;
         case metric_kind_t::cos_k: kind = simsimd_metric_cos_k; break;
         case metric_kind_t::l2sq_k: kind = simsimd_metric_l2sq_k; break;
         case metric_kind_t::hamming_k: kind = simsimd_metric_hamming_k; break;
@@ -1422,7 +1453,10 @@ class metric_punned_t {
         if (simd_metric == nullptr)
             return false;
 
-        std::memcpy(&raw_ptr_, &simd_metric, sizeof(simd_metric));
+        std::memcpy(&metric_ptr_, &simd_metric, sizeof(simd_metric));
+        metric_routed_ = metric_kind_ == metric_kind_t::ip_k
+                             ? reinterpret_cast<metric_rounted_t>(&metric_punned_t::invoke_simsimd_reverse)
+                             : reinterpret_cast<metric_rounted_t>(&metric_punned_t::invoke_simsimd);
         isa_kind_ = simd_kind;
         return true;
     }
@@ -1430,90 +1464,102 @@ class metric_punned_t {
         static simsimd_capability_t static_capabilities = simsimd_capabilities();
         return configure_with_simsimd(static_capabilities);
     }
+    result_t invoke_simsimd(uptr_t a, uptr_t b) const noexcept {
+        simsimd_distance_t result;
+        // Here `reinterpret_cast` raises warning... we know what we are doing!
+        auto function_pointer = (simsimd_metric_punned_t)(metric_ptr_);
+        function_pointer(reinterpret_cast<void const*>(a), reinterpret_cast<void const*>(b), metric_size_arg_, &result);
+        return (result_t)result;
+    }
+    result_t invoke_simsimd_reverse(uptr_t a, uptr_t b) const noexcept { return 1 - invoke_simsimd(a, b); }
 #else
     bool configure_with_simsimd() noexcept { return false; }
 #endif
-
-    void configure_with_auto_vectorized() noexcept {
+    result_t invoke_array_array_size(uptr_t a, uptr_t b) const noexcept {
+        auto function_pointer = (metric_array_array_size_t)(metric_ptr_);
+        result_t result = function_pointer(a, b, metric_size_arg_);
+        return result;
+    }
+    result_t invoke_array_array(uptr_t a, uptr_t b) const noexcept {
+        auto function_pointer = (metric_array_array_t)(metric_ptr_);
+        result_t result = function_pointer(a, b);
+        return result;
+    }
+    void configure_with_autovec() noexcept {
         switch (metric_kind_) {
         case metric_kind_t::ip_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::f32_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_ip_gt<f32_t>>; break;
-            case scalar_kind_t::f16_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_ip_gt<f16_t, f32_t>>; break;
-            case scalar_kind_t::i8_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_ip_gt<i8_t, f32_t>>; break;
-            case scalar_kind_t::f64_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_ip_gt<f64_t>>; break;
-            default: raw_ptr_ = nullptr; break;
+            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<f32_t>>; break;
+            case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::i8_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<i8_t, f32_t>>; break;
+            case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<f64_t>>; break;
+            default: metric_ptr_ = 0; break;
             }
             break;
         }
         case metric_kind_t::cos_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::f32_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_cos_gt<f32_t>>; break;
-            case scalar_kind_t::f16_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_cos_gt<f16_t, f32_t>>; break;
-            case scalar_kind_t::i8_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_cos_gt<i8_t, f32_t>>; break;
-            case scalar_kind_t::f64_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_cos_gt<f64_t>>; break;
-            default: raw_ptr_ = nullptr; break;
+            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<f32_t>>; break;
+            case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::i8_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<i8_t, f32_t>>; break;
+            case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<f64_t>>; break;
+            default: metric_ptr_ = 0; break;
             }
             break;
         }
         case metric_kind_t::l2sq_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::f32_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_l2sq_gt<f32_t>>; break;
-            case scalar_kind_t::f16_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_l2sq_gt<f16_t, f32_t>>; break;
-            case scalar_kind_t::i8_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_l2sq_gt<i8_t, f32_t>>; break;
-            case scalar_kind_t::f64_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_l2sq_gt<f64_t>>; break;
-            default: raw_ptr_ = nullptr; break;
+            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<f32_t>>; break;
+            case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::i8_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<i8_t, f32_t>>; break;
+            case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<f64_t>>; break;
+            default: metric_ptr_ = 0; break;
             }
             break;
         }
         case metric_kind_t::pearson_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::i8_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_pearson_gt<i8_t, f32_t>>; break;
-            case scalar_kind_t::f16_k:
-                raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_pearson_gt<f16_t, f32_t>>;
-                break;
-            case scalar_kind_t::f32_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_pearson_gt<f32_t>>; break;
-            case scalar_kind_t::f64_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_pearson_gt<f64_t>>; break;
-            default: raw_ptr_ = nullptr; break;
+            case scalar_kind_t::i8_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_pearson_gt<i8_t, f32_t>>; break;
+            case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_pearson_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_pearson_gt<f32_t>>; break;
+            case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_pearson_gt<f64_t>>; break;
+            default: metric_ptr_ = 0; break;
             }
             break;
         }
         case metric_kind_t::haversine_k: {
             switch (scalar_kind_) {
             case scalar_kind_t::f16_k:
-                raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_haversine_gt<f16_t, f32_t>>;
+                metric_ptr_ = (uptr_t)&equidimensional_<metric_haversine_gt<f16_t, f32_t>>;
                 break;
-            case scalar_kind_t::f32_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_haversine_gt<f32_t>>; break;
-            case scalar_kind_t::f64_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_haversine_gt<f64_t>>; break;
-            default: raw_ptr_ = nullptr; break;
+            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_haversine_gt<f32_t>>; break;
+            case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_haversine_gt<f64_t>>; break;
+            default: metric_ptr_ = 0; break;
             }
             break;
         }
         case metric_kind_t::divergence_k: {
             switch (scalar_kind_) {
             case scalar_kind_t::f16_k:
-                raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_divergence_gt<f16_t, f32_t>>;
+                metric_ptr_ = (uptr_t)&equidimensional_<metric_divergence_gt<f16_t, f32_t>>;
                 break;
-            case scalar_kind_t::f32_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_divergence_gt<f32_t>>; break;
-            case scalar_kind_t::f64_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_divergence_gt<f64_t>>; break;
-            default: raw_ptr_ = nullptr; break;
+            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_divergence_gt<f32_t>>; break;
+            case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_divergence_gt<f64_t>>; break;
+            default: metric_ptr_ = 0; break;
             }
             break;
         }
         case metric_kind_t::jaccard_k: // Equivalent to Tanimoto
-        case metric_kind_t::tanimoto_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_tanimoto_gt<b1x8_t>>; break;
-        case metric_kind_t::hamming_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_hamming_gt<b1x8_t>>; break;
-        case metric_kind_t::sorensen_k: raw_ptr_ = (punned_ptr_t)&equidimensional_<metric_sorensen_gt<b1x8_t>>; break;
+        case metric_kind_t::tanimoto_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_tanimoto_gt<b1x8_t>>; break;
+        case metric_kind_t::hamming_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_hamming_gt<b1x8_t>>; break;
+        case metric_kind_t::sorensen_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_sorensen_gt<b1x8_t>>; break;
         default: return;
         }
     }
 
     template <typename typed_at>
-    inline static result_t equidimensional_( //
-        punned_arg_t a, punned_arg_t b,      //
-        punned_arg_t a_dimensions, punned_arg_t b_dimensions) noexcept {
+    inline static result_t equidimensional_(uptr_t a, uptr_t b, uptr_t a_dimensions) noexcept {
         using scalar_t = typename typed_at::scalar_t;
-        (void)b_dimensions;
         return typed_at{}((scalar_t const*)a, (scalar_t const*)b, a_dimensions);
     }
 };
@@ -1819,7 +1865,8 @@ class flat_hash_multi_set_gt {
         }
 
         // Reset populated slots count
-        std::memset(data_, 0, buckets_ * bytes_per_bucket());
+        if (data_)
+            std::memset(data_, 0, buckets_ * bytes_per_bucket());
         populated_slots_ = 0;
     }
 

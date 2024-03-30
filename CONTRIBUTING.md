@@ -33,9 +33,17 @@ brew install libomp llvm # MacOS
 Using modern syntax, this is how you build and run the test suite:
 
 ```sh
-cmake -DUSEARCH_BUILD_TEST_CPP=1 -B ./build_debug
+cmake -DUSEARCH_BUILD_TEST_CPP=1 -DCMAKE_BUILD_TYPE=Debug -B ./build_debug
 cmake --build ./build_debug --config Debug
 ./build_debug/test_cpp
+```
+
+If there build mode is not specified, the default is `Release`.
+
+```sh
+cmake -DUSEARCH_BUILD_TEST_CPP=1 -B ./build_release
+cmake --build ./build_release --config Debug
+./build_release/test_cpp
 ```
 
 The CMakeLists.txt file has a number of options you can pass:
@@ -45,6 +53,7 @@ The CMakeLists.txt file has a number of options you can pass:
   - `USEARCH_BUILD_BENCH_CPP` - build the C++ benchmark suite
   - `USEARCH_BUILD_LIB_C` - build the C library
   - `USEARCH_BUILD_TEST_C` - build the C test suite
+  - `USEARCH_BUILD_SQLITE` - build the SQLite extension
 - Which dependencies to use:
   - `USEARCH_USE_OPENMP` - use OpenMP for parallelism
   - `USEARCH_USE_SIMSIMD` - use SimSIMD for vectorization
@@ -66,6 +75,7 @@ cmake \
     -DUSEARCH_BUILD_BENCH_CPP=1 \
     -DUSEARCH_BUILD_LIB_C=1 \
     -DUSEARCH_BUILD_TEST_C=1 \
+    -DUSEARCH_BUILD_SQLITE=1 \
     -B ./build_release
 
 cmake --build ./build_release --config Release
@@ -104,6 +114,51 @@ cppcheck --enable=all --force --suppress=cstyleCast --suppress=unusedFunction \
     include/index_plugins.hpp
 ```
 
+I'd recommend putting the following breakpoints when debugging the code in GDB:
+
+- `__asan::ReportGenericError` - to detect illegal memory accesses.
+- `__ubsan::ScopedReport::~ScopedReport` - to catch undefined behavior.
+- `__GI_exit` - to stop at exit points - the end of running any executable.
+- `__builtin_unreachable` - to catch all the places where the code is expected to be unreachable.
+
+### Cross Compilation
+
+Unlike GCC, LLVM handles cross compilation very easily.
+You just need to pass the right `TARGET_ARCH` and `BUILD_ARCH` to CMake.
+The [list includes](https://packages.ubuntu.com/search?keywords=crossbuild-essential&searchon=names):
+
+- `crossbuild-essential-amd64` for 64-bit x86
+- `crossbuild-essential-arm64` for 64-bit Arm
+- `crossbuild-essential-armhf` for 32-bit ARM hard-float
+- `crossbuild-essential-armel` for 32-bit ARM soft-float (emulates `float`)
+- `crossbuild-essential-riscv64` for RISC-V
+- `crossbuild-essential-powerpc` for PowerPC
+- `crossbuild-essential-s390x` for IBM Z
+- `crossbuild-essential-mips` for MIPS
+- `crossbuild-essential-ppc64el` for PowerPC 64-bit little-endian
+
+Here is an example for cross-compiling for Arm64 on an x86_64 machine:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y clang lld make crossbuild-essential-arm64 crossbuild-essential-armhf
+export CC="clang"
+export CXX="clang++"
+export AR="llvm-ar"
+export NM="llvm-nm"
+export RANLIB="llvm-ranlib"
+export TARGET_ARCH="aarch64-linux-gnu" # Or "x86_64-linux-gnu"
+export BUILD_ARCH="arm64" # Or "amd64"
+
+cmake -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_COMPILER_TARGET=${TARGET_ARCH} \
+    -DCMAKE_CXX_COMPILER_TARGET=${TARGET_ARCH} \
+    -DCMAKE_SYSTEM_NAME=Linux \
+    -DCMAKE_SYSTEM_PROCESSOR=${BUILD_ARCH} \
+    -B build_artifacts
+cmake --build build_artifacts --config Release
+```
+
 ## Python 3
 
 Python bindings are built using PyBind11 and are available on [PyPi](https://pypi.org/project/usearch/).
@@ -130,7 +185,24 @@ Still, if you have Docker running on any desktop OS, you can use it to build and
 
 ```sh
 pip install cibuildwheel
-cibuildwheel --platform linux
+cibuildwheel
+cibuildwheel --platform linux                   # works on any OS and builds all Linux backends
+cibuildwheel --platform linux --archs x86_64    # 64-bit x86, the most common on desktop and servers
+cibuildwheel --platform linux --archs aarch64   # 64-bit Arm for mobile devices, Apple M-series, and AWS Graviton
+cibuildwheel --platform macos                   # works only on MacOS
+cibuildwheel --platform windows                 # works only on Windows
+```
+
+You may need root previligies for multi-architecture builds:
+
+```sh
+sudo $(which cibuildwheel) --platform linux
+```
+
+On Windows and MacOS, to avoid frequent path resolution issues, you may want to use:
+
+```sh
+python -m cibuildwheel --platform windows
 ```
 
 ## JavaScript
@@ -155,10 +227,12 @@ RUN yum install tar git python3 cmake gcc-c++ -y && yum groupinstall "Developmen
 # Assuming AWS Linux 2 uses old compilers:
 ENV USEARCH_USE_FP16LIB 1
 ENV DUSEARCH_USE_SIMSIMD 1
-ENV SIMSIMD_TARGET_X86_AVX2 1
-ENV SIMSIMD_TARGET_X86_AVX512 0
-ENV SIMSIMD_TARGET_ARM_NEON 1
-ENV SIMSIMD_TARGET_ARM_SVE 0
+ENV SIMSIMD_TARGET_HASWELL 1
+ENV SIMSIMD_TARGET_SKYLAKE 0
+ENV SIMSIMD_TARGET_ICE 0
+ENV SIMSIMD_TARGET_SAPPHIRE 0
+ENV SIMSIMD_TARGET_NEON 1
+ENV SIMSIMD_TARGET_SVE 0
 
 # For specific PR:
 # RUN npm install --build-from-source unum-cloud/usearch#pull/302/head
@@ -186,7 +260,7 @@ USearch provides Rust bindings available on [Crates.io](https://crates.io/crates
 The compilation settings are controlled by the `build.rs` and are independent from CMake used for C/C++ builds.
 
 ```sh
-cargo test -p usearch
+cargo test -p usearch -- --nocapture --test-threads=1
 cargo publish
 ```
 
@@ -196,9 +270,10 @@ USearch provides both Objective-C and Swift bindings through the [Swift Package 
 The compilation settings are controlled by the `Package.swift` and are independent from CMake used for C/C++ builds.
 
 ```sh
-swift build
-swift test -v
+swift build && swift test -v
 ```
+
+Those depend on Apple's `Foundation` library and can only run on Apple devices.
 
 ## GoLang
 
@@ -270,6 +345,32 @@ g++ -dynamiclib -o libusearch.dylib cloud_unum_usearch_Index.o -lc
 cd ../../../..
 cp cloud/unum/usearch/libusearch.* .
 java -cp . -Djava.library.path="$(pwd)" cloud.unum.usearch.Index
+```
+
+## C#
+
+Setup the .NET environment:
+
+```sh
+dotnet nuget add source https://api.nuget.org/v3/index.json -n nuget.org
+```
+
+USearch provides CSharp bindings, that depend on the C library that must be installed beforehand.
+So one should first compile the C library, link it with CSharp, and only then run tests.
+
+```sh
+cmake -B ./build_artifacts -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
+cmake --build ./build_artifacts --config Release -j
+```
+
+Then, on Windows, copy the library to the CSharp project and run the tests:
+
+```sh
+mkdir -p ".\csharp\lib\runtimes\win-x64\native"
+cp ".\build_artifacts\libusearch_c.dll" ".\csharp\lib\runtimes\win-x64\native"
+cd csharp
+dotnet test -c Debug --logger "console;verbosity=detailed"
+dotnet test -c Release
 ```
 
 ## Wolfram

@@ -6,11 +6,11 @@ function assertAlmostEqual(actual, expected, tolerance = 1e-6) {
     const lowerBound = expected - tolerance;
     const upperBound = expected + tolerance;
     assert(
-      actual >= lowerBound && actual <= upperBound,
-      `Expected ${actual} to be almost equal to ${expected}`
+        actual >= lowerBound && actual <= upperBound,
+        `Expected ${actual} to be almost equal to ${expected}`
     );
 }
-  
+
 
 test('Single-entry operations', () => {
     const index = new usearch.Index(2, 'l2sq');

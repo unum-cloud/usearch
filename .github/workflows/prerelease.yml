@@ -35,7 +35,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev gcc-12 g++-12
-          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_SQLITE=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
           cmake --build build_artifacts --config RelWithDebInfo
       - name: Test C++
         run: ./build_artifacts/test_cpp
@@ -50,7 +50,8 @@ jobs:
       - name: Build Python
         run: |
           python -m pip install --upgrade pip
-          pip install pytest numpy
+          pip install pytest numpy numba cppyy
+          pip install --upgrade git+https://github.com/Maratyszcza/PeachPy
           python -m pip install .
       - name: Test Python
         run: pytest python/scripts/ -s -x
@@ -58,6 +59,8 @@ jobs:
         # JavaScript
       - name: Set up Node.js
         uses: actions/setup-node@v4
+        with:
+          node-version: 20
       - name: Build JavaScript
         run: npm ci
       - name: Test JavaScript
@@ -125,7 +128,7 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 16
-          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_OPENMP=0 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_SQLITE=1 -DUSEARCH_USE_OPENMP=0 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
           cmake --build build_artifacts --config RelWithDebInfo
       - name: Test C++
         run: ./build_artifacts/test_cpp
@@ -148,7 +151,8 @@ jobs:
       - name: Build Python
         run: |
           python -m pip install --upgrade pip
-          pip install pytest numpy
+          pip install pytest numpy numba cppyy
+          pip install --upgrade git+https://github.com/Maratyszcza/PeachPy
           python -m pip install .
       - name: Test Python
         run: pytest python/scripts/ -s -x
@@ -181,7 +185,7 @@ jobs:
         run: |
           brew update
           brew install cmake
-          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1
+          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_SQLITE=1
           cmake --build build_artifacts --config RelWithDebInfo
       - name: Test C++
         run: ./build_artifacts/test_cpp
@@ -245,7 +249,7 @@ jobs:
       - name: Build C/C++
         run: |
           choco install cmake
-          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1
+          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_SQLITE=1
           cmake --build build_artifacts --config RelWithDebInfo
       - name: Test C++
         run: .\build_artifacts\test_cpp.exe
@@ -268,6 +272,8 @@ jobs:
         # JavaScript
       - name: Set up Node.js
         uses: actions/setup-node@v4
+        with:
+          node-version: 20
       - name: Build JavaScript
         run: npm ci
       - name: Test JavaScript
@@ -300,3 +306,81 @@ jobs:
           context: .
           load: true
           push: false
+
+  build_wheels:
+    name: Build Python ${{ matrix.python-version }} for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    needs: [test_ubuntu_gcc, test_ubuntu_clang, test_macos, test_windows]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["37", "38", "39", "310", "311", "312"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+
+        # We only need QEMU for Linux builds
+      - name: Setup QEMU
+        if: matrix.os == 'ubuntu-latest'
+        uses: docker/setup-qemu-action@v3
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel
+      - name: Build wheels
+        run: cibuildwheel --output-dir wheelhouse
+        env:
+          CIBW_BUILD: cp${{ matrix.python-version }}-*
+
+  test_ubuntu_cross_compilation:
+    name: Cross Compilation
+    runs-on: ubuntu-22.04
+    env:
+      CC: clang
+      CXX: clang++
+      AR: llvm-ar
+      NM: llvm-nm
+      RANLIB: llvm-ranlib
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            target: x86_64-linux-gnu
+          - arch: arm64
+            target: aarch64-linux-gnu
+
+    steps:
+      - uses: actions/checkout@v4
+      - run: git submodule update --init --recursive
+
+        # C/C++
+        # We need to install the cross-compilation toolchain for ARM64 and ARMHF
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld make crossbuild-essential-arm64 crossbuild-essential-armhf libjemalloc-dev
+
+      - name: Build C/C++
+        run: |
+          cmake -B build_artifacts \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
+            -DCMAKE_C_COMPILER_TARGET=${{ matrix.target }} \
+            -DCMAKE_CXX_COMPILER_TARGET=${{ matrix.target }} \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} \
+            -DUSEARCH_BUILD_LIB_C=1 \
+            -DUSEARCH_BUILD_SQLITE=1 \
+            -DUSEARCH_BUILD_TEST_CPP=0 \
+            -DUSEARCH_BUILD_BENCH_CPP=0
+
+          cmake --build build_artifacts --config RelWithDebInfo
+
+        # We can't run the produced builds, but we can make sure they exist
+      - name: Test artifacts presense
+        run: |
+          test -e build_artifacts/libusearch_c.so
+          test -e build_artifacts/libusearch_sqlite.so
