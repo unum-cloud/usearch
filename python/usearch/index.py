@@ -1234,12 +1234,10 @@ class Index:
             self.hardware_acceleration,
         )
 
-    def _repr_pretty_(self, printer, cycle) -> str:
+    def __repr_pretty__(self) -> str:
         if not hasattr(self, "_compiled"):
             return "usearch.Index(failed)"
-        level_stats = [
-            f"--- {i}. {self.level_stats(i).nodes:,} nodes" for i in range(self.nlevels)
-        ]
+        level_stats = [f"--- {i}. {self.level_stats(i).nodes:,} nodes" for i in range(self.nlevels)]
         lines = "\n".join(
             [
                 "usearch.Index",
@@ -1263,7 +1261,10 @@ class Index:
                 *level_stats,
             ]
         )
-        printer.text(lines)
+        return lines
+
+    def _repr_pretty_(self, printer, cycle):
+        printer.text(self.__repr_pretty__())
 
 
 class Indexes:
