@@ -11,7 +11,9 @@ if (USEARCH_BUILD_SQLITE)
     # find_package(SQLite3 REQUIRED) target_link_libraries(usearch_sqlite PRIVATE SQLite::SQLite3)
     # target_include_directories(usearch_sqlite PRIVATE ${SQLite3_INCLUDE_DIRS})
     include(FetchContent)
-    FetchContent_Declare(sqlite3 URL https://sqlite.org/2024/sqlite-amalgamation-3450200.zip)
+    FetchContent_Declare(
+        sqlite3 URL https://sqlite.org/2024/sqlite-amalgamation-3450200.zip DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
     FetchContent_MakeAvailable(sqlite3)
     add_library(sqlite3_shared SHARED ${sqlite3_SOURCE_DIR}/sqlite3.c)
     target_include_directories(sqlite3_shared PUBLIC ${sqlite3_SOURCE_DIR})
