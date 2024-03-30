@@ -122,8 +122,12 @@ def self_recall(index: Index, sample: Union[float, int] = 1.0, **kwargs) -> Sear
             sample = int(ceil(len(keys) * sample))
         keys = np.random.choice(keys, sample)
 
-    queries = index.get(keys, index.dtype)
-    matches = index.search(queries, **kwargs)
+    if "vectors" in kwargs:
+        vectors = kwargs.pop("vectors")
+    else:
+        vectors = index.get(keys, index.dtype)
+
+    matches = index.search(vectors, **kwargs)
     count_matches: int = (
         matches.count_matches(keys) if isinstance(matches, BatchMatches) else int(matches.keys[0] == keys[0])
     )

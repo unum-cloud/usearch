@@ -893,7 +893,17 @@ template <typename from_scalar_at> struct cast_gt<from_scalar_at, b1x8_t> {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
         unsigned char* typed_output = reinterpret_cast<unsigned char*>(output);
         for (std::size_t i = 0; i != dim; ++i)
-            typed_output[i / CHAR_BIT] |= bool(typed_input[i]) ? (128 >> (i & (CHAR_BIT - 1))) : 0;
+            // Converting from scalar types to boolean isn't trivial and depends on the type.
+            // The most common case is to consider all positive values as `true` and all others as `false`.
+            //  - `bool(0.00001f)` converts to 1
+            //  - `bool(-0.00001f)` converts to 1
+            //  - `bool(0)` converts to 0
+            //  - `bool(-0)` converts to 0
+            //  - `bool(std::numeric_limits<float>::infinity())` converts to 1
+            //  - `bool(std::numeric_limits<float>::epsilon())` converts to 1
+            //  - `bool(std::numeric_limits<float>::signaling_NaN())` converts to 1
+            //  - `bool(std::numeric_limits<float>::denorm_min())` converts to 1
+            typed_output[i / CHAR_BIT] |= bool(typed_input[i] > 0) ? (128 >> (i & (CHAR_BIT - 1))) : 0;
         return true;
     }
 };
@@ -903,6 +913,8 @@ template <typename to_scalar_at> struct cast_gt<b1x8_t, to_scalar_at> {
         unsigned char const* typed_input = reinterpret_cast<unsigned char const*>(input);
         to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
         for (std::size_t i = 0; i != dim; ++i)
+            // We can't entirely reconstruct the original scalar type from a boolean.
+            // The simplest variant would be to map set bits to ones, and unset bits to zeros.
             typed_output[i] = bool(typed_input[i / CHAR_BIT] & (128 >> (i & (CHAR_BIT - 1))));
         return true;
     }
