@@ -21,8 +21,9 @@ if (USEARCH_BUILD_SQLITE)
     target_link_libraries(usearch_sqlite PRIVATE sqlite3_shared)
 
     target_include_directories(usearch_sqlite PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../stringzilla/include)
-    target_compile_options(usearch_sqlite PRIVATE -fPIC)
-    target_compile_options(usearch_sqlite PRIVATE -Wno-vla -Wno-unused-function -Wno-cast-function-type)
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        target_compile_options(usearch_sqlite PRIVATE -Wno-vla -Wno-unused-function -Wno-cast-function-type)
+    endif ()
     setup_target(usearch_sqlite)
 
 endif ()
