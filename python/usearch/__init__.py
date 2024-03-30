@@ -15,7 +15,7 @@ from usearch.compiled import (
 __version__ = f"{VERSION_MAJOR}.{VERSION_MINOR}.{VERSION_PATCH}"
 
 
-class UsearchBinaryManager:
+class BinaryManager:
     def __init__(self, version: Optional[str] = None):
         if version is None:
             version = __version__
@@ -105,5 +105,5 @@ class UsearchBinaryManager:
 
 
 # Use the function to set the `sqlite` computed property
-binary_manager = UsearchBinaryManager()
+binary_manager = BinaryManager()
 sqlite = binary_manager.sqlite_found_or_downloaded

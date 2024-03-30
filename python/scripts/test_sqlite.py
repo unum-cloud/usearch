@@ -21,9 +21,16 @@ dimensions = [3, 97, 256]
 def test_sqlite_minimal_json_cosine_vector_search():
     """Minimal test for searching JSON vectors in an SQLite database."""
     conn = sqlite3.connect(":memory:")
-    conn.enable_load_extension(True)  # Not available on MacOS with default build
-    conn.load_extension(usearch.sqlite)
 
+    # Loading extensions isn't supported in some SQLite builds,
+    # including the default one on MacOS
+    try:
+        conn.enable_load_extension(True)
+    except AttributeError:
+        pytest.skip("SQLite extensions are not available on this platform")
+        return
+
+    conn.load_extension(usearch.sqlite)
     cursor = conn.cursor()
 
     # Create a table with a JSON column for vectors
@@ -56,9 +63,16 @@ def test_sqlite_minimal_json_cosine_vector_search():
 def test_sqlite_minimal_text_search():
     """Minimal test for Unicode strings in an SQLite database."""
     conn = sqlite3.connect(":memory:")
-    conn.enable_load_extension(True)  # Not available on MacOS with default build
-    conn.load_extension(usearch.sqlite)
 
+    # Loading extensions isn't supported in some SQLite builds,
+    # including the default one on MacOS
+    try:
+        conn.enable_load_extension(True)
+    except AttributeError:
+        pytest.skip("SQLite extensions are not available on this platform")
+        return
+
+    conn.load_extension(usearch.sqlite)
     cursor = conn.cursor()
 
     # Create a table with a TEXT column for strings
@@ -105,9 +119,16 @@ def test_sqlite_blob_bits_vector_search():
     """Minimal test for searching binary vectors in an SQLite database."""
 
     conn = sqlite3.connect(":memory:")
-    conn.enable_load_extension(True)
-    conn.load_extension(usearch.sqlite)
 
+    # Loading extensions isn't supported in some SQLite builds,
+    # including the default one on MacOS
+    try:
+        conn.enable_load_extension(True)
+    except AttributeError:
+        pytest.skip("SQLite extensions are not available on this platform")
+        return
+
+    conn.load_extension(usearch.sqlite)
     cursor = conn.cursor()
 
     # Create a table with a BLOB column for binary vectors
@@ -161,9 +182,16 @@ def test_sqlite_distances_in_high_dimensions(num_vectors: int, ndim: int):
     """
 
     conn = sqlite3.connect(":memory:")
-    conn.enable_load_extension(True)
-    conn.load_extension(usearch.sqlite)
 
+    # Loading extensions isn't supported in some SQLite builds,
+    # including the default one on MacOS
+    try:
+        conn.enable_load_extension(True)
+    except AttributeError:
+        pytest.skip("SQLite extensions are not available on this platform")
+        return
+
+    conn.load_extension(usearch.sqlite)
     cursor = conn.cursor()
 
     # Create a table with additional columns for f32 and f16 BLOBs
@@ -230,9 +258,16 @@ def test_sqlite_distances_in_low_dimensions(num_vectors: int):
 
     # Setup SQLite connection and enable extensions
     conn = sqlite3.connect(":memory:")
-    conn.enable_load_extension(True)
-    conn.load_extension(usearch.sqlite)
 
+    # Loading extensions isn't supported in some SQLite builds,
+    # including the default one on MacOS
+    try:
+        conn.enable_load_extension(True)
+    except AttributeError:
+        pytest.skip("SQLite extensions are not available on this platform")
+        return
+
+    conn.load_extension(usearch.sqlite)
     cursor = conn.cursor()
 
     # Create a table for storing vectors and their descriptions
