@@ -295,7 +295,7 @@ Napi::Value exactSearch(Napi::CallbackInfo const& ctx) {
     metric_punned_t metric(dimensions, metric_kind, quantization);
     if (!metric) {
         Napi::TypeError::New(env, "Failed to initialize the metric!").ThrowAsJavaScriptException();
-        return;
+        return env.Null();
     }
 
     executor_default_t executor;
