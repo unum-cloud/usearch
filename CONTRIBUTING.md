@@ -196,11 +196,20 @@ python -m cibuildwheel --platform windows
 
 USearch provides NAPI bindings for NodeJS available on [NPM](https://www.npmjs.com/package/usearch).
 The compilation settings are controlled by the `binding.gyp` and are independent from CMake used for C/C++ builds.
+If you don't have NPM installed, first the Node Version Manager:
 
 ```sh
-npm install
-node --test ./javascript/usearch.test.js
-npm publish
+wget -qO- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+nvm install 20
+```
+
+Testing and benchmarking:
+
+```sh
+npm install -g typescript
+npm run build-js
+npm test
+npm run bench
 ```
 
 To compile for AWS Lambda you'd need to recompile the binding.
