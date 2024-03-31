@@ -4,6 +4,7 @@ import tempfile
 import warnings
 import urllib.request
 from typing import Optional
+from urllib.error import HTTPError
 
 
 from usearch.compiled import (
@@ -97,11 +98,23 @@ class BinaryManager:
         # If not found locally, warn the user and download from GitHub
         temp_dir = tempfile.gettempdir()
         warnings.warn("Will download `usearch_sqlite` binary from GitHub.", UserWarning)
-        binary_path = self.download_binary(self.sqlite_download_url(), temp_dir)
+
+        # If the download fails due to HTTPError (e.g., 404 Not Found), like a missing lib version
+        try:
+            binary_path = self.download_binary(self.sqlite_download_url(), temp_dir)
+        except HTTPError as e:
+            if e.code == 404:
+                warnings.warn(f"Download failed: {e.url} could not be found.", UserWarning)
+            else:
+                warnings.warn(f"Download failed with HTTP error: {e.code} {e.reason}", UserWarning)
+            return None
+
+        # Handle the case where binary_path does not exist after supposed successful download
         if os.path.exists(binary_path):
             return binary_path
         else:
-            raise FileNotFoundError("Failed to download `usearch_sqlite` binary from GitHub.")
+            warnings.warn("Failed to download `usearch_sqlite` binary from GitHub.", UserWarning)
+            return None
 
 
 # Use the function to set the `sqlite` computed property
