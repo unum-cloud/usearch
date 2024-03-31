@@ -1204,7 +1204,9 @@ template <typename scalar_at = float, typename result_at = float> struct metric_
             return 0;
         result_t corr = dim * ab_sum - a_sum * b_sum;
         denom = std::sqrt(denom);
-        return -corr / denom;
+        // The normal Pearson correlation value is between -1 and 1, but we are looking for a distance.
+        // So instead of returning `corr / denom`, we return `1 - corr / denom`.
+        return 1 - corr / denom;
     }
 };
 
