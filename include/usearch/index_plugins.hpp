@@ -1401,7 +1401,16 @@ class metric_punned_t {
     inline std::size_t dimensions() const noexcept { return dimensions_; }
     inline metric_kind_t metric_kind() const noexcept { return metric_kind_; }
     inline scalar_kind_t scalar_kind() const noexcept { return scalar_kind_; }
-    explicit inline operator bool() const noexcept { return metric_routed_ && metric_ptr_; }
+    inline explicit operator bool() const noexcept { return metric_routed_ && metric_ptr_; }
+
+    /**
+     *  @brief  Checks fi we've failed to initialized the metric with provided arguments.
+     *
+     *  It's different from `operator bool()` when it comes to explicitly uninitialized metrics.
+     *  It's a common case, where a NULL state is created only to be overwritten later, when
+     *  we recover an old index state from a file or a network.
+     */
+    inline bool missing() const noexcept { return !bool(*this) && metric_kind_ != metric_kind_t::unknown_k; }
 
     inline char const* isa_name() const noexcept {
         if (!*this)

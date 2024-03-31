@@ -122,7 +122,7 @@ static dense_index_py_t make_index(             //
         metric_uintptr //
             ? metric_t(dimensions, metric_uintptr, metric_signature, metric_kind, scalar_kind)
             : metric_t(dimensions, metric_kind, scalar_kind);
-    if (!metric)
+    if (metric.missing())
         throw std::invalid_argument("Unsupported metric!");
 
     return index_dense_t::make(metric, config);

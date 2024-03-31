@@ -119,7 +119,7 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
                                            reinterpret_cast<std::uintptr_t>(options->metric), //
                                            metric_punned_signature_t::array_array_k,          //
                                            metric_kind, scalar_kind);
-    if (!metric) {
+    if (metric.missing()) {
         *error = "Unknown metric kind!";
         return NULL;
     }

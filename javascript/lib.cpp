@@ -86,7 +86,7 @@ CompiledIndex::CompiledIndex(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<C
     bool multi = ctx[6].As<Napi::Boolean>().Value();
 
     metric_punned_t metric(dimensions, metric_kind, quantization);
-    if (!metric) {
+    if (metric.missing()) {
         Napi::TypeError::New(ctx.Env(), "Failed to initialize the metric!").ThrowAsJavaScriptException();
         return;
     }

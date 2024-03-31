@@ -31,7 +31,7 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
         index_dense_config_t config(static_cast<std::size_t>(connectivity), static_cast<std::size_t>(expansion_add),
                                     static_cast<std::size_t>(expansion_search));
         metric_punned_t metric(static_cast<std::size_t>(dimensions), metric_kind, quantization);
-        if (!metric) {
+        if (metric.missing()) {
             jclass jc = (*env).FindClass("java/lang/Error");
             if (jc)
                 (*env).ThrowNew(jc, "Failed to initialize the metric!");
