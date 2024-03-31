@@ -249,7 +249,7 @@ jobs:
       - name: Build C/C++
         run: |
           choco install cmake
-          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_SQLITE=1
+          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_SQLITE=0
           cmake --build build_artifacts --config RelWithDebInfo
       - name: Test C++
         run: .\build_artifacts\test_cpp.exe
