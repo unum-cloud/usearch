@@ -49,7 +49,7 @@ class BinaryManager:
         url = f"{base_url}/v{version}/{filename}"
         return url
 
-    def download_binary(url: str, dest_folder: str) -> str:
+    def download_binary(self, url: str, dest_folder: str) -> str:
         """
         Downloads a file from a given URL to a specified destination folder.
 
