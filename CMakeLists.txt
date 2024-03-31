@@ -5,10 +5,13 @@ project(
     usearch
     VERSION 2.7.2
     LANGUAGES C CXX
+    DESCRIPTION "Smaller & Faster Single-File Vector Search Engine from Unum"
+    HOMEPAGE_URL "https://github.com/unum-cloud/usearch"
 )
 
 # Determine if USearch is built as a subproject (using `add_subdirectory`) or if it is the main project
 set(USEARCH_IS_MAIN_PROJECT OFF)
+
 if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     set(USEARCH_IS_MAIN_PROJECT ON)
 endif ()
@@ -31,6 +34,7 @@ option(USEARCH_BUILD_BENCH_CPP "Compile a native benchmark in C++" ${USEARCH_IS_
 option(USEARCH_BUILD_LIB_C "Compile a native library for the C 99 interface" OFF)
 option(USEARCH_BUILD_TEST_C "Compile a test for the C 99 interface" OFF)
 option(USEARCH_BUILD_WOLFRAM "Compile Wolfram Language bindings" OFF)
+option(USEARCH_BUILD_SQLITE "Compile separate SQLite extension" OFF)
 
 # Includes
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
@@ -56,6 +60,7 @@ set(USEARCH_PKGCONFIG_INSTALL_DIR "${CMAKE_INSTALL_DATADIR}/pkgconfig")
 add_library(${USEARCH_TARGET_NAME} INTERFACE)
 add_library(${PROJECT_NAME}::${USEARCH_TARGET_NAME} ALIAS ${USEARCH_TARGET_NAME})
 set(USEARCH_INCLUDE_BUILD_DIR "${PROJECT_SOURCE_DIR}/include/")
+
 if (${CMAKE_VERSION} VERSION_LESS "3.8.0")
     target_compile_features(${USEARCH_TARGET_NAME} INTERFACE cxx_range_for)
 else ()
@@ -63,18 +68,11 @@ else ()
 endif ()
 
 # Core compilation settings affecting "index.hpp"
-target_compile_definitions(
-    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${USEARCH_USE_OPENMP}>>:USEARCH_USE_OPENMP=0>
-)
+target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE "USEARCH_USE_OPENMP=$<BOOL:${USEARCH_USE_OPENMP}>")
 
 # Supplementary compilation settings affecting "index_plugins.hpp"
-target_compile_definitions(
-    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${USEARCH_USE_FP16LIB}>>:USEARCH_USE_FP16LIB=1>
-)
-
-target_compile_definitions(
-    ${USEARCH_TARGET_NAME} INTERFACE $<$<NOT:$<BOOL:${USEARCH_USE_SIMSIMD}>>:USEARCH_USE_SIMSIMD=0>
-)
+target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE "USEARCH_USE_FP16LIB=$<BOOL:${USEARCH_USE_FP16LIB}>")
+target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE "USEARCH_USE_SIMSIMD=$<BOOL:${USEARCH_USE_SIMSIMD}>")
 
 target_include_directories(
     ${USEARCH_TARGET_NAME} ${USEARCH_SYSTEM_INCLUDE} INTERFACE $<BUILD_INTERFACE:${USEARCH_INCLUDE_BUILD_DIR}>
@@ -122,6 +120,7 @@ if (CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin")
     set(CMAKE_USE_PTHREADS_INIT 1)
     set(THREADS_PREFER_PTHREAD_FLAG ON)
 endif ()
+
 find_package(Threads REQUIRED)
 
 if (USEARCH_USE_OPENMP)
@@ -168,7 +167,6 @@ function (setup_target TARGET_NAME)
                     -fmax-errors=1
                     -pedantic
                     -fdiagnostics-color=always
-                    -ftime-report
         )
         target_link_options(
             ${TARGET_NAME}
@@ -206,7 +204,6 @@ function (setup_target TARGET_NAME)
                     # Don't complain if the for-loops were not vectorzied
                     -Wpass-failed=transform-warning
                     -fcolor-diagnostics
-                    -ftime-trace
         )
         target_link_options(
             ${TARGET_NAME}
@@ -246,11 +243,12 @@ function (setup_target TARGET_NAME)
         set_property(SOURCE bench.cpp PROPERTY LANGUAGE CUDA)
         set_target_properties(${TARGET_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
         set_target_properties(${TARGET_NAME} PROPERTIES CUDA_ARCHITECTURES "86")
-
+        
     elseif (CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
         target_compile_options(${TARGET_NAME} PRIVATE -w -ferror-limit=1)
-
+        
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        target_compile_options(${TARGET_NAME} PRIVATE /wd4068 /wd4996)
         target_compile_options(
             ${TARGET_NAME} PRIVATE $<$<CONFIG:DEBUG>:/DEBUG> $<$<CONFIG:RELEASE>:/O2> $<$<CONFIG:RELWITHDEBINFO>:/O2
                                    /DEBUG>
@@ -291,19 +289,17 @@ function (setup_target TARGET_NAME)
     # On Linux and MacOS our primary shared libraries for C are called `libusearch_c.so` and `libusearch_c.dylib`, while
     # on Windows the "lib" prefix might be missing by default, so let's ensure it's always there
     get_target_property(TARGET_TYPE ${TARGET_NAME} TYPE)
+
     if (TARGET_TYPE STREQUAL "SHARED_LIBRARY" OR TARGET_TYPE STREQUAL "STATIC_LIBRARY")
         set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "lib")
     endif ()
 
     # Core compilation settings affecting "index.hpp"
-    target_compile_definitions(${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_OPENMP}>>:USEARCH_USE_OPENMP=0>)
+    target_compile_definitions(${TARGET_NAME} PRIVATE "USEARCH_USE_OPENMP=$<BOOL:${USEARCH_USE_OPENMP}>")
 
     # Supplementary compilation settings affecting "index_plugins.hpp"
-    target_compile_definitions(
-        ${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_FP16LIB}>>:USEARCH_USE_FP16LIB=1>
-    )
-
-    target_compile_definitions(${TARGET_NAME} PRIVATE $<$<NOT:$<BOOL:${USEARCH_USE_SIMSIMD}>>:USEARCH_USE_SIMSIMD=0>)
+    target_compile_definitions(${TARGET_NAME} PRIVATE "USEARCH_USE_FP16LIB=$<BOOL:${USEARCH_USE_FP16LIB}>")
+    target_compile_definitions(${TARGET_NAME} PRIVATE "USEARCH_USE_SIMSIMD=$<BOOL:${USEARCH_USE_SIMSIMD}>")
 
 endfunction ()
 
@@ -321,4 +317,8 @@ endif ()
 
 if (${USEARCH_BUILD_LIB_C} OR ${USEARCH_BUILD_TEST_C})
     add_subdirectory(c)
+endif ()
+
+if (${USEARCH_BUILD_SQLITE})
+    add_subdirectory(sqlite)
 endif ()

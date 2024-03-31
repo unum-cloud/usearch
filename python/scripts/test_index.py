@@ -3,7 +3,6 @@ import os
 import pytest
 import numpy as np
 
-from usearch.io import load_matrix, save_matrix
 from usearch.eval import random_vectors, self_recall, SearchStats
 from usearch.index import search
 
@@ -46,9 +45,7 @@ hash_metrics = [
 @pytest.mark.parametrize("batch_size", [1, 7, 1024])
 @pytest.mark.parametrize("quantization", [ScalarKind.F32, ScalarKind.I8])
 @pytest.mark.parametrize("dtype", [np.float32, np.float64, np.float16])
-def test_index_initialization_and_addition(
-    ndim, metric, quantization, dtype, batch_size
-):
+def test_index_initialization_and_addition(ndim, metric, quantization, dtype, batch_size):
     index = Index(ndim=ndim, metric=metric, dtype=quantization, multi=False)
     keys = np.arange(batch_size)
     vectors = random_vectors(count=batch_size, ndim=ndim, dtype=dtype)
@@ -115,7 +112,6 @@ def test_index_self_recall(ndim: int, batch_size: int):
     """
     Test self-recall evaluation scripts.
     """
-    original = np.random.rand(batch_size, ndim)
     index = Index(ndim=ndim, multi=False)
     keys = np.arange(batch_size)
     vectors = random_vectors(count=batch_size, ndim=ndim)
@@ -197,9 +193,7 @@ def test_index_save_load_restore_copy(ndim, quantization, batch_size):
     copied_index = index.copy()
     assert len(copied_index) == len(index)
     if batch_size > 0:
-        assert np.allclose(
-            np.vstack(copied_index.get(keys)), np.vstack(index.get(keys))
-        )
+        assert np.allclose(np.vstack(copied_index.get(keys)), np.vstack(index.get(keys)))
 
     # Perform the same operations in RAM, without touching the filesystem
     serialized_index = index.save()
@@ -210,9 +204,7 @@ def test_index_save_load_restore_copy(ndim, quantization, batch_size):
     assert len(deserialized_index) == len(index)
     assert set(np.array(deserialized_index.keys)) == set(np.array(index.keys))
     if batch_size > 0:
-        assert np.allclose(
-            np.vstack(deserialized_index.get(keys)), np.vstack(index.get(keys))
-        )
+        assert np.allclose(np.vstack(deserialized_index.get(keys)), np.vstack(index.get(keys)))
 
     deserialized_index.reset()
     index.reset()

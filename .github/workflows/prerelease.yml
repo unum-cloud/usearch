@@ -25,9 +25,7 @@ jobs:
       CXX: g++-12
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: main-dev
+      - uses: actions/checkout@v4
       - run: git submodule update --init --recursive
 
         # C/C++
@@ -35,7 +33,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev gcc-12 g++-12
-          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_SQLITE=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
           cmake --build build_artifacts --config RelWithDebInfo
       - name: Test C++
         run: ./build_artifacts/test_cpp
@@ -44,24 +42,27 @@ jobs:
 
         # Python
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Build Python
         run: |
           python -m pip install --upgrade pip
-          pip install pytest numpy
+          pip install pytest pytest-repeat numpy numba cppyy
+          pip install --upgrade git+https://github.com/Maratyszcza/PeachPy
           python -m pip install .
       - name: Test Python
-        run: pytest python/scripts/ -s -x
+        run: pytest
 
         # JavaScript
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Install dependencies
+        run: npm ci --skip-scripts
       - name: Build JavaScript
-        run: npm ci
+        run: npm run build-js
       - name: Test JavaScript
         run: npm test
 
@@ -113,9 +114,7 @@ jobs:
       CXX: clang++-16
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: main-dev
+      - uses: actions/checkout@v4
       - run: git submodule update --init --recursive
 
         # C/C++
@@ -127,12 +126,24 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 16
-          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_OPENMP=0 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_SQLITE=1 -DUSEARCH_USE_OPENMP=0 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
           cmake --build build_artifacts --config RelWithDebInfo
       - name: Test C++
         run: ./build_artifacts/test_cpp
       - name: Test C
         run: ./build_artifacts/test_c
+
+        # JavaScript
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm ci --skip-scripts
+      - name: Build JavaScript
+        run: npm run build-js
+      - name: Test JavaScript
+        run: npm test
 
         # Python
       - name: Set up Python ${{ env.PYTHON_VERSION }}
@@ -142,20 +153,11 @@ jobs:
       - name: Build Python
         run: |
           python -m pip install --upgrade pip
-          pip install pytest numpy
+          pip install pytest pytest-repeat numpy numba cppyy
+          pip install --upgrade git+https://github.com/Maratyszcza/PeachPy
           python -m pip install .
       - name: Test Python
-        run: pytest python/scripts/ -s -x
-
-        # JavaScript
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 20
-      - name: Build and test JavaScript
-        run: |
-          npm ci
-          npm test
+        run: pytest
 
         # C#
       - name: Setup .NET ${{ env.DOTNET_VERSION }}
@@ -175,9 +177,7 @@ jobs:
     runs-on: macos-12
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: main-dev
+      - uses: actions/checkout@v4
       - run: git submodule update --init --recursive
 
         # C/C++
@@ -185,12 +185,24 @@ jobs:
         run: |
           brew update
           brew install cmake
-          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1
+          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_SQLITE=1
           cmake --build build_artifacts --config RelWithDebInfo
       - name: Test C++
         run: ./build_artifacts/test_cpp
       - name: Test C
         run: ./build_artifacts/test_c
+
+        # JavaScript
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm ci --skip-scripts
+      - name: Build JavaScript
+        run: npm run build-js
+      - name: Test JavaScript
+        run: npm test
 
         # Python
       - name: Set up Python ${{ env.PYTHON_VERSION }}
@@ -200,20 +212,10 @@ jobs:
       - name: Build Python
         run: |
           python -m pip install --upgrade pip
-          pip install pytest numpy
+          pip install pytest pytest-repeat numpy
           python -m pip install .
       - name: Test Python
-        run: pytest python/scripts/ -s -x
-
-        # JavaScript
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 20
-      - name: Build JavaScript
-        run: npm ci
-      - name: Test JavaScript
-        run: npm test
+        run: pytest
 
         # ObjC/Swift
       - name: Build ObjC/Swift
@@ -238,16 +240,14 @@ jobs:
     name: Windows
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: main-dev
+      - uses: actions/checkout@v4
       - run: git submodule update --init --recursive
 
         # C/C++
       - name: Build C/C++
         run: |
           choco install cmake
-          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1
+          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_SQLITE=0
           cmake --build build_artifacts --config RelWithDebInfo
       - name: Test C++
         run: .\build_artifacts\test_cpp.exe
@@ -262,18 +262,20 @@ jobs:
       - name: Build Python
         run: |
           python -m pip install --upgrade pip
-          pip install pytest numpy
+          pip install pytest pytest-repeat numpy
           python -m pip install .
       - name: Test Python
-        run: pytest python/scripts/ -s -x
+        run: pytest
 
         # JavaScript
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Install dependencies
+        run: npm ci --skip-scripts
       - name: Build JavaScript
-        run: npm ci
+        run: npm run build-js
       - name: Test JavaScript
         run: npm test
 
@@ -294,7 +296,7 @@ jobs:
     name: Docker
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: git submodule update --init --recursive
       - name: Build
         uses: docker/build-push-action@v4
@@ -302,7 +304,6 @@ jobs:
           context: .
           load: true
           push: false
-
 
   build_wheels:
     name: Build Python ${{ matrix.python-version }} for ${{ matrix.os }}
@@ -329,3 +330,55 @@ jobs:
         run: cibuildwheel --output-dir wheelhouse
         env:
           CIBW_BUILD: cp${{ matrix.python-version }}-*
+
+  test_ubuntu_cross_compilation:
+    name: Cross Compilation
+    runs-on: ubuntu-22.04
+    env:
+      CC: clang
+      CXX: clang++
+      AR: llvm-ar
+      NM: llvm-nm
+      RANLIB: llvm-ranlib
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            target: x86_64-linux-gnu
+          - arch: arm64
+            target: aarch64-linux-gnu
+
+    steps:
+      - uses: actions/checkout@v4
+      - run: git submodule update --init --recursive
+
+        # C/C++
+        # We need to install the cross-compilation toolchain for ARM64 and ARMHF
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld make crossbuild-essential-arm64 crossbuild-essential-armhf libjemalloc-dev
+
+      - name: Build C/C++
+        run: |
+          cmake -B build_artifacts \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
+            -DCMAKE_C_COMPILER_TARGET=${{ matrix.target }} \
+            -DCMAKE_CXX_COMPILER_TARGET=${{ matrix.target }} \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} \
+            -DUSEARCH_BUILD_LIB_C=1 \
+            -DUSEARCH_BUILD_SQLITE=1 \
+            -DUSEARCH_BUILD_TEST_CPP=0 \
+            -DUSEARCH_BUILD_BENCH_CPP=0
+
+          cmake --build build_artifacts --config RelWithDebInfo
+
+        # We can't run the produced builds, but we can make sure they exist
+      - name: Test artifacts presense
+        run: |
+          test -e build_artifacts/libusearch_c.so
+          test -e build_artifacts/libusearch_sqlite.so

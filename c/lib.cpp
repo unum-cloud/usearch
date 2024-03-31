@@ -119,6 +119,10 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
                                            reinterpret_cast<std::uintptr_t>(options->metric), //
                                            metric_punned_signature_t::array_array_k,          //
                                            metric_kind, scalar_kind);
+    if (metric.missing()) {
+        *error = "Unknown metric kind!";
+        return NULL;
+    }
 
     index_dense_t index = index_dense_t::make(metric, config);
     index_dense_t* result_ptr = new index_dense_t(std::move(index));

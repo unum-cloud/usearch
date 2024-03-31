@@ -121,6 +121,12 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     index_config_t config(static_cast<std::size_t>(connectivity));
     metric_punned_t metric(dims, to_native_metric(metricKind), to_native_scalar(quantization));
+    if (metric.missing()) {
+        @throw [NSException exceptionWithName:@"Can't create an index"
+                                       reason:@"The metric is not supported"
+                                     userInfo:nil];
+    }
+
     shared_index_dense_t ptr = std::make_shared<index_dense_t>(index_dense_t::make(metric, config));
     return [[USearchIndex alloc] initWithIndex:ptr];
 }

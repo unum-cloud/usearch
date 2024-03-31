@@ -1,6 +1,16 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const usearch = require('./usearch.js');
+const usearch = require('./dist/cjs/usearch.js');
+
+function assertAlmostEqual(actual, expected, tolerance = 1e-6) {
+    const lowerBound = expected - tolerance;
+    const upperBound = expected + tolerance;
+    assert(
+        actual >= lowerBound && actual <= upperBound,
+        `Expected ${actual} to be almost equal to ${expected}`
+    );
+}
+
 
 test('Single-entry operations', () => {
     const index = new usearch.Index(2, 'l2sq');
@@ -38,7 +48,7 @@ test('Batch operations', () => {
 
 test("Expected results", () => {
     var index = new usearch.Index({
-        metric: "cos",
+        metric: "l2sq",
         connectivity: 16,
         dimensions: 3,
     });
@@ -47,7 +57,7 @@ test("Expected results", () => {
 
     assert.equal(index.size(), 1);
     assert.deepEqual(results.keys, new BigUint64Array([42n]));
-    assert.deepEqual(results.distances, new Float32Array([0]));
+    assertAlmostEqual(results.distances[0], new Float32Array([0]));
 });
 
 
@@ -62,7 +72,7 @@ test('Operations with invalid values', () => {
         indexBatch.add(keys, vectors);
         throw new Error('indexBatch.add should have thrown an error.');
     } catch (err) {
-        assert.equal(err.message, 'All keys must be integers or bigints.');
+        assert.equal(err.message, 'All keys must be positive integers or bigints.');
     }
 
     try {

@@ -16,23 +16,21 @@ def _vector_to_ascii(vector: np.ndarray) -> Optional[str]:
     # poking 60 and replacing with the 124.
     vector += 23
     vector[vector == 60] = 124
-    ascii = str(vector)
-    return ascii
+    ascii_vector = str(vector)
+    return ascii_vector
 
 
 class IndexClient:
-    def __init__(
-        self, uri: str = "127.0.0.1", port: int = 8545, use_http: bool = True
-    ) -> None:
+    def __init__(self, uri: str = "127.0.0.1", port: int = 8545, use_http: bool = True) -> None:
         self.client = Client(uri=uri, port=port, use_http=use_http)
 
     def add_one(self, key: int, vector: np.ndarray):
         assert isinstance(key, int)
         assert isinstance(vector, np.ndarray)
         vector = vector.flatten()
-        ascii = _vector_to_ascii(vector)
-        if ascii:
-            self.client.add_ascii(key=key, string=ascii)
+        ascii_vector = _vector_to_ascii(vector)
+        if ascii_vector:
+            self.client.add_ascii(key=key, string=ascii_vector)
         else:
             self.client.add_one(key=key, vectors=vector)
 
@@ -52,9 +50,9 @@ class IndexClient:
     def search_one(self, vector: np.ndarray, count: int) -> Matches:
         matches: List[dict] = []
         vector = vector.flatten()
-        ascii = _vector_to_ascii(vector)
-        if ascii:
-            matches = self.client.search_ascii(string=ascii, count=count)
+        ascii_vector = _vector_to_ascii(vector)
+        if ascii_vector:
+            matches = self.client.search_ascii(string=ascii_vector, count=count)
         else:
             matches = self.client.search_one(vector=vector, count=count)
 
@@ -73,9 +71,7 @@ class IndexClient:
 
     def search_many(self, vectors: np.ndarray, count: int) -> Matches:
         batch_size: int = vectors.shape[0]
-        list_of_matches: List[List[dict]] = self.client.search_many(
-            vectors=vectors, count=count
-        )
+        list_of_matches: List[List[dict]] = self.client.search_many(vectors=vectors, count=count)
 
         keys = np.array((batch_size, count), dtype=np.uint32)
         distances = np.array((batch_size, count), dtype=np.float32)

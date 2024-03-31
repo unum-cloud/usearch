@@ -4,7 +4,7 @@ from typing import Optional
 import numpy as np
 from faiss import IndexHNSWFlat, IndexIVFPQ, read_index
 
-from usearch.index import Matches, BatchMatches
+from usearch.index import BatchMatches
 from usearch.index import (
     DEFAULT_CONNECTIVITY,
     DEFAULT_EXPANSION_ADD,

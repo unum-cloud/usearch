@@ -13,37 +13,39 @@
         "url": "https://github.com/unum-cloud/usearch/issues",
         "email": "info@unum.cloud"
     },
-    "main": "javascript/usearch.js",
-    "gypfile": true,
     "engines": {
         "node": "~10 >=10.20 || >=12.17"
     },
+    "files": [
+        "javascript/dist",
+        "prebuilds"
+    ],
     "dependencies": {
-        "@types/node": "^20.4.5",
-        "bindings": "~1.2.1",
-        "node-addon-api": "^3.0.0"
+        "bindings": "^1.5.0",
+        "node-addon-api": "^3.0.0",
+        "node-gyp-build": "^4.8.0"
     },
     "scripts": {
         "test": "node --test ./javascript/usearch.test.js",
-        "install": "node-gyp rebuild",
-        "typegen": "npx tsc"
+        "install": "node-gyp-build",
+        "prebuild-single": "prebuildify --napi --strip",
+        "prebuild-arm64": "prebuildify --arch arm64 --napi --strip",
+        "prebuild-darwin-x64+arm64": "prebuildify --arch arm64+x64 --napi --strip",
+        "build-js": "rm -fr javascript/dist/* && tsc -p javascript/tsconfig-esm.json && tsc -p javascript/tsconfig-cjs.json && cp javascript/dist-package-esm.json javascript/dist/esm/package.json && cp javascript/dist-package-cjs.json javascript/dist/cjs/package.json"
     },
     "devDependencies": {
-        "typescript": "^5.1.6"
+        "@types/bindings": "^1.5.5",
+        "@types/node": "^20.11.0",
+        "node-gyp": "^10.0.1",
+        "prebuildify": "^6.0.0",
+        "typescript": "^5.3.3"
     },
+    "main": "javascript/dist/cjs/usearch.js",
+    "module": "javascript/dist/esm/usearch.js",
     "exports": {
         ".": {
-            "types": "./javascript/types/usearch.d.ts",
-            "require": "./javascript/usearch.js",
-            "import": "./javascript/usearch.js"
-        },
-        "./package.json": "./package.json"
-    },
-    "typesVersions": {
-      "*": {
-          "*": [
-              "./javascript/types/usearch.d.ts"
-          ]
-      }
-  }
+            "import": "./javascript/dist/esm/usearch.js",
+            "require": "./javascript/dist/cjs/usearch.js"
+        }
+    }
 }
