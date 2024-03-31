@@ -1401,8 +1401,12 @@ class metric_punned_t {
     inline std::size_t dimensions() const noexcept { return dimensions_; }
     inline metric_kind_t metric_kind() const noexcept { return metric_kind_; }
     inline scalar_kind_t scalar_kind() const noexcept { return scalar_kind_; }
+    explicit inline operator bool() const noexcept { return metric_routed_ && metric_ptr_; }
 
     inline char const* isa_name() const noexcept {
+        if (!*this)
+            return "uninitialized";
+
 #if USEARCH_USE_SIMSIMD
         switch (isa_kind_) {
         case simsimd_cap_serial_k: return "serial";

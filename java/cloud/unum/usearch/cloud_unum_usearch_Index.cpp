@@ -31,6 +31,13 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
         index_dense_config_t config(static_cast<std::size_t>(connectivity), static_cast<std::size_t>(expansion_add),
                                     static_cast<std::size_t>(expansion_search));
         metric_punned_t metric(static_cast<std::size_t>(dimensions), metric_kind, quantization);
+        if (!metric) {
+            jclass jc = (*env).FindClass("java/lang/Error");
+            if (jc)
+                (*env).ThrowNew(jc, "Failed to initialize the metric!");
+            goto cleanup;
+        }
+
         index_dense_t index = index_dense_t::make(metric, config);
         if (!index.reserve(static_cast<std::size_t>(capacity))) {
             jclass jc = (*env).FindClass("java/lang/Error");
@@ -47,6 +54,7 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
             (*env).ThrowNew(jc, "Failed to initialize the vector index!");
     }
 
+cleanup:
     (*env).ReleaseStringUTFChars(metric, metric_cstr);
     (*env).ReleaseStringUTFChars(quantization, quantization_cstr);
     return result;

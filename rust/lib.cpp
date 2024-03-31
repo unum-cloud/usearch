@@ -131,6 +131,8 @@ std::unique_ptr<NativeIndex> new_native_index(IndexOptions const& options) {
     metric_kind_t metric_kind = rust_to_cpp_metric(options.metric);
     scalar_kind_t scalar_kind = rust_to_cpp_scalar(options.quantization);
     metric_punned_t metric(options.dimensions, metric_kind, scalar_kind);
+    if (!metric)
+        throw std::invalid_argument("Unsupported metric or scalar type");
     index_dense_config_t config(options.connectivity, options.expansion_add, options.expansion_search);
     config.multi = options.multi;
     return wrap(index_t::make(metric, config));

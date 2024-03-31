@@ -122,6 +122,9 @@ static dense_index_py_t make_index(             //
         metric_uintptr //
             ? metric_t(dimensions, metric_uintptr, metric_signature, metric_kind, scalar_kind)
             : metric_t(dimensions, metric_kind, scalar_kind);
+    if (!metric)
+        throw std::invalid_argument("Unsupported metric!");
+
     return index_dense_t::make(metric, config);
 }
 
@@ -485,6 +488,8 @@ static py::tuple search_many_brute_force(       //
         metric_uintptr //
             ? metric_t(dimensions, metric_uintptr, metric_signature, metric_kind, queries_kind)
             : metric_t(dimensions, metric_kind, queries_kind);
+    if (!metric)
+        throw std::invalid_argument("Unsupported metric!");
 
     py::array_t<dense_key_t> keys_py({static_cast<Py_ssize_t>(queries_count), static_cast<Py_ssize_t>(wanted)});
     py::array_t<distance_t> distances_py({static_cast<Py_ssize_t>(queries_count), static_cast<Py_ssize_t>(wanted)});
@@ -1098,6 +1103,8 @@ PYBIND11_MODULE(compiled, m) {
                 metric_uintptr //
                     ? metric_t(dimensions, metric_uintptr, metric_signature, metric_kind, scalar_kind)
                     : metric_t(dimensions, metric_kind, scalar_kind);
+            if (!metric)
+                throw std::invalid_argument("Unsupported metric kind!");
             index.change_metric(std::move(metric));
         },
         py::arg("metric_kind") = metric_kind_t::cos_k,                          //
@@ -1231,4 +1238,3 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("progress") = nullptr                             //
     );
 }
-

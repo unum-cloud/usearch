@@ -86,9 +86,13 @@ CompiledIndex::CompiledIndex(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<C
     bool multi = ctx[6].As<Napi::Boolean>().Value();
 
     metric_punned_t metric(dimensions, metric_kind, quantization);
+    if (!metric) {
+        Napi::TypeError::New(ctx.Env(), "Failed to initialize the metric!").ThrowAsJavaScriptException();
+        return;
+    }
+
     index_dense_config_t config(connectivity, expansion_add, expansion_search);
     config.multi = multi;
-
     native_.reset(new index_dense_t(index_dense_t::make(metric, config)));
     if (!native_)
         Napi::Error::New(ctx.Env(), "Out of memory!").ThrowAsJavaScriptException();
@@ -289,6 +293,11 @@ Napi::Value exactSearch(Napi::CallbackInfo const& ctx) {
     }
 
     metric_punned_t metric(dimensions, metric_kind, quantization);
+    if (!metric) {
+        Napi::TypeError::New(env, "Failed to initialize the metric!").ThrowAsJavaScriptException();
+        return;
+    }
+
     executor_default_t executor;
     exact_search_t search;
 
