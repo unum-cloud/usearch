@@ -150,13 +150,23 @@ cmake --build build_artifacts --config Release
 
 Python bindings are built using PyBind11 and are available on [PyPi](https://pypi.org/project/usearch/).
 The compilation settings are controlled by the `setup.py` and are independent from CMake used for C/C++ builds.
-Use PyTest to validate the build.
+To install USearch locally:
+
+```sh
+pip install -e .
+```
+
+For testing USearch uses PyTest, which is pre-configured in `pyproject.toml`.
+Following options are enabled:
 
 - The `-s` option will disable capturing the logs.
 - The `-x` option will exit after first failure to simplify debugging.
+- The `-p no:warnings` option will suppress and allow warnings.
 
 ```sh
-pip install -e . && pytest python/scripts/ -s -x
+pip install pytest pytest-repeat # for repeated fuzzy tests
+pytest # if you trust the default settings
+pytest python/scripts/ -s -x -p no:warnings # to overwrite the default settings
 ```
 
 Linting:

@@ -2,10 +2,8 @@ from time import time
 from typing import Literal
 
 from faiss import knn, METRIC_L2, METRIC_INNER_PRODUCT
-import numpy as np
 import fire
 
-from usearch.index import search, MetricKind, ScalarKind
 from usearch.compiled import hardware_acceleration
 from usearch.eval import random_vectors
 
@@ -13,6 +11,7 @@ from usearch.eval import random_vectors
 from usearch.index import (
     ScalarKind,
     MetricKind,
+    search,
     _normalize_metric,
     _normalize_dtype,
 )
@@ -68,7 +67,7 @@ def run(
 
     start = time()
     faiss_metric = METRIC_L2 if metric == "l2sq" else METRIC_INNER_PRODUCT
-    _ = knn(x[:q], x, k, metric=METRIC_L2)[1]
+    _ = knn(x[:q], x, k, metric=faiss_metric)[1]
     duration = time() - start
     print(f"FAISS:   {format_duration(duration)} ({calculate_throughput(duration, q)})")
 

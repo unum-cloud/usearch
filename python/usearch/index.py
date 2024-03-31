@@ -301,7 +301,7 @@ class Matches:
         Convert matches to the list of tuples which contain matches' indices and distances to them.
         """
 
-        return [(int(l), float(d)) for l, d in zip(self.keys, self.distances)]
+        return [(int(key), float(distance)) for key, distance in zip(self.keys, self.distances)]
 
     def __repr__(self) -> str:
         return f"usearch.Matches({len(self)})"
@@ -462,7 +462,7 @@ class Index:
 
     def __init__(
         self,
-        *,
+        *,  # All arguments must be named
         ndim: int = 0,
         metric: MetricLike = MetricKind.Cos,
         dtype: Optional[DTypeLike] = None,
