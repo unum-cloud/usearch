@@ -333,7 +333,7 @@ class f16_bits_t {
     inline f16_bits_t(i8_converted_t) noexcept;
     inline f16_bits_t(bool v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(float v) noexcept : uint16_(f32_to_f16(v)) {}
-    inline f16_bits_t(double v) noexcept : uint16_(f32_to_f16(v)) {}
+    inline f16_bits_t(double v) noexcept : uint16_(f32_to_f16(static_cast<float>(v))) {}
 
     inline f16_bits_t operator+(f16_bits_t other) const noexcept { return {float(*this) + float(other)}; }
     inline f16_bits_t operator-(f16_bits_t other) const noexcept { return {float(*this) - float(other)}; }
@@ -486,7 +486,7 @@ class executor_openmp_t {
      *  @param threads_count The number of threads to be used for parallel execution.
      */
     executor_openmp_t(std::size_t threads_count = 0) noexcept {
-        omp_set_num_threads(threads_count ? threads_count : std::thread::hardware_concurrency());
+        omp_set_num_threads(static_cast<int>(threads_count ? threads_count : std::thread::hardware_concurrency()));
     }
 
     /**
@@ -1256,7 +1256,9 @@ struct cos_i8_t {
             a2 += square(ai);
             b2 += square(bi);
         }
-        return (ab != 0) ? (1.f - ab / (std::sqrt(a2) * std::sqrt(b2))) : 0;
+        result_t a2f = std::sqrt(static_cast<result_t>(a2));
+        result_t b2f = std::sqrt(static_cast<result_t>(b2));
+        return (ab != 0) ? (1.f - ab / (a2f * b2f)) : 0;
     }
 };
 
@@ -1560,7 +1562,7 @@ class metric_punned_t {
     template <typename typed_at>
     inline static result_t equidimensional_(uptr_t a, uptr_t b, uptr_t a_dimensions) noexcept {
         using scalar_t = typename typed_at::scalar_t;
-        return typed_at{}((scalar_t const*)a, (scalar_t const*)b, a_dimensions);
+        return static_cast<result_t>(typed_at{}((scalar_t const*)a, (scalar_t const*)b, a_dimensions));
     }
 };
 

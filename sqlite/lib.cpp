@@ -169,16 +169,16 @@ static void sqlite_dense(sqlite3_context* context, int argc, sqlite3_value** arg
         scalar_t parsed1[max_dimensions_k], parsed2[max_dimensions_k];
         for (size_t i = 0; i != dimensions; ++i) {
             switch (sqlite3_value_type(argv[i])) {
-            case SQLITE_FLOAT: parsed1[i] = sqlite3_value_double(argv[i]); break;
-            case SQLITE_INTEGER: parsed1[i] = sqlite3_value_int(argv[i]); break;
+            case SQLITE_FLOAT: parsed1[i] = static_cast<scalar_t>(sqlite3_value_double(argv[i])); break;
+            case SQLITE_INTEGER: parsed1[i] = static_cast<scalar_t>(sqlite3_value_int(argv[i])); break;
             case SQLITE_NULL: parsed1[i] = 0; break;
             default:
                 sqlite3_result_error(context, "Scalar columns may only contain 32-bit integers, floats, or NULLs.", -1);
                 return;
             }
             switch (sqlite3_value_type(argv[dimensions + i])) {
-            case SQLITE_FLOAT: parsed2[i] = sqlite3_value_double(argv[dimensions + i]); break;
-            case SQLITE_INTEGER: parsed2[i] = sqlite3_value_int(argv[dimensions + i]); break;
+            case SQLITE_FLOAT: parsed2[i] = static_cast<scalar_t>(sqlite3_value_double(argv[dimensions + i])); break;
+            case SQLITE_INTEGER: parsed2[i] = static_cast<scalar_t>(sqlite3_value_int(argv[dimensions + i])); break;
             case SQLITE_NULL: parsed2[i] = 0; break;
             default:
                 sqlite3_result_error(context, "Scalar columns may only contain 32-bit integers, floats, or NULLs.", -1);

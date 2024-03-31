@@ -1414,7 +1414,9 @@ class input_file_t {
     }
 
     explicit operator bool() const noexcept { return file_; }
-    bool seek_to(std::size_t progress) noexcept { return std::fseek(file_, progress, SEEK_SET) == 0; }
+    bool seek_to(std::size_t progress) noexcept {
+        return std::fseek(file_, static_cast<long>(progress), SEEK_SET) == 0;
+    }
     bool seek_to_end() noexcept { return std::fseek(file_, 0L, SEEK_END) == 0; }
     bool infer_progress(std::size_t& progress) noexcept {
         long int result = std::ftell(file_);

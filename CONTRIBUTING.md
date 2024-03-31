@@ -53,30 +53,17 @@ The CMakeLists.txt file has a number of options you can pass:
   - `USEARCH_BUILD_BENCH_CPP` - build the C++ benchmark suite
   - `USEARCH_BUILD_LIB_C` - build the C library
   - `USEARCH_BUILD_TEST_C` - build the C test suite
-  - `USEARCH_BUILD_SQLITE` - build the SQLite extension
+  - `USEARCH_BUILD_SQLITE` - build the SQLite extension ([no Windows](https://gist.github.com/zeljic/d8b542788b225b1bcb5fce169ee28c55))
 - Which dependencies to use:
   - `USEARCH_USE_OPENMP` - use OpenMP for parallelism
   - `USEARCH_USE_SIMSIMD` - use SimSIMD for vectorization
-  - `USEARCH_USE_JEMALLOC` - use Jemalloc for memory management
+  - `USEARCH_USE_JEMALLOC` - use JeMalloc for memory management
   - `USEARCH_USE_FP16LIB` - use software emulation for half-precision floating point
 
-Putting all of this together on Ubuntu and compiling the "release" version using the GCC 12 compiler:
+Putting all of this together, compiling all targets on most platforms should work with the following snippet:
 
 ```sh
-cmake \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER=gcc-12 \
-    -DCMAKE_CXX_COMPILER=g++-12 \
-    -DUSEARCH_USE_FP16LIB=1 \
-    -DUSEARCH_USE_OPENMP=1 \
-    -DUSEARCH_USE_SIMSIMD=1 \
-    -DUSEARCH_USE_JEMALLOC=1 \
-    -DUSEARCH_BUILD_TEST_CPP=1 \
-    -DUSEARCH_BUILD_BENCH_CPP=1 \
-    -DUSEARCH_BUILD_LIB_C=1 \
-    -DUSEARCH_BUILD_TEST_C=1 \
-    -DUSEARCH_BUILD_SQLITE=1 \
-    -B ./build_release
+cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_USE_FP16LIB=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1 -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_BENCH_CPP=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_SQLITE=0 -B ./build_release
 
 cmake --build ./build_release --config Release
 ./build_release/test_cpp
