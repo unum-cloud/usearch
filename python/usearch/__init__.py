@@ -86,14 +86,14 @@ class BinaryManager:
             for root, _, files in os.walk(directory):
                 for file in files:
                     if file.endswith(file_extension) and "usearch_sqlite" in file:
-                        return os.path.join(root, file)
+                        return os.path.join(root, file).removesuffix(file_extension)
 
         # Check a temporary directory (assuming the binary might be downloaded from a GitHub release)
         temp_dir = tempfile.gettempdir()
         for root, _, files in os.walk(temp_dir):
             for file in files:
                 if file.endswith(file_extension) and "usearch_sqlite" in file:
-                    return os.path.join(root, file)
+                    return os.path.join(root, file).removesuffix(file_extension)
 
         # If not found locally, warn the user and download from GitHub
         temp_dir = tempfile.gettempdir()
@@ -111,7 +111,7 @@ class BinaryManager:
 
         # Handle the case where binary_path does not exist after supposed successful download
         if os.path.exists(binary_path):
-            return binary_path
+            return binary_path.removesuffix(file_extension)
         else:
             warnings.warn("Failed to download `usearch_sqlite` binary from GitHub.", UserWarning)
             return None
