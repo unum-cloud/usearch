@@ -115,7 +115,7 @@ jobs:
           touch "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/DEBIAN/control"
           mkdir -p "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/lib"
           mkdir "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/include"
-          cp include/usearch/usearch.h "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/include/"
+          cp include/c/usearch.h "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/include/"
           cp build_release/libusearch_c.so "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/lib/"
           echo -e "Package: usearch\nVersion: ${{ steps.set_version.outputs.version }}\nMaintainer: Ash Vardanian\nArchitecture: ${{ matrix.arch }}\nDescription: Faster & Smaller Single-File Search Engine for Vectors & Texts" > "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/DEBIAN/control"
           dpkg-deb --build "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}"
