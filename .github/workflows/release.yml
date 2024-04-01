@@ -77,7 +77,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          ref: "main"
       - run: git submodule update --init --recursive
 
       - name: Get version
@@ -147,7 +147,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          ref: "main"
       - run: git submodule update --init --recursive
 
       - name: Setup CMake
@@ -195,7 +195,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          ref: "main"
       - run: git submodule update --init --recursive
 
       - uses: actions/setup-go@v4
@@ -242,7 +242,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          ref: "main"
       - run: git submodule update --init --recursive
 
       - name: Get version
