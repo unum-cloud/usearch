@@ -77,7 +77,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          ref: "main"
       - run: git submodule update --init --recursive
 
       - name: Get version
@@ -115,7 +115,7 @@ jobs:
           touch "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/DEBIAN/control"
           mkdir -p "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/lib"
           mkdir "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/include"
-          cp include/usearch/usearch.h "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/include/"
+          cp include/c/usearch.h "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/include/"
           cp build_release/libusearch_c.so "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/lib/"
           echo -e "Package: usearch\nVersion: ${{ steps.set_version.outputs.version }}\nMaintainer: Ash Vardanian\nArchitecture: ${{ matrix.arch }}\nDescription: Faster & Smaller Single-File Search Engine for Vectors & Texts" > "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/DEBIAN/control"
           dpkg-deb --build "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}"
@@ -147,7 +147,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          ref: "main"
       - run: git submodule update --init --recursive
 
       - name: Setup CMake
@@ -195,7 +195,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          ref: "main"
       - run: git submodule update --init --recursive
 
       - uses: actions/setup-go@v4
@@ -210,7 +210,13 @@ jobs:
 
       - name: Build library
         run: |
-          cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_SQLITE=1 -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_BENCH_CPP=0 -B ./build_release
+          cmake -DCMAKE_BUILD_TYPE=Release \
+                -DUSEARCH_BUILD_LIB_C=1 \
+                -DUSEARCH_BUILD_SQLITE=1 \
+                -DUSEARCH_BUILD_TEST_CPP=0 \
+                -DUSEARCH_BUILD_BENCH_CPP=0 \
+                -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
+                -B ./build_release
           cmake --build ./build_release --config Release        
           zip -r usearch_macos_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.zip build_release/libusearch_c.dylib c/usearch.h
           mv build_release/libusearch_sqlite.dylib usearch_sqlite_macos_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.dylib
@@ -242,7 +248,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          ref: "main"
       - run: git submodule update --init --recursive
 
       - name: Get version
