@@ -3,7 +3,7 @@ import platform
 import tempfile
 import warnings
 import urllib.request
-from typing import Optional
+from typing import Optional, Tuple
 from urllib.error import HTTPError
 
 
@@ -21,7 +21,6 @@ class BinaryManager:
         if version is None:
             version = __version__
         self.version = version or __version__
-        self.download_dir = self.determine_download_dir()
 
     @staticmethod
     def determine_download_dir():
@@ -35,7 +34,13 @@ class BinaryManager:
             home_dir = os.path.expanduser("~")
             return os.path.join(home_dir, ".usearch", "binaries")
 
-    def sqlite_file_name(self) -> str:
+    @staticmethod
+    def determine_download_url(version: str, filename: str) -> str:
+        base_url = "https://github.com/unum-cloud/usearch/releases/download"
+        url = f"{base_url}/v{version}/{filename}"
+        return url
+
+    def get_binary_name(self) -> Tuple[str, str]:
         version = self.version
         os_map = {"Linux": "linux", "Windows": "windows", "Darwin": "macos"}
         arch_map = {
@@ -49,31 +54,9 @@ class BinaryManager:
         arch = platform.machine()
         arch_part = arch_map.get(arch, "")
         extension = {"Linux": "so", "Windows": "dll", "Darwin": "dylib"}.get(platform.system(), "")
-        filename = f"usearch_sqlite_{os_part}_{arch_part}_{version}.{extension}"
-        return filename
-
-    def sqlite_download_url(self) -> str:
-        version = self.version
-        filename = self.sqlite_file_name()
-        base_url = "https://github.com/unum-cloud/usearch/releases/download"
-        url = f"{base_url}/v{version}/{filename}"
-        return url
-
-    def download_binary(self, url: str, dest_folder: str) -> str:
-        """
-        Downloads a file from a given URL to a specified destination folder.
-
-        Args:
-            url (str): The URL to download the file from.
-            dest_folder (str): The folder where the file will be saved.
-
-        Returns:
-            The path to the downloaded file.
-        """
-        filename = url.split("/")[-1]
-        dest_path = os.path.join(dest_folder, filename)
-        urllib.request.urlretrieve(url, dest_path)
-        return dest_path
+        source_filename = f"usearch_sqlite_{os_part}_{arch_part}_{version}.{extension}"
+        target_filename = f"usearch_sqlite.{extension}"
+        return source_filename, target_filename
 
     def sqlite_found_or_downloaded(self) -> Optional[str]:
         """
@@ -85,37 +68,44 @@ class BinaryManager:
         """
         # Search local directories
         local_dirs = ["build", "build_artifacts", "build_release", "build_debug"]
-        extensions = {"Linux": ".so", "Windows": ".dll", "Darwin": ".dylib"}
-        os_type = platform.system()
-        file_extension = extensions.get(os_type, "")
+        source_filename, target_filename = self.get_binary_name()
 
         # Check local development directories first
-        for directory in local_dirs:
-            for root, _, files in os.walk(directory):
-                for file in files:
-                    if file.endswith(file_extension) and "usearch_sqlite" in file:
-                        return os.path.join(root, file).removesuffix(file_extension)
+        for local_dir in local_dirs:
 
-        # Check a temporary directory (assuming the binary might be downloaded from a GitHub release)
-        local_path = os.path.join(self.download_dir, self.sqlite_file_name())
-        if os.path.exists(local_path):
-            return local_path.removesuffix(file_extension)
+            local_path = os.path.join(local_dir, target_filename)
+            if os.path.exists(local_path):
+                path_wout_extension, _, _ = local_path.rpartition(".")
+                return path_wout_extension
 
-        # If not found locally, warn the user and download from GitHub
-        warnings.warn("Will download `usearch_sqlite` binary from GitHub.", UserWarning)
-        try:
-            binary_path = self.download_binary(self.sqlite_download_url(), self.download_dir)
-        except HTTPError as e:
-            # If the download fails due to HTTPError (e.g., 404 Not Found), like a missing lib version
-            if e.code == 404:
-                warnings.warn(f"Download failed: {e.url} could not be found.", UserWarning)
-            else:
-                warnings.warn(f"Download failed with HTTP error: {e.code} {e.reason}", UserWarning)
-            return None
+            # Most build systems on POSIX would prefix the library name with "lib"
+            local_path = os.path.join(local_dir, "lib" + target_filename)
+            if os.path.exists(local_path):
+                path_wout_extension, _, _ = local_path.rpartition(".")
+                return path_wout_extension
+
+        # Check local installation directories, in case the build is already installed
+        download_dir = self.determine_download_dir()
+        local_path = os.path.join(download_dir, target_filename)
+        if not os.path.exists(local_path):
+
+            # If not found locally, warn the user and download from GitHub
+            warnings.warn("Will download `usearch_sqlite` binary from GitHub.", UserWarning)
+            try:
+                source_url = self.determine_download_url(self.version, source_filename)
+                urllib.request.urlretrieve(source_url, local_path)
+            except HTTPError as e:
+                # If the download fails due to HTTPError (e.g., 404 Not Found), like a missing lib version
+                if e.code == 404:
+                    warnings.warn(f"Download failed: {e.url} could not be found.", UserWarning)
+                else:
+                    warnings.warn(f"Download failed with HTTP error: {e.code} {e.reason}", UserWarning)
+                return None
 
         # Handle the case where binary_path does not exist after supposed successful download
-        if os.path.exists(binary_path):
-            return binary_path.removesuffix(file_extension)
+        if os.path.exists(local_path):
+            path_wout_extension, _, _ = local_path.rpartition(".")
+            return path_wout_extension
         else:
             warnings.warn("Failed to download `usearch_sqlite` binary from GitHub.", UserWarning)
             return None

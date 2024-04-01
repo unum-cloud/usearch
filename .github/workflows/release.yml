@@ -115,7 +115,7 @@ jobs:
           touch "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/DEBIAN/control"
           mkdir -p "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/lib"
           mkdir "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/include"
-          cp include/c/usearch.h "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/include/"
+          cp c/usearch.h "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/include/"
           cp build_release/libusearch_c.so "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/lib/"
           echo -e "Package: usearch\nVersion: ${{ steps.set_version.outputs.version }}\nMaintainer: Ash Vardanian\nArchitecture: ${{ matrix.arch }}\nDescription: Faster & Smaller Single-File Search Engine for Vectors & Texts" > "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/DEBIAN/control"
           dpkg-deb --build "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}"
@@ -125,15 +125,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          file: "*.so"
-          update_latest_release: true
-
-      - name: Upload archive
-        uses: xresloader/upload-to-github-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          file: "*.deb"
+          file: "*.so;*.deb"
           update_latest_release: true
 
   create_windows_dll_library:
@@ -184,7 +176,7 @@ jobs:
           file: "usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar"
           update_latest_release: true
 
-  create_macos_library:
+  create_macos_dylib_library:
     name: Create Library for MacOS ${{ matrix.arch }}
     runs-on: macos-12
     needs: versioning
@@ -237,7 +229,7 @@ jobs:
           file: "*.zip"
           update_latest_release: true
 
-  wasm_c_library:
+  create_wasm_library:
     name: WASM builds for C libraries on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     needs: versioning
@@ -329,8 +321,8 @@ jobs:
         versioning,
         create_linux_deb_package,
         create_windows_dll_library,
-        create_macos_library,
-        wasm_c_library,
+        create_macos_dylib_library,
+        create_wasm_library,
         deploy_docs_pages,
       ]
     steps:

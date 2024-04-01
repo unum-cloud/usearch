@@ -34,7 +34,7 @@ def test_sqlite_minimal_json_cosine_vector_search():
         pytest.skip("SQLite extensions are not available on this platform")
         return
 
-    conn.load_extension(usearch.sqlite)
+    conn.load_extension(usearch.sqlite_path())
     cursor = conn.cursor()
 
     # Create a table with a JSON column for vectors
@@ -76,7 +76,7 @@ def test_sqlite_minimal_text_search():
         pytest.skip("SQLite extensions are not available on this platform")
         return
 
-    conn.load_extension(usearch.sqlite)
+    conn.load_extension(usearch.sqlite_path())
     cursor = conn.cursor()
 
     # Create a table with a TEXT column for strings
@@ -132,7 +132,7 @@ def test_sqlite_blob_bits_vector_search():
         pytest.skip("SQLite extensions are not available on this platform")
         return
 
-    conn.load_extension(usearch.sqlite)
+    conn.load_extension(usearch.sqlite_path())
     cursor = conn.cursor()
 
     # Create a table with a BLOB column for binary vectors
@@ -195,7 +195,7 @@ def test_sqlite_distances_in_high_dimensions(num_vectors: int, ndim: int):
         pytest.skip("SQLite extensions are not available on this platform")
         return
 
-    conn.load_extension(usearch.sqlite)
+    conn.load_extension(usearch.sqlite_path())
     cursor = conn.cursor()
 
     # Create a table with additional columns for f32 and f16 BLOBs
@@ -271,7 +271,7 @@ def test_sqlite_distances_in_low_dimensions(num_vectors: int):
         pytest.skip("SQLite extensions are not available on this platform")
         return
 
-    conn.load_extension(usearch.sqlite)
+    conn.load_extension(usearch.sqlite_path())
     cursor = conn.cursor()
 
     # Create a table for storing vectors and their descriptions
