@@ -9,7 +9,11 @@ import pytest
 import usearch
 
 
-found_sqlite_path = usearch.sqlite
+try:
+    found_sqlite_path = usearch.sqlite_path()
+except FileNotFoundError:
+    found_sqlite_path = None
+
 if found_sqlite_path is None:
     pytest.skip(reason="Can't find an SQLite installation", allow_module_level=True)
 

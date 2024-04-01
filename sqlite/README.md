@@ -30,7 +30,7 @@ import usearch
 
 conn = sqlite3.connect(":memory:")
 conn.enable_load_extension(True)
-conn.load_extension(usearch.sqlite)
+conn.load_extension(usearch.sqlite_path())
 ```
 
 Afterwards, the following script should work fine.
