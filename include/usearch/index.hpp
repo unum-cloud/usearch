@@ -3628,8 +3628,8 @@ struct join_result_t {
  *          to perform fast one-to-one matching between two large collections
  *          of vectors, using approximate nearest neighbors search.
  *
- *  @param[inout] man_to_woman Container to map ::first keys to ::second.
- *  @param[inout] woman_to_man Container to map ::second keys to ::first.
+ *  @param[inout] man_to_woman Container to map ::men keys to ::women.
+ *  @param[inout] woman_to_man Container to map ::women keys to ::men.
  *  @param[in] executor Thread-pool to execute the job in parallel.
  *  @param[in] progress Callback to report the execution progress.
  */

@@ -495,7 +495,14 @@ jobs:
         if: matrix.os == 'macos-latest'
       - name: Extra for cross build
         if: matrix.os == 'ubuntu-22.04'
-        run: npm run prebuild-arm64
+        run: |
+          export CC=aarch64-linux-gnu-gcc
+          export CXX=aarch64-linux-gnu-g++
+          export AR=aarch64-linux-gnu-ar
+          export AS=aarch64-linux-gnu-as
+          export LD=aarch64-linux-gnu-ld
+          export STRIP=aarch64-linux-gnu-strip
+          npm run prebuild-arm64
       - uses: actions/upload-artifact@v3
         with:
           name: prebuilds
@@ -766,8 +773,8 @@ jobs:
         run: |
           sudo apt update && 
           sudo apt install -y doxygen graphviz dia git && 
-          pip install sphinx==5.3.0 sphinx-js==3.2.1 breathe==4.35.0 furo==2023.3.27 m2r2==0.3.3.post2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery==4.1 && 
-          npm install -g jsdoc
+          pip install -r docs/requirements.txt && 
+          npm install -g jsdoc typedoc
       - name: Install USearch from PyPi
         run: pip install usearch
       - name: Build documentation
