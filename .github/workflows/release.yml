@@ -495,7 +495,14 @@ jobs:
         if: matrix.os == 'macos-latest'
       - name: Extra for cross build
         if: matrix.os == 'ubuntu-22.04'
-        run: npm run prebuild-arm64
+        run: |
+          export CC=aarch64-linux-gnu-gcc
+          export CXX=aarch64-linux-gnu-g++
+          export AR=aarch64-linux-gnu-ar
+          export AS=aarch64-linux-gnu-as
+          export LD=aarch64-linux-gnu-ld
+          export STRIP=aarch64-linux-gnu-strip
+          npm run prebuild-arm64
       - uses: actions/upload-artifact@v3
         with:
           name: prebuilds
