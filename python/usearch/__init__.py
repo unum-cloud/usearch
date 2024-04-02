@@ -93,6 +93,7 @@ class BinaryManager:
             warnings.warn("Will download `usearch_sqlite` binary from GitHub.", UserWarning)
             try:
                 source_url = self.determine_download_url(self.version, source_filename)
+                os.makedirs(download_dir, exist_ok=True)
                 urllib.request.urlretrieve(source_url, local_path)
             except HTTPError as e:
                 # If the download fails due to HTTPError (e.g., 404 Not Found), like a missing lib version
