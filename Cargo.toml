@@ -8,6 +8,16 @@ license = "Apache-2.0"
 publish = true
 repository = "https://github.com/unum-cloud/usearch"
 
+# If no precompiled binaries are available, the build script will compile the
+# following files using the `build.rs` specification.
+include = [
+    "rust/*",
+    "include/*",
+    "fp16/include/*",
+    "simsimd/include/*",
+    "Cargo.toml",
+]
+
 [lib]
 name = "usearch"
 path = "rust/lib.rs"
