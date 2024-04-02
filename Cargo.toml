@@ -18,6 +18,12 @@ include = [
     "Cargo.toml",
 ]
 
+[features]
+default = ["simsimd"] # SimSIMD is enabled by default
+simsimd = []          # No need to do anything to enable SimSIMD by default
+openmp = []           # Optional: Users can enable OpenMP
+fp16lib = []          # Optional: Users can enable FP16 support
+
 [lib]
 name = "usearch"
 path = "rust/lib.rs"
