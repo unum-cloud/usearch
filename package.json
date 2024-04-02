@@ -17,7 +17,14 @@
         "node": "~10 >=10.20 || >=12.17"
     },
     "files": [
-        "javascript/dist",
+        "binding.gyp",
+        "c",
+        "cpp",
+        "cmake",
+        "fp16",
+        "simsimd",
+        "include",
+        "javascript",
         "prebuilds"
     ],
     "dependencies": {
