@@ -107,36 +107,41 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
 
 /**
  *  @brief Frees the resources associated with the index.
+ *  @param[inout] index The handle to the USearch index to be freed.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
-USEARCH_EXPORT void usearch_free(usearch_index_t, usearch_error_t* error);
+USEARCH_EXPORT void usearch_free(usearch_index_t index, usearch_error_t* error);
 
 /**
  *  @brief Reports expected file size after serialization.
+ *  @param[in] index The handle to the USearch index to be serialized.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
-USEARCH_EXPORT size_t usearch_serialized_length(usearch_index_t, usearch_error_t* error);
+USEARCH_EXPORT size_t usearch_serialized_length(usearch_index_t index, usearch_error_t* error);
 
 /**
  *  @brief Saves the index to a file.
+ *  @param[in] index The handle to the USearch index to be serialized.
  *  @param[in] path The file path where the index will be saved.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
-USEARCH_EXPORT void usearch_save(usearch_index_t, char const* path, usearch_error_t* error);
+USEARCH_EXPORT void usearch_save(usearch_index_t index, char const* path, usearch_error_t* error);
 
 /**
  *  @brief Loads the index from a file.
+ *  @param[inout] index The handle to the USearch index to be populated from path.
  *  @param[in] path The file path from where the index will be loaded.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
-USEARCH_EXPORT void usearch_load(usearch_index_t, char const* path, usearch_error_t* error);
+USEARCH_EXPORT void usearch_load(usearch_index_t index, char const* path, usearch_error_t* error);
 
 /**
  *  @brief Creates a view of the index from a file without copying it into memory.
+ *  @param[inout] index The handle to the USearch index to be populated with a file view.
  *  @param[in] path The file path from where the view will be created.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
-USEARCH_EXPORT void usearch_view(usearch_index_t, char const* path, usearch_error_t* error);
+USEARCH_EXPORT void usearch_view(usearch_index_t index, char const* path, usearch_error_t* error);
 
 /**
  *  @brief Loads index metadata from a file.
@@ -149,28 +154,36 @@ USEARCH_EXPORT void usearch_metadata(char const* path, usearch_init_options_t* o
 
 /**
  *  @brief Saves the index to an in-memory buffer.
+ *  @param[in] index The handle to the USearch index to be serialized.
  *  @param[in] buffer The in-memory continuous buffer where the index will be saved.
+ *  @param[in] length The length of the buffer in bytes.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
-USEARCH_EXPORT void usearch_save_buffer(usearch_index_t, void* buffer, size_t length, usearch_error_t* error);
+USEARCH_EXPORT void usearch_save_buffer(usearch_index_t index, void* buffer, size_t length, usearch_error_t* error);
 
 /**
  *  @brief Loads the index from an in-memory buffer.
+ *  @param[inout] index The handle to the USearch index to be populated from buffer.
  *  @param[in] buffer The in-memory continuous buffer from where the index will be loaded.
+ *  @param[in] length The length of the buffer in bytes.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
-USEARCH_EXPORT void usearch_load_buffer(usearch_index_t, void const* buffer, size_t length, usearch_error_t* error);
+USEARCH_EXPORT void usearch_load_buffer(usearch_index_t index, void const* buffer, size_t length,
+                                        usearch_error_t* error);
 
 /**
  *  @brief Creates a view of the index from an in-memory buffer without copying it into memory.
+ *  @param[inout] index The handle to the USearch index to be populated with a buffer view.
  *  @param[in] buffer The in-memory continuous buffer from where the view will be created.
+ *  @param[in] length The length of the buffer in bytes.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
-USEARCH_EXPORT void usearch_view_buffer(usearch_index_t, void const* buffer, size_t length, usearch_error_t* error);
+USEARCH_EXPORT void usearch_view_buffer(usearch_index_t index, void const* buffer, size_t length,
+                                        usearch_error_t* error);
 
 /**
  *  @brief Loads index metadata from an in-memory buffer.
- *  @param[in] path The file path from where the index will be loaded.
+ *  @param[in] buffer The in-memory continuous buffer from where the view will be created.
  *  @param[out] options Pointer to the `usearch_init_options_t` structure to be populated.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  *  @return A handle to the initialized USearch index, or `NULL` on failure.
@@ -178,47 +191,75 @@ USEARCH_EXPORT void usearch_view_buffer(usearch_index_t, void const* buffer, siz
 USEARCH_EXPORT void usearch_metadata_buffer(void const* buffer, size_t length, usearch_init_options_t* options,
                                             usearch_error_t* error);
 
-USEARCH_EXPORT size_t usearch_size(usearch_index_t, usearch_error_t* error);
-USEARCH_EXPORT size_t usearch_capacity(usearch_index_t, usearch_error_t* error);
-USEARCH_EXPORT size_t usearch_dimensions(usearch_index_t, usearch_error_t* error);
-USEARCH_EXPORT size_t usearch_connectivity(usearch_index_t, usearch_error_t* error);
+/**
+ *  @brief Reports the current size (number of vectors) of the index.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT size_t usearch_size(usearch_index_t index, usearch_error_t* error);
+
+/**
+ *  @brief Reports the current capacity (number of vectors) of the index.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT size_t usearch_capacity(usearch_index_t index, usearch_error_t* error);
+
+/**
+ *  @brief Reports the current dimensions of the vectors in the index.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT size_t usearch_dimensions(usearch_index_t index, usearch_error_t* error);
+
+/**
+ *  @brief Reports the current connectivity of the index.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT size_t usearch_connectivity(usearch_index_t index, usearch_error_t* error);
 
 /**
  *  @brief Reserves memory for a specified number of incoming vectors.
+ *  @param[inout] index The handle to the USearch index to be resized.
  *  @param[in] capacity The desired total capacity including current size.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
-USEARCH_EXPORT void usearch_reserve(usearch_index_t, size_t capacity, usearch_error_t* error);
+USEARCH_EXPORT void usearch_reserve(usearch_index_t index, size_t capacity, usearch_error_t* error);
 
 /**
  *  @brief Adds a vector with a key to the index.
+ *  @param[inout] index The handle to the USearch index to be populated.
  *  @param[in] key The key associated with the vector.
  *  @param[in] vector Pointer to the vector data.
  *  @param[in] vector_kind The scalar type used in the vector data.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
-USEARCH_EXPORT void usearch_add(        //
-    usearch_index_t, usearch_key_t key, //
+USEARCH_EXPORT void usearch_add(              //
+    usearch_index_t index, usearch_key_t key, //
     void const* vector, usearch_scalar_kind_t vector_kind, usearch_error_t* error);
 
 /**
  *  @brief Checks if the index contains a vector with a specific key.
+ *  @param[in] index The handle to the USearch index to be queried.
  *  @param[in] key The key to be checked.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  *  @return `true` if the index contains the vector with the given key, `false` otherwise.
  */
-USEARCH_EXPORT bool usearch_contains(usearch_index_t, usearch_key_t, usearch_error_t* error);
+USEARCH_EXPORT bool usearch_contains(usearch_index_t index, usearch_key_t key, usearch_error_t* error);
 
 /**
  *  @brief Counts the number of entries in the index under a specific key.
+ *  @param[in] index The handle to the USearch index to be queried.
  *  @param[in] key The key to be checked.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  *  @return Number of vectors found under that key.
  */
-USEARCH_EXPORT size_t usearch_count(usearch_index_t, usearch_key_t, usearch_error_t* error);
+USEARCH_EXPORT size_t usearch_count(usearch_index_t index, usearch_key_t, usearch_error_t* error);
 
 /**
  *  @brief Performs k-Approximate Nearest Neighbors (kANN) Search for closest vectors to query.
+ *  @param[in] index The handle to the USearch index to be queried.
  *  @param[in] query_vector Pointer to the query vector data.
  *  @param[in] query_kind The scalar type used in the query vector data.
  *  @param[in] count Upper bound on the number of neighbors to search, the "k" in "kANN".
@@ -228,12 +269,13 @@ USEARCH_EXPORT size_t usearch_count(usearch_index_t, usearch_key_t, usearch_erro
  *  @return Number of found matches.
  */
 USEARCH_EXPORT size_t usearch_search(                           //
-    usearch_index_t,                                            //
+    usearch_index_t index,                                      //
     void const* query_vector, usearch_scalar_kind_t query_kind, //
     size_t count, usearch_key_t* keys, usearch_distance_t* distances, usearch_error_t* error);
 
 /**
  *  @brief Retrieves the vector associated with the given key from the index.
+ *  @param[in] index The handle to the USearch index to be queried.
  *  @param[in] key The key of the vector to retrieve.
  *  @param[out] vector Pointer to the memory where the vector data will be copied.
  *  @param[in] count Number of vectors that can be fitted into `vector` for multi-vector entries.
@@ -241,26 +283,29 @@ USEARCH_EXPORT size_t usearch_search(                           //
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  *  @return Number of vectors found under that name and exported to `vector`.
  */
-USEARCH_EXPORT size_t usearch_get(                    //
-    usearch_index_t, usearch_key_t key, size_t count, //
+USEARCH_EXPORT size_t usearch_get(                          //
+    usearch_index_t index, usearch_key_t key, size_t count, //
     void* vector, usearch_scalar_kind_t vector_kind, usearch_error_t* error);
 
 /**
  *  @brief Removes the vector associated with the given key from the index.
+ *  @param[inout] index The handle to the USearch index to be modified.
  *  @param[in] key The key of the vector to be removed.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  *  @return Number of vectors found under that name and dropped from the index.
  */
-USEARCH_EXPORT size_t usearch_remove(usearch_index_t, usearch_key_t key, usearch_error_t* error);
+USEARCH_EXPORT size_t usearch_remove(usearch_index_t index, usearch_key_t key, usearch_error_t* error);
 
 /**
  *  @brief Renames the vector to map to a different key.
+ *  @param[inout] index The handle to the USearch index to be modified.
  *  @param[in] from The key of the vector to be renamed.
  *  @param[in] to New key for found entry.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  *  @return Number of vectors found under that name and renamed.
  */
-USEARCH_EXPORT size_t usearch_rename(usearch_index_t, usearch_key_t from, usearch_key_t to, usearch_error_t* error);
+USEARCH_EXPORT size_t usearch_rename(usearch_index_t index, usearch_key_t from, usearch_key_t to,
+                                     usearch_error_t* error);
 
 /**
  *  @brief Computes the distance between two equi-dimensional vectors.
