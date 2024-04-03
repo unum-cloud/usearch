@@ -481,7 +481,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev gcc-12 g++-12
-          sudo apt install gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          sudo apt install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu g++-aarch64-linux-gnu
 
       - run: npm ci --ignore-scripts
       - run: npm run prebuild-single
@@ -494,7 +494,7 @@ jobs:
       - run: file prebuilds/*/*
         if: matrix.os == 'macos-latest'
       - name: Extra for cross build
-        if: matrix.os == 'ubuntu-22.04'
+        if: matrix.os == 'ubuntu-22.04-skip'
         run: |
           export CC=aarch64-linux-gnu-gcc
           export CXX=aarch64-linux-gnu-g++
