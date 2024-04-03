@@ -36,7 +36,7 @@
         "test": "node --test ./javascript/usearch.test.js",
         "install": "node-gyp-build",
         "prebuild-single": "prebuildify --napi --strip",
-        "prebuild-arm64": "prebuildify --arch arm64 --napi --strip",
+        "prebuild-arm64": "prebuildify --arch arm64 --napi",
         "prebuild-darwin-x64+arm64": "prebuildify --arch arm64+x64 --napi --strip",
         "build-js": "rm -fr javascript/dist/* && tsc -p javascript/tsconfig-esm.json && tsc -p javascript/tsconfig-cjs.json && cp javascript/dist-package-esm.json javascript/dist/esm/package.json && cp javascript/dist-package-cjs.json javascript/dist/cjs/package.json"
     },
