@@ -481,7 +481,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev gcc-12 g++-12
-          sudo apt install gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          sudo apt install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu g++-aarch64-linux-gnu
 
       - run: npm ci --ignore-scripts
       - run: npm run prebuild-single
@@ -503,6 +503,7 @@ jobs:
           export LD=aarch64-linux-gnu-ld
           export STRIP=aarch64-linux-gnu-strip
           npm run prebuild-arm64
+          aarch64-linux-gnu-strip prebuilds/linux-arm64/*node
       - uses: actions/upload-artifact@v3
         with:
           name: prebuilds
