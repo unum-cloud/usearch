@@ -29,7 +29,7 @@
     ],
     "dependencies": {
         "bindings": "^1.5.0",
-        "node-addon-api": "^3.0.0",
+        "node-addon-api": "^8.0.0",
         "node-gyp-build": "^4.8.0"
     },
     "scripts": {
@@ -42,10 +42,10 @@
     },
     "devDependencies": {
         "@types/bindings": "^1.5.5",
-        "@types/node": "^20.11.0",
-        "node-gyp": "^10.0.1",
+        "@types/node": "^20.12.4",
+        "node-gyp": "^10.1.0",
         "prebuildify": "^6.0.0",
-        "typescript": "^5.3.3"
+        "typescript": "^5.4.4"
     },
     "main": "javascript/dist/cjs/usearch.js",
     "module": "javascript/dist/esm/usearch.js",
