@@ -708,7 +708,7 @@ class index_dense_gt {
         cluster_config.thread = lock.thread_id;
         cluster_config.expansion = config_.expansion_search;
         metric_proxy_t metric{*this};
-        auto allow = [=](member_cref_t const& member) noexcept { return member.key != free_key_; };
+        auto allow = [=, this](member_cref_t const& member) noexcept { return member.key != free_key_; };
 
         // Find the closest cluster for any vector under that key.
         while (key_range.first != key_range.second) {
@@ -1787,7 +1787,7 @@ class index_dense_gt {
         search_config.expansion = config_.expansion_search;
         search_config.exact = exact;
 
-        auto allow = [=](member_cref_t const& member) noexcept { return member.key != free_key_; };
+        auto allow = [=, this](member_cref_t const& member) noexcept { return member.key != free_key_; };
         return typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow);
     }
 
@@ -1810,7 +1810,7 @@ class index_dense_gt {
         cluster_config.thread = lock.thread_id;
         cluster_config.expansion = config_.expansion_search;
 
-        auto allow = [=](member_cref_t const& member) noexcept { return member.key != free_key_; };
+        auto allow = [=, this](member_cref_t const& member) noexcept { return member.key != free_key_; };
         return typed_->cluster(vector_data, level, metric_proxy_t{*this}, cluster_config, allow);
     }
 
