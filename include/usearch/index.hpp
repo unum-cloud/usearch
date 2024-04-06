@@ -3497,8 +3497,11 @@ class index_gt {
 
         distance_t radius = context.measure(query, citerator_at(start_slot), metric);
         next.insert_reserved({-radius, static_cast<compressed_slot_t>(start_slot)});
-        top.insert_reserved({radius, static_cast<compressed_slot_t>(start_slot)});
         visits.set(static_cast<compressed_slot_t>(start_slot));
+
+        // Don't populate the top list if the predicate is not satisfied
+        if (is_dummy<predicate_at>() || predicate(member_cref_t{node_at_(start_slot).ckey(), start_slot}))
+            top.insert_reserved({radius, static_cast<compressed_slot_t>(start_slot)});
 
         while (!next.empty()) {
 
@@ -3529,12 +3532,9 @@ class index_gt {
                 if (top.size() < top_limit || successor_dist < radius) {
                     // This can substantially grow our priority queue:
                     next.insert({-successor_dist, successor_slot});
-                    if (!is_dummy<predicate_at>())
-                        if (!predicate(member_cref_t{node_at_(successor_slot).ckey(), successor_slot}))
-                            continue;
-
-                    // This will automatically evict poor matches:
-                    top.insert({successor_dist, successor_slot}, top_limit);
+                    if (is_dummy<predicate_at>() ||
+                        predicate(member_cref_t{node_at_(successor_slot).ckey(), successor_slot}))
+                        top.insert({successor_dist, successor_slot}, top_limit);
                     radius = top.top().distance;
                 }
             }
