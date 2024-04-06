@@ -102,12 +102,12 @@ impl Default for ffi::IndexOptions {
         use crate::ffi::MetricKind;
         use crate::ffi::ScalarKind;
         Self {
-            dimensions: 128,
-            metric: MetricKind::IP,
-            quantization: ScalarKind::F32,
-            connectivity: 32,
-            expansion_add: 2,
-            expansion_search: 3,
+            dimensions: 256,
+            metric: MetricKind::Cos,
+            quantization: ScalarKind::F16,
+            connectivity: 0,
+            expansion_add: 0,
+            expansion_search: 0,
             multi: false,
         }
     }
