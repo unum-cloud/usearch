@@ -228,6 +228,57 @@ USEARCH_EXPORT size_t usearch_connectivity(usearch_index_t index, usearch_error_
 USEARCH_EXPORT void usearch_reserve(usearch_index_t index, size_t capacity, usearch_error_t* error);
 
 /**
+ *  @brief Retrieves the expansion value used during index creation.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ *  @return The expansion value used during index creation.
+ */
+USEARCH_EXPORT size_t usearch_expansion_add(usearch_index_t index, usearch_error_t* error);
+
+/**
+ *  @brief Retrieves the expansion value used during search.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ *  @return The expansion value used during search.
+ */
+USEARCH_EXPORT size_t usearch_expansion_search(usearch_index_t index, usearch_error_t* error);
+
+/**
+ *  @brief Updates the expansion value used during index creation. Rarely used.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[in] expansion The new expansion value.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT void usearch_change_expansion_add(usearch_index_t index, size_t expansion, usearch_error_t* error);
+
+/**
+ *  @brief Updates the expansion value used during search. Rarely used.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[in] expansion The new expansion value.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT void usearch_change_expansion_search(usearch_index_t index, size_t expansion, usearch_error_t* error);
+
+/**
+ *  @brief Updates the metric kind used for distance calculation between vectors.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[in] kind The metric kind used for distance calculation between vectors.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT void usearch_change_metric_kind(usearch_index_t index, usearch_metric_kind_t kind,
+                                               usearch_error_t* error);
+
+/**
+ *  @brief Updates the custom metric function used for distance calculation between vectors.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[in] metric The custom metric function used for distance calculation between vectors.
+ *  @param[in] kind The metric kind used for distance calculation between vectors. Needed for serialization.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT void usearch_change_metric(usearch_index_t index, usearch_metric_t metric, usearch_metric_kind_t kind,
+                                          usearch_error_t* error);
+
+/**
  *  @brief Adds a vector with a key to the index.
  *  @param[inout] index The handle to the USearch index to be populated.
  *  @param[in] key The key associated with the vector.
