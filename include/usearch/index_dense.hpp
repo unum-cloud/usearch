@@ -930,7 +930,7 @@ class index_dense_gt {
                 return result.failed("Slot type doesn't match, consider rebuilding");
 
             config_.multi = head.multi;
-            metric_ = metric_t(head.dimensions, head.kind_metric, head.kind_scalar);
+            metric_ = metric_t::builtin(head.dimensions, head.kind_metric, head.kind_scalar);
             cast_buffer_.resize(available_threads_.size() * metric_.bytes_per_vector());
             casts_ = make_casts_(head.kind_scalar);
         }
@@ -1016,7 +1016,7 @@ class index_dense_gt {
                 return result.failed("Slot type doesn't match, consider rebuilding");
 
             config_.multi = head.multi;
-            metric_ = metric_t(head.dimensions, head.kind_metric, head.kind_scalar);
+            metric_ = metric_t::builtin(head.dimensions, head.kind_metric, head.kind_scalar);
             cast_buffer_.resize(available_threads_.size() * metric_.bytes_per_vector());
             casts_ = make_casts_(head.kind_scalar);
             offset += sizeof(buffer);

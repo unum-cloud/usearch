@@ -121,8 +121,8 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
     scalar_kind_t scalar_kind = scalar_kind_to_cpp(options->quantization);
 
     metric_punned_t metric = //
-        !options->metric ? metric_punned_t(options->dimensions, metric_kind, scalar_kind)
-                         : metric_punned_t(options->dimensions,                               //
+        !options->metric ? metric_punned_t::builtin(options->dimensions, metric_kind, scalar_kind)
+                         : metric_punned_t::stateless(options->dimensions,                               //
                                            reinterpret_cast<std::uintptr_t>(options->metric), //
                                            metric_punned_signature_t::array_array_k,          //
                                            metric_kind, scalar_kind);
@@ -283,16 +283,21 @@ USEARCH_EXPORT void usearch_change_metric_kind(usearch_index_t index, usearch_me
     USEARCH_ASSERT(index && error && "Missing arguments");
     auto& index_dense = *reinterpret_cast<index_dense_t*>(index);
     index_dense.change_metric(
-        metric_punned_t(index_dense.dimensions(), metric_kind_to_cpp(kind), index_dense.scalar_kind()));
+        metric_punned_t::builtin(index_dense.dimensions(), metric_kind_to_cpp(kind), index_dense.scalar_kind()));
 }
 
-USEARCH_EXPORT void usearch_change_metric(usearch_index_t index, usearch_metric_t metric, usearch_metric_kind_t kind,
-                                          usearch_error_t* error) {
+USEARCH_EXPORT void usearch_change_metric(usearch_index_t index, usearch_metric_t metric, void* state,
+                                          usearch_metric_kind_t kind, usearch_error_t* error) {
     USEARCH_ASSERT(index && error && "Missing arguments");
     auto& index_dense = *reinterpret_cast<index_dense_t*>(index);
-    index_dense.change_metric(metric_punned_t(index_dense.dimensions(), reinterpret_cast<std::uintptr_t>(metric),
+    auto metric_punned =
+        state ? metric_punned_t::statefull(reinterpret_cast<std::uintptr_t>(metric),
+                                           reinterpret_cast<std::uintptr_t>(state), metric_kind_to_cpp(kind),
+                                           index_dense.scalar_kind())
+              : metric_punned_t::stateless(index_dense.dimensions(), reinterpret_cast<std::uintptr_t>(metric),
                                               metric_punned_signature_t::array_array_k, metric_kind_to_cpp(kind),
-                                              index_dense.scalar_kind()));
+                                           index_dense.scalar_kind());
+    index_dense.change_metric(std::move(metric_punned));
 }
 
 USEARCH_EXPORT void usearch_reserve(usearch_index_t index, size_t capacity, usearch_error_t* error) {
@@ -321,13 +326,13 @@ USEARCH_EXPORT size_t usearch_count(usearch_index_t index, usearch_key_t key, us
     return reinterpret_cast<index_dense_t*>(index)->count(key);
 }
 
-USEARCH_EXPORT size_t usearch_search(                                                            //
-    usearch_index_t index, void const* vector, usearch_scalar_kind_t kind, size_t results_limit, //
+USEARCH_EXPORT size_t usearch_search(                                                                 //
+    usearch_index_t index, void const* query, usearch_scalar_kind_t query_kind, size_t results_limit, //
     usearch_key_t* found_keys, usearch_distance_t* found_distances, usearch_error_t* error) {
 
-    USEARCH_ASSERT(index && vector && error && "Missing arguments");
+    USEARCH_ASSERT(index && query && error && "Missing arguments");
     search_result_t result =
-        search_(reinterpret_cast<index_dense_t*>(index), vector, scalar_kind_to_cpp(kind), results_limit);
+        search_(reinterpret_cast<index_dense_t*>(index), query, scalar_kind_to_cpp(query_kind), results_limit);
     if (!result) {
         *error = result.error.release();
         return 0;
