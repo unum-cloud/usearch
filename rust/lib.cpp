@@ -10,13 +10,40 @@ using search_result_t = typename index_t::search_result_t;
 using labeling_result_t = typename index_t::labeling_result_t;
 using vector_key_t = typename index_dense_t::vector_key_t;
 
-template <typename scalar_at> Matches search_(index_dense_t& index, scalar_at const* vec, size_t count) {
+metric_kind_t rust_to_cpp_metric(MetricKind value) {
+    switch (value) {
+    case MetricKind::IP: return metric_kind_t::ip_k;
+    case MetricKind::L2sq: return metric_kind_t::l2sq_k;
+    case MetricKind::Cos: return metric_kind_t::cos_k;
+    case MetricKind::Pearson: return metric_kind_t::pearson_k;
+    case MetricKind::Haversine: return metric_kind_t::haversine_k;
+    case MetricKind::Divergence: return metric_kind_t::divergence_k;
+    case MetricKind::Hamming: return metric_kind_t::hamming_k;
+    case MetricKind::Tanimoto: return metric_kind_t::tanimoto_k;
+    case MetricKind::Sorensen: return metric_kind_t::sorensen_k;
+    default: return metric_kind_t::unknown_k;
+    }
+}
+
+scalar_kind_t rust_to_cpp_scalar(ScalarKind value) {
+    switch (value) {
+    case ScalarKind::I8: return scalar_kind_t::i8_k;
+    case ScalarKind::F16: return scalar_kind_t::f16_k;
+    case ScalarKind::F32: return scalar_kind_t::f32_k;
+    case ScalarKind::F64: return scalar_kind_t::f64_k;
+    case ScalarKind::B1: return scalar_kind_t::b1x8_k;
+    default: return scalar_kind_t::unknown_k;
+    }
+}
+
+template <typename scalar_at, typename predicate_at = dummy_predicate_t>
+Matches search_(index_dense_t& index, scalar_at const* vec, size_t count, predicate_at&& predicate = predicate_at{}) {
     Matches matches;
     matches.keys.reserve(count);
     matches.distances.reserve(count);
     for (size_t i = 0; i != count; ++i)
         matches.keys.push_back(0), matches.distances.push_back(0);
-    search_result_t result = index.search(vec, count);
+    search_result_t result = index.filtered_search(vec, count, std::forward<predicate_at>(predicate));
     result.error.raise();
     count = result.dump_to(matches.keys.data(), matches.distances.data());
     matches.keys.truncate(count);
@@ -25,6 +52,14 @@ template <typename scalar_at> Matches search_(index_dense_t& index, scalar_at co
 }
 
 NativeIndex::NativeIndex(std::unique_ptr<index_t> index) : index_(std::move(index)) {}
+
+auto make_predicate(uptr_t metric, uptr_t metric_state) {
+    return [=](vector_key_t key) {
+        auto func = reinterpret_cast<bool (*)(uptr_t, vector_key_t)>(metric);
+        auto state = reinterpret_cast<uptr_t>(metric_state);
+        return func(key, state);
+    };
+}
 
 // clang-format off
 void NativeIndex::add_i8(vector_key_t key, rust::Slice<int8_t const> vec) const { index_->add(key, vec.data()).error.raise(); }
@@ -37,6 +72,11 @@ Matches NativeIndex::search_f16(rust::Slice<uint16_t const> vec, size_t count) c
 Matches NativeIndex::search_f32(rust::Slice<float const> vec, size_t count) const { return search_(*index_, vec.data(), count); }
 Matches NativeIndex::search_f64(rust::Slice<double const> vec, size_t count) const { return search_(*index_, vec.data(), count); }
 
+Matches NativeIndex::filtered_search_i8(rust::Slice<int8_t const> vec, size_t count, uptr_t metric, uptr_t metric_state) const { return search_(*index_, vec.data(), count, make_predicate(metric, metric_state)); }
+Matches NativeIndex::filtered_search_f16(rust::Slice<uint16_t const> vec, size_t count, uptr_t metric, uptr_t metric_state) const { return search_(*index_, (f16_t const*)vec.data(), count, make_predicate(metric, metric_state)); }
+Matches NativeIndex::filtered_search_f32(rust::Slice<float const> vec, size_t count, uptr_t metric, uptr_t metric_state) const { return search_(*index_, vec.data(), count, make_predicate(metric, metric_state)); }
+Matches NativeIndex::filtered_search_f64(rust::Slice<double const> vec, size_t count, uptr_t metric, uptr_t metric_state) const { return search_(*index_, vec.data(), count, make_predicate(metric, metric_state)); }
+
 size_t NativeIndex::get_i8(vector_key_t key, rust::Slice<int8_t> vec) const { if (vec.size() % dimensions()) throw std::invalid_argument("Vector length must be a multiple of index dimensionality"); return index_->get(key, vec.data(), vec.size() / dimensions()); }
 size_t NativeIndex::get_f16(vector_key_t key, rust::Slice<uint16_t> vec) const { if (vec.size() % dimensions()) throw std::invalid_argument("Vector length must be a multiple of index dimensionality"); return index_->get(key, (f16_t*)vec.data(), vec.size() / dimensions()); }
 size_t NativeIndex::get_f32(vector_key_t key, rust::Slice<float> vec) const { if (vec.size() % dimensions()) throw std::invalid_argument("Vector length must be a multiple of index dimensionality"); return index_->get(key, vec.data(), vec.size() / dimensions()); }
@@ -47,6 +87,21 @@ size_t NativeIndex::expansion_add() const { return index_->expansion_add(); }
 size_t NativeIndex::expansion_search() const { return index_->expansion_search(); }
 void NativeIndex::change_expansion_add(size_t n) const { index_->change_expansion_add(n); }
 void NativeIndex::change_expansion_search(size_t n) const { index_->change_expansion_search(n); }
+
+void NativeIndex::change_metric(uptr_t metric, uptr_t state) const {
+    index_->change_metric(metric_punned_t::statefull( //
+        reinterpret_cast<std::uintptr_t>(metric),     //
+        reinterpret_cast<std::uintptr_t>(state),      //
+        index_->metric().metric_kind(),               //
+        index_->scalar_kind()));
+}
+
+void NativeIndex::change_metric_kind(MetricKind metric) const {
+    index_->change_metric(metric_punned_t::builtin( //
+        index_->dimensions(),                       //
+        rust_to_cpp_metric(metric),                 //
+        index_->scalar_kind()));
+}
 
 size_t NativeIndex::remove(vector_key_t key) const {
     labeling_result_t result = index_->remove(key);
@@ -99,32 +154,6 @@ std::unique_ptr<NativeIndex> wrap(index_t&& index) {
     std::unique_ptr<NativeIndex> result;
     result.reset(new NativeIndex(std::move(punned_ptr)));
     return result;
-}
-
-metric_kind_t rust_to_cpp_metric(MetricKind value) {
-    switch (value) {
-    case MetricKind::IP: return metric_kind_t::ip_k;
-    case MetricKind::L2sq: return metric_kind_t::l2sq_k;
-    case MetricKind::Cos: return metric_kind_t::cos_k;
-    case MetricKind::Pearson: return metric_kind_t::pearson_k;
-    case MetricKind::Haversine: return metric_kind_t::haversine_k;
-    case MetricKind::Divergence: return metric_kind_t::divergence_k;
-    case MetricKind::Hamming: return metric_kind_t::hamming_k;
-    case MetricKind::Tanimoto: return metric_kind_t::tanimoto_k;
-    case MetricKind::Sorensen: return metric_kind_t::sorensen_k;
-    default: return metric_kind_t::unknown_k;
-    }
-}
-
-scalar_kind_t rust_to_cpp_scalar(ScalarKind value) {
-    switch (value) {
-    case ScalarKind::I8: return scalar_kind_t::i8_k;
-    case ScalarKind::F16: return scalar_kind_t::f16_k;
-    case ScalarKind::F32: return scalar_kind_t::f32_k;
-    case ScalarKind::F64: return scalar_kind_t::f64_k;
-    case ScalarKind::B1: return scalar_kind_t::b1x8_k;
-    default: return scalar_kind_t::unknown_k;
-    }
 }
 
 std::unique_ptr<NativeIndex> new_native_index(IndexOptions const& options) {
