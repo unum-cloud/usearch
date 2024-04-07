@@ -272,11 +272,12 @@ USEARCH_EXPORT void usearch_change_metric_kind(usearch_index_t index, usearch_me
  *  @brief Updates the custom metric function used for distance calculation between vectors.
  *  @param[in] index The handle to the USearch index to be queried.
  *  @param[in] metric The custom metric function used for distance calculation between vectors.
+ *  @param[in] state The @b optional state pointer to be passed to the custom metric function.
  *  @param[in] kind The metric kind used for distance calculation between vectors. Needed for serialization.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
-USEARCH_EXPORT void usearch_change_metric(usearch_index_t index, usearch_metric_t metric, usearch_metric_kind_t kind,
-                                          usearch_error_t* error);
+USEARCH_EXPORT void usearch_change_metric(usearch_index_t index, usearch_metric_t metric, void* state,
+                                          usearch_metric_kind_t kind, usearch_error_t* error);
 
 /**
  *  @brief Adds a vector with a key to the index.
@@ -322,6 +323,25 @@ USEARCH_EXPORT size_t usearch_count(usearch_index_t index, usearch_key_t, usearc
 USEARCH_EXPORT size_t usearch_search(                           //
     usearch_index_t index,                                      //
     void const* query_vector, usearch_scalar_kind_t query_kind, //
+    size_t count, usearch_key_t* keys, usearch_distance_t* distances, usearch_error_t* error);
+
+/**
+ *  @brief  Performs k-Approximate Nearest Neighbors (kANN) Search for closest vectors to query,
+ *          predicated on a custom function that returns `true` for vectors to be included.
+ *
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[in] query_vector Pointer to the query vector data.
+ *  @param[in] query_kind The scalar type used in the query vector data.
+ *  @param[in] count Upper bound on the number of neighbors to search, the "k" in "kANN".
+ *  @param[out] keys Output buffer for up to `count` nearest neighbors keys.
+ *  @param[out] distances Output buffer for up to `count` distances to nearest neighbors.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ *  @return Number of found matches.
+ */
+USEARCH_EXPORT size_t usearch_filtered_search(                                //
+    usearch_index_t index,                                                    //
+    void const* query_vector, usearch_scalar_kind_t query_kind,               //
+    int (*filter)(usearch_key_t key, void* filter_state), void* filter_state, //
     size_t count, usearch_key_t* keys, usearch_distance_t* distances, usearch_error_t* error);
 
 /**

@@ -98,13 +98,20 @@ std::size_t get_(index_dense_t* index, usearch_key_t key, size_t count, void* ve
     }
 }
 
-search_result_t search_(index_dense_t* index, void const* vector, scalar_kind_t kind, size_t n) {
+template <typename predicate_at = dummy_predicate_t>
+search_result_t search_(index_dense_t* index, void const* vector, scalar_kind_t kind, size_t n,
+                        predicate_at&& predicate = predicate_at{}) {
     switch (kind) {
-    case scalar_kind_t::f32_k: return index->search((f32_t const*)vector, n);
-    case scalar_kind_t::f64_k: return index->search((f64_t const*)vector, n);
-    case scalar_kind_t::f16_k: return index->search((f16_t const*)vector, n);
-    case scalar_kind_t::i8_k: return index->search((i8_t const*)vector, n);
-    case scalar_kind_t::b1x8_k: return index->search((b1x8_t const*)vector, n);
+    case scalar_kind_t::f32_k:
+        return index->filtered_search((f32_t const*)vector, n, std::forward<predicate_at>(predicate));
+    case scalar_kind_t::f64_k:
+        return index->filtered_search((f64_t const*)vector, n, std::forward<predicate_at>(predicate));
+    case scalar_kind_t::f16_k:
+        return index->filtered_search((f16_t const*)vector, n, std::forward<predicate_at>(predicate));
+    case scalar_kind_t::i8_k:
+        return index->filtered_search((i8_t const*)vector, n, std::forward<predicate_at>(predicate));
+    case scalar_kind_t::b1x8_k:
+        return index->filtered_search((b1x8_t const*)vector, n, std::forward<predicate_at>(predicate));
     default: return search_result_t().failed("Unknown scalar kind!");
     }
 }
@@ -123,9 +130,9 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
     metric_punned_t metric = //
         !options->metric ? metric_punned_t::builtin(options->dimensions, metric_kind, scalar_kind)
                          : metric_punned_t::stateless(options->dimensions,                               //
-                                           reinterpret_cast<std::uintptr_t>(options->metric), //
-                                           metric_punned_signature_t::array_array_k,          //
-                                           metric_kind, scalar_kind);
+                                                      reinterpret_cast<std::uintptr_t>(options->metric), //
+                                                      metric_punned_signature_t::array_array_k,          //
+                                                      metric_kind, scalar_kind);
     if (metric.missing()) {
         *error = "Unknown metric kind!";
         return NULL;
@@ -295,7 +302,7 @@ USEARCH_EXPORT void usearch_change_metric(usearch_index_t index, usearch_metric_
                                            reinterpret_cast<std::uintptr_t>(state), metric_kind_to_cpp(kind),
                                            index_dense.scalar_kind())
               : metric_punned_t::stateless(index_dense.dimensions(), reinterpret_cast<std::uintptr_t>(metric),
-                                              metric_punned_signature_t::array_array_k, metric_kind_to_cpp(kind),
+                                           metric_punned_signature_t::array_array_k, metric_kind_to_cpp(kind),
                                            index_dense.scalar_kind());
     index_dense.change_metric(std::move(metric_punned));
 }
@@ -333,6 +340,24 @@ USEARCH_EXPORT size_t usearch_search(                                           
     USEARCH_ASSERT(index && query && error && "Missing arguments");
     search_result_t result =
         search_(reinterpret_cast<index_dense_t*>(index), query, scalar_kind_to_cpp(query_kind), results_limit);
+    if (!result) {
+        *error = result.error.release();
+        return 0;
+    }
+
+    return result.dump_to(found_keys, found_distances);
+}
+
+USEARCH_EXPORT size_t usearch_filtered_search(                                //
+    usearch_index_t index,                                                    //
+    void const* query, usearch_scalar_kind_t query_kind,                      //
+    int (*filter)(usearch_key_t key, void* filter_state), void* filter_state, //
+    size_t results_limit, usearch_key_t* found_keys, usearch_distance_t* found_distances, usearch_error_t* error) {
+
+    USEARCH_ASSERT(index && query && filter && error && "Missing arguments");
+    search_result_t result =
+        search_(reinterpret_cast<index_dense_t*>(index), query, scalar_kind_to_cpp(query_kind), results_limit,
+                [=](usearch_key_t key) noexcept { return filter(key, filter_state); });
     if (!result) {
         *error = result.error.release();
         return 0;

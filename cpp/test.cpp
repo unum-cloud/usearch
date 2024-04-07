@@ -65,6 +65,17 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
 
     // Perform exact search
     matched_count = index.search(vector_first, 5, args...).dump_to(matched_keys, matched_distances);
+    expect(matched_count != 0);
+
+    // Perform filtered exact search, keeping only odd values
+    if constexpr (punned_ak) {
+        auto is_odd = [](vector_key_t key) -> bool { return (key & 1) != 0; };
+        matched_count =
+            index.filtered_search(vector_first, is_odd, 5, args...).dump_to(matched_keys, matched_distances);
+        expect(matched_count != 0);
+        for (std::size_t i = 0; i < matched_count; i++)
+            expect(is_odd(matched_keys[i]));
+    }
 
     // Validate scans
     std::size_t count = 0;
