@@ -714,7 +714,9 @@ class index_dense_gt {
         cluster_config.thread = lock.thread_id;
         cluster_config.expansion = config_.expansion_search;
         metric_proxy_t metric{*this};
-        auto allow = [=](member_cref_t const& member) noexcept { return member.key != free_key_; };
+        auto allow = [free_key_ = this->free_key_](member_cref_t const& member) noexcept {
+            return member.key != free_key_;
+        };
 
         // Find the closest cluster for any vector under that key.
         while (key_range.first != key_range.second) {
@@ -1774,9 +1776,8 @@ class index_dense_gt {
     }
 
     template <typename scalar_at, typename predicate_at>
-    search_result_t search_(                                                   
-        scalar_at const* vector, std::size_t wanted, predicate_at&& predicate, 
-        std::size_t thread, bool exact, cast_t const& cast) const {
+    search_result_t search_(scalar_at const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread,
+                            bool exact, cast_t const& cast) const {
 
         // Cast the vector, if needed for compatibility with `metric_`
         thread_lock_t lock = thread_lock_(thread);
@@ -1794,10 +1795,12 @@ class index_dense_gt {
         search_config.exact = exact;
 
         if (std::is_same<typename std::decay<predicate_at>::type, dummy_predicate_t>::value) {
-            auto allow = [=](member_cref_t const& member) noexcept { return member.key != free_key_; };
+            auto allow = [free_key_ = this->free_key_](member_cref_t const& member) noexcept {
+                return member.key != free_key_;
+            };
             return typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow);
         } else {
-            auto allow = [=, &predicate](member_cref_t const& member) noexcept {
+            auto allow = [free_key_ = this->free_key_, &predicate](member_cref_t const& member) noexcept {
                 return member.key != free_key_ && predicate(member.key);
             };
             return typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow);
@@ -1823,7 +1826,9 @@ class index_dense_gt {
         cluster_config.thread = lock.thread_id;
         cluster_config.expansion = config_.expansion_search;
 
-        auto allow = [=](member_cref_t const& member) noexcept { return member.key != free_key_; };
+        auto allow = [free_key_ = this->free_key_](member_cref_t const& member) noexcept {
+            return member.key != free_key_;
+        };
         return typed_->cluster(vector_data, level, metric_proxy_t{*this}, cluster_config, allow);
     }
 

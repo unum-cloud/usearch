@@ -71,7 +71,7 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     if constexpr (punned_ak) {
         auto is_odd = [](vector_key_t key) -> bool { return (key & 1) != 0; };
         matched_count =
-            index.filtered_search(vector_first, is_odd, 5, args...).dump_to(matched_keys, matched_distances);
+            index.filtered_search(vector_first, 5, is_odd, args...).dump_to(matched_keys, matched_distances);
         expect(matched_count != 0);
         for (std::size_t i = 0; i < matched_count; i++)
             expect(is_odd(matched_keys[i]));
