@@ -55,7 +55,8 @@ fn main() {
             .flag_if_supported("/W1"); // Reduce warnings verbosity
     }
 
-    if build.try_compile("usearch").is_err() {
+    let mut result = build.try_compile("usearch");
+    if result.is_err() {
         print!("cargo:warning=Failed to compile with all SIMD backends...");
 
         let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
@@ -69,19 +70,22 @@ fn main() {
             ],
         };
 
-        for flag in flags_to_try.iter() {
+        for flag in flags_to_try {
             build.define(flag, "0");
-            if build.try_compile("usearch").is_ok() {
+            result = build.try_compile("usearch");
+            if result.is_err() {
+                println!(
+                    "cargo:warning=Failed to compile after disabling {}, trying next configuration...",
+                    flag
+                );
+            } else {
                 break;
             }
-
-            // Print the failed configuration
-            println!(
-                "cargo:warning=Failed to compile after disabling {}, trying next configuration...",
-                flag
-            );
         }
     }
+
+    // Ensure one build has been successful
+    result.unwrap();
 
     println!("cargo:rerun-if-changed=rust/lib.rs");
     println!("cargo:rerun-if-changed=rust/lib.cpp");
