@@ -63,7 +63,7 @@ static void sqlite_dense(sqlite3_context* context, int argc, sqlite3_value** arg
         void const* vec2 = sqlite3_value_blob(argv[1]);
 
         std::size_t dimensions = (size_t)(bytes1)*CHAR_BIT / bits_per_scalar(scalar_kind_ak);
-        metric_t metric = metric_t(dimensions, metric_kind_ak, scalar_kind_ak);
+        metric_t metric = metric_t::builtin(dimensions, metric_kind_ak, scalar_kind_ak);
         distance_punned_t distance =
             metric(reinterpret_cast<byte_t const*>(vec1), reinterpret_cast<byte_t const*>(vec2));
         sqlite3_result_double(context, distance);
@@ -148,7 +148,7 @@ static void sqlite_dense(sqlite3_context* context, int argc, sqlite3_value** arg
         }
 
         // Compute the distance itself
-        metric_t metric = metric_t(dimensions, metric_kind_ak, parsed_scalar_kind_gt<scalar_kind_ak>::kind);
+        metric_t metric = metric_t::builtin(dimensions, metric_kind_ak, parsed_scalar_kind_gt<scalar_kind_ak>::kind);
         distance_punned_t distance =
             metric(reinterpret_cast<byte_t const*>(parsed1), reinterpret_cast<byte_t const*>(parsed2));
         sqlite3_result_double(context, distance);
@@ -187,7 +187,7 @@ static void sqlite_dense(sqlite3_context* context, int argc, sqlite3_value** arg
         }
 
         // Compute the distance itself
-        metric_t metric = metric_t(dimensions, metric_kind_ak, parsed_scalar_kind_gt<scalar_kind_ak>::kind);
+        metric_t metric = metric_t::builtin(dimensions, metric_kind_ak, parsed_scalar_kind_gt<scalar_kind_ak>::kind);
         distance_punned_t distance =
             metric(reinterpret_cast<byte_t const*>(parsed1), reinterpret_cast<byte_t const*>(parsed2));
         sqlite3_result_double(context, distance);

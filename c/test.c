@@ -72,6 +72,8 @@ void test_init(size_t const collection_size, size_t const dimensions) {
     ASSERT(usearch_capacity(index, &error) == collection_size, error);
     ASSERT(usearch_dimensions(index, &error) == dimensions, error);
     ASSERT(usearch_connectivity(index, &error) == opts.connectivity, error);
+    ASSERT(usearch_hardware_acceleration(index, &error), error);
+    ASSERT(usearch_memory_usage(index, &error), error);
 
     usearch_free(index, &error);
     ASSERT(!error, error);
@@ -361,6 +363,8 @@ void test_view(size_t const collection_size, size_t const dimensions) {
 }
 
 int main(int argc, char const* argv[]) {
+    printf("Running tests...\n");
+    printf("USearch version: %s\n", usearch_version());
 
     size_t collection_sizes[] = {11, 512};
     size_t dimensions[] = {83, 2}; // Not all distance functions make sense for 1 dimensional data

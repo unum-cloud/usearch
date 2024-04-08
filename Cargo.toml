@@ -8,6 +8,22 @@ license = "Apache-2.0"
 publish = true
 repository = "https://github.com/unum-cloud/usearch"
 
+# If no precompiled binaries are available, the build script will compile the
+# following files using the `build.rs` specification.
+include = [
+    "rust/*",
+    "include/*",
+    "fp16/include/*",
+    "simsimd/include/*",
+    "Cargo.toml",
+]
+
+[features]
+default = ["simsimd"] # SimSIMD is enabled by default
+simsimd = []          # No need to do anything to enable SimSIMD by default
+openmp = []           # Optional: Users can enable OpenMP
+fp16lib = []          # Optional: Users can enable FP16 support
+
 [lib]
 name = "usearch"
 path = "rust/lib.rs"

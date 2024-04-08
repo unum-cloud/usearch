@@ -10,11 +10,26 @@ fn main() {
         .include("fp16/include")
         .include("simsimd/include");
 
-    build
-        .define("USEARCH_USE_SIMSIMD", "1")
-        .define("SIMSIMD_DYNAMIC_DISPATCH", "1")
-        .define("USEARCH_USE_OPENMP", "0")
-        .define("USEARCH_USE_FP16LIB", "0");
+    // Check for optional features
+    if cfg!(feature = "openmp") {
+        build.define("USEARCH_USE_OPENMP", "1");
+    } else {
+        build.define("USEARCH_USE_OPENMP", "0");
+    }
+
+    if cfg!(feature = "fp16lib") {
+        build.define("USEARCH_USE_FP16LIB", "1");
+    } else {
+        build.define("USEARCH_USE_FP16LIB", "0");
+    }
+
+    if cfg!(feature = "simsimd") {
+        build
+            .define("USEARCH_USE_SIMSIMD", "1")
+            .define("SIMSIMD_DYNAMIC_DISPATCH", "1");
+    } else {
+        build.define("USEARCH_USE_SIMSIMD", "0");
+    }
 
     // Conditional compilation depending on the target operating system.
     if cfg!(target_os = "linux") {

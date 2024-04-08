@@ -1320,6 +1320,7 @@ using span_punned_t = span_gt<byte_t const>;
 enum class metric_punned_signature_t {
     array_array_k = 0,
     array_array_size_k,
+    array_array_state_k,
 };
 
 /**
@@ -1339,12 +1340,14 @@ class metric_punned_t {
     using metric_array_array_t = result_t (*)(uptr_t, uptr_t);
     /// Distance function that takes two arrays and their length and returns a scalar.
     using metric_array_array_size_t = result_t (*)(uptr_t, uptr_t, uptr_t);
+    /// Distance function that takes two arrays and some callback state and returns a scalar.
+    using metric_array_array_state_t = result_t (*)(uptr_t, uptr_t, uptr_t);
     /// Distance function callback, like `metric_array_array_size_t`, but depends on member variables.
     using metric_rounted_t = result_t (metric_punned_t::*)(uptr_t, uptr_t) const;
 
     metric_rounted_t metric_routed_ = nullptr;
     uptr_t metric_ptr_ = 0;
-    uptr_t metric_size_arg_ = 0;
+    uptr_t metric_third_arg_ = 0;
 
     std::size_t dimensions_ = 0;
     metric_kind_t metric_kind_ = metric_kind_t::unknown_k;
@@ -1367,37 +1370,95 @@ class metric_punned_t {
     inline metric_punned_t() noexcept = default;
     inline metric_punned_t(metric_punned_t const&) noexcept = default;
     inline metric_punned_t& operator=(metric_punned_t const&) noexcept = default;
-    inline metric_punned_t(                                //
-        std::size_t dimensions,                            //
-        metric_kind_t metric_kind = metric_kind_t::l2sq_k, //
-        scalar_kind_t scalar_kind = scalar_kind_t::f32_k) noexcept
-        : metric_routed_(&metric_punned_t::invoke_array_array_size), metric_size_arg_(dimensions),
-          dimensions_(dimensions), metric_kind_(metric_kind), scalar_kind_(scalar_kind) {
+
+    inline metric_punned_t(std::size_t dimensions, metric_kind_t metric_kind = metric_kind_t::l2sq_k,
+                           scalar_kind_t scalar_kind = scalar_kind_t::f32_k) noexcept
+        : metric_punned_t(builtin(dimensions, metric_kind, scalar_kind)) {}
+
+    inline metric_punned_t(std::size_t dimensions, std::uintptr_t metric_uintptr, metric_punned_signature_t signature,
+                           metric_kind_t metric_kind, scalar_kind_t scalar_kind) noexcept
+        : metric_punned_t(stateless(dimensions, metric_uintptr, signature, metric_kind, scalar_kind)) {}
+
+    /**
+     *  @brief  Creates a metric of a natively supported kind, choosing the best
+     *          available backend internally or from SimSIMD.
+     *
+     *  @param  dimensions      The number of elements in the input arrays.
+     *  @param  metric_kind     The kind of metric to use.
+     *  @param  scalar_kind     The kind of scalar to use.
+     *  @return                 A metric object that can be used to compute distances between vectors.
+     */
+    inline static metric_punned_t builtin(std::size_t dimensions, metric_kind_t metric_kind = metric_kind_t::l2sq_k,
+                                          scalar_kind_t scalar_kind = scalar_kind_t::f32_k) noexcept {
+        metric_punned_t metric;
+        metric.metric_routed_ = &metric_punned_t::invoke_array_array_third;
+        metric.metric_ptr_ = 0;
+        metric.metric_third_arg_ =
+            scalar_kind == scalar_kind_t::b1x8_k ? divide_round_up<CHAR_BIT>(dimensions) : dimensions;
+        metric.dimensions_ = dimensions;
+        metric.metric_kind_ = metric_kind;
+        metric.scalar_kind_ = scalar_kind;
 
 #if USEARCH_USE_SIMSIMD
-        if (!configure_with_simsimd())
-            configure_with_autovec();
+        if (!metric.configure_with_simsimd())
+            metric.configure_with_autovec();
 #else
-        configure_with_autovec();
+        metric.configure_with_autovec();
 #endif
 
-        if (scalar_kind == scalar_kind_t::b1x8_k)
-            metric_size_arg_ = divide_round_up<CHAR_BIT>(dimensions_);
+        return metric;
     }
 
-    inline metric_punned_t(                                                 //
-        std::size_t dimensions,                                             //
-        std::uintptr_t metric_uintptr, metric_punned_signature_t signature, //
-        metric_kind_t metric_kind,                                          //
-        scalar_kind_t scalar_kind) noexcept
-        : metric_routed_(signature == metric_punned_signature_t::array_array_k
-                             ? &metric_punned_t::invoke_array_array
-                             : &metric_punned_t::invoke_array_array_size),
-          metric_ptr_(metric_uintptr), metric_size_arg_(dimensions), dimensions_(dimensions), metric_kind_(metric_kind),
-          scalar_kind_(scalar_kind) {
+    /**
+     *  @brief  Creates a metric using the provided function pointer for a stateless metric.
+     *          So the provided ::metric_uintptr is a pointer to a function that takes two arrays
+     *          and returns a scalar. If the ::signature is metric_punned_signature_t::array_array_size_k,
+     *          then the third argument is the number of scalar words in the input vectors.
+     *
+     *  @param  dimensions      The number of elements in the input arrays.
+     *  @param  metric_uintptr  The function pointer to the metric function.
+     *  @param  signature       The signature of the metric function.
+     *  @param  metric_kind     The kind of metric to use.
+     *  @param  scalar_kind     The kind of scalar to use.
+     *  @return                 A metric object that can be used to compute distances between vectors.
+     */
+    inline static metric_punned_t stateless(std::size_t dimensions, std::uintptr_t metric_uintptr,
+                                            metric_punned_signature_t signature, metric_kind_t metric_kind,
+                                            scalar_kind_t scalar_kind) noexcept {
+        metric_punned_t metric;
+        metric.metric_routed_ = signature == metric_punned_signature_t::array_array_k
+                                    ? &metric_punned_t::invoke_array_array
+                                    : &metric_punned_t::invoke_array_array_third;
+        metric.metric_ptr_ = metric_uintptr;
+        metric.metric_third_arg_ =
+            scalar_kind == scalar_kind_t::b1x8_k ? divide_round_up<CHAR_BIT>(dimensions) : dimensions;
+        metric.dimensions_ = dimensions;
+        metric.metric_kind_ = metric_kind;
+        metric.scalar_kind_ = scalar_kind;
+        return metric;
+    }
 
-        if (scalar_kind == scalar_kind_t::b1x8_k)
-            metric_size_arg_ = divide_round_up<CHAR_BIT>(dimensions_);
+    /**
+     *  @brief  Creates a metric using the provided function pointer for a statefull metric.
+     *          The third argument is the state that will be passed to the metric function.
+     *
+     *  @param  metric_uintptr  The function pointer to the metric function.
+     *  @param  metric_state    The state to pass to the metric function.
+     *  @param  metric_kind     The kind of metric to use.
+     *  @param  scalar_kind     The kind of scalar to use.
+     *  @return                 A metric object that can be used to compute distances between vectors.
+     */
+    inline static metric_punned_t statefull(std::uintptr_t metric_uintptr, std::uintptr_t metric_state,
+                                            metric_kind_t metric_kind = metric_kind_t::unknown_k,
+                                            scalar_kind_t scalar_kind = scalar_kind_t::unknown_k) noexcept {
+        metric_punned_t metric;
+        metric.metric_routed_ = &metric_punned_t::invoke_array_array_third;
+        metric.metric_ptr_ = metric_uintptr;
+        metric.metric_third_arg_ = metric_state;
+        metric.dimensions_ = 0;
+        metric.metric_kind_ = metric_kind;
+        metric.scalar_kind_ = scalar_kind;
+        return metric;
     }
 
     inline std::size_t dimensions() const noexcept { return dimensions_; }
@@ -1485,16 +1546,17 @@ class metric_punned_t {
         simsimd_distance_t result;
         // Here `reinterpret_cast` raises warning... we know what we are doing!
         auto function_pointer = (simsimd_metric_punned_t)(metric_ptr_);
-        function_pointer(reinterpret_cast<void const*>(a), reinterpret_cast<void const*>(b), metric_size_arg_, &result);
+        function_pointer(reinterpret_cast<void const*>(a), reinterpret_cast<void const*>(b), metric_third_arg_,
+                         &result);
         return (result_t)result;
     }
     result_t invoke_simsimd_reverse(uptr_t a, uptr_t b) const noexcept { return 1 - invoke_simsimd(a, b); }
 #else
     bool configure_with_simsimd() noexcept { return false; }
 #endif
-    result_t invoke_array_array_size(uptr_t a, uptr_t b) const noexcept {
+    result_t invoke_array_array_third(uptr_t a, uptr_t b) const noexcept {
         auto function_pointer = (metric_array_array_size_t)(metric_ptr_);
-        result_t result = function_pointer(a, b, metric_size_arg_);
+        result_t result = function_pointer(a, b, metric_third_arg_);
         return result;
     }
     result_t invoke_array_array(uptr_t a, uptr_t b) const noexcept {

@@ -98,6 +98,12 @@ USEARCH_EXPORT typedef struct usearch_init_options_t {
 } usearch_init_options_t;
 
 /**
+ *  @brief Retrieves the version of the library.
+ *  @return The version of the library.
+ */
+USEARCH_EXPORT char const* usearch_version(void);
+
+/**
  *  @brief Initializes a new instance of the index.
  *  @param options Pointer to the `usearch_init_options_t` structure containing initialization options.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
@@ -111,6 +117,22 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
 USEARCH_EXPORT void usearch_free(usearch_index_t index, usearch_error_t* error);
+
+/**
+ *  @brief Reports the memory usage of the index.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ *  @return Number of bytes used by the index.
+ */
+USEARCH_EXPORT size_t usearch_memory_usage(usearch_index_t index, usearch_error_t* error);
+
+/**
+ *  @brief Reports the SIMD capabilities used by the index on the current CPU.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ *  @return The codename of the SIMD instruction set used by the index.
+ */
+USEARCH_EXPORT char const* usearch_hardware_acceleration(usearch_index_t index, usearch_error_t* error);
 
 /**
  *  @brief Reports expected file size after serialization.
@@ -228,6 +250,58 @@ USEARCH_EXPORT size_t usearch_connectivity(usearch_index_t index, usearch_error_
 USEARCH_EXPORT void usearch_reserve(usearch_index_t index, size_t capacity, usearch_error_t* error);
 
 /**
+ *  @brief Retrieves the expansion value used during index creation.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ *  @return The expansion value used during index creation.
+ */
+USEARCH_EXPORT size_t usearch_expansion_add(usearch_index_t index, usearch_error_t* error);
+
+/**
+ *  @brief Retrieves the expansion value used during search.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ *  @return The expansion value used during search.
+ */
+USEARCH_EXPORT size_t usearch_expansion_search(usearch_index_t index, usearch_error_t* error);
+
+/**
+ *  @brief Updates the expansion value used during index creation. Rarely used.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[in] expansion The new expansion value.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT void usearch_change_expansion_add(usearch_index_t index, size_t expansion, usearch_error_t* error);
+
+/**
+ *  @brief Updates the expansion value used during search. Rarely used.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[in] expansion The new expansion value.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT void usearch_change_expansion_search(usearch_index_t index, size_t expansion, usearch_error_t* error);
+
+/**
+ *  @brief Updates the metric kind used for distance calculation between vectors.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[in] kind The metric kind used for distance calculation between vectors.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT void usearch_change_metric_kind(usearch_index_t index, usearch_metric_kind_t kind,
+                                               usearch_error_t* error);
+
+/**
+ *  @brief Updates the custom metric function used for distance calculation between vectors.
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[in] metric The custom metric function used for distance calculation between vectors.
+ *  @param[in] state The @b optional state pointer to be passed to the custom metric function.
+ *  @param[in] kind The metric kind used for distance calculation between vectors. Needed for serialization.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT void usearch_change_metric(usearch_index_t index, usearch_metric_t metric, void* state,
+                                          usearch_metric_kind_t kind, usearch_error_t* error);
+
+/**
  *  @brief Adds a vector with a key to the index.
  *  @param[inout] index The handle to the USearch index to be populated.
  *  @param[in] key The key associated with the vector.
@@ -268,10 +342,31 @@ USEARCH_EXPORT size_t usearch_count(usearch_index_t index, usearch_key_t, usearc
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  *  @return Number of found matches.
  */
-USEARCH_EXPORT size_t usearch_search(                           //
-    usearch_index_t index,                                      //
-    void const* query_vector, usearch_scalar_kind_t query_kind, //
-    size_t count, usearch_key_t* keys, usearch_distance_t* distances, usearch_error_t* error);
+USEARCH_EXPORT size_t usearch_search(                                         //
+    usearch_index_t index,                                                    //
+    void const* query_vector, usearch_scalar_kind_t query_kind, size_t count, //
+    usearch_key_t* keys, usearch_distance_t* distances, usearch_error_t* error);
+
+/**
+ *  @brief  Performs k-Approximate Nearest Neighbors (kANN) Search for closest vectors to query,
+ *          predicated on a custom function that returns `true` for vectors to be included.
+ *
+ *  @param[in] index The handle to the USearch index to be queried.
+ *  @param[in] query_vector Pointer to the query vector data.
+ *  @param[in] query_kind The scalar type used in the query vector data.
+ *  @param[in] count Upper bound on the number of neighbors to search, the "k" in "kANN".
+ *  @param[in] filter The custom filter function that returns `true` for vectors to be included.
+ *  @param[in] filter_state The @b optional state pointer to be passed to the custom filter function.
+ *  @param[out] keys Output buffer for up to `count` nearest neighbors keys.
+ *  @param[out] distances Output buffer for up to `count` distances to nearest neighbors.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ *  @return Number of found matches.
+ */
+USEARCH_EXPORT size_t usearch_filtered_search(                                //
+    usearch_index_t index,                                                    //
+    void const* query_vector, usearch_scalar_kind_t query_kind, size_t count, //
+    int (*filter)(usearch_key_t key, void* filter_state), void* filter_state, //
+    usearch_key_t* keys, usearch_distance_t* distances, usearch_error_t* error);
 
 /**
  *  @brief Retrieves the vector associated with the given key from the index.

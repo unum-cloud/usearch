@@ -194,20 +194,39 @@ When compared to FAISS's `IndexFlatL2` in Google Colab, __[USearch may offer up 
 
 ## User-Defined Functions
 
-While most vector search packages concentrate on just a few metrics - "Inner Product distance" and "Euclidean distance," USearch extends this list to include any user-defined metrics.
-This flexibility allows you to customize your search for various applications, from computing geospatial coordinates with the rare [Haversine][haversine] distance to creating custom metrics for composite embeddings from multiple AI models.
+While most vector search packages concentrate on just two metrics, "Inner Product distance" and "Euclidean distance", USearch allows arbitrary user-defined metrics.
+This flexibility allows you to customize your search for various applications, from computing geospatial coordinates with the rare [Haversine][haversine] distance to creating custom metrics for composite embeddings from multiple AI models, like joint image-text embeddings.
+You can use [Numba][numba], [Cppyy][cppyy], or [PeachPy][peachpy] to define your [custom metric even in Python](https://unum-cloud.github.io/usearch/python#user-defined-metrics-and-jit-in-python):
 
-![USearch: Vector Search Approaches](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-approaches-white.png?raw=true)
+```py
+from numba import cfunc, types, carray
+from usearch.index import Index, MetricKind, MetricSignature, CompiledMetric
 
-Unlike older approaches indexing high-dimensional spaces, like KD-Trees and Locality Sensitive Hashing, HNSW doesn't require vectors to be identical in length.
+@cfunc(types.float32(types.CPointer(types.float32), types.CPointer(types.float32)))
+def python_inner_product(a, b):
+    a_array = carray(a, ndim)
+    b_array = carray(b, ndim)
+    c = 0.0
+    for i in range(ndim):
+        c += a_array[i] * b_array[i]
+    return 1 - c
+
+metric = CompiledMetric(pointer=python_inner_product.address, kind=MetricKind.IP, signature=MetricSignature.ArrayArray)
+index = Index(ndim=ndim, metric=metric, dtype=np.float32)
+```
+
+Similar effect is even easier to achieve in C, C++, and Rust interfaces.
+Moreover, unlike older approaches indexing high-dimensional spaces, like KD-Trees and Locality Sensitive Hashing, HNSW doesn't require vectors to be identical in length.
 They only have to be comparable.
-So you can apply it in [obscure][obscure] applications, like searching for similar sets or fuzzy text matching, using [GZip][gzip-similarity] as a distance function.
-
-> Read more about [JIT and UDF in USearch Python SDK](https://unum-cloud.github.io/usearch/python#user-defined-metrics-and-jit-in-python).
+So you can apply it in [obscure][obscure] applications, like searching for similar sets or fuzzy text matching, using [GZip][gzip-similarity] compression-ratio as a distance function.
 
 [haversine]: https://ashvardanian.com/posts/abusing-vector-search#geo-spatial-indexing
 [obscure]: https://ashvardanian.com/posts/abusing-vector-search
 [gzip-similarity]: https://twitter.com/LukeGessler/status/1679211291292889100?s=20
+
+[numba]: https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
+[cppyy]: https://cppyy.readthedocs.io/en/latest/
+[peachpy]: https://github.com/Maratyszcza/PeachPy
 
 ## Memory Efficiency, Downcasting, and Quantization
 
@@ -315,6 +334,7 @@ In some cases, like Batch operations, feature parity is meaningless, as the host
 | Save, load, view        |   ✅    |    ✅     |   ✅   |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
 | User-defined metrics    |   ✅    |    ✅     |   ✅   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 | Batch operations        |   ❌    |    ✅     |   ❌   |   ❌   |     ✅      |   ❌   |   ❌    |   ❌   |
+| Filter predicates       |   ✅    |    ❌     |   ✅   |   ❌   |     ❌      |   ✅   |   ❌    |   ❌   |
 | Joins                   |   ✅    |    ✅     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 | Variable-length vectors |   ✅    |    ❌     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 | 4B+ capacities          |   ✅    |    ❌     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
