@@ -31,7 +31,9 @@ To enable specific features, use the following configuration:
 usearch = { version = "...", features = ["simsimd", "openmp", "fp16lib"] }
 ```
 
-OpenMP will use the OpenMP runtime for parallelism, and `fp16lib` will use the C-layer `fp16` library to emulate half-precision floating point operations on older hardware.
+OpenMP (`openmp`) will use the OpenMP runtime for parallelism.
+It may not be available on all platforms, but on Linux it will lead to better performance and lower latency of small-batch operations on multi-core CPUs.
+The `fp16lib` flag will bring in the C-layer `fp16` library to emulate half-precision floating point operations on older CPUs, where it may not be natively supported.
 
 ## Quickstart
 
@@ -128,6 +130,12 @@ let weighted_distance = Box::new(move |a: *const f32, b: *const f32| unsafe {
 index.change_metric(weighted_distance);
 ```
 
+You can always revert back to one of the native metrics by calling:
+    
+```rust
+index.change_metric_kind(MetricKind::Cos);
+```
+
 ## Filtering with Predicates
 
 Sometimes you may want to cross-reference search-results against some external database or filter them based on some criteria.
@@ -202,4 +210,26 @@ assert_eq!(results.keys[0], 43);
 assert_eq!(results.distances[0], 2.0); // 2 bits differ between query and vector43
 assert_eq!(results.keys[1], 42);
 assert_eq!(results.distances[1], 6.0); // 6 bits differ between query and vector42
+```
+
+## Performance Tuning
+
+To optimize the performance of the index, you can adjust the expansion values used during index creation and search operations.
+Higher expansion values will lead to better search accuracy at the cost of slightly increased memory usage, but potentially much higher search times.
+Following methods are available to adjust the expansion values:
+
+```rs
+println!("Add expansion: {}", index.expansion_add());
+println!("Search expansion: {}", index.expansion_search());
+index.change_expansion_add(32);
+index.change_expansion_search(32);
+```
+
+Optimizing hardware utilization, you may want to check the SIMD hardware acceleration capabilities of the index and memory consumption.
+The first will print the codename of the most advanced SIMD instruction set supported by the CPU and used by the index.
+The second will print the memory usage of the index in bytes.
+
+```rs
+println!("Hardware acceleration: {}", index.hardware_acceleration());
+println!("Memory usage: {}", index.memory_usage());
 ```
