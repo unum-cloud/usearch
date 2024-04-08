@@ -124,8 +124,9 @@ let weighted_distance = Box::new(move |a: *const f32, b: *const f32| unsafe {
 
     let image_similarity = f32::cosine(a_slice[0..image_dimensions], b_slice[0..image_dimensions]);
     let text_similarity = f32::cosine(a_slice[image_dimensions..], b_slice[image_dimensions..]);
+    let similarity = image_weights * image_similarity + text_weights * text_similarity / (image_weights + text_weights);
     
-    (1.0 - image_similarity) * image_weights + (1.0 - text_similarity) * text_weights
+    1.0 - similarity
 });
 index.change_metric(weighted_distance);
 ```

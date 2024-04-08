@@ -42,7 +42,7 @@ int main() {
 
     // Search:
     usearch_key_t found_keys[10];
-    float found_distances[10];
+    usearch_distance_t found_distances[10];
     size_t found_count = usearch_search(
         index, &vector[0], usearch_scalar_f32_k, 10, 
         &found_keys[0], &found_distances[0], &error);
@@ -113,7 +113,8 @@ simsimd_distance_t callback(void const* a, void const* b, void* state) {
     // Your custom metric implementation here
 }
 
-usearch_change_metric(index, callback, NULL, usearch_metric_unknown_k, &error);
+void callback_state = NULL;
+usearch_change_metric(index, callback, callback_state, usearch_metric_unknown_k, &error);
 ```
 
 You can always revert back to one of the native metrics by calling:
@@ -133,8 +134,10 @@ int is_odd(usearch_key_t key, void* state) {
     return key % 2;
 }
 
+usearch_key_t found_keys[10];
+usearch_distance_t found_distances[10];
 usearch_filtered_search(
-    index, &vector[0], usearch_scalar_f32_k, 10, 
+    index, &query[0], usearch_scalar_f32_k, 10, 
     &is_odd, NULL, // no state needed for this callback
     &found_keys[0], &found_distances[0], &error);
 ```
