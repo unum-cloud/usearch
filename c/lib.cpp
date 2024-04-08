@@ -118,6 +118,15 @@ search_result_t search_(index_dense_t* index, void const* vector, scalar_kind_t 
 
 extern "C" {
 
+USEARCH_EXPORT char const* usearch_version(void) {
+    int major = USEARCH_VERSION_MAJOR;
+    int minor = USEARCH_VERSION_MINOR;
+    int patch = USEARCH_VERSION_PATCH;
+    static char version[32];
+    sprintf(version, "%d.%d.%d", major, minor, patch);
+    return version;
+}
+
 USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, usearch_error_t* error) {
 
     USEARCH_ASSERT(options && error && "Missing arguments");
@@ -275,6 +284,16 @@ USEARCH_EXPORT size_t usearch_expansion_search(usearch_index_t index, usearch_er
     return reinterpret_cast<index_dense_t*>(index)->expansion_search();
 }
 
+USEARCH_EXPORT size_t usearch_memory_usage(usearch_index_t index, usearch_error_t* error) {
+    USEARCH_ASSERT(index && error && "Missing arguments");
+    return reinterpret_cast<index_dense_t*>(index)->memory_usage();
+}
+
+USEARCH_EXPORT char const* usearch_hardware_acceleration(usearch_index_t index, usearch_error_t* error) {
+    USEARCH_ASSERT(index && error && "Missing arguments");
+    return reinterpret_cast<index_dense_t*>(index)->metric().isa_name();
+}
+
 USEARCH_EXPORT void usearch_change_expansion_add(usearch_index_t index, size_t expansion, usearch_error_t* error) {
     USEARCH_ASSERT(index && error && "Missing arguments");
     reinterpret_cast<index_dense_t*>(index)->change_expansion_add(expansion);
@@ -348,11 +367,11 @@ USEARCH_EXPORT size_t usearch_search(                                           
     return result.dump_to(found_keys, found_distances);
 }
 
-USEARCH_EXPORT size_t usearch_filtered_search(                                //
-    usearch_index_t index,                                                    //
-    void const* query, usearch_scalar_kind_t query_kind,                      //
-    int (*filter)(usearch_key_t key, void* filter_state), void* filter_state, //
-    size_t results_limit, usearch_key_t* found_keys, usearch_distance_t* found_distances, usearch_error_t* error) {
+USEARCH_EXPORT size_t usearch_filtered_search(                                 //
+    usearch_index_t index,                                                     //
+    void const* query, usearch_scalar_kind_t query_kind, size_t results_limit, //
+    int (*filter)(usearch_key_t key, void* filter_state), void* filter_state,  //
+    usearch_key_t* found_keys, usearch_distance_t* found_distances, usearch_error_t* error) {
 
     USEARCH_ASSERT(index && query && filter && error && "Missing arguments");
     search_result_t result =
