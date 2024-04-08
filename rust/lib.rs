@@ -18,6 +18,161 @@ pub type StatefullMetric = unsafe extern "C" fn(
 /// Callback signature for custom predicate functions, defined in the Rust layer and used in the C++ layer.
 pub type StatefullPredicate = unsafe extern "C" fn(Key, *mut std::ffi::c_void) -> bool;
 
+/// Represents errors that can occur when addressing bits.
+#[derive(Debug)]
+pub enum BitAddressableError {
+    /// Error indicating the specified index is out of the allowable range.
+    IndexOutOfRange,
+}
+
+impl std::fmt::Display for BitAddressableError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match *self {
+            BitAddressableError::IndexOutOfRange => write!(f, "Index out of range"),
+        }
+    }
+}
+
+impl std::error::Error for BitAddressableError {}
+
+/// Trait for types that can be addressed at the bit level.
+/// Provides methods to set and get individual bits within the implementing type.
+pub trait BitAddressable {
+    /// Sets a bit at the specified index.
+    /// Returns an error if the index is out of range.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - The index of the bit to set.
+    /// * `value` - The value to set the bit to (`true` for 1, `false` for 0).
+    fn set_bit(&mut self, index: usize, value: bool) -> Result<(), BitAddressableError>;
+
+    /// Gets the value of a bit at the specified index.
+    /// Returns an error if the index is out of range.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - The index of the bit to retrieve.
+    fn get_bit(&self, index: usize) -> Result<bool, BitAddressableError>;
+}
+
+#[allow(non_camel_case_types)]
+pub struct b1x8(pub u8);
+impl b1x8 {
+    /// Casts a slice of `u8` to a slice of `b1x8`.
+    pub fn from_u8s(slice: &[u8]) -> &[Self] {
+        unsafe { std::slice::from_raw_parts(slice.as_ptr() as *const Self, slice.len()) }
+    }
+
+    /// Casts a mutable slice of `u8` to a mutable slice of `b1x8`.
+    pub fn from_mut_u8s(slice: &mut [u8]) -> &mut [Self] {
+        unsafe { std::slice::from_raw_parts_mut(slice.as_mut_ptr() as *mut Self, slice.len()) }
+    }
+
+    /// Casts a slice of `b1x8` back to a slice of `u8`.
+    pub fn to_u8s(slice: &[Self]) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(slice.as_ptr() as *const u8, slice.len()) }
+    }
+
+    /// Casts a mutable slice of `b1x8` back to a mutable slice of `u8`.
+    pub fn to_mut_u8s(slice: &mut [Self]) -> &mut [u8] {
+        unsafe { std::slice::from_raw_parts_mut(slice.as_mut_ptr() as *mut u8, slice.len()) }
+    }
+}
+
+impl BitAddressable for b1x8 {
+    /// Sets a bit at a specific index within the byte.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - The 0-based index of the bit to set, ranging from 0 to 7.
+    /// * `value` - The boolean value to assign to the bit (`true` for 1, `false` for 0).
+    ///
+    /// # Returns
+    ///
+    /// This method returns `Ok(())` if the bit was successfully set, or an `Err(BitAddressableError::IndexOutOfRange)`
+    /// if the provided index is outside the valid range.
+    fn set_bit(&mut self, index: usize, value: bool) -> Result<(), BitAddressableError> {
+        if index >= 8 {
+            Err(BitAddressableError::IndexOutOfRange)
+        } else {
+            if value {
+                self.0 |= 1 << index;
+            } else {
+                self.0 &= !(1 << index);
+            }
+            Ok(())
+        }
+    }
+
+    /// Retrieves the value of a bit at a specific index within the byte.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - The 0-based index of the bit to retrieve, ranging from 0 to 7.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(true)` if the bit is set (1), `Ok(false)` if the bit is not set (0),
+    /// or an `Err(BitAddressableError::IndexOutOfRange)` if the provided index is outside
+    /// the valid range.
+    fn get_bit(&self, index: usize) -> Result<bool, BitAddressableError> {
+        if index >= 8 {
+            Err(BitAddressableError::IndexOutOfRange)
+        } else {
+            Ok(((self.0 >> index) & 1) == 1)
+        }
+    }
+}
+
+impl BitAddressable for [b1x8] {
+    /// Sets a bit at a specific index across the slice of `b1x8`.
+    fn set_bit(&mut self, index: usize, value: bool) -> Result<(), BitAddressableError> {
+        let byte_index = index / 8;
+        let bit_index = index % 8;
+        if byte_index >= self.len() {
+            Err(BitAddressableError::IndexOutOfRange)
+        } else {
+            self[byte_index].set_bit(bit_index, value)
+        }
+    }
+
+    /// Gets a bit at a specific index across the slice of `b1x8`.
+    fn get_bit(&self, index: usize) -> Result<bool, BitAddressableError> {
+        let byte_index = index / 8;
+        let bit_index = index % 8;
+        if byte_index >= self.len() {
+            Err(BitAddressableError::IndexOutOfRange)
+        } else {
+            self[byte_index].get_bit(bit_index)
+        }
+    }
+}
+
+#[allow(non_camel_case_types)]
+pub struct f16(i16);
+impl f16 {
+    /// Casts a slice of `i16` to a slice of `f16`.
+    pub fn from_i16s(slice: &[i16]) -> &[Self] {
+        unsafe { std::slice::from_raw_parts(slice.as_ptr() as *const Self, slice.len()) }
+    }
+
+    /// Casts a mutable slice of `i16` to a mutable slice of `f16`.
+    pub fn from_mut_i16s(slice: &mut [i16]) -> &mut [Self] {
+        unsafe { std::slice::from_raw_parts_mut(slice.as_mut_ptr() as *mut Self, slice.len()) }
+    }
+
+    /// Casts a slice of `f16` back to a slice of `i16`.
+    pub fn to_i16s(slice: &[Self]) -> &[i16] {
+        unsafe { std::slice::from_raw_parts(slice.as_ptr() as *const i16, slice.len()) }
+    }
+
+    /// Casts a mutable slice of `f16` back to a mutable slice of `i16`.
+    pub fn to_mut_i16s(slice: &mut [Self]) -> &mut [i16] {
+        unsafe { std::slice::from_raw_parts_mut(slice.as_mut_ptr() as *mut i16, slice.len()) }
+    }
+}
+
 #[cxx::bridge]
 pub mod ffi {
 
@@ -113,16 +268,25 @@ pub mod ffi {
         pub fn capacity(self: &NativeIndex) -> usize;
         pub fn serialized_length(self: &NativeIndex) -> usize;
 
+        pub fn add_b1x8(self: &NativeIndex, key: u64, vector: &[u8]) -> Result<()>;
         pub fn add_i8(self: &NativeIndex, key: u64, vector: &[i8]) -> Result<()>;
-        pub fn add_f16(self: &NativeIndex, key: u64, vector: &[u16]) -> Result<()>;
+        pub fn add_f16(self: &NativeIndex, key: u64, vector: &[i16]) -> Result<()>;
         pub fn add_f32(self: &NativeIndex, key: u64, vector: &[f32]) -> Result<()>;
         pub fn add_f64(self: &NativeIndex, key: u64, vector: &[f64]) -> Result<()>;
 
+        pub fn search_b1x8(self: &NativeIndex, query: &[u8], count: usize) -> Result<Matches>;
         pub fn search_i8(self: &NativeIndex, query: &[i8], count: usize) -> Result<Matches>;
-        pub fn search_f16(self: &NativeIndex, query: &[u16], count: usize) -> Result<Matches>;
+        pub fn search_f16(self: &NativeIndex, query: &[i16], count: usize) -> Result<Matches>;
         pub fn search_f32(self: &NativeIndex, query: &[f32], count: usize) -> Result<Matches>;
         pub fn search_f64(self: &NativeIndex, query: &[f64], count: usize) -> Result<Matches>;
 
+        pub fn filtered_search_b1x8(
+            self: &NativeIndex,
+            query: &[u8],
+            count: usize,
+            filter: usize,
+            filter_state: usize,
+        ) -> Result<Matches>;
         pub fn filtered_search_i8(
             self: &NativeIndex,
             query: &[i8],
@@ -132,7 +296,7 @@ pub mod ffi {
         ) -> Result<Matches>;
         pub fn filtered_search_f16(
             self: &NativeIndex,
-            query: &[u16],
+            query: &[i16],
             count: usize,
             filter: usize,
             filter_state: usize,
@@ -152,8 +316,9 @@ pub mod ffi {
             filter_state: usize,
         ) -> Result<Matches>;
 
+        pub fn get_b1x8(self: &NativeIndex, key: u64, buffer: &mut [u8]) -> Result<usize>;
         pub fn get_i8(self: &NativeIndex, key: u64, buffer: &mut [i8]) -> Result<usize>;
-        pub fn get_f16(self: &NativeIndex, key: u64, buffer: &mut [u16]) -> Result<usize>;
+        pub fn get_f16(self: &NativeIndex, key: u64, buffer: &mut [i16]) -> Result<usize>;
         pub fn get_f32(self: &NativeIndex, key: u64, buffer: &mut [f32]) -> Result<usize>;
         pub fn get_f64(self: &NativeIndex, key: u64, buffer: &mut [f64]) -> Result<usize>;
 
@@ -175,9 +340,63 @@ pub mod ffi {
     }
 }
 
+// Re-export the FFI structs and enums at the crate root for easy access
+pub use ffi::{IndexOptions, MetricKind, ScalarKind};
+
+/// Represents custom metric functions for calculating distances between vectors in various formats.
+///
+/// This enum allows the encapsulation of custom distance calculation logic for vectors of different
+/// data types, facilitating the use of custom metrics in vector space operations. Each variant of this
+/// enum holds a boxed function pointer (`Box<dyn Fn(...) -> Distance + Send + Sync>`) that defines the
+/// distance calculation between two vectors of a specific type. The function returns a `Distance`, which
+/// is typically a floating-point value representing the calculated distance between the two vectors.
+///
+/// # Variants
+///
+/// - `B1X8Metric`: A metric function for binary vectors packed in `u8` containers, represented here by `b1x8`.
+/// - `I8Metric`: A metric function for vectors of 8-bit signed integers (`i8`).
+/// - `F16Metric`: A metric function for vectors of 16-bit floating-point numbers, using a custom `f16` type
+///   to represent half-precision floats.
+/// - `F32Metric`: A metric function for vectors of 32-bit floating-point numbers (`f32`).
+/// - `F64Metric`: A metric function for vectors of 64-bit floating-point numbers (`f64`).
+///
+/// Each metric function takes two pointers to the vectors of the respective type and returns a `Distance`.
+///
+/// # Usage
+///
+/// Custom metric functions can be used to define how distances are calculated between vectors, enabling
+/// the implementation of various distance metrics such as Euclidean distance, Manhattan distance, or
+/// Cosine similarity, depending on the specific requirements of the application.
+///
+/// # Safety
+///
+/// Since these functions operate on raw pointers, care must be taken to ensure that the pointers are valid
+/// and that the lifetime of the referenced data extends at least as long as the lifetime of the metric
+/// function's use. Improper use of these functions can lead to undefined behavior.
+///
+/// # Examples
+///
+/// ```
+/// use usearch::{MetricFunction, Distance, f16, b1x8};
+///
+/// // Example of defining a custom Euclidean distance function for f32 vectors
+/// let euclidean: MetricFunction = MetricFunction::F32Metric(Box::new(|a, b| {
+///     // Safety: Assume a and b are valid for the number of dimensions in context.
+///     let dimensions = 256;
+///     let a = unsafe { std::slice::from_raw_parts(a, dimensions) };
+///     let b = unsafe { std::slice::from_raw_parts(b, dimensions) };
+///     a.iter().zip(b.iter())
+///         .map(|(a, b)| (a - b).powi(2))
+///         .sum::<f32>()
+///         .sqrt()
+/// }));
+/// ```
+///
+/// In this example, `dimensions` should be defined and valid for the vectors `a` and `b`.
 pub enum MetricFunction {
+    B1X8Metric(Box<dyn Fn(*const b1x8, *const b1x8) -> Distance + Send + Sync>),
     I8Metric(Box<dyn Fn(*const i8, *const i8) -> Distance + Send + Sync>),
-    F16Metric(Box<dyn Fn(*const u16, *const u16) -> Distance + Send + Sync>),
+    F16Metric(Box<dyn Fn(*const f16, *const f16) -> Distance + Send + Sync>),
     F32Metric(Box<dyn Fn(*const f32, *const f32) -> Distance + Send + Sync>),
     F64Metric(Box<dyn Fn(*const f64, *const f64) -> Distance + Send + Sync>),
 }
@@ -197,20 +416,21 @@ pub enum MetricFunction {
 ///
 /// // Create an index with specific options
 /// let mut options = IndexOptions::default();
-/// options.dimensions = 256; // Set the number of dimensions for vectors
+/// options.dimensions = 4; // Set the number of dimensions for vectors
 /// options.metric = MetricKind::Cos; // Use cosine similarity for distance measurement
 /// options.quantization = ScalarKind::F32; // Use 32-bit floating point numbers
 ///
 /// let index = Index::new(&options).expect("Failed to create index.");
+/// index.reserve(1000).expect("Failed to reserve capacity.");
 ///
 /// // Add vectors to the index
-/// let vector1: Vec<f32> = vec![0.0, 1.0, 0.0, 1.0, ...];
-/// let vector2: Vec<f32> = vec![1.0, 0.0, 1.0, 0.0, ...];
+/// let vector1: Vec<f32> = vec![0.0, 1.0, 0.0, 1.0];
+/// let vector2: Vec<f32> = vec![1.0, 0.0, 1.0, 0.0];
 /// index.add(1, &vector1).expect("Failed to add vector1.");
 /// index.add(2, &vector2).expect("Failed to add vector2.");
 ///
 /// // Search for the nearest neighbors to a query vector
-/// let query: Vec<f32> = vec![0.5, 0.5, 0.5, 0.5, ...];
+/// let query: Vec<f32> = vec![0.5, 0.5, 0.5, 0.5];
 /// let results = index.search(&query, 5).expect("Search failed.");
 /// for (key, distance) in results.keys.iter().zip(results.distances.iter()) {
 ///     println!("Key: {}, Distance: {}", key, distance);
@@ -224,8 +444,6 @@ pub struct Index {
 
 impl Default for ffi::IndexOptions {
     fn default() -> Self {
-        use crate::ffi::MetricKind;
-        use crate::ffi::ScalarKind;
         Self {
             dimensions: 256,
             metric: MetricKind::Cos,
@@ -535,6 +753,148 @@ impl VectorType for f64 {
             let closure_address = match index.metric_fn {
                 Some(MetricFunction::F64Metric(ref metric)) => metric as *const _ as usize,
                 _ => panic!("Expected F64Metric"),
+            };
+            index.inner.change_metric(trampoline_fn, closure_address)
+        }
+
+        Ok(())
+    }
+}
+
+impl VectorType for f16 {
+    fn search(index: &Index, query: &[Self], count: usize) -> Result<ffi::Matches, cxx::Exception> {
+        index.inner.search_f16(f16::to_i16s(query), count)
+    }
+    fn get(index: &Index, key: Key, vector: &mut [Self]) -> Result<usize, cxx::Exception> {
+        index.inner.get_f16(key, f16::to_mut_i16s(vector))
+    }
+    fn add(index: &Index, key: Key, vector: &[Self]) -> Result<(), cxx::Exception> {
+        index.inner.add_f16(key, f16::to_i16s(vector))
+    }
+    fn filtered_search<F>(
+        index: &Index,
+        query: &[Self],
+        count: usize,
+        filter: F,
+    ) -> Result<ffi::Matches, cxx::Exception>
+    where
+        Self: Sized,
+        F: Fn(Key) -> bool,
+    {
+        // Trampoline is the function that knows how to call the Rust closure.
+        extern "C" fn trampoline<F: Fn(u64) -> bool>(key: u64, closure_address: usize) -> bool {
+            let closure = closure_address as *const F;
+            unsafe { (*closure)(key) }
+        }
+
+        // Temporarily cast the closure to a raw pointer for passing.
+        unsafe {
+            let trampoline_fn: usize = std::mem::transmute(trampoline::<F> as *const ());
+            let closure_address: usize = &filter as *const F as usize;
+            index.inner.filtered_search_f16(
+                f16::to_i16s(query),
+                count,
+                trampoline_fn,
+                closure_address,
+            )
+        }
+    }
+
+    fn change_metric(
+        index: &mut Index,
+        metric: Box<dyn Fn(*const Self, *const Self) -> Distance + Send + Sync>,
+    ) -> Result<(), cxx::Exception> {
+        // Store the metric function in the Index.
+        type MetricFn = fn(*const f16, *const f16) -> Distance;
+        index.metric_fn = Some(MetricFunction::F16Metric(metric));
+
+        // Trampoline is the function that knows how to call the Rust closure.
+        // The `first` is a pointer to the first vector, `second` is a pointer to the second vector,
+        // and `index_wrapper` is a pointer to the `index` itself, from which we can infer the metric function
+        // and the number of dimensions.
+        extern "C" fn trampoline(first: usize, second: usize, closure_address: usize) -> Distance {
+            let first_ptr = first as *const f16;
+            let second_ptr = second as *const f16;
+            let closure: MetricFn = unsafe { std::mem::transmute(closure_address) };
+            closure(first_ptr, second_ptr)
+        }
+
+        unsafe {
+            let trampoline_fn: usize = std::mem::transmute(trampoline as *const ());
+            let closure_address = match index.metric_fn {
+                Some(MetricFunction::F16Metric(ref metric)) => metric as *const _ as usize,
+                _ => panic!("Expected F16Metric"),
+            };
+            index.inner.change_metric(trampoline_fn, closure_address)
+        }
+
+        Ok(())
+    }
+}
+
+impl VectorType for b1x8 {
+    fn search(index: &Index, query: &[Self], count: usize) -> Result<ffi::Matches, cxx::Exception> {
+        index.inner.search_b1x8(b1x8::to_u8s(query), count)
+    }
+    fn get(index: &Index, key: Key, vector: &mut [Self]) -> Result<usize, cxx::Exception> {
+        index.inner.get_b1x8(key, b1x8::to_mut_u8s(vector))
+    }
+    fn add(index: &Index, key: Key, vector: &[Self]) -> Result<(), cxx::Exception> {
+        index.inner.add_b1x8(key, b1x8::to_u8s(vector))
+    }
+    fn filtered_search<F>(
+        index: &Index,
+        query: &[Self],
+        count: usize,
+        filter: F,
+    ) -> Result<ffi::Matches, cxx::Exception>
+    where
+        Self: Sized,
+        F: Fn(Key) -> bool,
+    {
+        // Trampoline is the function that knows how to call the Rust closure.
+        extern "C" fn trampoline<F: Fn(u64) -> bool>(key: u64, closure_address: usize) -> bool {
+            let closure = closure_address as *const F;
+            unsafe { (*closure)(key) }
+        }
+
+        // Temporarily cast the closure to a raw pointer for passing.
+        unsafe {
+            let trampoline_fn: usize = std::mem::transmute(trampoline::<F> as *const ());
+            let closure_address: usize = &filter as *const F as usize;
+            index.inner.filtered_search_b1x8(
+                b1x8::to_u8s(query),
+                count,
+                trampoline_fn,
+                closure_address,
+            )
+        }
+    }
+
+    fn change_metric(
+        index: &mut Index,
+        metric: Box<dyn Fn(*const Self, *const Self) -> Distance + Send + Sync>,
+    ) -> Result<(), cxx::Exception> {
+        // Store the metric function in the Index.
+        type MetricFn = fn(*const b1x8, *const b1x8) -> Distance;
+        index.metric_fn = Some(MetricFunction::B1X8Metric(metric));
+
+        // Trampoline is the function that knows how to call the Rust closure.
+        // The `first` is a pointer to the first vector, `second` is a pointer to the second vector,
+        // and `index_wrapper` is a pointer to the `index` itself, from which we can infer the metric function
+        // and the number of dimensions.
+        extern "C" fn trampoline(first: usize, second: usize, closure_address: usize) -> Distance {
+            let first_ptr = first as *const b1x8;
+            let second_ptr = second as *const b1x8;
+            let closure: MetricFn = unsafe { std::mem::transmute(closure_address) };
+            closure(first_ptr, second_ptr)
+        }
+
+        unsafe {
+            let trampoline_fn: usize = std::mem::transmute(trampoline as *const ());
+            let closure_address = match index.metric_fn {
+                Some(MetricFunction::B1X8Metric(ref metric)) => metric as *const _ as usize,
+                _ => panic!("Expected B1X8Metric"),
             };
             index.inner.change_metric(trampoline_fn, closure_address)
         }
@@ -853,6 +1213,8 @@ mod tests {
     use crate::ffi::MetricKind;
     use crate::ffi::ScalarKind;
 
+    use crate::b1x8;
+    use crate::f16;
     use crate::new_index;
     use crate::Distance;
     use crate::Index;
@@ -1120,10 +1482,9 @@ mod tests {
         index.add(2, &second).unwrap();
 
         // Stateless filter: checks if the key is odd
-        let stateless_filter = |key: Key| key % 2 == 1;
-
+        let is_odd = |key: Key| key % 2 == 1;
         let query = vec![0.2, 0.1, 0.2, 0.1, 0.3]; // Example query vector
-        let results = index.filtered_search(&query, 10, stateless_filter).unwrap();
+        let results = index.filtered_search(&query, 10, is_odd).unwrap();
         assert!(
             results.keys.iter().all(|&key| key % 2 == 1),
             "All keys must be odd"
@@ -1170,15 +1531,45 @@ mod tests {
         let vector: [f32; 2] = [1.0, 0.0];
         index.add(1, &vector).unwrap();
 
-        // Stateless distance function: simply returns the difference in the first element
-        let stateless_distance =
-            Box::new(|a: *const f32, b: *const f32| unsafe { (*a - *b).abs() });
-        index.change_metric(stateless_distance);
-
-        // Now changing to a stateful distance function: scales the difference by a factor
-        let scale_factor = 2.0;
-        let stateful_distance =
-            Box::new(move |a: *const f32, b: *const f32| unsafe { (*a - *b).abs() * scale_factor });
+        // Stateful distance function with adjustments for pointer to slice conversion
+        let first_factor: f32 = 2.0;
+        let second_factor: f32 = 0.7;
+        let stateful_distance = Box::new(move |a: *const f32, b: *const f32| unsafe {
+            let a_slice = std::slice::from_raw_parts(a, 2);
+            let b_slice = std::slice::from_raw_parts(b, 2);
+            (a_slice[0] - b_slice[0]).abs() * first_factor
+                + (a_slice[1] - b_slice[1]).abs() * second_factor
+        });
         index.change_metric(stateful_distance);
+    }
+
+    #[test]
+    fn test_binary_vectors_and_hamming_distance() {
+        let index = Index::new(&IndexOptions {
+            dimensions: 8,
+            metric: MetricKind::Hamming,
+            quantization: ScalarKind::B1,
+            ..Default::default()
+        })
+        .unwrap();
+
+        // Binary vectors represented as `b1x8` slices
+        let vector42: Vec<b1x8> = vec![b1x8(0b00001111)];
+        let vector43: Vec<b1x8> = vec![b1x8(0b11110000)];
+        let query: Vec<b1x8> = vec![b1x8(0b01111000)];
+
+        // Adding binary vectors to the index
+        index.reserve(10).unwrap();
+        index.add(42, &vector42).unwrap();
+        index.add(43, &vector43).unwrap();
+
+        let results = index.search(&query, 5).unwrap();
+
+        // Validate the search results based on Hamming distance
+        assert_eq!(results.keys.len(), 2);
+        assert_eq!(results.keys[0], 43);
+        assert_eq!(results.distances[0], 2.0);
+        assert_eq!(results.keys[1], 42);
+        assert_eq!(results.distances[1], 6.0);
     }
 }
