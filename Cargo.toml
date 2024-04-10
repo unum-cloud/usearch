@@ -7,15 +7,14 @@ edition = "2021"
 license = "Apache-2.0"
 publish = true
 repository = "https://github.com/unum-cloud/usearch"
-
-# If no precompiled binaries are available, the build script will compile the
-# following files using the `build.rs` specification.
+documentation = "https://unum-cloud.github.io/usearch"
 include = [
-    "rust/*",
-    "include/*",
-    "fp16/include/*",
-    "simsimd/include/*",
-    "Cargo.toml",
+    "/rust/**",
+    "/include/**",
+    "/fp16/include/**",
+    "/simsimd/include/**",
+    "/stringzilla/include/**",
+    "/build.rs",
 ]
 
 [features]
