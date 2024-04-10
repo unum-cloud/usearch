@@ -94,9 +94,10 @@ USearch is compact and broadly compatible without sacrificing performance, prima
 | Supported metrics ²                          |         9 fixed metrics |               any metric |              extendible |
 | Supported languages ³                        |             C++, Python |             10 languages |                portable |
 | Supported ID types ⁴                         |          32-bit, 64-bit |   32-bit, 40-bit, 64-bit |               efficient |
-| Required dependencies ⁵                      |            BLAS, OpenMP |                        - |            light-weight |
-| Bindings ⁶                                   |                    SWIG |                   Native |             low-latency |
-| Python binding size ⁷                        | [~ 10 MB][faiss-weight] | [< 1 MB][usearch-weight] |              deployable |
+| Filtering ⁵                                  |               ban-lists |           any predicates |              composable |
+| Required dependencies ⁶                      |            BLAS, OpenMP |                        - |            light-weight |
+| Bindings ⁷                                   |                    SWIG |                   Native |             low-latency |
+| Python binding size ⁸                        | [~ 10 MB][faiss-weight] | [< 1 MB][usearch-weight] |              deployable |
 
 [sloc]: https://en.wikipedia.org/wiki/Source_lines_of_code
 [faiss-weight]: https://pypi.org/project/faiss-cpu/#files
@@ -107,9 +108,10 @@ USearch is compact and broadly compatible without sacrificing performance, prima
 > ² User-defined metrics allow you to customize your search for various applications, from GIS to creating custom metrics for composite embeddings from multiple AI models or hybrid full-text and semantic search.
 > ³ With USearch, you can reuse the same preconstructed index in various programming languages.
 > ⁴ The 40-bit integer allows you to store 4B+ vectors without allocating 8 bytes for every neighbor reference in the proximity graph.
-> ⁵ Lack of obligatory dependencies makes USearch much more portable.
-> ⁶ Native bindings introduce lower call latencies than more straightforward approaches.
-> ⁷ Lighter bindings make downloads and deployments faster.
+> ⁵ With USearch the index can be combined with arbitrary external containers, like Bloom filters or third-party databases, to filter out irrelevant keys during index traversal.
+> ⁶ Lack of obligatory dependencies makes USearch much more portable.
+> ⁷ Native bindings introduce lower call latencies than more straightforward approaches.
+> ⁸ Lighter bindings make downloads and deployments faster.
 
 [intel-benchmarks]: https://www.unum.cloud/blog/2023-11-07-scaling-vector-search-with-intel
 
@@ -192,7 +194,7 @@ When compared to FAISS's `IndexFlatL2` in Google Colab, __[USearch may offer up 
 - `faiss.IndexFlatL2`: __55.3 ms__.
 - `usearch.index.search`: __2.54 ms__.
 
-## User-Defined Functions
+## User-Defined Metrics
 
 While most vector search packages concentrate on just two metrics, "Inner Product distance" and "Euclidean distance", USearch allows arbitrary user-defined metrics.
 This flexibility allows you to customize your search for various applications, from computing geospatial coordinates with the rare [Haversine][haversine] distance to creating custom metrics for composite embeddings from multiple AI models, like joint image-text embeddings.
@@ -227,6 +229,23 @@ So you can apply it in [obscure][obscure] applications, like searching for simil
 [numba]: https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
 [cppyy]: https://cppyy.readthedocs.io/en/latest/
 [peachpy]: https://github.com/Maratyszcza/PeachPy
+
+## Filtering and Predicate Functions
+
+Sometimes you may want to cross-reference search-results against some external database or filter them based on some criteria.
+In most engines, you'd have to manually perform paging requests, successively filtering the results.
+In USearch you can simply pass a predicate function to the search method, which will be applied directly during graph traversal.
+In Rust that would look like this:
+
+```rust
+let is_odd = |key: Key| key % 2 == 1;
+let query = vec![0.2, 0.1, 0.2, 0.1, 0.3];
+let results = index.filtered_search(&query, 10, is_odd).unwrap();
+assert!(
+    results.keys.iter().all(|&key| key % 2 == 1),
+    "All keys must be odd"
+);
+```
 
 ## Memory Efficiency, Downcasting, and Quantization
 
