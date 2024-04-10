@@ -742,6 +742,11 @@ class index_dense_gt {
             unique_lock_t lock(slot_lookup_mutex_);
             slot_lookup_.reserve(limits.members);
             vectors_lookup_.resize(limits.members);
+
+            // During reserve, no insertions may be happening, so we can safely overwrite the whole collection.
+            std::unique_lock<std::mutex> available_threads_lock(available_threads_mutex_);
+            available_threads_.resize(limits.threads());
+            std::iota(available_threads_.begin(), available_threads_.end(), 0ul);
         }
         return typed_->reserve(limits);
     }

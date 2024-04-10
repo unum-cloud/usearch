@@ -71,8 +71,19 @@ Instead of spawning additional threads within USearch, we focus on the thread sa
 
 During initialization, we allocate enough temporary memory for all the cores on the machine.
 On the call, the user can supply the identifier of the current thread, making this library easy to integrate with OpenMP and similar tools.
+Here is how parallel indexing may look like, when dealing with the low-level engine:
 
-Moreover, you can take advantage of one of the provided "executors" to parallelize the search:
+```cpp
+std::size_t executor_threads = std::thread::hardware_concurrency() * 4;
+executor_default_t executor(executor_threads);
+
+index.reserve(index_limits_t {vectors.size(), executor.size()});
+executor.fixed(vectors.size(), [&](std::size_t thread, std::size_t task) {
+    index.add(task, vectors[task + 3].data(), index_update_config_t { .thread = thread });
+});
+```
+
+Aside from the `executor_default_t`, you can take advantage of one of the provided "executors" to parallelize the search:
 
 - `executor_openmp_t`, that would use OpenMP under the hood.
 - `executor_stl_t`, that will spawn `std::thread` instances.

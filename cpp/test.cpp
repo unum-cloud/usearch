@@ -114,8 +114,9 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
         expect(std::equal(vector_second, vector_second + dimensions, vec_recovered_from_load.data()));
     }
 
-    // Try batch requests
-    executor_default_t executor;
+    // Try batch requests, heavily obersubscribing the CPU cores
+    std::size_t executor_threads = std::thread::hardware_concurrency() * 4;
+    executor_default_t executor(executor_threads);
     index.reserve({vectors.size(), executor.size()});
     executor.fixed(vectors.size() - 3, [&](std::size_t thread, std::size_t task) {
         if constexpr (punned_ak) {
