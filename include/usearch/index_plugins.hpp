@@ -46,7 +46,9 @@
 
 #if USEARCH_USE_SIMSIMD
 // Propagate the `f16` settings
+#if !defined(SIMSIMD_NATIVE_F16)
 #define SIMSIMD_NATIVE_F16 !USEARCH_USE_FP16LIB
+#endif
 #define SIMSIMD_DYNAMIC_DISPATCH 0
 // No problem, if some of the functions are unused or undefined
 #pragma GCC diagnostic push

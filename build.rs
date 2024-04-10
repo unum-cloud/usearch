@@ -26,7 +26,8 @@ fn main() {
     if cfg!(feature = "simsimd") {
         build
             .define("USEARCH_USE_SIMSIMD", "1")
-            .define("SIMSIMD_DYNAMIC_DISPATCH", "1");
+            .define("SIMSIMD_DYNAMIC_DISPATCH", "1")
+            .define("SIMSIMD_NATIVE_F16", "0");
     } else {
         build.define("USEARCH_USE_SIMSIMD", "0");
     }
