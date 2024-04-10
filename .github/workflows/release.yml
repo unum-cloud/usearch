@@ -778,6 +778,10 @@ jobs:
           npm install -g jsdoc typedoc
       - name: Install USearch from PyPi
         run: pip install usearch
+      - name: Build CJS JS
+        run: |
+          npm ci --ignore-scripts
+          npm run build-js
       - name: Build documentation
         run: cd docs && doxygen conf.dox && make html
       - name: Copy assets
