@@ -558,6 +558,10 @@ jobs:
         with:
           ref: "main"
       - run: git submodule update --init --recursive
+      - name: Hide submodule Crates
+        run: |
+          mv simsimd/Cargo.toml simsimd/Cargo.toml.bak
+          mv stringzilla/Cargo.toml stringzilla/Cargo.toml.bak
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
