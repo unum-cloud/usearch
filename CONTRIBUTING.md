@@ -267,7 +267,31 @@ The compilation settings are controlled by the `build.rs` and are independent fr
 
 ```sh
 cargo test -p usearch -- --nocapture --test-threads=1
+```
+
+Publishing the crate is a bit more complicated than normally.
+If you simply pull the repository with submodules and run the following command it will list fewer files than expected:
+
+```sh
+cargo package --list --allow-dirty
+```
+
+The reason for that is the heuristic that Cargo uses to determine the files to include in the package.
+
+> Regardless of whether exclude or include is specified, the following files are always excluded:
+> Any sub-packages will be skipped (any subdirectory that contains a Cargo.toml file).
+
+Assuming both SimSIMD and StringZilla contain their own `Cargo.toml` files, we need to temporarily exclude them from the package.
+
+```sh
+mv simsimd/Cargo.toml simsimd/Cargo.toml.bak
+mv stringzilla/Cargo.toml stringzilla/Cargo.toml.bak
+cargo package --list --allow-dirty
 cargo publish
+
+# Revert back
+mv simsimd/Cargo.toml.bak simsimd/Cargo.toml
+mv stringzilla/Cargo.toml.bak stringzilla/Cargo.toml
 ```
 
 ## Objective-C and Swift
@@ -404,6 +428,21 @@ docker buildx create --use &&
         --tag unum/usearch:$version \
         --tag unum/usearch:latest \
         --push .
+```
+
+## WebAssembly
+
+```sh
+export WASI_VERSION=21
+export WASI_VERSION_FULL=${WASI_VERSION}.0
+wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sdk-${WASI_VERSION_FULL}-linux.tar.gz
+tar xvf wasi-sdk-${WASI_VERSION_FULL}-linux.tar.gz
+```
+
+After the installation, we can pass WASI SDK to CMake as a new toolchain:
+
+```sh
+cmake -DCMAKE_TOOLCHAIN_FILE=${WASI_SDK_PATH}/share/cmake/wasi-sdk.cmake .
 ```
 
 ## Working on Sub-Modules
