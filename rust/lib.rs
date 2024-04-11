@@ -1439,6 +1439,8 @@ mod tests {
         options.metric = MetricKind::Cos;
         assert!(new_index(&options).is_ok());
         options.metric = MetricKind::Haversine;
+        options.quantization = ScalarKind::F32;
+        options.dimensions = 2;
         assert!(new_index(&options).is_ok());
 
         let mut serialization_buffer = Vec::new();

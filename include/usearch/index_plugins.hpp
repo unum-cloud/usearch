@@ -74,7 +74,9 @@ class f16_bits_t;
 class i8_converted_t;
 
 #if !USEARCH_USE_FP16LIB
-#if defined(USEARCH_DEFINED_ARM)
+#if USEARCH_USE_SIMSIMD
+using f16_native_t = simsimd_f16_t;
+#elif defined(USEARCH_DEFINED_ARM)
 using f16_native_t = __fp16;
 #else
 using f16_native_t = _Float16;
@@ -1292,7 +1294,8 @@ struct l2sq_i8_t {
 template <typename scalar_at = float, typename result_at = scalar_at> struct metric_haversine_gt {
     using scalar_t = scalar_at;
     using result_t = result_at;
-    static_assert(!std::is_integral<scalar_t>::value, "Latitude and longitude must be floating-node");
+    static_assert(!std::is_integral<scalar_t>::value && !std::is_same<scalar_t, f16_t>::value,
+                  "Latitude and longitude must be floating-node");
 
     inline result_t operator()(scalar_t const* a, scalar_t const* b, std::size_t = 2) const noexcept {
         result_t lat_a = a[0], lon_a = a[1];
@@ -1610,9 +1613,7 @@ class metric_punned_t {
         }
         case metric_kind_t::haversine_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::f16_k:
-                metric_ptr_ = (uptr_t)&equidimensional_<metric_haversine_gt<f16_t, f32_t>>;
-                break;
+            case scalar_kind_t::f16_k: metric_ptr_ = 0; break; //< Having half-precision 2D coordinates is a bit silly.
             case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_haversine_gt<f32_t>>; break;
             case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_haversine_gt<f64_t>>; break;
             default: metric_ptr_ = 0; break;
