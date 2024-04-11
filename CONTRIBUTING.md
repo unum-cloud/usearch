@@ -73,6 +73,7 @@ cmake --build ./build_release --config Release
 Similarly, to use the most recent Clang compiler version from HomeBrew on MacOS:
 
 ```sh
+brew install clang++ clang cmake
 cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_C_COMPILER="/opt/homebrew/opt/llvm/bin/clang" \

@@ -148,6 +148,25 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     expect(matched_keys[0] == key_first);
     expect(std::abs(matched_distances[0]) < 0.01);
 
+    // Check over-sampling beyond the size of the collection
+    {
+        std::size_t max_possible_matches = vectors.size();
+        std::size_t count_requested = max_possible_matches * 4;
+        std::vector<vector_key_t> matched_keys(count_requested);
+        std::vector<distance_t> matched_distances(count_requested);
+
+        matched_count = index                                               //
+                            .search(vector_first, count_requested, args...) //
+                            .dump_to(matched_keys.data(), matched_distances.data());
+        expect(matched_count <= max_possible_matches);
+        expect(matched_keys[0] == key_first);
+        expect(std::abs(matched_distances[0]) < 0.01);
+
+        // Check that all the distance are monotonically rising
+        for (std::size_t i = 1; i < matched_count; i++)
+            expect(matched_distances[i - 1] <= matched_distances[i]);
+    }
+
     if constexpr (punned_ak) {
         std::vector<scalar_t> vec_recovered_from_view(dimensions);
         index.get(key_second, vec_recovered_from_view.data());

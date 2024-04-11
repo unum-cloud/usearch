@@ -268,9 +268,12 @@ jobs:
 
       - name: Build library on Ubuntu
         run: |
+          export WASI_VERSION=20
+          export WASI_VERSION_FULL=${WASI_VERSION}.0
           wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sdk-${WASI_VERSION_FULL}-linux.tar.gz
           tar xf wasi-sdk-${WASI_VERSION_FULL}-linux.tar.gz
           rm -rf wasi-sdk-${WASI_VERSION_FULL}-linux.tar.gz
+          export WASI_SDK_PATH=/home/runner/work/usearch/usearch/wasi-sdk-${WASI_VERSION_FULL}
           archs=("x86_64" "arm64")
           cd ./c
           for arch in "${archs[@]}"
