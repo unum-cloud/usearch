@@ -1,4 +1,5 @@
 import os
+from time import time
 
 import pytest
 import numpy as np
@@ -40,12 +41,18 @@ hash_metrics = [
 ]
 
 
+def reset_randomness():
+    np.random.seed(int(time()))
+
+
 @pytest.mark.parametrize("ndim", [3, 97, 256])
 @pytest.mark.parametrize("metric", [MetricKind.Cos, MetricKind.L2sq])
 @pytest.mark.parametrize("batch_size", [1, 7, 1024])
 @pytest.mark.parametrize("quantization", [ScalarKind.F32, ScalarKind.I8])
 @pytest.mark.parametrize("dtype", [np.float32, np.float64, np.float16])
 def test_index_initialization_and_addition(ndim, metric, quantization, dtype, batch_size):
+    reset_randomness()
+
     index = Index(ndim=ndim, metric=metric, dtype=quantization, multi=False)
     keys = np.arange(batch_size)
     vectors = random_vectors(count=batch_size, ndim=ndim, dtype=dtype)
@@ -59,25 +66,27 @@ def test_index_initialization_and_addition(ndim, metric, quantization, dtype, ba
 @pytest.mark.parametrize("quantization", [ScalarKind.F32, ScalarKind.I8])
 @pytest.mark.parametrize("dtype", [np.float32, np.float64, np.float16])
 def test_index_retrieval(ndim, metric, quantization, dtype, batch_size):
+    reset_randomness()
+
     index = Index(ndim=ndim, metric=metric, dtype=quantization, multi=False)
     keys = np.arange(batch_size)
     vectors = random_vectors(count=batch_size, ndim=ndim, dtype=dtype)
     index.add(keys, vectors, threads=threads)
-    vectors_retrived = np.vstack(index.get(keys, dtype))
-    assert np.allclose(vectors_retrived, vectors, atol=0.1)
+    vectors_retrieved = np.vstack(index.get(keys, dtype))
+    assert np.allclose(vectors_retrieved, vectors, atol=0.1)
 
     # Try retrieving all the keys
-    keys_retrived = index.keys
-    keys_retrived = np.array(keys_retrived)
-    assert np.all(np.sort(keys_retrived) == keys)
+    keys_retrieved = index.keys
+    keys_retrieved = np.array(keys_retrieved)
+    assert np.all(np.sort(keys_retrieved) == keys)
 
     # Try retrieving all of them
     if quantization != ScalarKind.I8:
         # The returned vectors can be in a different order
-        vectors_batch_retrived = index.vectors
-        vectors_reordering = np.argsort(keys_retrived)
-        vectors_batch_retrived = vectors_batch_retrived[vectors_reordering]
-        assert np.allclose(vectors_batch_retrived, vectors, atol=0.1)
+        vectors_batch_retrieved = index.vectors
+        vectors_reordering = np.argsort(keys_retrieved)
+        vectors_batch_retrieved = vectors_batch_retrieved[vectors_reordering]
+        assert np.allclose(vectors_batch_retrieved, vectors, atol=0.1)
 
 
 @pytest.mark.parametrize("ndim", [3, 97, 256])
@@ -86,6 +95,8 @@ def test_index_retrieval(ndim, metric, quantization, dtype, batch_size):
 @pytest.mark.parametrize("quantization", [ScalarKind.F32, ScalarKind.I8])
 @pytest.mark.parametrize("dtype", [np.float32, np.float64, np.float16])
 def test_index_search(ndim, metric, quantization, dtype, batch_size):
+    reset_randomness()
+
     index = Index(ndim=ndim, metric=metric, dtype=quantization, multi=False)
     keys = np.arange(batch_size)
     vectors = random_vectors(count=batch_size, ndim=ndim, dtype=dtype)
@@ -112,6 +123,8 @@ def test_index_self_recall(ndim: int, batch_size: int):
     """
     Test self-recall evaluation scripts.
     """
+    reset_randomness()
+
     index = Index(ndim=ndim, multi=False)
     keys = np.arange(batch_size)
     vectors = random_vectors(count=batch_size, ndim=ndim)
@@ -126,6 +139,8 @@ def test_index_self_recall(ndim: int, batch_size: int):
 
 @pytest.mark.parametrize("batch_size", [1, 7, 1024])
 def test_index_duplicates(batch_size):
+    reset_randomness()
+
     ndim = 8
     index = Index(ndim=ndim, multi=False)
     keys = np.arange(batch_size)
@@ -147,6 +162,8 @@ def test_index_duplicates(batch_size):
 
 @pytest.mark.parametrize("batch_size", [1, 7, 1024])
 def test_index_stats(batch_size):
+    reset_randomness()
+
     ndim = 8
     index = Index(ndim=ndim, multi=False)
     keys = np.arange(batch_size)
@@ -165,6 +182,7 @@ def test_index_stats(batch_size):
 @pytest.mark.parametrize("batch_size", [0, 1, 7, 1024])
 @pytest.mark.parametrize("quantization", [ScalarKind.F32, ScalarKind.I8])
 def test_index_save_load_restore_copy(ndim, quantization, batch_size):
+    reset_randomness()
     index = Index(ndim=ndim, dtype=quantization, multi=False)
 
     if batch_size > 0:
@@ -213,6 +231,7 @@ def test_index_save_load_restore_copy(ndim, quantization, batch_size):
 
 @pytest.mark.parametrize("batch_size", [32])
 def test_index_contains_remove_rename(batch_size):
+    reset_randomness()
     if batch_size <= 1:
         return
 
@@ -246,6 +265,7 @@ def test_index_contains_remove_rename(batch_size):
 @pytest.mark.parametrize("batch_size", [3, 17, 33])
 @pytest.mark.parametrize("threads", [1, 4])
 def test_index_oversubscribed_search(batch_size: int, threads: int):
+    reset_randomness()
     if batch_size <= 1:
         return
 
