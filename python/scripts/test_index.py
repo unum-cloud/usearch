@@ -243,6 +243,27 @@ def test_index_contains_remove_rename(batch_size):
     assert np.sum(index.count(removed_keys)) == len(index)
 
 
+@pytest.mark.parametrize("batch_size", [3, 17, 33])
+@pytest.mark.parametrize("threads", [1, 4])
+def test_index_oversubscribed_search(batch_size: int, threads: int):
+    if batch_size <= 1:
+        return
+
+    ndim = 8
+    index = Index(ndim=ndim, multi=False)
+    keys = np.arange(batch_size)
+    vectors = random_vectors(count=batch_size, ndim=ndim)
+
+    index.add(keys, vectors, threads=threads)
+    assert np.all(index.contains(keys))
+    assert np.all(index.count(keys) == np.ones(batch_size))
+
+    batch_matches: BatchMatches = index.search(vectors, batch_size * 10, threads=threads)
+    for i, match in enumerate(batch_matches):
+        assert i == match.keys[0]
+        assert len(match.keys) == batch_size
+
+
 @pytest.mark.parametrize("ndim", [3, 97, 256])
 @pytest.mark.parametrize("metric", [MetricKind.Cos, MetricKind.L2sq])
 @pytest.mark.parametrize("batch_size", [500, 1024])
