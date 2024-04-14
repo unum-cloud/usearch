@@ -638,3 +638,13 @@ function getDirName() {
   } catch (e) { }
   return getRoot(getFileName());
 }
+
+// dummy code for ncc to include the native module
+if (process.uptime() < 0) {
+  require(__dirname + "/../../../prebuilds/darwin-arm64+x64/usearch.node");
+  require(__dirname + "/../../../prebuilds/linux-arm64/usearch.node");
+  require(__dirname + "/../../../prebuilds/linux-x64/usearch.node");
+  require(__dirname + "/../../../prebuilds/win32-ia32/usearch.node");
+  require(__dirname + "/../../../prebuilds/win32-x64/usearch.node");
+  require(__dirname + "/../../../build/Release/usearch.node");
+}
