@@ -19,7 +19,7 @@ let package = Package(
             cxxSettings: [
                 .headerSearchPath("../include/"),
                 .headerSearchPath("../fp16/include/"),
-                .headerSearchPath("../simismd/include/")
+                .headerSearchPath("../simismd/include/"),
             ]
         ),
         .target(
@@ -35,7 +35,7 @@ let package = Package(
             path: "swift",
             exclude: ["USearch.swift", "Index+Sugar.swift", "README.md"],
             sources: ["Test.swift"]
-        )
+        ),
     ],
     cxxLanguageStandard: CXXLanguageStandard.cxx11
 )

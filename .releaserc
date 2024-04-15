@@ -79,6 +79,7 @@
                     "conanfile.py",
                     "package.json",
                     "Cargo.toml",
+                    "Cargo.lock",
                     "wasmer.toml",
                     "./include/usearch/index.hpp",
                     "./csharp/nuget/nuget-package.props",

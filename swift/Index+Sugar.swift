@@ -25,7 +25,7 @@ extension USearchIndex {
     /// - Parameter key: Unique identifier for that object.
     /// - Parameter vector: Single-precision vector.
     /// - Throws: If runs out of memory.
-    public func add(key: USearchKey, vector: Array<Float32>) {
+    public func add(key: USearchKey, vector: [Float32]) {
         add(key: key, vector: vector[...])
     }
 
@@ -50,7 +50,7 @@ extension USearchIndex {
     /// - Parameter count: Upper limit on the number of matches to retrieve.
     /// - Returns: Labels and distances to closest approximate matches in decreasing similarity order.
     /// - Throws: If runs out of memory.
-    public func search(vector: Array<Float32>, count: Int) -> ([Key], [Float]) {
+    public func search(vector: [Float32], count: Int) -> ([Key], [Float]) {
         return search(vector: vector[...], count: count)
     }
 
@@ -68,7 +68,7 @@ extension USearchIndex {
     /// - Parameter key: Unique identifier for that object.
     /// - Parameter vector: Double-precision vector.
     /// - Throws: If runs out of memory.
-    public func add(key: Key, vector: Array<Float64>) {
+    public func add(key: Key, vector: [Float64]) {
         add(key: key, vector: vector[...])
     }
 
@@ -93,7 +93,7 @@ extension USearchIndex {
     /// - Parameter count: Upper limit on the number of matches to retrieve.
     /// - Returns: Labels and distances to closest approximate matches in decreasing similarity order.
     /// - Throws: If runs out of memory.
-    public func search(vector: Array<Float64>, count: Int) -> ([Key], [Float]) {
+    public func search(vector: [Float64], count: Int) -> ([Key], [Float]) {
         search(vector: vector[...], count: count)
     }
 
@@ -115,7 +115,7 @@ extension USearchIndex {
         /// - Parameter vector: Half-precision vector.
         /// - Throws: If runs out of memory.
         @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, *)
-        public func add(key: Key, vector: Array<Float16>) {
+        public func add(key: Key, vector: [Float16]) {
             add(key: key, vector: vector[...])
         }
 
@@ -142,7 +142,7 @@ extension USearchIndex {
         /// - Returns: Labels and distances to closest approximate matches in decreasing similarity order.
         /// - Throws: If runs out of memory.
         @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, *)
-        public func search(vector: Array<Float16>, count: Int) -> ([Key], [Float]) {
+        public func search(vector: [Float16], count: Int) -> ([Key], [Float]) {
             search(vector: vector[...], count: count)
         }
 

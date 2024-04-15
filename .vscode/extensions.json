@@ -1,0 +1,10 @@
+{
+    "recommendations": [
+        "vknabel.vscode-apple-swift-format",
+        "sswg.swift-lang",
+        "ms-python.black-formatter",
+        "ms-vscode.cpptools-extension-pack",
+        "xaver.clang-format",
+        "swellaby.rust-pack"
+    ]
+}
