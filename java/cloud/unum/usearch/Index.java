@@ -1,3 +1,7 @@
+
+/**
+ * Java bindings for Unum USearch vector search library.
+ */
 package cloud.unum.usearch;
 
 import java.io.IOException;

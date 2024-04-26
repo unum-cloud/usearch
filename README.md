@@ -94,9 +94,10 @@ USearch is compact and broadly compatible without sacrificing performance, prima
 | Supported metrics ²                          |         9 fixed metrics |               any metric |              extendible |
 | Supported languages ³                        |             C++, Python |             10 languages |                portable |
 | Supported ID types ⁴                         |          32-bit, 64-bit |   32-bit, 40-bit, 64-bit |               efficient |
-| Required dependencies ⁵                      |            BLAS, OpenMP |                        - |            light-weight |
-| Bindings ⁶                                   |                    SWIG |                   Native |             low-latency |
-| Python binding size ⁷                        | [~ 10 MB][faiss-weight] | [< 1 MB][usearch-weight] |              deployable |
+| Filtering ⁵                                  |               ban-lists |           any predicates |              composable |
+| Required dependencies ⁶                      |            BLAS, OpenMP |                        - |            light-weight |
+| Bindings ⁷                                   |                    SWIG |                   Native |             low-latency |
+| Python binding size ⁸                        | [~ 10 MB][faiss-weight] | [< 1 MB][usearch-weight] |              deployable |
 
 [sloc]: https://en.wikipedia.org/wiki/Source_lines_of_code
 [faiss-weight]: https://pypi.org/project/faiss-cpu/#files
@@ -107,16 +108,17 @@ USearch is compact and broadly compatible without sacrificing performance, prima
 > ² User-defined metrics allow you to customize your search for various applications, from GIS to creating custom metrics for composite embeddings from multiple AI models or hybrid full-text and semantic search.
 > ³ With USearch, you can reuse the same preconstructed index in various programming languages.
 > ⁴ The 40-bit integer allows you to store 4B+ vectors without allocating 8 bytes for every neighbor reference in the proximity graph.
-> ⁵ Lack of obligatory dependencies makes USearch much more portable.
-> ⁶ Native bindings introduce lower call latencies than more straightforward approaches.
-> ⁷ Lighter bindings make downloads and deployments faster.
+> ⁵ With USearch the index can be combined with arbitrary external containers, like Bloom filters or third-party databases, to filter out irrelevant keys during index traversal.
+> ⁶ Lack of obligatory dependencies makes USearch much more portable.
+> ⁷ Native bindings introduce lower call latencies than more straightforward approaches.
+> ⁸ Lighter bindings make downloads and deployments faster.
 
 [intel-benchmarks]: https://www.unum.cloud/blog/2023-11-07-scaling-vector-search-with-intel
 
 Base functionality is identical to FAISS, and the interface must be familiar if you have ever investigated Approximate Nearest Neighbors search:
 
 ```py
-$ pip install numpy usearch
+# pip install numpy usearch
 
 import numpy as np
 from usearch.index import Index
@@ -192,6 +194,80 @@ When compared to FAISS's `IndexFlatL2` in Google Colab, __[USearch may offer up 
 - `faiss.IndexFlatL2`: __55.3 ms__.
 - `usearch.index.search`: __2.54 ms__.
 
+## User-Defined Metrics
+
+While most vector search packages concentrate on just two metrics, "Inner Product distance" and "Euclidean distance", USearch allows arbitrary user-defined metrics.
+This flexibility allows you to customize your search for various applications, from computing geospatial coordinates with the rare [Haversine][haversine] distance to creating custom metrics for composite embeddings from multiple AI models, like joint image-text embeddings.
+You can use [Numba][numba], [Cppyy][cppyy], or [PeachPy][peachpy] to define your [custom metric even in Python](https://unum-cloud.github.io/usearch/python#user-defined-metrics-and-jit-in-python):
+
+```py
+from numba import cfunc, types, carray
+from usearch.index import Index, MetricKind, MetricSignature, CompiledMetric
+
+@cfunc(types.float32(types.CPointer(types.float32), types.CPointer(types.float32)))
+def python_inner_product(a, b):
+    a_array = carray(a, ndim)
+    b_array = carray(b, ndim)
+    c = 0.0
+    for i in range(ndim):
+        c += a_array[i] * b_array[i]
+    return 1 - c
+
+metric = CompiledMetric(pointer=python_inner_product.address, kind=MetricKind.IP, signature=MetricSignature.ArrayArray)
+index = Index(ndim=ndim, metric=metric, dtype=np.float32)
+```
+
+Similar effect is even easier to achieve in C, C++, and Rust interfaces.
+Moreover, unlike older approaches indexing high-dimensional spaces, like KD-Trees and Locality Sensitive Hashing, HNSW doesn't require vectors to be identical in length.
+They only have to be comparable.
+So you can apply it in [obscure][obscure] applications, like searching for similar sets or fuzzy text matching, using [GZip][gzip-similarity] compression-ratio as a distance function.
+
+[haversine]: https://ashvardanian.com/posts/abusing-vector-search#geo-spatial-indexing
+[obscure]: https://ashvardanian.com/posts/abusing-vector-search
+[gzip-similarity]: https://twitter.com/LukeGessler/status/1679211291292889100?s=20
+
+[numba]: https://numba.readthedocs.io/en/stable/reference/jit-compilation.html#c-callbacks
+[cppyy]: https://cppyy.readthedocs.io/en/latest/
+[peachpy]: https://github.com/Maratyszcza/PeachPy
+
+## Filtering and Predicate Functions
+
+Sometimes you may want to cross-reference search-results against some external database or filter them based on some criteria.
+In most engines, you'd have to manually perform paging requests, successively filtering the results.
+In USearch you can simply pass a predicate function to the search method, which will be applied directly during graph traversal.
+In Rust that would look like this:
+
+```rust
+let is_odd = |key: Key| key % 2 == 1;
+let query = vec![0.2, 0.1, 0.2, 0.1, 0.3];
+let results = index.filtered_search(&query, 10, is_odd).unwrap();
+assert!(
+    results.keys.iter().all(|&key| key % 2 == 1),
+    "All keys must be odd"
+);
+```
+
+## Memory Efficiency, Downcasting, and Quantization
+
+Training a quantization model and dimension-reduction is a common approach to accelerate vector search.
+Those, however, are only sometimes reliable, can significantly affect the statistical properties of your data, and require regular adjustments if your distribution shifts.
+Instead, we have focused on high-precision arithmetic over low-precision downcasted vectors.
+The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f64_t`, `f32_t`, `f16_t`, `i8_t`, and single-bit representations.
+You can use the following command to check, if hardware acceleration is enabled:
+
+```sh
+$ python -c 'from usearch.index import Index; print(Index(ndim=768, metric="cos", dtype="f16").hardware_acceleration)'
+> sapphire
+$ python -c 'from usearch.index import Index; print(Index(ndim=166, metric="tanimoto").hardware_acceleration)'
+> ice
+```
+
+Using smaller numeric types will save you RAM needed to store the vectors, but you can also compress the neighbors lists forming our proximity graphs.
+By default, 32-bit `uint32_t` is used to enumerate those, which is not enough if you need to address over 4 Billion entries.
+For such cases we provide a custom `uint40_t` type, that will still be 37.5% more space-efficient than the commonly used 8-byte integers, and will scale up to 1 Trillion entries.
+
+![USearch uint40_t support](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-neighbor-types.png?raw=true)
+
 ## `Indexes` for Multi-Index Lookups
 
 For larger workloads targeting billions or even trillions of vectors, parallel multi-index lookups become invaluable.
@@ -264,43 +340,6 @@ pairs: dict = men.join(women, max_proposals=0, exact=False)
 
 > Read more in the post: [Combinatorial Stable Marriages for Semantic Search 💍](https://ashvardanian.com/posts/searching-stable-marriages)
 
-## User-Defined Functions
-
-While most vector search packages concentrate on just a few metrics - "Inner Product distance" and "Euclidean distance," USearch extends this list to include any user-defined metrics.
-This flexibility allows you to customize your search for various applications, from computing geospatial coordinates with the rare [Haversine][haversine] distance to creating custom metrics for composite embeddings from multiple AI models.
-
-![USearch: Vector Search Approaches](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-approaches-white.png?raw=true)
-
-Unlike older approaches indexing high-dimensional spaces, like KD-Trees and Locality Sensitive Hashing, HNSW doesn't require vectors to be identical in length.
-They only have to be comparable.
-So you can apply it in [obscure][obscure] applications, like searching for similar sets or fuzzy text matching, using [GZip][gzip-similarity] as a distance function.
-
-> Read more about [JIT and UDF in USearch Python SDK](https://unum-cloud.github.io/usearch/python#user-defined-metrics-and-jit-in-python).
-
-[haversine]: https://ashvardanian.com/posts/abusing-vector-search#geo-spatial-indexing
-[obscure]: https://ashvardanian.com/posts/abusing-vector-search
-[gzip-similarity]: https://twitter.com/LukeGessler/status/1679211291292889100?s=20
-
-## Memory Efficiency, Downcasting, and Quantization
-
-Training a quantization model and dimension-reduction is a common approach to accelerate vector search.
-Those, however, are only sometimes reliable, can significantly affect the statistical properties of your data, and require regular adjustments if your distribution shifts.
-Instead, we have focused on high-precision arithmetic over low-precision downcasted vectors.
-The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f64_t`, `f32_t`, `f16_t`, `i8_t`, and single-bit representations.
-You can use the following command to check, if hardware acceleration is enabled:
-
-```sh
-$ python -c 'from usearch.index import Index; print(Index(ndim=768, metric="cos", dtype="f16").hardware_acceleration)'
-> avx512+f16
-$ python -c 'from usearch.index import Index; print(Index(ndim=166, metric="tanimoto").hardware_acceleration)'
-> avx512+popcnt
-```
-
-Using smaller numeric types will save you RAM needed to store the vectors, but you can also compress the neighbors lists forming our proximity graphs.
-By default, 32-bit `uint32_t` is used to enumerate those, which is not enough if you need to address over 4 Billion entries.
-For such cases we provide a custom `uint40_t` type, that will still be 37.5% more space-efficient than the commonly used 8-byte integers, and will scale up to 1 Trillion entries.
-
-![USearch uint40_t support](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-neighbor-types.png?raw=true)
 
 ## Functionality
 
@@ -314,6 +353,7 @@ In some cases, like Batch operations, feature parity is meaningless, as the host
 | Save, load, view        |   ✅    |    ✅     |   ✅   |   ✅   |     ✅      |   ✅   |   ✅    |   ✅   |
 | User-defined metrics    |   ✅    |    ✅     |   ✅   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 | Batch operations        |   ❌    |    ✅     |   ❌   |   ❌   |     ✅      |   ❌   |   ❌    |   ❌   |
+| Filter predicates       |   ✅    |    ❌     |   ✅   |   ❌   |     ❌      |   ✅   |   ❌    |   ❌   |
 | Joins                   |   ✅    |    ✅     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 | Variable-length vectors |   ✅    |    ❌     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
 | 4B+ capacities          |   ✅    |    ❌     |   ❌   |   ❌   |     ❌      |   ❌   |   ❌    |   ❌   |
@@ -408,10 +448,10 @@ That method was used to build the ["USearch Molecules"](https://github.com/ashva
 
 ### USearch + POI Coordinates = GIS Applications... on iOS?
 
-[![USearch Maps with SwiftUI](https://github.com/ashvardanian/SwiftVectorSearch/raw/main/USearch+SwiftUI.gif)](https://github.com/ashvardanian/SwiftVectorSearch)
+[![USearch Maps with SwiftUI](https://github.com/ashvardanian/SwiftSemanticSearch/raw/main/USearch+SwiftUI.gif)](https://github.com/ashvardanian/SwiftSemanticSearch)
 
 With Objective-C and Swift iOS bindings, USearch can be easily used in mobile applications.
-The [SwiftVectorSearch](https://github.com/ashvardanian/SwiftVectorSearch) project illustrates how to build a dynamic, real-time search system on iOS.
+The [SwiftSemanticSearch](https://github.com/ashvardanian/SwiftSemanticSearch) project illustrates how to build a dynamic, real-time search system on iOS.
 In this example, we use 2-dimensional vectors—encoded as latitude and longitude—to find the closest Points of Interest (POIs) on a map.
 The search is based on the Haversine distance metric but can easily be extended to support high-dimensional vectors.
 
@@ -425,13 +465,13 @@ The search is based on the Haversine distance metric but can easily be extended 
 
 ## Citations
 
-```txt
+```bibtex
 @software{Vardanian_USearch_2023,
 doi = {10.5281/zenodo.7949416},
 author = {Vardanian, Ash},
 title = {{USearch by Unum Cloud}},
 url = {https://github.com/unum-cloud/usearch},
-version = {2.9.2},
+version = {2.11.7},
 year = {2023},
 month = oct,
 }

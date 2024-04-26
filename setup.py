@@ -24,6 +24,7 @@ def get_bool_env_w_name(name: str, preference: bool) -> tuple:
 is_linux: bool = sys.platform == "linux"
 is_macos: bool = sys.platform == "darwin"
 is_windows: bool = sys.platform == "win32"
+machine: str = platform.machine().lower()
 
 
 is_gcc = False
@@ -39,7 +40,7 @@ if is_linux:
             pass
 
 
-prefer_simsimd: bool = is_linux or is_macos
+prefer_simsimd: bool = True
 prefer_fp16lib: bool = True
 prefer_openmp: bool = is_linux and is_gcc
 
@@ -70,10 +71,12 @@ if is_linux:
     if use_simsimd:
         macros_args.extend(
             [
-                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX512", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_ARM_SVE", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX2", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_ARM_NEON", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_NEON", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SVE", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_HASWELL", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SKYLAKE", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_ICE", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SAPPHIRE", True),
             ]
         )
 
@@ -104,12 +107,15 @@ if is_macos:
     if use_simsimd:
         macros_args.extend(
             [
-                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX512", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_ARM_SVE", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX2", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_ARM_NEON", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_NEON", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SVE", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_HASWELL", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SKYLAKE", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_ICE", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_SAPPHIRE", False),
             ]
         )
+
 
 if is_windows:
     compile_args.append("/std:c++17")
@@ -117,30 +123,17 @@ if is_windows:
     compile_args.append("/fp:fast")  # Enable fast math for MSVC
     compile_args.append("/W1")  # Reduce warnings verbosity
 
-    # Detect supported architectures for MSVC.
-    if "AVX512" in platform.processor():
-        macros_args.append(get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX512", True))
-        compile_args.append("/arch:AVX512")
-    else:
-        macros_args.append(get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX512", True))
-
-    if "AVX2" in platform.processor():
-        macros_args.append(get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX2", True))
-        compile_args.append("/arch:AVX2")
-    else:
-        macros_args.append(get_bool_env_w_name("SIMSIMD_TARGET_X86_AVX2", True))
-
-        # Arm extensions aren't supported on Windows:
+    if use_simsimd:
         macros_args.extend(
             [
-                get_bool_env_w_name("SIMSIMD_TARGET_ARM_SVE", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_ARM_NEON", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_NEON", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SVE", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_HASWELL", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SKYLAKE", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_ICE", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SAPPHIRE", False),
             ]
         )
-
-if is_linux or is_macos:
-    sources.append("sqlite/lib.cpp")
-    link_args.append("-lsqlite3")
 
 ext_modules = [
     Pybind11Extension(
@@ -156,7 +149,7 @@ __version__ = open("VERSION", "r").read().strip()
 __lib_name__ = "usearch"
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
-with open(os.path.join(this_directory, "README.md")) as f:
+with open(os.path.join(this_directory, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
 # Depending on the macros, adjust the include directories

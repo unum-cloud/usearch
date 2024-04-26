@@ -65,6 +65,17 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
 
     // Perform exact search
     matched_count = index.search(vector_first, 5, args...).dump_to(matched_keys, matched_distances);
+    expect(matched_count != 0);
+
+    // Perform filtered exact search, keeping only odd values
+    if constexpr (punned_ak) {
+        auto is_odd = [](vector_key_t key) -> bool { return (key & 1) != 0; };
+        matched_count =
+            index.filtered_search(vector_first, 5, is_odd, args...).dump_to(matched_keys, matched_distances);
+        expect(matched_count != 0);
+        for (std::size_t i = 0; i < matched_count; i++)
+            expect(is_odd(matched_keys[i]));
+    }
 
     // Validate scans
     std::size_t count = 0;
@@ -103,8 +114,9 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
         expect(std::equal(vector_second, vector_second + dimensions, vec_recovered_from_load.data()));
     }
 
-    // Try batch requests
-    executor_default_t executor;
+    // Try batch requests, heavily obersubscribing the CPU cores
+    std::size_t executor_threads = std::thread::hardware_concurrency() * 4;
+    executor_default_t executor(executor_threads);
     index.reserve({vectors.size(), executor.size()});
     executor.fixed(vectors.size() - 3, [&](std::size_t thread, std::size_t task) {
         if constexpr (punned_ak) {
@@ -136,6 +148,25 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     expect(matched_keys[0] == key_first);
     expect(std::abs(matched_distances[0]) < 0.01);
 
+    // Check over-sampling beyond the size of the collection
+    {
+        std::size_t max_possible_matches = vectors.size();
+        std::size_t count_requested = max_possible_matches * 4;
+        std::vector<vector_key_t> matched_keys(count_requested);
+        std::vector<distance_t> matched_distances(count_requested);
+
+        matched_count = index                                               //
+                            .search(vector_first, count_requested, args...) //
+                            .dump_to(matched_keys.data(), matched_distances.data());
+        expect(matched_count <= max_possible_matches);
+        expect(matched_keys[0] == key_first);
+        expect(std::abs(matched_distances[0]) < 0.01);
+
+        // Check that all the distance are monotonically rising
+        for (std::size_t i = 1; i < matched_count; i++)
+            expect(matched_distances[i - 1] <= matched_distances[i]);
+    }
+
     if constexpr (punned_ak) {
         std::vector<scalar_t> vec_recovered_from_view(dimensions);
         index.get(key_second, vec_recovered_from_view.data());
@@ -166,17 +197,18 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     using member_cref_t = typename index_typed_t::member_cref_t;
     using member_citerator_t = typename index_typed_t::member_citerator_t;
 
-    std::vector<std::vector<scalar_at>> matrix(collection_size);
-    for (std::vector<scalar_at>& vector : matrix) {
+    using vector_of_vectors_t = std::vector<std::vector<scalar_at>>;
+    vector_of_vectors_t vector_of_vectors(collection_size);
+    for (auto& vector : vector_of_vectors) {
         vector.resize(dimensions);
         std::generate(vector.begin(), vector.end(), [=] { return float(std::rand()) / float(INT_MAX); });
     }
 
     struct metric_t {
-        std::vector<std::vector<scalar_at>> const* matrix_ptr;
-        std::size_t dimensions;
+        vector_of_vectors_t const* vector_of_vectors_ptr = nullptr;
+        std::size_t dimensions = 0;
 
-        scalar_t const* row(std::size_t i) const noexcept { return (*matrix_ptr)[i].data(); }
+        scalar_t const* row(std::size_t i) const noexcept { return (*vector_of_vectors_ptr)[i].data(); }
 
         float operator()(member_cref_t const& a, member_cref_t const& b) const {
             return metric_cos_gt<scalar_t>{}(row(get_slot(b)), row(get_slot(a)), dimensions);
@@ -195,10 +227,10 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     // Template:
     for (std::size_t connectivity : {3, 13, 50}) {
         std::printf("- templates with connectivity %zu \n", connectivity);
-        metric_t metric{&matrix, dimensions};
+        metric_t metric{&vector_of_vectors, dimensions};
         index_config_t config(connectivity);
         index_typed_t index_typed(config);
-        test_cosine<false>(index_typed, matrix, metric);
+        test_cosine<false>(index_typed, vector_of_vectors, metric);
     }
 
     // Type-punned:
@@ -217,7 +249,7 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
                 // move assignment
                 index = std::move(index_tmp2);
             }
-            test_cosine<true>(index, matrix);
+            test_cosine<true>(index, vector_of_vectors);
         }
     }
 }

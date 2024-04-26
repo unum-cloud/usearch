@@ -1,11 +1,11 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 authors:
-- family-names: "Vardanian"
-  given-names: "Ash"
-  orcid: "https://orcid.org/0000-0002-4882-1815"
+  - family-names: "Vardanian"
+    given-names: "Ash"
+    orcid: "https://orcid.org/0000-0002-4882-1815"
 title: "USearch by Unum Cloud"
-version: 2.9.2
+version: 2.11.7
 doi: 10.5281/zenodo.7949416
 date-released: 2023-10-22
 url: "https://github.com/unum-cloud/usearch"

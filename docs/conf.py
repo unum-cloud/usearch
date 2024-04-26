@@ -29,6 +29,8 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinxcontrib.jquery",
     "sphinxcontrib.googleanalytics",
+    # Sadly, javasphinx is not maintained anymore
+    # "javasphinx",
 ]
 
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "*.md"]
@@ -50,4 +52,9 @@ html_baseurl = "/docs/usearch/"
 breathe_projects = {"USearch": "../build/xml"}
 breathe_default_project = "USearch"
 
-js_source_path = "../javascript/usearch.js"
+# To switch to TypeScript, uncomment the following lines:
+#
+#   js_language = "typescript"
+#   js_source_path = "../javascript/usearch.ts"
+#   jsdoc_config_path = "../javascript/tsconfig-cjs.json"
+js_source_path = "../javascript/dist/cjs/usearch.js"

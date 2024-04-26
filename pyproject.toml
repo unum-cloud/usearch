@@ -12,7 +12,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
+addopts = "-ra --showlocals --strict-markers --strict-config -s -x -p no:warnings"
 xfail_strict = true
 filterwarnings = ["error"]
 
@@ -77,3 +77,9 @@ before-build = [
     "md build\\usearch",
     "git submodule update --init --recursive",
 ]
+
+# Configuration options for the Black formatter:
+# https://black.readthedocs.io/en/latest/usage_and_configuration/the_basics.html#where-black-looks-for-the-file
+[tool.black]
+line-length = 120                  # Set line length to the same value as in `.clang-format` for modern wide screens
+target-version = ['py36', 'py312']

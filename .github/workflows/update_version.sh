@@ -13,3 +13,7 @@ echo $1 > VERSION &&
     sed -i "s/>[0-9]\+\.[0-9]\+\.[0-9]\+<\/Version>/>$1<\/Version>/" ./csharp/nuget/nuget-package.props &&
     sed -i "s/VERSION [0-9]\+\.[0-9]\+\.[0-9]\+/VERSION $1/" CMakeLists.txt &&
     sed -i "s/version=\".*\"/version=\"$1\"/" wasmer.toml
+
+# Update the version in the Cargo.lock file, but don't report an error if it fails...
+# as `cargo` may not be available in the current environment.
+cargo update || true

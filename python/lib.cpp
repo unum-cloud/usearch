@@ -120,8 +120,11 @@ static dense_index_py_t make_index(             //
 
     metric_t metric =  //
         metric_uintptr //
-            ? metric_t(dimensions, metric_uintptr, metric_signature, metric_kind, scalar_kind)
-            : metric_t(dimensions, metric_kind, scalar_kind);
+            ? metric_t::stateless(dimensions, metric_uintptr, metric_signature, metric_kind, scalar_kind)
+            : metric_t::builtin(dimensions, metric_kind, scalar_kind);
+    if (metric.missing())
+        throw std::invalid_argument("Unsupported metric!");
+
     return index_dense_t::make(metric, config);
 }
 
@@ -483,8 +486,10 @@ static py::tuple search_many_brute_force(       //
     std::size_t dimensions = static_cast<std::size_t>(queries_dimensions);
     metric_t metric =  //
         metric_uintptr //
-            ? metric_t(dimensions, metric_uintptr, metric_signature, metric_kind, queries_kind)
-            : metric_t(dimensions, metric_kind, queries_kind);
+            ? metric_t::stateless(dimensions, metric_uintptr, metric_signature, metric_kind, queries_kind)
+            : metric_t::builtin(dimensions, metric_kind, queries_kind);
+    if (!metric)
+        throw std::invalid_argument("Unsupported metric!");
 
     py::array_t<dense_key_t> keys_py({static_cast<Py_ssize_t>(queries_count), static_cast<Py_ssize_t>(wanted)});
     py::array_t<distance_t> distances_py({static_cast<Py_ssize_t>(queries_count), static_cast<Py_ssize_t>(wanted)});
@@ -935,7 +940,7 @@ PYBIND11_MODULE(compiled, m) {
     m.def(
         "hardware_acceleration",
         [](scalar_kind_t scalar_kind, std::size_t dimensions, metric_kind_t metric_kind) -> py::str {
-            return metric_t(dimensions, metric_kind, scalar_kind).isa_name();
+            return metric_t::builtin(dimensions, metric_kind, scalar_kind).isa_name();
         },
         py::kw_only(),                                //
         py::arg("dtype") = scalar_kind_t::f32_k,      //
@@ -1096,8 +1101,10 @@ PYBIND11_MODULE(compiled, m) {
             std::size_t dimensions = index.dimensions();
             metric_t metric =  //
                 metric_uintptr //
-                    ? metric_t(dimensions, metric_uintptr, metric_signature, metric_kind, scalar_kind)
-                    : metric_t(dimensions, metric_kind, scalar_kind);
+                    ? metric_t::stateless(dimensions, metric_uintptr, metric_signature, metric_kind, scalar_kind)
+                    : metric_t::builtin(dimensions, metric_kind, scalar_kind);
+            if (!metric)
+                throw std::invalid_argument("Unsupported metric kind!");
             index.change_metric(std::move(metric));
         },
         py::arg("metric_kind") = metric_kind_t::cos_k,                          //
@@ -1231,4 +1238,3 @@ PYBIND11_MODULE(compiled, m) {
         py::arg("progress") = nullptr                             //
     );
 }
-

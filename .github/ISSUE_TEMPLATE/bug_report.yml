@@ -73,6 +73,14 @@ body:
     validations:
       required: false
   - type: checkboxes
+    id: mentions
+    attributes:
+      label: Are you open to being tagged as a contributor?
+      description: Sometimes a good bug report is just as valuable as a patch 🤗
+      options:
+        - label: I am open to being mentioned in the project `.git` history as a contributor
+          required: false
+  - type: checkboxes
     id: duplicate
     attributes:
       label: Is there an existing issue for this?

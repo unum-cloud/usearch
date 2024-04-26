@@ -10,8 +10,8 @@
 #define UNUM_USEARCH_HPP
 
 #define USEARCH_VERSION_MAJOR 2
-#define USEARCH_VERSION_MINOR 9
-#define USEARCH_VERSION_PATCH 2
+#define USEARCH_VERSION_MINOR 11
+#define USEARCH_VERSION_PATCH 7
 
 // Inferring C++ version
 // https://stackoverflow.com/a/61552074
@@ -1414,7 +1414,9 @@ class input_file_t {
     }
 
     explicit operator bool() const noexcept { return file_; }
-    bool seek_to(std::size_t progress) noexcept { return std::fseek(file_, progress, SEEK_SET) == 0; }
+    bool seek_to(std::size_t progress) noexcept {
+        return std::fseek(file_, static_cast<long>(progress), SEEK_SET) == 0;
+    }
     bool seek_to_end() noexcept { return std::fseek(file_, 0L, SEEK_END) == 0; }
     bool infer_progress(std::size_t& progress) noexcept {
         long int result = std::ftell(file_);
@@ -3495,8 +3497,11 @@ class index_gt {
 
         distance_t radius = context.measure(query, citerator_at(start_slot), metric);
         next.insert_reserved({-radius, static_cast<compressed_slot_t>(start_slot)});
-        top.insert_reserved({radius, static_cast<compressed_slot_t>(start_slot)});
         visits.set(static_cast<compressed_slot_t>(start_slot));
+
+        // Don't populate the top list if the predicate is not satisfied
+        if (is_dummy<predicate_at>() || predicate(member_cref_t{node_at_(start_slot).ckey(), start_slot}))
+            top.insert_reserved({radius, static_cast<compressed_slot_t>(start_slot)});
 
         while (!next.empty()) {
 
@@ -3527,12 +3532,9 @@ class index_gt {
                 if (top.size() < top_limit || successor_dist < radius) {
                     // This can substantially grow our priority queue:
                     next.insert({-successor_dist, successor_slot});
-                    if (!is_dummy<predicate_at>())
-                        if (!predicate(member_cref_t{node_at_(successor_slot).ckey(), successor_slot}))
-                            continue;
-
-                    // This will automatically evict poor matches:
-                    top.insert({successor_dist, successor_slot}, top_limit);
+                    if (is_dummy<predicate_at>() ||
+                        predicate(member_cref_t{node_at_(successor_slot).ckey(), successor_slot}))
+                        top.insert({successor_dist, successor_slot}, top_limit);
                     radius = top.top().distance;
                 }
             }
@@ -3626,8 +3628,8 @@ struct join_result_t {
  *          to perform fast one-to-one matching between two large collections
  *          of vectors, using approximate nearest neighbors search.
  *
- *  @param[inout] man_to_woman Container to map ::first keys to ::second.
- *  @param[inout] woman_to_man Container to map ::second keys to ::first.
+ *  @param[inout] man_to_woman Container to map ::men keys to ::women.
+ *  @param[inout] woman_to_man Container to map ::women keys to ::men.
  *  @param[in] executor Thread-pool to execute the job in parallel.
  *  @param[in] progress Callback to report the execution progress.
  */

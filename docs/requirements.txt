@@ -1,0 +1,7 @@
+sphinx==7.2.6
+sphinxcontrib-googleanalytics==0.4
+sphinxcontrib-jquery==4.1
+furo==2024.1.29
+breathe==4.35.0
+m2r2==0.3.3.post2
+sphinx-js==3.2.2

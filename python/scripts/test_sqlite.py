@@ -8,8 +8,14 @@ import pytest
 
 import usearch
 
-if sys.platform != "linux":
-    pytest.skip(reason="Requires Linux to run", allow_module_level=True)
+
+try:
+    found_sqlite_path = usearch.sqlite_path()
+except FileNotFoundError:
+    found_sqlite_path = None
+
+if found_sqlite_path is None:
+    pytest.skip(reason="Can't find an SQLite installation", allow_module_level=True)
 
 
 batch_sizes = [1, 3, 20]
@@ -19,9 +25,16 @@ dimensions = [3, 97, 256]
 def test_sqlite_minimal_json_cosine_vector_search():
     """Minimal test for searching JSON vectors in an SQLite database."""
     conn = sqlite3.connect(":memory:")
-    conn.enable_load_extension(True)  # Not available on MacOS with default build
-    conn.load_extension(usearch.sqlite)
 
+    # Loading extensions isn't supported in some SQLite builds,
+    # including the default one on MacOS
+    try:
+        conn.enable_load_extension(True)
+    except AttributeError:
+        pytest.skip("SQLite extensions are not available on this platform")
+        return
+
+    conn.load_extension(usearch.sqlite_path())
     cursor = conn.cursor()
 
     # Create a table with a JSON column for vectors
@@ -54,18 +67,23 @@ def test_sqlite_minimal_json_cosine_vector_search():
 def test_sqlite_minimal_text_search():
     """Minimal test for Unicode strings in an SQLite database."""
     conn = sqlite3.connect(":memory:")
-    conn.enable_load_extension(True)  # Not available on MacOS with default build
-    conn.load_extension(usearch.sqlite)
 
+    # Loading extensions isn't supported in some SQLite builds,
+    # including the default one on MacOS
+    try:
+        conn.enable_load_extension(True)
+    except AttributeError:
+        pytest.skip("SQLite extensions are not available on this platform")
+        return
+
+    conn.load_extension(usearch.sqlite_path())
     cursor = conn.cursor()
 
     # Create a table with a TEXT column for strings
     str42 = "école"  # 6 codepoints (runes), 7 bytes
     str43 = "école"  # 5 codepoints (runes), 6 bytes
     str44 = "écolé"  # 5 codepoints (runes), 7 bytes
-    assert (
-        str42 != str43
-    ), "etter 'é' as a single character vs 'e' + '´' are not the same"
+    assert str42 != str43, "etter 'é' as a single character vs 'e' + '´' are not the same"
 
     # Inject the different strings into the table
     cursor.executescript(
@@ -105,9 +123,16 @@ def test_sqlite_blob_bits_vector_search():
     """Minimal test for searching binary vectors in an SQLite database."""
 
     conn = sqlite3.connect(":memory:")
-    conn.enable_load_extension(True)
-    conn.load_extension(usearch.sqlite)
 
+    # Loading extensions isn't supported in some SQLite builds,
+    # including the default one on MacOS
+    try:
+        conn.enable_load_extension(True)
+    except AttributeError:
+        pytest.skip("SQLite extensions are not available on this platform")
+        return
+
+    conn.load_extension(usearch.sqlite_path())
     cursor = conn.cursor()
 
     # Create a table with a BLOB column for binary vectors
@@ -161,9 +186,16 @@ def test_sqlite_distances_in_high_dimensions(num_vectors: int, ndim: int):
     """
 
     conn = sqlite3.connect(":memory:")
-    conn.enable_load_extension(True)
-    conn.load_extension(usearch.sqlite)
 
+    # Loading extensions isn't supported in some SQLite builds,
+    # including the default one on MacOS
+    try:
+        conn.enable_load_extension(True)
+    except AttributeError:
+        pytest.skip("SQLite extensions are not available on this platform")
+        return
+
+    conn.load_extension(usearch.sqlite_path())
     cursor = conn.cursor()
 
     # Create a table with additional columns for f32 and f16 BLOBs
@@ -230,9 +262,16 @@ def test_sqlite_distances_in_low_dimensions(num_vectors: int):
 
     # Setup SQLite connection and enable extensions
     conn = sqlite3.connect(":memory:")
-    conn.enable_load_extension(True)
-    conn.load_extension(usearch.sqlite)
 
+    # Loading extensions isn't supported in some SQLite builds,
+    # including the default one on MacOS
+    try:
+        conn.enable_load_extension(True)
+    except AttributeError:
+        pytest.skip("SQLite extensions are not available on this platform")
+        return
+
+    conn.load_extension(usearch.sqlite_path())
     cursor = conn.cursor()
 
     # Create a table for storing vectors and their descriptions
@@ -280,12 +319,8 @@ def test_sqlite_distances_in_low_dimensions(num_vectors: int):
 
     # Validate the results of the distance computations
     for id1, id2, similarity_f32, similarity_f16, haversine_meters in cursor.fetchall():
-        assert (
-            0 <= similarity_f32 <= 1
-        ), "Cosine similarity (f32) must be between 0 and 1"
-        assert (
-            0 <= similarity_f16 <= 1
-        ), "Cosine similarity (f16) must be between 0 and 1"
+        assert 0 <= similarity_f32 <= 1, "Cosine similarity (f32) must be between 0 and 1"
+        assert 0 <= similarity_f16 <= 1, "Cosine similarity (f16) must be between 0 and 1"
         assert haversine_meters >= 0, "Haversine distance must be non-negative"
 
     # Clean up

@@ -5,8 +5,8 @@ API Reference
 usearch.Index
 ==================
 
-.. js:autoclass:: Index
+.. ts:autoclass:: Index
    :members:
 
-.. js:autoclass:: Matches
+.. ts:autoclass:: Matches
    :members:

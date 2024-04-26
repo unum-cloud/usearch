@@ -74,12 +74,14 @@
             {
                 "assets": [
                     "VERSION",
+                    "README.md",
+                    "CMakeLists.txt",
                     "conanfile.py",
                     "package.json",
                     "Cargo.toml",
+                    "Cargo.lock",
                     "wasmer.toml",
                     "./include/usearch/index.hpp",
-                    "README.md",
                     "./csharp/nuget/nuget-package.props",
                     "CITATION.cff"
                 ],

@@ -21,14 +21,20 @@ jobs:
     name: Semantic Release
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install --save-dev --prefix ./package-ci @semantic-release/exec @semantic-release/git conventional-changelog-eslint semantic-release && npx --prefix ./package-ci semantic-release
+      - name: Set up Cargo
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Bump version
+        run: npm install --save-dev --prefix ./package-ci @semantic-release/exec @semantic-release/git conventional-changelog-eslint semantic-release && npx --prefix ./package-ci semantic-release
 
   rebase:
     name: Rebase Dev. Branch
@@ -36,7 +42,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout the latest code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -58,55 +64,76 @@ jobs:
     name: Create Debian Package for ${{ matrix.arch }}
     runs-on: ubuntu-22.04
     needs: versioning
+    env:
+      CC: clang
+      CXX: clang++
+      AR: llvm-ar
+      NM: llvm-nm
+      RANLIB: llvm-ranlib
+
     strategy:
       fail-fast: false
       matrix:
-        arch: ["linux/amd64", "linux/arm64"]
+        include:
+          - arch: amd64
+            target: x86_64-linux-gnu
+          - arch: arm64
+            target: aarch64-linux-gnu
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Check out refreshed version
+        uses: actions/checkout@v4
         with:
-          persist-credentials: false
           ref: "main"
-      - run: git submodule update --init --recursive
+      - name: Pull Git submodules
+        run: git submodule update --init --recursive
 
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@v2
-
-      - name: Setup Docker
-        uses: docker/setup-buildx-action@v2
-
-      - name: Get Docker daemon IP
-        id: dockerip
+      - name: Get version
+        id: set_version
         run: |
-          docker_ip=$(ip addr show docker0 | grep -Po 'inet \K[\d.]+') && \
-          echo "docker_ip=$docker_ip" >> "$GITHUB_OUTPUT"
+          version=$(cat VERSION)
+          echo "version=$version" >> $GITHUB_OUTPUT
 
-      - name: Set runner user password
-        id: userpass
+      - name: Install dependencies
         run: |
-          user_pass="1122"
-          echo "runner:$user_pass" | sudo chpasswd
-          echo "user_pass=$user_pass" >> "$GITHUB_OUTPUT"
+          sudo apt-get update
+          sudo apt-get install -y clang lld make crossbuild-essential-arm64 crossbuild-essential-armhf libjemalloc-dev
 
-      - name: Build library
+      - name: Build C/C++
         run: |
-          docker buildx create --use
-          docker buildx build \
-          --platform ${{ matrix.arch }} \
-          --build-arg docker_ip=${{ steps.dockerip.outputs.docker_ip }} \
-          --build-arg user_pass=${{ steps.userpass.outputs.user_pass }} \
-          --file .github/workflows/Dockerfile.libs \
-          --tag unum/usearch-library:latest \
-          --load .
-      - name: Clear Docker buildx cache
-        run: docker buildx prune --all --force
+          # Configure and build the project
+          cmake -B build_release \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
+            -DCMAKE_C_COMPILER_TARGET=${{ matrix.target }} \
+            -DCMAKE_CXX_COMPILER_TARGET=${{ matrix.target }} \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} \
+            -DUSEARCH_BUILD_LIB_C=1 \
+            -DUSEARCH_BUILD_SQLITE=1 \
+            -DUSEARCH_BUILD_TEST_CPP=0 \
+            -DUSEARCH_BUILD_BENCH_CPP=0
 
-      - name: Upload archive
+          cmake --build build_release --config Release
+
+          cp build_release/libusearch_c.so "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.so"
+          cp build_release/libusearch_sqlite.so "usearch_sqlite_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.so"
+
+          mkdir -p "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/DEBIAN"
+          touch "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/DEBIAN/control"
+          mkdir -p "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/lib"
+          mkdir "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/include"
+          cp c/usearch.h "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/include/"
+          cp build_release/libusearch_c.so "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/usr/local/lib/"
+          echo -e "Package: usearch\nVersion: ${{ steps.set_version.outputs.version }}\nMaintainer: Ash Vardanian\nArchitecture: ${{ matrix.arch }}\nDescription: Faster & Smaller Single-File Search Engine for Vectors & Texts" > "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/DEBIAN/control"
+          dpkg-deb --build "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}"
+
+      - name: Upload library
         uses: xresloader/upload-to-github-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          file: "*.deb"
+          file: "*.so;*.deb"
           update_latest_release: true
 
   create_windows_dll_library:
@@ -118,16 +145,18 @@ jobs:
       matrix:
         arch: [x64, x86]
     steps:
-      - uses: actions/checkout@v3
+      - name: Check out refreshed version
+        uses: actions/checkout@v4
         with:
-          persist-credentials: false
           ref: "main"
-      - run: git submodule update --init --recursive
+      - name: Pull Git submodules
+        run: git submodule update --init --recursive
 
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v1.13
 
-      - uses: actions/setup-go@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
         with:
           go-version: "^1.19.0"
 
@@ -146,7 +175,7 @@ jobs:
 
       - name: Build library
         run: |
-          cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_BENCH_CPP=0 -B ./build_release
+          cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_SQLITE=0 -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_BENCH_CPP=0 -B ./build_release
           cmake --build ./build_release --config Release
           tar -cvf usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar .\build_release\libusearch_c.dll .\c\usearch.h
 
@@ -158,7 +187,7 @@ jobs:
           file: "usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar"
           update_latest_release: true
 
-  create_macos_library:
+  create_macos_dylib_library:
     name: Create Library for MacOS ${{ matrix.arch }}
     runs-on: macos-12
     needs: versioning
@@ -167,27 +196,44 @@ jobs:
       matrix:
         arch: [arm64, x86_64]
     steps:
-      - uses: actions/checkout@v3
+      - name: Check out refreshed version
+        uses: actions/checkout@v4
         with:
-          persist-credentials: false
           ref: "main"
-      - run: git submodule update --init --recursive
+      - name: Pull Git submodules
+        run: git submodule update --init --recursive
 
-      - uses: actions/setup-go@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
         with:
           go-version: "^1.21.0"
 
       - name: Get version
-        id: version
+        id: set_version
         run: |
           version=$(cat VERSION)
           echo "version=$version" >> $GITHUB_OUTPUT
 
       - name: Build library
         run: |
-          cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_BENCH_CPP=0 -B ./build_release
+          cmake -DCMAKE_BUILD_TYPE=Release \
+                -DUSEARCH_BUILD_LIB_C=1 \
+                -DUSEARCH_BUILD_SQLITE=1 \
+                -DUSEARCH_BUILD_TEST_CPP=0 \
+                -DUSEARCH_BUILD_BENCH_CPP=0 \
+                -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
+                -B ./build_release
           cmake --build ./build_release --config Release        
-          zip -r usearch_macOS_${{ matrix.arch }}_${{ steps.version.outputs.version }}.zip build_release/libusearch_c.dylib c/usearch.h
+          zip -r usearch_macos_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.zip build_release/libusearch_c.dylib c/usearch.h
+          mv build_release/libusearch_sqlite.dylib usearch_sqlite_macos_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.dylib
+
+      - name: Upload library
+        uses: xresloader/upload-to-github-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          file: "*.dylib"
+          update_latest_release: true
 
       - name: Upload archive
         uses: xresloader/upload-to-github-release@v1
@@ -197,7 +243,7 @@ jobs:
           file: "*.zip"
           update_latest_release: true
 
-  wasm_c_library:
+  create_wasm_library:
     name: WASM builds for C libraries on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     needs: versioning
@@ -206,14 +252,15 @@ jobs:
       matrix:
         os: [ubuntu-22.04, macOS-11, windows-2022]
     steps:
-      - uses: actions/checkout@v3
+      - name: Check out refreshed version
+        uses: actions/checkout@v4
         with:
-          persist-credentials: false
           ref: "main"
-      - run: git submodule update --init --recursive
+      - name: Pull Git submodules
+        run: git submodule update --init --recursive
 
       - name: Get version
-        id: version
+        id: set_version
         run: |
           version=$(cat VERSION)
           echo "version=$version" >> $GITHUB_OUTPUT
@@ -232,8 +279,8 @@ jobs:
           for arch in "${archs[@]}"
           do
             ../wasi-sdk-20.0/bin/clang++ --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot -o libusearch_c.so -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared --target=wasm32-wasi-threads  -Wl,--no-entry -nostdlib -D_WASI_EMULATED_MMAN -march="$arch"
-            tar -czvf usearch_wasm_linux_"$arch"_${{ steps.version.outputs.version }}.tar.gz libusearch_c.so
-            mv usearch_wasm_linux_"$arch"_${{ steps.version.outputs.version }}.tar.gz ../ && rm -rf libusearch_c.so
+            tar -czvf usearch_wasm_linux_"$arch"_${{ steps.set_version.outputs.version }}.tar.gz libusearch_c.so
+            mv usearch_wasm_linux_"$arch"_${{ steps.set_version.outputs.version }}.tar.gz ../ && rm -rf libusearch_c.so
           done
         if: matrix.os == 'ubuntu-22.04'
 
@@ -250,8 +297,8 @@ jobs:
           for arch in "${archs[@]}"
           do
             ../wasi-sdk-20.0/bin/clang++ --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot -o libusearch_c.dylib -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared --target=wasm32-wasi-threads  -Wl,--no-entry -nostdlib -D_WASI_EMULATED_MMAN -march="$arch"
-            zip -r usearch_wasm_macos_"$arch"_${{ steps.version.outputs.version }}.zip libusearch_c.dylib
-            mv usearch_wasm_macos_"$arch"_${{ steps.version.outputs.version }}.zip ../ && rm -rf libusearch_c.dylib
+            zip -r usearch_wasm_macos_"$arch"_${{ steps.set_version.outputs.version }}.zip libusearch_c.dylib
+            mv usearch_wasm_macos_"$arch"_${{ steps.set_version.outputs.version }}.zip ../ && rm -rf libusearch_c.dylib
           done
         if: matrix.os == 'macOS-11'
 
@@ -268,8 +315,8 @@ jobs:
           for arch in "${archs[@]}"
           do
             ../wasi-sdk-20.0+m/bin/clang++ --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot -o libusearch_c.so -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared --target=wasm32-wasi-threads  -Wl,--no-entry -nostdlib -D_WASI_EMULATED_MMAN -march="$arch"
-            tar -cvf usearch_wasm_windows_"$arch"_${{ steps.version.outputs.version }}.tar.gz libusearch_c.so
-            mv usearch_wasm_windows_"$arch"_${{ steps.version.outputs.version }}.tar.gz ../ && rm -rf libusearch_c.so
+            tar -cvf usearch_wasm_windows_"$arch"_${{ steps.set_version.outputs.version }}.tar.gz libusearch_c.so
+            mv usearch_wasm_windows_"$arch"_${{ steps.set_version.outputs.version }}.tar.gz ../ && rm -rf libusearch_c.so
           done
         shell: bash
         if: matrix.os == 'windows-2022'
@@ -290,8 +337,8 @@ jobs:
         versioning,
         create_linux_deb_package,
         create_windows_dll_library,
-        create_macos_library,
-        wasm_c_library,
+        create_macos_dylib_library,
+        create_wasm_library,
         deploy_docs_pages,
       ]
     steps:
@@ -302,8 +349,8 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/releases/latest")
           echo "last_release_id=$(echo "$response" | jq -r '.id')" >> $GITHUB_OUTPUT
 
-      - uses: robinraju/release-downloader@v1.8
-        name: Download release assets
+      - name: Download release assets
+        uses: robinraju/release-downloader@v1.8
         with:
           latest: true
           fileName: "*"
@@ -357,9 +404,13 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["37", "38", "39", "310", "311", "312"]
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out refreshed version
+        uses: actions/checkout@v4
         with:
           ref: "main"
+      - name: Setup Docker
+        if: matrix.os == 'ubuntu-22.04'
+        uses: crazy-max/ghaction-setup-docker@v1.0.0
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -406,51 +457,134 @@ jobs:
           verbose: true
           print-hash: true
 
-  publish_javascript:
-    name: Publish JavaScript
+  build_javascript:
+    name: Build JavaScript Native Modules
     needs: versioning
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x64
+          - x86
+        os:
+          - macos-latest
+          - ubuntu-22.04
+          - windows-latest
+        exclude:
+          - arch: x86
+            os: macos-latest
+          - arch: x86
+            os: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
     env:
       CC: gcc-12
       CXX: g++-12
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout the latest code
+        uses: actions/checkout@v4
         with:
           ref: "main"
       - run: git submodule update --init --recursive
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          architecture: ${{ matrix.arch }}
+
       - name: Update compilers
+        if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt update
           sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev gcc-12 g++-12
+          sudo apt install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu g++-aarch64-linux-gnu
+      - run: npm ci --ignore-scripts
+      - run: npm run prebuild-single
+        if: matrix.os != 'macos-latest'
+      - run: npm run prebuild-darwin-x64+arm64
+        env:
+          CC: clang
+          CXX: clang++
+        if: matrix.os == 'macos-latest'
+      - run: file prebuilds/*/*
+        if: matrix.os == 'macos-latest'
+      - name: Extra for cross build
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          export CC=aarch64-linux-gnu-gcc
+          export CXX=aarch64-linux-gnu-g++
+          export AR=aarch64-linux-gnu-ar
+          export AS=aarch64-linux-gnu-as
+          export LD=aarch64-linux-gnu-ld
+          export STRIP=aarch64-linux-gnu-strip
+          npm run prebuild-arm64
+          aarch64-linux-gnu-strip prebuilds/linux-arm64/*node
+      - uses: actions/upload-artifact@v3
+        with:
+          name: prebuilds
+          path: prebuilds
+          retention-days: 1
+
+  publish_javascript:
+    name: Publish JavaScript
+    needs: build_javascript
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Check out refreshed version
+        uses: actions/checkout@v4
+        with:
+          ref: "main"
+      - name: Pull Git submodules
+        run: git submodule update --init --recursive
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Build and Test
-        run: |
-          npm ci
-          npm test
-          npm run typegen
+      - name: Download prebuilds
+        uses: actions/download-artifact@v3
+
+      - name: Look for links
+        run: find . -type f -links +1
+
+      - name: Install Dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build the JS from TS
+        run: npm run build-js
+
+      - name: Last minute test with prebuild artifact
+        run: npm run test
+
+      - name: Publish Dry Run
+        run: npm publish --dry-run
 
       - name: Publish
-        uses: JS-DevTools/npm-publish@v2
+        uses: JS-DevTools/npm-publish@v3
         with:
           token: ${{ secrets.NPM_TOKEN }}
+          access: public
 
   publish_rust:
     name: Publish Rust
     needs: versioning
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - name: Check out refreshed version
+        uses: actions/checkout@v4
         with:
           ref: "main"
-      - run: git submodule update --init --recursive
-      - uses: actions-rs/toolchain@v1
+      - name: Pull Git submodules
+        run: git submodule update --init --recursive
+      - name: Hide submodule Crates
+        run: |
+          mv simsimd/Cargo.toml simsimd/Cargo.toml.bak
+          mv stringzilla/Cargo.toml stringzilla/Cargo.toml.bak
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
@@ -473,11 +607,14 @@ jobs:
       ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.ORG_GRADLE_PROJECT_SIGNINGPASSWORD }}
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Check out refreshed version
+        uses: actions/checkout@v4
         with:
           ref: "main"
-      - run: git submodule update --init --recursive
-      - uses: actions/setup-java@v3
+      - name: Pull Git submodules
+        run: git submodule update --init --recursive
+      - name: Set up Java
+        uses: actions/setup-java@v3
         with:
           java-version: "11"
           distribution: "adopt"
@@ -493,10 +630,12 @@ jobs:
     needs: versioning
     runs-on: macos-12
     steps:
-      - uses: actions/checkout@v3
+      - name: Check out refreshed version
+        uses: actions/checkout@v4
         with:
           ref: "main"
-      - run: git submodule update --init --recursive
+      - name: Pull Git submodules
+        run: git submodule update --init --recursive
       - name: Build
         run: swift build
       - name: Run tests
@@ -512,10 +651,12 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v3
+      - name: Check out refreshed version
+        uses: actions/checkout@v4
         with:
           ref: "main"
-      - run: git submodule update --init --recursive
+      - name: Pull Git submodules
+        run: git submodule update --init --recursive
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
@@ -557,10 +698,12 @@ jobs:
         shell: bash
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Check out refreshed version
+        uses: actions/checkout@v4
         with:
           ref: "main"
-      - run: git submodule update --init --recursive
+      - name: Pull Git submodules
+        run: git submodule update --init --recursive
 
       - name: Build C library for Linux
         if: matrix.os == 'ubuntu-22.04'
@@ -611,10 +754,12 @@ jobs:
       NUGET_SOURCE: https://api.nuget.org/v3/index.json
       GITHUB_PACKAGES_SOURCE: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
     steps:
-      - uses: actions/checkout@v3
+      - name: Check out refreshed version
+        uses: actions/checkout@v4
         with:
           ref: "main"
-      - run: git submodule update --init --recursive
+      - name: Pull Git submodules
+        run: git submodule update --init --recursive
 
       - name: Download usearch libs artifact
         uses: actions/download-artifact@v3
@@ -659,17 +804,21 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: "main"
       - name: Install dependencies
         run: |
           sudo apt update && 
           sudo apt install -y doxygen graphviz dia git && 
-          pip install sphinx==5.3.0 sphinx-js==3.2.1 breathe==4.35.0 furo==2023.3.27 m2r2==0.3.3.post2 sphinxcontrib-googleanalytics==0.2.dev20220708 sphinxcontrib-jquery==4.1 && 
-          npm install -g jsdoc
+          pip install -r docs/requirements.txt && 
+          npm install -g jsdoc typedoc
       - name: Install USearch from PyPi
         run: pip install usearch
+      - name: Build CJS JS
+        run: |
+          npm ci --ignore-scripts
+          npm run build-js
       - name: Build documentation
         run: cd docs && doxygen conf.dox && make html
       - name: Copy assets
