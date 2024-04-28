@@ -1,10 +1,8 @@
 /**
- *  @file index.hpp
- *  @author Ash Vardanian
- *  @brief Single-header Vector Search.
- *  @date 2023-04-26
- *
- *  @copyright Copyright (c) 2023
+ *  @file       index.hpp
+ *  @author     Ash Vardanian
+ *  @brief      Single-header Vector Search engine.
+ *  @date       April 26, 2023
  */
 #ifndef UNUM_USEARCH_HPP
 #define UNUM_USEARCH_HPP
@@ -115,7 +113,7 @@
 #else
 #define usearch_assert_m(must_be_true, message)                                                                        \
     if (!(must_be_true)) {                                                                                             \
-        throw std::runtime_error(message);                                                                             \
+        raise_runtime_error(message);                                                                                  \
     }
 #define usearch_noexcept_m
 #endif
@@ -145,6 +143,15 @@ inline std::size_t ceil2(std::size_t v) noexcept {
 #endif
     v++;
     return v;
+}
+
+/// @brief  Helper function to simplify debugging - trace just one symbol - `raise_runtime_error`.
+inline void raise_runtime_error(char const* message) {
+#ifndef __cpp_exceptions
+    std::terminate();
+#else
+    throw std::runtime_error(message);
+#endif
 }
 
 /// @brief  Simply dereferencing misaligned pointers can be dangerous.
@@ -2399,6 +2406,10 @@ class index_gt {
         callback_at&& callback = callback_at{}, //
         prefetch_at&& prefetch = prefetch_at{}) usearch_noexcept_m {
 
+        // Someone is gonna fuzz this, so let's make sure we cover the basics
+        if (!config.expansion)
+            config.expansion = default_expansion_add();
+
         usearch_assert_m(!is_immutable(), "Can't add to an immutable index");
         add_result_t result;
         std::size_t old_slot = iterator.slot_;
@@ -2467,7 +2478,15 @@ class index_gt {
         metric_at&& metric,                        //
         index_search_config_t config = {},         //
         predicate_at&& predicate = predicate_at{}, //
-        prefetch_at&& prefetch = prefetch_at{}) const noexcept {
+        prefetch_at&& prefetch = prefetch_at{}) const usearch_noexcept_m {
+
+        // Someone is gonna fuzz this, so let's make sure we cover the basics
+        if (!wanted)
+            return search_result_t{};
+
+        // Expansion factor set to zero is equivalent to the default value
+        if (!config.expansion)
+            config.expansion = default_expansion_search();
 
         context_t& context = contexts_[config.thread];
         top_candidates_t& top = context.top_candidates;
@@ -2486,6 +2505,7 @@ class index_gt {
         } else {
             next_candidates_t& next = context.next_candidates;
             std::size_t expansion = (std::max)(config.expansion, wanted);
+            usearch_assert_m(expansion > 0, "Expansion factor can't be a zero!");
             if (!next.reserve(expansion))
                 return result.failed("Out of memory!");
             if (!top.reserve(expansion))
@@ -3478,7 +3498,7 @@ class index_gt {
     template <typename value_at, typename metric_at, typename predicate_at, typename prefetch_at>
     bool search_to_find_in_base_(                                                               //
         value_at&& query, metric_at&& metric, predicate_at&& predicate, prefetch_at&& prefetch, //
-        std::size_t start_slot, std::size_t expansion, context_t& context) const noexcept {
+        std::size_t start_slot, std::size_t expansion, context_t& context) const usearch_noexcept_m {
 
         visits_hash_set_t& visits = context.visits;
         next_candidates_t& next = context.next_candidates; // pop min, push
@@ -3496,12 +3516,16 @@ class index_gt {
             prefetch(citerator_at(start_slot), citerator_at(start_slot + 1));
 
         distance_t radius = context.measure(query, citerator_at(start_slot), metric);
+        usearch_assert_m(next.capacity(), "The `max_heap_gt` must have been reserved in the search entry point");
         next.insert_reserved({-radius, static_cast<compressed_slot_t>(start_slot)});
         visits.set(static_cast<compressed_slot_t>(start_slot));
 
         // Don't populate the top list if the predicate is not satisfied
-        if (is_dummy<predicate_at>() || predicate(member_cref_t{node_at_(start_slot).ckey(), start_slot}))
+        if (is_dummy<predicate_at>() || predicate(member_cref_t{node_at_(start_slot).ckey(), start_slot})) {
+            usearch_assert_m(top.capacity(),
+                             "The `sorted_buffer_gt` must have been reserved in the search entry point");
             top.insert_reserved({radius, static_cast<compressed_slot_t>(start_slot)});
+        }
 
         while (!next.empty()) {
 

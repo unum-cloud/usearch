@@ -397,7 +397,7 @@ void test_absurd(std::size_t dimensions, std::size_t connectivity, std::size_t e
             expect((bool)results);
             auto count_found = results.dump_to(keys.data(), distances.data());
             expect(count_found <= count_wanted);
-            if (count_vectors)
+            if (count_vectors && count_wanted)
                 expect(count_found > 0);
         });
     }
