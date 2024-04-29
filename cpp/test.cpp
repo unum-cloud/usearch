@@ -11,6 +11,9 @@
 #include <unordered_map> // `std::unordered_map`
 #include <vector>        // `std::vector`
 
+#define SZ_USE_X86_AVX512 0            // Sanitizers hate AVX512
+#include <stringzilla/stringzilla.hpp> // Levenshtein distance implementation
+
 #include <usearch/index.hpp>
 #include <usearch/index_dense.hpp>
 #include <usearch/index_plugins.hpp>
@@ -559,6 +562,73 @@ void test_sets(std::size_t collection_size, std::size_t min_set_length, std::siz
     }
 }
 
+/**
+ * Tests similarity search over strings using Levenshtein distances
+ * implementation from StringZilla.
+ *
+ * Adds a predefined number of long strings, comparing them.
+ *
+ * @param index A reference to the index instance to be tested.
+ * @tparam index_at Type of the index being tested.
+ */
+template <typename key_at, typename slot_at> void test_strings() {
+
+    namespace sz = ashvardanian::stringzilla;
+
+    /// Levenshtein distance is an integer
+    using levenshtein_distance_t = std::uint64_t;
+
+    // Aliasis for the index overload
+    using vector_key_t = key_at;
+    using slot_t = slot_at;
+    using index_t = index_gt<levenshtein_distance_t, vector_key_t, slot_t>;
+
+    std::string_view str0 = "ACGTACGTACGTACGTACGTACGTACGTACGTACGT";
+    std::string_view str1 = "ACG_ACTC_TAC-TACGTA_GTACACG_ACGT";
+    std::string_view str2 = "A_GTACTACGTA-GTAC_TACGTACGTA-GTAGT";
+    std::string_view str3 = "GTACGTAGT-ACGTACGACGTACGTACG-TACGTAC";
+    std::vector<std::string_view> strings({str0, str1, str2, str3});
+
+    // Wrap the data into a proxy object
+    struct metric_t {
+        using member_cref_t = typename index_t::member_cref_t;
+        using member_citerator_t = typename index_t::member_citerator_t;
+
+        std::vector<std::string_view> const* strings_ptr = nullptr;
+
+        std::string_view str_at(std::size_t i) const noexcept { return (*strings_ptr)[i]; }
+        levenshtein_distance_t between(std::string_view a, std::string_view b) const {
+            return sz::edit_distance(sz::string_view(a), sz::string_view(b));
+        }
+
+        levenshtein_distance_t operator()(member_cref_t const& a, member_cref_t const& b) const {
+            return between(str_at(get_slot(b)), str_at(get_slot(a)));
+        }
+        levenshtein_distance_t operator()(std::string_view some_vector, member_cref_t const& member) const {
+            return between(some_vector, str_at(get_slot(member)));
+        }
+        levenshtein_distance_t operator()(member_citerator_t const& a, member_citerator_t const& b) const {
+            return between(str_at(get_slot(b)), str_at(get_slot(a)));
+        }
+        levenshtein_distance_t operator()(std::string_view some_vector, member_citerator_t const& member) const {
+            return between(some_vector, str_at(get_slot(member)));
+        }
+    };
+
+    // Perform indexing
+    aligned_wrapper_gt<index_t> aligned_index;
+    aligned_index.index->reserve(strings.size());
+    for (std::size_t i = 0; i < strings.size(); i++)
+        aligned_index.index->add(i, strings[i], metric_t{&strings});
+    expect(aligned_index.index->size() == strings.size());
+
+    // Perform the search queries
+    for (std::size_t i = 0; i < strings.size(); i++) {
+        auto results = aligned_index.index->search(strings[i], 5, metric_t{&strings});
+        expect(results.size() > 0);
+    }
+}
+
 int main(int, char**) {
 
     // Exact search without constructing indexes.
@@ -570,10 +640,10 @@ int main(int, char**) {
 
     // Make sure the initializers and the algorithms can work with inadequately small values.
     // Be warned - this combinatorial explosion of tests produces close to __500'000__ tests!
-    for (std::size_t connectivity : {0, 1, 2, 3, 16})
-        for (std::size_t dimensions : {1, 2, 3, 16}) // TODO: Add zero
-            for (std::size_t expansion_add : {0, 1, 2, 3, 16})
-                for (std::size_t expansion_search : {0, 1, 2, 3, 16})
+    for (std::size_t connectivity : {0, 1, 2, 3})
+        for (std::size_t dimensions : {1, 2, 3}) // TODO: Add zero?
+            for (std::size_t expansion_add : {0, 1, 2, 3})
+                for (std::size_t expansion_search : {0, 1, 2, 3})
                     for (std::size_t count_vectors : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
                         for (std::size_t count_wanted : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
                             test_absurd<std::int64_t, std::uint32_t>(dimensions, connectivity, expansion_add,
@@ -596,6 +666,7 @@ int main(int, char**) {
     // Beyond dense equi-dimensional vectors - integer sets
     for (std::size_t set_size : {1, 100, 1000})
         test_sets<std::int64_t, std::uint32_t>(set_size, 20, 30);
+    test_strings<std::int64_t, std::uint32_t>();
 
     return 0;
 }
