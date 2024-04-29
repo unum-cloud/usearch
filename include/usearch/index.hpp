@@ -120,8 +120,11 @@
 
 extern "C" {
 /// @brief  Helper function to simplify debugging - trace just one symbol - `__usearch_raise_runtime_error`.
+///         Assuming the `extern C` block, the name won't be mangled.
 inline static void __usearch_raise_runtime_error(char const* message) {
-#ifndef __cpp_exceptions
+    // On Windows we compile with `/EHc` flag, which specifies that functions
+    // with C linkage do not throw C++ exceptions.
+#if !defined(__cpp_exceptions) || defined(USEARCH_DEFINED_WINDOWS)
     std::terminate();
 #else
     throw std::runtime_error(message);
