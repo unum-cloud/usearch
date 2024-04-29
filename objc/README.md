@@ -5,23 +5,22 @@ Below, you will find detailed information on installation, usage, and advanced f
 
 ## Installation
 
-To integrate USearch into your Objective-C project use CocoaPods.
-Add the following line to your `Podfile`:
+USearch is available through the Swift Package Manager.
+To install it, simply add the following line to your `Package.swift`:
 
-```ruby
-pod 'USearch'
+```swift
+dependencies: [
+    .package(url: "https://github.com/unum-cloud/usearch", .upToNextMajor(from: "2.0.0"))
+]
 ```
 
-Then run:
+Alternatively, manually copy the following files to your project:
 
-```sh
-pod install
-```
-
-Alternatively, add the following files to your project:
-
-- `USearchIndex.h`
-- `USearchIndex.m`
+- `objc/include/USearchIndex.h`
+- `objc/USearchIndex.m`
+- `include/usearch/index.hpp`
+- `include/usearch/index_dense.hpp`
+- `include/usearch/index_plugins.hpp`
 
 ## Quickstart
 
