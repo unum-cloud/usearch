@@ -306,7 +306,7 @@ jobs:
           push: false
 
   build_wheels:
-    name: Build Python ${{ matrix.python-version }} for ${{ matrix.os }}
+    name: Build Python Wheels
     runs-on: ${{ matrix.os }}
     needs: [test_ubuntu_gcc, test_ubuntu_clang, test_macos, test_windows]
     strategy:

@@ -42,7 +42,7 @@ If there build mode is not specified, the default is `Release`.
 
 ```sh
 cmake -DUSEARCH_BUILD_TEST_CPP=1 -B ./build_release
-cmake --build ./build_release --config Debug
+cmake --build ./build_release --config Release
 ./build_release/test_cpp
 ```
 

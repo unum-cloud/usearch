@@ -633,6 +633,7 @@ int main(int, char**) {
 
     // Exact search without constructing indexes.
     // Great for validating the distance functions.
+    std::printf("Testing exact search\n");
     for (std::size_t dataset_count : {10, 100})
         for (std::size_t queries_count : {1, 10})
             for (std::size_t wanted_count : {1, 5})
@@ -640,6 +641,7 @@ int main(int, char**) {
 
     // Make sure the initializers and the algorithms can work with inadequately small values.
     // Be warned - this combinatorial explosion of tests produces close to __500'000__ tests!
+    std::printf("Testing absurd index configs\n");
     for (std::size_t connectivity : {0, 1, 2, 3})
         for (std::size_t dimensions : {1, 2, 3}) // TODO: Add zero?
             for (std::size_t expansion_add : {0, 1, 2, 3})
@@ -659,11 +661,13 @@ int main(int, char**) {
         }
 
     // Test with binaty vectors
+    std::printf("Testing binary vectors\n");
     for (std::size_t connectivity : {3, 13, 50})
         for (std::size_t dimensions : {97, 256})
             test_tanimoto<std::int64_t, std::uint32_t>(dimensions, connectivity);
 
     // Beyond dense equi-dimensional vectors - integer sets
+    std::printf("Testing sparse vectors, strings, and sets\n");
     for (std::size_t set_size : {1, 100, 1000})
         test_sets<std::int64_t, std::uint32_t>(set_size, 20, 30);
     test_strings<std::int64_t, std::uint32_t>();

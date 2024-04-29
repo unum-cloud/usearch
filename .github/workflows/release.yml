@@ -61,7 +61,7 @@ jobs:
           force: True
 
   create_linux_deb_package:
-    name: Create Debian Package for ${{ matrix.arch }}
+    name: Create Debian Package
     runs-on: ubuntu-22.04
     needs: versioning
     env:
@@ -137,7 +137,7 @@ jobs:
           update_latest_release: true
 
   create_windows_dll_library:
-    name: Create Dll Library for Windows ${{ matrix.arch }}
+    name: Create Dll Library for Windows
     runs-on: windows-2022
     needs: versioning
     strategy:
@@ -188,7 +188,7 @@ jobs:
           update_latest_release: true
 
   create_macos_dylib_library:
-    name: Create Library for MacOS ${{ matrix.arch }}
+    name: Create Library for MacOS
     runs-on: macos-12
     needs: versioning
     strategy:
@@ -244,7 +244,7 @@ jobs:
           update_latest_release: true
 
   create_wasm_library:
-    name: WASM builds for C libraries on ${{ matrix.os }}
+    name: WASM builds for C libraries
     runs-on: ${{ matrix.os }}
     needs: versioning
     strategy:
@@ -396,7 +396,7 @@ jobs:
             * ${{ steps.hashes.outputs.asset_name_15 }} : `${{ steps.hashes.outputs.asset_hash_15 }}`
 
   build_wheels:
-    name: Build Python ${{ matrix.python-version }} for ${{ matrix.os }}
+    name: Build Python Wheels
     runs-on: ${{ matrix.os }}
     needs: versioning
     strategy:
