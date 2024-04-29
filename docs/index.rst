@@ -14,6 +14,7 @@ Overview
    java/index
    c/index
    swift/index
+   objc/index
    csharp/index
    golang/index
    wolfram/index
@@ -25,8 +26,9 @@ Overview
    contributing
    benchmarks
    format
+   sqlite/index
 
-.. toctree:: 
+.. toctree::
    :hidden:
    :caption: �
 

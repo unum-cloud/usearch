@@ -118,7 +118,7 @@ USearch is compact and broadly compatible without sacrificing performance, prima
 Base functionality is identical to FAISS, and the interface must be familiar if you have ever investigated Approximate Nearest Neighbors search:
 
 ```py
-$ pip install numpy usearch
+# pip install numpy usearch
 
 import numpy as np
 from usearch.index import Index
@@ -448,10 +448,10 @@ That method was used to build the ["USearch Molecules"](https://github.com/ashva
 
 ### USearch + POI Coordinates = GIS Applications... on iOS?
 
-[![USearch Maps with SwiftUI](https://github.com/ashvardanian/SwiftVectorSearch/raw/main/USearch+SwiftUI.gif)](https://github.com/ashvardanian/SwiftVectorSearch)
+[![USearch Maps with SwiftUI](https://github.com/ashvardanian/SwiftSemanticSearch/raw/main/USearch+SwiftUI.gif)](https://github.com/ashvardanian/SwiftSemanticSearch)
 
 With Objective-C and Swift iOS bindings, USearch can be easily used in mobile applications.
-The [SwiftVectorSearch](https://github.com/ashvardanian/SwiftVectorSearch) project illustrates how to build a dynamic, real-time search system on iOS.
+The [SwiftSemanticSearch](https://github.com/ashvardanian/SwiftSemanticSearch) project illustrates how to build a dynamic, real-time search system on iOS.
 In this example, we use 2-dimensional vectors—encoded as latitude and longitude—to find the closest Points of Interest (POIs) on a map.
 The search is based on the Haversine distance metric but can easily be extended to support high-dimensional vectors.
 
@@ -465,13 +465,13 @@ The search is based on the Haversine distance metric but can easily be extended 
 
 ## Citations
 
-```txt
+```bibtex
 @software{Vardanian_USearch_2023,
 doi = {10.5281/zenodo.7949416},
 author = {Vardanian, Ash},
 title = {{USearch by Unum Cloud}},
 url = {https://github.com/unum-cloud/usearch},
-version = {2.11.6},
+version = {2.11.7},
 year = {2023},
 month = oct,
 }
