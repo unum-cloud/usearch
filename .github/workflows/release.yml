@@ -469,7 +469,8 @@ jobs:
         os:
           - macos-latest
           - ubuntu-22.04
-          - windows-latest
+          # Windows pre-buld is not working
+          # - windows-latest
         exclude:
           - arch: x86
             os: macos-latest
