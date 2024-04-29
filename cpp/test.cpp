@@ -598,7 +598,9 @@ template <typename key_at, typename slot_at> void test_strings() {
 
         std::string_view str_at(std::size_t i) const noexcept { return (*strings_ptr)[i]; }
         levenshtein_distance_t between(std::string_view a, std::string_view b) const {
-            return sz::edit_distance(sz::string_view(a), sz::string_view(b));
+            sz::string_view asz{a.data(), a.size()};
+            sz::string_view bsz{b.data(), b.size()};
+            return sz::edit_distance<char const>(asz, bsz);
         }
 
         levenshtein_distance_t operator()(member_cref_t const& a, member_cref_t const& b) const {
