@@ -113,10 +113,21 @@
 #else
 #define usearch_assert_m(must_be_true, message)                                                                        \
     if (!(must_be_true)) {                                                                                             \
-        raise_runtime_error(message);                                                                                  \
+        __usearch_raise_runtime_error(message);                                                                        \
     }
 #define usearch_noexcept_m
 #endif
+
+extern "C" {
+/// @brief  Helper function to simplify debugging - trace just one symbol - `__usearch_raise_runtime_error`.
+inline static void __usearch_raise_runtime_error(char const* message) {
+#ifndef __cpp_exceptions
+    std::terminate();
+#else
+    throw std::runtime_error(message);
+#endif
+}
+}
 
 namespace unum {
 namespace usearch {
@@ -143,15 +154,6 @@ inline std::size_t ceil2(std::size_t v) noexcept {
 #endif
     v++;
     return v;
-}
-
-/// @brief  Helper function to simplify debugging - trace just one symbol - `raise_runtime_error`.
-inline void raise_runtime_error(char const* message) {
-#ifndef __cpp_exceptions
-    std::terminate();
-#else
-    throw std::runtime_error(message);
-#endif
 }
 
 /// @brief  Simply dereferencing misaligned pointers can be dangerous.

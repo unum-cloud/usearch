@@ -108,6 +108,7 @@ I'd recommend putting the following breakpoints when debugging the code in GDB:
 - `__ubsan::ScopedReport::~ScopedReport` - to catch undefined behavior.
 - `__GI_exit` - to stop at exit points - the end of running any executable.
 - `__builtin_unreachable` - to catch all the places where the code is expected to be unreachable.
+- `__usearch_raise_runtime_error` - for USearch-specific assertions.
 
 ### Cross Compilation
 

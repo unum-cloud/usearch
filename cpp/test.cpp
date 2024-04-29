@@ -20,9 +20,64 @@ using namespace unum;
 
 void expect(bool must_be_true) {
     if (!must_be_true)
-        raise_runtime_error("Failed!");
+        __usearch_raise_runtime_error("Failed!");
 }
 
+/**
+ *  @brief  Convinience wrapper combining combined allocation and construction of an index.
+ */
+template <typename index_at> struct aligned_wrapper_gt {
+    using index_t = index_at;
+    using alloc_t = aligned_allocator_gt<index_t, 64>;
+
+    alloc_t alloc;
+    index_t* index = nullptr;
+
+    template <typename... args_at> aligned_wrapper_gt(args_at&&... args) {
+
+        alloc_t index_alloc;
+        index_t* index_typed = index_alloc.allocate(1);
+        expect(index_typed != nullptr);
+        expect(((unsigned long long)(index_typed) % 64ull) == 0ull);
+
+        new (index_typed) index_t(std::forward<args_at>(args)...);
+        index = index_typed;
+    }
+
+    ~aligned_wrapper_gt() {
+        if (index != nullptr) {
+            index->~index_t();
+            alloc.deallocate(index, 1);
+        }
+    }
+};
+
+/**
+ * Tests the behavior of various move-constructors and move-assignment operators for the index.
+ *
+ * Constructs an index and performs tests with it before and after move operations to ensure that the index maintains
+ * its integrity and functionality after being moved.
+ *
+ * @param config Configuration settings for the index.
+ * @tparam index_at Type of the index being tested.
+ */
+template <typename index_at> void test_move_constructors(index_config_t const& config) {
+    {
+        index_at index{config};
+        test_sets(index);
+    }
+    {
+        index_at index{config};
+        index.reserve(1);
+        test_sets(index_at(std::move(index)));
+    }
+    {
+        index_at index{config};
+        index.reserve(1);
+        index_at index_moved = std::move(index);
+        test_sets(index_moved);
+    }
+}
 /**
  * Tests the cosine similarity functionality of the given index.
  *
@@ -278,13 +333,10 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     // Template:
     for (std::size_t connectivity : {3, 13, 50}) {
         std::printf("- templates with connectivity %zu \n", connectivity);
-        alignas(64) metric_t metric{&vector_of_vectors, dimensions};
-        alignas(64) index_config_t config(connectivity);
-        alignas(64) unsigned char index_buffer[sizeof(index_typed_t)];
-        expect(((unsigned long long)(&index_buffer[0]) % 64ull) == 0ull);
-        index_typed_t* index_typed = new (index_buffer) index_typed_t(config); // Constructing the object in-place
-        test_cosine<false>(*index_typed, vector_of_vectors, metric);
-        index_typed->~index_typed_t(); // Manually calling the destructor
+        metric_t metric{&vector_of_vectors, dimensions};
+        index_config_t config(connectivity);
+        aligned_wrapper_gt<index_typed_t> aligned_index;
+        test_cosine<false>(*aligned_index.index, vector_of_vectors, metric);
     }
 
     // Type-punned:
