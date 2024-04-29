@@ -494,54 +494,82 @@ void test_exact_search(std::size_t dataset_count, std::size_t queries_count, std
  * @param index A reference to the index instance to be tested.
  * @tparam index_at Type of the index being tested.
  */
-template <typename index_at> void test_sets(index_at&& index) {
+template <typename key_at, typename slot_at>
+void test_sets(std::size_t collection_size, std::size_t min_set_length, std::size_t max_set_length) {
 
-    using index_t = typename std::remove_reference<index_at>::type;
-    using scalar_t = typename index_t::scalar_t;
-    using view_t = span_gt<scalar_t const>;
+    /// Type of set elements, should support strong ordering
+    using set_member_t = std::uint32_t;
+    /// Jaccard is a fraction, so let's use a some float
+    using set_distance_t = double;
 
-    scalar_t vec0[] = {10, 20};
-    scalar_t vec1[] = {10, 15, 20};
-    scalar_t vec2[] = {10, 20, 30, 35};
+    // Aliasis for the index overload
+    using vector_key_t = key_at;
+    using slot_t = slot_at;
+    using index_t = index_gt<set_distance_t, vector_key_t, slot_t>;
 
-    index.reserve(10);
-    index.add(42, view_t{&vec0[0], 2ul});
-    index.add(43, view_t{&vec1[0], 3ul});
-    index.add(44, view_t{&vec2[0], 4ul});
-
-    expect(index.size() == 3);
-}
-
-/**
- * Tests the behavior of various move-constructors and move-assignment operators for the index.
- *
- * Constructs an index and performs tests with it before and after move operations to ensure that the index maintains
- * its integrity and functionality after being moved.
- *
- * @param config Configuration settings for the index.
- * @tparam index_at Type of the index being tested.
- */
-template <typename index_at> void test_sets_moved(index_config_t const& config) {
-    {
-        index_at index{config};
-        test_sets(index);
+    // Let's allocate some data for indexing
+    using set_view_t = span_gt<set_member_t const>;
+    using sets_t = std::vector<std::vector<set_member_t>>;
+    sets_t sets(collection_size);
+    for (auto& set : sets) {
+        std::size_t set_size = min_set_length + std::rand() % (max_set_length - min_set_length);
+        set.resize(set_size);
+        std::size_t upper_bound = (max_set_length - min_set_length) * 3;
+        std::generate(set.begin(), set.end(), [=] { return static_cast<set_member_t>(std::rand() % upper_bound); });
+        std::sort(set.begin(), set.end());
     }
-    {
-        index_at index{config};
-        index.reserve(1);
-        test_sets(index_at(std::move(index)));
-    }
-    {
-        index_at index{config};
-        index.reserve(1);
-        index_at index_moved = std::move(index);
-        test_sets(index_moved);
+
+    // Wrap the data into a proxy object
+    struct metric_t {
+        using member_cref_t = typename index_t::member_cref_t;
+        using member_citerator_t = typename index_t::member_citerator_t;
+
+        sets_t const* sets_ptr = nullptr;
+
+        set_view_t set_at(std::size_t i) const noexcept { return {(*sets_ptr)[i].data(), (*sets_ptr)[i].size()}; }
+        set_distance_t between(set_view_t a, set_view_t b) const {
+            return metric_jaccard_gt<set_member_t, set_distance_t>{}(a.data(), b.data(), a.size(), b.size());
+        }
+
+        set_distance_t operator()(member_cref_t const& a, member_cref_t const& b) const {
+            return between(set_at(get_slot(b)), set_at(get_slot(a)));
+        }
+        set_distance_t operator()(set_view_t some_vector, member_cref_t const& member) const {
+            return between(some_vector, set_at(get_slot(member)));
+        }
+        set_distance_t operator()(member_citerator_t const& a, member_citerator_t const& b) const {
+            return between(set_at(get_slot(b)), set_at(get_slot(a)));
+        }
+        set_distance_t operator()(set_view_t some_vector, member_citerator_t const& member) const {
+            return between(some_vector, set_at(get_slot(member)));
+        }
+    };
+
+    // Perform indexing
+    aligned_wrapper_gt<index_t> aligned_index;
+    aligned_index.index->reserve(sets.size());
+    for (std::size_t i = 0; i < sets.size(); i++)
+        aligned_index.index->add(i, set_view_t{sets[i].data(), sets[i].size()}, metric_t{&sets});
+    expect(aligned_index.index->size() == sets.size());
+
+    // Perform the search queries
+    for (std::size_t i = 0; i < sets.size(); i++) {
+        auto results = aligned_index.index->search(set_view_t{sets[i].data(), sets[i].size()}, 5, metric_t{&sets});
+        expect(results.size() > 0);
     }
 }
 
 int main(int, char**) {
 
-    // Make sure the initializers and the algorithms can work with inadequately small values
+    // Exact search without constructing indexes.
+    // Great for validating the distance functions.
+    for (std::size_t dataset_count : {10, 100})
+        for (std::size_t queries_count : {1, 10})
+            for (std::size_t wanted_count : {1, 5})
+                test_exact_search(dataset_count, queries_count, wanted_count);
+
+    // Make sure the initializers and the algorithms can work with inadequately small values.
+    // Be warned - this combinatorial explosion of tests produces close to __500'000__ tests!
     for (std::size_t connectivity : {0, 1, 2, 3, 16})
         for (std::size_t dimensions : {1, 2, 3, 16}) // TODO: Add zero
             for (std::size_t expansion_add : {0, 1, 2, 3, 16})
@@ -551,11 +579,7 @@ int main(int, char**) {
                             test_absurd<std::int64_t, std::uint32_t>(dimensions, connectivity, expansion_add,
                                                                      expansion_search, count_vectors, count_wanted);
 
-    for (std::size_t dataset_count : {10, 100})
-        for (std::size_t queries_count : {1, 10})
-            for (std::size_t wanted_count : {1, 5})
-                test_exact_search(dataset_count, queries_count, wanted_count);
-
+    // Use just one
     for (std::size_t collection_size : {10, 500})
         for (std::size_t dimensions : {97, 256}) {
             std::printf("Indexing %zu vectors with cos: <float, std::int64_t, std::uint32_t> \n", collection_size);
@@ -564,9 +588,14 @@ int main(int, char**) {
             test_cosine<float, std::int64_t, uint40_t>(collection_size, dimensions);
         }
 
+    // Test with binaty vectors
     for (std::size_t connectivity : {3, 13, 50})
         for (std::size_t dimensions : {97, 256})
             test_tanimoto<std::int64_t, std::uint32_t>(dimensions, connectivity);
+
+    // Beyond dense equi-dimensional vectors - integer sets
+    for (std::size_t set_size : {1, 100, 1000})
+        test_sets<std::int64_t, std::uint32_t>(set_size, 20, 30);
 
     return 0;
 }
