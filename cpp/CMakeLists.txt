@@ -4,6 +4,12 @@ if (USEARCH_BUILD_TEST_CPP)
     include(CTest)
     enable_testing()
     add_test(NAME test_cpp COMMAND test_cpp)
+
+    target_include_directories(test_cpp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../stringzilla/include)
+
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        target_compile_options(test_cpp PRIVATE -Wno-vla -Wno-unused-function -Wno-cast-function-type)
+    endif ()
 endif ()
 
 if (USEARCH_BUILD_BENCH_CPP)

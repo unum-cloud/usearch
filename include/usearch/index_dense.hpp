@@ -1,3 +1,9 @@
+/**
+ *  @file       index_dense.hpp
+ *  @author     Ash Vardanian
+ *  @brief      Single-header Vector Search engine for equi-dimensional dense vectors.
+ *  @date       July 26, 2023
+ */
 #pragma once
 #include <stdlib.h> // `aligned_alloc`
 

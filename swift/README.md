@@ -2,11 +2,18 @@
 
 ## Installation
 
-```txt
-https://github.com/unum-cloud/usearch
+USearch is available through the Swift Package Manager.
+To install it, simply add the following line to your `Package.swift`:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/unum-cloud/usearch", .upToNextMajor(from: "2.0.0"))
+]
 ```
 
 ## Quickstart
+
+Here’s a basic example:
 
 ```swift
 let index = USearchIndex.make(metric: .Cos, dimensions: 3, connectivity: 8)
@@ -31,8 +38,8 @@ struct USearchMobileApp: App {
         WindowGroup {
             let index = USearchIndex.make(metric: .IP, dimensions: 2, connectivity: 16, quantization: .F32)
             let _ = index.reserve(10)
-            let coordiantes: Array<Float32> = [40.177200, 44.503490]
-            let _ = index.add(key: 10, vector: coordiantes)            
+            let coordinates: Array<Float32> = [40.177200, 44.503490]
+            let _ = index.add(key: 10, vector: coordinates)            
             VStack {
                 Text("USearch index contains \(index.length) vectors")
                 Spacer()
@@ -43,6 +50,44 @@ struct USearchMobileApp: App {
 }
 ```
 
-You can find a working example of using USearch with SwiftUI maps at [ashvardanian/SwiftVectorSearch](https://github.com/ashvardanian/SwiftVectorSearch).
+You can find a working example of using USearch with SwiftUI maps at [ashvardanian/SwiftSemanticSearch](https://github.com/ashvardanian/SwiftSemanticSearch).
 
-[![](https://media.githubusercontent.com/media/ashvardanian/SwiftVectorSearch/main/USearch%2BSwiftUI.gif)](https://github.com/ashvardanian/SwiftVectorSearch)
+[![](https://media.githubusercontent.com/media/ashvardanian/SwiftSemanticSearch/main/USearch%2BSwiftUI.gif)](https://github.com/ashvardanian/SwiftSemanticSearch)
+
+## Serialization
+
+Save and load your indices for efficient reuse:
+
+```swift
+try index.save("path/to/save/index")
+try index.load("path/to/load/index")
+try index.view("path/to/view/index")
+```
+
+## Updates and Metadata
+
+Just like in Objective-C, you can manipulate the index and check its metadata:
+
+```swift
+// Retrieve structural properties of the index
+let dimensions = index.dimensions
+let connectivity = index.connectivity
+let expansionAdd = index.expansionAdd
+let expansionSearch = index.expansionSearch
+
+// Check the number of vectors and if the index is empty
+let numberOfVectors = index.count
+let isEmpty = index.isEmpty
+
+// Remove a vector by key
+index.remove(key: 42)
+
+// Rename a vector key
+index.rename(from: 42, to: 52)
+
+// Check if a specific key exists in the index
+let exists = index.contains(key: 52)
+
+// Clear all vectors from the index while preserving settings
+index.clear()
+```
