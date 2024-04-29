@@ -578,6 +578,9 @@ class aligned_allocator_gt {
 
     pointer allocate(size_type length) const {
         std::size_t length_bytes = alignment_ak * divide_round_up<alignment_ak>(length * sizeof(value_type));
+        // Avoid overflow
+        if (length > length_bytes)
+            return nullptr;
         std::size_t alignment = alignment_ak;
         // void* result = nullptr;
         // int status = posix_memalign(&result, alignment, length_bytes);
