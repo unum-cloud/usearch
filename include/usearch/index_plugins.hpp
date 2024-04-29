@@ -1155,18 +1155,21 @@ template <typename scalar_at = std::int32_t, typename result_at = float> struct 
     using scalar_t = scalar_at;
     using result_t = result_at;
     static_assert(!std::is_floating_point<scalar_t>::value, "Jaccard distance requires integral scalars");
+    static_assert(std::is_floating_point<result_t>::value, "Jaccard distance returns a fraction");
 
     inline result_t operator()( //
         scalar_t const* a, scalar_t const* b, std::size_t a_length, std::size_t b_length) const noexcept {
-        result_t intersection{};
+        std::size_t intersection{};
         std::size_t i{};
         std::size_t j{};
         while (i != a_length && j != b_length) {
-            intersection += a[i] == b[j];
-            i += a[i] < b[j];
-            j += a[i] >= b[j];
+            scalar_t ai = a[i];
+            scalar_t bj = b[j];
+            intersection += ai == bj;
+            i += ai < bj;
+            j += ai >= bj;
         }
-        return 1 - intersection / (a_length + b_length - intersection);
+        return 1 - static_cast<result_t>(intersection) / (a_length + b_length - intersection);
     }
 };
 
