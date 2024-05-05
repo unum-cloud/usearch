@@ -3,13 +3,9 @@
 #include <float.h>  // `_Float16`
 #include <stdlib.h> // `aligned_alloc`
 
+#include <atomic>  // `std::atomic`
 #include <cstring> // `std::strncmp`
-#include <numeric> // `std::iota`
 #include <thread>  // `std::thread`
-#include <vector>  // `std::vector`
-
-#include <atomic> // `std::atomic`
-#include <thread> // `std::thread`
 
 #include <usearch/index.hpp> // `expected_gt` and macros
 
@@ -382,14 +378,16 @@ class executor_stl_t {
 
     struct jthread_t {
         std::thread native_;
+        bool initialized_ = false;
 
         jthread_t() = default;
         jthread_t(jthread_t&&) = default;
         jthread_t(jthread_t const&) = delete;
-        template <typename callable_at> jthread_t(callable_at&& func) : native_([=]() { func(); }) {}
+        template <typename callable_at>
+        jthread_t(callable_at&& func) : native_([=]() { func(); }), initialized_(true) {}
 
         ~jthread_t() {
-            if (native_.joinable())
+            if (initialized_ && native_.joinable())
                 native_.join();
         }
     };
@@ -414,13 +412,13 @@ class executor_stl_t {
      */
     template <typename thread_aware_function_at>
     void fixed(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
-        std::vector<jthread_t> threads_pool;
+        buffer_gt<jthread_t> threads_pool(threads_count_ - 1); // Allocate space for threads minus the main thread
         std::size_t tasks_per_thread = tasks;
         std::size_t threads_count = (std::min)(threads_count_, tasks);
         if (threads_count > 1) {
             tasks_per_thread = (tasks / threads_count) + ((tasks % threads_count) != 0);
             for (std::size_t thread_idx = 1; thread_idx < threads_count; ++thread_idx) {
-                threads_pool.emplace_back([=]() {
+                new (&threads_pool[thread_idx - 1]) jthread_t([=]() {
                     for (std::size_t task_idx = thread_idx * tasks_per_thread;
                          task_idx < (std::min)(tasks, thread_idx * tasks_per_thread + tasks_per_thread); ++task_idx)
                         thread_aware_function(thread_idx, task_idx);
@@ -439,14 +437,14 @@ class executor_stl_t {
      */
     template <typename thread_aware_function_at>
     void dynamic(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
-        std::vector<jthread_t> threads_pool;
+        buffer_gt<jthread_t> threads_pool(threads_count_ - 1);
         std::size_t tasks_per_thread = tasks;
         std::size_t threads_count = (std::min)(threads_count_, tasks);
         std::atomic_bool stop{false};
         if (threads_count > 1) {
             tasks_per_thread = (tasks / threads_count) + ((tasks % threads_count) != 0);
             for (std::size_t thread_idx = 1; thread_idx < threads_count; ++thread_idx) {
-                threads_pool.emplace_back([=, &stop]() {
+                new (&threads_pool[thread_idx - 1]) jthread_t([=, &stop]() {
                     for (std::size_t task_idx = thread_idx * tasks_per_thread;
                          task_idx < (std::min)(tasks, thread_idx * tasks_per_thread + tasks_per_thread) &&
                          !stop.load(std::memory_order_relaxed);
@@ -471,9 +469,9 @@ class executor_stl_t {
     void parallel(thread_aware_function_at&& thread_aware_function) noexcept(false) {
         if (threads_count_ == 1)
             return thread_aware_function(0);
-        std::vector<jthread_t> threads_pool;
+        buffer_gt<jthread_t> threads_pool(threads_count_ - 1);
         for (std::size_t thread_idx = 1; thread_idx < threads_count_; ++thread_idx)
-            threads_pool.emplace_back([=]() { thread_aware_function(thread_idx); });
+            new (&threads_pool[thread_idx - 1]) jthread_t([=]() { thread_aware_function(thread_idx); });
         thread_aware_function(0);
     }
 };
@@ -1556,9 +1554,14 @@ class metric_punned_t {
         static simsimd_capability_t static_capabilities = simsimd_capabilities();
         return configure_with_simsimd(static_capabilities);
     }
-    result_t invoke_simsimd(uptr_t a, uptr_t b) const noexcept {
+
+#if defined(USEARCH_DEFINED_CLANG) || defined(USEARCH_DEFINED_GCC)
+    __attribute__((no_sanitize("all")))
+#endif
+    result_t
+    invoke_simsimd(uptr_t a, uptr_t b) const noexcept {
         simsimd_distance_t result;
-        // Here `reinterpret_cast` raises warning... we know what we are doing!
+        // Here `reinterpret_cast` raises warning and UBSan reports an issue... we know what we are doing!
         auto function_pointer = (simsimd_metric_punned_t)(metric_ptr_);
         function_pointer(reinterpret_cast<void const*>(a), reinterpret_cast<void const*>(b), metric_third_arg_,
                          &result);
