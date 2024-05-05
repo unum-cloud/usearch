@@ -129,13 +129,25 @@ USEARCH_EXPORT char const* usearch_version(void) {
 
 USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, usearch_error_t* error) {
 
-    USEARCH_ASSERT(options && error && "Missing arguments");
+    USEARCH_ASSERT(error && "Missing arguments");
 
-    index_dense_config_t config(options->connectivity, options->expansion_add, options->expansion_search);
+    // The user may want to initialize from a file.
+    // In that case he may pass NULL options, and we will try to load the metadata from the file.
+    if (!options) {
+        index_dense_t* result_ptr = new index_dense_t();
+        if (!result_ptr)
+            *error = "Out of memory!";
+        return result_ptr;
+    }
+
+    index_dense_config_t config;
+    config.connectivity = options->connectivity;
+    config.expansion_add = options->expansion_add;
+    config.expansion_search = options->expansion_search;
     config.multi = options->multi;
+
     metric_kind_t metric_kind = metric_kind_to_cpp(options->metric_kind);
     scalar_kind_t scalar_kind = scalar_kind_to_cpp(options->quantization);
-
     metric_punned_t metric = //
         !options->metric ? metric_punned_t::builtin(options->dimensions, metric_kind, scalar_kind)
                          : metric_punned_t::stateless(options->dimensions,                               //
@@ -147,9 +159,12 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
         return NULL;
     }
 
-    index_dense_t index = index_dense_t::make(metric, config);
-    index_dense_t* result_ptr = new index_dense_t(std::move(index));
-    if (!result_ptr || !*result_ptr)
+    using state_result_t = typename index_dense_t::state_result_t;
+    state_result_t state = index_dense_t::make(metric, config);
+    if (!state)
+        *error = state.error.release();
+    index_dense_t* result_ptr = new index_dense_t(std::move(state.index));
+    if (!result_ptr)
         *error = "Out of memory!";
     return result_ptr;
 }
@@ -302,6 +317,22 @@ USEARCH_EXPORT void usearch_change_expansion_add(usearch_index_t index, size_t e
 USEARCH_EXPORT void usearch_change_expansion_search(usearch_index_t index, size_t expansion, usearch_error_t* error) {
     USEARCH_ASSERT(index && error && "Missing arguments");
     reinterpret_cast<index_dense_t*>(index)->change_expansion_search(expansion);
+}
+
+USEARCH_EXPORT void usearch_change_threads_add(usearch_index_t index, size_t threads, usearch_error_t* error) {
+    USEARCH_ASSERT(index && error && "Missing arguments");
+    auto& index_dense = *reinterpret_cast<index_dense_t*>(index);
+    index_limits_t limits = index_dense.limits();
+    limits.threads_add = threads;
+    index_dense.try_reserve(limits);
+}
+
+USEARCH_EXPORT void usearch_change_threads_search(usearch_index_t index, size_t threads, usearch_error_t* error) {
+    USEARCH_ASSERT(index && error && "Missing arguments");
+    auto& index_dense = *reinterpret_cast<index_dense_t*>(index);
+    index_limits_t limits = index_dense.limits();
+    limits.threads_search = threads;
+    index_dense.try_reserve(limits);
 }
 
 USEARCH_EXPORT void usearch_change_metric_kind(usearch_index_t index, usearch_metric_kind_t kind,

@@ -883,7 +883,8 @@ class index_dense_gt {
         std::unique_lock<std::mutex> free_lock(free_keys_mutex_);
         std::unique_lock<std::mutex> available_threads_lock(available_threads_mutex_);
 
-        typed_->reset();
+        if (typed_)
+            typed_->reset();
         slot_lookup_.clear();
         vectors_lookup_.reset();
         free_keys_.clear();
@@ -1052,6 +1053,13 @@ class index_dense_gt {
         }
 
         // Pull the actual proximity graph
+        if (!typed_) {
+            index_t* raw = index_allocator_t{}.allocate(1);
+            if (!raw)
+                return result.failed("Failed to allocate memory for the index");
+            new (raw) index_t(config_);
+            typed_ = raw;
+        }
         result = typed_->load_from_stream(std::forward<input_callback_at>(input), std::forward<progress_at>(progress));
         if (!result)
             return result;
@@ -1141,6 +1149,13 @@ class index_dense_gt {
         }
 
         // Pull the actual proximity graph
+        if (!typed_) {
+            index_t* raw = index_allocator_t{}.allocate(1);
+            if (!raw)
+                return result.failed("Failed to allocate memory for the index");
+            new (raw) index_t(config_);
+            typed_ = raw;
+        }
         result = typed_->view(std::move(file), offset, std::forward<progress_at>(progress));
         if (!result)
             return result;

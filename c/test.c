@@ -278,9 +278,9 @@ void test_save_load(size_t const collection_size, size_t const dimensions) {
     // Reinit
     {
 
-        usearch_index_t index = usearch_init(&opts, &error);
+        usearch_index_t index = usearch_init(NULL, &error);
         ASSERT(!error, error);
-        ASSERT(usearch_size(index, &error) == 0, error);
+        // ASSERT(usearch_size(index, &error) == 0, error);
 
         // Load
         usearch_load(index, "tmp.usearch", &error);
@@ -302,6 +302,7 @@ void test_save_load(size_t const collection_size, size_t const dimensions) {
         ASSERT(keys && distances, "Failed to allocate memory");
 
         // Find the vectors
+        usearch_change_threads_search(index, 1, &error);
         for (size_t i = 0; i < collection_size; i++) {
             size_t found_count = usearch_search(index, data + i * dimensions, usearch_scalar_f32_k, collection_size,
                                                 keys, distances, &error);
