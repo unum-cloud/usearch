@@ -328,7 +328,7 @@ USEARCH_EXPORT void usearch_change_metric(usearch_index_t index, usearch_metric_
 
 USEARCH_EXPORT void usearch_reserve(usearch_index_t index, size_t capacity, usearch_error_t* error) {
     USEARCH_ASSERT(index && error && "Missing arguments");
-    if (!reinterpret_cast<index_dense_t*>(index)->reserve(capacity))
+    if (!reinterpret_cast<index_dense_t*>(index)->try_reserve(capacity))
         *error = "Out of memory!";
 }
 

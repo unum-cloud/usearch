@@ -347,16 +347,18 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         for (std::size_t connectivity : {3, 13, 50}) {
             std::printf("- punned with connectivity %zu \n", connectivity);
             using index_t = index_dense_gt<vector_key_t, slot_t>;
+            using index_result_t = typename index_t::state_result_t;
             metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
             index_dense_config_t config(connectivity);
             config.multi = multi;
             index_t index;
             {
-                index_t index_tmp1 = index_t::make(metric, config);
+                index_result_t result_temporary = index_t::make(metric, config);
+                index_t& index_temporary = result_temporary.index;
                 // move construction
-                index_t index_tmp2 = std::move(index_tmp1);
+                index_t index_moved = std::move(index_temporary);
                 // move assignment
-                index = std::move(index_tmp2);
+                index = std::move(index_moved);
             }
             test_cosine<true>(index, vector_of_vectors);
         }
@@ -384,7 +386,9 @@ template <typename key_at, typename slot_at> void test_tanimoto(std::size_t dime
     std::size_t words = divide_round_up<CHAR_BIT>(dimensions);
     metric_punned_t metric(words, metric_kind_t::tanimoto_k, scalar_kind_t::b1x8_k);
     index_config_t config(connectivity);
-    index_punned_t index = index_punned_t::make(metric, config);
+    auto index_result = index_punned_t::make(metric, config);
+    expect(bool(index_result));
+    index_punned_t& index = index_result.index;
 
     executor_default_t executor;
     std::size_t batch_size = 1000;
@@ -423,14 +427,16 @@ void test_absurd(std::size_t dimensions, std::size_t connectivity, std::size_t e
     using index_punned_t = index_dense_gt<vector_key_t, slot_t>;
     metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind_t::f32_k);
     index_dense_config_t config(connectivity, expansion_add, expansion_search);
-    index_punned_t index = index_punned_t::make(metric, config);
+    auto index_result = index_punned_t::make(metric, config);
+    expect(bool(index_result));
+    index_punned_t& index = index_result.index;
 
     std::size_t count_max = (std::max)(count_vectors, count_wanted);
     std::size_t needed_scalars = count_max * dimensions;
     std::vector<f32_t> scalars(needed_scalars);
     std::generate(scalars.begin(), scalars.end(), [] { return static_cast<f32_t>(std::rand()); });
 
-    expect(index.reserve({count_vectors, count_max}));
+    expect(index.try_reserve({count_vectors, count_max}));
     index.change_expansion_add(expansion_add);
     index.change_expansion_search(expansion_search);
 
@@ -644,8 +650,8 @@ int main(int, char**) {
     // Make sure the initializers and the algorithms can work with inadequately small values.
     // Be warned - this combinatorial explosion of tests produces close to __500'000__ tests!
     std::printf("Testing absurd index configs\n");
-    for (std::size_t connectivity : {0, 1, 2, 3})
-        for (std::size_t dimensions : {1, 2, 3}) // TODO: Add zero?
+    for (std::size_t connectivity : {2, 3})      // ! Zero maps to default, one degenerates
+        for (std::size_t dimensions : {1, 2, 3}) // ! Zero will raise
             for (std::size_t expansion_add : {0, 1, 2, 3})
                 for (std::size_t expansion_search : {0, 1, 2, 3})
                     for (std::size_t count_vectors : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})

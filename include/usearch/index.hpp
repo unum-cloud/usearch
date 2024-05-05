@@ -291,7 +291,8 @@ template <typename scalar_at, typename allocator_at = std::allocator<scalar_at>>
             for (std::size_t i = 0; i != size_; ++i)
                 construct_at(data_ + i);
     }
-    ~buffer_gt() noexcept {
+    ~buffer_gt() noexcept { reset(); }
+    void reset() noexcept {
         if (!std::is_trivially_destructible<scalar_at>::value)
             for (std::size_t i = 0; i != size_; ++i)
                 destroy_at(data_ + i);
@@ -1125,20 +1126,43 @@ struct index_config_t {
     std::size_t connectivity_base = default_connectivity() * 2;
 
     inline index_config_t() = default;
-    inline index_config_t(std::size_t c) noexcept
-        : connectivity(c ? c : default_connectivity()), connectivity_base(c ? c * 2 : default_connectivity() * 2) {}
-    inline index_config_t(std::size_t c, std::size_t cb) noexcept
-        : connectivity(c), connectivity_base((std::max)(c, cb)) {}
+    inline index_config_t(std::size_t c, std::size_t cb = 0) noexcept : connectivity(c), connectivity_base(cb) {}
+
+    /**
+     *  @brief  Validates the configuration settings, updating them in-place.
+     *  @return Error message, if any.
+     */
+    inline error_t validate() noexcept {
+        if (connectivity == 0)
+            connectivity = default_connectivity();
+        if (connectivity_base == 0)
+            connectivity_base = connectivity * 2;
+        if (connectivity < 2)
+            return "Connectivity must be at least 2, otherwise the index degenerates into ropes";
+        if (connectivity_base < connectivity)
+            return "Base layer should be at least as connected as the rest of the graph";
+        return {};
+    }
 };
 
+/**
+ *  @brief  Growth settings for the index container.
+ *          Includes the upper bound for `::members` capacity,
+ *          and the number of read/write threads expected to work with the index.
+ */
 struct index_limits_t {
+    /// @brief Maximum number of entries in the index.
     std::size_t members = 0;
+    /// @brief Max number of threads simultaneously updating entries.
     std::size_t threads_add = std::thread::hardware_concurrency();
+    /// @brief Max number of threads simultaneously searching entries.
     std::size_t threads_search = std::thread::hardware_concurrency();
 
     inline index_limits_t(std::size_t n, std::size_t t) noexcept : members(n), threads_add(t), threads_search(t) {}
     inline index_limits_t(std::size_t n = 0) noexcept : index_limits_t(n, std::thread::hardware_concurrency()) {}
+    /// @brief Returns the upper limit for the number of threads.
     inline std::size_t threads() const noexcept { return (std::max)(threads_add, threads_search); }
+    /// @brief Returns the concurrency-level of the index - the minimum of thread counts.
     inline std::size_t concurrency() const noexcept { return (std::min)(threads_add, threads_search); }
 };
 
@@ -1986,16 +2010,44 @@ class index_gt {
         return *this;
     }
 
-    struct copy_result_t {
+    struct state_result_t {
         error_t error;
         index_gt index;
 
         explicit operator bool() const noexcept { return !error; }
-        copy_result_t failed(error_t message) noexcept {
+        state_result_t failed(error_t message) noexcept {
             error = std::move(message);
             return std::move(*this);
         }
+        operator index_gt&&() && {
+            if (error)
+                __usearch_raise_runtime_error(error.what());
+            return std::move(index);
+        }
     };
+    using copy_result_t = state_result_t;
+
+    static state_result_t make( //
+        index_config_t config = {}, dynamic_allocator_t dynamic_allocator = {},
+        tape_allocator_t tape_allocator = {}) noexcept {
+
+        error_t error = config.validate();
+        if (error)
+            return state_result_t{}.failed(std::move(error));
+
+        index_gt index;
+        index.config_ = std::move(config);
+        index.dynamic_allocator_ = std::move(dynamic_allocator);
+        index.tape_allocator_ = std::move(tape_allocator);
+        index.pre_ = precompute_(index.config_);
+        index.nodes_count_ = 0u;
+        index.max_level_ = -1;
+        index.entry_slot_ = 0u;
+
+        state_result_t result;
+        result.index = std::move(index);
+        return result;
+    }
 
     copy_result_t copy(index_copy_config_t config = {}) const noexcept {
         copy_result_t result;
@@ -2781,6 +2833,10 @@ class index_gt {
         // Submit metadata
         config_.connectivity = header.connectivity;
         config_.connectivity_base = header.connectivity_base;
+        error_t error = config_.validate();
+        if (error)
+            return result.failed(std::move(error));
+
         pre_ = precompute_(config_);
         index_limits_t limits;
         limits.members = header.size;
@@ -2948,6 +3004,10 @@ class index_gt {
 
         config_.connectivity = header.connectivity;
         config_.connectivity_base = header.connectivity_base;
+        error_t error = config_.validate();
+        if (error)
+            return result.failed(std::move(error));
+
         pre_ = precompute_(config_);
         misaligned_ptr_gt<level_t> levels{(byte_t*)file.data() + offset + sizeof(header)};
         offsets[0u] = offset + sizeof(header) + sizeof(level_t) * header.size;

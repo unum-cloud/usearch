@@ -89,6 +89,19 @@ Aside from the `executor_default_t`, you can take advantage of one of the provid
 - `executor_stl_t`, that will spawn `std::thread` instances.
 - `dummy_executor_t`, that will run everything sequentially.
 
+## Error Handling
+
+Unlike most open-source C++ libraries USearch doesn't use exceptions, as they often lead to corrupted states in concurrent data-structures.
+They are also not suited for systems that always operate on the edge of available memory, and would end up raising `std::bad_alloc` exceptions all the time.
+For that reason, most operations return a "result" object, that can be checked for success or failure.
+
+```cpp
+bool success;
+success = (bool)index.try_reserve(10); // Recommended over `reserve()`
+success = (bool)index.add(42, &vec[0]); // Explicitly convert `add_result_t`
+success = (bool)index.search(&vec[0], 5); // Explicitly convert `search_result_t`
+```
+
 ## Clustering
 
 Aside from basic Create-Read-Update-Delete (CRUD) operations and search, USearch also supports clustering.

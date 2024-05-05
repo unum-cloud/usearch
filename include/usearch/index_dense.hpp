@@ -5,12 +5,12 @@
  *  @date       July 26, 2023
  */
 #pragma once
+#include "index.hpp"
 #include <stdlib.h> // `aligned_alloc`
 
 #include <functional> // `std::function`
 #include <numeric>    // `std::iota`
 #include <thread>     // `std::thread`
-#include <vector>     // `std::vector`
 
 #include <usearch/index.hpp>
 #include <usearch/index_plugins.hpp>
@@ -95,10 +95,32 @@ struct index_dense_head_result_t {
     }
 };
 
+/**
+ *  @brief  Configuration settings for the construction of dense
+ *          equidimensional vector indexes.
+ *
+ *  Unlike the underlying `index_gt` class, incroporates the
+ *  `::expansion_add` and `::expansion_search` parameters passed
+ *  separately for the lower-level engine.
+ */
 struct index_dense_config_t : public index_config_t {
     std::size_t expansion_add = default_expansion_add();
     std::size_t expansion_search = default_expansion_search();
+
+    /**
+     *  @brief  Excludes vectors from the serialized file.
+     *          This is handy when you want to store the vectors in a separate file.
+     *
+     *  ! For advanced users only.
+     */
     bool exclude_vectors = false;
+
+    /**
+     *  @brief  Allows you to store multiple vectors per key.
+     *          This is handy when a large document is chunked into many parts.
+     *
+     *  ! May degrade the performance of iterators.
+     */
     bool multi = false;
 
     /**
@@ -112,12 +134,25 @@ struct index_dense_config_t : public index_config_t {
      */
     bool enable_key_lookups = true;
 
-    index_dense_config_t(index_config_t base) noexcept : index_config_t(base) {}
+    inline index_dense_config_t(index_config_t base) noexcept : index_config_t(base) {}
 
-    index_dense_config_t(std::size_t c = default_connectivity(), std::size_t ea = default_expansion_add(),
-                         std::size_t es = default_expansion_search()) noexcept
-        : index_config_t(c), expansion_add(ea ? ea : default_expansion_add()),
-          expansion_search(es ? es : default_expansion_search()) {}
+    inline index_dense_config_t(std::size_t c = 0, std::size_t ea = 0, std::size_t es = 0) noexcept
+        : index_config_t(c), expansion_add(ea), expansion_search(es) {}
+
+    /**
+     *  @brief  Validates the configuration settings, updating them in-place.
+     *  @return Error message, if any.
+     */
+    inline error_t validate() noexcept {
+        error_t error = index_config_t::validate();
+        if (error)
+            return error;
+        if (expansion_add == 0)
+            expansion_add = default_expansion_add();
+        if (expansion_search == 0)
+            expansion_search = default_expansion_search();
+        return {};
+    }
 };
 
 struct index_dense_clustering_config_t {
@@ -359,7 +394,10 @@ class index_dense_gt {
     index_dense_config_t config_;
     index_t* typed_ = nullptr;
 
-    mutable std::vector<byte_t> cast_buffer_;
+    using cast_buffer_t = buffer_gt<byte_t, dynamic_allocator_t>;
+
+    /// @brief  Temporary memory for every thread to store a casted vector.
+    mutable cast_buffer_t cast_buffer_;
     struct casts_t {
         cast_t from_b1x8;
         cast_t from_i8;
@@ -381,11 +419,17 @@ class index_dense_gt {
     /// @brief Allocator for the copied vectors, aligned to widest double-precision scalars.
     vectors_tape_allocator_t vectors_tape_allocator_;
 
-    /// @brief For every managed `compressed_slot_t` stores a pointer to the allocated vector copy.
-    mutable std::vector<byte_t*> vectors_lookup_;
+    using vectors_lookup_allocator_t = aligned_allocator_gt<byte_t*, 64>;
+    using vectors_lookup_t = buffer_gt<byte_t*, vectors_lookup_allocator_t>;
 
-    /// @brief Originally forms and array of integers [0, threads], marking all
-    mutable std::vector<std::size_t> available_threads_;
+    /// @brief For every managed `compressed_slot_t` stores a pointer to the allocated vector copy.
+    mutable vectors_lookup_t vectors_lookup_;
+
+    using available_threads_allocator_t = aligned_allocator_gt<std::size_t, 64>;
+    using available_threads_t = ring_gt<std::size_t, available_threads_allocator_t>;
+
+    /// @brief Originally forms and array of integers [0, threads], marking all as available.
+    mutable available_threads_t available_threads_;
 
     /// @brief Mutex, controlling concurrent access to `available_threads_`.
     mutable std::mutex available_threads_mutex_;
@@ -491,6 +535,23 @@ class index_dense_gt {
         typed_ = nullptr;
     }
 
+    struct state_result_t {
+        index_dense_gt index;
+        error_t error;
+
+        explicit operator bool() const noexcept { return !error; }
+        state_result_t failed(error_t message) noexcept {
+            error = std::move(message);
+            return std::move(*this);
+        }
+        operator index_dense_gt&&() && {
+            if (error)
+                __usearch_raise_runtime_error(error.what());
+            return std::move(index);
+        }
+    };
+    using copy_result_t = state_result_t;
+
     /**
      *  @brief Constructs an instance of ::index_dense_gt.
      *  @param[in] metric One of the provided or an @b ad-hoc metric, type-punned.
@@ -498,33 +559,48 @@ class index_dense_gt {
      *  @param[in] free_key The key used for freed vectors (optional).
      *  @return An instance of ::index_dense_gt.
      */
-    static index_dense_gt make(           //
+    static state_result_t make(           //
         metric_t metric,                  //
         index_dense_config_t config = {}, //
         vector_key_t free_key = default_free_value<vector_key_t>()) {
 
-        scalar_kind_t scalar_kind = metric.scalar_kind();
+        if (metric.dimensions() == 0)
+            return state_result_t{}.failed("Zero-dimensional vectors are not supported!");
+        if (!metric)
+            return state_result_t{}.failed("Metric uninitialized!");
+        error_t error = config.validate();
+        if (error)
+            return state_result_t{}.failed(std::move(error));
         std::size_t hardware_threads = std::thread::hardware_concurrency();
-
-        index_dense_gt result;
-        result.config_ = config;
-        result.cast_buffer_.resize(hardware_threads * metric.bytes_per_vector());
-        result.casts_ = make_casts_(scalar_kind);
-        result.metric_ = metric;
-        result.free_key_ = free_key;
-
-        // Fill the thread IDs.
-        result.available_threads_.resize(hardware_threads);
-        std::iota(result.available_threads_.begin(), result.available_threads_.end(), 0ul);
-
-        // Available since C11, but only C++17, so we use the C version.
+        cast_buffer_t cast_buffer(hardware_threads * metric.bytes_per_vector());
+        if (!cast_buffer)
+            return state_result_t{}.failed("Failed to allocate memory for the casts!");
+        available_threads_t available_threads;
+        if (!available_threads.reserve(hardware_threads))
+            return state_result_t{}.failed("Failed to allocate memory for the available threads!");
+        for (std::size_t i = 0; i < hardware_threads; i++)
+            available_threads.push(i);
         index_t* raw = index_allocator_t{}.allocate(1);
+        if (!raw)
+            return state_result_t{}.failed("Failed to allocate memory for the index!");
+
+        scalar_kind_t scalar_kind = metric.scalar_kind();
+
+        state_result_t result;
+        index_dense_gt& index = result.index;
+        index.config_ = config;
+        index.cast_buffer_ = std::move(cast_buffer);
+        index.casts_ = make_casts_(scalar_kind);
+        index.metric_ = metric;
+        index.free_key_ = free_key;
+        index.available_threads_ = std::move(available_threads);
+
         new (raw) index_t(config);
-        result.typed_ = raw;
+        index.typed_ = raw;
         return result;
     }
 
-    static index_dense_gt make(char const* path, bool view = false) {
+    static state_result_t make(char const* path, bool view = false) {
         index_dense_metadata_result_t meta = index_dense_metadata_from_path(path);
         if (!meta)
             return {};
@@ -742,19 +818,42 @@ class index_dense_gt {
     /**
      *  @brief Reserves memory for the index and the keyed lookup.
      *  @return `true` if the memory reservation was successful, `false` otherwise.
+     *
+     *  ! No update or search operations should be running during this operation.
      */
-    bool reserve(index_limits_t limits) {
-        {
-            unique_lock_t lock(slot_lookup_mutex_);
-            slot_lookup_.reserve(limits.members);
-            vectors_lookup_.resize(limits.members);
+    bool try_reserve(index_limits_t limits) {
 
-            // During reserve, no insertions may be happening, so we can safely overwrite the whole collection.
-            std::unique_lock<std::mutex> available_threads_lock(available_threads_mutex_);
-            available_threads_.resize(limits.threads());
-            std::iota(available_threads_.begin(), available_threads_.end(), 0ul);
+        unique_lock_t lock(slot_lookup_mutex_);
+        if (!slot_lookup_.try_reserve(limits.members))
+            return false;
+
+        // Once the `slot_lookup_` grows, let's use its capacity as the new
+        // target for the `vectors_lookup_` to synchronize allocations and
+        // expensive index re-organizations.
+        if (slot_lookup_.capacity() != vectors_lookup_.size()) {
+            vectors_lookup_t new_vectors_lookup(slot_lookup_.capacity());
+            if (!new_vectors_lookup)
+                return false;
+            if (vectors_lookup_.size() > 0)
+                std::memcpy(new_vectors_lookup.data(), vectors_lookup_.data(),
+                            vectors_lookup_.size() * sizeof(byte_t*));
+            vectors_lookup_ = std::move(new_vectors_lookup);
         }
+
+        // During reserve, no insertions may be happening, so we can safely overwrite the whole collection.
+        std::unique_lock<std::mutex> available_threads_lock(available_threads_mutex_);
+        available_threads_.clear();
+        if (!available_threads_.reserve(limits.threads()))
+            return false;
+        for (std::size_t i = 0; i < limits.threads(); i++)
+            available_threads_.push(i);
+
         return typed_->reserve(limits);
+    }
+
+    void reserve(index_limits_t limits) {
+        if (!try_reserve(limits))
+            throw std::bad_alloc();
     }
 
     /**
@@ -769,7 +868,7 @@ class index_dense_gt {
         std::unique_lock<std::mutex> free_lock(free_keys_mutex_);
         typed_->clear();
         slot_lookup_.clear();
-        vectors_lookup_.clear();
+        vectors_lookup_.reset();
         free_keys_.clear();
         vectors_tape_allocator_.reset();
     }
@@ -778,23 +877,20 @@ class index_dense_gt {
      *  @brief Erases all members from index, closing files, and returning RAM to OS.
      *
      *  Will change both `size()` and `capacity()` to zero.
-     *  Will deallocate all threads/contexts.
+     *  Will not change the threads/contexts.
      *  If the index is memory-mapped - releases the mapping and the descriptor.
      */
-    void reset() {
-        unique_lock_t lookup_lock(slot_lookup_mutex_);
+    void reset() noexcept {
 
+        unique_lock_t lookup_lock(slot_lookup_mutex_);
         std::unique_lock<std::mutex> free_lock(free_keys_mutex_);
         std::unique_lock<std::mutex> available_threads_lock(available_threads_mutex_);
+
         typed_->reset();
         slot_lookup_.clear();
-        vectors_lookup_.clear();
+        vectors_lookup_.reset();
         free_keys_.clear();
         vectors_tape_allocator_.reset();
-
-        // Reset the thread IDs.
-        available_threads_.resize(std::thread::hardware_concurrency());
-        std::iota(available_threads_.begin(), available_threads_.end(), 0ul);
     }
 
     /**
@@ -919,7 +1015,9 @@ class index_dense_gt {
                 matrix_cols = dimensions[1];
             }
             // Load the vectors one after another
-            vectors_lookup_.resize(matrix_rows);
+            vectors_lookup_ = vectors_lookup_t(matrix_rows);
+            if (!vectors_lookup_)
+                return result.failed("Failed to allocate memory to address vectors");
             for (std::uint64_t slot = 0; slot != matrix_rows; ++slot) {
                 byte_t* vector = vectors_tape_allocator_.allocate(matrix_cols);
                 if (!input(vector, matrix_cols))
@@ -950,7 +1048,9 @@ class index_dense_gt {
 
             config_.multi = head.multi;
             metric_ = metric_t::builtin(head.dimensions, head.kind_metric, head.kind_scalar);
-            cast_buffer_.resize(available_threads_.size() * metric_.bytes_per_vector());
+            cast_buffer_ = cast_buffer_t(available_threads_.size() * metric_.bytes_per_vector());
+            if (!cast_buffer_)
+                return result.failed("Failed to allocate memory for the casts");
             casts_ = make_casts_(head.kind_scalar);
         }
 
@@ -1036,7 +1136,9 @@ class index_dense_gt {
 
             config_.multi = head.multi;
             metric_ = metric_t::builtin(head.dimensions, head.kind_metric, head.kind_scalar);
-            cast_buffer_.resize(available_threads_.size() * metric_.bytes_per_vector());
+            cast_buffer_ = cast_buffer_t(available_threads_.size() * metric_.bytes_per_vector());
+            if (!cast_buffer_)
+                return result.failed("Failed to allocate memory for the casts");
             casts_ = make_casts_(head.kind_scalar);
             offset += sizeof(buffer);
         }
@@ -1049,7 +1151,9 @@ class index_dense_gt {
             return result.failed("Index size and the number of vectors doesn't match");
 
         // Address the vectors
-        vectors_lookup_.resize(matrix_rows);
+        vectors_lookup_ = vectors_lookup_t(matrix_rows);
+        if (!vectors_lookup_)
+            return result.failed("Failed to allocate memory to address vectors");
         if (!config.exclude_vectors)
             for (std::uint64_t slot = 0; slot != matrix_rows; ++slot)
                 vectors_lookup_[slot] = (byte_t*)vectors_buffer.data() + matrix_cols * slot;
@@ -1343,17 +1447,6 @@ class index_dense_gt {
         });
     }
 
-    struct copy_result_t {
-        index_dense_gt index;
-        error_t error;
-
-        explicit operator bool() const noexcept { return !error; }
-        copy_result_t failed(error_t message) noexcept {
-            error = std::move(message);
-            return std::move(*this);
-        }
-    };
-
     /**
      *  @brief Copies the ::index_dense_gt @b with all the data in it.
      *  @param config The copy configuration (optional).
@@ -1376,10 +1469,12 @@ class index_dense_gt {
             copy.free_keys_.push(free_keys_[i]);
 
         // Allocate buffers and move the vectors themselves
-        if (!config.force_vector_copy && copy.config_.exclude_vectors)
-            copy.vectors_lookup_ = vectors_lookup_;
-        else {
-            copy.vectors_lookup_.resize(vectors_lookup_.size());
+        copy.vectors_lookup_ = vectors_lookup_t(vectors_lookup_.size());
+        if (!copy.vectors_lookup_)
+            return result.failed("Out of memory!");
+        if (!config.force_vector_copy && copy.config_.exclude_vectors) {
+            std::memcpy(copy.vectors_lookup_.data(), vectors_lookup_.data(), vectors_lookup_.size() * sizeof(byte_t*));
+        } else {
             for (std::size_t slot = 0; slot != vectors_lookup_.size(); ++slot)
                 copy.vectors_lookup_[slot] = copy.vectors_tape_allocator_.allocate(copy.metric_.bytes_per_vector());
             if (std::count(copy.vectors_lookup_.begin(), copy.vectors_lookup_.end(), nullptr))
@@ -1398,20 +1493,28 @@ class index_dense_gt {
      *  @return A similarly configured ::index_dense_gt instance.
      */
     copy_result_t fork() const {
+
+        cast_buffer_t cast_buffer(cast_buffer_.size());
+        if (!cast_buffer)
+            return state_result_t{}.failed("Failed to allocate memory for the casts!");
+        available_threads_t available_threads;
+        if (!available_threads.reserve(available_threads_.capacity()))
+            return state_result_t{}.failed("Failed to allocate memory for the available threads!");
+        for (std::size_t i = 0; i < available_threads.capacity(); i++)
+            available_threads.push(i);
+        index_t* raw = index_allocator_t{}.allocate(1);
+        if (!raw)
+            return state_result_t{}.failed("Failed to allocate memory for the index!");
+
         copy_result_t result;
         index_dense_gt& other = result.index;
-
         other.config_ = config_;
-        other.cast_buffer_ = cast_buffer_;
+        other.cast_buffer_ = std::move(cast_buffer);
         other.casts_ = casts_;
 
         other.metric_ = metric_;
-        other.available_threads_ = available_threads_;
+        other.available_threads_ = std::move(available_threads);
         other.free_key_ = free_key_;
-
-        index_t* raw = index_allocator_t{}.allocate(1);
-        if (!raw)
-            return result.failed("Can't allocate the index");
 
         new (raw) index_t(config());
         other.typed_ = raw;
@@ -1472,7 +1575,10 @@ class index_dense_gt {
     compaction_result_t compact(executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
         compaction_result_t result;
 
-        std::vector<byte_t*> new_vectors_lookup(vectors_lookup_.size());
+        vectors_lookup_t new_vectors_lookup(vectors_lookup_.size());
+        if (!new_vectors_lookup)
+            return result.failed("Out of memory!");
+
         vectors_tape_allocator_t new_vectors_allocator;
 
         auto track_slot_change = [&](vector_key_t, compressed_slot_t old_slot, compressed_slot_t new_slot) {
@@ -1725,15 +1831,14 @@ class index_dense_gt {
             return {*this, thread_id, false};
 
         available_threads_mutex_.lock();
-        thread_id = available_threads_.back();
-        available_threads_.pop_back();
+        available_threads_.try_pop(thread_id);
         available_threads_mutex_.unlock();
         return {*this, thread_id, true};
     }
 
     void thread_unlock_(std::size_t thread_id) const {
         available_threads_mutex_.lock();
-        available_threads_.push_back(thread_id);
+        available_threads_.push(thread_id);
         available_threads_mutex_.unlock();
     }
 

@@ -561,7 +561,8 @@ using executor_default_t = executor_stl_t;
 #endif
 
 /**
- *  @brief Uses OS-specific APIs for aligned memory allocations.
+ *  @brief  Uses OS-specific APIs for aligned memory allocations.
+ *          Available since C11, but only C++17, so we wrap the C version.
  */
 template <typename element_at = char, std::size_t alignment_ak = 64> //
 class aligned_allocator_gt {
@@ -570,9 +571,7 @@ class aligned_allocator_gt {
     using size_type = std::size_t;
     using pointer = element_at*;
     using const_pointer = element_at const*;
-    template <typename other_element_at> struct rebind {
-        using other = aligned_allocator_gt<other_element_at>;
-    };
+    template <typename other_element_at> struct rebind { using other = aligned_allocator_gt<other_element_at>; };
 
     constexpr std::size_t alignment() const { return alignment_ak; }
 
@@ -603,6 +602,10 @@ class aligned_allocator_gt {
 
 using aligned_allocator_t = aligned_allocator_gt<>;
 
+/**
+ *  @brief  A simple RAM-page allocator that uses the OS-specific APIs for memory allocation.
+ *          Shouldn't be used frequently, as system calls are slow.
+ */
 class page_allocator_t {
   public:
     static constexpr std::size_t page_size() { return 4096; }
