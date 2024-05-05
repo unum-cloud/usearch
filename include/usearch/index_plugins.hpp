@@ -869,7 +869,7 @@ template <typename mutex_at = unfair_shared_mutex_t> class shared_lock_gt {
  *          avoiding unnecessary conversions.
  */
 template <typename from_scalar_at, typename to_scalar_at> struct cast_gt {
-    inline bool operator()(byte_t const* input, std::size_t dim, byte_t* output) const {
+    static bool try_(byte_t const* input, std::size_t dim, byte_t* output) noexcept {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
         to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
         auto converter = [](from_scalar_at from) { return to_scalar_at(from); };
@@ -879,27 +879,27 @@ template <typename from_scalar_at, typename to_scalar_at> struct cast_gt {
 };
 
 template <> struct cast_gt<f32_t, f32_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
+    static bool try_(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
 
 template <> struct cast_gt<f64_t, f64_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
+    static bool try_(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
 
 template <> struct cast_gt<f16_bits_t, f16_bits_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
+    static bool try_(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
 
 template <> struct cast_gt<i8_t, i8_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
+    static bool try_(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
 
 template <> struct cast_gt<b1x8_t, b1x8_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
+    static bool try_(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
 
 template <typename from_scalar_at> struct cast_gt<from_scalar_at, b1x8_t> {
-    inline bool operator()(byte_t const* input, std::size_t dim, byte_t* output) const {
+    inline static bool try_(byte_t const* input, std::size_t dim, byte_t* output) noexcept {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
         unsigned char* typed_output = reinterpret_cast<unsigned char*>(output);
         for (std::size_t i = 0; i != dim; ++i)
@@ -919,7 +919,7 @@ template <typename from_scalar_at> struct cast_gt<from_scalar_at, b1x8_t> {
 };
 
 template <typename to_scalar_at> struct cast_gt<b1x8_t, to_scalar_at> {
-    inline bool operator()(byte_t const* input, std::size_t dim, byte_t* output) const {
+    static bool try_(byte_t const* input, std::size_t dim, byte_t* output) noexcept {
         unsigned char const* typed_input = reinterpret_cast<unsigned char const*>(input);
         to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
         for (std::size_t i = 0; i != dim; ++i)

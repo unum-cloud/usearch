@@ -8,9 +8,8 @@
 #include "index.hpp"
 #include <stdlib.h> // `aligned_alloc`
 
-#include <functional> // `std::function`
-#include <numeric>    // `std::iota`
-#include <thread>     // `std::thread`
+#include <numeric> // `std::iota`
+#include <thread>  // `std::thread`
 
 #include <usearch/index.hpp>
 #include <usearch/index_plugins.hpp>
@@ -359,7 +358,7 @@ class index_dense_gt {
 
   private:
     /// @brief Schema: input buffer, bytes in input buffer, output buffer.
-    using cast_t = std::function<bool(byte_t const*, std::size_t, byte_t*)>;
+    using cast_t = bool (*)(byte_t const*, std::size_t, byte_t*);
     /// @brief Punned index.
     using index_t = index_gt<                        //
         distance_t, vector_key_t, compressed_slot_t, //
@@ -2064,17 +2063,17 @@ class index_dense_gt {
     template <typename to_scalar_at> static casts_t make_casts_() {
         casts_t result;
 
-        result.from_b1x8 = cast_gt<b1x8_t, to_scalar_at>{};
-        result.from_i8 = cast_gt<i8_t, to_scalar_at>{};
-        result.from_f16 = cast_gt<f16_t, to_scalar_at>{};
-        result.from_f32 = cast_gt<f32_t, to_scalar_at>{};
-        result.from_f64 = cast_gt<f64_t, to_scalar_at>{};
+        result.from_b1x8 = &cast_gt<b1x8_t, to_scalar_at>::try_;
+        result.from_i8 = &cast_gt<i8_t, to_scalar_at>::try_;
+        result.from_f16 = &cast_gt<f16_t, to_scalar_at>::try_;
+        result.from_f32 = &cast_gt<f32_t, to_scalar_at>::try_;
+        result.from_f64 = &cast_gt<f64_t, to_scalar_at>::try_;
 
-        result.to_b1x8 = cast_gt<to_scalar_at, b1x8_t>{};
-        result.to_i8 = cast_gt<to_scalar_at, i8_t>{};
-        result.to_f16 = cast_gt<to_scalar_at, f16_t>{};
-        result.to_f32 = cast_gt<to_scalar_at, f32_t>{};
-        result.to_f64 = cast_gt<to_scalar_at, f64_t>{};
+        result.to_b1x8 = &cast_gt<to_scalar_at, b1x8_t>::try_;
+        result.to_i8 = &cast_gt<to_scalar_at, i8_t>::try_;
+        result.to_f16 = &cast_gt<to_scalar_at, f16_t>::try_;
+        result.to_f32 = &cast_gt<to_scalar_at, f32_t>::try_;
+        result.to_f64 = &cast_gt<to_scalar_at, f64_t>::try_;
 
         return result;
     }
