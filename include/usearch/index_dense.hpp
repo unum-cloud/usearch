@@ -592,17 +592,10 @@ class index_dense_gt {
      *  @return An instance of ::index_dense_gt or error, wrapped in a `state_result_t`.
      */
     static state_result_t make(char const* path, bool view = false) {
-        index_dense_metadata_result_t meta = index_dense_metadata_from_path(path);
-        if (!meta)
-            return {};
-        metric_punned_t metric(meta.head.dimensions, meta.head.kind_metric, meta.head.kind_scalar);
-        index_dense_gt result = make(metric);
-        if (!result)
-            return result;
-        if (view)
-            result.view(path);
-        else
-            result.load(path);
+        state_result_t result;
+        serialization_result_t serialization_result = view ? result.index.view(path) : result.index.load(path);
+        if (!serialization_result)
+            return result.failed(std::move(serialization_result.error));
         return result;
     }
 
