@@ -8,9 +8,6 @@
 #include "index.hpp"
 #include <stdlib.h> // `aligned_alloc`
 
-#include <numeric> // `std::iota`
-#include <thread>  // `std::thread`
-
 #include <usearch/index.hpp>
 #include <usearch/index_plugins.hpp>
 
@@ -556,7 +553,7 @@ class index_dense_gt {
      *  @param[in] metric One of the provided or an @b ad-hoc metric, type-punned.
      *  @param[in] config The index configuration (optional).
      *  @param[in] free_key The key used for freed vectors (optional).
-     *  @return An instance of ::index_dense_gt.
+     *  @return An instance of ::index_dense_gt or error, wrapped in a `state_result_t`.
      */
     static state_result_t make(           //
         metric_t metric,                  //
@@ -570,15 +567,6 @@ class index_dense_gt {
         error_t error = config.validate();
         if (error)
             return state_result_t{}.failed(std::move(error));
-        std::size_t hardware_threads = std::thread::hardware_concurrency();
-        cast_buffer_t cast_buffer(hardware_threads * metric.bytes_per_vector());
-        if (!cast_buffer)
-            return state_result_t{}.failed("Failed to allocate memory for the casts!");
-        available_threads_t available_threads;
-        if (!available_threads.reserve(hardware_threads))
-            return state_result_t{}.failed("Failed to allocate memory for the available threads!");
-        for (std::size_t i = 0; i < hardware_threads; i++)
-            available_threads.push(i);
         index_t* raw = index_allocator_t{}.allocate(1);
         if (!raw)
             return state_result_t{}.failed("Failed to allocate memory for the index!");
@@ -588,17 +576,21 @@ class index_dense_gt {
         state_result_t result;
         index_dense_gt& index = result.index;
         index.config_ = config;
-        index.cast_buffer_ = std::move(cast_buffer);
         index.casts_ = make_casts_(scalar_kind);
         index.metric_ = metric;
         index.free_key_ = free_key;
-        index.available_threads_ = std::move(available_threads);
 
         new (raw) index_t(config);
         index.typed_ = raw;
         return result;
     }
 
+    /**
+     *  @brief Constructs an instance of ::index_dense_gt from a serialized binary file.
+     *  @param[in] path The path to the binary file.
+     *  @param[in] view Whether to map the file into memory or load it.
+     *  @return An instance of ::index_dense_gt or error, wrapped in a `state_result_t`.
+     */
     static state_result_t make(char const* path, bool view = false) {
         index_dense_metadata_result_t meta = index_dense_metadata_from_path(path);
         if (!meta)
@@ -846,6 +838,12 @@ class index_dense_gt {
             return false;
         for (std::size_t i = 0; i < limits.threads(); i++)
             available_threads_.push(i);
+
+        // Allocate a buffer for the casted vectors.
+        cast_buffer_t cast_buffer(limits.threads() * metric_.bytes_per_vector());
+        if (!cast_buffer)
+            return false;
+        cast_buffer_ = std::move(cast_buffer);
 
         return typed_->reserve(limits);
     }
