@@ -55,6 +55,33 @@ template <typename index_at> struct aligned_wrapper_gt {
     }
 };
 
+/** Byteswap the given value if the compiler has a builtin for it
+ * otherwise return the input value
+ */
+uint64_t maybe_bswap64(uint64_t v) {
+#if defined(USEARCH_DEFINED_CLANG) || defined(USEARCH_DEFINED_GCC)
+    return __builtin_bswap64(v);
+#endif
+    return v;
+}
+
+void test_uint40_t() {
+    for (uint64_t v : {42ULL, 4242ULL, 1ULL << 40, (1ULL << 40) + 1, 1ULL << 63}) {
+        for (uint64_t v : {v, maybe_bswap64(v)}) {
+            uint32_t n_32 = v;
+            uint64_t n_64 = v;
+            size_t n_size = v;
+            // test uint40_t constructors
+            uint40_t n_40_from_32(n_32);
+            uint40_t n_40_from_64(n_64);
+            uint40_t n_40_from_size(n_size);
+            // mask the 64-bit value to 40 bits
+            v = v & ((1L << 40) - 1);
+            expect(n_40_from_32 == v && n_40_from_64 == v && n_40_from_size == v);
+        }
+    }
+}
+
 /**
  * Tests the behavior of various move-constructors and move-assignment operators for the index.
  *
@@ -638,6 +665,7 @@ template <typename key_at, typename slot_at> void test_strings() {
 }
 
 int main(int, char**) {
+    test_uint40_t();
 
     // Exact search without constructing indexes.
     // Great for validating the distance functions.
