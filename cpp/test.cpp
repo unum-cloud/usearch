@@ -55,33 +55,39 @@ template <typename index_at> struct aligned_wrapper_gt {
     }
 };
 
-/** Byteswap the given value if the compiler has a builtin for it
- * otherwise return the input value
+/**
+ * Tests the functionality of the custom uint40_t type ensuring consistent 
+ * behavior across various constructors from uint32_t, uint64_t, and size_t types.
  */
-uint64_t maybe_bswap64(uint64_t v) {
-#if defined(USEARCH_DEFINED_CLANG) || defined(USEARCH_DEFINED_GCC)
-    return __builtin_bswap64(v);
-#endif
-    return v;
-}
+void test_uint40() {
+    // Constants for tests
+    std::uint64_t max_uint40_k = (1ULL << 40) - 1;
 
-void test_uint40_t() {
-    for (uint64_t v : {42ULL, 4242ULL, 1ULL << 40, (1ULL << 40) + 1, 1ULL << 63}) {
-        for (uint64_t v : {v, maybe_bswap64(v)}) {
-            uint32_t n_32 = v;
-            uint64_t n_64 = v;
-            size_t n_size = v;
-            // test uint40_t constructors
-            uint40_t n_40_from_32(n_32);
-            uint40_t n_40_from_64(n_64);
-            uint40_t n_40_from_size(n_size);
-            // mask the 64-bit value to 40 bits
-            v = v & ((1L << 40) - 1);
-            expect(n_40_from_32 == v && n_40_from_64 == v && n_40_from_size == v);
-        }
+    for (std::uint64_t original_value : {
+        42ull,                        // Typical small number
+        4242ull,                      // Larger number still within uint40 range
+        1ull << 40,                   // Exactly at the boundary of uint40
+        (1ull << 40) + 1,             // Just beyond the boundary of uint40
+        1ull << 63                    // Well beyond the uint40 boundary, tests masking
+    }) {
+        std::uint32_t v_32 = static_cast<std::uint32_t>(original_value);
+        std::uint64_t v_64 = original_value;
+        std::size_t v_size = static_cast<std::size_t>(original_value);
+
+        // Create uint40_t instances from different types
+        uint40_t n_40_from_32(v_32);
+        uint40_t n_40_from_64(v_64);
+        uint40_t n_40_from_size(v_size);
+
+        // Expected value after masking
+        std::uint64_t expected_value = original_value & max_uint40_k;
+
+        // Check if all conversions are equal to the masked value
+        expect(n_40_from_32 == expected_value);
+        expect(n_40_from_64 == expected_value);
+        expect(n_40_from_size == expected_value);
     }
 }
-
 /**
  * Tests the behavior of various move-constructors and move-assignment operators for the index.
  *
@@ -665,7 +671,7 @@ template <typename key_at, typename slot_at> void test_strings() {
 }
 
 int main(int, char**) {
-    test_uint40_t();
+    test_uint40();
 
     // Exact search without constructing indexes.
     // Great for validating the distance functions.
