@@ -864,7 +864,7 @@ class index_dense_gt {
      *  @brief Erases all members from index, closing files, and returning RAM to OS.
      *
      *  Will change both `size()` and `capacity()` to zero.
-     *  Will not change the threads/contexts.
+     *  Will deallocate all threads/contexts.
      *  If the index is memory-mapped - releases the mapping and the descriptor.
      */
     void reset() noexcept {
@@ -879,6 +879,7 @@ class index_dense_gt {
         vectors_lookup_.reset();
         free_keys_.clear();
         vectors_tape_allocator_.reset();
+        available_threads_.reset();
     }
 
     /**
@@ -1056,6 +1057,16 @@ class index_dense_gt {
         if (typed_->size() != static_cast<std::size_t>(matrix_rows))
             return result.failed("Index size and the number of vectors doesn't match");
 
+        // After the index is loaded, we may have to resize the `available_threads_` to
+        // match the limits of the underlying engine.
+        available_threads_t available_threads;
+        std::size_t max_threads = typed_->limits().threads();
+        if (!available_threads.reserve(max_threads))
+            return result.failed("Failed to allocate memory for the available threads!");
+        for (std::size_t i = 0; i < max_threads; i++)
+            available_threads.push(i);
+        available_threads_ = std::move(available_threads);
+
         reindex_keys_();
         return result;
     }
@@ -1159,6 +1170,16 @@ class index_dense_gt {
         if (!config.exclude_vectors)
             for (std::uint64_t slot = 0; slot != matrix_rows; ++slot)
                 vectors_lookup_[slot] = (byte_t*)vectors_buffer.data() + matrix_cols * slot;
+
+        // After the index is loaded, we may have to resize the `available_threads_` to
+        // match the limits of the underlying engine.
+        available_threads_t available_threads;
+        std::size_t max_threads = typed_->limits().threads();
+        if (!available_threads.reserve(max_threads))
+            return result.failed("Failed to allocate memory for the available threads!");
+        for (std::size_t i = 0; i < max_threads; i++)
+            available_threads.push(i);
+        available_threads_ = std::move(available_threads);
 
         reindex_keys_();
         return result;

@@ -2863,6 +2863,8 @@ class index_gt {
         pre_ = precompute_(config_);
         index_limits_t limits;
         limits.members = header.size;
+        limits.threads_add = (std::max<std::size_t>)(1, limits_.threads_add);
+        limits.threads_search = (std::max<std::size_t>)(1, limits_.threads_search);
         if (!reserve(limits)) {
             reset();
             return result.failed("Out of memory");
@@ -3046,6 +3048,8 @@ class index_gt {
         // Submit metadata and reserve memory
         index_limits_t limits;
         limits.members = header.size;
+        limits.threads_add = (std::max<std::size_t>)(1, limits_.threads_add);
+        limits.threads_search = (std::max<std::size_t>)(1, limits_.threads_search);
         if (!reserve(limits)) {
             reset();
             return result.failed("Out of memory");
