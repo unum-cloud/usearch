@@ -26,6 +26,8 @@ void expect(bool must_be_true) {
         __usearch_raise_runtime_error("Failed!");
 }
 
+template <typename value_at> void expect_eq(value_at a, value_at b) { expect(a == b); }
+
 /**
  *  @brief  Convinience wrapper combining combined allocation and construction of an index.
  */
@@ -637,7 +639,70 @@ template <typename key_at, typename slot_at> void test_strings() {
     }
 }
 
+/**
+ * @brief Tests replacing and updating entries in index_dense_gt to ensure consistency after modifications.
+ */
+template <typename key_at, typename slot_at> void test_replacing_update() {
+
+    using vector_key_t = key_at;
+    using slot_t = slot_at;
+
+    using index_punned_t = index_dense_gt<vector_key_t, slot_t>;
+    metric_punned_t metric(1, metric_kind_t::l2sq_k, scalar_kind_t::f32_k);
+    auto index_result = index_punned_t::make(metric);
+    expect(bool(index_result));
+    index_punned_t& index = index_result.index;
+
+    // Reserve space for 3 entries
+    index.reserve(3);
+    auto as_ptr = [](float v) {
+        static float value;
+        value = v;
+        return &value;
+    };
+
+    // Add 3 entries
+    index.add(42, as_ptr(1.1f));
+    index.add(43, as_ptr(2.1f));
+    index.add(44, as_ptr(3.1f));
+    expect_eq<std::size_t>(index.size(), 3);
+
+    // Assert initial state
+    auto initial_search = index.search(as_ptr(1.0f), 3);
+    expect_eq<std::size_t>(initial_search.size(), 3);
+    expect_eq<vector_key_t>(initial_search[0].member.key, 42);
+    expect_eq<vector_key_t>(initial_search[1].member.key, 43);
+    expect_eq<vector_key_t>(initial_search[2].member.key, 44);
+
+    // Replace the second entry
+    index.remove(43);
+    index.add(43, as_ptr(2.2f));
+    expect_eq<std::size_t>(index.size(), 3);
+
+    // Assert state after replacing second entry
+    auto post_second_replacement = index.search(as_ptr(1.0f), 3);
+    expect_eq<std::size_t>(post_second_replacement.size(), 3);
+    expect_eq<vector_key_t>(post_second_replacement[0].member.key, 42);
+    expect_eq<vector_key_t>(post_second_replacement[1].member.key, 43);
+    expect_eq<vector_key_t>(post_second_replacement[2].member.key, 44);
+
+    // Replace the first entry
+    index.remove(42);
+    index.add(42, as_ptr(1.2f));
+    expect_eq<std::size_t>(index.size(), 3);
+
+    // Assert state after replacing first entry
+    auto final_search = index.search(as_ptr(1.0f), 3, 0);
+    expect_eq<std::size_t>(final_search.size(), 3);
+    expect_eq<vector_key_t>(final_search[0].member.key, 42);
+    expect_eq<vector_key_t>(final_search[1].member.key, 43);
+    expect_eq<vector_key_t>(final_search[2].member.key, 44);
+}
+
 int main(int, char**) {
+
+    // Weird corner cases
+    test_replacing_update<std::int64_t, std::uint32_t>();
 
     // Exact search without constructing indexes.
     // Great for validating the distance functions.

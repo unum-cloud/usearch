@@ -1895,7 +1895,7 @@ class index_gt {
         void clear() noexcept {
             neighbors_count_t n = misaligned_load<neighbors_count_t>(tape_);
             std::memset(tape_, 0, shift(n));
-            // misaligned_store<neighbors_count_t>(tape_, 0);
+            misaligned_store<neighbors_count_t>(tape_, 0);
         }
         void push_back(compressed_slot_t slot) noexcept {
             neighbors_count_t n = misaligned_load<neighbors_count_t>(tape_);
@@ -2374,9 +2374,9 @@ class index_gt {
 
         // Determining how much memory to allocate for the node depends on the target level
         std::unique_lock<std::mutex> new_level_lock(global_mutex_);
-        level_t max_level_copy = max_level_;      // Copy under lock
-        std::size_t entry_idx_copy = entry_slot_; // Copy under lock
-        level_t target_level = choose_random_level_(context.level_generator);
+        level_t max_level_copy = max_level_;       // Copy under lock
+        std::size_t entry_slot_copy = entry_slot_; // Copy under lock
+        level_t new_target_level = choose_random_level_(context.level_generator);
 
         // Make sure we are not overflowing
         std::size_t capacity = nodes_capacity_.load();
@@ -2387,15 +2387,15 @@ class index_gt {
         }
 
         // Allocate the neighbors
-        node_t node = node_make_(key, target_level);
-        if (!node) {
+        node_t new_node = node_make_(key, new_target_level);
+        if (!new_node) {
             nodes_count_.fetch_sub(1);
             return result.failed("Out of memory!");
         }
-        if (target_level <= max_level_copy)
+        if (new_target_level <= max_level_copy)
             new_level_lock.unlock();
 
-        nodes_[new_slot] = node;
+        nodes_[new_slot] = new_node;
         result.new_size = new_slot + 1;
         result.slot = new_slot;
         callback(at(new_slot));
@@ -2404,7 +2404,7 @@ class index_gt {
         // Do nothing for the first element
         if (!new_slot) {
             entry_slot_ = new_slot;
-            max_level_ = target_level;
+            max_level_ = new_target_level;
             return result;
         }
 
@@ -2412,19 +2412,27 @@ class index_gt {
         result.computed_distances = context.computed_distances_count;
         result.visited_members = context.iteration_cycles;
 
-        connect_node_across_levels_(                                //
-            value, metric, prefetch,                                //
-            new_slot, entry_idx_copy, max_level_copy, target_level, //
-            config, context);
+        // Go down the level, tracking only the closest match
+        std::size_t closest_slot = search_for_one_( //
+            value, metric, prefetch,                //
+            entry_slot_copy, max_level_copy, new_target_level, context);
+
+        // From `new_target_level` down - perform proper extensive search
+        for (level_t level = (std::min)(new_target_level, max_level_copy); level >= 0; --level) {
+            // TODO: Handle out of memory conditions
+            search_to_insert_(value, metric, prefetch, closest_slot, new_slot, level, config.expansion, context);
+            closest_slot = form_links_to_closest_(metric, new_slot, level, context);
+            form_reverse_links_(metric, new_slot, value, level, context);
+        }
 
         // Normalize stats
         result.computed_distances = context.computed_distances_count - result.computed_distances;
         result.visited_members = context.iteration_cycles - result.visited_members;
 
         // Updating the entry point if needed
-        if (target_level > max_level_copy) {
+        if (new_target_level > max_level_copy) {
             entry_slot_ = new_slot;
-            max_level_ = target_level;
+            max_level_ = new_target_level;
         }
         return result;
     }
@@ -2469,7 +2477,7 @@ class index_gt {
 
         usearch_assert_m(!is_immutable(), "Can't add to an immutable index");
         add_result_t result;
-        std::size_t old_slot = iterator.slot_;
+        std::size_t updated_slot = iterator.slot_;
 
         // Make sure we have enough local memory to perform this request
         context_t& context = contexts_[config.thread];
@@ -2487,30 +2495,45 @@ class index_gt {
         if (!next.reserve(config.expansion))
             return result.failed("Out of memory!");
 
-        node_lock_t new_lock = node_lock_(old_slot);
-        node_t node = node_at_(old_slot);
+        node_lock_t updated_lock = node_lock_(updated_slot);
+        node_t updated_node = node_at_(updated_slot);
+        level_t updated_node_level = updated_node.level();
 
-        level_t node_level = node.level();
-        span_bytes_t node_bytes = node_bytes_(node);
-        std::memset(node_bytes.data(), 0, node_bytes.size());
-        node.level(node_level);
+        // Copy entry coordinates under locks
+        level_t max_level_copy;
+        std::size_t entry_slot_copy;
+        {
+            std::unique_lock<std::mutex> new_level_lock(global_mutex_);
+            max_level_copy = max_level_;   // Copy under lock
+            entry_slot_copy = entry_slot_; // Copy under lock
+        }
 
         // Pull stats
         result.computed_distances = context.computed_distances_count;
         result.visited_members = context.iteration_cycles;
 
-        connect_node_across_levels_(                       //
-            value, metric, prefetch,                       //
-            old_slot, entry_slot_, max_level_, node_level, //
-            config, context);
-        node.key(key);
+        // Go down the level, tracking only the closest match;
+        // It may even be equal to the `updated_slot`
+        std::size_t closest_slot = search_for_one_( //
+            value, metric, prefetch,                //
+            entry_slot_copy, max_level_copy, updated_node_level, context);
+
+        // From `updated_node_level` down - perform proper extensive search
+        for (level_t level = (std::min)(updated_node_level, max_level_copy); level >= 0; --level) {
+            // TODO: Handle out of memory conditions
+            search_to_update_(value, metric, prefetch, closest_slot, updated_slot, level, config.expansion, context);
+            neighbors_(updated_node, level).clear();
+            closest_slot = form_links_to_closest_(metric, updated_slot, level, context);
+            form_reverse_links_(metric, updated_slot, value, level, context);
+        }
+        updated_node.key(key);
 
         // Normalize stats
         result.computed_distances = context.computed_distances_count - result.computed_distances;
         result.visited_members = context.iteration_cycles - result.visited_members;
-        result.slot = old_slot;
+        result.slot = updated_slot;
 
-        callback(at(old_slot));
+        callback(at(updated_slot));
         return result;
     }
 
@@ -3283,28 +3306,25 @@ class index_gt {
         return {nodes_mutexes_, slot};
     }
 
-    template <typename value_at, typename metric_at, typename prefetch_at>
-    void connect_node_across_levels_(                                                           //
-        value_at&& value, metric_at&& metric, prefetch_at&& prefetch,                           //
-        std::size_t node_slot, std::size_t entry_slot, level_t max_level, level_t target_level, //
-        index_update_config_t const& config, context_t& context) usearch_noexcept_m {
-
-        // Go down the level, tracking only the closest match
-        std::size_t closest_slot = search_for_one_( //
-            value, metric, prefetch,                //
-            entry_slot, max_level, target_level, context);
-
-        // From `target_level` down perform proper extensive search
-        for (level_t level = (std::min)(target_level, max_level); level >= 0; --level) {
-            // TODO: Handle out of memory conditions
-            search_to_insert_(value, metric, prefetch, closest_slot, node_slot, level, config.expansion, context);
-            closest_slot = connect_new_node_(metric, node_slot, level, context);
-            reconnect_neighbor_nodes_(metric, node_slot, value, level, context);
+    struct node_conditional_lock_t {
+        nodes_mutexes_t& mutexes;
+        std::size_t slot;
+        inline ~node_conditional_lock_t() noexcept {
+            if (slot != std::numeric_limits<std::size_t>::max())
+                mutexes.atomic_reset(slot);
         }
+    };
+
+    inline node_conditional_lock_t node_conditional_lock_(std::size_t slot, bool condition) const noexcept {
+        if (!condition)
+            return {nodes_mutexes_, std::numeric_limits<std::size_t>::max()};
+        while (nodes_mutexes_.atomic_set(slot))
+            ;
+        return {nodes_mutexes_, slot};
     }
 
     template <typename metric_at>
-    std::size_t connect_new_node_( //
+    std::size_t form_links_to_closest_( //
         metric_at&& metric, std::size_t new_slot, level_t level, context_t& context) usearch_noexcept_m {
 
         node_t new_node = node_at_(new_slot);
@@ -3315,6 +3335,7 @@ class index_gt {
         {
             usearch_assert_m(!new_neighbors.size(), "The newly inserted element should have blank link list");
             candidates_view_t top_view = refine_(metric, config_.connectivity, top, context);
+            usearch_assert_m(top_view.size(), "This would lead to isolated nodes");
 
             for (std::size_t idx = 0; idx != top_view.size(); idx++) {
                 usearch_assert_m(!new_neighbors[idx], "Possible memory corruption");
@@ -3327,7 +3348,7 @@ class index_gt {
     }
 
     template <typename value_at, typename metric_at>
-    void reconnect_neighbor_nodes_( //
+    void form_reverse_links_( //
         metric_at&& metric, std::size_t new_slot, value_at&& value, level_t level,
         context_t& context) usearch_noexcept_m {
 
@@ -3342,9 +3363,13 @@ class index_gt {
                 continue;
             node_lock_t close_lock = node_lock_(close_slot);
             node_t close_node = node_at_(close_slot);
-
             neighbors_ref_t close_header = neighbors_(close_node, level);
-            usearch_assert_m(close_header.size() <= connectivity_max, "Possible corruption");
+
+            // The node may have no neighbors only in one case, when it's the first one in the index,
+            // but that is problematic to track in multi-threaded environments, where the order of insertion
+            // is not guaranteed.
+            // usearch_assert_m(close_header.size() || new_slot == 1, "Possible corruption - isolated node");
+            usearch_assert_m(close_header.size() <= connectivity_max, "Possible corruption - overflow");
             usearch_assert_m(close_slot != new_slot, "Self-loops are impossible");
             usearch_assert_m(level <= close_node.level(), "Linking to missing level");
 
@@ -3367,6 +3392,7 @@ class index_gt {
             // Export the results:
             close_header.clear();
             candidates_view_t top_view = refine_(metric, connectivity_max, top, context);
+            usearch_assert_m(top_view.size(), "This would lead to isolated nodes");
             for (std::size_t idx = 0; idx != top_view.size(); idx++)
                 close_header.push_back(top_view[idx].slot);
         }
@@ -3499,6 +3525,8 @@ class index_gt {
         visits.clear();
         next.clear();
         top.clear();
+
+        // At the very least we are going to explore the starting node and its neighbors
         if (!visits.reserve(config_.connectivity_base + 1u))
             return false;
 
@@ -3511,6 +3539,7 @@ class index_gt {
         top.insert_reserved({radius, static_cast<compressed_slot_t>(start_slot)});
         visits.set(static_cast<compressed_slot_t>(start_slot));
 
+        // The primary loop of the graph traversal
         while (!next.empty()) {
 
             candidate_t candidacy = next.top();
@@ -3521,8 +3550,6 @@ class index_gt {
             context.iteration_cycles++;
 
             compressed_slot_t candidate_slot = candidacy.slot;
-            if (new_slot == candidate_slot)
-                continue;
             node_t candidate_ref = node_at_(candidate_slot);
             node_lock_t candidate_lock = node_lock_(candidate_slot);
             neighbors_ref_t candidate_neighbors = neighbors_(candidate_ref, level);
@@ -3541,6 +3568,8 @@ class index_gt {
                 if (visits.set(successor_slot))
                     continue;
 
+                // We don't access the neighbors of the `successor_slot` node,
+                // so we don't have to lock it.
                 // node_lock_t successor_lock = node_lock_(successor_slot);
                 distance_t successor_dist = context.measure(query, citerator_at(successor_slot), metric);
                 if (top.size() < top_limit || successor_dist < radius) {
@@ -3548,6 +3577,87 @@ class index_gt {
                     next.insert({-successor_dist, successor_slot});
                     // This will automatically evict poor matches:
                     top.insert({successor_dist, successor_slot}, top_limit);
+                    radius = top.top().distance;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     *  @brief  Traverses a layer of a graph, to find the best neighbors list for updated node.
+     *          Locks the nodes in the process, assuming other threads are updating neighbors lists.
+     *  @return `true` if procedure succeeded, `false` if run out of memory.
+     */
+    template <typename value_at, typename metric_at, typename prefetch_at = dummy_prefetch_t>
+    bool search_to_update_(                                           //
+        value_at&& query, metric_at&& metric, prefetch_at&& prefetch, //
+        std::size_t start_slot, std::size_t updated_slot, level_t level, std::size_t top_limit,
+        context_t& context) noexcept {
+
+        visits_hash_set_t& visits = context.visits;
+        next_candidates_t& next = context.next_candidates; // pop min, push
+        top_candidates_t& top = context.top_candidates;    // pop max, push
+
+        visits.clear();
+        next.clear();
+        top.clear();
+
+        // At the very least we are going to explore the starting node and its neighbors
+        if (!visits.reserve(config_.connectivity_base + 1u))
+            return false;
+
+        // Optional prefetching
+        if (!is_dummy<prefetch_at>())
+            prefetch(citerator_at(start_slot), citerator_at(start_slot + 1));
+
+        distance_t radius = context.measure(query, citerator_at(start_slot), metric);
+        next.insert_reserved({-radius, static_cast<compressed_slot_t>(start_slot)});
+        visits.set(static_cast<compressed_slot_t>(start_slot));
+        if (start_slot != updated_slot)
+            top.insert_reserved({radius, static_cast<compressed_slot_t>(start_slot)});
+
+        // The primary loop of the graph traversal
+        while (!next.empty()) {
+
+            candidate_t candidacy = next.top();
+            if ((-candidacy.distance) > radius && top.size() == top_limit)
+                break;
+
+            next.pop();
+            context.iteration_cycles++;
+
+            compressed_slot_t candidate_slot = candidacy.slot;
+            node_t candidate_ref = node_at_(candidate_slot);
+            node_conditional_lock_t candidate_lock =
+                node_conditional_lock_(candidate_slot, updated_slot != candidate_slot);
+            neighbors_ref_t candidate_neighbors = neighbors_(candidate_ref, level);
+
+            // Optional prefetching
+            if (!is_dummy<prefetch_at>()) {
+                candidates_range_t missing_candidates{*this, candidate_neighbors, visits};
+                prefetch(missing_candidates.begin(), missing_candidates.end());
+            }
+
+            // Assume the worst-case when reserving memory
+            if (!visits.reserve(visits.size() + candidate_neighbors.size()))
+                return false;
+
+            for (compressed_slot_t successor_slot : candidate_neighbors) {
+                if (visits.set(successor_slot))
+                    continue;
+
+                // We don't access the neighbors of the `successor_slot` node,
+                // so we don't have to lock it.
+                // node_conditional_lock_t successor_lock =
+                //     node_conditional_lock_(successor_slot, updated_slot != successor_slot);
+                distance_t successor_dist = context.measure(query, citerator_at(successor_slot), metric);
+                if (top.size() < top_limit || successor_dist < radius) {
+                    // This can substantially grow our priority queue:
+                    next.insert({-successor_dist, successor_slot});
+                    // This will automatically evict poor matches:
+                    if (updated_slot != successor_slot)
+                        top.insert({successor_dist, successor_slot}, top_limit);
                     radius = top.top().distance;
                 }
             }
