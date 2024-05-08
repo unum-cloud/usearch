@@ -1335,7 +1335,8 @@ class index_dense_gt {
         // Grow the removed entries ring, if needed
         std::size_t matching_count = std::distance(matching_slots.first, matching_slots.second);
         std::unique_lock<std::mutex> free_lock(free_keys_mutex_);
-        if (!free_keys_.reserve(free_keys_.size() + matching_count))
+        std::size_t free_count_old = free_keys_.size();
+        if (!free_keys_.reserve(free_count_old + matching_count))
             return result.failed("Can't allocate memory for a free-list");
 
         // A removed entry would be:
@@ -1349,6 +1350,7 @@ class index_dense_gt {
         }
         slot_lookup_.erase(key);
         result.completed = matching_count;
+        usearch_assert_m(free_keys_.size() == free_count_old + matching_count, "Free keys count mismatch");
 
         return result;
     }

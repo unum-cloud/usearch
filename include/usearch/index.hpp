@@ -1020,7 +1020,7 @@ class ring_gt {
     size_t size() const noexcept {
         if (empty_)
             return 0;
-        else if (head_ >= tail_)
+        else if (head_ > tail_)
             return head_ - tail_;
         else
             return capacity_ - (tail_ - head_);
