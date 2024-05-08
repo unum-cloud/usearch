@@ -39,7 +39,7 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
         }
 
         index_dense_t index = index_dense_t::make(metric, config);
-        if (!index.reserve(static_cast<std::size_t>(capacity))) {
+        if (!index.try_reserve(static_cast<std::size_t>(capacity))) {
             jclass jc = (*env).FindClass("java/lang/Error");
             if (jc)
                 (*env).ThrowNew(jc, "Failed to reserve desired capacity!");
@@ -114,7 +114,7 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1capacity(JNIEnv*, jclas
 }
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1reserve(JNIEnv* env, jclass, jlong c_ptr, jlong capacity) {
-    if (!reinterpret_cast<index_dense_t*>(c_ptr)->reserve(static_cast<std::size_t>(capacity))) {
+    if (!reinterpret_cast<index_dense_t*>(c_ptr)->try_reserve(static_cast<std::size_t>(capacity))) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
             (*env).ThrowNew(jc, "Failed to grow vector index!");

@@ -569,7 +569,9 @@ class aligned_allocator_gt {
     using size_type = std::size_t;
     using pointer = element_at*;
     using const_pointer = element_at const*;
-    template <typename other_element_at> struct rebind { using other = aligned_allocator_gt<other_element_at>; };
+    template <typename other_element_at> struct rebind {
+        using other = aligned_allocator_gt<other_element_at>;
+    };
 
     constexpr std::size_t alignment() const { return alignment_ak; }
 
@@ -579,11 +581,14 @@ class aligned_allocator_gt {
         if (length > length_bytes)
             return nullptr;
         std::size_t alignment = alignment_ak;
-        // void* result = nullptr;
-        // int status = posix_memalign(&result, alignment, length_bytes);
-        // return status == 0 ? (pointer)result : nullptr;
 #if defined(USEARCH_DEFINED_WINDOWS)
         return (pointer)_aligned_malloc(length_bytes, alignment);
+#elif defined(USEARCH_DEFINED_APPLE)
+        // Apple Clang keeps complaining that `aligned_alloc` is only available
+        // with macOS 10.15 and newer, so let's use `posix_memalign` there.
+        void* result = nullptr;
+        int status = posix_memalign(&result, alignment, length_bytes);
+        return status == 0 ? (pointer)result : nullptr;
 #else
         return (pointer)aligned_alloc(alignment, length_bytes);
 #endif

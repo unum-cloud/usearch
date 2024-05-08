@@ -560,8 +560,6 @@ class index_dense_gt {
         index_dense_config_t config = {}, //
         vector_key_t free_key = default_free_value<vector_key_t>()) {
 
-        if (metric.dimensions() == 0)
-            return state_result_t{}.failed("Zero-dimensional vectors are not supported!");
         if (!metric)
             return state_result_t{}.failed("Metric uninitialized!");
         error_t error = config.validate();
@@ -780,9 +778,8 @@ class index_dense_gt {
         cluster_config.thread = lock.thread_id;
         cluster_config.expansion = config_.expansion_search;
         metric_proxy_t metric{*this};
-        auto allow = [free_key_ = this->free_key_](member_cref_t const& member) noexcept {
-            return member.key != free_key_;
-        };
+        vector_key_t free_key_copy = free_key_;
+        auto allow = [free_key_copy](member_cref_t const& member) noexcept { return member.key != free_key_copy; };
 
         // Find the closest cluster for any vector under that key.
         while (key_range.first != key_range.second) {
@@ -1915,14 +1912,13 @@ class index_dense_gt {
         search_config.expansion = config_.expansion_search;
         search_config.exact = exact;
 
+        vector_key_t free_key_copy = free_key_;
         if (std::is_same<typename std::decay<predicate_at>::type, dummy_predicate_t>::value) {
-            auto allow = [free_key_ = this->free_key_](member_cref_t const& member) noexcept {
-                return member.key != free_key_;
-            };
+            auto allow = [free_key_copy](member_cref_t const& member) noexcept { return member.key != free_key_copy; };
             return typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow);
         } else {
-            auto allow = [free_key_ = this->free_key_, &predicate](member_cref_t const& member) noexcept {
-                return member.key != free_key_ && predicate(member.key);
+            auto allow = [free_key_copy, &predicate](member_cref_t const& member) noexcept {
+                return member.key != free_key_copy && predicate(member.key);
             };
             return typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow);
         }
@@ -1947,9 +1943,8 @@ class index_dense_gt {
         cluster_config.thread = lock.thread_id;
         cluster_config.expansion = config_.expansion_search;
 
-        auto allow = [free_key_ = this->free_key_](member_cref_t const& member) noexcept {
-            return member.key != free_key_;
-        };
+        vector_key_t free_key_copy = free_key_;
+        auto allow = [free_key_copy](member_cref_t const& member) noexcept { return member.key != free_key_copy; };
         return typed_->cluster(vector_data, level, metric_proxy_t{*this}, cluster_config, allow);
     }
 
