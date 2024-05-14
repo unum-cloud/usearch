@@ -123,6 +123,17 @@ public class Index {
   }
 
   /**
+   * Return the contents of the vector at key.
+   * 
+   * @param key key to lookup.
+   * @return the contents of the vector.
+   * @throws {@link IllegalArgumentException} is key is not available.
+   */
+  public float[] get(int key) {
+    return c_get(c_ptr, key);
+  }
+
+  /**
    * Saves the index to a file.
    *
    * @param path the file path where the index will be saved.
@@ -342,6 +353,8 @@ public class Index {
   private static native void c_add(long ptr, int key, float vector[]);
 
   private static native int[] c_search(long ptr, float vector[], long count);
+
+  private static native float[] c_get(long ptr, int key);
 
   private static native void c_save(long ptr, String path);
 

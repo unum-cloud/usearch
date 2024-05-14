@@ -73,6 +73,14 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add
 
 /*
  * Class:     cloud_unum_usearch_Index
+ * Method:    c_get
+ * Signature: (JI)[F
+ */
+JNIEXPORT jfloatArray JNICALL Java_cloud_unum_usearch_Index_c_1get
+  (JNIEnv *, jclass, jlong, jint);
+
+/*
+ * Class:     cloud_unum_usearch_Index
  * Method:    c_search
  * Signature: (J[FJ)[I
  */
