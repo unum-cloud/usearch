@@ -1143,6 +1143,12 @@ struct index_config_t {
             return "Base layer should be at least as connected as the rest of the graph";
         return {};
     }
+
+    /**
+     *  @brief  Immutable function to check if the configuration is valid.
+     *  @return `true` if the configuration is valid.
+     */
+    inline bool is_valid() const noexcept { return connectivity >= 2 && connectivity_base >= connectivity; }
 };
 
 /**
@@ -1878,7 +1884,7 @@ class index_gt {
     class neighbors_ref_t {
         byte_t* tape_;
 
-        static constexpr std::size_t shift(std::size_t i = 0) {
+        static constexpr std::size_t shift(std::size_t i = 0) noexcept {
             return sizeof(neighbors_count_t) + sizeof(compressed_slot_t) * i;
         }
 
@@ -1984,17 +1990,29 @@ class index_gt {
     index_config_t const& config() const noexcept { return config_; }
     index_limits_t const& limits() const noexcept { return limits_; }
     bool is_immutable() const noexcept { return bool(viewed_file_); }
+    explicit operator bool() const noexcept { return config_.is_valid(); }
 
     /**
      *  @section Exceptions
      *      Doesn't throw, unless the ::metric's and ::allocators's throw on copy-construction.
      */
     explicit index_gt( //
-        index_config_t config = {}, dynamic_allocator_t dynamic_allocator = {},
-        tape_allocator_t tape_allocator = {}) noexcept
-        : config_(config), limits_(0, 0), dynamic_allocator_(std::move(dynamic_allocator)),
-          tape_allocator_(std::move(tape_allocator)), pre_(precompute_(config)), nodes_count_(0u), max_level_(-1),
+        dynamic_allocator_t dynamic_allocator = {}, tape_allocator_t tape_allocator = {}) noexcept(false)
+        : config_(), limits_(0, 0), dynamic_allocator_(std::move(dynamic_allocator)),
+          tape_allocator_(std::move(tape_allocator)), pre_(precompute_({})), nodes_count_(0u), max_level_(-1),
           entry_slot_(0u), nodes_(), nodes_mutexes_(), contexts_() {}
+
+    /**
+     *  @section Exceptions
+     *      Doesn't throw, unless the ::metric's and ::allocators's throw on copy-construction.
+     */
+    explicit index_gt(index_config_t config, dynamic_allocator_t dynamic_allocator = {},
+                      tape_allocator_t tape_allocator = {}) noexcept(false)
+        : index_gt(dynamic_allocator, tape_allocator) {
+        config.validate();
+        config_ = config;
+        pre_ = precompute_(config);
+    }
 
     /**
      *  @brief  Clones the structure with the same hyper-parameters, but without contents.
@@ -2421,8 +2439,9 @@ class index_gt {
         for (level_t level = (std::min)(new_target_level, max_level_copy); level >= 0; --level) {
             // TODO: Handle out of memory conditions
             search_to_insert_(value, metric, prefetch, closest_slot, new_slot, level, config.expansion, context);
-            closest_slot = form_links_to_closest_(metric, new_slot, level, context);
-            form_reverse_links_(metric, new_slot, value, level, context);
+            candidates_view_t closest_view = form_links_to_closest_(metric, new_slot, level, context);
+            closest_slot = closest_view[0].slot;
+            form_reverse_links_(metric, new_slot, closest_view, value, level, context);
         }
 
         // Normalize stats
@@ -2439,6 +2458,10 @@ class index_gt {
 
     /**
      *  @brief  Update an existing entry. Thread-safe. Supports @b heterogeneous lookups.
+     *
+     *  ! It's assumed that different threads aren't updating the same entry at the same time.
+     *  ! The state won't be corrupted, but no transactional guarantees are provided and the
+     *  ! resulting value & neighbors list may be inconsistent.
      *
      *  @tparam metric_at
      *      A function responsible for computing the distance @b (dis-similarity) between two objects.
@@ -2495,7 +2518,6 @@ class index_gt {
         if (!next.reserve(config.expansion))
             return result.failed("Out of memory!");
 
-        node_lock_t updated_lock = node_lock_(updated_slot);
         node_t updated_node = node_at_(updated_slot);
         level_t updated_node_level = updated_node.level();
 
@@ -2522,9 +2544,14 @@ class index_gt {
         for (level_t level = (std::min)(updated_node_level, max_level_copy); level >= 0; --level) {
             // TODO: Handle out of memory conditions
             search_to_update_(value, metric, prefetch, closest_slot, updated_slot, level, config.expansion, context);
-            neighbors_(updated_node, level).clear();
-            closest_slot = form_links_to_closest_(metric, updated_slot, level, context);
-            form_reverse_links_(metric, updated_slot, value, level, context);
+            candidates_view_t closest_view;
+            {
+                node_lock_t updated_lock = node_lock_(updated_slot);
+                neighbors_(updated_node, level).clear();
+                closest_view = form_links_to_closest_(metric, updated_slot, level, context);
+                closest_slot = closest_view[0].slot;
+            }
+            form_reverse_links_(metric, updated_slot, closest_view, value, level, context);
         }
         updated_node.key(key);
 
@@ -3319,50 +3346,44 @@ class index_gt {
         }
     };
 
-    inline node_conditional_lock_t node_conditional_lock_(std::size_t slot, bool condition) const noexcept {
-        if (!condition)
-            return {nodes_mutexes_, std::numeric_limits<std::size_t>::max()};
-        while (nodes_mutexes_.atomic_set(slot))
-            ;
-        return {nodes_mutexes_, slot};
+    inline node_conditional_lock_t node_try_conditional_lock_(std::size_t slot, bool condition,
+                                                              bool& failed_to_acquire) const noexcept {
+        failed_to_acquire = condition ? nodes_mutexes_.atomic_set(slot) : false;
+        return {nodes_mutexes_, failed_to_acquire ? std::numeric_limits<std::size_t>::max() : slot};
     }
 
     template <typename metric_at>
-    std::size_t form_links_to_closest_( //
+    candidates_view_t form_links_to_closest_( //
         metric_at&& metric, std::size_t new_slot, level_t level, context_t& context) usearch_noexcept_m {
 
         node_t new_node = node_at_(new_slot);
         top_candidates_t& top = context.top_candidates;
+        candidates_view_t top_view = refine_(metric, config_.connectivity, top, context);
+        usearch_assert_m(top_view.size(), "This would lead to isolated nodes");
 
         // Outgoing links from `new_slot`:
         neighbors_ref_t new_neighbors = neighbors_(new_node, level);
-        {
-            usearch_assert_m(!new_neighbors.size(), "The newly inserted element should have blank link list");
-            candidates_view_t top_view = refine_(metric, config_.connectivity, top, context);
-            usearch_assert_m(top_view.size(), "This would lead to isolated nodes");
-
-            for (std::size_t idx = 0; idx != top_view.size(); idx++) {
-                usearch_assert_m(!new_neighbors[idx], "Possible memory corruption");
-                usearch_assert_m(level <= node_at_(top_view[idx].slot).level(), "Linking to missing level");
-                new_neighbors.push_back(top_view[idx].slot);
-            }
+        usearch_assert_m(!new_neighbors.size(), "The newly inserted element should have blank link list");
+        for (std::size_t idx = 0; idx != top_view.size(); idx++) {
+            usearch_assert_m(!new_neighbors[idx], "Possible memory corruption");
+            usearch_assert_m(level <= node_at_(top_view[idx].slot).level(), "Linking to missing level");
+            new_neighbors.push_back(top_view[idx].slot);
         }
 
-        return new_neighbors[0];
+        return top_view;
     }
 
     template <typename value_at, typename metric_at>
     void form_reverse_links_( //
-        metric_at&& metric, std::size_t new_slot, value_at&& value, level_t level,
+        metric_at&& metric, std::size_t new_slot, candidates_view_t new_neighbors, value_at&& value, level_t level,
         context_t& context) usearch_noexcept_m {
 
-        node_t new_node = node_at_(new_slot);
         top_candidates_t& top = context.top_candidates;
-        neighbors_ref_t new_neighbors = neighbors_(new_node, level);
+        std::size_t const connectivity_max = level ? config_.connectivity : config_.connectivity_base;
 
         // Reverse links from the neighbors:
-        std::size_t const connectivity_max = level ? config_.connectivity : config_.connectivity_base;
-        for (compressed_slot_t close_slot : new_neighbors) {
+        for (auto new_neighbor : new_neighbors) {
+            compressed_slot_t close_slot = new_neighbor.slot;
             if (close_slot == new_slot)
                 continue;
             node_lock_t close_lock = node_lock_(close_slot);
@@ -3375,7 +3396,7 @@ class index_gt {
             // usearch_assert_m(close_header.size() || new_slot == 1, "Possible corruption - isolated node");
             usearch_assert_m(close_header.size() <= connectivity_max, "Possible corruption - overflow");
             usearch_assert_m(close_slot != new_slot, "Self-loops are impossible");
-            usearch_assert_m(level <= close_node.level(), "Linking to missing level");
+            // usearch_assert_m(level <= close_node.level(), "Linking to missing level");
 
             // If `new_slot` is already present in the neighboring connections of `close_slot`
             // then no need to modify any connections or run the heuristics.
@@ -3633,8 +3654,16 @@ class index_gt {
 
             compressed_slot_t candidate_slot = candidacy.slot;
             node_t candidate_ref = node_at_(candidate_slot);
+
+            // The trickiest part of update-heavy workloads is mitigating dead-locks
+            // in connected nodes during traversal. A "good enough" solution would be
+            // to skip concurrent access, assuming the other "close" node is gonna add
+            // this one when forming reverse connections.
+            bool failed_to_acquire = false;
             node_conditional_lock_t candidate_lock =
-                node_conditional_lock_(candidate_slot, updated_slot != candidate_slot);
+                node_try_conditional_lock_(candidate_slot, updated_slot != candidate_slot, failed_to_acquire);
+            if (failed_to_acquire)
+                continue;
             neighbors_ref_t candidate_neighbors = neighbors_(candidate_ref, level);
 
             // Optional prefetching
@@ -3654,7 +3683,7 @@ class index_gt {
                 // We don't access the neighbors of the `successor_slot` node,
                 // so we don't have to lock it.
                 // node_conditional_lock_t successor_lock =
-                //     node_conditional_lock_(successor_slot, updated_slot != successor_slot);
+                //     node_try_conditional_lock_(successor_slot, updated_slot != successor_slot);
                 distance_t successor_dist = context.measure(query, citerator_at(successor_slot), metric);
                 if (top.size() < top_limit || successor_dist < radius) {
                     // This can substantially grow our priority queue:

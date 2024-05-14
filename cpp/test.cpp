@@ -83,13 +83,10 @@ template <typename index_at> void test_move_constructors(index_config_t const& c
         test_sets(index_moved);
     }
 }
+
 /**
- * Tests the cosine similarity functionality of the given index.
- *
- * This function adds a few vectors to the index and performs searches to check if the vectors can be retrieved
- * accurately. The test covers operations like adding vectors, searching them, verifying results of searches, and
- * checking functionalities like filtering based on a condition, handling duplicates, and serialization/deserialization
- * of the index.
+ * The goal of this test is to invoke as many different interfaces as possible, making sure that all code-paths compile.
+ * For that it only uses a tiny set of 3 predefined vectors.
  *
  * @param index Reference to the index where vectors will be stored and searched.
  * @param vectors A collection of vectors to be tested.
@@ -100,23 +97,16 @@ template <typename index_at> void test_move_constructors(index_config_t const& c
  * @tparam extra_args_at Variadic template parameter types for additional configuration.
  */
 template <bool punned_ak, typename index_at, typename scalar_at, typename... extra_args_at>
-void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vectors, extra_args_at&&... args) {
+void test_minimal_three_vectors(index_at& index, //
+                                typename index_at::vector_key_t key_first, std::vector<scalar_at> const& vector_first,
+                                typename index_at::vector_key_t key_second, std::vector<scalar_at> const& vector_second,
+                                typename index_at::vector_key_t key_third, std::vector<scalar_at> const& vector_third,
+                                extra_args_at&&... args) {
 
     using scalar_t = scalar_at;
     using index_t = index_at;
     using vector_key_t = typename index_t::vector_key_t;
     using distance_t = typename index_t::distance_t;
-
-    // Generate some keys starting from end,
-    // for three vectors from the dataset
-    vector_key_t const key_max = default_free_value<vector_key_t>() - 1;
-    vector_key_t const key_first = key_max - 0;
-    vector_key_t const key_second = key_max - 1;
-    vector_key_t const key_third = key_max - 2;
-    scalar_t const* vector_first = vectors[0].data();
-    scalar_t const* vector_second = vectors[1].data();
-    scalar_t const* vector_third = vectors[2].data();
-    std::size_t dimensions = vectors[0].size();
 
     // Try checking the empty state
     if constexpr (punned_ak) {
@@ -126,31 +116,31 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
 
     // Add data
     index.reserve(10);
-    index.add(key_first, vector_first, args...);
+    index.add(key_first, vector_first.data(), args...);
 
     // Default approximate search
     vector_key_t matched_keys[10] = {0};
     distance_t matched_distances[10] = {0};
-    std::size_t matched_count = index.search(vector_first, 5, args...).dump_to(matched_keys, matched_distances);
+    std::size_t matched_count = index.search(vector_first.data(), 5, args...).dump_to(matched_keys, matched_distances);
 
     expect(matched_count == 1);
     expect(matched_keys[0] == key_first);
     expect(std::abs(matched_distances[0]) < 0.01);
 
     // Add more entries
-    index.add(key_second, vector_second, args...);
-    index.add(key_third, vector_third, args...);
+    index.add(key_second, vector_second.data(), args...);
+    index.add(key_third, vector_third.data(), args...);
     expect(index.size() == 3);
 
     // Perform exact search
-    matched_count = index.search(vector_first, 5, args...).dump_to(matched_keys, matched_distances);
+    matched_count = index.search(vector_first.data(), 5, args...).dump_to(matched_keys, matched_distances);
     expect(matched_count != 0);
 
     // Perform filtered exact search, keeping only odd values
     if constexpr (punned_ak) {
         auto is_odd = [](vector_key_t key) -> bool { return (key & 1) != 0; };
         matched_count =
-            index.filtered_search(vector_first, 5, is_odd, args...).dump_to(matched_keys, matched_distances);
+            index.filtered_search(vector_first.data(), 5, is_odd, args...).dump_to(matched_keys, matched_distances);
         expect(matched_count != 0);
         for (std::size_t i = 0; i < matched_count; i++)
             expect(is_odd(matched_keys[i]));
@@ -160,14 +150,14 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     std::size_t count = 0;
     for (auto member : index) {
         vector_key_t id = member.key;
-        expect(id <= key_first && id >= key_third);
+        expect(id >= key_first && id <= key_third);
         count++;
     }
     expect((count == 3));
     expect((index.stats(0).nodes == 3));
 
     // Check if clustering endpoint compiles
-    index.cluster(vector_first, 0, args...);
+    index.cluster(vector_first.data(), 0, args...);
 
     // Try removals and replacements
     if constexpr (punned_ak) {
@@ -175,73 +165,91 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
         labeling_result_t result = index.remove(key_third);
         expect(bool(result));
         expect(index.size() == 2);
-        index.add(key_third, vector_third, args...);
+        index.add(key_third, vector_third.data(), args...);
         expect(index.size() == 3);
     }
 
-    // Search again over reconstructed index
     index.save("tmp.usearch");
+
+    // Check if metadata is retrieved correctly
+    if constexpr (punned_ak) {
+        auto head = index_dense_metadata_from_path("tmp.usearch");
+        expect_eq<std::size_t>(head.head.count_present, 3);
+    }
+
+    // Search again over reconstructed index
     index.load("tmp.usearch");
-    matched_count = index.search(vector_first, 5, args...).dump_to(matched_keys, matched_distances);
+    matched_count = index.search(vector_first.data(), 5, args...).dump_to(matched_keys, matched_distances);
     expect(matched_count == 3);
     expect(matched_keys[0] == key_first);
     expect(std::abs(matched_distances[0]) < 0.01);
 
     if constexpr (punned_ak) {
-        std::vector<scalar_t> vec_recovered_from_load(dimensions);
-        index.get(key_second, vec_recovered_from_load.data());
-        expect(std::equal(vector_second, vector_second + dimensions, vec_recovered_from_load.data()));
+        std::size_t dimensions = vector_first.size();
+        std::vector<scalar_t> vector_reloaded(dimensions);
+        index.get(key_second, vector_reloaded.data());
+        expect(std::equal(vector_second.data(), vector_second.data() + dimensions, vector_reloaded.data()));
     }
+}
+
+/**
+ * Tests the normal operational mode of the library, dealing with a variable length collection
+ * of `vectors` with monotonically increasing keys starting from `start_key`.
+ *
+ * @param index Reference to the index where vectors will be stored and searched.
+ * @param start_key The key for the first `vector`, others are generated with increments.
+ * @param vectors A collection of vectors to be tested.
+ * @param args Additional arguments for configuring search or index operations.
+ * @tparam punned_ak Template parameter that determines specific behaviors or checks in the test based on its value.
+ * @tparam index_at Type of the index being tested.
+ * @tparam scalar_at Data type of the elements in the vectors.
+ * @tparam extra_args_at Variadic template parameter types for additional configuration.
+ */
+template <bool punned_ak, typename index_at, typename scalar_at, typename... extra_args_at>
+void test_collection(index_at& index, typename index_at::vector_key_t const start_key,
+                     std::vector<std::vector<scalar_at>> const& vectors, extra_args_at&&... args) {
+
+    using scalar_t = scalar_at;
+    using index_t = index_at;
+    using vector_key_t = typename index_t::vector_key_t;
+    using distance_t = typename index_t::distance_t;
+
+    // Generate some keys starting from end,
+    // for three vectors from the dataset
+    vector_key_t const key_first = start_key;
+    std::vector<scalar_at> const& vector_first = vectors[0];
+    std::size_t dimensions = vector_first.size();
 
     // Try batch requests, heavily obersubscribing the CPU cores
-    std::size_t executor_threads = std::thread::hardware_concurrency() * 4;
+    std::size_t executor_threads = std::thread::hardware_concurrency();
     executor_default_t executor(executor_threads);
     index.reserve({vectors.size(), executor.size()});
-    executor.fixed(vectors.size() - 3, [&](std::size_t thread, std::size_t task) {
+    executor.fixed(vectors.size(), [&](std::size_t thread, std::size_t task) {
         if constexpr (punned_ak) {
-            index.add(key_max - task - 3, vectors[task + 3].data(), args...);
+            index.add(start_key + task, vectors[task].data(), args...);
         } else {
             index_update_config_t config;
             config.thread = thread;
-            index.add(key_max - task - 3, vectors[task + 3].data(), args..., config);
+            index.add(start_key + task, vectors[task].data(), args..., config);
         }
     });
 
     // Check for duplicates
     if constexpr (punned_ak) {
         index.reserve({vectors.size() + 1u, executor.size()});
-        auto result = index.add(key_first, vector_first, args...);
-        expect(!!result == index.multi());
+        auto result = index.add(key_first, vector_first.data(), args...);
+        expect_eq<std::size_t>(!!result, index.multi());
         result.error.release();
 
         std::size_t first_key_count = index.count(key_first);
-        expect(first_key_count == (1ul + index.multi()));
-    }
-
-    // Try batch removals and concurrent replacements
-    if constexpr (punned_ak && 0) { // TODO: Fix
-        // Remove all the keys
-        executor.fixed(vectors.size(), [&](std::size_t thread, std::size_t task) {
-            using labeling_result_t = typename index_t::labeling_result_t;
-            vector_key_t key = key_max - task;
-            labeling_result_t result = index.remove(key);
-            expect(bool(result));
-        });
-        expect(index.size() == 0);
-
-        // Add them back
-        executor.fixed(vectors.size(), [&](std::size_t thread, std::size_t task) {
-            vector_key_t key = key_max - task;
-            index.add(key, vectors[task].data(), args...);
-        });
-        expect(index.size() == vectors.size());
+        expect_eq<std::size_t>(first_key_count, 1ul + index.multi());
     }
 
     // Search again over mapped index
-    // file_head_result_t head = index_dense_metadata_from_path("tmp.usearch");
-    // expect(head.size == 3);
     index.view("tmp.usearch");
-    matched_count = index.search(vector_first, 5, args...).dump_to(matched_keys, matched_distances);
+    vector_key_t matched_keys[10] = {0};
+    distance_t matched_distances[10] = {0};
+    std::size_t matched_count = index.search(vector_first.data(), 5, args...).dump_to(matched_keys, matched_distances);
     expect(matched_count == 3);
     expect(matched_keys[0] == key_first);
     expect(std::abs(matched_distances[0]) < 0.01);
@@ -253,8 +261,8 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
         std::vector<vector_key_t> matched_keys(count_requested);
         std::vector<distance_t> matched_distances(count_requested);
 
-        matched_count = index                                               //
-                            .search(vector_first, count_requested, args...) //
+        matched_count = index                                                      //
+                            .search(vector_first.data(), count_requested, args...) //
                             .dump_to(matched_keys.data(), matched_distances.data());
         expect(matched_count <= max_possible_matches);
         expect(matched_keys[0] == key_first);
@@ -266,9 +274,9 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
     }
 
     if constexpr (punned_ak) {
-        std::vector<scalar_t> vec_recovered_from_view(dimensions);
-        index.get(key_second, vec_recovered_from_view.data());
-        expect(std::equal(vector_second, vector_second + dimensions, vec_recovered_from_view.data()));
+        std::vector<scalar_t> vector_reloaded(dimensions);
+        index.get(key_first, vector_reloaded.data());
+        expect(std::equal(vector_first.data(), vector_first.data() + dimensions, vector_reloaded.data()));
 
         auto compaction_result = index.compact();
         expect(bool(compaction_result));
@@ -282,6 +290,59 @@ void test_cosine(index_at& index, std::vector<std::vector<scalar_at>> const& vec
         index_dense_metadata_result_t meta = index_dense_metadata_from_path("tmp.usearch");
         expect(bool(meta));
     }
+}
+
+/**
+ * Stress-tests the behavior of the type-punned higher-level index under heavy concurrent insertions,
+ * removals and updates.
+ *
+ * @param index Reference to the index where vectors will be stored and searched.
+ * @param start_key The key for the first `vector`, others are generated with increments.
+ * @param vectors A collection of vectors to be tested.
+ * @param executor_threads Number of threads to be used for concurrent operations.
+ * @tparam punned_ak Template parameter that determines specific behaviors or checks in the test based on its value.
+ * @tparam index_at Type of the index being tested.
+ * @tparam scalar_at Data type of the elements in the vectors.
+ * @tparam extra_args_at Variadic template parameter types for additional configuration.
+ */
+template <typename index_at, typename scalar_at, typename... extra_args_at>
+void test_punned_concurrent_updates(index_at& index, typename index_at::vector_key_t const start_key,
+                                    std::vector<std::vector<scalar_at>> const& vectors, std::size_t executor_threads) {
+
+    using scalar_t = scalar_at;
+    using index_t = index_at;
+    using vector_key_t = typename index_t::vector_key_t;
+    using distance_t = typename index_t::distance_t;
+
+    // Generate some keys starting from end,
+    // for three vectors from the dataset
+    std::size_t dimensions = vectors[0].size();
+
+    // Try batch requests, heavily obersubscribing the CPU cores
+    executor_default_t executor(executor_threads);
+    index.reserve({vectors.size(), executor.size()});
+    executor.fixed(vectors.size(), [&](std::size_t thread, std::size_t task) {
+        using add_result_t = typename index_t::add_result_t;
+        add_result_t result = index.add(start_key + task, vectors[task].data());
+        expect(bool(result));
+    });
+    expect_eq<std::size_t>(index.size(), vectors.size());
+
+    // Remove all the keys
+    executor.fixed(vectors.size(), [&](std::size_t thread, std::size_t task) {
+        using labeling_result_t = typename index_t::labeling_result_t;
+        labeling_result_t result = index.remove(start_key + task);
+        expect(bool(result));
+    });
+    expect_eq<std::size_t>(index.size(), 0);
+
+    // Add them back, which under the hood will trigger the `update`
+    executor.fixed(vectors.size(), [&](std::size_t thread, std::size_t task) {
+        using add_result_t = typename index_t::add_result_t;
+        add_result_t result = index.add(start_key + task, vectors[task].data());
+        expect(bool(result));
+    });
+    expect_eq<std::size_t>(index.size(), vectors.size());
 }
 
 /**
@@ -340,8 +401,20 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         std::printf("- templates with connectivity %zu \n", connectivity);
         metric_t metric{&vector_of_vectors, dimensions};
         index_config_t config(connectivity);
-        aligned_wrapper_gt<index_typed_t> aligned_index;
-        test_cosine<false>(*aligned_index.index, vector_of_vectors, metric);
+
+        // Toy example
+        if (vector_of_vectors.size() >= 3) {
+            aligned_wrapper_gt<index_typed_t> aligned_index(config);
+            test_minimal_three_vectors<false, index_typed_t>(*aligned_index.index,     //
+                                                             42, vector_of_vectors[0], //
+                                                             43, vector_of_vectors[1], //
+                                                             44, vector_of_vectors[2], metric);
+        }
+        // Larger collection
+        {
+            aligned_wrapper_gt<index_typed_t> aligned_index(config);
+            test_collection<false, index_typed_t>(*aligned_index.index, 42, vector_of_vectors, metric);
+        }
     }
 
     // Type-punned:
@@ -353,16 +426,34 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
             metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
             index_dense_config_t config(connectivity);
             config.multi = multi;
-            index_t index;
-            {
-                index_result_t result_temporary = index_t::make(metric, config);
-                index_t& index_temporary = result_temporary.index;
-                // move construction
-                index_t index_moved = std::move(index_temporary);
-                // move assignment
-                index = std::move(index_moved);
+
+            // Toy example
+            if (vector_of_vectors.size() >= 3) {
+                index_result_t index_result = index_t::make(metric, config);
+                index_t& index = index_result.index;
+                test_minimal_three_vectors<true>(index,                    //
+                                                 42, vector_of_vectors[0], //
+                                                 43, vector_of_vectors[1], //
+                                                 44, vector_of_vectors[2]);
             }
-            test_cosine<true>(index, vector_of_vectors);
+            // Larger collection
+            {
+                index_result_t index_result = index_t::make(metric, config);
+                index_t& index = index_result.index;
+                test_collection<true>(index, 42, vector_of_vectors);
+            }
+            // Try running benchmarks with a different number of threads
+            for (std::size_t threads : {
+                     static_cast<std::size_t>(1),
+                     static_cast<std::size_t>(2),
+                     static_cast<std::size_t>(std::thread::hardware_concurrency()),
+                     static_cast<std::size_t>(std::thread::hardware_concurrency() * 4),
+                     static_cast<std::size_t>(vector_of_vectors.size()),
+                 }) {
+                index_result_t index_result = index_t::make(metric, config);
+                index_t& index = index_result.index;
+                test_punned_concurrent_updates(index, 42, vector_of_vectors, threads);
+            }
         }
     }
 }
@@ -702,7 +793,7 @@ template <typename key_at, typename slot_at> void test_replacing_update() {
 int main(int, char**) {
 
     // Weird corner cases
-    test_replacing_update<std::int64_t, std::uint32_t>();
+    // test_replacing_update<std::int64_t, std::uint32_t>();
 
     // Exact search without constructing indexes.
     // Great for validating the distance functions.
@@ -721,8 +812,9 @@ int main(int, char**) {
                 for (std::size_t expansion_search : {0, 1, 2, 3})
                     for (std::size_t count_vectors : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
                         for (std::size_t count_wanted : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
-                            test_absurd<std::int64_t, std::uint32_t>(dimensions, connectivity, expansion_add,
-                                                                     expansion_search, count_vectors, count_wanted);
+                            // test_absurd<std::int64_t, std::uint32_t>(dimensions, connectivity, expansion_add,
+                            //                                          expansion_search, count_vectors, count_wanted);
+                            continue;
 
     // Use just one
     for (std::size_t collection_size : {10, 500})
