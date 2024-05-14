@@ -296,7 +296,11 @@ public class Index {
       System.loadLibrary("usearch"); // used for tests. This library in classpath only
     } catch (UnsatisfiedLinkError e) {
       try {
-        NativeUtils.loadLibraryFromJar("/usearch/libusearch.so");
+        if (System.getProperty("os.name").equals("Mac OS X")) {
+          NativeUtils.loadLibraryFromJar("/usearch/libusearch.dylib");
+        } else {
+          NativeUtils.loadLibraryFromJar("/usearch/libusearch.so");
+        }
       } catch (IOException e1) {
         throw new RuntimeException(e1);
       }
