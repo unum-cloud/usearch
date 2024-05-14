@@ -785,7 +785,7 @@ class usearch_pack_m uint40_t {
 
   public:
     inline uint40_t() noexcept { broadcast(0); }
-    inline uint40_t(std::uint32_t n) noexcept { std::memcpy(&octets[1], &n, 4); }
+    inline uint40_t(std::uint32_t n) noexcept { std::memcpy(&octets, &n, 4); }
 
 #ifdef USEARCH_64BIT_ENV
     inline uint40_t(std::uint64_t n) noexcept { std::memcpy(octets, &n, 5); }
@@ -811,7 +811,7 @@ class usearch_pack_m uint40_t {
 #ifdef USEARCH_64BIT_ENV
         std::memcpy(&result, octets, 5);
 #else
-        std::memcpy(&result, octets + 1, 4);
+        std::memcpy(&result, octets, 4);
 #endif
         return result;
     }
