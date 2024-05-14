@@ -49,7 +49,7 @@ Linux • MacOS • Windows • iOS • WebAssembly •
 
 - ✅ __[10x faster][faster-than-faiss]__ [HNSW][hnsw-algorithm] implementation than [FAISS][faiss].
 - ✅ Simple and extensible [single C++11 header][usearch-header] __library__.
-- ✅ [Trusted](#integrations) by giants like Google and databases like [ClickHouse][clickhouse-docs].
+- ✅ [Trusted](#integrations) by giants like Google and DBs like [ClickHouse][clickhouse-docs] & [DuckDB][duckdb-docs].
 - ✅ [SIMD][simd]-optimized and [user-defined metrics](#user-defined-functions) with JIT compilation.
 - ✅ Hardware-agnostic `f16` & `i8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
 - ✅ [View large indexes from disk](#serving-index-from-disk) without loading into RAM.
@@ -67,6 +67,7 @@ Linux • MacOS • Windows • iOS • WebAssembly •
 [simd]: https://en.wikipedia.org/wiki/Single_instruction,_multiple_data
 [faster-than-faiss]: https://www.unum.cloud/blog/2023-11-07-scaling-vector-search-with-intel
 [clickhouse-docs]: https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/annindexes#usearch
+[duckdb-docs]: https://duckdb.org/2024/05/03/vector-similarity-search-vss.html
 
 __Technical Insights__ and related articles:
 
@@ -456,13 +457,17 @@ The [SwiftSemanticSearch](https://github.com/ashvardanian/SwiftSemanticSearch) p
 In this example, we use 2-dimensional vectors—encoded as latitude and longitude—to find the closest Points of Interest (POIs) on a map.
 The search is based on the Haversine distance metric but can easily be extended to support high-dimensional vectors.
 
-## Integrations
+## Integrations & Users
 
-- [x] GPTCache: [Python](https://github.com/zilliztech/GPTCache/releases/tag/0.1.29).
+- [x] ClickHouse: [C++](https://github.com/ClickHouse/ClickHouse/pull/53447), [docs](https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/annindexes#usearch).
+- [x] DuckDB: [post](https://duckdb.org/2024/05/03/vector-similarity-search-vss.html).
+- [x] Google: [UniSim](https://github.com/google/unisim), [RetSim](https://arxiv.org/abs/2311.17264) paper.
+- [x] LanternDB: [C++](https://github.com/lanterndata/lantern), [Rust](https://github.com/lanterndata/lantern_extras), [docs](https://lantern.dev/blog/hnsw-index-creation).
 - [x] LangChain: [Python](https://github.com/langchain-ai/langchain/releases/tag/v0.0.257) and [JavaScript](https://github.com/hwchase17/langchainjs/releases/tag/0.0.125).
-- [x] ClickHouse: [C++](https://github.com/ClickHouse/ClickHouse/pull/53447).
 - [x] Microsoft Semantic Kernel: [Python](https://github.com/microsoft/semantic-kernel/releases/tag/python-0.3.9.dev) and C#.
-- [x] LanternDB: [C++](https://github.com/lanterndata/lantern) and [Rust](https://github.com/lanterndata/lantern_extras).
+- [x] GPTCache: [Python](https://github.com/zilliztech/GPTCache/releases/tag/0.1.29).
+- [x] Sentence-Transformers: Python [docs](https://www.sbert.net/docs/package_reference/quantization.html#sentence_transformers.quantization.semantic_search_usearch).
+- [x] Pathway: [Rust](https://github.com/pathwaycom/pathway).
 
 ## Citations
 
