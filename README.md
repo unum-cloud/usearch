@@ -136,12 +136,13 @@ assert np.allclose(index[42], vector, atol=0.1) # Ensure high tolerance in mixed
 ```
 
 More settings are always available, and the API is designed to be as flexible as possible.
+The default storage/quantization level is hardware-dependant for efficiency, but `f16` is recommended for most modern CPUs.
 
 ```py
 index = Index(
     ndim=3, # Define the number of dimensions in input vectors
-    metric='cos', # Choose 'l2sq', 'haversine' or other metric, default = 'ip'
-    dtype='f32', # Quantize to 'f16' or 'i8' if needed, default = 'f32'
+    metric='cos', # Choose 'l2sq', 'ip', 'haversine' or other metric, default = 'cos'
+    dtype='f16', # Store as 'f64', 'f32', 'f16', 'i8', 'b1'..., default = None
     connectivity=16, # Optional: Limit number of neighbors per graph node
     expansion_add=128, # Optional: Control the recall of indexing
     expansion_search=64, # Optional: Control the quality of the search
