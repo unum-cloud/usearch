@@ -1,5 +1,7 @@
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertThrows;
+
 import java.io.File;
-import java.util.Arrays;
 
 import org.junit.Test;
 
@@ -27,5 +29,23 @@ public class IndexTest {
         int[] keys = index.search(vec, 5);
 
         System.out.println("Java Tests Passed!");
+    }
+
+    public void testGetSuccess() {
+        Index index = new Index.Config().metric("cos").dimensions(2).build();
+        float vec[] = { 10, 20 };
+        index.reserve(10);
+        index.add(42, vec);
+
+        assertArrayEquals(vec, index.get(42), 0.01f);
+    }
+
+    public void testGetFailed() {
+        Index index = new Index.Config().metric("cos").dimensions(2).build();
+        float vec[] = { 10, 20 };
+        index.reserve(10);
+        index.add(42, vec);
+
+        assertThrows(IllegalArgumentException.class, () -> index.get(41));
     }
 }
