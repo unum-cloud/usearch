@@ -1749,6 +1749,9 @@ class index_gt {
         member_iterator_gt() noexcept {}
         member_iterator_gt(index_t* index, std::size_t slot) noexcept : index_(index), slot_(slot) {}
 
+        ref_t call_key(std::true_type) const noexcept { return ref_t{index_->node_at_(slot_).ckey(), slot_}; }
+        ref_t call_key(std::false_type) const noexcept { return ref_t{index_->node_at_(slot_).key(), slot_}; }
+
         index_t* index_{};
         std::size_t slot_{};
 
@@ -1759,8 +1762,8 @@ class index_gt {
         using pointer = void;
         using reference = ref_t;
 
-        reference operator*() const noexcept { return {index_->node_at_(slot_).key(), slot_}; }
-        vector_key_t key() const noexcept { return index_->node_at_(slot_).key(); }
+        reference operator*() const noexcept { return call_key(std::is_const<index_t>()); }
+        vector_key_t key() const noexcept { return index_->node_at_(slot_).ckey(); }
 
         friend inline std::size_t get_slot(member_iterator_gt const& it) noexcept { return it.slot_; }
         friend inline vector_key_t get_key(member_iterator_gt const& it) noexcept { return it.key(); }
@@ -1865,8 +1868,10 @@ class index_gt {
         node_t& operator=(node_t const&) = default;
 
         misaligned_ref_gt<vector_key_t const> ckey() const noexcept { return {tape_}; }
-        misaligned_ref_gt<vector_key_t> key() const noexcept { return {tape_}; }
-        misaligned_ref_gt<level_t> level() const noexcept { return {tape_ + sizeof(vector_key_t)}; }
+        misaligned_ref_gt<vector_key_t const> ckey() noexcept { return {tape_}; }
+        misaligned_ref_gt<vector_key_t const> key() const noexcept { return {tape_}; }
+        misaligned_ref_gt<vector_key_t> key() noexcept { return {tape_}; }
+        misaligned_ref_gt<level_t> level() noexcept { return {tape_ + sizeof(vector_key_t)}; }
 
         void key(vector_key_t v) noexcept { return misaligned_store<vector_key_t>(tape_, v); }
         void level(level_t v) noexcept { return misaligned_store<level_t>(tape_ + sizeof(vector_key_t), v); }

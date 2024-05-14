@@ -58,7 +58,7 @@ template <typename index_at> struct aligned_wrapper_gt {
 };
 
 /**
- * Tests the functionality of the custom uint40_t type ensuring consistent 
+ * Tests the functionality of the custom uint40_t type ensuring consistent
  * behavior across various constructors from uint32_t, uint64_t, and size_t types.
  */
 void test_uint40() {
@@ -66,12 +66,12 @@ void test_uint40() {
     std::uint64_t max_uint40_k = (1ULL << 40) - 1;
 
     for (std::uint64_t original_value : {
-        42ull,                        // Typical small number
-        4242ull,                      // Larger number still within uint40 range
-        1ull << 40,                   // Exactly at the boundary of uint40
-        (1ull << 40) + 1,             // Just beyond the boundary of uint40
-        1ull << 63                    // Well beyond the uint40 boundary, tests masking
-    }) {
+             42ull,            // Typical small number
+             4242ull,          // Larger number still within uint40 range
+             1ull << 40,       // Exactly at the boundary of uint40
+             (1ull << 40) + 1, // Just beyond the boundary of uint40
+             1ull << 63        // Well beyond the uint40 boundary, tests masking
+         }) {
         std::uint32_t v_32 = static_cast<std::uint32_t>(original_value);
         std::uint64_t v_64 = original_value;
         std::size_t v_size = static_cast<std::size_t>(original_value);
@@ -742,10 +742,10 @@ template <typename key_at, typename slot_at> void test_strings() {
             return between(some_vector, str_at(get_slot(member)));
         }
         levenshtein_distance_t operator()(member_citerator_t const& a, member_citerator_t const& b) const {
-            return between(str_at(get_slot(b)), str_at(get_slot(a)));
+            return between(str_at(get_slot(*b)), str_at(get_slot(*a)));
         }
         levenshtein_distance_t operator()(std::string_view some_vector, member_citerator_t const& member) const {
-            return between(some_vector, str_at(get_slot(member)));
+            return between(some_vector, str_at(get_slot(*member)));
         }
     };
 
