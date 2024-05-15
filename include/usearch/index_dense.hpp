@@ -561,14 +561,18 @@ class index_dense_gt {
      *  @param[in] config The index configuration (optional).
      *  @param[in] free_key The key used for freed vectors (optional).
      *  @return An instance of ::index_dense_gt or error, wrapped in a `state_result_t`.
+     *
+     *  ! If the `metric` isn't provided in this method, it has to be set with
+     *  ! the `change_metric` method before the index can be used. Alternatively,
+     *  ! if you are loading an existing index, the metric will be set automatically.
      */
     static state_result_t make(           //
-        metric_t metric,                  //
+        metric_t metric = {},             //
         index_dense_config_t config = {}, //
         vector_key_t free_key = default_free_value<vector_key_t>()) {
 
-        if (!metric)
-            return state_result_t{}.failed("Metric uninitialized!");
+        if (metric.missing())
+            return state_result_t{}.failed("Metric won't be initialized!");
         error_t error = config.validate();
         if (error)
             return state_result_t{}.failed(std::move(error));
@@ -576,14 +580,17 @@ class index_dense_gt {
         if (!raw)
             return state_result_t{}.failed("Failed to allocate memory for the index!");
 
-        scalar_kind_t scalar_kind = metric.scalar_kind();
-
         state_result_t result;
         index_dense_gt& index = result.index;
         index.config_ = config;
-        index.casts_ = make_casts_(scalar_kind);
-        index.metric_ = metric;
         index.free_key_ = free_key;
+
+        // In some cases the metric is not provided, and will be set later.
+        if (metric) {
+            scalar_kind_t scalar_kind = metric.scalar_kind();
+            index.casts_ = make_casts_(scalar_kind);
+            index.metric_ = metric;
+        }
 
         new (raw) index_t(config);
         index.typed_ = raw;

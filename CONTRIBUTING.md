@@ -33,17 +33,17 @@ brew install libomp llvm # MacOS
 Using modern syntax, this is how you build and run the test suite:
 
 ```sh
-cmake -DUSEARCH_BUILD_TEST_CPP=1 -DCMAKE_BUILD_TYPE=Debug -B ./build_debug
-cmake --build ./build_debug --config Debug
-./build_debug/test_cpp
+cmake -DUSEARCH_BUILD_TEST_CPP=1 -DCMAKE_BUILD_TYPE=Debug -B build_debug
+cmake --build build_debug --config Debug
+build_debug/test_cpp
 ```
 
 If there build mode is not specified, the default is `Release`.
 
 ```sh
-cmake -DUSEARCH_BUILD_TEST_CPP=1 -B ./build_release
-cmake --build ./build_release --config Release
-./build_release/test_cpp
+cmake -DUSEARCH_BUILD_TEST_CPP=1 -B build_release
+cmake --build build_release --config Release
+build_release/test_cpp
 ```
 
 The CMakeLists.txt file has a number of options you can pass:
@@ -63,11 +63,11 @@ The CMakeLists.txt file has a number of options you can pass:
 Putting all of this together, compiling all targets on most platforms should work with the following snippet:
 
 ```sh
-cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_USE_FP16LIB=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1 -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_BENCH_CPP=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_SQLITE=0 -B ./build_release
+cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_USE_FP16LIB=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1 -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_BENCH_CPP=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_SQLITE=0 -B build_release
 
-cmake --build ./build_release --config Release
-./build_release/test_cpp
-./build_release/test_c
+cmake --build build_release --config Release
+build_release/test_cpp
+build_release/test_c
 ```
 
 Similarly, to use the most recent Clang compiler version from HomeBrew on MacOS:
@@ -86,11 +86,11 @@ cmake \
     -DUSEARCH_BUILD_BENCH_CPP=1 \
     -DUSEARCH_BUILD_LIB_C=1 \
     -DUSEARCH_BUILD_TEST_C=1 \
-    -B ./build_release
+    -B build_release
 
-cmake --build ./build_release --config Release
-./build_release/test_cpp
-./build_release/test_c
+cmake --build build_release --config Release
+build_release/test_cpp
+build_release/test_c
 ```
 
 Linting:
