@@ -16,6 +16,9 @@
 #if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
 #define USEARCH_DEFINED_CPP17
 #endif
+#if ((defined(_MSVC_LANG) && _MSVC_LANG >= 202002L) || __cplusplus >= 202002L)
+#define USEARCH_DEFINED_CPP20
+#endif
 
 // Inferring target OS: Windows, MacOS, or Linux
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
@@ -180,6 +183,13 @@ template <typename at, typename other_at = at> at exchange(at& obj, other_at&& n
     return old_value;
 }
 
+#if defined(USEARCH_DEFINED_CPP20)
+
+template <typename at> void destroy_at(at* obj) { std::destroy_at(obj); }
+template <typename at> void construct_at(at* obj) { std::construct_at(obj); }
+
+#else
+
 /// @brief  The `std::destroy_at` alternative for C++11.
 template <typename at, typename sfinae_at = at>
 typename std::enable_if<std::is_pod<sfinae_at>::value>::type destroy_at(at*) {}
@@ -195,6 +205,8 @@ template <typename at, typename sfinae_at = at>
 typename std::enable_if<!std::is_pod<sfinae_at>::value>::type construct_at(at* obj) {
     new (obj) at();
 }
+
+#endif
 
 /**
  *  @brief  A reference to a misaligned memory location with a specific type.
