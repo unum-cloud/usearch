@@ -145,6 +145,7 @@ USEARCH_EXPORT usearch_index_t usearch_init(usearch_init_options_t* options, use
     config.expansion_add = options->expansion_add;
     config.expansion_search = options->expansion_search;
     config.multi = options->multi;
+    config.enable_key_lookups = 1;
 
     metric_kind_t metric_kind = metric_kind_to_cpp(options->metric_kind);
     scalar_kind_t scalar_kind = scalar_kind_to_cpp(options->quantization);

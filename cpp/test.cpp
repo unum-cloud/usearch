@@ -21,12 +21,16 @@
 using namespace unum::usearch;
 using namespace unum;
 
-void expect(bool must_be_true) {
-    if (!must_be_true)
-        __usearch_raise_runtime_error("Failed!");
+void expect(bool must_be_true, char const* message = nullptr) {
+    if (must_be_true)
+        return;
+    message = message ? message : "C++ unit test failed";
+    __usearch_raise_runtime_error(message);
 }
 
-template <typename value_at> void expect_eq(value_at a, value_at b) { expect(a == b); }
+template <typename value_at> void expect_eq(value_at a, value_at b, char const* message = nullptr) {
+    expect(a == b, message);
+}
 
 /**
  *  @brief  Convinience wrapper combining combined allocation and construction of an index.
@@ -529,6 +533,8 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
             index_t& index = index_result.index;
             // TODO: Fix this test later
             // test_punned_concurrent_updates(index, 42, vector_of_vectors, threads);
+            (void)threads;
+            (void)index;
         }
     };
 
@@ -884,6 +890,7 @@ int main(int, char**) {
     // Make sure the initializers and the algorithms can work with inadequately small values.
     // Be warned - this combinatorial explosion of tests produces close to __500'000__ tests!
     std::printf("Testing absurd index configs\n");
+    // for (metric_kind_t metric_kind : {metric_kind_t::cos_k, metric_kind_t::unknown_k, metric_kind_t::haversine_k})
     for (std::size_t connectivity : {2, 3})      // ! Zero maps to default, one degenerates
         for (std::size_t dimensions : {1, 2, 3}) // ! Zero will raise
             for (std::size_t expansion_add : {0, 1, 2, 3})
