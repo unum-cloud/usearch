@@ -2435,7 +2435,6 @@ class index_gt {
         result.new_size = new_slot + 1;
         result.slot = new_slot;
         callback(at(new_slot));
-        node_lock_t new_lock = node_lock_(new_slot);
 
         // Do nothing for the first element
         if (!new_slot) {
@@ -2456,9 +2455,14 @@ class index_gt {
         // From `new_target_level` down - perform proper extensive search
         for (level_t level = (std::min)(new_target_level, max_level_copy); level >= 0; --level) {
             // TODO: Handle out of memory conditions
-            search_to_insert_(value, metric, prefetch, closest_slot, new_slot, level, config.expansion, context);
-            candidates_view_t closest_view = form_links_to_closest_(metric, new_slot, level, context);
-            closest_slot = closest_view[0].slot;
+            search_to_insert_(value, metric, prefetch, closest_slot, level, config.expansion, context);
+            candidates_view_t closest_view;
+            {
+                node_lock_t new_lock = node_lock_(new_slot);
+                neighbors_(new_node, level).clear();
+                closest_view = form_links_to_closest_(metric, new_slot, level, context);
+                closest_slot = closest_view[0].slot;
+            }
             form_reverse_links_(metric, new_slot, closest_view, value, level, context);
         }
 
@@ -3557,8 +3561,7 @@ class index_gt {
     template <typename value_at, typename metric_at, typename prefetch_at = dummy_prefetch_t>
     bool search_to_insert_(                                           //
         value_at&& query, metric_at&& metric, prefetch_at&& prefetch, //
-        std::size_t start_slot, std::size_t new_slot, level_t level, std::size_t top_limit,
-        context_t& context) noexcept {
+        std::size_t start_slot, level_t level, std::size_t top_limit, context_t& context) noexcept {
 
         visits_hash_set_t& visits = context.visits;
         next_candidates_t& next = context.next_candidates; // pop min, push
