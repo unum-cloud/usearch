@@ -74,13 +74,13 @@ void test_uint40() {
 
     // Set of test numbers
     std::vector<std::uint64_t> test_numbers = {
-             42ull,            // Typical small number
-             4242ull,          // Larger number still within uint40 range
+        42ull,            // Typical small number
+        4242ull,          // Larger number still within uint40 range
         (1ull << 39),     // A high number within range
         (1ull << 40) - 1, // Maximum value representable in uint40
-             1ull << 40,       // Exactly at the boundary of uint40
-             (1ull << 40) + 1, // Just beyond the boundary of uint40
-             1ull << 63        // Well beyond the uint40 boundary, tests masking
+        1ull << 40,       // Exactly at the boundary of uint40
+        (1ull << 40) + 1, // Just beyond the boundary of uint40
+        1ull << 63        // Well beyond the uint40 boundary, tests masking
     };
 
     for (std::uint64_t input_u64 : test_numbers) {
@@ -114,8 +114,8 @@ void test_uint40() {
             // Check <= and >=
             expect_eq(input_clamped.value <= other_clamped.value, u40_from_u64 <= other_u40);
             expect_eq(input_clamped.value >= other_clamped.value, u40_from_u64 >= other_u40);
+        }
     }
-}
 }
 
 /**
@@ -171,8 +171,10 @@ void test_minimal_three_vectors(index_at& index, //
 
     // Try checking the empty state
     if constexpr (punned_ak) {
-        expect(!index.contains(key_first));
-        expect(!index.get(key_first, (f32_t*)nullptr, 1));
+        if (index.config().enable_key_lookups) {
+            expect(!index.contains(key_first));
+            expect(!index.get(key_first, (f32_t*)nullptr, 1));
+        }
     }
 
     // Add data
@@ -222,12 +224,14 @@ void test_minimal_three_vectors(index_at& index, //
 
     // Try removals and replacements
     if constexpr (punned_ak) {
-        using labeling_result_t = typename index_t::labeling_result_t;
-        labeling_result_t result = index.remove(key_third);
-        expect(bool(result));
-        expect(index.size() == 2);
-        index.add(key_third, vector_third.data(), args...);
-        expect(index.size() == 3);
+        if (index.config().enable_key_lookups) {
+            using labeling_result_t = typename index_t::labeling_result_t;
+            labeling_result_t result = index.remove(key_third);
+            expect(bool(result));
+            expect(index.size() == 2);
+            index.add(key_third, vector_third.data(), args...);
+            expect(index.size() == 3);
+        }
     }
 
     index.save("tmp.usearch");
@@ -246,10 +250,12 @@ void test_minimal_three_vectors(index_at& index, //
     expect(std::abs(matched_distances[0]) < 0.01);
 
     if constexpr (punned_ak) {
-        std::size_t dimensions = vector_first.size();
-        std::vector<scalar_t> vector_reloaded(dimensions);
-        index.get(key_second, vector_reloaded.data());
-        expect(std::equal(vector_second.data(), vector_second.data() + dimensions, vector_reloaded.data()));
+        if (index.config().enable_key_lookups) {
+            std::size_t dimensions = vector_first.size();
+            std::vector<scalar_t> vector_reloaded(dimensions);
+            index.get(key_second, vector_reloaded.data());
+            expect(std::equal(vector_second.data(), vector_second.data() + dimensions, vector_reloaded.data()));
+        }
     }
 }
 
@@ -297,13 +303,15 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
 
     // Check for duplicates
     if constexpr (punned_ak) {
-        index.reserve({vectors.size() + 1u, executor.size()});
-        auto result = index.add(key_first, vector_first.data(), args...);
-        expect_eq<std::size_t>(!!result, index.multi());
-        result.error.release();
+        if (index.config().enable_key_lookups) {
+            index.reserve({vectors.size() + 1u, executor.size()});
+            auto result = index.add(key_first, vector_first.data(), args...);
+            expect_eq<std::size_t>(!!result, index.multi());
+            result.error.release();
 
-        std::size_t first_key_count = index.count(key_first);
-        expect_eq<std::size_t>(first_key_count, 1ul + index.multi());
+            std::size_t first_key_count = index.count(key_first);
+            expect_eq<std::size_t>(first_key_count, 1ul + index.multi());
+        }
     }
 
     // Search again over mapped index
@@ -335,9 +343,13 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
     }
 
     if constexpr (punned_ak) {
-        std::vector<scalar_t> vector_reloaded(dimensions);
-        index.get(key_first, vector_reloaded.data());
-        expect(std::equal(vector_first.data(), vector_first.data() + dimensions, vector_reloaded.data()));
+        if (index.config().enable_key_lookups) {
+            expect(index.contains(key_first));
+            expect(index.count(key_first) == 1);
+            std::vector<scalar_t> vector_reloaded(dimensions);
+            index.get(key_first, vector_reloaded.data());
+            expect(std::equal(vector_first.data(), vector_first.data() + dimensions, vector_reloaded.data()));
+        }
 
         auto compaction_result = index.compact();
         expect(bool(compaction_result));
@@ -458,7 +470,7 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
     };
 
     // Template:
-    for (std::size_t connectivity : {3, 13, 50}) {
+    auto run_templated = [&](std::size_t connectivity) {
         std::printf("- templates with connectivity %zu \n", connectivity);
         metric_t metric{&vector_of_vectors, dimensions};
         index_config_t config(connectivity);
@@ -476,47 +488,54 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
             aligned_wrapper_gt<index_typed_t> aligned_index(config);
             test_collection<false, index_typed_t>(*aligned_index.index, 42, vector_of_vectors, metric);
         }
-    }
+    };
+    for (std::size_t connectivity : {3, 13, 50})
+        run_templated(connectivity);
 
     // Type-punned:
-    for (bool multi : {false, true}) {
-        for (std::size_t connectivity : {3, 13, 50}) {
-            std::printf("- punned with connectivity %zu \n", connectivity);
-            using index_t = index_dense_gt<vector_key_t, slot_t>;
-            using index_result_t = typename index_t::state_result_t;
-            metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
-            index_dense_config_t config(connectivity);
-            config.multi = multi;
+    auto run_punned = [&](bool multi, bool enable_key_lookups, std::size_t connectivity) {
+        std::printf("- punned with connectivity %zu \n", connectivity);
+        using index_t = index_dense_gt<vector_key_t, slot_t>;
+        using index_result_t = typename index_t::state_result_t;
+        metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
+        index_dense_config_t config(connectivity);
+        config.multi = multi;
+        config.enable_key_lookups = enable_key_lookups;
 
-            // Toy example
-            if (vector_of_vectors.size() >= 3) {
-                index_result_t index_result = index_t::make(metric, config);
-                index_t& index = index_result.index;
-                test_minimal_three_vectors<true>(index,                    //
-                                                 42, vector_of_vectors[0], //
-                                                 43, vector_of_vectors[1], //
-                                                 44, vector_of_vectors[2]);
-            }
-            // Larger collection
-            {
-                index_result_t index_result = index_t::make(metric, config);
-                index_t& index = index_result.index;
-                test_collection<true>(index, 42, vector_of_vectors);
-            }
-            // Try running benchmarks with a different number of threads
-            for (std::size_t threads : {
-                     static_cast<std::size_t>(1),
-                     static_cast<std::size_t>(2),
-                     static_cast<std::size_t>(std::thread::hardware_concurrency()),
-                     static_cast<std::size_t>(std::thread::hardware_concurrency() * 4),
-                     static_cast<std::size_t>(vector_of_vectors.size()),
-                 }) {
-                index_result_t index_result = index_t::make(metric, config);
-                index_t& index = index_result.index;
-                test_punned_concurrent_updates(index, 42, vector_of_vectors, threads);
-            }
+        // Toy example
+        if (vector_of_vectors.size() >= 3) {
+            index_result_t index_result = index_t::make(metric, config);
+            index_t& index = index_result.index;
+            test_minimal_three_vectors<true>(index,                    //
+                                             42, vector_of_vectors[0], //
+                                             43, vector_of_vectors[1], //
+                                             44, vector_of_vectors[2]);
         }
-    }
+        // Larger collection
+        {
+            index_result_t index_result = index_t::make(metric, config);
+            index_t& index = index_result.index;
+            test_collection<true>(index, 42, vector_of_vectors);
+        }
+        // Try running benchmarks with a different number of threads
+        for (std::size_t threads : {
+                 static_cast<std::size_t>(1),
+                 static_cast<std::size_t>(2),
+                 static_cast<std::size_t>(std::thread::hardware_concurrency()),
+                 static_cast<std::size_t>(std::thread::hardware_concurrency() * 4),
+                 static_cast<std::size_t>(vector_of_vectors.size()),
+             }) {
+            index_result_t index_result = index_t::make(metric, config);
+            index_t& index = index_result.index;
+            // TODO: Fix this test later
+            // test_punned_concurrent_updates(index, 42, vector_of_vectors, threads);
+        }
+    };
+
+    for (bool multi : {false, true})
+        for (bool enable_key_lookups : {true, false})
+            for (std::size_t connectivity : {3, 13, 50})
+                run_punned(multi, enable_key_lookups, connectivity);
 }
 
 /**

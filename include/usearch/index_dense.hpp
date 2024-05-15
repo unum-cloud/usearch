@@ -125,8 +125,15 @@ struct index_dense_config_t : public index_config_t {
      *          the vectors-to-keys mappings.
      *
      *  ! This configuration parameter doesn't affect the serialized file,
-     *  ! and is not preserved between runs. Makes sense for small vector
-     *  ! representations that fit ina  single cache line.
+     *  ! and is not preserved between runs. Makes sense for smaller vectors
+     *  ! that fit in a couple of cache lines.
+     *
+     *  The trade-off is that some methods won't be available, like `get`, `rename`,
+     *  and `remove`. The basic functionality, like `add` and `search` will work as
+     *  expected even with `enable_key_lookups = false`.
+     *
+     *  If both `!multi && !enable_key_lookups`, the "duplicate entry" checks won't
+     *  be performed and no errors will be raised.
      */
     bool enable_key_lookups = true;
 
@@ -705,6 +712,7 @@ class index_dense_gt {
      *          exporting the mean, maximum, and minimum values.
      */
     aggregated_distances_t distance_between(vector_key_t a, vector_key_t b, std::size_t = any_thread()) const {
+        usearch_assert_m(config().enable_key_lookups, "Key lookups are disabled!");
         shared_lock_t lock(slot_lookup_mutex_);
         aggregated_distances_t result;
         if (!multi()) {
@@ -804,15 +812,19 @@ class index_dense_gt {
      */
     bool try_reserve(index_limits_t limits) {
 
-        unique_lock_t lock(slot_lookup_mutex_);
-        if (!slot_lookup_.try_reserve(limits.members))
-            return false;
+        // The slot lookup system will generally prefer power-of-two sizes.
+        if (config_.enable_key_lookups) {
+            unique_lock_t lock(slot_lookup_mutex_);
+            if (!slot_lookup_.try_reserve(limits.members))
+                return false;
+            limits.members = slot_lookup_.capacity();
+        }
 
         // Once the `slot_lookup_` grows, let's use its capacity as the new
         // target for the `vectors_lookup_` to synchronize allocations and
         // expensive index re-organizations.
-        if (slot_lookup_.capacity() != vectors_lookup_.size()) {
-            vectors_lookup_t new_vectors_lookup(slot_lookup_.capacity());
+        if (limits.members != vectors_lookup_.size()) {
+            vectors_lookup_t new_vectors_lookup(limits.members);
             if (!new_vectors_lookup)
                 return false;
             if (vectors_lookup_.size() > 0)
@@ -1313,6 +1325,7 @@ class index_dense_gt {
      *  @return `true` if the key is present in the index, `false` otherwise.
      */
     bool contains(vector_key_t key) const {
+        usearch_assert_m(config().enable_key_lookups, "Key lookups are disabled");
         shared_lock_t lock(slot_lookup_mutex_);
         return slot_lookup_.contains(key_and_slot_t::any_slot(key));
     }
@@ -1322,6 +1335,7 @@ class index_dense_gt {
      *  @return Zero if nothing is found, a positive integer otherwise.
      */
     std::size_t count(vector_key_t key) const {
+        usearch_assert_m(config().enable_key_lookups, "Key lookups are disabled");
         shared_lock_t lock(slot_lookup_mutex_);
         return slot_lookup_.count(key_and_slot_t::any_slot(key));
     }
@@ -1346,6 +1360,7 @@ class index_dense_gt {
      *          If an error occurred during the removal operation, `result.error` will contain an error message.
      */
     labeling_result_t remove(vector_key_t key) {
+        usearch_assert_m(config().enable_key_lookups, "Key lookups are disabled");
         labeling_result_t result;
 
         unique_lock_t lookup_lock(slot_lookup_mutex_);
@@ -1386,6 +1401,7 @@ class index_dense_gt {
      */
     template <typename keys_iterator_at>
     labeling_result_t remove(keys_iterator_at keys_begin, keys_iterator_at keys_end) {
+        usearch_assert_m(config().enable_key_lookups, "Key lookups are disabled");
 
         labeling_result_t result;
         unique_lock_t lookup_lock(slot_lookup_mutex_);
@@ -1508,7 +1524,7 @@ class index_dense_gt {
                 std::memcpy(copy.vectors_lookup_[slot], vectors_lookup_[slot], metric_.bytes_per_vector());
         }
 
-        copy.slot_lookup_ = slot_lookup_;
+        copy.slot_lookup_ = slot_lookup_; // TODO: Handle out of memory
         *copy.typed_ = std::move(typed_result.index);
         return result;
     }
@@ -1872,7 +1888,7 @@ class index_dense_gt {
         vector_key_t key, scalar_at const* vector, //
         std::size_t thread, bool force_vector_copy, cast_t const& cast) {
 
-        if (!multi() && contains(key))
+        if (!multi() && config().enable_key_lookups && contains(key))
             return add_result_t{}.failed("Duplicate keys not allowed in high-level wrappers");
 
         // Cast the vector, if needed for compatibility with `metric_`
@@ -1896,8 +1912,10 @@ class index_dense_gt {
         // Perform the insertion or the update
         bool reuse_node = free_slot != default_free_value<compressed_slot_t>();
         auto on_success = [&](member_ref_t member) {
-            unique_lock_t slot_lock(slot_lookup_mutex_);
-            slot_lookup_.try_emplace(key_and_slot_t{key, static_cast<compressed_slot_t>(member.slot)});
+            if (config_.enable_key_lookups) {
+                unique_lock_t slot_lock(slot_lookup_mutex_);
+                slot_lookup_.try_emplace(key_and_slot_t{key, static_cast<compressed_slot_t>(member.slot)});
+            }
             if (copy_vector) {
                 if (!reuse_node)
                     vectors_lookup_[member.slot] = vectors_tape_allocator_.allocate(metric_.bytes_per_vector());
@@ -1989,6 +2007,7 @@ class index_dense_gt {
         }
 
         // Check if such `key` is even present.
+        usearch_assert_m(config().enable_key_lookups, "Key lookups are disabled!");
         shared_lock_t slots_lock(slot_lookup_mutex_);
         auto key_range = slot_lookup_.equal_range(key_and_slot_t::any_slot(key));
         aggregated_distances_t result;
