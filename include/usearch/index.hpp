@@ -771,9 +771,7 @@ class sorted_buffer_gt {
 #endif
 
 /**
- *  @brief Five-byte integer type to address node clouds with over 4B entries.
- *
- * @note Avoid usage in 32bit environment
+ *  @brief  Five-byte integer type to address node clouds with over 4B entries.
  */
 class usearch_pack_m uint40_t {
     unsigned char octets[5];
@@ -785,7 +783,7 @@ class usearch_pack_m uint40_t {
 
   public:
     inline uint40_t() noexcept { broadcast(0); }
-    inline uint40_t(std::uint32_t n) noexcept { std::memcpy(&octets, &n, 4); }
+    inline uint40_t(std::uint32_t n) noexcept { std::memcpy(&octets, &n, 4), octets[4] = 0; }
 
 #ifdef USEARCH_64BIT_ENV
     inline uint40_t(std::uint64_t n) noexcept { std::memcpy(octets, &n, 5); }
@@ -818,6 +816,21 @@ class usearch_pack_m uint40_t {
 
     inline static uint40_t max() noexcept { return uint40_t{}.broadcast(0xFF); }
     inline static uint40_t min() noexcept { return uint40_t{}.broadcast(0); }
+
+    inline bool operator==(uint40_t const& other) const noexcept { return std::memcmp(octets, other.octets, 5) == 0; }
+    inline bool operator!=(uint40_t const& other) const noexcept { return !(*this == other); }
+    inline bool operator>(uint40_t const& other) const noexcept { return other < *this; }
+    inline bool operator<=(uint40_t const& other) const noexcept { return !(*this > other); }
+    inline bool operator>=(uint40_t const& other) const noexcept { return !(*this < other); }
+    inline bool operator<(uint40_t const& other) const noexcept {
+        for (int i = 0; i < 5; ++i) {
+            if (octets[4 - i] < other.octets[4 - i])
+                return true;
+            if (octets[4 - i] > other.octets[4 - i])
+                return false;
+        }
+        return false;
+    }
 };
 
 #if defined(USEARCH_DEFINED_WINDOWS)
@@ -3380,8 +3393,8 @@ class index_gt {
 
     template <typename value_at, typename metric_at>
     void form_reverse_links_( //
-        metric_at&& metric, std::size_t new_slot, candidates_view_t new_neighbors, value_at&& value, level_t level,
-        context_t& context) usearch_noexcept_m {
+        metric_at&& metric, compressed_slot_t new_slot, candidates_view_t new_neighbors, value_at&& value,
+        level_t level, context_t& context) usearch_noexcept_m {
 
         top_candidates_t& top = context.top_candidates;
         std::size_t const connectivity_max = level ? config_.connectivity : config_.connectivity_base;
@@ -3406,15 +3419,14 @@ class index_gt {
             // If `new_slot` is already present in the neighboring connections of `close_slot`
             // then no need to modify any connections or run the heuristics.
             if (close_header.size() < connectivity_max) {
-                close_header.push_back(static_cast<compressed_slot_t>(new_slot));
+                close_header.push_back(new_slot);
                 continue;
             }
 
             // To fit a new connection we need to drop an existing one.
             top.clear();
             usearch_assert_m((top.reserve(close_header.size() + 1)), "The memory must have been reserved in `add`");
-            top.insert_reserved(
-                {context.measure(value, citerator_at(close_slot), metric), static_cast<compressed_slot_t>(new_slot)});
+            top.insert_reserved({context.measure(value, citerator_at(close_slot), metric), new_slot});
             for (compressed_slot_t successor_slot : close_header)
                 top.insert_reserved(
                     {context.measure(citerator_at(close_slot), citerator_at(successor_slot), metric), successor_slot});

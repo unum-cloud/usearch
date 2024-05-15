@@ -59,37 +59,65 @@ template <typename index_at> struct aligned_wrapper_gt {
 
 /**
  * Tests the functionality of the custom uint40_t type ensuring consistent
- * behavior across various constructors from uint32_t, uint64_t, and size_t types.
+ * behavior across various constructors from uint32_t, uint64_t, and size_t types,
+ * and validates the relational ordering between various values.
  */
 void test_uint40() {
+
+    union uint64_octets_t {
+        std::uint64_t value;
+        std::uint8_t octets[8];
+    };
+
     // Constants for tests
     std::uint64_t max_uint40_k = (1ULL << 40) - 1;
 
-    for (std::uint64_t original_value : {
+    // Set of test numbers
+    std::vector<std::uint64_t> test_numbers = {
              42ull,            // Typical small number
              4242ull,          // Larger number still within uint40 range
+        (1ull << 39),     // A high number within range
+        (1ull << 40) - 1, // Maximum value representable in uint40
              1ull << 40,       // Exactly at the boundary of uint40
              (1ull << 40) + 1, // Just beyond the boundary of uint40
              1ull << 63        // Well beyond the uint40 boundary, tests masking
-         }) {
-        std::uint32_t v_32 = static_cast<std::uint32_t>(original_value);
-        std::uint64_t v_64 = original_value;
-        std::size_t v_size = static_cast<std::size_t>(original_value);
+    };
+
+    for (std::uint64_t input_u64 : test_numbers) {
+        std::uint32_t input_u32 = static_cast<std::uint32_t>(input_u64);
+        std::size_t input_size = static_cast<std::size_t>(input_u64);
 
         // Create uint40_t instances from different types
-        uint40_t n_40_from_32(v_32);
-        uint40_t n_40_from_64(v_64);
-        uint40_t n_40_from_size(v_size);
+        uint40_t u40_from_u32(input_u32);
+        uint40_t u40_from_u64(input_u64);
+        uint40_t u40_from_size(input_size);
 
         // Expected value after masking
-        std::uint64_t expected_value = original_value & max_uint40_k;
+        uint64_octets_t input_clamped;
+        input_clamped.value = input_u64 & max_uint40_k;
 
         // Check if all conversions are equal to the masked value
-        expect(n_40_from_32 == expected_value);
-        expect(n_40_from_64 == expected_value);
-        expect(n_40_from_size == expected_value);
+        expect_eq<std::uint64_t>(u40_from_u32, input_clamped.value & 0xFFFFFFFF);
+        expect_eq<std::uint64_t>(u40_from_u64, input_clamped.value);
+        expect_eq<std::uint64_t>(u40_from_size, input_clamped.value);
+
+        // Check relative ordering against all other test numbers
+        for (std::uint64_t other_u64 : test_numbers) {
+            uint64_octets_t other_clamped;
+            other_clamped.value = other_u64 & max_uint40_k;
+            uint40_t other_u40(other_clamped.value);
+
+            // Check < and >
+            expect_eq(input_clamped.value < other_clamped.value, u40_from_u64 < other_u40);
+            expect_eq(input_clamped.value > other_clamped.value, u40_from_u64 > other_u40);
+
+            // Check <= and >=
+            expect_eq(input_clamped.value <= other_clamped.value, u40_from_u64 <= other_u40);
+            expect_eq(input_clamped.value >= other_clamped.value, u40_from_u64 >= other_u40);
     }
 }
+}
+
 /**
  * Tests the behavior of various move-constructors and move-assignment operators for the index.
  *
@@ -826,9 +854,6 @@ template <typename key_at, typename slot_at> void test_replacing_update() {
 int main(int, char**) {
     test_uint40();
 
-    // Weird corner cases
-    // test_replacing_update<std::int64_t, std::uint32_t>();
-
     // Exact search without constructing indexes.
     // Great for validating the distance functions.
     std::printf("Testing exact search\n");
@@ -845,10 +870,12 @@ int main(int, char**) {
             for (std::size_t expansion_add : {0, 1, 2, 3})
                 for (std::size_t expansion_search : {0, 1, 2, 3})
                     for (std::size_t count_vectors : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
-                        for (std::size_t count_wanted : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
-                            // test_absurd<std::int64_t, std::uint32_t>(dimensions, connectivity, expansion_add,
-                            //                                          expansion_search, count_vectors, count_wanted);
-                            continue;
+                        for (std::size_t count_wanted : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}) {
+                            test_absurd<std::int64_t, std::uint32_t>(dimensions, connectivity, expansion_add,
+                                                                     expansion_search, count_vectors, count_wanted);
+                            test_absurd<uint40_t, uint40_t>(dimensions, connectivity, expansion_add, expansion_search,
+                                                            count_vectors, count_wanted);
+                        }
 
     // Use just one
     for (std::size_t collection_size : {10, 500})

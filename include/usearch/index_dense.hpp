@@ -448,8 +448,8 @@ class index_dense_gt {
 
     struct lookup_key_hash_t {
         using is_transparent = void;
-        std::size_t operator()(key_and_slot_t const& k) const noexcept { return std::hash<vector_key_t>{}(k.key); }
-        std::size_t operator()(vector_key_t const& k) const noexcept { return std::hash<vector_key_t>{}(k); }
+        std::size_t operator()(key_and_slot_t const& k) const noexcept { return hash_gt<vector_key_t>{}(k.key); }
+        std::size_t operator()(vector_key_t const& k) const noexcept { return hash_gt<vector_key_t>{}(k); }
     };
 
     struct lookup_key_same_t {
@@ -1937,11 +1937,13 @@ class index_dense_gt {
 
         vector_key_t free_key_copy = free_key_;
         if (std::is_same<typename std::decay<predicate_at>::type, dummy_predicate_t>::value) {
-            auto allow = [free_key_copy](member_cref_t const& member) noexcept { return member.key != free_key_copy; };
+            auto allow = [free_key_copy](member_cref_t const& member) noexcept {
+                return (vector_key_t)member.key != free_key_copy;
+            };
             return typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow);
         } else {
             auto allow = [free_key_copy, &predicate](member_cref_t const& member) noexcept {
-                return member.key != free_key_copy && predicate(member.key);
+                return (vector_key_t)member.key != free_key_copy && predicate(member.key);
             };
             return typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow);
         }
