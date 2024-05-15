@@ -33,6 +33,14 @@
 #define USEARCH_DEFINED_GCC
 #endif
 
+// The `#pragma region` and `#pragma endregion` are not supported by GCC 12 and older.
+// But they are supported by GCC 13, all recent Clang versions, and MSVC.
+#if defined(__GNUC__) && ((__GNUC__ > 13) || (__GNUC__ == 13 && __GNUC_MINOR__ >= 0))
+#define USEARCH_USE_PRAGMA_REGION
+#elif defined(__clang__) || defined(_MSC_VER)
+#define USEARCH_USE_PRAGMA_REGION
+#endif
+
 // Inferring hardware architecture: x86 vs Arm
 #if defined(__x86_64__)
 #define USEARCH_DEFINED_X86
@@ -2121,7 +2129,9 @@ class index_gt {
     dynamic_allocator_t const& dynamic_allocator() const noexcept { return dynamic_allocator_; }
     tape_allocator_t const& tape_allocator() const noexcept { return tape_allocator_; }
 
+#if defined(USEARCH_USE_PRAGMA_REGION)
 #pragma region Adjusting Configuration
+#endif
 
     /**
      *  @brief Erases all the vectors from the index.
@@ -2214,9 +2224,11 @@ class index_gt {
         return true;
     }
 
+#if defined(USEARCH_USE_PRAGMA_REGION)
 #pragma endregion
 
 #pragma region Construction and Search
+#endif
 
     struct add_result_t {
         error_t error{};
@@ -2706,9 +2718,11 @@ class index_gt {
         return result;
     }
 
+#if defined(USEARCH_USE_PRAGMA_REGION)
 #pragma endregion
 
 #pragma region Metadata
+#endif
 
     struct stats_t {
         std::size_t nodes{};
@@ -2812,9 +2826,11 @@ class index_gt {
 
     std::size_t memory_usage_per_node(level_t level) const noexcept { return node_bytes_(level); }
 
+#if defined(USEARCH_USE_PRAGMA_REGION)
 #pragma endregion
 
 #pragma region Serialization
+#endif
 
     /**
      *  @brief  Estimate the binary length (in bytes) of the serialized index.
@@ -3117,7 +3133,9 @@ class index_gt {
         return {};
     }
 
+#if defined(USEARCH_USE_PRAGMA_REGION)
 #pragma endregion
+#endif
 
     /**
      *  @brief  Performs compaction on the whole HNSW index, purging some entries
