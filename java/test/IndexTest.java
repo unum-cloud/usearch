@@ -1,4 +1,5 @@
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
 import java.io.File;
@@ -22,30 +23,46 @@ public class IndexTest {
         String path = "./tmp/";
         deleteDirectoryFiles(path);
 
-        Index index = new Index.Config().metric("cos").dimensions(2).build();
-        float vec[] = { 10, 20 };
-        index.reserve(10);
-        index.add(42, vec);
-        int[] keys = index.search(vec, 5);
+        try (Index index = new Index.Config().metric("cos").dimensions(2).build()) {
+            float vec[] = { 10, 20 };
+            index.reserve(10);
+            index.add(42, vec);
+            int[] keys = index.search(vec, 5);
+        }
 
         System.out.println("Java Tests Passed!");
     }
 
+    @Test
     public void testGetSuccess() {
-        Index index = new Index.Config().metric("cos").dimensions(2).build();
-        float vec[] = { 10, 20 };
-        index.reserve(10);
-        index.add(42, vec);
+        try (Index index = new Index.Config().metric("cos").dimensions(2).build()) {
+            float vec[] = { 10, 20 };
+            index.reserve(10);
+            index.add(42, vec);
 
-        assertArrayEquals(vec, index.get(42), 0.01f);
+            assertArrayEquals(vec, index.get(42), 0.01f);
+        }
     }
 
+    @Test
     public void testGetFailed() {
+        try (Index index = new Index.Config().metric("cos").dimensions(2).build()) {
+            float vec[] = { 10, 20 };
+            index.reserve(10);
+            index.add(42, vec);
+
+            assertThrows(IllegalArgumentException.class, () -> index.get(41));
+        }
+    }
+
+    @Test
+    public void testUseAfterClose() {
         Index index = new Index.Config().metric("cos").dimensions(2).build();
         float vec[] = { 10, 20 };
         index.reserve(10);
         index.add(42, vec);
-
-        assertThrows(IllegalArgumentException.class, () -> index.get(41));
+        assertEquals(1, index.size());
+        index.close();
+        assertThrows(IllegalStateException.class, () -> index.size());
     }
 }
