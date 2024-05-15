@@ -35,7 +35,11 @@
 #define USEARCH_DEFINED_GCC
 #endif
 
-#if defined(__clang__) || defined(_MSC_VER)
+// The `#pragma region` and `#pragma endregion` are not supported by GCC 12 and older.
+// But they are supported by GCC 13, all recent Clang versions, and MSVC.
+#if defined(__GNUC__) && ((__GNUC__ > 13) || (__GNUC__ == 13 && __GNUC_MINOR__ >= 0))
+#define USEARCH_USE_PRAGMA_REGION
+#elif defined(__clang__) || defined(_MSC_VER)
 #define USEARCH_USE_PRAGMA_REGION
 #endif
 
