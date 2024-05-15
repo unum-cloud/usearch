@@ -86,6 +86,7 @@ model {
     }
 
     toolChains {
+        clang(Clang)
         gcc(Gcc) {
             target("linux_aarch64") {
                 cppCompiler.withArguments { args ->

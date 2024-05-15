@@ -141,6 +141,26 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add( //
     (*env).ReleaseFloatArrayElements(vector, vector_data, 0);
 }
 
+JNIEXPORT jfloatArray JNICALL Java_cloud_unum_usearch_Index_c_1get(
+    JNIEnv *env, jclass, jlong c_ptr, jint key) {
+    
+    auto index = reinterpret_cast<index_dense_t*>(c_ptr);
+    size_t dim = index->dimensions();
+    std::unique_ptr<jfloat[]> vector(new jfloat[dim]);
+    if (index->get(key, vector.get()) == 0) {
+        jclass jc = env->FindClass("java/lang/IllegalArgumentException");
+        if (jc) {
+            env->ThrowNew(jc, "key not found");
+        }
+    }
+    jfloatArray jvector = env->NewFloatArray(dim);
+    if (jvector == nullptr) {  // out of memory
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(jvector, 0, dim, vector.get());
+    return jvector;
+}
+
 JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search( //
     JNIEnv* env, jclass, jlong c_ptr, jfloatArray vector, jlong wanted) {
 
