@@ -386,10 +386,7 @@ template <typename index_at, typename scalar_at, typename... extra_args_at>
 void test_punned_concurrent_updates(index_at& index, typename index_at::vector_key_t const start_key,
                                     std::vector<std::vector<scalar_at>> const& vectors, std::size_t executor_threads) {
 
-    using scalar_t = scalar_at;
     using index_t = index_at;
-    using vector_key_t = typename index_t::vector_key_t;
-    using distance_t = typename index_t::distance_t;
 
     // Generate some keys starting from end,
     // for three vectors from the dataset
