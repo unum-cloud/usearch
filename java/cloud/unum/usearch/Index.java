@@ -46,16 +46,33 @@ public class Index implements AutoCloseable {
     long expansion_add,
     long expansion_search
   ) {
-    c_ptr =
-      c_create(
-        metric,
-        quantization,
-        dimensions,
-        capacity,
-        connectivity,
-        expansion_add,
-        expansion_search
-      );
+    this(c_create(metric, quantization, dimensions, capacity, connectivity, expansion_add, expansion_search));
+  }
+
+  private Index(long c_ptr) {
+    this.c_ptr = c_ptr;
+  }
+
+  /**
+   * Loads an index from a file into memory.
+   *
+   * @param path path to load from
+   * @return a mutable Index.
+   * @throws {@Error} if any part of loading from path failed.
+   */
+  public static Index loadFromPath(String path) {
+    return new Index(c_createFromFile(path, false));
+  }
+
+  /**
+   * Loads an index view from a file into memory.
+   *
+   * @param path path to load from
+   * @return an immutable Index.
+   * @throws {@Error} if any part of loading from path failed.
+   */
+  public static Index viewFromPath(String path) {
+    return new Index(c_createFromFile(path, true));
   }
 
   @Override
@@ -391,6 +408,8 @@ public class Index implements AutoCloseable {
     long expansion_add,
     long expansion_search
   );
+
+  private static native long c_createFromFile(String path, boolean view);
 
   private static native void c_destroy(long ptr);
 
