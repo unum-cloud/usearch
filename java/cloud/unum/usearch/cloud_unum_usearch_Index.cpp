@@ -60,6 +60,22 @@ cleanup:
     return result;
 }
 
+JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1createFromFile(JNIEnv *env, jclass, jstring path, jboolean view) {
+    char const* path_cstr = env->GetStringUTFChars(path, 0);
+    index_dense_t::state_result_t make_result = index_dense_t::make(path_cstr, view);
+    env->ReleaseStringUTFChars(path, path_cstr);
+    if (!make_result) {
+        jclass jc = env->FindClass("java/lang/Error");
+        if (jc) {
+            env->ThrowNew(jc, make_result.error.release());
+        }
+    }
+    index_dense_t* result_ptr = new index_dense_t(std::move(make_result.index));
+    jlong result;
+    std::memcpy(&result, &result_ptr, sizeof(jlong));
+    return result;
+}
+
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1save(JNIEnv* env, jclass, jlong c_ptr, jstring path) {
     char const* path_cstr = (*env).GetStringUTFChars(path, 0);
     serialization_result_t result = reinterpret_cast<index_dense_t*>(c_ptr)->save(path_cstr);
