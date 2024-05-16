@@ -1,4 +1,3 @@
-
 /**
  * Java bindings for Unum USearch vector search library.
  */
@@ -39,21 +38,24 @@ public class Index implements AutoCloseable {
    *                         during search operations
    */
   public Index(
-      String metric,
-      String quantization,
-      long dimensions,
-      long capacity,
-      long connectivity,
-      long expansion_add,
-      long expansion_search) {
-    c_ptr = c_create(
+    String metric,
+    String quantization,
+    long dimensions,
+    long capacity,
+    long connectivity,
+    long expansion_add,
+    long expansion_search
+  ) {
+    c_ptr =
+      c_create(
         metric,
         quantization,
         dimensions,
         capacity,
         connectivity,
         expansion_add,
-        expansion_search);
+        expansion_search
+      );
   }
 
   @Override
@@ -154,7 +156,7 @@ public class Index implements AutoCloseable {
 
   /**
    * Return the contents of the vector at key.
-   * 
+   *
    * @param key key to lookup.
    * @return the contents of the vector.
    * @throws {@link IllegalArgumentException} is key is not available.
@@ -251,8 +253,7 @@ public class Index implements AutoCloseable {
     /**
      * Default constructor for the Config class.
      */
-    public Config() {
-    }
+    public Config() {}
 
     /**
      * Constructs an Index instance based on the current configuration settings.
@@ -261,13 +262,14 @@ public class Index implements AutoCloseable {
      */
     public Index build() {
       return new Index(
-          _metric,
-          _quantization,
-          _dimensions,
-          _capacity,
-          _connectivity,
-          _expansion_add,
-          _expansion_search);
+        _metric,
+        _quantization,
+        _dimensions,
+        _capacity,
+        _connectivity,
+        _expansion_add,
+        _expansion_search
+      );
     }
 
     /**
@@ -372,20 +374,23 @@ public class Index implements AutoCloseable {
    * @param args command line arguments (not used in this case)
    */
   public static void main(String[] args) {
-    try (Index index = new Index.Config().metric("cos").dimensions(100).build()) {
+    try (
+      Index index = new Index.Config().metric("cos").dimensions(100).build()
+    ) {
       index.size();
     }
     System.out.println("Java tests passed!");
   }
 
   private static native long c_create(
-      String metric,
-      String quantization,
-      long dimensions,
-      long capacity,
-      long connectivity,
-      long expansion_add,
-      long expansion_search);
+    String metric,
+    String quantization,
+    long dimensions,
+    long capacity,
+    long connectivity,
+    long expansion_add,
+    long expansion_search
+  );
 
   private static native void c_destroy(long ptr);
 
