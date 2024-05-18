@@ -3,6 +3,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
 import java.io.File;
+import java.io.IOException;
 
 import org.junit.Test;
 
@@ -64,5 +65,21 @@ public class IndexTest {
         assertEquals(1, index.size());
         index.close();
         assertThrows(IllegalStateException.class, () -> index.size());
+    }
+
+    @Test
+    public void testLoadFromPath() throws IOException {
+        File indexFile = File.createTempFile("test", "uidx");
+
+        float vec[] = { 10, 20 };
+        try (Index index = new Index.Config().metric("cos").dimensions(2).build()) {
+            index.reserve(10);
+            index.add(42, vec);
+            index.save(indexFile.getAbsolutePath());
+        }
+
+        try (Index index = Index.loadFromPath(indexFile.getAbsolutePath())) {
+            assertArrayEquals(vec, index.get(42), 0.01f);
+        }
     }
 }
