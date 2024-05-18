@@ -1523,11 +1523,12 @@ class index_dense_gt {
         if (!config.force_vector_copy && copy.config_.exclude_vectors) {
             std::memcpy(copy.vectors_lookup_.data(), vectors_lookup_.data(), vectors_lookup_.size() * sizeof(byte_t*));
         } else {
-            for (std::size_t slot = 0; slot != vectors_lookup_.size(); ++slot)
+            std::size_t slots_count = typed_result.index.size();
+            for (std::size_t slot = 0; slot != slots_count; ++slot)
                 copy.vectors_lookup_[slot] = copy.vectors_tape_allocator_.allocate(copy.metric_.bytes_per_vector());
-            if (std::count(copy.vectors_lookup_.begin(), copy.vectors_lookup_.end(), nullptr))
+            if (std::count(copy.vectors_lookup_.begin(), copy.vectors_lookup_.begin() + slots_count, nullptr))
                 return result.failed("Out of memory!");
-            for (std::size_t slot = 0; slot != vectors_lookup_.size(); ++slot)
+            for (std::size_t slot = 0; slot != slots_count; ++slot)
                 std::memcpy(copy.vectors_lookup_[slot], vectors_lookup_[slot], metric_.bytes_per_vector());
         }
 
