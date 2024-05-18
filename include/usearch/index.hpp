@@ -3856,11 +3856,14 @@ class index_gt {
         metric_at&& metric,    //
         std::size_t needed, top_candidates_t& top, context_t& context) const noexcept {
 
-        top.sort_ascending();
+        // Avoid expensive computation, if the set is already small
         candidate_t* top_data = top.data();
         std::size_t const top_count = top.size();
         if (top_count < needed)
             return {top_data, top_count};
+
+        // Sort before processing
+        top.sort_ascending();
 
         std::size_t submitted_count = 1;
         std::size_t consumed_count = 1; /// Always equal or greater than `submitted_count`.
