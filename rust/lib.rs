@@ -1389,8 +1389,12 @@ mod tests {
 
         let first: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
         let second: [f32; 5] = [0.3, 0.2, 0.4, 0.0, 0.1];
+        let too_long: [f32; 6] = [0.3, 0.2, 0.4, 0.0, 0.1, 0.1];
+        let too_short: [f32; 4] = [0.3, 0.2, 0.4, 0.0];
         assert!(index.add(1, &first).is_ok());
         assert!(index.add(2, &second).is_ok());
+        assert!(index.add(3, &too_long).is_err());
+        assert!(index.add(4, &too_short).is_err());
         assert_eq!(index.size(), 2);
 
         // Test using Vec<T>
