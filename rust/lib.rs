@@ -474,15 +474,6 @@ pub enum MetricFunction {
     F64Metric(std::boxed::Box<dyn Fn(*const f64, *const f64) -> Distance + Send + Sync>),
 }
 
-impl MetricFunction {
-    fn is_variable_length(&self) -> bool {
-        match self {
-            B1X8Metric => true,
-            _ => false,
-        }
-    }
-}
-
 /// Approximate Nearest Neighbors search index for dense vectors.
 ///
 /// The `Index` struct provides an abstraction over a dense vector space, allowing
@@ -556,9 +547,6 @@ impl Clone for ffi::IndexOptions {
 /// in an index. It supports generic operations on vectors of different types,
 /// allowing for the addition, retrieval, and search of vectors within an index.
 pub trait VectorType {
-    fn allow_variable_length() -> bool {
-        false
-    }
     /// Adds a vector to the index under the specified key.
     ///
     /// # Parameters
@@ -918,9 +906,6 @@ impl VectorType for f16 {
 }
 
 impl VectorType for b1x8 {
-    fn allow_variable_length() -> bool {
-        true
-    }
     fn search(index: &Index, query: &[Self], count: usize) -> Result<ffi::Matches, cxx::Exception> {
         index.inner.search_b1x8(b1x8::to_u8s(query), count)
     }
