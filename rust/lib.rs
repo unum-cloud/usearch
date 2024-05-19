@@ -474,6 +474,15 @@ pub enum MetricFunction {
     F64Metric(std::boxed::Box<dyn Fn(*const f64, *const f64) -> Distance + Send + Sync>),
 }
 
+impl MetricFunction {
+    fn is_variable_length(&self) -> bool {
+        match self {
+            B1X8Metric => true,
+            _ => false,
+        }
+    }
+}
+
 /// Approximate Nearest Neighbors search index for dense vectors.
 ///
 /// The `Index` struct provides an abstraction over a dense vector space, allowing
@@ -547,6 +556,9 @@ impl Clone for ffi::IndexOptions {
 /// in an index. It supports generic operations on vectors of different types,
 /// allowing for the addition, retrieval, and search of vectors within an index.
 pub trait VectorType {
+    fn allow_variable_length() -> bool {
+        false
+    }
     /// Adds a vector to the index under the specified key.
     ///
     /// # Parameters
@@ -906,6 +918,9 @@ impl VectorType for f16 {
 }
 
 impl VectorType for b1x8 {
+    fn allow_variable_length() -> bool {
+        true
+    }
     fn search(index: &Index, query: &[Self], count: usize) -> Result<ffi::Matches, cxx::Exception> {
         index.inner.search_b1x8(b1x8::to_u8s(query), count)
     }
@@ -978,6 +993,14 @@ impl VectorType for b1x8 {
 
 fn wrap_cxx_exception<T>(error: Result<T, cxx::Exception>) -> Result<T, USearchError> {
     error.map_err(|cxx_error| USearchError::CxxException(cxx_error))
+}
+use std::any::type_name;
+fn type_of<T>(_: T) -> &'static str {
+    type_name::<T>()
+}
+fn allow_different_dimensions<T>(type_check: T) -> bool {
+    let checktype: &[b1x8] = &[b1x8(0b00001111)];
+    type_of(type_check) == type_of(checktype)
 }
 
 impl Index {
@@ -1083,13 +1106,15 @@ impl Index {
     /// * `vector` - A slice containing the vector data.
     pub fn add<T: VectorType>(self: &Index, key: Key, vector: &[T]) -> Result<(), USearchError> {
         if vector.len() == self.dimensions() {
-            wrap_cxx_exception(T::add(self, key, vector))
-        } else {
-            Err(USearchError::WrongDimensionSize(
-                vector.len(),
-                self.dimensions(),
-            ))
+            return wrap_cxx_exception(T::add(self, key, vector));
         }
+        if allow_different_dimensions(vector) {
+            return wrap_cxx_exception(T::add(self, key, vector));
+        }
+        Err(USearchError::WrongDimensionSize(
+            vector.len(),
+            self.dimensions(),
+        ))
     }
 
     /// Extracts one or more vectors matching the specified key.
