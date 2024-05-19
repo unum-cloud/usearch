@@ -41,6 +41,11 @@ pub enum BitAddressableError {
     /// Error indicating the specified index is out of the allowable range.
     IndexOutOfRange,
 }
+#[derive(Debug)]
+pub enum USearchError {
+    CxxException(cxx::Exception),
+    WrongDimensionSize(usize, usize),
+}
 
 impl std::fmt::Display for BitAddressableError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -1072,8 +1077,15 @@ impl Index {
     ///
     /// * `key` - The key associated with the vector.
     /// * `vector` - A slice containing the vector data.
-    pub fn add<T: VectorType>(self: &Index, key: Key, vector: &[T]) -> Result<(), cxx::Exception> {
-        T::add(self, key, vector)
+    pub fn add<T: VectorType>(self: &Index, key: Key, vector: &[T]) -> Result<(), USearchError> {
+        if vector.len() == self.dimensions() {
+            T::add(self, key, vector).map_err(|cxx_error| USearchError::CxxException(cxx_error))
+        } else {
+            Err(USearchError::WrongDimensionSize(
+                vector.len(),
+                self.dimensions(),
+            ))
+        }
     }
 
     /// Extracts one or more vectors matching the specified key.
