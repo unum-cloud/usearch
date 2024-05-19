@@ -976,15 +976,19 @@ impl VectorType for b1x8 {
     }
 }
 
+fn wrap_cxx_exception<T>(error: Result<T, cxx::Exception>) -> Result<T, USearchError> {
+    error.map_err(|cxx_error| USearchError::CxxException(cxx_error))
+}
+
 impl Index {
-    pub fn new(options: &ffi::IndexOptions) -> Result<Self, cxx::Exception> {
-        match ffi::new_native_index(options) {
+    pub fn new(options: &ffi::IndexOptions) -> Result<Self, USearchError> {
+        wrap_cxx_exception(match ffi::new_native_index(options) {
             Ok(inner) => Result::Ok(Self {
                 inner,
                 metric_fn: None,
             }),
             Err(err) => Err(err),
-        }
+        })
     }
 
     /// Retrieves the expansion value used during index creation.
@@ -1043,8 +1047,8 @@ impl Index {
         self: &Index,
         query: &[T],
         count: usize,
-    ) -> Result<ffi::Matches, cxx::Exception> {
-        T::search(self, query, count)
+    ) -> Result<ffi::Matches, USearchError> {
+        wrap_cxx_exception(T::search(self, query, count))
     }
 
     /// Performs k-Approximate Nearest Neighbors (kANN) Search for closest vectors to the provided query
@@ -1064,11 +1068,11 @@ impl Index {
         query: &[T],
         count: usize,
         filter: F,
-    ) -> Result<ffi::Matches, cxx::Exception>
+    ) -> Result<ffi::Matches, USearchError>
     where
         F: Fn(Key) -> bool,
     {
-        T::filtered_search(self, query, count, filter)
+        wrap_cxx_exception(T::filtered_search(self, query, count, filter))
     }
 
     /// Adds a vector with a specified key to the index.
@@ -1079,7 +1083,7 @@ impl Index {
     /// * `vector` - A slice containing the vector data.
     pub fn add<T: VectorType>(self: &Index, key: Key, vector: &[T]) -> Result<(), USearchError> {
         if vector.len() == self.dimensions() {
-            T::add(self, key, vector).map_err(|cxx_error| USearchError::CxxException(cxx_error))
+            wrap_cxx_exception(T::add(self, key, vector))
         } else {
             Err(USearchError::WrongDimensionSize(
                 vector.len(),
@@ -1103,8 +1107,8 @@ impl Index {
         self: &Index,
         key: Key,
         vector: &mut [T],
-    ) -> Result<usize, cxx::Exception> {
-        T::get(self, key, vector)
+    ) -> Result<usize, USearchError> {
+        wrap_cxx_exception(T::get(self, key, vector))
     }
 
     /// Extracts one or more vectors matching specified key into supplied resizable vector.
@@ -1118,16 +1122,16 @@ impl Index {
         self: &Index,
         key: Key,
         vector: &mut Vec<T>,
-    ) -> Result<usize, cxx::Exception> {
+    ) -> Result<usize, USearchError> {
         let dim = self.dimensions();
         let max_matches = self.count(key);
         vector.resize(dim * max_matches, T::default());
         let matches = T::get(self, key, &mut vector[..]);
         if matches.is_err() {
-            return matches;
+            return wrap_cxx_exception(matches);
         }
         vector.resize(dim * matches.as_ref().unwrap(), T::default());
-        return matches;
+        return wrap_cxx_exception(matches);
     }
 
     /// Reserves memory for a specified number of incoming vectors.
@@ -1135,8 +1139,8 @@ impl Index {
     /// # Arguments
     ///
     /// * `capacity` - The desired total capacity, including the current size.
-    pub fn reserve(self: &Index, capacity: usize) -> Result<(), cxx::Exception> {
-        self.inner.reserve(capacity)
+    pub fn reserve(self: &Index, capacity: usize) -> Result<(), USearchError> {
+        wrap_cxx_exception(self.inner.reserve(capacity))
     }
 
     /// Retrieves the number of dimensions in the vectors indexed.
@@ -1173,8 +1177,8 @@ impl Index {
     /// # Returns
     ///
     /// `true` if the vector is successfully removed, `false` otherwise.
-    pub fn remove(self: &Index, key: Key) -> Result<usize, cxx::Exception> {
-        self.inner.remove(key)
+    pub fn remove(self: &Index, key: Key) -> Result<usize, USearchError> {
+        wrap_cxx_exception(self.inner.remove(key))
     }
 
     /// Renames the vector under a specific key.
@@ -1187,8 +1191,8 @@ impl Index {
     /// # Returns
     ///
     /// `true` if the vector is renamed, `false` otherwise.
-    pub fn rename(self: &Index, from: Key, to: Key) -> Result<usize, cxx::Exception> {
-        self.inner.rename(from, to)
+    pub fn rename(self: &Index, from: Key, to: Key) -> Result<usize, USearchError> {
+        wrap_cxx_exception(self.inner.rename(from, to))
     }
 
     /// Checks if the index contains a vector with a specified key.
@@ -1222,8 +1226,8 @@ impl Index {
     /// # Arguments
     ///
     /// * `path` - The file path where the index will be saved.
-    pub fn save(self: &Index, path: &str) -> Result<(), cxx::Exception> {
-        self.inner.save(path)
+    pub fn save(self: &Index, path: &str) -> Result<(), USearchError> {
+        wrap_cxx_exception(self.inner.save(path))
     }
 
     /// Loads the index from a specified file.
@@ -1231,8 +1235,8 @@ impl Index {
     /// # Arguments
     ///
     /// * `path` - The file path from where the index will be loaded.
-    pub fn load(self: &Index, path: &str) -> Result<(), cxx::Exception> {
-        self.inner.load(path)
+    pub fn load(self: &Index, path: &str) -> Result<(), USearchError> {
+        wrap_cxx_exception(self.inner.load(path))
     }
 
     /// Creates a view of the index from a file without loading it into memory.
@@ -1240,13 +1244,13 @@ impl Index {
     /// # Arguments
     ///
     /// * `path` - The file path from where the view will be created.
-    pub fn view(self: &Index, path: &str) -> Result<(), cxx::Exception> {
-        self.inner.view(path)
+    pub fn view(self: &Index, path: &str) -> Result<(), USearchError> {
+        wrap_cxx_exception(self.inner.view(path))
     }
 
     /// Erases all members from the index, closes files, and returns RAM to OS.
-    pub fn reset(self: &Index) -> Result<(), cxx::Exception> {
-        self.inner.reset()
+    pub fn reset(self: &Index) -> Result<(), USearchError> {
+        wrap_cxx_exception(self.inner.reset())
     }
 
     /// A relatively accurate lower bound on the amount of memory consumed by the system.
@@ -1260,8 +1264,8 @@ impl Index {
     /// # Arguments
     ///
     /// * `path` - The file path where the index will be saved.
-    pub fn save_to_buffer(self: &Index, buffer: &mut [u8]) -> Result<(), cxx::Exception> {
-        self.inner.save_to_buffer(buffer)
+    pub fn save_to_buffer(self: &Index, buffer: &mut [u8]) -> Result<(), USearchError> {
+        wrap_cxx_exception(self.inner.save_to_buffer(buffer))
     }
 
     /// Loads the index from a specified file.
@@ -1269,8 +1273,8 @@ impl Index {
     /// # Arguments
     ///
     /// * `path` - The file path from where the index will be loaded.
-    pub fn load_from_buffer(self: &Index, buffer: &[u8]) -> Result<(), cxx::Exception> {
-        self.inner.load_from_buffer(buffer)
+    pub fn load_from_buffer(self: &Index, buffer: &[u8]) -> Result<(), USearchError> {
+        wrap_cxx_exception(self.inner.load_from_buffer(buffer))
     }
 
     /// Creates a view of the index from a file without loading it into memory.
@@ -1278,12 +1282,12 @@ impl Index {
     /// # Arguments
     ///
     /// * `path` - The file path from where the view will be created.
-    pub fn view_from_buffer(self: &Index, buffer: &[u8]) -> Result<(), cxx::Exception> {
-        self.inner.view_from_buffer(buffer)
+    pub fn view_from_buffer(self: &Index, buffer: &[u8]) -> Result<(), USearchError> {
+        wrap_cxx_exception(self.inner.view_from_buffer(buffer))
     }
 }
 
-pub fn new_index(options: &ffi::IndexOptions) -> Result<Index, cxx::Exception> {
+pub fn new_index(options: &ffi::IndexOptions) -> Result<Index, USearchError> {
     Index::new(options)
 }
 
