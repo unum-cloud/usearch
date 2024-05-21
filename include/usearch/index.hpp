@@ -1683,8 +1683,8 @@ template <typename key_at> inline key_at get_key(member_ref_gt<key_at> const& m)
  *          be seen as a network of keys, accelerating approximate @b Value~>Key visited_members.
  *
  *  Unlike most implementations, this one is generic anc can be used for any search,
- *  not just within equi-dimensional vectors. Examples range from texts to similar Chess
- *  positions.
+ *  not just within equi-dimensional vectors. Examples range from Texts to similar Chess
+ *  positions, Geo-Spatial Search, and even Graphs.
  *
  *  @tparam key_at
  *      The type of primary objects stored in the index.
