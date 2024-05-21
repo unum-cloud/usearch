@@ -123,33 +123,6 @@ void test_uint40() {
 }
 
 /**
- * Tests the behavior of various move-constructors and move-assignment operators for the index.
- *
- * Constructs an index and performs tests with it before and after move operations to ensure that the index maintains
- * its integrity and functionality after being moved.
- *
- * @param config Configuration settings for the index.
- * @tparam index_at Type of the index being tested.
- */
-template <typename index_at> void test_move_constructors(index_config_t const& config) {
-    {
-        index_at index{config};
-        test_sets(index);
-    }
-    {
-        index_at index{config};
-        index.reserve(1);
-        test_sets(index_at(std::move(index)));
-    }
-    {
-        index_at index{config};
-        index.reserve(1);
-        index_at index_moved = std::move(index);
-        test_sets(index_moved);
-    }
-}
-
-/**
  * The goal of this test is to invoke as many different interfaces as possible, making sure that all code-paths compile.
  * For that it only uses a tiny set of 3 predefined vectors.
  *
@@ -199,15 +172,18 @@ void test_minimal_three_vectors(index_at& index, //
     index.add(key_third, vector_third.data(), args...);
     expect(index.size() == 3);
 
-    // Perform exact search
-    matched_count = index.search(vector_first.data(), 5, args...).dump_to(matched_keys, matched_distances);
+    // Perform single entry search
+    matched_count = index                                        //
+                        .search(vector_first.data(), 5, args...) //
+                        .dump_to(matched_keys, matched_distances);
     expect(matched_count != 0);
 
     // Perform filtered exact search, keeping only odd values
     if constexpr (punned_ak) {
         auto is_odd = [](vector_key_t key) -> bool { return (key & 1) != 0; };
-        matched_count =
-            index.filtered_search(vector_first.data(), 5, is_odd, args...).dump_to(matched_keys, matched_distances);
+        matched_count = index                                                         //
+                            .filtered_search(vector_first.data(), 5, is_odd, args...) //
+                            .dump_to(matched_keys, matched_distances);
         expect(matched_count != 0);
         for (std::size_t i = 0; i < matched_count; i++)
             expect(is_odd(matched_keys[i]));
@@ -239,6 +215,50 @@ void test_minimal_three_vectors(index_at& index, //
     }
 
     index.save("tmp.usearch");
+
+    // Perform content and scan validations for a copy
+    {
+        auto copy_result = index.copy();
+        expect(bool(copy_result));
+        auto& copied_index = copy_result.index;
+
+        // Perform single entry search
+        matched_count = copied_index                                 //
+                            .search(vector_first.data(), 5, args...) //
+                            .dump_to(matched_keys, matched_distances);
+        expect(matched_count != 0);
+
+        // Validate scans
+        std::size_t count = 0;
+        for (auto member : copied_index) {
+            vector_key_t id = member.key;
+            expect(id >= key_first && id <= key_third);
+            count++;
+        }
+        expect((count == 3));
+        expect((copied_index.stats(0).nodes == 3));
+    }
+
+    // Perform content and scan validations for a moved
+    {
+        index_at moved_index(std::move(index));
+
+        // Perform single entry search
+        matched_count = moved_index                                  //
+                            .search(vector_first.data(), 5, args...) //
+                            .dump_to(matched_keys, matched_distances);
+        expect(matched_count != 0);
+
+        // Validate scans
+        std::size_t count = 0;
+        for (auto member : moved_index) {
+            vector_key_t id = member.key;
+            expect(id >= key_first && id <= key_third);
+            count++;
+        }
+        expect((count == 3));
+        expect((moved_index.stats(0).nodes == 3));
+    }
 
     // Check if metadata is retrieved correctly
     if constexpr (punned_ak) {
