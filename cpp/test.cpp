@@ -248,11 +248,14 @@ void test_minimal_three_vectors(index_at& index, //
 
     // Search again over reconstructed index
     index.load("tmp.usearch");
+    {
     matched_count = index.search(vector_first.data(), 5, args...).dump_to(matched_keys, matched_distances);
     expect(matched_count == 3);
     expect(matched_keys[0] == key_first);
     expect(std::abs(matched_distances[0]) < 0.01);
+    }
 
+    // Try retrieving a vector from a deserialized index
     if constexpr (punned_ak) {
         if (index.config().enable_key_lookups) {
             std::size_t dimensions = vector_first.size();
@@ -284,6 +287,8 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
     using index_t = index_at;
     using vector_key_t = typename index_t::vector_key_t;
     using distance_t = typename index_t::distance_t;
+    using index_add_result_t = typename index_t::add_result_t;
+    using index_search_result_t = typename index_t::search_result_t;
 
     // Generate some keys starting from end,
     // for three vectors from the dataset
@@ -297,19 +302,51 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
     index.reserve({vectors.size(), executor.size()});
     executor.fixed(vectors.size(), [&](std::size_t thread, std::size_t task) {
         if constexpr (punned_ak) {
-            index.add(start_key + task, vectors[task].data(), args...);
+            index_add_result_t result = index.add(start_key + task, vectors[task].data(), args...);
+            expect(bool(result));
         } else {
             index_update_config_t config;
             config.thread = thread;
-            index.add(start_key + task, vectors[task].data(), args..., config);
+            index_add_result_t result = index.add(start_key + task, vectors[task].data(), args..., config);
+            expect(bool(result));
         }
+    });
+
+    // Parallel search over the same vectors
+    executor.fixed(vectors.size(), [&](std::size_t thread, std::size_t task) {
+        std::size_t max_possible_matches = vectors.size();
+        std::size_t count_requested = max_possible_matches;
+        std::vector<vector_key_t> matched_keys(count_requested);
+        std::vector<distance_t> matched_distances(count_requested);
+        std::size_t matched_count = 0;
+
+        // Invoke the search kernel
+        if constexpr (punned_ak) {
+            index_search_result_t result = index.search(vectors[task].data(), count_requested, args...);
+            expect(bool(result));
+            matched_count = result.dump_to(matched_keys.data(), matched_distances.data());
+        } else {
+            index_search_config_t config;
+            config.thread = thread;
+            index_search_result_t result = index.search(vectors[task].data(), count_requested, args..., config);
+            expect(bool(result));
+            matched_count = result.dump_to(matched_keys.data(), matched_distances.data());
+        }
+
+        expect_eq(matched_count, max_possible_matches);
+        expect_eq<vector_key_t>(matched_keys[0], start_key + task);
+        expect(std::abs(matched_distances[0]) < 0.01);
+
+        // Check that all the distance are monotonically rising
+        for (std::size_t i = 1; i < matched_count; i++)
+            expect(matched_distances[i - 1] <= matched_distances[i]);
     });
 
     // Check for duplicates
     if constexpr (punned_ak) {
         if (index.config().enable_key_lookups) {
             index.reserve({vectors.size() + 1u, executor.size()});
-            auto result = index.add(key_first, vector_first.data(), args...);
+            index_add_result_t result = index.add(key_first, vector_first.data(), args...);
             expect_eq<std::size_t>(!!result, index.multi());
             result.error.release();
 
@@ -319,37 +356,45 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
     }
 
     // Search again over mapped index
+    index.save("tmp.usearch");
     index.view("tmp.usearch");
-    vector_key_t matched_keys[10] = {0};
-    distance_t matched_distances[10] = {0};
-    std::size_t matched_count = index.search(vector_first.data(), 5, args...).dump_to(matched_keys, matched_distances);
-    expect(matched_count == 3);
-    expect(matched_keys[0] == key_first);
-    expect(std::abs(matched_distances[0]) < 0.01);
 
+    // Parallel search over the same vectors
+    executor.fixed(vectors.size(), [&](std::size_t thread, std::size_t task) {
     // Check over-sampling beyond the size of the collection
-    {
         std::size_t max_possible_matches = vectors.size();
-        std::size_t count_requested = max_possible_matches * 4;
+        std::size_t count_requested = max_possible_matches * 10;
         std::vector<vector_key_t> matched_keys(count_requested);
         std::vector<distance_t> matched_distances(count_requested);
+        std::size_t matched_count = 0;
 
-        matched_count = index                                                      //
-                            .search(vector_first.data(), count_requested, args...) //
-                            .dump_to(matched_keys.data(), matched_distances.data());
-        expect(matched_count <= max_possible_matches);
-        expect(matched_keys[0] == key_first);
+        // Invoke the search kernel
+        if constexpr (punned_ak) {
+            index_search_result_t result = index.search(vectors[task].data(), count_requested, args...);
+            expect(bool(result));
+            matched_count = result.dump_to(matched_keys.data(), matched_distances.data());
+        } else {
+            index_search_config_t config;
+            config.thread = thread;
+            index_search_result_t result = index.search(vectors[task].data(), count_requested, args..., config);
+            expect(bool(result));
+            matched_count = result.dump_to(matched_keys.data(), matched_distances.data());
+        }
+
+        expect_eq(matched_count, max_possible_matches);
+        expect_eq<vector_key_t>(matched_keys[0], start_key + task);
         expect(std::abs(matched_distances[0]) < 0.01);
 
         // Check that all the distance are monotonically rising
         for (std::size_t i = 1; i < matched_count; i++)
             expect(matched_distances[i - 1] <= matched_distances[i]);
-    }
+    });
 
+    // Try retrieving a vector from a deserialized index
     if constexpr (punned_ak) {
         if (index.config().enable_key_lookups) {
             expect(index.contains(key_first));
-            expect(index.count(key_first) == 1);
+            expect_eq<std::size_t>(index.count(key_first), 1);
             std::vector<scalar_t> vector_reloaded(dimensions);
             index.get(key_first, vector_reloaded.data());
             expect(std::equal(vector_first.data(), vector_first.data() + dimensions, vector_reloaded.data()));
