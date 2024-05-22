@@ -989,6 +989,7 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct met
 #endif
         for (std::size_t i = 0; i != dim; ++i)
             ab += result_t(a[i]) * result_t(b[i]);
+        // reversing the sign to convert inner product similarity to distance function
         return - ab;
     }
 };
@@ -1556,7 +1557,6 @@ class metric_punned_t {
                          &result);
         return (result_t)result;
     }
-    result_t invoke_simsimd_reverse(uptr_t a, uptr_t b) const noexcept { return 1 - invoke_simsimd(a, b); }
 #else
     bool configure_with_simsimd() noexcept { return false; }
 #endif
