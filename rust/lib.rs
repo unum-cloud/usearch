@@ -249,7 +249,7 @@ pub mod ffi {
     #[repr(i32)]
     enum MetricKind {
         Unknown,
-        /// The Inner Product metric, defined as `IP = 1 - sum(a[i] * b[i])`.
+        /// The Inner Product metric, defined as `IP = - sum(a[i] * b[i])`.
         IP,
         /// The squared Euclidean Distance metric, defined as `L2 = sum((a[i] - b[i])^2)`.
         L2sq,

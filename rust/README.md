@@ -94,7 +94,7 @@ assert!(index.view_from_buffer(&serialization_buffer).is_ok());
 USearch comes pre-packaged with SimSIMD, bringing over 100 SIMD-accelerated distance kernels for x86 and ARM architectures.
 That includes:
 
-- `MetricKind::IP` - Inner Product metric, defined as `IP = 1 - sum(a[i] * b[i])`.
+- `MetricKind::IP` - Inner Product metric, defined as `IP = - sum(a[i] * b[i])`.
 - `MetricKind::L2sq` - Squared Euclidean Distance metric, defined as `L2 = sum((a[i] - b[i])^2)`.
 - `MetricKind::Cos` - Cosine Similarity metric, defined as `Cos = 1 - sum(a[i] * b[i]) / (sqrt(sum(a[i]^2) * sqrt(sum(b[i]^2)))`.
 - `MetricKind::Pearson` - Pearson Correlation metric.
