@@ -989,7 +989,7 @@ template <typename scalar_at = float, typename result_at = scalar_at> struct met
 #endif
         for (std::size_t i = 0; i != dim; ++i)
             ab += result_t(a[i]) * result_t(b[i]);
-        return 1 - ab;
+        return - ab;
     }
 };
 
@@ -1540,9 +1540,7 @@ class metric_punned_t {
             return false;
 
         std::memcpy(&metric_ptr_, &simd_metric, sizeof(simd_metric));
-        metric_routed_ = metric_kind_ == metric_kind_t::ip_k
-                             ? reinterpret_cast<metric_rounted_t>(&metric_punned_t::invoke_simsimd_reverse)
-                             : reinterpret_cast<metric_rounted_t>(&metric_punned_t::invoke_simsimd);
+        metric_routed_ = reinterpret_cast<metric_rounted_t>(&metric_punned_t::invoke_simsimd);
         isa_kind_ = simd_kind;
         return true;
     }
