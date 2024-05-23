@@ -46,6 +46,14 @@ cmake --build build_release --config Release
 build_release/test_cpp
 ```
 
+For development purposes, you may want to include symbols information in the build:
+
+```sh
+cmake -DUSEARCH_BUILD_TEST_CPP=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo -B build_relwithdebinfo
+cmake --build build_relwithdebinfo --config RelWithDebInfo
+build_relwithdebinfo/test_cpp
+```
+
 The CMakeLists.txt file has a number of options you can pass:
 
 - What to build:

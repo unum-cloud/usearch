@@ -21,16 +21,22 @@
 using namespace unum::usearch;
 using namespace unum;
 
-void expect(bool must_be_true, char const* message = nullptr) {
+void __expect(bool must_be_true, char const* file, int line, char const* message = nullptr) {
     if (must_be_true)
         return;
     message = message ? message : "C++ unit test failed";
-    __usearch_raise_runtime_error(message);
+    char buffer[512];
+    std::snprintf(buffer, sizeof(buffer), "%s at %s:%d", message, file, line);
+    __usearch_raise_runtime_error(buffer);
 }
 
-template <typename value_at> void expect_eq(value_at a, value_at b, char const* message = nullptr) {
-    expect(a == b, message);
+template <typename value_at>
+void __expect_eq(value_at a, value_at b, char const* file, int line, char const* message = nullptr) {
+    __expect(a == b, file, line, message);
 }
+
+#define expect(cond) __expect((bool)(cond), __FILE__, __LINE__)
+#define expect_eq(a, b) __expect_eq<decltype(a)>((a), (b), __FILE__, __LINE__)
 
 /**
  *  @brief  Convinience wrapper combining combined allocation and construction of an index.
@@ -101,9 +107,9 @@ void test_uint40() {
         input_clamped.value = input_u64 & max_uint40_k;
 
         // Check if all conversions are equal to the masked value
-        expect_eq<std::uint64_t>(u40_from_u32, input_clamped.value & 0xFFFFFFFF);
-        expect_eq<std::uint64_t>(u40_from_u64, input_clamped.value);
-        expect_eq<std::uint64_t>(u40_from_size, input_clamped.value);
+        expect_eq(u40_from_u32, input_clamped.value & 0xFFFFFFFF);
+        expect_eq(u40_from_u64, input_clamped.value);
+        expect_eq(u40_from_size, input_clamped.value);
 
         // Check relative ordering against all other test numbers
         for (std::uint64_t other_u64 : test_numbers) {
@@ -155,8 +161,8 @@ void test_minimal_three_vectors(index_at& index, //
     }
 
     // Add data
-    expect((bool)index.try_reserve(10));
-    expect((bool)index.add(key_first, vector_first.data(), args...));
+    expect(index.try_reserve(10));
+    expect(index.add(key_first, vector_first.data(), args...));
 
     // Default approximate search
     vector_key_t matched_keys[10] = {0};
@@ -175,7 +181,7 @@ void test_minimal_three_vectors(index_at& index, //
     // Perform single entry search
     {
         auto search_result = index.search(vector_first.data(), 5, args...);
-        expect((bool)search_result);
+        expect(search_result);
         matched_count = search_result.dump_to(matched_keys, matched_distances);
         expect(matched_count != 0);
     }
@@ -184,7 +190,7 @@ void test_minimal_three_vectors(index_at& index, //
     if constexpr (punned_ak) {
         auto is_odd = [](vector_key_t key) -> bool { return (key & 1) != 0; };
         auto search_result = index.filtered_search(vector_first.data(), 5, is_odd, args...);
-        expect((bool)search_result);
+        expect(search_result);
         matched_count = search_result.dump_to(matched_keys, matched_distances);
         expect(matched_count != 0);
         for (std::size_t i = 0; i < matched_count; i++)
@@ -209,24 +215,24 @@ void test_minimal_three_vectors(index_at& index, //
         if (index.config().enable_key_lookups) {
             using labeling_result_t = typename index_t::labeling_result_t;
             labeling_result_t result = index.remove(key_third);
-            expect((bool)result);
+            expect(result);
             expect(index.size() == 2);
             index.add(key_third, vector_third.data(), args...);
             expect(index.size() == 3);
         }
     }
 
-    expect((bool)index.save("tmp.usearch"));
+    expect(index.save("tmp.usearch"));
 
     // Perform content and scan validations for a copy
     {
         auto copy_result = index.copy();
-        expect((bool)copy_result);
+        expect(copy_result);
         auto& copied_index = copy_result.index;
 
         // Perform single entry search
         auto search_result = copied_index.search(vector_first.data(), 5, args...);
-        expect((bool)search_result);
+        expect(search_result);
         matched_count = search_result.dump_to(matched_keys, matched_distances);
         expect(matched_count != 0);
 
@@ -237,8 +243,8 @@ void test_minimal_three_vectors(index_at& index, //
             expect(id >= key_first && id <= key_third);
             count++;
         }
-        expect_eq<std::size_t>(count, 3);
-        expect_eq<std::size_t>(copied_index.stats(0).nodes, 3);
+        expect_eq(count, 3);
+        expect_eq(copied_index.stats(0).nodes, 3);
     }
 
     // Perform content and scan validations for a moved
@@ -247,7 +253,7 @@ void test_minimal_three_vectors(index_at& index, //
 
         // Perform single entry search
         auto search_result = moved_index.search(vector_first.data(), 5, args...);
-        expect((bool)search_result);
+        expect(search_result);
         matched_count = search_result.dump_to(matched_keys, matched_distances);
         expect(matched_count != 0);
 
@@ -258,24 +264,24 @@ void test_minimal_three_vectors(index_at& index, //
             expect(id >= key_first && id <= key_third);
             count++;
         }
-        expect_eq<std::size_t>(count, 3);
-        expect_eq<std::size_t>(moved_index.stats(0).nodes, 3);
+        expect_eq(count, 3);
+        expect_eq(moved_index.stats(0).nodes, 3);
     }
 
     // Check if metadata is retrieved correctly
     if constexpr (punned_ak) {
         auto head_result = index_dense_metadata_from_path("tmp.usearch");
-        expect((bool)head_result);
-        expect_eq<std::size_t>(head_result.head.count_present, 3);
+        expect(head_result);
+        expect_eq(3ull, head_result.head.count_present);
     }
 
     // Search again over reconstructed index
     auto load_result = index.load("tmp.usearch");
-    expect((bool)load_result);
+    expect(load_result);
     {
         matched_count = index.search(vector_first.data(), 5, args...).dump_to(matched_keys, matched_distances);
-        expect(matched_count == 3);
-        expect(matched_keys[0] == key_first);
+        expect_eq(matched_count, 3);
+        expect_eq(matched_keys[0], key_first);
         expect(std::abs(matched_distances[0]) < 0.01);
     }
 
@@ -284,7 +290,7 @@ void test_minimal_three_vectors(index_at& index, //
         if (index.config().enable_key_lookups) {
             std::size_t dimensions = vector_first.size();
             std::vector<scalar_t> vector_reloaded(dimensions);
-            expect((bool)index.get(key_second, vector_reloaded.data()));
+            expect(index.get(key_second, vector_reloaded.data()));
             expect(std::equal(vector_second.data(), vector_second.data() + dimensions, vector_reloaded.data()));
         }
     }
@@ -327,12 +333,12 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
     executor.fixed(vectors.size(), [&](std::size_t thread, std::size_t task) {
         if constexpr (punned_ak) {
             index_add_result_t result = index.add(start_key + task, vectors[task].data(), args...);
-            expect((bool)result);
+            expect(result);
         } else {
             index_update_config_t config;
             config.thread = thread;
             index_add_result_t result = index.add(start_key + task, vectors[task].data(), args..., config);
-            expect((bool)result);
+            expect(result);
         }
     });
 
@@ -347,19 +353,19 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
         // Invoke the search kernel
         if constexpr (punned_ak) {
             index_search_result_t result = index.search(vectors[task].data(), count_requested, args...);
-            expect((bool)result);
+            expect(result);
             matched_count = result.dump_to(matched_keys.data(), matched_distances.data());
         } else {
             index_search_config_t config;
             config.thread = thread;
             index_search_result_t result = index.search(vectors[task].data(), count_requested, args..., config);
-            expect((bool)result);
+            expect(result);
             matched_count = result.dump_to(matched_keys.data(), matched_distances.data());
         }
 
         // In approximate search we can't always expect the right answer to be found
         //      expect_eq(matched_count, max_possible_matches);
-        //      expect_eq<vector_key_t>(matched_keys[0], start_key + task);
+        //      expect_eq(matched_keys[0], start_key + task);
         //      expect(std::abs(matched_distances[0]) < 0.01);
         expect(matched_count <= max_possible_matches);
 
@@ -369,23 +375,23 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
     });
 
     // Search again over mapped index
-    expect((bool)index.save("tmp.usearch"));
+    expect(index.save("tmp.usearch"));
 
     // Check for duplicates
     if constexpr (punned_ak) {
         if (index.config().enable_key_lookups) {
             expect(index.try_reserve({vectors.size() + 1u, executor.size()}));
             index_add_result_t result = index.add(key_first, vector_first.data(), args...);
-            expect_eq<std::size_t>(!!result, index.multi());
+            expect_eq(!!result, index.multi());
             result.error.release();
 
             std::size_t first_key_count = index.count(key_first);
-            expect_eq<std::size_t>(first_key_count, 1ul + index.multi());
+            expect_eq(first_key_count, 1ul + index.multi());
         }
     }
 
     // Recover the state before the duplicate insertion
-    expect((bool)index.view("tmp.usearch"));
+    expect(index.view("tmp.usearch"));
 
     // Parallel search over the same vectors
     executor.fixed(vectors.size(), [&](std::size_t thread, std::size_t task) {
@@ -399,19 +405,19 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
         // Invoke the search kernel
         if constexpr (punned_ak) {
             index_search_result_t result = index.search(vectors[task].data(), count_requested, args...);
-            expect((bool)result);
+            expect(result);
             matched_count = result.dump_to(matched_keys.data(), matched_distances.data());
         } else {
             index_search_config_t config;
             config.thread = thread;
             index_search_result_t result = index.search(vectors[task].data(), count_requested, args..., config);
-            expect((bool)result);
+            expect(result);
             matched_count = result.dump_to(matched_keys.data(), matched_distances.data());
         }
 
         // In approximate search we can't always expect the right answer to be found
         //      expect_eq(matched_count, max_possible_matches);
-        //      expect_eq<vector_key_t>(matched_keys[0], start_key + task);
+        //      expect_eq(matched_keys[0], start_key + task);
         //      expect(std::abs(matched_distances[0]) < 0.01);
         expect(matched_count <= max_possible_matches);
 
@@ -424,14 +430,14 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
     if constexpr (punned_ak) {
         if (index.config().enable_key_lookups) {
             expect(index.contains(key_first));
-            expect_eq<std::size_t>(index.count(key_first), 1);
+            expect_eq(index.count(key_first), 1);
             std::vector<scalar_t> vector_reloaded(dimensions);
             index.get(key_first, vector_reloaded.data());
             expect(std::equal(vector_first.data(), vector_first.data() + dimensions, vector_reloaded.data()));
         }
 
         auto compaction_result = index.compact();
-        expect((bool)compaction_result);
+        expect(compaction_result);
     }
 
     expect(index.memory_usage() > 0);
@@ -440,7 +446,7 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
     // Check metadata
     if constexpr (punned_ak) {
         index_dense_metadata_result_t meta = index_dense_metadata_from_path("tmp.usearch");
-        expect((bool)meta);
+        expect(meta);
     }
 }
 
@@ -469,25 +475,25 @@ void test_punned_concurrent_updates(index_at& index, typename index_at::vector_k
     executor.fixed(vectors.size(), [&](std::size_t, std::size_t task) {
         using add_result_t = typename index_t::add_result_t;
         add_result_t result = index.add(start_key + task, vectors[task].data());
-        expect((bool)result);
+        expect(result);
     });
-    expect_eq<std::size_t>(index.size(), vectors.size());
+    expect_eq(index.size(), vectors.size());
 
     // Remove all the keys
     executor.fixed(vectors.size(), [&](std::size_t, std::size_t task) {
         using labeling_result_t = typename index_t::labeling_result_t;
         labeling_result_t result = index.remove(start_key + task);
-        expect((bool)result);
+        expect(result);
     });
-    expect_eq<std::size_t>(index.size(), 0);
+    expect_eq(index.size(), 0);
 
     // Add them back, which under the hood will trigger the `update`
     executor.fixed(vectors.size(), [&](std::size_t, std::size_t task) {
         using add_result_t = typename index_t::add_result_t;
         add_result_t result = index.add(start_key + task, vectors[task].data());
-        expect((bool)result);
+        expect(result);
     });
-    expect_eq<std::size_t>(index.size(), vectors.size());
+    expect_eq(index.size(), vectors.size());
 }
 
 /**
@@ -566,7 +572,8 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
 
     // Type-punned:
     auto run_punned = [&](bool multi, bool enable_key_lookups, std::size_t connectivity) {
-        std::printf("-- punned with connectivity %zu \n", connectivity);
+        std::printf("-- punned with connectivity %zu, multi: %s, lookups: %s \n", connectivity, multi ? "yes" : "no",
+                    enable_key_lookups ? "yes" : "no");
         using index_t = index_dense_gt<vector_key_t, slot_t>;
         using index_result_t = typename index_t::state_result_t;
         metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
@@ -634,7 +641,7 @@ template <typename key_at, typename slot_at> void test_tanimoto(std::size_t dime
     metric_punned_t metric(words, metric_kind_t::tanimoto_k, scalar_kind_t::b1x8_k);
     index_config_t config(connectivity);
     auto index_result = index_punned_t::make(metric, config);
-    expect((bool)index_result);
+    expect(index_result);
     index_punned_t& index = index_result.index;
 
     executor_default_t executor;
@@ -675,7 +682,7 @@ void test_absurd(std::size_t dimensions, std::size_t connectivity, std::size_t e
     metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind_t::f32_k);
     index_dense_config_t config(connectivity, expansion_add, expansion_search);
     auto index_result = index_punned_t::make(metric, config);
-    expect((bool)index_result);
+    expect(index_result);
     index_punned_t& index = index_result.index;
 
     std::size_t count_max = (std::max)(count_vectors, count_wanted);
@@ -691,7 +698,7 @@ void test_absurd(std::size_t dimensions, std::size_t connectivity, std::size_t e
     {
         executor_default_t executor(count_vectors);
         executor.fixed(count_vectors, [&](std::size_t thread, std::size_t task) {
-            expect((bool)index.add(task + 25000, scalars.data() + index.scalar_words() * task, thread));
+            expect(index.add(task + 25000, scalars.data() + index.scalar_words() * task, thread));
         });
     }
 
@@ -702,7 +709,7 @@ void test_absurd(std::size_t dimensions, std::size_t connectivity, std::size_t e
             std::vector<vector_key_t> keys(count_wanted);
             std::vector<f32_t> distances(count_wanted);
             auto results = index.search(scalars.data() + index.scalar_words() * task, count_wanted, thread);
-            expect((bool)results);
+            expect(results);
             auto count_found = results.dump_to(keys.data(), distances.data());
             expect(count_found <= count_wanted);
             if (count_vectors && count_wanted)
@@ -895,7 +902,7 @@ template <typename key_at, typename slot_at> void test_replacing_update() {
     using index_punned_t = index_dense_gt<vector_key_t, slot_t>;
     metric_punned_t metric(1, metric_kind_t::l2sq_k, scalar_kind_t::f32_k);
     auto index_result = index_punned_t::make(metric);
-    expect((bool)index_result);
+    expect(index_result);
     index_punned_t& index = index_result.index;
 
     // Reserve space for 3 entries
@@ -910,38 +917,38 @@ template <typename key_at, typename slot_at> void test_replacing_update() {
     index.add(42, as_ptr(1.1f));
     index.add(43, as_ptr(2.1f));
     index.add(44, as_ptr(3.1f));
-    expect_eq<std::size_t>(index.size(), 3);
+    expect_eq(index.size(), 3);
 
     // Assert initial state
     auto initial_search = index.search(as_ptr(1.0f), 3);
-    expect_eq<std::size_t>(initial_search.size(), 3);
-    expect_eq<vector_key_t>(initial_search[0].member.key, 42);
-    expect_eq<vector_key_t>(initial_search[1].member.key, 43);
-    expect_eq<vector_key_t>(initial_search[2].member.key, 44);
+    expect_eq(initial_search.size(), 3);
+    expect_eq(initial_search[0].member.key, 42);
+    expect_eq(initial_search[1].member.key, 43);
+    expect_eq(initial_search[2].member.key, 44);
 
     // Replace the second entry
     index.remove(43);
     index.add(43, as_ptr(2.2f));
-    expect_eq<std::size_t>(index.size(), 3);
+    expect_eq(index.size(), 3);
 
     // Assert state after replacing second entry
     auto post_second_replacement = index.search(as_ptr(1.0f), 3);
-    expect_eq<std::size_t>(post_second_replacement.size(), 3);
-    expect_eq<vector_key_t>(post_second_replacement[0].member.key, 42);
-    expect_eq<vector_key_t>(post_second_replacement[1].member.key, 43);
-    expect_eq<vector_key_t>(post_second_replacement[2].member.key, 44);
+    expect_eq(post_second_replacement.size(), 3);
+    expect_eq(post_second_replacement[0].member.key, 42);
+    expect_eq(post_second_replacement[1].member.key, 43);
+    expect_eq(post_second_replacement[2].member.key, 44);
 
     // Replace the first entry
     index.remove(42);
     index.add(42, as_ptr(1.2f));
-    expect_eq<std::size_t>(index.size(), 3);
+    expect_eq(index.size(), 3);
 
     // Assert state after replacing first entry
     auto final_search = index.search(as_ptr(1.0f), 3, 0);
-    expect_eq<std::size_t>(final_search.size(), 3);
-    expect_eq<vector_key_t>(final_search[0].member.key, 42);
-    expect_eq<vector_key_t>(final_search[1].member.key, 43);
-    expect_eq<vector_key_t>(final_search[2].member.key, 44);
+    expect_eq(final_search.size(), 3);
+    expect_eq(final_search[0].member.key, 42);
+    expect_eq(final_search[1].member.key, 43);
+    expect_eq(final_search[2].member.key, 44);
 }
 
 int main(int, char**) {
