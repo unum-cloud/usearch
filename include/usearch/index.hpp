@@ -2211,7 +2211,7 @@ class index_gt {
      *  @brief  Increases the `capacity()` of the index to allow adding more vectors.
      *  @return `true` on success, `false` on memory allocation errors.
      */
-    bool reserve(index_limits_t limits) usearch_noexcept_m {
+    bool try_reserve(index_limits_t limits) usearch_noexcept_m {
 
         if (limits.threads_add <= limits_.threads_add          //
             && limits.threads_search <= limits_.threads_search //
@@ -2235,6 +2235,12 @@ class index_gt {
         nodes_mutexes_ = std::move(new_mutexes);
         return true;
     }
+
+    /**
+     *  @brief  Increases the `capacity()` of the index to allow adding more vectors.
+     *  @return `true` on success, `false` on memory allocation errors.
+     */
+    bool reserve(index_limits_t limits) usearch_noexcept_m { return try_reserve(limits); }
 
 #if defined(USEARCH_USE_PRAGMA_REGION)
 #pragma endregion
@@ -2909,6 +2915,7 @@ class index_gt {
         serialization_result_t result;
 
         // Remove previously stored objects
+        index_limits_t old_limits = limits_;
         reset();
 
         // Pull basic metadata
@@ -2940,8 +2947,8 @@ class index_gt {
         pre_ = precompute_(config_);
         index_limits_t limits;
         limits.members = header.size;
-        limits.threads_add = (std::max<std::size_t>)(1, limits_.threads_add);
-        limits.threads_search = (std::max<std::size_t>)(1, limits_.threads_search);
+        limits.threads_add = (std::max<std::size_t>)(1, old_limits.threads_add);
+        limits.threads_search = (std::max<std::size_t>)(1, old_limits.threads_search);
         if (!reserve(limits)) {
             reset();
             return result.failed("Out of memory");
@@ -3080,6 +3087,7 @@ class index_gt {
                                 progress_at&& progress = {}) noexcept {
 
         // Remove previously stored objects
+        index_limits_t old_limits = limits_;
         reset();
 
         serialization_result_t result = file.open_if_not();
@@ -3125,8 +3133,8 @@ class index_gt {
         // Submit metadata and reserve memory
         index_limits_t limits;
         limits.members = header.size;
-        limits.threads_add = (std::max<std::size_t>)(1, limits_.threads_add);
-        limits.threads_search = (std::max<std::size_t>)(1, limits_.threads_search);
+        limits.threads_add = (std::max<std::size_t>)(1, old_limits.threads_add);
+        limits.threads_search = (std::max<std::size_t>)(1, old_limits.threads_search);
         if (!reserve(limits)) {
             reset();
             return result.failed("Out of memory");

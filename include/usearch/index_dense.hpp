@@ -999,6 +999,7 @@ class index_dense_gt {
                                             progress_at&& progress = {}) {
 
         // Discard all previous memory allocations of `vectors_tape_allocator_`
+        index_limits_t old_limits = typed_ ? typed_->limits() : index_limits_t{};
         reset();
 
         // Infer the new index size
@@ -1075,11 +1076,14 @@ class index_dense_gt {
             return result;
         if (typed_->size() != static_cast<std::size_t>(matrix_rows))
             return result.failed("Index size and the number of vectors doesn't match");
+        old_limits.members = static_cast<std::size_t>(matrix_rows);
+        if (!typed_->try_reserve(old_limits))
+            return result.failed("Failed to reserve memory for the index");
 
         // After the index is loaded, we may have to resize the `available_threads_` to
         // match the limits of the underlying engine.
         available_threads_t available_threads;
-        std::size_t max_threads = typed_->limits().threads();
+        std::size_t max_threads = old_limits.threads();
         if (!available_threads.reserve(max_threads))
             return result.failed("Failed to allocate memory for the available threads!");
         for (std::size_t i = 0; i < max_threads; i++)
@@ -1102,6 +1106,7 @@ class index_dense_gt {
                                 progress_at&& progress = {}) {
 
         // Discard all previous memory allocations of `vectors_tape_allocator_`
+        index_limits_t old_limits = typed_ ? typed_->limits() : index_limits_t{};
         reset();
 
         serialization_result_t result = file.open_if_not();
@@ -1181,6 +1186,9 @@ class index_dense_gt {
             return result;
         if (typed_->size() != static_cast<std::size_t>(matrix_rows))
             return result.failed("Index size and the number of vectors doesn't match");
+        old_limits.members = static_cast<std::size_t>(matrix_rows);
+        if (!typed_->try_reserve(old_limits))
+            return result.failed("Failed to reserve memory for the index");
 
         // Address the vectors
         vectors_lookup_ = vectors_lookup_t(matrix_rows);
@@ -1193,7 +1201,7 @@ class index_dense_gt {
         // After the index is loaded, we may have to resize the `available_threads_` to
         // match the limits of the underlying engine.
         available_threads_t available_threads;
-        std::size_t max_threads = typed_->limits().threads();
+        std::size_t max_threads = old_limits.threads();
         if (!available_threads.reserve(max_threads))
             return result.failed("Failed to allocate memory for the available threads!");
         for (std::size_t i = 0; i < max_threads; i++)
