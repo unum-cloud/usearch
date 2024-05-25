@@ -336,7 +336,7 @@ class f16_bits_t {
     inline f16_bits_t(float v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(double v) noexcept : uint16_(f32_to_f16(static_cast<float>(v))) {}
 
-    inline bool operator<(const f16_bits_t& other) const noexcept { return uint16_ < other.uint16_; }
+    inline bool operator<(const f16_bits_t& other) const noexcept { return float(*this) < float(other); }
 
     inline f16_bits_t operator+(f16_bits_t other) const noexcept { return {float(*this) + float(other)}; }
     inline f16_bits_t operator-(f16_bits_t other) const noexcept { return {float(*this) - float(other)}; }
@@ -963,8 +963,9 @@ class i8_converted_t {
     inline explicit operator std::int32_t() const noexcept { return int8_; }
     inline explicit operator std::int64_t() const noexcept { return int8_; }
 
+    // Even with `f16_t` arguments we may want to use `f32_t` for clamping and comparions.
     inline i8_converted_t(f16_t v)
-        : int8_(static_cast<std::int8_t>(usearch::clamp<f16_t>(v * divisor_k, min_k, max_k))) {}
+        : int8_(static_cast<std::int8_t>(usearch::clamp<f32_t>(v * divisor_k, min_k, max_k))) {}
     inline i8_converted_t(f32_t v)
         : int8_(static_cast<std::int8_t>(usearch::clamp<f32_t>(v * divisor_k, min_k, max_k))) {}
     inline i8_converted_t(f64_t v)
