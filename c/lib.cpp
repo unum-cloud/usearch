@@ -94,7 +94,7 @@ std::size_t get_(index_dense_t* index, usearch_key_t key, size_t count, void* ve
     case scalar_kind_t::f16_k: return index->get(key, (f16_t*)vector, count);
     case scalar_kind_t::i8_k: return index->get(key, (i8_t*)vector, count);
     case scalar_kind_t::b1x8_k: return index->get(key, (b1x8_t*)vector, count);
-    default: return search_result_t().failed("Unknown scalar kind!");
+    default: return search_result_t(*index).failed("Unknown scalar kind!");
     }
 }
 
@@ -112,7 +112,7 @@ search_result_t search_(index_dense_t* index, void const* vector, scalar_kind_t 
         return index->filtered_search((i8_t const*)vector, n, std::forward<predicate_at>(predicate));
     case scalar_kind_t::b1x8_k:
         return index->filtered_search((b1x8_t const*)vector, n, std::forward<predicate_at>(predicate));
-    default: return search_result_t().failed("Unknown scalar kind!");
+    default: return search_result_t(*index).failed("Unknown scalar kind!");
     }
 }
 

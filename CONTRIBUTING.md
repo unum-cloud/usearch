@@ -65,7 +65,7 @@ The CMakeLists.txt file has a number of options you can pass:
 - Which dependencies to use:
   - `USEARCH_USE_OPENMP` - use OpenMP for parallelism
   - `USEARCH_USE_SIMSIMD` - use SimSIMD for vectorization
-  - `USEARCH_USE_JEMALLOC` - use JeMalloc for memory management
+  - `USEARCH_USE_JEMALLOC` - use Jemalloc for memory management
   - `USEARCH_USE_FP16LIB` - use software emulation for half-precision floating point
 
 Putting all of this together, compiling all targets on most platforms should work with the following snippet:

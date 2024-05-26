@@ -1098,7 +1098,9 @@ class ring_gt {
         return true;
     }
 
-    void push(element_t const& value) noexcept {
+    void push(element_t const& value) usearch_noexcept_m {
+        usearch_assert_m(capacity() > 0, "Ring buffer is not initialized");
+        usearch_assert_m(size() < capacity(), "Ring buffer is full");
         elements_[head_] = value;
         head_ = (head_ + 1) % capacity_;
         empty_ = false;
@@ -1106,7 +1108,7 @@ class ring_gt {
 
     bool try_push(element_t const& value) noexcept {
         if (head_ == tail_ && !empty_)
-            return false; // elements_ is full
+            return false; // `elements_` is full
 
         return push(value);
         return true;

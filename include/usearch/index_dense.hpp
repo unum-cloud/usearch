@@ -481,12 +481,56 @@ class index_dense_gt {
     /// @brief A constant for the reserved key value, used to mark deleted entries.
     vector_key_t free_key_ = default_free_value<vector_key_t>();
 
+    /// @brief Locks the thread for the duration of the operation.
+    struct thread_lock_t {
+        index_dense_gt const& parent;
+        std::size_t thread_id = 0;
+        bool engaged = false;
+
+        ~thread_lock_t() usearch_noexcept_m {
+            if (engaged)
+                parent.thread_unlock_(thread_id);
+        }
+
+        thread_lock_t(thread_lock_t const&) = delete;
+        thread_lock_t& operator=(thread_lock_t const&) = delete;
+
+        thread_lock_t(index_dense_gt const& parent, std::size_t thread_id, bool engaged = true) noexcept
+            : parent(parent), thread_id(thread_id), engaged(engaged) {}
+        thread_lock_t(thread_lock_t&& other) noexcept
+            : parent(other.parent), thread_id(other.thread_id), engaged(other.engaged) {
+            other.engaged = false;
+        }
+    };
+
   public:
-    using search_result_t = typename index_t::search_result_t;
     using cluster_result_t = typename index_t::cluster_result_t;
     using add_result_t = typename index_t::add_result_t;
     using stats_t = typename index_t::stats_t;
     using match_t = typename index_t::match_t;
+
+    /**
+     *  @brief  A search result, containing the found keys and distances.
+     *
+     *  As the `index_dense_gt` manages the thread-pool on its own, the search result
+     *  preserves the thread-lock to avoid undefined behaviors, when other threads
+     *  start overwriting the results.
+     */
+    struct search_result_t : public index_t::search_result_t {
+        inline search_result_t(index_dense_gt const& parent) noexcept
+            : index_t::search_result_t(), lock_(parent, 0, false) {}
+        search_result_t failed(error_t message) noexcept {
+            this->error = std::move(message);
+            return std::move(*this);
+        }
+
+      private:
+        friend class index_dense_gt;
+        thread_lock_t lock_;
+
+        inline search_result_t(typename index_t::search_result_t result, thread_lock_t lock) noexcept
+            : index_t::search_result_t(std::move(result)), lock_(std::move(lock)) {}
+    };
 
     index_dense_gt() = default;
     index_dense_gt(index_dense_gt&& other)
@@ -619,6 +663,10 @@ class index_dense_gt {
     index_dense_config_t const& config() const { return config_; }
     index_limits_t const& limits() const { return typed_->limits(); }
     bool multi() const { return config_.multi; }
+    std::size_t currently_available_threads() const {
+        std::unique_lock<std::mutex> available_threads_lock(available_threads_mutex_);
+        return available_threads_.size();
+    }
 
     // The metric and its properties
     metric_t const& metric() const { return metric_; }
@@ -1872,29 +1920,20 @@ class index_dense_gt {
     }
 
   private:
-    struct thread_lock_t {
-        index_dense_gt const& parent;
-        std::size_t thread_id;
-        bool engaged;
-
-        ~thread_lock_t() {
-            if (engaged)
-                parent.thread_unlock_(thread_id);
-        }
-    };
-
-    thread_lock_t thread_lock_(std::size_t thread_id) const {
+    thread_lock_t thread_lock_(std::size_t thread_id) const usearch_noexcept_m {
         if (thread_id != any_thread())
             return {*this, thread_id, false};
 
         available_threads_mutex_.lock();
+        usearch_assert_m(available_threads_.size(), "No available threads to lock");
         available_threads_.try_pop(thread_id);
         available_threads_mutex_.unlock();
         return {*this, thread_id, true};
     }
 
-    void thread_unlock_(std::size_t thread_id) const {
+    void thread_unlock_(std::size_t thread_id) const usearch_noexcept_m {
         available_threads_mutex_.lock();
+        usearch_assert_m(available_threads_.size() < available_threads_.capacity(), "Too many threads unlocked");
         available_threads_.push(thread_id);
         available_threads_mutex_.unlock();
     }
@@ -1974,12 +2013,14 @@ class index_dense_gt {
             auto allow = [free_key_copy](member_cref_t const& member) noexcept {
                 return (vector_key_t)member.key != free_key_copy;
             };
-            return typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow);
+            auto typed_result = typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow);
+            return search_result_t{std::move(typed_result), std::move(lock)};
         } else {
             auto allow = [free_key_copy, &predicate](member_cref_t const& member) noexcept {
                 return (vector_key_t)member.key != free_key_copy && predicate(member.key);
             };
-            return typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow);
+            auto typed_result = typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow);
+            return search_result_t{std::move(typed_result), std::move(lock)};
         }
     }
 

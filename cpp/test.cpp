@@ -326,7 +326,7 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
     std::vector<scalar_at> const& vector_first = vectors[0];
     std::size_t dimensions = vector_first.size();
 
-    // Try batch requests, heavily obersubscribing the CPU cores
+    // Try batch requests, heavily oversubscribing the CPU cores
     std::size_t executor_threads = std::thread::hardware_concurrency();
     executor_default_t executor(executor_threads);
     expect(index.try_reserve({vectors.size(), executor.size()}));
@@ -341,6 +341,11 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
             expect(result);
         }
     });
+
+    // Make sure we didn't lose parallelism settings after reload
+    expect(index.limits().threads_search >= executor.size());
+    if constexpr (punned_ak)
+        expect(index.currently_available_threads() >= executor.size());
 
     // Parallel search over the same vectors
     executor.fixed(vectors.size(), [&](std::size_t thread, std::size_t task) {
@@ -469,7 +474,7 @@ void test_punned_concurrent_updates(index_at& index, typename index_at::vector_k
 
     using index_t = index_at;
 
-    // Try batch requests, heavily obersubscribing the CPU cores
+    // Try batch requests, heavily oversubscribing the CPU cores
     executor_default_t executor(executor_threads);
     index.try_reserve({vectors.size(), executor.size()});
     executor.fixed(vectors.size(), [&](std::size_t, std::size_t task) {
