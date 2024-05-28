@@ -301,7 +301,7 @@ template <typename at> class misaligned_ptr_gt {
     }
 
     bool operator==(misaligned_ptr_gt const& other) const noexcept { return ptr_ == other.ptr_; }
-    bool operator!=(misaligned_ptr_gt const& other) const noexcept { return !(*this == other); }
+    bool operator!=(misaligned_ptr_gt const& other) const noexcept { return ptr_ != other.ptr_; }
     bool operator<(misaligned_ptr_gt const& other) const noexcept { return ptr_ < other.ptr_; }
     bool operator<=(misaligned_ptr_gt const& other) const noexcept { return ptr_ <= other.ptr_; }
     bool operator>(misaligned_ptr_gt const& other) const noexcept { return ptr_ > other.ptr_; }
@@ -382,7 +382,8 @@ class error_t {
     char const* message_{};
 
   public:
-    error_t(char const* message = nullptr) noexcept : message_(message) {}
+    error_t() noexcept : message_(nullptr) {}
+    error_t(char const* message) noexcept : message_(message) {}
     error_t& operator=(char const* message) noexcept {
         message_ = message;
         return *this;
@@ -905,6 +906,7 @@ template <> struct hash_gt<uint40_t> {
 
 /**
  *  @brief  Minimalistic hash-set implementation to track visited nodes during graph traversal.
+ *          In our primary usecase, its a sparse alternative to a bit-set.
  *
  *  It doesn't support deletion of separate objects, but supports `clear`-ing all at once.
  *  It expects `reserve` to be called ahead of all insertions, so no resizes are needed.
@@ -972,6 +974,10 @@ class growing_hash_set_gt {
     growing_hash_set_gt(growing_hash_set_gt const&) = delete;
     growing_hash_set_gt& operator=(growing_hash_set_gt const&) = delete;
 
+    /**
+     *  @brief  Checks if the element is already in the hash-set.
+     *  @return `true` if the element is already in the hash-set.
+     */
     inline bool test(element_t const& elem) const noexcept {
         std::size_t index = hasher_(elem) & (capacity_ - 1);
         while (slots_[index] != default_free_value<element_t>()) {
@@ -984,7 +990,7 @@ class growing_hash_set_gt {
     }
 
     /**
-     *
+     *  @brief  Inserts an element into the hash-set.
      *  @return Similar to `bitset_gt`, returns the previous value.
      */
     inline bool set(element_t const& elem) noexcept {
@@ -1001,6 +1007,10 @@ class growing_hash_set_gt {
         return false;
     }
 
+    /**
+     *  @brief  Extends the capacity of the hash-set.
+     *  @return `true` if enough capacity is available, `false` if memory allocation failed.
+     */
     bool reserve(std::size_t new_capacity) noexcept {
         new_capacity = (new_capacity * 5u) / 3u;
         if (new_capacity <= capacity_)
@@ -1511,8 +1521,10 @@ class input_file_t {
     serialization_result_t read(void* begin, std::size_t length) noexcept {
         serialization_result_t result;
         std::size_t read = std::fread(begin, length, 1, file_);
-        if (length && !read)
-            return result.failed(std::feof(file_) ? "End of file reached!" : std::strerror(errno));
+        if (length && !read) {
+            bool reached_eof = std::feof(file_);
+            return result.failed(reached_eof ? "End of file reached!" : std::strerror(errno));
+        }
         return result;
     }
     void close() noexcept {
@@ -2021,7 +2033,7 @@ class index_gt {
             return metric(first, second);
         }
 
-        /// @brief Heterogeneous distance calculation.
+        /// @brief Heterogeneous batch distance calculation.
         template <typename value_at, typename metric_at, typename entries_at, typename candidate_allowed_at,
                   typename transform_at,
                   typename callback_at> //
@@ -2077,7 +2089,7 @@ class index_gt {
     mutable buffer_gt<context_t, contexts_allocator_t> contexts_{};
 
   public:
-    static constexpr bool parallel_metric_k = false;
+    static constexpr bool parallel_metric_k = true;
 
     std::size_t connectivity() const noexcept { return config_.connectivity; }
     std::size_t capacity() const noexcept { return nodes_capacity_; }
@@ -3723,17 +3735,19 @@ class index_gt {
                 return false;
 
             if constexpr (parallel_metric_k) {
-                auto candidate_allowed = [&](compressed_slot_t slot) { return !visits.test(slot); };
-                auto candidate_transform = [&](compressed_slot_t slot) { return citerator_at(slot); };
-                auto candidate_accept = [&](compressed_slot_t slot, distance_t dist) {
-                    if (top.size() < top_limit || dist < radius) {
+                auto candidate_allowed = [&](compressed_slot_t successor_slot) { return !visits.test(successor_slot); };
+                auto candidate_transform = [&](compressed_slot_t successor_slot) {
+                    return citerator_at(successor_slot);
+                };
+                auto candidate_accept = [&](compressed_slot_t successor_slot, distance_t successor_dist) {
+                    if (top.size() < top_limit || successor_dist < radius) {
                         // This can substantially grow our priority queue:
-                        next.insert({-dist, slot});
+                        next.insert({-successor_dist, successor_slot});
                         // This will automatically evict poor matches:
-                        top.insert({dist, slot}, top_limit);
+                        top.insert({successor_dist, successor_slot}, top_limit);
                         radius = top.top().distance;
                     }
-                    visits.set(slot);
+                    visits.set(successor_slot);
                 };
                 context.measure_batch(query, candidate_neighbors, metric, //
                                       candidate_allowed, candidate_transform, candidate_accept);
@@ -3768,7 +3782,7 @@ class index_gt {
     template <typename value_at, typename metric_at, typename prefetch_at = dummy_prefetch_t>
     bool search_to_update_(                                           //
         value_at&& query, metric_at&& metric, prefetch_at&& prefetch, //
-        std::size_t start_slot, std::size_t updated_slot, level_t level, std::size_t top_limit,
+        compressed_slot_t start_slot, compressed_slot_t updated_slot, level_t level, std::size_t top_limit,
         context_t& context) noexcept {
 
         visits_hash_set_t& visits = context.visits;
@@ -3908,7 +3922,7 @@ class index_gt {
                 return false;
 
             if constexpr (parallel_metric_k) {
-                auto candidate_allowed = [&](compressed_slot_t successor_slot) { return !visits.test(successor_slot); };
+                auto candidate_allowed = [&](compressed_slot_t successor_slot) { return !visits.set(successor_slot); };
                 auto candidate_transform = [&](compressed_slot_t successor_slot) {
                     return citerator_at(successor_slot);
                 };
@@ -3921,7 +3935,6 @@ class index_gt {
                             top.insert({successor_dist, successor_slot}, top_limit);
                         radius = top.top().distance;
                     }
-                    visits.set(successor_slot);
                 };
                 context.measure_batch(query, candidate_neighbors, metric, //
                                       candidate_allowed, candidate_transform, candidate_accept);
