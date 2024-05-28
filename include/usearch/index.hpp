@@ -274,8 +274,12 @@ template <typename at> class misaligned_ptr_gt {
     misaligned_ptr_gt& operator-=(difference_type d) noexcept { ptr_ -= d * sizeof(element_t); return *this; }
     // clang-format on
 
-    bool operator==(misaligned_ptr_gt const& other) noexcept { return ptr_ == other.ptr_; }
-    bool operator!=(misaligned_ptr_gt const& other) noexcept { return ptr_ != other.ptr_; }
+    bool operator==(misaligned_ptr_gt const& other) const noexcept { return ptr_ == other.ptr_; }
+    bool operator!=(misaligned_ptr_gt const& other) const noexcept { return ptr_ != other.ptr_; }
+    bool operator<(misaligned_ptr_gt const& other) const noexcept { return ptr_ < other.ptr_; }
+    bool operator<=(misaligned_ptr_gt const& other) const noexcept { return ptr_ <= other.ptr_; }
+    bool operator>(misaligned_ptr_gt const& other) const noexcept { return ptr_ > other.ptr_; }
+    bool operator>=(misaligned_ptr_gt const& other) const noexcept { return ptr_ >= other.ptr_; }
 };
 
 /**
