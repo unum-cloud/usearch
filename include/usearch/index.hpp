@@ -356,7 +356,8 @@ class error_t {
     char const* message_{};
 
   public:
-    error_t(char const* message = nullptr) noexcept : message_(message) {}
+    error_t() noexcept : message_(nullptr) {}
+    error_t(char const* message) noexcept : message_(message) {}
     error_t& operator=(char const* message) noexcept {
         message_ = message;
         return *this;
