@@ -2006,6 +2006,22 @@ class index_gt {
             computed_distances_count++;
             return metric(first, second);
         }
+
+        /// @brief Heterogeneous batch distance calculation.
+        template <typename value_at, typename metric_at, typename entries_at, typename candidate_allowed_at,
+                  typename transform_at,
+                  typename callback_at> //
+        inline void measure_batch(value_at const& first, entries_at const& second_entries, metric_at&& metric,
+                                  candidate_allowed_at&& candidate_allowed, transform_at&& transform,
+                                  callback_at&& callback) noexcept {
+
+            using entry_t = typename std::remove_reference<decltype(second_entries[0])>::type;
+            metric.batch(first, second_entries, candidate_allowed, transform,
+                         [&](entry_t const& entry, distance_t distance) {
+                             callback(entry, distance);
+                             computed_distances_count++;
+                         });
+        }
     };
 
     index_config_t config_{};
@@ -2047,6 +2063,8 @@ class index_gt {
     mutable buffer_gt<context_t, contexts_allocator_t> contexts_{};
 
   public:
+    static constexpr bool parallel_metric_k = true;
+
     std::size_t connectivity() const noexcept { return config_.connectivity; }
     std::size_t capacity() const noexcept { return nodes_capacity_; }
     std::size_t size() const noexcept { return nodes_count_; }
@@ -3603,12 +3621,29 @@ class index_gt {
                 }
 
                 // Actual traversal
-                for (compressed_slot_t candidate_slot : closest_neighbors) {
-                    distance_t candidate_dist = context.measure(query, citerator_at(candidate_slot), metric);
-                    if (candidate_dist < closest_dist) {
-                        closest_dist = candidate_dist;
-                        closest_slot = candidate_slot;
-                        changed = true;
+                if constexpr (parallel_metric_k) {
+                    auto candidate_allowed = [=](compressed_slot_t) { return true; };
+                    auto candidate_transform = [&](compressed_slot_t candidate_slot) {
+                        return citerator_at(candidate_slot);
+                    };
+                    auto candidate_accept = [&](compressed_slot_t candidate_slot, distance_t candidate_dist) {
+                        if (candidate_dist < closest_dist) {
+                            closest_dist = candidate_dist;
+                            closest_slot = candidate_slot;
+                            changed = true;
+                        }
+                    };
+                    context.measure_batch(query, closest_neighbors, metric, //
+                                          candidate_allowed, candidate_transform, candidate_accept);
+
+                } else {
+                    for (compressed_slot_t candidate_slot : closest_neighbors) {
+                        distance_t candidate_dist = context.measure(query, citerator_at(candidate_slot), metric);
+                        if (candidate_dist < closest_dist) {
+                            closest_dist = candidate_dist;
+                            closest_slot = candidate_slot;
+                            changed = true;
+                        }
                     }
                 }
                 context.iteration_cycles++;
@@ -3673,20 +3708,40 @@ class index_gt {
             if (!visits.reserve(visits.size() + candidate_neighbors.size()))
                 return false;
 
-            for (compressed_slot_t successor_slot : candidate_neighbors) {
-                if (visits.set(successor_slot))
-                    continue;
+            if constexpr (parallel_metric_k) {
+                auto candidate_allowed = [&](compressed_slot_t successor_slot) { return !visits.test(successor_slot); };
+                auto candidate_transform = [&](compressed_slot_t successor_slot) {
+                    return citerator_at(successor_slot);
+                };
+                auto candidate_accept = [&](compressed_slot_t successor_slot, distance_t successor_dist) {
+                    if (top.size() < top_limit || successor_dist < radius) {
+                        // This can substantially grow our priority queue:
+                        next.insert({-successor_dist, successor_slot});
+                        // This will automatically evict poor matches:
+                        top.insert({successor_dist, successor_slot}, top_limit);
+                        radius = top.top().distance;
+                    }
+                    visits.set(successor_slot);
+                };
+                context.measure_batch(query, candidate_neighbors, metric, //
+                                      candidate_allowed, candidate_transform, candidate_accept);
 
-                // We don't access the neighbors of the `successor_slot` node,
-                // so we don't have to lock it.
-                // node_lock_t successor_lock = node_lock_(successor_slot);
-                distance_t successor_dist = context.measure(query, citerator_at(successor_slot), metric);
-                if (top.size() < top_limit || successor_dist < radius) {
-                    // This can substantially grow our priority queue:
-                    next.insert({-successor_dist, successor_slot});
-                    // This will automatically evict poor matches:
-                    top.insert({successor_dist, successor_slot}, top_limit);
-                    radius = top.top().distance;
+            } else {
+                for (compressed_slot_t successor_slot : candidate_neighbors) {
+                    if (visits.set(successor_slot))
+                        continue;
+
+                    // We don't access the neighbors of the `successor_slot` node,
+                    // so we don't have to lock it.
+                    // node_lock_t successor_lock = node_lock_(successor_slot);
+                    distance_t successor_dist = context.measure(query, citerator_at(successor_slot), metric);
+                    if (top.size() < top_limit || successor_dist < radius) {
+                        // This can substantially grow our priority queue:
+                        next.insert({-successor_dist, successor_slot});
+                        // This will automatically evict poor matches:
+                        top.insert({successor_dist, successor_slot}, top_limit);
+                        radius = top.top().distance;
+                    }
                 }
             }
         }
@@ -3701,7 +3756,7 @@ class index_gt {
     template <typename value_at, typename metric_at, typename prefetch_at = dummy_prefetch_t>
     bool search_to_update_(                                           //
         value_at&& query, metric_at&& metric, prefetch_at&& prefetch, //
-        std::size_t start_slot, std::size_t updated_slot, level_t level, std::size_t top_limit,
+        compressed_slot_t start_slot, compressed_slot_t updated_slot, level_t level, std::size_t top_limit,
         context_t& context) noexcept {
 
         visits_hash_set_t& visits = context.visits;
@@ -3840,18 +3895,37 @@ class index_gt {
             if (!visits.reserve(visits.size() + candidate_neighbors.size()))
                 return false;
 
-            for (compressed_slot_t successor_slot : candidate_neighbors) {
-                if (visits.set(successor_slot))
-                    continue;
+            if constexpr (parallel_metric_k) {
+                auto candidate_allowed = [&](compressed_slot_t successor_slot) { return !visits.set(successor_slot); };
+                auto candidate_transform = [&](compressed_slot_t successor_slot) {
+                    return citerator_at(successor_slot);
+                };
+                auto candidate_accept = [&](compressed_slot_t successor_slot, distance_t successor_dist) {
+                    if (top.size() < top_limit || successor_dist < radius) {
+                        // This can substantially grow our priority queue:
+                        next.insert({-successor_dist, successor_slot});
+                        if (is_dummy<predicate_at>() ||
+                            predicate(member_cref_t{node_at_(successor_slot).ckey(), successor_slot}))
+                            top.insert({successor_dist, successor_slot}, top_limit);
+                        radius = top.top().distance;
+                    }
+                };
+                context.measure_batch(query, candidate_neighbors, metric, //
+                                      candidate_allowed, candidate_transform, candidate_accept);
+            } else {
+                for (compressed_slot_t successor_slot : candidate_neighbors) {
+                    if (visits.set(successor_slot))
+                        continue;
 
-                distance_t successor_dist = context.measure(query, citerator_at(successor_slot), metric);
-                if (top.size() < top_limit || successor_dist < radius) {
-                    // This can substantially grow our priority queue:
-                    next.insert({-successor_dist, successor_slot});
-                    if (is_dummy<predicate_at>() ||
-                        predicate(member_cref_t{node_at_(successor_slot).ckey(), successor_slot}))
-                        top.insert({successor_dist, successor_slot}, top_limit);
-                    radius = top.top().distance;
+                    distance_t successor_dist = context.measure(query, citerator_at(successor_slot), metric);
+                    if (top.size() < top_limit || successor_dist < radius) {
+                        // This can substantially grow our priority queue:
+                        next.insert({-successor_dist, successor_slot});
+                        if (is_dummy<predicate_at>() ||
+                            predicate(member_cref_t{node_at_(successor_slot).ckey(), successor_slot}))
+                            top.insert({successor_dist, successor_slot}, top_limit);
+                        radius = top.top().distance;
+                    }
                 }
             }
         }
