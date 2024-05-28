@@ -3,6 +3,14 @@
  *  @author     Ash Vardanian
  *  @brief      Unit-testing vector-search functionality.
  *  @date       June 10, 2023
+ *
+ *
+ *  Key and slot types:
+ *      - 64-bit `std::int64_t` keys and `std::uint32_t` slots are most popular.
+ *      - 64-bit `std::uint64_t` keys and `std::uint40_t` are most space-efficient for
+ *        point clouds 4B+ in size.
+ *      - 128-bit `uuid_t` keys and `enum slot64_t : std::uint64_t` make most sense for
+ *        for database users, implementing portable, concurrent systems.
  */
 #include <algorithm>     // `std::shuffle`
 #include <cassert>       // `assert`
@@ -37,6 +45,16 @@ void __expect_eq(value_at a, value_at b, char const* file, int line, char const*
 
 #define expect(cond) __expect((bool)(cond), __FILE__, __LINE__)
 #define expect_eq(a, b) __expect_eq<decltype(a)>((a), (b), __FILE__, __LINE__)
+
+/**
+ *  Less error-prone type definition to differentiate `std::uint32_t` and other native
+ *  types in logs and avoid implicit conversions.
+ */
+enum slot32_t : std::uint32_t {};
+template <> struct unum::usearch::hash_gt<slot32_t> : public unum::usearch::hash_gt<std::uint32_t> {};
+template <> struct unum::usearch::default_free_value_gt<slot32_t> {
+    static slot32_t value() noexcept { return static_cast<slot32_t>(std::numeric_limits<std::uint32_t>::max()); }
+};
 
 /**
  *  @brief  Convinience wrapper combining combined allocation and construction of an index.
@@ -976,8 +994,8 @@ int main(int, char**) {
                 for (std::size_t expansion_search : {0, 1, 3})
                     for (std::size_t count_vectors : {0, 1, 2, 17})
                         for (std::size_t count_wanted : {0, 1, 3, 19}) {
-                            test_absurd<std::int64_t, std::uint32_t>(dimensions, connectivity, expansion_add,
-                                                                     expansion_search, count_vectors, count_wanted);
+                            test_absurd<std::int64_t, slot32_t>(dimensions, connectivity, expansion_add,
+                                                                expansion_search, count_vectors, count_wanted);
                             test_absurd<uint40_t, uint40_t>(dimensions, connectivity, expansion_add, expansion_search,
                                                             count_vectors, count_wanted);
                         }
@@ -989,8 +1007,8 @@ int main(int, char**) {
     std::printf("Testing common cases\n");
     for (std::size_t collection_size : {10, 500})
         for (std::size_t dimensions : {97, 256}) {
-            std::printf("- Indexing %zu vectors with cos: <float, std::int64_t, std::uint32_t> \n", collection_size);
-            test_cosine<float, std::int64_t, std::uint32_t>(collection_size, dimensions);
+            std::printf("- Indexing %zu vectors with cos: <float, std::int64_t, slot32_t> \n", collection_size);
+            test_cosine<float, std::int64_t, slot32_t>(collection_size, dimensions);
             std::printf("- Indexing %zu vectors with cos: <float, std::int64_t, uint40_t> \n", collection_size);
             test_cosine<float, std::int64_t, uint40_t>(collection_size, dimensions);
         }
@@ -999,13 +1017,13 @@ int main(int, char**) {
     std::printf("Testing binary vectors\n");
     for (std::size_t connectivity : {3, 13, 50})
         for (std::size_t dimensions : {97, 256})
-            test_tanimoto<std::int64_t, std::uint32_t>(dimensions, connectivity);
+            test_tanimoto<std::int64_t, slot32_t>(dimensions, connectivity);
 
     // Beyond dense equi-dimensional vectors - integer sets
     std::printf("Testing sparse vectors, strings, and sets\n");
     for (std::size_t set_size : {1, 100, 1000})
-        test_sets<std::int64_t, std::uint32_t>(set_size, 20, 30);
-    test_strings<std::int64_t, std::uint32_t>();
+        test_sets<std::int64_t, slot32_t>(set_size, 20, 30);
+    test_strings<std::int64_t, slot32_t>();
 
     return 0;
 }
