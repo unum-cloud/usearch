@@ -880,6 +880,7 @@ template <> struct hash_gt<uint40_t> {
 
 /**
  *  @brief  Minimalistic hash-set implementation to track visited nodes during graph traversal.
+ *          In our primary usecase, its a sparse alternative to a bit-set.
  *
  *  It doesn't support deletion of separate objects, but supports `clear`-ing all at once.
  *  It expects `reserve` to be called ahead of all insertions, so no resizes are needed.
@@ -947,6 +948,10 @@ class growing_hash_set_gt {
     growing_hash_set_gt(growing_hash_set_gt const&) = delete;
     growing_hash_set_gt& operator=(growing_hash_set_gt const&) = delete;
 
+    /**
+     *  @brief  Checks if the element is already in the hash-set.
+     *  @return `true` if the element is already in the hash-set.
+     */
     inline bool test(element_t const& elem) const noexcept {
         std::size_t index = hasher_(elem) & (capacity_ - 1);
         while (slots_[index] != default_free_value<element_t>()) {
@@ -959,7 +964,7 @@ class growing_hash_set_gt {
     }
 
     /**
-     *
+     *  @brief  Inserts an element into the hash-set.
      *  @return Similar to `bitset_gt`, returns the previous value.
      */
     inline bool set(element_t const& elem) noexcept {
@@ -976,6 +981,10 @@ class growing_hash_set_gt {
         return false;
     }
 
+    /**
+     *  @brief  Extends the capacity of the hash-set.
+     *  @return `true` if enough capacity is available, `false` if memory allocation failed.
+     */
     bool reserve(std::size_t new_capacity) noexcept {
         new_capacity = (new_capacity * 5u) / 3u;
         if (new_capacity <= capacity_)
@@ -1486,8 +1495,10 @@ class input_file_t {
     serialization_result_t read(void* begin, std::size_t length) noexcept {
         serialization_result_t result;
         std::size_t read = std::fread(begin, length, 1, file_);
-        if (length && !read)
-            return result.failed(std::feof(file_) ? "End of file reached!" : std::strerror(errno));
+        if (length && !read) {
+            bool reached_eof = std::feof(file_);
+            return result.failed(reached_eof ? "End of file reached!" : std::strerror(errno));
+        }
         return result;
     }
     void close() noexcept {
@@ -1934,11 +1945,17 @@ class index_gt {
         }
 
       public:
+        using iterator = misaligned_ptr_gt<compressed_slot_t>;
+        using const_iterator = misaligned_ptr_gt<compressed_slot_t const>;
+        using value_type = compressed_slot_t;
+
         neighbors_ref_t(byte_t* tape) noexcept : tape_(tape) {}
         misaligned_ptr_gt<compressed_slot_t> begin() noexcept { return tape_ + shift(); }
         misaligned_ptr_gt<compressed_slot_t> end() noexcept { return begin() + size(); }
         misaligned_ptr_gt<compressed_slot_t const> begin() const noexcept { return tape_ + shift(); }
         misaligned_ptr_gt<compressed_slot_t const> end() const noexcept { return begin() + size(); }
+        misaligned_ptr_gt<compressed_slot_t const> cbegin() noexcept { return tape_ + shift(); }
+        misaligned_ptr_gt<compressed_slot_t const> cend() noexcept { return begin() + size(); }
         compressed_slot_t operator[](std::size_t i) const noexcept {
             return misaligned_load<compressed_slot_t>(tape_ + shift(i));
         }
@@ -1968,6 +1985,7 @@ class index_gt {
         std::size_t iteration_cycles{};
         std::size_t computed_distances_count{};
 
+        /// @brief Heterogeneous distance calculation.
         template <typename value_at, typename metric_at, typename entry_at> //
         inline distance_t measure(value_at const& first, entry_at const& second, metric_at&& metric) noexcept {
             static_assert( //
@@ -1978,6 +1996,7 @@ class index_gt {
             return metric(first, second);
         }
 
+        /// @brief Homogeneous distance calculation.
         template <typename metric_at, typename entry_at> //
         inline distance_t measure(entry_at const& first, entry_at const& second, metric_at&& metric) noexcept {
             static_assert( //
