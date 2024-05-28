@@ -2101,7 +2101,8 @@ class index_dense_gt {
         std::size_t count_total = typed_->size();
         std::size_t count_removed = 0;
         for (std::size_t i = 0; i != count_total; ++i) {
-            member_cref_t member = typed_->at(i);
+            auto member_slot = static_cast<compressed_slot_t>(i);
+            member_cref_t member = typed_->at(member_slot);
             count_removed += member.key == free_key_;
         }
 
@@ -2117,11 +2118,12 @@ class index_dense_gt {
         free_keys_.clear();
         free_keys_.reserve(count_removed);
         for (std::size_t i = 0; i != typed_->size(); ++i) {
-            member_cref_t member = typed_->at(i);
+            auto member_slot = static_cast<compressed_slot_t>(i);
+            member_cref_t member = typed_->at(member_slot);
             if (member.key == free_key_)
-                free_keys_.push(static_cast<compressed_slot_t>(i));
+                free_keys_.push(member_slot);
             else if (config_.enable_key_lookups)
-                slot_lookup_.try_emplace(key_and_slot_t{vector_key_t(member.key), static_cast<compressed_slot_t>(i)});
+                slot_lookup_.try_emplace(key_and_slot_t{vector_key_t(member.key), member_slot});
         }
     }
 

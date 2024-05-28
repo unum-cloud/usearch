@@ -890,12 +890,33 @@ class usearch_pack_m uint40_t {
 
 static_assert(sizeof(uint40_t) == 5, "uint40_t must be exactly 5 bytes");
 
-// clang-format off
-template <typename key_at, typename std::enable_if<std::is_integral<key_at>::value>::type* = nullptr> key_at default_free_value() { return std::numeric_limits<key_at>::max(); }
-template <typename key_at, typename std::enable_if<std::is_same<key_at, uint40_t>::value>::type* = nullptr> uint40_t default_free_value() { return uint40_t::max(); }
-template <typename key_at, typename std::enable_if<!std::is_integral<key_at>::value && !std::is_same<key_at, uint40_t>::value>::type* = nullptr> key_at default_free_value() { return key_at(); }
-// clang-format on
+/**
+ *  @brief  Reflection-helper to get the default "unused" value for a given type.
+ *          Needed to initialize hash-sets and bit-sets.
+ */
+template <typename element_at> struct default_free_value_gt {
+    template <typename sfinae_element_at = element_at,
+              typename std::enable_if<std::is_integral<sfinae_element_at>::value>::type* = nullptr>
+    static sfinae_element_at value() noexcept {
+        return std::numeric_limits<element_at>::max();
+    }
+    template <typename sfinae_element_at = element_at,
+              typename std::enable_if<!std::is_integral<sfinae_element_at>::value>::type* = nullptr>
+    static sfinae_element_at value() noexcept {
+        return element_at();
+    }
+};
 
+template <> struct default_free_value_gt<uint40_t> {
+    static uint40_t value() noexcept { return uint40_t::max(); }
+};
+
+template <typename element_at> element_at default_free_value() { return default_free_value_gt<element_at>::value(); }
+
+/**
+ *  @brief  Adapter to allow definining arbitrary hash functions for keys and slots.
+ *          It's added, as overloading `std::hash` is not recommended by the standard.
+ */
 template <typename element_at> struct hash_gt {
     std::size_t operator()(element_at const& element) const noexcept { return std::hash<element_at>{}(element); }
 };
@@ -1824,13 +1845,13 @@ class index_gt {
 
         friend class index_gt;
         member_iterator_gt() noexcept {}
-        member_iterator_gt(index_t* index, std::size_t slot) noexcept : index_(index), slot_(slot) {}
+        member_iterator_gt(index_t* index, compressed_slot_t slot) noexcept : index_(index), slot_(slot) {}
 
         ref_t call_key(std::true_type) const noexcept { return ref_t{index_->node_at_(slot_).ckey(), slot_}; }
         ref_t call_key(std::false_type) const noexcept { return ref_t{index_->node_at_(slot_).key(), slot_}; }
 
         index_t* index_{};
-        std::size_t slot_{};
+        compressed_slot_t slot_{};
 
       public:
         using iterator_category = std::random_access_iterator_tag;
@@ -1842,19 +1863,18 @@ class index_gt {
         reference operator*() const noexcept { return call_key(std::is_const<index_t>()); }
         vector_key_t key() const noexcept { return index_->node_at_(slot_).ckey(); }
 
-        friend inline std::size_t get_slot(member_iterator_gt const& it) noexcept { return it.slot_; }
+        friend inline compressed_slot_t get_slot(member_iterator_gt const& it) noexcept { return it.slot_; }
         friend inline vector_key_t get_key(member_iterator_gt const& it) noexcept { return it.key(); }
 
-        member_iterator_gt operator++(int) noexcept { return member_iterator_gt(index_, slot_ + 1); }
-        member_iterator_gt operator--(int) noexcept { return member_iterator_gt(index_, slot_ - 1); }
-        member_iterator_gt operator+(difference_type d) noexcept { return member_iterator_gt(index_, slot_ + d); }
-        member_iterator_gt operator-(difference_type d) noexcept { return member_iterator_gt(index_, slot_ - d); }
-
         // clang-format off
-        member_iterator_gt& operator++() noexcept { slot_ += 1; return *this; }
-        member_iterator_gt& operator--() noexcept { slot_ -= 1; return *this; }
-        member_iterator_gt& operator+=(difference_type d) noexcept { slot_ += d; return *this; }
-        member_iterator_gt& operator-=(difference_type d) noexcept { slot_ -= d; return *this; }
+        member_iterator_gt operator++(int) noexcept { return member_iterator_gt(index_, static_cast<compressed_slot_t>(static_cast<std::size_t>(slot_) + 1)); }
+        member_iterator_gt operator--(int) noexcept { return member_iterator_gt(index_, static_cast<compressed_slot_t>(static_cast<std::size_t>(slot_) - 1)); }
+        member_iterator_gt operator+(difference_type d) noexcept { return member_iterator_gt(index_, static_cast<compressed_slot_t>(static_cast<std::size_t>(slot_) + d)); }
+        member_iterator_gt operator-(difference_type d) noexcept { return member_iterator_gt(index_, static_cast<compressed_slot_t>(static_cast<std::size_t>(slot_) - d)); }
+        member_iterator_gt& operator++() noexcept { slot_ = static_cast<compressed_slot_t>(static_cast<std::size_t>(slot_) + 1); return *this; }
+        member_iterator_gt& operator--() noexcept { slot_ = static_cast<compressed_slot_t>(static_cast<std::size_t>(slot_) - 1); return *this; }
+        member_iterator_gt& operator+=(difference_type d) noexcept { slot_ = static_cast<compressed_slot_t>(static_cast<std::size_t>(slot_) + d); return *this; }
+        member_iterator_gt& operator-=(difference_type d) noexcept { slot_ = static_cast<compressed_slot_t>(static_cast<std::size_t>(slot_) - d); return *this; }
         bool operator==(member_iterator_gt const& other) const noexcept { return index_ == other.index_ && slot_ == other.slot_; }
         bool operator!=(member_iterator_gt const& other) const noexcept { return index_ != other.index_ || slot_ != other.slot_; }
         // clang-format on
@@ -2196,17 +2216,17 @@ class index_gt {
         return result;
     }
 
-    member_citerator_t cbegin() const noexcept { return {this, 0}; }
-    member_citerator_t cend() const noexcept { return {this, size()}; }
-    member_citerator_t begin() const noexcept { return {this, 0}; }
-    member_citerator_t end() const noexcept { return {this, size()}; }
-    member_iterator_t begin() noexcept { return {this, 0}; }
-    member_iterator_t end() noexcept { return {this, size()}; }
+    member_citerator_t cbegin() const noexcept { return {this, static_cast<compressed_slot_t>(0u)}; }
+    member_citerator_t cend() const noexcept { return {this, static_cast<compressed_slot_t>(size())}; }
+    member_citerator_t begin() const noexcept { return {this, static_cast<compressed_slot_t>(0u)}; }
+    member_citerator_t end() const noexcept { return {this, static_cast<compressed_slot_t>(size())}; }
+    member_iterator_t begin() noexcept { return {this, static_cast<compressed_slot_t>(0u)}; }
+    member_iterator_t end() noexcept { return {this, static_cast<compressed_slot_t>(size())}; }
 
-    member_ref_t at(std::size_t slot) noexcept { return {nodes_[slot].key(), slot}; }
-    member_cref_t at(std::size_t slot) const noexcept { return {nodes_[slot].ckey(), slot}; }
-    member_iterator_t iterator_at(std::size_t slot) noexcept { return {this, slot}; }
-    member_citerator_t citerator_at(std::size_t slot) const noexcept { return {this, slot}; }
+    member_ref_t at(compressed_slot_t slot) noexcept { return {nodes_[slot].key(), slot}; }
+    member_cref_t at(compressed_slot_t slot) const noexcept { return {nodes_[slot].ckey(), slot}; }
+    member_iterator_t iterator_at(compressed_slot_t slot) noexcept { return {this, slot}; }
+    member_citerator_t citerator_at(compressed_slot_t slot) const noexcept { return {this, slot}; }
 
     dynamic_allocator_t const& dynamic_allocator() const noexcept { return dynamic_allocator_; }
     tape_allocator_t const& tape_allocator() const noexcept { return tape_allocator_; }
@@ -2323,7 +2343,7 @@ class index_gt {
         std::size_t new_size{};
         std::size_t visited_members{};
         std::size_t computed_distances{};
-        std::size_t slot{};
+        compressed_slot_t slot{};
 
         explicit operator bool() const noexcept { return !error; }
         add_result_t failed(error_t message) noexcept {
@@ -2510,14 +2530,14 @@ class index_gt {
 
         // Determining how much memory to allocate for the node depends on the target level
         std::unique_lock<std::mutex> new_level_lock(global_mutex_);
-        level_t max_level_copy = max_level_;       // Copy under lock
-        std::size_t entry_slot_copy = entry_slot_; // Copy under lock
+        level_t max_level_copy = max_level_;                                             // Copy under lock
+        compressed_slot_t entry_slot_copy = static_cast<compressed_slot_t>(entry_slot_); // Copy under lock
         level_t new_target_level = choose_random_level_(context.level_generator);
 
         // Make sure we are not overflowing
         std::size_t capacity = nodes_capacity_.load();
-        std::size_t new_slot = nodes_count_.fetch_add(1);
-        if (new_slot >= capacity) {
+        std::size_t old_size = nodes_count_.fetch_add(1);
+        if (old_size >= capacity) {
             nodes_count_.fetch_sub(1);
             return result.failed("Reserve capacity ahead of insertions!");
         }
@@ -2531,14 +2551,14 @@ class index_gt {
         if (new_target_level <= max_level_copy)
             new_level_lock.unlock();
 
-        nodes_[new_slot] = new_node;
-        result.new_size = new_slot + 1;
-        result.slot = new_slot;
-        callback(at(new_slot));
+        nodes_[old_size] = new_node;
+        result.new_size = old_size + 1;
+        compressed_slot_t new_slot = result.slot = static_cast<compressed_slot_t>(old_size);
+        callback(at(result.slot));
 
         // Do nothing for the first element
-        if (!new_slot) {
-            entry_slot_ = new_slot;
+        if (!old_size) {
+            entry_slot_ = result.slot;
             max_level_ = new_target_level;
             return result;
         }
@@ -2548,8 +2568,8 @@ class index_gt {
         result.visited_members = context.iteration_cycles;
 
         // Go down the level, tracking only the closest match
-        std::size_t closest_slot = search_for_one_( //
-            value, metric, prefetch,                //
+        compressed_slot_t closest_slot = search_for_one_( //
+            value, metric, prefetch,                      //
             entry_slot_copy, max_level_copy, new_target_level, context);
 
         // From `new_target_level` down - perform proper extensive search
@@ -2622,7 +2642,7 @@ class index_gt {
 
         usearch_assert_m(!is_immutable(), "Can't add to an immutable index");
         add_result_t result;
-        std::size_t updated_slot = iterator.slot_;
+        compressed_slot_t updated_slot = iterator.slot_;
 
         // Make sure we have enough local memory to perform this request
         context_t& context = contexts_[config.thread];
@@ -2645,11 +2665,11 @@ class index_gt {
 
         // Copy entry coordinates under locks
         level_t max_level_copy;
-        std::size_t entry_slot_copy;
+        compressed_slot_t entry_slot_copy;
         {
             std::unique_lock<std::mutex> new_level_lock(global_mutex_);
-            max_level_copy = max_level_;   // Copy under lock
-            entry_slot_copy = entry_slot_; // Copy under lock
+            max_level_copy = max_level_;                                   // Copy under lock
+            entry_slot_copy = static_cast<compressed_slot_t>(entry_slot_); // Copy under lock
         }
 
         // Pull stats
@@ -2658,8 +2678,8 @@ class index_gt {
 
         // Go down the level, tracking only the closest match;
         // It may even be equal to the `updated_slot`
-        std::size_t closest_slot = search_for_one_( //
-            value, metric, prefetch,                //
+        compressed_slot_t closest_slot = search_for_one_( //
+            value, metric, prefetch,                      //
             entry_slot_copy, max_level_copy, updated_node_level, context);
 
         // From `updated_node_level` down - perform proper extensive search
@@ -2740,7 +2760,8 @@ class index_gt {
             if (!top.reserve(expansion))
                 return result.failed("Out of memory!");
 
-            std::size_t closest_slot = search_for_one_(query, metric, prefetch, entry_slot_, max_level_, 0, context);
+            compressed_slot_t closest_slot = search_for_one_(
+                query, metric, prefetch, static_cast<compressed_slot_t>(entry_slot_), max_level_, 0, context);
 
             // For bottom layer we need a more optimized procedure
             if (!search_to_find_in_base_(query, metric, predicate, prefetch, closest_slot, expansion, context))
@@ -2794,8 +2815,9 @@ class index_gt {
         if (!next.reserve(expansion))
             return result.failed("Out of memory!");
 
-        result.cluster.member = at(search_for_one_(query, metric, prefetch, entry_slot_, max_level_,
-                                                   static_cast<level_t>(level <= 0 ? 0 : level - 1), context));
+        result.cluster.member =
+            at(search_for_one_(query, metric, prefetch, static_cast<compressed_slot_t>(entry_slot_), max_level_,
+                               static_cast<level_t>(level <= 0 ? 0 : level - 1), context));
         result.cluster.distance = context.measure(query, result.cluster.member, metric);
 
         // Normalize stats
@@ -3275,16 +3297,14 @@ class index_gt {
         std::size_t const total = 3 * slots_and_levels.size();
 
         // For every bottom level node, determine its parent cluster
-        executor.dynamic(slots_and_levels.size(), [&](std::size_t thread_idx, std::size_t old_slot) {
+        executor.dynamic(slots_and_levels.size(), [&](std::size_t thread_idx, std::size_t old_slot_as_uint) {
             context_t& context = contexts_[thread_idx];
-            std::size_t cluster = search_for_one_( //
-                values[citerator_at(old_slot)],    //
-                metric, prefetch,                  //
-                entry_slot_, max_level_, 0, context);
-            slots_and_levels[old_slot] = {                                          //
-                                          static_cast<compressed_slot_t>(old_slot), //
-                                          static_cast<compressed_slot_t>(cluster),  //
-                                          node_at_(old_slot).level()};
+            compressed_slot_t old_slot = static_cast<compressed_slot_t>(old_slot_as_uint);
+            compressed_slot_t cluster = search_for_one_( //
+                values[citerator_at(old_slot)],          //
+                metric, prefetch,                        //
+                static_cast<compressed_slot_t>(entry_slot_), max_level_, 0, context);
+            slots_and_levels[old_slot] = {old_slot, cluster, node_at_(old_slot).level()};
             ++processed;
             if (thread_idx == 0)
                 do_tasks = progress(processed.load(), total);
@@ -3621,16 +3641,16 @@ class index_gt {
     };
 
     template <typename value_at, typename metric_at, typename prefetch_at = dummy_prefetch_t>
-    std::size_t search_for_one_(                                      //
+    compressed_slot_t search_for_one_(                                //
         value_at&& query, metric_at&& metric, prefetch_at&& prefetch, //
-        std::size_t closest_slot, level_t begin_level, level_t end_level, context_t& context) const noexcept {
+        compressed_slot_t closest_slot, level_t begin_level, level_t end_level, context_t& context) const noexcept {
 
         visits_hash_set_t& visits = context.visits;
         visits.clear();
 
         // Optional prefetching
         if (!is_dummy<prefetch_at>())
-            prefetch(citerator_at(closest_slot), citerator_at(closest_slot + 1));
+            prefetch(citerator_at(closest_slot), citerator_at(closest_slot) + 1);
 
         distance_t closest_dist = context.measure(query, citerator_at(closest_slot), metric);
         for (level_t level = begin_level; level > end_level; --level) {
@@ -3686,7 +3706,7 @@ class index_gt {
     template <typename value_at, typename metric_at, typename prefetch_at = dummy_prefetch_t>
     bool search_to_insert_(                                           //
         value_at&& query, metric_at&& metric, prefetch_at&& prefetch, //
-        std::size_t start_slot, level_t level, std::size_t top_limit, context_t& context) noexcept {
+        compressed_slot_t start_slot, level_t level, std::size_t top_limit, context_t& context) noexcept {
 
         visits_hash_set_t& visits = context.visits;
         next_candidates_t& next = context.next_candidates; // pop min, push
@@ -3702,12 +3722,12 @@ class index_gt {
 
         // Optional prefetching
         if (!is_dummy<prefetch_at>())
-            prefetch(citerator_at(start_slot), citerator_at(start_slot + 1));
+            prefetch(citerator_at(start_slot), citerator_at(start_slot) + 1);
 
         distance_t radius = context.measure(query, citerator_at(start_slot), metric);
-        next.insert_reserved({-radius, static_cast<compressed_slot_t>(start_slot)});
-        top.insert_reserved({radius, static_cast<compressed_slot_t>(start_slot)});
-        visits.set(static_cast<compressed_slot_t>(start_slot));
+        next.insert_reserved({-radius, start_slot});
+        top.insert_reserved({radius, start_slot});
+        visits.set(start_slot);
 
         // The primary loop of the graph traversal
         while (!next.empty()) {
@@ -3799,13 +3819,13 @@ class index_gt {
 
         // Optional prefetching
         if (!is_dummy<prefetch_at>())
-            prefetch(citerator_at(start_slot), citerator_at(start_slot + 1));
+            prefetch(citerator_at(start_slot), citerator_at(start_slot) + 1);
 
         distance_t radius = context.measure(query, citerator_at(start_slot), metric);
-        next.insert_reserved({-radius, static_cast<compressed_slot_t>(start_slot)});
-        visits.set(static_cast<compressed_slot_t>(start_slot));
+        next.insert_reserved({-radius, start_slot});
+        visits.set(start_slot);
         if (start_slot != updated_slot)
-            top.insert_reserved({radius, static_cast<compressed_slot_t>(start_slot)});
+            top.insert_reserved({radius, start_slot});
 
         // The primary loop of the graph traversal
         while (!next.empty()) {
@@ -3871,7 +3891,7 @@ class index_gt {
     template <typename value_at, typename metric_at, typename predicate_at, typename prefetch_at>
     bool search_to_find_in_base_(                                                               //
         value_at&& query, metric_at&& metric, predicate_at&& predicate, prefetch_at&& prefetch, //
-        std::size_t start_slot, std::size_t expansion, context_t& context) const usearch_noexcept_m {
+        compressed_slot_t start_slot, std::size_t expansion, context_t& context) const usearch_noexcept_m {
 
         visits_hash_set_t& visits = context.visits;
         next_candidates_t& next = context.next_candidates; // pop min, push
@@ -3886,18 +3906,18 @@ class index_gt {
 
         // Optional prefetching
         if (!is_dummy<prefetch_at>())
-            prefetch(citerator_at(start_slot), citerator_at(start_slot + 1));
+            prefetch(citerator_at(start_slot), citerator_at(start_slot) + 1);
 
         distance_t radius = context.measure(query, citerator_at(start_slot), metric);
         usearch_assert_m(next.capacity(), "The `max_heap_gt` must have been reserved in the search entry point");
-        next.insert_reserved({-radius, static_cast<compressed_slot_t>(start_slot)});
-        visits.set(static_cast<compressed_slot_t>(start_slot));
+        next.insert_reserved({-radius, start_slot});
+        visits.set(start_slot);
 
         // Don't populate the top list if the predicate is not satisfied
         if (is_dummy<predicate_at>() || predicate(member_cref_t{node_at_(start_slot).ckey(), start_slot})) {
             usearch_assert_m(top.capacity(),
                              "The `sorted_buffer_gt` must have been reserved in the search entry point");
-            top.insert_reserved({radius, static_cast<compressed_slot_t>(start_slot)});
+            top.insert_reserved({radius, start_slot});
         }
 
         while (!next.empty()) {
@@ -3971,12 +3991,13 @@ class index_gt {
         top.clear();
         top.reserve(count);
         for (std::size_t i = 0; i != size(); ++i) {
+            auto slot = static_cast<compressed_slot_t>(i);
             if (!is_dummy<predicate_at>())
-                if (!predicate(at(i)))
+                if (!predicate(at(slot)))
                     continue;
 
-            distance_t distance = context.measure(query, citerator_at(i), metric);
-            top.insert(candidate_t{distance, static_cast<compressed_slot_t>(i)}, count);
+            distance_t distance = context.measure(query, citerator_at(slot), metric);
+            top.insert(candidate_t{distance, slot}, count);
         }
     }
 
