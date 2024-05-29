@@ -4025,15 +4025,29 @@ class index_gt {
         while (submitted_count < needed && consumed_count < top_count) {
             candidate_t candidate = top_data[consumed_count];
             bool good = true;
-            for (std::size_t idx = 0; idx < submitted_count; idx++) {
-                candidate_t submitted = top_data[idx];
-                distance_t inter_result_dist = context.measure( //
-                    citerator_at(candidate.slot),               //
-                    citerator_at(submitted.slot),               //
-                    metric);
-                if (inter_result_dist < candidate.distance) {
-                    good = false;
-                    break;
+
+            if constexpr (parallel_metric_k) {
+                auto candidate_allowed = [=](candidate_t) { return true; };
+                auto candidate_transform = [&](candidate_t candidate) { return citerator_at(candidate.slot); };
+                auto candidate_accept = [&](candidate_t candidate, distance_t inter_result_dist) {
+                    if (inter_result_dist < candidate.distance) {
+                        good = false;
+                        return;
+                    }
+                };
+                context.measure_batch(candidate, span_gt<candidate_t>(top_data, submitted_count), metric, //
+                                      candidate_allowed, candidate_transform, candidate_accept);
+            } else {
+                for (std::size_t idx = 0; idx < submitted_count; idx++) {
+                    candidate_t submitted = top_data[idx];
+                    distance_t inter_result_dist = context.measure( //
+                        citerator_at(candidate.slot),               //
+                        citerator_at(submitted.slot),               //
+                        metric);
+                    if (inter_result_dist < candidate.distance) {
+                        good = false;
+                        break;
+                    }
                 }
             }
 
