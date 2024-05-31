@@ -906,6 +906,7 @@ template <typename from_scalar_at> struct cast_gt<from_scalar_at, b1x8_t> {
     inline static bool try_(byte_t const* input, std::size_t dim, byte_t* output) noexcept {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
         unsigned char* typed_output = reinterpret_cast<unsigned char*>(output);
+        std::memset(typed_output, 0, dim / CHAR_BIT);
         for (std::size_t i = 0; i != dim; ++i)
             // Converting from scalar types to boolean isn't trivial and depends on the type.
             // The most common case is to consider all positive values as `true` and all others as `false`.
