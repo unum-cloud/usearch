@@ -609,15 +609,6 @@ function exactSearch(
   }
 }
 
-module.exports = {
-  Index,
-  MetricKind,
-  ScalarKind,
-  Matches,
-  BatchMatches,
-  exactSearch,
-};
-
 // utility functions to help find native builds
 
 function getBuildDir(dir: string) {
