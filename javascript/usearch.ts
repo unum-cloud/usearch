@@ -609,6 +609,16 @@ function exactSearch(
   }
 }
 
+const usearch = {
+    Index,
+    MetricKind,
+    ScalarKind,
+    Matches,
+    BatchMatches,
+    exactSearch,
+};
+export default usearch;
+
 // utility functions to help find native builds
 
 function getBuildDir(dir: string) {
