@@ -6,7 +6,7 @@ using namespace unum::usearch;
 using distance_t = distance_punned_t;
 using metric_t = metric_punned_t;
 using index_t = index_dense_t;
-using vector_view_t = span_gt<float>;
+using vector_view_t = span_gt<double>;
 
 using add_result_t = typename index_t::add_result_t;
 using search_result_t = typename index_t::search_result_t;
@@ -120,12 +120,12 @@ EXTERN_C DLLEXPORT int IndexCapacity(WolframLibraryData libData, mint Argc, MArg
 EXTERN_C DLLEXPORT int IndexAdd(WolframLibraryData libData, mint Argc, MArgument* Args, MArgument Res) {
     char* path_cstr = nullptr;
     index_t* c_ptr = (index_t*)MArgument_getUTF8String(Args[0]);
-    float* vector_data = nullptr;
+    double* vector_data = nullptr;
     try {
         int key = MArgument_getInteger(Args[1]);
         MTensor tens = MArgument_getMTensor(Args[2]);
         std::size_t len = libData->MTensor_getFlattenedLength(tens);
-        vector_data = (float*)libData->MTensor_getRealData(tens);
+        vector_data = (double*)libData->MTensor_getRealData(tens);
         vector_view_t vector_span = vector_view_t{vector_data, len};
         c_ptr->add(key, vector_span);
     } catch (...) {
@@ -138,13 +138,13 @@ EXTERN_C DLLEXPORT int IndexSearch(WolframLibraryData libData, mint Argc, MArgum
     index_t* c_ptr = (index_t*)MArgument_getUTF8String(Args[0]);
     MTensor matches;
     int wanted = MArgument_getInteger(Args[2]);
-    float* vector_data = nullptr;
+    double* vector_data = nullptr;
     vector_key_t* matches_data = nullptr;
 
     try {
         MTensor tens = MArgument_getMTensor(Args[1]);
         std::size_t len = libData->MTensor_getFlattenedLength(tens);
-        vector_data = (float*)libData->MTensor_getRealData(tens);
+        vector_data = (double*)libData->MTensor_getRealData(tens);
         vector_view_t vector_span = vector_view_t{vector_data, len};
         matches_data = (vector_key_t*)std::malloc(sizeof(vector_key_t) * wanted);
         dense_search_result_t found = c_ptr->search(vector_span, static_cast<std::size_t>(wanted));
