@@ -193,11 +193,11 @@ inline scalar_kind_t convert_pre_2_10_scalar_kind(scalar_kind_t scalar_kind) noe
 
 inline void fix_pre_2_10_metadata(index_dense_head_t& head) {
     // deal with incompatibility with pre-2.10 versions: https://github.com/unum-cloud/usearch/issues/423
-    if (head.version_major < 2 || (head.version_major == 2 && head.version_minor < 10)) {
+    if (head.version_major == 2 && head.version_minor < 10) {
         head.kind_scalar = convert_pre_2_10_scalar_kind(head.kind_scalar);
         head.kind_key = convert_pre_2_10_scalar_kind(head.kind_key);
         head.kind_compressed_slot = convert_pre_2_10_scalar_kind(head.kind_compressed_slot);
-        head.version_major = 2;
+        // update minor versions so that no repeated conversion occurs
         head.version_minor = 10;
         head.version_patch = 0;
     }
