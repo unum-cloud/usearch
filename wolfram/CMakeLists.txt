@@ -1,3 +1,6 @@
+cmake_minimum_required(VERSION 3.15.0)
+
+project(usearch)
 
 if(NOT WOLFRAM_PATH)
     set(WOLFRAM_PATH "/usr/local/Wolfram/Mathematica")
