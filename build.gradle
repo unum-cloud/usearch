@@ -10,8 +10,10 @@ plugins {
 group "cloud.unum"
 version = file("VERSION").text.trim()
 
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
+java {
+    sourceCompatibility = JavaVersion.VERSION_18
+    targetCompatibility = JavaVersion.VERSION_18
+}
 
 repositories {
     mavenCentral()
