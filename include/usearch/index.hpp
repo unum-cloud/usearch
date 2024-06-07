@@ -2793,8 +2793,9 @@ class index_gt {
 
     stats_t stats(std::size_t level) const noexcept {
         stats_t result{};
-
         std::size_t neighbors_bytes = !level ? pre_.neighbors_base_bytes : pre_.neighbors_bytes;
+        std::size_t max_edges_per_node = !level ? config_.connectivity_base : config_.connectivity;
+
         for (std::size_t i = 0; i != size(); ++i) {
             node_t node = node_at_(i);
             if (static_cast<std::size_t>(node.level()) < level)
@@ -2805,7 +2806,6 @@ class index_gt {
             result.allocated_bytes += node_head_bytes_() + neighbors_bytes;
         }
 
-        std::size_t max_edges_per_node = level ? config_.connectivity_base : config_.connectivity;
         result.max_edges = result.nodes * max_edges_per_node;
         return result;
     }
