@@ -84,8 +84,8 @@ Similarly, to use the most recent Clang compiler version from HomeBrew on MacOS:
 brew install clang++ clang cmake
 cmake \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER="/opt/homebrew/opt/llvm/bin/clang" \
-    -DCMAKE_CXX_COMPILER="/opt/homebrew/opt/llvm/bin/clang++" \
+    -DCMAKE_C_COMPILER="$(brew --prefix llvm)/bin/clang" \
+    -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" \
     -DUSEARCH_USE_FP16LIB=1 \
     -DUSEARCH_USE_OPENMP=1 \
     -DUSEARCH_USE_SIMSIMD=1 \

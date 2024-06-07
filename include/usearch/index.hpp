@@ -365,11 +365,18 @@ class error_t {
         std::swap(message_, other.message_);
         return *this;
     }
+
+    /// @brief Checks if there was an error.
     explicit operator bool() const noexcept { return message_ != nullptr; }
+
+    /// @brief Returns the error message.
     char const* what() const noexcept { return message_; }
+
+    /// @brief Releases the error message, meaning the caller takes ownership.
     char const* release() noexcept { return exchange(message_, nullptr); }
 
 #if defined(__cpp_exceptions) || defined(__EXCEPTIONS)
+    /// @brief Destructor raises an exception if an error was recorded.
     ~error_t() noexcept(false) {
 #if defined(USEARCH_DEFINED_CPP17)
         if (message_ && std::uncaught_exceptions() == 0)
@@ -378,12 +385,17 @@ class error_t {
 #endif
             raise();
     }
+
+    /// @brief Throws an exception using to be caught by `try` / `catch`.
     void raise() noexcept(false) {
         if (message_)
             throw std::runtime_error(exchange(message_, nullptr));
     }
 #else
+    /// @brief Destructor terminates if an error was recorded.
     ~error_t() noexcept { raise(); }
+
+    /// @brief Terminates if an error was recorded.
     void raise() noexcept {
         if (message_)
             std::terminate();
@@ -1981,7 +1993,9 @@ class index_gt {
         visits_hash_set_t visits{};
         std::default_random_engine level_generator{};
         std::size_t iteration_cycles{};
-        std::size_t computed_distances_count{};
+        std::size_t computed_distances{};
+        std::size_t computed_distances_in_refines{};
+        std::size_t computed_distances_in_reverse_refines{};
 
         template <typename value_at, typename metric_at, typename entry_at> //
         inline distance_t measure(value_at const& first, entry_at const& second, metric_at&& metric) noexcept {
@@ -1989,7 +2003,7 @@ class index_gt {
                 std::is_same<entry_at, member_cref_t>::value || std::is_same<entry_at, member_citerator_t>::value,
                 "Unexpected type");
 
-            computed_distances_count++;
+            computed_distances++;
             return metric(first, second);
         }
 
@@ -1999,7 +2013,7 @@ class index_gt {
                 std::is_same<entry_at, member_cref_t>::value || std::is_same<entry_at, member_citerator_t>::value,
                 "Unexpected type");
 
-            computed_distances_count++;
+            computed_distances++;
             return metric(first, second);
         }
     };
@@ -2031,7 +2045,7 @@ class index_gt {
 
     using nodes_allocator_t = typename dynamic_allocator_traits_t::template rebind_alloc<node_t>;
 
-    /// @brief  C-style array of `node_t` smart-pointers.
+    /// @brief  C-style array of `node_t` smart-pointers. Use `compressed_slot_t` for indexing.
     buffer_gt<node_t, nodes_allocator_t> nodes_{};
 
     /// @brief  Mutex, that limits concurrent access to `nodes_`.
@@ -2053,8 +2067,10 @@ class index_gt {
     explicit operator bool() const noexcept { return config_.is_valid(); }
 
     /**
+     *  @brief Default index constructor, suitable only for stateless allocators.
+     *  @warning Consider `index_gt::make` instead, or explicitly convert to `bool` to check if the index is valid.
      *  @section Exceptions
-     *      Doesn't throw, unless the ::metric's and ::allocators's throw on copy-construction.
+     *      Doesn't throw, unless the ::dynamic_allocator's and ::tape_allocator's throw on move-construction.
      */
     explicit index_gt( //
         dynamic_allocator_t dynamic_allocator = {}, tape_allocator_t tape_allocator = {}) noexcept(false)
@@ -2063,8 +2079,10 @@ class index_gt {
           entry_slot_(0u), nodes_(), nodes_mutexes_(), contexts_() {}
 
     /**
+     *  @brief Default index constructor, suitable only for stateless allocators.
+     *  @warning Consider `index_gt::make` instead, or explicitly convert to `bool` to check if the index is valid.
      *  @section Exceptions
-     *      Doesn't throw, unless the ::metric's and ::allocators's throw on copy-construction.
+     *      Doesn't throw, unless the ::dynamic_allocator's and ::tape_allocator's throw on move-construction.
      */
     explicit index_gt(index_config_t config, dynamic_allocator_t dynamic_allocator = {},
                       tape_allocator_t tape_allocator = {}) noexcept(false)
@@ -2105,6 +2123,14 @@ class index_gt {
     };
     using copy_result_t = state_result_t;
 
+    /**
+     *  @brief  The recommended way to initialize the index, as unlike the constructor,
+     *          it can fail with an error message, without raising an exception.
+     *
+     *  @param[in] config The configuration specs of the index.
+     *  @param[in] dynamic_allocator The allocator for temporary buffers and thread contexts, like priority queues.
+     *  @param[in] tape_allocator The allocator for the primary allocations of nodes and vectors.
+     */
     static state_result_t make( //
         index_config_t config = {}, dynamic_allocator_t dynamic_allocator = {},
         tape_allocator_t tape_allocator = {}) noexcept {
@@ -2127,6 +2153,12 @@ class index_gt {
         return result;
     }
 
+    /**
+     *  @brief  The recommended way to copy the index, as unlike the copy-constructor,
+     *          it can fail with an error message, without raising an exception.
+     *
+     *  @param[in] config The configuration specs for the copy-operation. Currently unused.
+     */
     copy_result_t copy(index_copy_config_t config = {}) const noexcept {
         copy_result_t result;
         index_gt& other = result.index;
@@ -2259,7 +2291,8 @@ class index_gt {
     }
 
     /**
-     *  @brief  Increases the `capacity()` of the index to allow adding more vectors.
+     *  @brief Increases the `capacity()` of the index to allow adding more vectors.
+     *  @warning Unlike STL, won't throw exceptions on memory allocations, so check the return value.
      *  @return `true` on success, `false` on memory allocation errors.
      */
     bool reserve(index_limits_t limits) usearch_noexcept_m { return try_reserve(limits); }
@@ -2275,6 +2308,8 @@ class index_gt {
         std::size_t new_size{};
         std::size_t visited_members{};
         std::size_t computed_distances{};
+        std::size_t computed_distances_in_refines{};
+        std::size_t computed_distances_in_reverse_refines{};
         compressed_slot_t slot{};
 
         explicit operator bool() const noexcept { return !error; }
@@ -2496,7 +2531,9 @@ class index_gt {
         }
 
         // Pull stats
-        result.computed_distances = context.computed_distances_count;
+        result.computed_distances = context.computed_distances;
+        result.computed_distances_in_refines = context.computed_distances_in_refines;
+        result.computed_distances_in_reverse_refines = context.computed_distances_in_reverse_refines;
         result.visited_members = context.iteration_cycles;
 
         // Go down the level, tracking only the closest match
@@ -2519,7 +2556,11 @@ class index_gt {
         }
 
         // Normalize stats
-        result.computed_distances = context.computed_distances_count - result.computed_distances;
+        result.computed_distances = context.computed_distances - result.computed_distances;
+        result.computed_distances_in_refines =
+            context.computed_distances_in_refines - result.computed_distances_in_refines;
+        result.computed_distances_in_reverse_refines =
+            context.computed_distances_in_reverse_refines - result.computed_distances_in_reverse_refines;
         result.visited_members = context.iteration_cycles - result.visited_members;
 
         // Updating the entry point if needed
@@ -2605,7 +2646,7 @@ class index_gt {
         }
 
         // Pull stats
-        result.computed_distances = context.computed_distances_count;
+        result.computed_distances = context.computed_distances;
         result.visited_members = context.iteration_cycles;
 
         // Go down the level, tracking only the closest match;
@@ -2630,7 +2671,7 @@ class index_gt {
         updated_node.key(key);
 
         // Normalize stats
-        result.computed_distances = context.computed_distances_count - result.computed_distances;
+        result.computed_distances = context.computed_distances - result.computed_distances;
         result.visited_members = context.iteration_cycles - result.visited_members;
         result.slot = updated_slot;
 
@@ -2676,7 +2717,7 @@ class index_gt {
             return result;
 
         // Go down the level, tracking only the closest match
-        result.computed_distances = context.computed_distances_count;
+        result.computed_distances = context.computed_distances;
         result.visited_members = context.iteration_cycles;
 
         if (config.exact) {
@@ -2704,7 +2745,7 @@ class index_gt {
         top.shrink(wanted);
 
         // Normalize stats
-        result.computed_distances = context.computed_distances_count - result.computed_distances;
+        result.computed_distances = context.computed_distances - result.computed_distances;
         result.visited_members = context.iteration_cycles - result.visited_members;
         result.count = top.size();
         return result;
@@ -2739,7 +2780,7 @@ class index_gt {
             return result.failed("No clusters to identify");
 
         // Go down the level, tracking only the closest match
-        result.computed_distances = context.computed_distances_count;
+        result.computed_distances = context.computed_distances;
         result.visited_members = context.iteration_cycles;
 
         next_candidates_t& next = context.next_candidates;
@@ -2753,7 +2794,7 @@ class index_gt {
         result.cluster.distance = context.measure(query, result.cluster.member, metric);
 
         // Normalize stats
-        result.computed_distances = context.computed_distances_count - result.computed_distances;
+        result.computed_distances = context.computed_distances - result.computed_distances;
         result.visited_members = context.iteration_cycles - result.visited_members;
 
         (void)predicate;
@@ -2773,6 +2814,9 @@ class index_gt {
         std::size_t allocated_bytes{};
     };
 
+    /**
+     *  @brief  Aggregates stats on the number of nodes, edges, and memory usage across all levels.
+     */
     stats_t stats() const noexcept {
         stats_t result{};
 
@@ -2791,6 +2835,12 @@ class index_gt {
         return result;
     }
 
+    /**
+     *  @brief  Aggregates stats on the number of nodes, edges, and memory usage up to a specific level.
+     *
+     *  The `level` parameter is zero-based, where `0` is the base level.
+     *  For example, `level=1` will include the base level and the first level of connections.
+     */
     stats_t stats(std::size_t level) const noexcept {
         stats_t result{};
         std::size_t neighbors_bytes = !level ? pre_.neighbors_base_bytes : pre_.neighbors_bytes;
@@ -2810,6 +2860,13 @@ class index_gt {
         return result;
     }
 
+    /**
+     *  @brief  Aggregates stats on the number of nodes, edges, and memory usage up to a specific level,
+     *          simultaneously exporting the stats for each level into the `stats_per_level` C-style array.
+     *
+     *  The `max_level` parameter is zero-based, where `0` is the base level.
+     *  For example, `max_level=1` will include the base level and the first level of connections.
+     */
     stats_t stats(stats_t* stats_per_level, std::size_t max_level) const noexcept {
 
         std::size_t head_bytes = node_head_bytes_();
@@ -3022,8 +3079,12 @@ class index_gt {
             },
             std::forward<progress_at>(progress));
 
-        if (!stream_result)
+        if (!stream_result) {
+            // Drop generic messages like "end of file reached" in favor
+            // of more specific messages from the stream
+            io_result.error.release();
             return stream_result;
+        }
         return io_result;
     }
 
@@ -3071,8 +3132,12 @@ class index_gt {
             },
             std::forward<progress_at>(progress));
 
-        if (!stream_result)
+        if (!stream_result) {
+            // Drop generic messages like "end of file reached" in favor
+            // of more specific messages from the stream
+            io_result.error.release();
             return stream_result;
+        }
         return io_result;
     }
 
@@ -3186,16 +3251,12 @@ class index_gt {
      *          and links to them, while also generating a more efficient mapping,
      *          putting the more frequently used entries closer together.
      *
-     *
-     * Scans the whole collection, removing the links leading towards
-     *          banned entries. This essentially isolates some nodes from the rest
-     *          of the graph, while keeping their outgoing links, in case the node
-     *          is structurally relevant and has a crucial role in the index.
-     *          It won't reclaim the memory.
-     *
-     *  @param[in] allow_member Predicate to mark nodes for isolation.
+     *  @param[in] values A []-subscriptable object, providing access to the values.
+     *  @param[in] metric Callable object measuring distance between any ::values and present objects.
+     *  @param[in] slot_transition Callable object to inform changes in slot assignments.
      *  @param[in] executor Thread-pool to execute the job in parallel.
      *  @param[in] progress Callback to report the execution progress.
+     *  @param[in] prefetch Callable object to prefetch data into the cache.
      */
     template <typename values_at, typename metric_at,                   //
               typename slot_transition_at = dummy_key_to_key_mapping_t, //
@@ -3440,7 +3501,8 @@ class index_gt {
 
         node_t new_node = node_at_(new_slot);
         top_candidates_t& top = context.top_candidates;
-        candidates_view_t top_view = refine_(metric, config_.connectivity, top, context);
+        candidates_view_t top_view =
+            refine_(metric, config_.connectivity, top, context, context.computed_distances_in_refines);
         usearch_assert_m(top_view.size(), "This would lead to isolated nodes");
 
         // Outgoing links from `new_slot`:
@@ -3489,7 +3551,8 @@ class index_gt {
 
             // To fit a new connection we need to drop an existing one.
             top.clear();
-            usearch_assert_m((top.reserve(close_header.size() + 1)), "The memory must have been reserved in `add`");
+            usearch_assert_m((top.capacity() >= (close_header.size() + 1)),
+                             "The memory must have been reserved in `add`");
             top.insert_reserved({context.measure(value, citerator_at(close_slot), metric), new_slot});
             for (compressed_slot_t successor_slot : close_header)
                 top.insert_reserved(
@@ -3497,7 +3560,8 @@ class index_gt {
 
             // Export the results:
             close_header.clear();
-            candidates_view_t top_view = refine_(metric, connectivity_max, top, context);
+            candidates_view_t top_view =
+                refine_(metric, connectivity_max, top, context, context.computed_distances_in_reverse_refines);
             usearch_assert_m(top_view.size(), "This would lead to isolated nodes");
             for (std::size_t idx = 0; idx != top_view.size(); idx++)
                 close_header.push_back(top_view[idx].slot);
@@ -3883,9 +3947,10 @@ class index_gt {
      *          to keep only the neighbors, that are from each other.
      */
     template <typename metric_at>
-    candidates_view_t refine_( //
-        metric_at&& metric,    //
-        std::size_t needed, top_candidates_t& top, context_t& context) const noexcept {
+    candidates_view_t refine_(                                         //
+        metric_at&& metric,                                            //
+        std::size_t needed, top_candidates_t& top, context_t& context, //
+        std::size_t& refines_counter) const noexcept {
 
         // Avoid expensive computation, if the set is already small
         candidate_t* top_data = top.data();
@@ -3901,7 +3966,8 @@ class index_gt {
         while (submitted_count < needed && consumed_count < top_count) {
             candidate_t candidate = top_data[consumed_count];
             bool good = true;
-            for (std::size_t idx = 0; idx < submitted_count; idx++) {
+            std::size_t idx = 0;
+            for (; idx < submitted_count; idx++) {
                 candidate_t submitted = top_data[idx];
                 distance_t inter_result_dist = context.measure( //
                     citerator_at(candidate.slot),               //
@@ -3918,6 +3984,7 @@ class index_gt {
                 submitted_count++;
             }
             consumed_count++;
+            refines_counter += idx;
         }
 
         top.shrink(submitted_count);
