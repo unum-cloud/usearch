@@ -95,17 +95,39 @@
 #include <thread>    // `std::thread`
 #include <utility>   // `std::pair`
 
+// Helper macros for concatenation and stringification
+#define usearch_concat_helper_m(a, b) a##b
+#define usearch_concat_m(a, b) usearch_concat_helper_m(a, b)
+#define usearch_stringify_helper_m(x) #x
+#define usearch_stringify_m(x) usearch_stringify_helper_m(x)
+
 // Prefetching
 #if defined(USEARCH_DEFINED_GCC)
 // https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html
 // Zero means we are only going to read from that memory.
 // Three means high temporal locality and suggests to keep
 // the data in all layers of cache.
-#define prefetch_m(ptr) __builtin_prefetch((void*)(ptr), 0, 3)
+#define usearch_prefetch_m(ptr) __builtin_prefetch((void*)(ptr), 0, 3)
 #elif defined(USEARCH_DEFINED_X86)
-#define prefetch_m(ptr) _mm_prefetch((void*)(ptr), _MM_HINT_T0)
+#define usearch_prefetch_m(ptr) _mm_prefetch((void*)(ptr), _MM_HINT_T0)
 #else
-#define prefetch_m(ptr)
+#define usearch_prefetch_m(ptr)
+#endif
+
+// Function profiling
+#if defined(usearch_defined_x86)
+#define usearch_profiled_m __attribute__((noinline))
+#define usearch_profile_name_m(name)                                                                                   \
+    __asm__ volatile(".globl " usearch_stringify_m(usearch_concat_m(name, __COUNTER__)) "\n" usearch_stringify_m(      \
+        usearch_concat_m(name, __COUNTER__)) ":")
+#elif defined(usearch_defined_arm)
+#define usearch_profiled_m __attribute__((noinline))
+#define usearch_profile_name_m(name)                                                                                   \
+    __asm__ volatile(".global " usearch_stringify_m(usearch_concat_m(name, __COUNTER__)) "\n" usearch_stringify_m(     \
+        usearch_concat_m(name, __COUNTER__)) ":")
+#else
+#define usearch_profiled_m
+#define usearch_profile_name_m(name)
 #endif
 
 // Alignment
@@ -439,7 +461,7 @@ class error_t {
  *          or an error. It's used to avoid raising exception, and gracefully propagate
  *          the error.
  *
- * @tparam result_at The type of the expected result.
+ *  @tparam result_at The type of the expected result.
  */
 template <typename result_at> struct expected_gt {
     result_at result;
@@ -573,6 +595,64 @@ using bitset_t = bitset_gt<>;
  *  @brief  Similar to `std::priority_queue`, but allows raw access to underlying
  *          memory, in case you want to shuffle it or sort. Good for collections
  *          from 100s to 10'000s elements.
+ *
+ *  In a max-heap, the heap property ensures that the value of each node is greater
+ *  than or equal to the values of its children. This means that the largest element
+ *  is always at the root of the heap.
+ *
+ *  @section    Heap Structures
+ *
+ *  There are several designs of heaps. Binary heaps are the simplest & most common
+ *  variant, that is easy to implement as a succint array. However, they are not the
+ *  most efficient for all operations. Most importantly, @b melding (merging) of
+ *  two heaps has linear complexity in time.
+ *
+ *  +-----------------+---------+-----------+---------+--------------+---------+
+ *  | Operation       | find-max| delete-max| insert  | increase-key | meld    |
+ *  +-----------------+---------+-----------+---------+--------------+---------+
+ *  | Binary          | Θ(1)    | Θ(log n)  | O(log n)| O(log n)     | Θ(n)    |
+ *  | Leftist         | Θ(1)    | Θ(log n)  | O(log n)| Θ(log n)     | Θ(log n)|
+ *  | Binomial        | Θ(1)    | Θ(log n)  | Θ(1)    | Θ(log n)     | O(log n)|
+ *  | Skew binomial   | Θ(1)    | Θ(log n)  | Θ(1)    | O(log n)     | O(log n)|
+ *  | Pairing         | Θ(1)    | O(log n)  | Θ(1)    | o(log n)     | Θ(1)    |
+ *  | Rank-pairing    | Θ(1)    | O(log n)  | Θ(1)    | Θ(1)         | Θ(1)    |
+ *  | Fibonacci       | Θ(1)    | O(log n)  | Θ(1)    | Θ(1)         | Θ(1)    |
+ *  | Strict Fibonacci| Θ(1)    | O(log n)  | Θ(1)    | Θ(1)         | Θ(1)    |
+ *  | Brodal          | Θ(1)    | Θ(log n)  | Θ(1)    | Θ(1)         | Θ(1)    |
+ *  | 2–3 heap        | Θ(1)    | O(log n)  | Θ(1)    | Θ(1)         | O(log n)|
+ *  +-----------------+---------+-----------+---------+--------------+---------+
+ *
+ *  It's well known, that improved priority queue structures translate into better
+ *  graph-transversal algorithms. For example, Dijkstra's algorithm can be sped up
+ *  by using a Fibonacci heap for arbitrary weights. For integer weight bounded
+ *  by L, Schrijver reported following time complexities in 2004:
+ *
+ *  +------------+-------------------------------------+----------------------------+--------------------------+
+ *  | Weights    | Algorithm                           | Time complexity            | Author                   |
+ *  +------------+-------------------------------------+----------------------------+--------------------------+
+ *  | R          |                                     | O(V^2 EL)                  | Ford 1956                |
+ *  | R          | Bellman–Ford algorithm              | O(VE)                      | Shimbel 1955, Bellman    |
+ *  |            |                                     |                            | 1958, Moore 1959         |
+ *  | R          |                                     | O(V^2 log V)               | Dantzig 1960             |
+ *  | R          | Dijkstra's with list                | O(V^2)                     | Leyzorek et al. 1957,    |
+ *  |            |                                     |                            | Dijkstra 1959...         |
+ *  | R          | Dijkstra's with binary heap         | O((E + V) log V)           | Johnson 1977             |
+ *  | R          | Dijkstra's with Fibonacci heap      | O(E + V log V)             | Fredman & Tarjan 1984,   |
+ *  |            |                                     |                            | Fredman & Tarjan 1987    |
+ *  | R          | Quantum Dijkstra                    | O(√VE log^2 V)             | Dürr et al. 2006         |
+ *  | R          | Dial's algorithm (Dijkstra's using  | O(E + LV)                  | Dial 1969                |
+ *  |            | a bucket queue with L buckets)      |                            |                          |
+ *  | N          |                                     | O(E log log L)             | Johnson 1981, Karlsson & |
+ *  |            |                                     |                            | Poblete 1983             |
+ *  | N          | Gabow's algorithm                   | O(E log_E/V L)             | Gabow 1983, Gabow 1985   |
+ *  | N          |                                     | O(E + V √log L)            | Ahuja et al. 1990        |
+ *  | N          | Thorup                              | O(E + V log log V)         | Thorup 2004              |
+ *  +------------+-------------------------------------+----------------------------+--------------------------+
+ *
+ *  Possible improvements:
+ *  - Randomized meldable heaps: https://en.wikipedia.org/wiki/Randomized_meldable_heap
+ *  - D-ary heaps: https://en.wikipedia.org/wiki/D-ary_heap
+ *  - B-heap: https://en.wikipedia.org/wiki/B-heap
  */
 template <typename element_at,                                //
           typename comparator_at = std::less<void>,           // <void> is needed before C++14.
@@ -623,13 +703,25 @@ class max_heap_gt {
     inline bool empty() const noexcept { return !size_; }
     inline std::size_t size() const noexcept { return size_; }
     inline std::size_t capacity() const noexcept { return capacity_; }
+    inline element_t* data() noexcept { return elements_; }
+    inline element_t const* data() const noexcept { return elements_; }
+    inline void clear() noexcept { size_ = 0; }
+    inline void shrink(std::size_t n) noexcept { size_ = (std::min<std::size_t>)(n, size_); }
 
     /// @brief  Selects the largest element in the heap.
     /// @return Reference to the stored element.
     inline element_t const& top() const noexcept { return elements_[0]; }
-    inline void clear() noexcept { size_ = 0; }
 
-    bool reserve(std::size_t new_capacity) noexcept {
+    /// @brief Invalidates the "max-heap" property, transforming into ascending range.
+    inline void sort_ascending() noexcept { std::sort_heap(elements_, elements_ + size_, &less); }
+
+    /**
+     *  @brief Ensures the heap has enough capacity for the specified number of elements.
+     *  @param new_capacity The desired minimum capacity.
+     *  @return True if the capacity was successfully increased, false otherwise.
+     */
+    usearch_profiled_m bool reserve(std::size_t new_capacity) noexcept {
+        usearch_profile_name_m(max_heap_reserve);
         if (new_capacity < capacity_)
             return true;
 
@@ -649,6 +741,11 @@ class max_heap_gt {
         return new_elements;
     }
 
+    /**
+     *  @brief Inserts an element into the heap.
+     *  @param element The element to be inserted.
+     *  @return True if the element was successfully inserted, false otherwise.
+     */
     bool insert(element_t&& element) noexcept {
         if (!reserve(size_ + 1))
             return false;
@@ -657,13 +754,33 @@ class max_heap_gt {
         return true;
     }
 
-    inline void insert_reserved(element_t&& element) noexcept {
+    /**
+     *  @brief Inserts an element into the heap without reserving additional space.
+     *  @param element The element to be inserted.
+     */
+    usearch_profiled_m void insert_reserved(element_t&& element) noexcept {
+        usearch_profile_name_m(max_heap_insert_reserved);
         new (&elements_[size_]) element_t(element);
         size_++;
         shift_up(size_ - 1);
     }
 
-    inline element_t pop() noexcept {
+    /**
+     *  @brief Inserts multiple elements into the heap.
+     *  @param elements Pointer to the elements to be inserted.
+     *  @return True if the elements were successfully inserted, false otherwise.
+     */
+    inline bool insert_many(element_t const* elements) noexcept {
+        // Wikipedia describes a procedure, due to Floyd, which constructs a heap from an array in linear time.
+        // It also mentions a procedure for merging two heaps, of sizes 𝑛 and 𝑘, in time 𝑂(𝑘+log𝑘log𝑛).
+        // Altogether, we can add 𝑘 elements to a heap of length 𝑛 in time 𝑂(𝑘+log𝑘log𝑛): first build a heap containing
+        // 𝑘 elements to be inserted (takes 𝑂(𝑘) time), then merge that with the heap of size 𝑛 (takes 𝑂(𝑘+log𝑘log𝑛)
+        // time). Compare this to repeated insertion, which would run in time 𝑂(𝑘log𝑛).
+        return false;
+    }
+
+    usearch_profiled_m element_t pop() noexcept {
+        usearch_profile_name_m(max_heap_pop);
         element_t result = top();
         std::swap(elements_[0], elements_[size_ - 1]);
         size_--;
@@ -672,24 +789,29 @@ class max_heap_gt {
         return result;
     }
 
-    /** @brief Invalidates the "max-heap" property, transforming into ascending range. */
-    inline void sort_ascending() noexcept { std::sort_heap(elements_, elements_ + size_, &less); }
-    inline void shrink(std::size_t n) noexcept { size_ = (std::min<std::size_t>)(n, size_); }
-
-    inline element_t* data() noexcept { return elements_; }
-    inline element_t const* data() const noexcept { return elements_; }
-
   private:
-    inline std::size_t parent_idx(std::size_t i) const noexcept { return (i - 1u) / 2u; }
-    inline std::size_t left_child_idx(std::size_t i) const noexcept { return (i * 2u) + 1u; }
-    inline std::size_t right_child_idx(std::size_t i) const noexcept { return (i * 2u) + 2u; }
+    static std::size_t parent_idx(std::size_t i) noexcept { return (i - 1u) / 2u; }
+    static std::size_t left_child_idx(std::size_t i) noexcept { return (i * 2u) + 1u; }
+    static std::size_t right_child_idx(std::size_t i) noexcept { return (i * 2u) + 2u; }
     static bool less(element_t const& a, element_t const& b) noexcept { return comparator_t{}(a, b); }
 
+    /**
+     *  @brief Shifts an element up to maintain the heap property.
+     *         This operation is called when a new element is @b added at the end of the heap.
+     *         The element is moved up until the heap property is restored.
+     *  @param i Index of the element to be shifted up.
+     */
     void shift_up(std::size_t i) noexcept {
         for (; i && less(elements_[parent_idx(i)], elements_[i]); i = parent_idx(i))
             std::swap(elements_[parent_idx(i)], elements_[i]);
     }
 
+    /**
+     *  @brief Shifts an element down to maintain the heap property.
+     *         This operation is called when the root element is @b removed and the last element is moved to the root.
+     *         The element is moved down until the heap property is restored.
+     *  @param i Index of the element to be shifted down.
+     */
     void shift_down(std::size_t i) noexcept {
         std::size_t max_idx = i;
 
@@ -810,6 +932,18 @@ class sorted_buffer_gt {
         elements_[slot] = element;
         size_ += size_ != limit;
         return true;
+    }
+
+    inline bool insert_sorted(element_t const* elements, std::size_t elements_count, std::size_t limit) noexcept {
+        if (!size_) {
+        }
+        // If we are inserting elements, we only perform full-scale binary search once,
+        // and then only compute successive insertion offsets based only on the tail.
+        std::size_t slot = std::lower_bound(elements_, elements_ + size_, elements[0], &less) - elements_;
+        if (slot == limit)
+            return false;
+        std::size_t to_move = size_ - slot - (size_ == limit);
+        std::size_t next_slot = std::lower_bound(elements_ + slot, elements_ + size_, elements[1], &less) - elements_;
     }
 
     inline element_t pop() noexcept {
@@ -2079,7 +2213,7 @@ class index_gt {
             metric.batch(first, second_entries, candidate_allowed, transform,
                          [&](entry_t const& entry, distance_t distance) {
                              callback(entry, distance);
-                             computed_distances_count++;
+                             computed_distances++;
                          });
         }
     };
@@ -2123,7 +2257,7 @@ class index_gt {
     mutable buffer_gt<context_t, contexts_allocator_t> contexts_{};
 
   public:
-    static constexpr bool parallel_metric_k = true;
+    static constexpr bool parallel_metric_k = false;
 
     std::size_t connectivity() const noexcept { return config_.connectivity; }
     std::size_t capacity() const noexcept { return nodes_capacity_; }
@@ -2427,11 +2561,11 @@ class index_gt {
             : nodes_(index.nodes_), top_(&top) {}
 
       public:
-        /** @brief  Number of search results found. */
+        /**  @brief  Number of search results found. */
         std::size_t count{};
-        /** @brief  Number of graph nodes traversed. */
+        /**  @brief  Number of graph nodes traversed. */
         std::size_t visited_members{};
-        /** @brief  Number of times the distances were computed. */
+        /**  @brief  Number of times the distances were computed. */
         std::size_t computed_distances{};
         error_t error{};
 
