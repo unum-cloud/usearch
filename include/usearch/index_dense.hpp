@@ -1605,7 +1605,8 @@ class index_dense_gt {
         available_threads_t available_threads;
         if (!available_threads.reserve(available_threads_.capacity()))
             return state_result_t{}.failed("Failed to allocate memory for the available threads!");
-        for (std::size_t i = 0; i < available_threads.capacity(); i++)
+        std::size_t max_threads = limits().threads();
+        for (std::size_t i = 0; i < max_threads; i++)
             available_threads.push(i);
         index_t* raw = index_allocator_t{}.allocate(1);
         if (!raw)
@@ -1613,6 +1614,8 @@ class index_dense_gt {
 
         copy_result_t result;
         index_dense_gt& other = result.index;
+        index_limits_t other_limits = limits();
+        other_limits.members = 0;
         other.config_ = config_;
         other.cast_buffer_ = std::move(cast_buffer);
         other.casts_ = casts_;
@@ -1622,6 +1625,7 @@ class index_dense_gt {
         other.free_key_ = free_key_;
 
         new (raw) index_t(config());
+        raw->try_reserve(other_limits);
         other.typed_ = raw;
         return result;
     }

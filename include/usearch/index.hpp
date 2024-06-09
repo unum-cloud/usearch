@@ -2474,6 +2474,13 @@ class index_gt {
             && limits.members <= limits_.members)
             return true;
 
+        // In some cases, we don't want to update the number of members,
+        // just want to make sure that future reserves use the new thread limits.
+        if (!limits.members && !size()) {
+            limits_ = limits;
+            return true;
+        }
+
         nodes_mutexes_t new_mutexes(limits.members);
         buffer_gt<node_t, nodes_allocator_t> new_nodes(limits.members);
         buffer_gt<context_t, contexts_allocator_t> new_contexts(limits.threads());
