@@ -259,6 +259,8 @@ struct running_stats_printer_t {
         print(new_progress, total);
     }
 
+    void print() { print(progress.load(), total); }
+
     void print(std::size_t progress, std::size_t total) {
 
         constexpr char bars_k[] = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";
@@ -303,6 +305,9 @@ void index_many(index_at& index, std::size_t n, vector_id_at const* ids, scalar_
         if (config.thread == 0)
             printer.refresh();
     }
+
+    // Refresh once again to show 100% completion
+    printer.print();
 }
 
 template <typename index_at, typename vector_id_at, typename scalar_at, typename distance_at>
@@ -327,6 +332,9 @@ void search_many( //
         if (config.thread == 0)
             printer.refresh();
     }
+
+    // Refresh once again to show 100% completion
+    printer.print();
 }
 
 template <typename dataset_at, typename index_at> //
@@ -381,6 +389,8 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
                         printer.print(progress, total);
                     return true;
                 });
+            // Refresh once again to show 100% completion
+            printer.print();
             join_attempts = result.visited_members;
         }
     }
@@ -589,8 +599,8 @@ int main(int argc, char** argv) {
 
     auto args = args_t{};
     auto cli = ( //
-        (option("--vectors") & value("path", args.path_vectors)).doc(".fbin file path to construct the index"),
-        (option("--queries") & value("path", args.path_queries)).doc(".fbin file path to query the index"),
+        (option("--vectors") & value("path", args.path_vectors)).doc(".[fhbd]bin file path to construct the index"),
+        (option("--queries") & value("path", args.path_queries)).doc(".[fhbd]bin file path to query the index"),
         (option("--neighbors") & value("path", args.path_neighbors)).doc(".ibin file path with ground truth"),
         (option("-o", "--output") & value("path", args.path_output)).doc(".usearch output file path"),
         (option("-b", "--big").set(args.big)).doc("Will switch to uint40_t for neighbors lists with over 4B entries"),
