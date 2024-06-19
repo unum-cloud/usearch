@@ -582,6 +582,10 @@ class aligned_allocator_gt {
         // void* result = nullptr;
         // int status = posix_memalign(&result, alignment, length_bytes);
         // return status == 0 ? (pointer)result : nullptr;
+#if defined(__ANDROID__)
+        return (nullptr);
+#endif
+
 #if defined(USEARCH_DEFINED_WINDOWS)
         return (pointer)_aligned_malloc(length_bytes, alignment);
 #else
