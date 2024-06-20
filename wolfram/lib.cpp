@@ -160,7 +160,7 @@ EXTERN_C DLLEXPORT int IndexSearch(WolframLibraryData libData, mint Argc, MArgum
         libData->MTensor_new(MType_Integer, 1, &dims, &matches);
 
         for (mint i = 1; i <= (mint)count; i++)
-            libData->MTensor_setInteger(matches, &i, static_cast<mint>(matches_data[i-1]));
+            libData->MTensor_setInteger(matches, &i, static_cast<mint>(matches_data[i - 1]));
 
         MArgument_setMTensor(Res, matches);
     } catch (...) {
