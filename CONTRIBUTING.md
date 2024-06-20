@@ -65,7 +65,7 @@ The CMakeLists.txt file has a number of options you can pass:
 - Which dependencies to use:
   - `USEARCH_USE_OPENMP` - use OpenMP for parallelism
   - `USEARCH_USE_SIMSIMD` - use SimSIMD for vectorization
-  - `USEARCH_USE_JEMALLOC` - use JeMalloc for memory management
+  - `USEARCH_USE_JEMALLOC` - use Jemalloc for memory management
   - `USEARCH_USE_FP16LIB` - use software emulation for half-precision floating point
 
 Putting all of this together, compiling all targets on most platforms should work with the following snippet:
@@ -84,8 +84,8 @@ Similarly, to use the most recent Clang compiler version from HomeBrew on MacOS:
 brew install clang++ clang cmake
 cmake \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER="/opt/homebrew/opt/llvm/bin/clang" \
-    -DCMAKE_CXX_COMPILER="/opt/homebrew/opt/llvm/bin/clang++" \
+    -DCMAKE_C_COMPILER="$(brew --prefix llvm)/bin/clang" \
+    -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" \
     -DUSEARCH_USE_FP16LIB=1 \
     -DUSEARCH_USE_OPENMP=1 \
     -DUSEARCH_USE_SIMSIMD=1 \
