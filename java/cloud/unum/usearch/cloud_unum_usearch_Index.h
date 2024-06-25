@@ -17,6 +17,14 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create
 
 /*
  * Class:     cloud_unum_usearch_Index
+ * Method:    c_createFromFile
+ * Signature: (Ljava/lang/String;Z)J
+ */
+JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1createFromFile
+  (JNIEnv *, jclass, jstring, jboolean);
+
+/*
+ * Class:     cloud_unum_usearch_Index
  * Method:    c_destroy
  * Signature: (J)V
  */
@@ -78,6 +86,14 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add
  */
 JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search
   (JNIEnv *, jclass, jlong, jfloatArray, jlong);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_get
+ * Signature: (JI)[F
+ */
+JNIEXPORT jfloatArray JNICALL Java_cloud_unum_usearch_Index_c_1get
+  (JNIEnv *, jclass, jlong, jint);
 
 /*
  * Class:     cloud_unum_usearch_Index

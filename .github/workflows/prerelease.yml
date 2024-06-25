@@ -93,7 +93,7 @@ jobs:
         run: |
           mkdir -p "${{ github.workspace }}/csharp/lib/runtimes/linux-x64/native"
           cp "${{ github.workspace }}/build_artifacts/libusearch_c.so" "${{ github.workspace }}/csharp/lib/runtimes/linux-x64/native"
-          dotnet test -c Release
+          dotnet test -c Debug --logger "console;verbosity=detailed"
         shell: bash
         working-directory: ${{ github.workspace }}/csharp
 
@@ -168,7 +168,7 @@ jobs:
         run: |
           mkdir -p "${{ github.workspace }}/csharp/lib/runtimes/linux-x64/native"
           cp "${{ github.workspace }}/build_artifacts/libusearch_c.so" "${{ github.workspace }}/csharp/lib/runtimes/linux-x64/native"
-          dotnet test -c Release
+          dotnet test -c Debug --logger "console;verbosity=detailed"
         shell: bash
         working-directory: ${{ github.workspace }}/csharp
 
@@ -232,7 +232,7 @@ jobs:
         run: |
           mkdir -p "${{ github.workspace }}/csharp/lib/runtimes/osx-x64/native"
           cp "${{ github.workspace }}/build_artifacts/libusearch_c.dylib" "${{ github.workspace }}/csharp/lib/runtimes/osx-x64/native"
-          dotnet test -c Release
+          dotnet test -c Debug --logger "console;verbosity=detailed"
         shell: bash
         working-directory: ${{ github.workspace }}/csharp
 
@@ -288,7 +288,7 @@ jobs:
         run: |
           mkdir -p "${{ github.workspace }}\csharp\lib\runtimes\win-x64\native"
           cp "${{ github.workspace }}\build_artifacts\libusearch_c.dll" "${{ github.workspace }}\csharp\lib\runtimes\win-x64\native"
-          dotnet test -c Release
+          dotnet test -c Debug --logger "console;verbosity=detailed"
         shell: bash
         working-directory: ${{ github.workspace }}/csharp
 

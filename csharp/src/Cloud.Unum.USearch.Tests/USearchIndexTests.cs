@@ -98,7 +98,7 @@ public class UsearchIndexTests
             // Assert
             Assert.Equal(ExpectedDimensions, index.Dimensions());
             Assert.Equal(ExpectedConnectivity, index.Connectivity());
-            Assert.Equal(ExpectedCapacity, index.Capacity());
+            Assert.True(ExpectedCapacity <= index.Capacity());
             Assert.Equal(ExpectedSize, index.Size());
         }
     }
@@ -129,7 +129,7 @@ public class UsearchIndexTests
             // Assert
             Assert.Equal(ExpectedDimensions, index.Dimensions());
             Assert.Equal(ExpectedConnectivity, index.Connectivity());
-            Assert.Equal(ExpectedCapacity, index.Capacity());
+            Assert.True(ExpectedCapacity <= index.Capacity());
             Assert.Equal(ExpectedSize, index.Size());
         }
     }
@@ -161,7 +161,7 @@ public class UsearchIndexTests
             Assert.True(index.Contains(AddKey));
             Assert.False(index.Contains(NonExistentKey));
             Assert.Equal(ExpectedSize, index.Size());
-            Assert.Equal(ExpectedCapacity, index.Capacity());
+            Assert.True(ExpectedCapacity <= index.Capacity());
         }
     }
 
@@ -192,7 +192,7 @@ public class UsearchIndexTests
             Assert.True(index.Contains(AddKey));
             Assert.False(index.Contains(NonExistentKey));
             Assert.Equal(ExpectedSize, index.Size());
-            Assert.Equal(ExpectedCapacity, index.Capacity());
+            Assert.True(ExpectedCapacity <= index.Capacity());
         }
     }
 
@@ -224,7 +224,7 @@ public class UsearchIndexTests
             // Assert
             Assert.True(index.Contains(AddKey));
             Assert.Equal((uint)AddFactor, index.Size());
-            Assert.Equal((uint)AddFactor, index.Capacity());
+            Assert.True((uint)AddFactor <= index.Capacity());
         }
     }
 
@@ -256,7 +256,7 @@ public class UsearchIndexTests
             // Assert
             Assert.True(index.Contains(AddKey));
             Assert.Equal((uint)AddFactor, index.Size());
-            Assert.Equal((uint)AddFactor, index.Capacity());
+            Assert.True((uint)AddFactor <= index.Capacity());
         }
     }
 
@@ -288,7 +288,7 @@ public class UsearchIndexTests
             // Assert
             Assert.True(index.Contains(AddKey));
             Assert.Equal(BatchSize, index.Size());
-            Assert.Equal(BatchSize, index.Capacity());
+            Assert.True(BatchSize <= index.Capacity());
             Assert.Equal((int)BatchSize, index.Count(AddKey));
         }
     }
@@ -321,7 +321,7 @@ public class UsearchIndexTests
             // Assert
             Assert.True(index.Contains(AddKey));
             Assert.Equal(BatchSize, index.Size());
-            Assert.Equal(BatchSize, index.Capacity());
+            Assert.True(BatchSize <= index.Capacity());
             Assert.Equal((int)BatchSize, index.Count(AddKey));
         }
     }

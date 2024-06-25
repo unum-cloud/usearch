@@ -8,11 +8,11 @@ Overview
    :caption: �
 
    cpp/index
+   c/index
    python/index
    rust/index
    javascript/index
    java/index
-   c/index
    swift/index
    objc/index
    csharp/index

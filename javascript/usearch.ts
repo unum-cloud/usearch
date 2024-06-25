@@ -609,14 +609,15 @@ function exactSearch(
   }
 }
 
-module.exports = {
-  Index,
-  MetricKind,
-  ScalarKind,
-  Matches,
-  BatchMatches,
-  exactSearch,
+const usearch = {
+    Index,
+    MetricKind,
+    ScalarKind,
+    Matches,
+    BatchMatches,
+    exactSearch,
 };
+export default usearch;
 
 // utility functions to help find native builds
 

@@ -10,10 +10,11 @@ bin
 .cache
 
 # C++ builds
-build
-build_release
-build_debug
-build_artifacts
+/build
+/build_release
+/build_debug
+/build_relwithdebinfo
+/build_artifacts
 _deps
 CMakeCache.txt
 CMakeFiles

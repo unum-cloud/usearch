@@ -176,6 +176,19 @@
                 "datasets/wiki_1M/groundtruth.public.100K.ibin",
             ],
             "justMyCode": true
+        },
+        {
+            "name": "Unit Test C#",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "dotnet",
+            "args": [
+                "test",
+                "-c",
+                "Debug"
+            ],
+            "cwd": "${workspaceFolder}/csharp",
+            "stopAtEntry": false
         }
     ]
 }

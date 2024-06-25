@@ -4,7 +4,7 @@
 
 ### Linux
 
-Download and install from the Debian package from the latest release.
+Download and install the Debian package from the latest release.
 Substitute `<release_tag>`, `<arch>`, and `<usearch_version>` with your settings.
 
 ```sh
@@ -14,8 +14,8 @@ dpkg -i usearch_<arch>_<usearch_version>.deb
 
 ### Windows
 
-Run a `winlibinstaller.bat` script from the main repository in the folder where you will run `go run`.
-That will install the USearch library and include in the same folder` where the script was run.
+Run the `winlibinstaller.bat` script from the main repository in the folder where you will run `go run`.
+This will install the USearch library and include it in the same folder where the script was run.
 
 ```sh
 .\usearch\winlibinstaller.bat
@@ -23,13 +23,13 @@ That will install the USearch library and include in the same folder` where the 
 
 ### MacOS
 
-Download and unpack a zip archive from the latest release.
+Download and unpack the zip archive from the latest release.
 Move the USearch library and the include file to their respective folders.
 
 ```sh
 wget https://github.com/unum-cloud/usearch/releases/download/<release_tag>/usearch_macos_<arch>_<usearch_version>.zip
 unzip usearch_macos_<arch>_<usearch_version>.zip
-sudo mv libusearch_c.so /usr/local/lib && sudo mv usearch.h /usr/local/include
+sudo mv libusearch_c.dylib /usr/local/lib && sudo mv usearch.h /usr/local/include
 ```
 
 ## Quickstart
@@ -48,26 +48,26 @@ go <go_version>
 package main
 
 import (
-"fmt"
-usearch "github.com/unum-cloud/usearch/golang"
+	"fmt"
+	usearch "github.com/unum-cloud/usearch/golang"
 )
 
 func main() {
 
    	// Create Index
-   	vector_size := 3
-   	vectors_count := 100
-   	conf := usearch.DefaultConfig(uint(vector_size))
-   	index,err := usearch.NewIndex(conf)
+   	vectorSize := 3
+   	vectorsCount := 100
+   	conf := usearch.DefaultConfig(uint(vectorSize))
+   	index, err := usearch.NewIndex(conf)
    	if err != nil {
    		panic("Failed to create Index")
    	}
    	defer index.Destroy()
 
    	// Add to Index
-   	err = index.Reserve(uint(vectors_count))
-   	for i := 0; i < vectors_count; i++ {
-   		err = index.Add(usearch.Key(i), []float32{float32(i), float32(i+1), float32(i+2)})
+   	err = index.Reserve(uint(vectorsCount))
+   	for i := 0; i < vectorsCount; i++ {
+   		err = index.Add(usearch.Key(i), []float32{float32(i), float32(i + 1), float32(i + 2)})
       	if err != nil {
       		panic("Failed to add")
       	}
@@ -92,4 +92,25 @@ go get github.com/unum-cloud/usearch/golang
 
 ```sh
 go run example.go
+```
+
+## Serialization
+
+To save and load the index from disk, use the following methods:
+
+```go
+err := index.Save("index.usearch")
+if err != nil {
+    panic("Failed to save index")
+}
+
+err = index.Load("index.usearch")
+if err != nil {
+    panic("Failed to load index")
+}
+
+err = index.View("index.usearch")
+if err != nil {
+    panic("Failed to view index")
+}
 ```

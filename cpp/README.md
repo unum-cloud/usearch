@@ -16,21 +16,29 @@ Once included, the high-level C++11 interface is as simple as it gets: `reserve(
 This covers 90% of use cases.
 
 ```cpp
+#include <usearch/index.hpp>
+#include <usearch/index_dense.hpp>
+
 using namespace unum::usearch;
 
-metric_punned_t metric(256, metric_kind_t::l2sq_k, scalar_kind_t::f32_k);
-
-// If you plan to store more than 4 Billion entries - use `index_dense_big_t`.
-// Or directly instantiate the template variant you need - `index_dense_gt<vector_key_t, internal_id_t>`.
-index_dense_t index = index_dense_t::make(metric);
-float vec[3] = {0.1, 0.3, 0.2};
-
-index.reserve(10); // Pre-allocate memory for 10 vectors
-index.add(42, &vec[0]); // Pass a key and a vector
-auto results = index.search(&vec[0], 5); // Pass a query and limit number of results
-
-for (std::size_t i = 0; i != results.size(); ++i)
-    results[i].element.key, results[i].element.vector, results[i].distance;
+int main(int argc, char **argv) {
+    metric_punned_t metric(3, metric_kind_t::l2sq_k, scalar_kind_t::f32_k);
+    
+    // If you plan to store more than 4 Billion entries - use `index_dense_big_t`.
+    // Or directly instantiate the template variant you need - `index_dense_gt<vector_key_t, internal_id_t>`.
+    index_dense_t index = index_dense_t::make(metric);
+    float vec[3] = {0.1, 0.3, 0.2};
+    
+    index.reserve(10); // Pre-allocate memory for 10 vectors
+    index.add(42, &vec[0]); // Pass a key and a vector
+    auto results = index.search(&vec[0], 5); // Pass a query and limit number of results
+    
+    for (std::size_t i = 0; i != results.size(); ++i)
+        // You can access the following properties of every match:
+        // results[i].element.key, results[i].element.vector, results[i].distance;
+        std::printf("Found matching key: %zu", results[i].element.key);
+    return 0;
+}
 ```
 
 Here we:
@@ -88,6 +96,19 @@ Aside from the `executor_default_t`, you can take advantage of one of the provid
 - `executor_openmp_t`, that would use OpenMP under the hood.
 - `executor_stl_t`, that will spawn `std::thread` instances.
 - `dummy_executor_t`, that will run everything sequentially.
+
+## Error Handling
+
+Unlike most open-source C++ libraries USearch doesn't use exceptions, as they often lead to corrupted states in concurrent data-structures.
+They are also not suited for systems that always operate on the edge of available memory, and would end up raising `std::bad_alloc` exceptions all the time.
+For that reason, most operations return a "result" object, that can be checked for success or failure.
+
+```cpp
+bool success;
+success = (bool)index.try_reserve(10); // Recommended over `reserve()`
+success = (bool)index.add(42, &vec[0]); // Explicitly convert `add_result_t`
+success = (bool)index.search(&vec[0], 5); // Explicitly convert `search_result_t`
+```
 
 ## Clustering
 

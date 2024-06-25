@@ -207,6 +207,9 @@ By default, as many of these structures are created as there are logical cores o
 Then, one can construct the index in parallel using many cores using third-party thread-pools or tools like OpenACC and OpenMP.
 
 ```c
+usearch_change_threads_add(index, omp_get_max_threads(), &error);
+usearch_change_threads_search(index, omp_get_max_threads(), &error);
+
 #pragma omp parallel for
 for (size_t i = 0; i < 1000; i++) {
     usearch_add(index, i, &vector[0], usearch_scalar_f32_k, &error);

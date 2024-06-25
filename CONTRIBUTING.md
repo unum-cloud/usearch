@@ -33,17 +33,25 @@ brew install libomp llvm # MacOS
 Using modern syntax, this is how you build and run the test suite:
 
 ```sh
-cmake -DUSEARCH_BUILD_TEST_CPP=1 -DCMAKE_BUILD_TYPE=Debug -B ./build_debug
-cmake --build ./build_debug --config Debug
-./build_debug/test_cpp
+cmake -DUSEARCH_BUILD_TEST_CPP=1 -DCMAKE_BUILD_TYPE=Debug -B build_debug
+cmake --build build_debug --config Debug
+build_debug/test_cpp
 ```
 
 If there build mode is not specified, the default is `Release`.
 
 ```sh
-cmake -DUSEARCH_BUILD_TEST_CPP=1 -B ./build_release
-cmake --build ./build_release --config Release
-./build_release/test_cpp
+cmake -DUSEARCH_BUILD_TEST_CPP=1 -B build_release
+cmake --build build_release --config Release
+build_release/test_cpp
+```
+
+For development purposes, you may want to include symbols information in the build:
+
+```sh
+cmake -DUSEARCH_BUILD_TEST_CPP=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo -B build_relwithdebinfo
+cmake --build build_relwithdebinfo --config RelWithDebInfo
+build_relwithdebinfo/test_cpp
 ```
 
 The CMakeLists.txt file has a number of options you can pass:
@@ -57,17 +65,17 @@ The CMakeLists.txt file has a number of options you can pass:
 - Which dependencies to use:
   - `USEARCH_USE_OPENMP` - use OpenMP for parallelism
   - `USEARCH_USE_SIMSIMD` - use SimSIMD for vectorization
-  - `USEARCH_USE_JEMALLOC` - use JeMalloc for memory management
+  - `USEARCH_USE_JEMALLOC` - use Jemalloc for memory management
   - `USEARCH_USE_FP16LIB` - use software emulation for half-precision floating point
 
 Putting all of this together, compiling all targets on most platforms should work with the following snippet:
 
 ```sh
-cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_USE_FP16LIB=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1 -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_BENCH_CPP=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_SQLITE=0 -B ./build_release
+cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_USE_FP16LIB=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1 -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_BENCH_CPP=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_SQLITE=0 -B build_release
 
-cmake --build ./build_release --config Release
-./build_release/test_cpp
-./build_release/test_c
+cmake --build build_release --config Release
+build_release/test_cpp
+build_release/test_c
 ```
 
 Similarly, to use the most recent Clang compiler version from HomeBrew on MacOS:
@@ -76,8 +84,8 @@ Similarly, to use the most recent Clang compiler version from HomeBrew on MacOS:
 brew install clang++ clang cmake
 cmake \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER="/opt/homebrew/opt/llvm/bin/clang" \
-    -DCMAKE_CXX_COMPILER="/opt/homebrew/opt/llvm/bin/clang++" \
+    -DCMAKE_C_COMPILER="$(brew --prefix llvm)/bin/clang" \
+    -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" \
     -DUSEARCH_USE_FP16LIB=1 \
     -DUSEARCH_USE_OPENMP=1 \
     -DUSEARCH_USE_SIMSIMD=1 \
@@ -86,11 +94,11 @@ cmake \
     -DUSEARCH_BUILD_BENCH_CPP=1 \
     -DUSEARCH_BUILD_LIB_C=1 \
     -DUSEARCH_BUILD_TEST_C=1 \
-    -B ./build_release
+    -B build_release
 
-cmake --build ./build_release --config Release
-./build_release/test_cpp
-./build_release/test_c
+cmake --build build_release --config Release
+build_release/test_cpp
+build_release/test_c
 ```
 
 Linting:
@@ -411,6 +419,18 @@ Then, on Windows, copy the library to the CSharp project and run the tests:
 ```sh
 mkdir -p ".\csharp\lib\runtimes\win-x64\native"
 cp ".\build_artifacts\libusearch_c.dll" ".\csharp\lib\runtimes\win-x64\native"
+cd csharp
+dotnet test -c Debug --logger "console;verbosity=detailed"
+dotnet test -c Release
+```
+
+On Linux, the process is similar:
+
+```sh
+mkdir -p "./csharp/lib/runtimes/linux-x64/native" # for x86
+cp "./build_artifacts/libusearch_c.so" "./csharp/lib/runtimes/linux-x64/native" # for x86
+mkdir -p "./csharp/lib/runtimes/linux-arm64/native" # for ARM
+cp "./build_artifacts/libusearch_c.so" "./csharp/lib/runtimes/linux-arm64/native" # for ARM
 cd csharp
 dotnet test -c Debug --logger "console;verbosity=detailed"
 dotnet test -c Release

@@ -49,7 +49,7 @@ Linux • MacOS • Windows • iOS • WebAssembly •
 
 - ✅ __[10x faster][faster-than-faiss]__ [HNSW][hnsw-algorithm] implementation than [FAISS][faiss].
 - ✅ Simple and extensible [single C++11 header][usearch-header] __library__.
-- ✅ [Trusted](#integrations) by giants like Google and databases like [ClickHouse][clickhouse-docs].
+- ✅ [Trusted](#integrations) by giants like Google and DBs like [ClickHouse][clickhouse-docs] & [DuckDB][duckdb-docs].
 - ✅ [SIMD][simd]-optimized and [user-defined metrics](#user-defined-functions) with JIT compilation.
 - ✅ Hardware-agnostic `f16` & `i8` - [half-precision & quarter-precision support](#memory-efficiency-downcasting-and-quantization).
 - ✅ [View large indexes from disk](#serving-index-from-disk) without loading into RAM.
@@ -67,6 +67,7 @@ Linux • MacOS • Windows • iOS • WebAssembly •
 [simd]: https://en.wikipedia.org/wiki/Single_instruction,_multiple_data
 [faster-than-faiss]: https://www.unum.cloud/blog/2023-11-07-scaling-vector-search-with-intel
 [clickhouse-docs]: https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/annindexes#usearch
+[duckdb-docs]: https://duckdb.org/2024/05/03/vector-similarity-search-vss.html
 
 __Technical Insights__ and related articles:
 
@@ -136,12 +137,13 @@ assert np.allclose(index[42], vector, atol=0.1) # Ensure high tolerance in mixed
 ```
 
 More settings are always available, and the API is designed to be as flexible as possible.
+The default storage/quantization level is hardware-dependant for efficiency, but `f16` is recommended for most modern CPUs.
 
 ```py
 index = Index(
     ndim=3, # Define the number of dimensions in input vectors
-    metric='cos', # Choose 'l2sq', 'haversine' or other metric, default = 'ip'
-    dtype='f32', # Quantize to 'f16' or 'i8' if needed, default = 'f32'
+    metric='cos', # Choose 'l2sq', 'ip', 'haversine' or other metric, default = 'cos'
+    dtype='f16', # Store as 'f64', 'f32', 'f16', 'i8', 'b1'..., default = None
     connectivity=16, # Optional: Limit number of neighbors per graph node
     expansion_add=128, # Optional: Control the recall of indexing
     expansion_search=64, # Optional: Control the quality of the search
@@ -360,40 +362,57 @@ In some cases, like Batch operations, feature parity is meaningless, as the host
 
 ## Application Examples
 
-### USearch + AI = Multi-Modal Semantic Search
-
-[![USearch Semantic Image Search](https://github.com/ashvardanian/usearch-images/raw/main/assets/usearch-images-slow.gif)](https://github.com/ashvardanian/usearch-images)
+### USearch + UForm + UCall = Multimodal Semantic Search
 
 AI has a growing number of applications, but one of the coolest classic ideas is to use it for Semantic Search.
-One can take an encoder model, like the multi-modal [UForm](https://github.com/unum-cloud/uform), and a web-programming framework, like UCall, and build a text-to-image search platform in just 20 lines of Python.
+One can take an encoder model, like the multi-modal [UForm](https://github.com/unum-cloud/uform), and a web-programming framework, like [UCall](https://github.com/unum-cloud/ucall), and build a text-to-image search platform in just 20 lines of Python.
 
 ```python
-import ucall
-import uform
-import usearch
+from ucall import Server
+from uform import get_model, Modality
+from usearch.index import Index
 
 import numpy as np
 import PIL as pil
 
-server = ucall.Server()
-model = uform.get_model('unum-cloud/uform-vl-multilingual')
-index = usearch.index.Index(ndim=256)
+processors, models = get_model('unum-cloud/uform3-image-text-english-small')
+model_text = models[Modality.TEXT_ENCODER]
+model_image = models[Modality.IMAGE_ENCODER]
+processor_text = processors[Modality.TEXT_ENCODER]
+processor_image = processors[Modality.IMAGE_ENCODER]
+
+server = Server()
+index = Index(ndim=256)
 
 @server
 def add(key: int, photo: pil.Image.Image):
-    image = model.preprocess_image(photo)
-    vector = model.encode_image(image).detach().numpy()
+    image = processor_image(photo)
+    vector = model_image(image)
     index.add(key, vector.flatten(), copy=True)
 
 @server
 def search(query: str) -> np.ndarray:
-    tokens = model.preprocess_text(query)
-    vector = model.encode_text(tokens).detach().numpy()
+    tokens = processor_text(query)
+    vector = model_text(tokens)
     matches = index.search(vector.flatten(), 3)
     return matches.keys
 
 server.run()
 ```
+
+Similar experiences can also be imlemented in other languages and on the client side, removing the network latency.
+For Swift and iOS, check out the [`ashvardanian/SwiftSemanticSearch`](https://github.com/ashvardanian/SwiftSemanticSearch) repository.
+
+<table>
+  <tr>
+    <td>
+      <img src="https://github.com/ashvardanian/ashvardanian/blob/master/demos/SwiftSemanticSearch-Dog.gif?raw=true" alt="SwiftSemanticSearch demo Dog">
+    </td>
+    <td>
+      <img src="https://github.com/ashvardanian/ashvardanian/blob/master/demos/SwiftSemanticSearch-Flowers.gif?raw=true" alt="SwiftSemanticSearch demo with Flowers">
+    </td>
+  </tr>
+</table>
 
 A more complete [demo with Streamlit is available on GitHub](https://github.com/ashvardanian/usearch-images).
 We have pre-processed some commonly used datasets, cleaned the images, produced the vectors, and pre-built the index.
@@ -446,22 +465,73 @@ That method was used to build the ["USearch Molecules"](https://github.com/ashva
 [smiles]: https://en.wikipedia.org/wiki/Simplified_molecular-input_line-entry_system
 [rdkit-fingerprints]: https://www.rdkit.org/docs/RDKit_Book.html#additional-information-about-the-fingerprints
 
-### USearch + POI Coordinates = GIS Applications... on iOS?
+### USearch + POI Coordinates = GIS Applications
 
-[![USearch Maps with SwiftUI](https://github.com/ashvardanian/SwiftSemanticSearch/raw/main/USearch+SwiftUI.gif)](https://github.com/ashvardanian/SwiftSemanticSearch)
+Similar to Vector and Molecule search, USearch can be used for Geospatial Information Systems.
+The Haversine distance is available out of the box, but you can also define more complex relationships, like the Vincenty formula, that accounts for the Earth's oblateness.
 
-With Objective-C and Swift iOS bindings, USearch can be easily used in mobile applications.
-The [SwiftSemanticSearch](https://github.com/ashvardanian/SwiftSemanticSearch) project illustrates how to build a dynamic, real-time search system on iOS.
-In this example, we use 2-dimensional vectors—encoded as latitude and longitude—to find the closest Points of Interest (POIs) on a map.
-The search is based on the Haversine distance metric but can easily be extended to support high-dimensional vectors.
+```py
+from numba import cfunc, types, carray
+import math
 
-## Integrations
+# Define the dimension as 2 for latitude and longitude
+ndim = 2
 
-- [x] GPTCache: [Python](https://github.com/zilliztech/GPTCache/releases/tag/0.1.29).
+# Signature for the custom metric
+signature = types.float32(
+    types.CPointer(types.float32),
+    types.CPointer(types.float32))
+
+# WGS-84 ellipsoid parameters
+a = 6378137.0  # major axis in meters
+f = 1 / 298.257223563  # flattening
+b = (1 - f) * a  # minor axis
+
+def vincenty_distance(a_ptr, b_ptr):
+    a_array = carray(a_ptr, ndim)
+    b_array = carray(b_ptr, ndim)
+    lat1, lon1, lat2, lon2 = a_array[0], a_array[1], b_array[0], b_array[1]
+    L, U1, U2 = lon2 - lon1, math.atan((1 - f) * math.tan(lat1)), math.atan((1 - f) * math.tan(lat2))
+    sinU1, cosU1, sinU2, cosU2 = math.sin(U1), math.cos(U1), math.sin(U2), math.cos(U2)
+    lambda_, iterLimit = L, 100
+    while iterLimit > 0:
+        iterLimit -= 1
+        sinLambda, cosLambda = math.sin(lambda_), math.cos(lambda_)
+        sinSigma = math.sqrt((cosU2 * sinLambda) ** 2 + (cosU1 * sinU2 - sinU1 * cosU2 * cosLambda) ** 2)
+        if sinSigma == 0: return 0.0  # Co-incident points
+        cosSigma, sigma = sinU1 * sinU2 + cosU1 * cosU2 * cosLambda, math.atan2(sinSigma, cosSigma)
+        sinAlpha, cos2Alpha = cosU1 * cosU2 * sinLambda / sinSigma, 1 - (cosU1 * cosU2 * sinLambda / sinSigma) ** 2
+        cos2SigmaM = cosSigma - 2 * sinU1 * sinU2 / cos2Alpha if not math.isnan(cosSigma - 2 * sinU1 * sinU2 / cos2Alpha) else 0  # Equatorial line
+        C = f / 16 * cos2Alpha * (4 + f * (4 - 3 * cos2Alpha))
+        lambda_, lambdaP = L + (1 - C) * f * (sinAlpha * (sigma + C * sinSigma * (cos2SigmaM + C * cosSigma * (-1 + 2 * cos2SigmaM ** 2)))), lambda_
+        if abs(lambda_ - lambdaP) <= 1e-12: break
+    if iterLimit == 0: return float('nan')  # formula failed to converge
+    u2 = cos2Alpha * (a ** 2 - b ** 2) / (b ** 2)
+    A = 1 + u2 / 16384 * (4096 + u2 * (-768 + u2 * (320 - 175 * u2)))
+    B = u2 / 1024 * (256 + u2 * (-128 + u2 * (74 - 47 * u2)))
+    deltaSigma = B * sinSigma * (cos2SigmaM + B / 4 * (cosSigma * (-1 + 2 * cos2SigmaM ** 2) - B / 6 * cos2SigmaM * (-3 + 4 * sinSigma ** 2) * (-3 + 4 * cos2SigmaM ** 2)))
+    s = b * A * (sigma - deltaSigma)
+    return s / 1000.0  # Distance in kilometers
+
+# Example usage:
+index = Index(ndim=ndim, metric=CompiledMetric(
+    pointer=vincenty_distance.address,
+    kind=MetricKind.Haversine,
+    signature=MetricSignature.ArrayArray,
+))
+```
+
+## Integrations & Users
+
+- [x] ClickHouse: [C++](https://github.com/ClickHouse/ClickHouse/pull/53447), [docs](https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/annindexes#usearch).
+- [x] DuckDB: [post](https://duckdb.org/2024/05/03/vector-similarity-search-vss.html).
+- [x] Google: [UniSim](https://github.com/google/unisim), [RetSim](https://arxiv.org/abs/2311.17264) paper.
+- [x] LanternDB: [C++](https://github.com/lanterndata/lantern), [Rust](https://github.com/lanterndata/lantern_extras), [docs](https://lantern.dev/blog/hnsw-index-creation).
 - [x] LangChain: [Python](https://github.com/langchain-ai/langchain/releases/tag/v0.0.257) and [JavaScript](https://github.com/hwchase17/langchainjs/releases/tag/0.0.125).
-- [x] ClickHouse: [C++](https://github.com/ClickHouse/ClickHouse/pull/53447).
 - [x] Microsoft Semantic Kernel: [Python](https://github.com/microsoft/semantic-kernel/releases/tag/python-0.3.9.dev) and C#.
-- [x] LanternDB: [C++](https://github.com/lanterndata/lantern) and [Rust](https://github.com/lanterndata/lantern_extras).
+- [x] GPTCache: [Python](https://github.com/zilliztech/GPTCache/releases/tag/0.1.29).
+- [x] Sentence-Transformers: Python [docs](https://www.sbert.net/docs/package_reference/quantization.html#sentence_transformers.quantization.semantic_search_usearch).
+- [x] Pathway: [Rust](https://github.com/pathwaycom/pathway).
 
 ## Citations
 
@@ -471,7 +541,7 @@ doi = {10.5281/zenodo.7949416},
 author = {Vardanian, Ash},
 title = {{USearch by Unum Cloud}},
 url = {https://github.com/unum-cloud/usearch},
-version = {2.12.0},
+version = {2.13.0},
 year = {2023},
 month = oct,
 }

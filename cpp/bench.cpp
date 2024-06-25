@@ -346,7 +346,7 @@ static void single_shot(dataset_at& dataset, index_at& index, bool construct = t
     std::size_t join_attempts = 0;
     {
         index_at& men = index;
-        index_at women = index.copy().index;
+        index_at women = index.copy();
         std::fill(man_to_woman.begin(), man_to_woman.end(), missing_key);
         std::fill(woman_to_man.begin(), woman_to_man.end(), missing_key);
         {
@@ -499,7 +499,7 @@ void run_punned(dataset_at& dataset, args_t const& args, index_config_t config, 
 
     std::printf("Will benchmark an on-disk view\n");
 
-    index_at index_view = index.fork().index;
+    index_at index_view = index.fork();
     index_view.view(args.path_output.c_str());
     single_shot(dataset, index_view, false);
 }

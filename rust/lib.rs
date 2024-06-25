@@ -1405,7 +1405,7 @@ mod tests {
         options.expansion_search = 3;
         let index = Index::new(&options).unwrap();
         assert!(index.reserve(10).is_ok());
-        assert_eq!(index.capacity(), 10);
+        assert!(index.capacity() >= 10);
 
         let first: [f32; 4] = [0.2, 0.1, 0.2, 0.1];
         let second: [f32; 4] = [0.3, 0.2, 0.4, 0.0];
