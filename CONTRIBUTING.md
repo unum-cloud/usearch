@@ -424,6 +424,18 @@ dotnet test -c Debug --logger "console;verbosity=detailed"
 dotnet test -c Release
 ```
 
+On Linux, the process is similar:
+
+```sh
+mkdir -p "./csharp/lib/runtimes/linux-x64/native" # for x86
+cp "./build_artifacts/libusearch_c.so" "./csharp/lib/runtimes/linux-x64/native" # for x86
+mkdir -p "./csharp/lib/runtimes/linux-arm64/native" # for ARM
+cp "./build_artifacts/libusearch_c.so" "./csharp/lib/runtimes/linux-arm64/native" # for ARM
+cd csharp
+dotnet test -c Debug --logger "console;verbosity=detailed"
+dotnet test -c Release
+```
+
 ## Wolfram
 
 ```sh
