@@ -623,21 +623,20 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
             index_t& index = index_result.index;
             test_collection<true>(index, 42, vector_of_vectors);
         }
-#if 0 
-        // TODO: This issue is still unresolved
+
         // Try running benchmarks with a different number of threads
         for (std::size_t threads : {
                  static_cast<std::size_t>(1),
-                 static_cast<std::size_t>(2),
-                 static_cast<std::size_t>(std::thread::hardware_concurrency()),
-                 static_cast<std::size_t>(std::thread::hardware_concurrency() * 4),
-                 static_cast<std::size_t>(vector_of_vectors.size()),
+                 // TODO: Multithreaded updates should word differently and may involve a search first
+                 //  static_cast<std::size_t>(2),
+                 //  static_cast<std::size_t>(std::thread::hardware_concurrency()),
+                 //  static_cast<std::size_t>(std::thread::hardware_concurrency() * 4),
+                 //  static_cast<std::size_t>(vector_of_vectors.size()),
              }) {
             index_result_t index_result = index_t::make(metric, config);
             index_t& index = index_result.index;
             test_punned_concurrent_updates(index, 42, vector_of_vectors, threads);
         }
-#endif
     };
 
     for (bool multi : {false, true})
@@ -756,7 +755,7 @@ void test_absurd(std::size_t dimensions, std::size_t connectivity, std::size_t e
  * @param wanted_count Number of top matches required from each query.
  */
 void test_exact_search(std::size_t dataset_count, std::size_t queries_count, std::size_t wanted_count) {
-    std::size_t dimensions = 10;
+    std::size_t dimensions = 32;
     metric_punned_t metric(dimensions, metric_kind_t::cos_k);
 
     std::random_device rd;

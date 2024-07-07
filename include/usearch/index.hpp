@@ -2869,11 +2869,16 @@ class index_gt {
 
         // From `updated_node_level` down - perform proper extensive search
         for (level_t level = (std::min)(updated_node_level, max_level_copy); level >= 0; --level) {
-            // TODO: Handle out of memory conditions
-            search_to_update_(value, metric, prefetch, closest_slot, updated_slot, level, config.expansion, context);
+            if (!search_to_update_(value, metric, prefetch, closest_slot, updated_slot, level, config.expansion,
+                                   context))
+                return result.failed("Out of memory!");
+
             candidates_view_t closest_view;
             {
                 node_lock_t updated_lock = node_lock_(updated_slot);
+                // TODO: Go through existing neighbors removing reverse links
+                // for (compressed_slot_t slot : neighbors_(updated_node, level))
+                //     remove_link_(slot, updated_slot, level);
                 neighbors_(updated_node, level).clear();
                 closest_view = form_links_to_closest_(metric, updated_slot, level, context);
                 closest_slot = closest_view[0].slot;
@@ -3753,7 +3758,7 @@ class index_gt {
             // usearch_assert_m(close_header.size() || new_slot == 1, "Possible corruption - isolated node");
             usearch_assert_m(close_header.size() <= connectivity_max, "Possible corruption - overflow");
             usearch_assert_m(close_slot != new_slot, "Self-loops are impossible");
-            // usearch_assert_m(level <= close_node.level(), "Linking to missing level");
+            usearch_assert_m(level <= close_node.level(), "Linking to missing level");
 
             // If `new_slot` is already present in the neighboring connections of `close_slot`
             // then no need to modify any connections or run the heuristics.
@@ -3876,14 +3881,14 @@ class index_gt {
                 }
 
                 // Actual traversal
-                    for (compressed_slot_t candidate_slot : closest_neighbors) {
-                        distance_t candidate_dist = context.measure(query, citerator_at(candidate_slot), metric);
-                        if (candidate_dist < closest_dist) {
-                            closest_dist = candidate_dist;
-                            closest_slot = candidate_slot;
-                            changed = true;
-                        }
+                for (compressed_slot_t candidate_slot : closest_neighbors) {
+                    distance_t candidate_dist = context.measure(query, citerator_at(candidate_slot), metric);
+                    if (candidate_dist < closest_dist) {
+                        closest_dist = candidate_dist;
+                        closest_slot = candidate_slot;
+                        changed = true;
                     }
+                }
 
                 context.iteration_cycles++;
             } while (changed);
@@ -3947,20 +3952,20 @@ class index_gt {
             if (!visits.reserve(visits.size() + candidate_neighbors.size()))
                 return false;
 
-                for (compressed_slot_t successor_slot : candidate_neighbors) {
-                    if (visits.set(successor_slot))
-                        continue;
+            for (compressed_slot_t successor_slot : candidate_neighbors) {
+                if (visits.set(successor_slot))
+                    continue;
 
-                    // We don't access the neighbors of the `successor_slot` node,
-                    // so we don't have to lock it.
-                    // node_lock_t successor_lock = node_lock_(successor_slot);
-                    distance_t successor_dist = context.measure(query, citerator_at(successor_slot), metric);
-                    if (top.size() < top_limit || successor_dist < radius) {
-                        // This can substantially grow our priority queue:
-                        next.insert({-successor_dist, successor_slot});
-                        // This will automatically evict poor matches:
-                        top.insert({successor_dist, successor_slot}, top_limit);
-                        radius = top.top().distance;
+                // We don't access the neighbors of the `successor_slot` node,
+                // so we don't have to lock it.
+                // node_lock_t successor_lock = node_lock_(successor_slot);
+                distance_t successor_dist = context.measure(query, citerator_at(successor_slot), metric);
+                if (top.size() < top_limit || successor_dist < radius) {
+                    // This can substantially grow our priority queue:
+                    next.insert({-successor_dist, successor_slot});
+                    // This will automatically evict poor matches:
+                    top.insert({successor_dist, successor_slot}, top_limit);
+                    radius = top.top().distance;
                 }
             }
         }
@@ -4114,18 +4119,18 @@ class index_gt {
             if (!visits.reserve(visits.size() + candidate_neighbors.size()))
                 return false;
 
-                for (compressed_slot_t successor_slot : candidate_neighbors) {
-                    if (visits.set(successor_slot))
-                        continue;
+            for (compressed_slot_t successor_slot : candidate_neighbors) {
+                if (visits.set(successor_slot))
+                    continue;
 
-                    distance_t successor_dist = context.measure(query, citerator_at(successor_slot), metric);
-                    if (top.size() < top_limit || successor_dist < radius) {
-                        // This can substantially grow our priority queue:
-                        next.insert({-successor_dist, successor_slot});
-                        if (is_dummy<predicate_at>() ||
-                            predicate(member_cref_t{node_at_(successor_slot).ckey(), successor_slot}))
-                            top.insert({successor_dist, successor_slot}, top_limit);
-                        radius = top.top().distance;
+                distance_t successor_dist = context.measure(query, citerator_at(successor_slot), metric);
+                if (top.size() < top_limit || successor_dist < radius) {
+                    // This can substantially grow our priority queue:
+                    next.insert({-successor_dist, successor_slot});
+                    if (is_dummy<predicate_at>() ||
+                        predicate(member_cref_t{node_at_(successor_slot).ckey(), successor_slot}))
+                        top.insert({successor_dist, successor_slot}, top_limit);
+                    radius = top.top().distance;
                 }
             }
         }
@@ -4180,19 +4185,19 @@ class index_gt {
         while (submitted_count < needed && consumed_count < top_count) {
             candidate_t candidate = top_data[consumed_count];
             bool good = true;
-                std::size_t idx = 0;
-                for (; idx < submitted_count; idx++) {
-                    candidate_t submitted = top_data[idx];
-                    distance_t inter_result_dist = context.measure( //
-                        citerator_at(candidate.slot),               //
-                        citerator_at(submitted.slot),               //
-                        metric);
-                    if (inter_result_dist < candidate.distance) {
-                        good = false;
-                        break;
-                    }
+            std::size_t idx = 0;
+            for (; idx < submitted_count; idx++) {
+                candidate_t submitted = top_data[idx];
+                distance_t inter_result_dist = context.measure( //
+                    citerator_at(candidate.slot),               //
+                    citerator_at(submitted.slot),               //
+                    metric);
+                if (inter_result_dist < candidate.distance) {
+                    good = false;
+                    break;
                 }
-                refines_counter += idx;
+            }
+            refines_counter += idx;
 
             if (good) {
                 top_data[submitted_count] = top_data[consumed_count];
