@@ -572,7 +572,9 @@ class aligned_allocator_gt {
     using size_type = std::size_t;
     using pointer = element_at*;
     using const_pointer = element_at const*;
-    template <typename other_element_at> struct rebind { using other = aligned_allocator_gt<other_element_at>; };
+    template <typename other_element_at> struct rebind {
+        using other = aligned_allocator_gt<other_element_at>;
+    };
 
     constexpr std::size_t alignment() const { return alignment_ak; }
 
@@ -1976,6 +1978,7 @@ class flat_hash_multi_set_gt {
         clear(); // Clear all elements
         if (data_)
             allocator_t{}.deallocate(data_, buckets_ * bytes_per_bucket());
+        data_ = nullptr;
         buckets_ = 0;
         populated_slots_ = 0;
         capacity_slots_ = 0;
