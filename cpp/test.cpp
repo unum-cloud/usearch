@@ -57,7 +57,7 @@ template <> struct unum::usearch::default_free_value_gt<slot32_t> {
 };
 
 /**
- *  @brief  Convinience wrapper combining combined allocation and construction of an index.
+ *  @brief  Convenience wrapper combining combined allocation and construction of an index.
  */
 template <typename index_at> struct aligned_wrapper_gt {
     using index_t = index_at;
@@ -145,6 +145,11 @@ void test_uint40() {
         }
     }
 }
+
+/**
+ *  @brief  Tests the functionality of the custom float16_t type ensuring consistent.
+ */
+void test_float16() {}
 
 /**
  * The goal of this test is to invoke as many different interfaces as possible, making sure that all code-paths compile.
@@ -344,7 +349,7 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
     std::vector<scalar_at> const& vector_first = vectors[0];
     std::size_t dimensions = vector_first.size();
 
-    // Try batch requests, heavily oversubscribing the CPU cores
+    // Try batch requests, heavily over-subscribing the CPU cores
     std::size_t executor_threads = std::thread::hardware_concurrency();
     executor_default_t executor(executor_threads);
     expect(index.try_reserve({vectors.size(), executor.size()}));
@@ -745,7 +750,7 @@ void test_absurd(std::size_t dimensions, std::size_t connectivity, std::size_t e
 }
 
 /**
- * Tests the exact search functionality over a dataset of vectors, @b wigthout constructing the index.
+ * Tests the exact search functionality over a dataset of vectors, @b without constructing the index.
  *
  * Generates a dataset of vectors and performs exact search queries to verify that the search results are correct.
  * This function mainly validates the basic functionality of exact searches using a given similarity metric.
@@ -791,7 +796,7 @@ void test_sets(std::size_t collection_size, std::size_t min_set_length, std::siz
     /// Jaccard is a fraction, so let's use a some float
     using set_distance_t = double;
 
-    // Aliasis for the index overload
+    // Aliases for the index overload
     using vector_key_t = key_at;
     using slot_t = slot_at;
     using index_t = index_gt<set_distance_t, vector_key_t, slot_t>;
@@ -864,7 +869,7 @@ template <typename key_at, typename slot_at> void test_strings() {
     /// Levenshtein distance is an integer
     using levenshtein_distance_t = std::uint64_t;
 
-    // Aliasis for the index overload
+    // Aliases for the index overload
     using vector_key_t = key_at;
     using slot_t = slot_at;
     using index_t = index_gt<levenshtein_distance_t, vector_key_t, slot_t>;
@@ -1016,7 +1021,7 @@ int main(int, char**) {
             test_cosine<float, std::int64_t, uint40_t>(collection_size, dimensions);
         }
 
-    // Test with binaty vectors
+    // Test with binary vectors
     std::printf("Testing binary vectors\n");
     for (std::size_t connectivity : {3, 13, 50})
         for (std::size_t dimensions : {97, 256})
