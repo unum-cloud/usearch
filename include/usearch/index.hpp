@@ -2856,6 +2856,11 @@ class index_gt {
         result.computed_distances = context.computed_distances;
         result.visited_members = context.iteration_cycles;
 
+        // If we are updating the entry node itself, it won't contain any neighbors,
+        // so we should traverse a level down to find the closest match.
+        if (updated_node_level == max_level_copy)
+            updated_node_level--;
+
         // Go down the level, tracking only the closest match;
         // It may even be equal to the `updated_slot`
         compressed_slot_t closest_slot = search_for_one_( //
@@ -3708,6 +3713,7 @@ class index_gt {
 
         node_t new_node = node_at_(new_slot);
         top_candidates_t& top = context.top_candidates;
+        usearch_assert_m(top.size(), "No candidates found");
         candidates_view_t top_view =
             refine_(metric, config_.connectivity, top, context, context.computed_distances_in_refines);
         usearch_assert_m(top_view.size(), "This would lead to isolated nodes");

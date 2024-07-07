@@ -494,13 +494,17 @@ void test_punned_concurrent_updates(index_at& index, typename index_at::vector_k
 
     // Try batch requests, heavily oversubscribing the CPU cores
     executor_default_t executor(executor_threads);
-    index.try_reserve({vectors.size(), executor.size()});
+    expect(index.try_reserve({vectors.size(), executor.size()}));
     executor.fixed(vectors.size(), [&](std::size_t, std::size_t task) {
         using add_result_t = typename index_t::add_result_t;
         add_result_t result = index.add(start_key + task, vectors[task].data());
         expect(result);
     });
     expect_eq(index.size(), vectors.size());
+
+    // Without key lookups we can't do much more
+    if (!index.config().enable_key_lookups)
+        return;
 
     // Remove all the keys
     executor.fixed(vectors.size(), [&](std::size_t, std::size_t task) {
