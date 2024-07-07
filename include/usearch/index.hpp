@@ -2257,8 +2257,6 @@ class index_gt {
     mutable buffer_gt<context_t, contexts_allocator_t> contexts_{};
 
   public:
-    static constexpr bool parallel_metric_k = false;
-
     std::size_t connectivity() const noexcept { return config_.connectivity; }
     std::size_t capacity() const noexcept { return nodes_capacity_; }
     std::size_t size() const noexcept { return nodes_count_; }
@@ -3872,22 +3870,6 @@ class index_gt {
                 }
 
                 // Actual traversal
-                if constexpr (parallel_metric_k) {
-                    auto candidate_allowed = [=](compressed_slot_t) { return true; };
-                    auto candidate_transform = [&](compressed_slot_t candidate_slot) {
-                        return citerator_at(candidate_slot);
-                    };
-                    auto candidate_accept = [&](compressed_slot_t candidate_slot, distance_t candidate_dist) {
-                        if (candidate_dist < closest_dist) {
-                            closest_dist = candidate_dist;
-                            closest_slot = candidate_slot;
-                            changed = true;
-                        }
-                    };
-                    context.measure_batch(query, closest_neighbors, metric, //
-                                          candidate_allowed, candidate_transform, candidate_accept);
-
-                } else {
                     for (compressed_slot_t candidate_slot : closest_neighbors) {
                         distance_t candidate_dist = context.measure(query, citerator_at(candidate_slot), metric);
                         if (candidate_dist < closest_dist) {
@@ -3896,7 +3878,7 @@ class index_gt {
                             changed = true;
                         }
                     }
-                }
+
                 context.iteration_cycles++;
             } while (changed);
         }
@@ -3959,25 +3941,6 @@ class index_gt {
             if (!visits.reserve(visits.size() + candidate_neighbors.size()))
                 return false;
 
-            if constexpr (parallel_metric_k) {
-                auto candidate_allowed = [&](compressed_slot_t successor_slot) { return !visits.test(successor_slot); };
-                auto candidate_transform = [&](compressed_slot_t successor_slot) {
-                    return citerator_at(successor_slot);
-                };
-                auto candidate_accept = [&](compressed_slot_t successor_slot, distance_t successor_dist) {
-                    if (top.size() < top_limit || successor_dist < radius) {
-                        // This can substantially grow our priority queue:
-                        next.insert({-successor_dist, successor_slot});
-                        // This will automatically evict poor matches:
-                        top.insert({successor_dist, successor_slot}, top_limit);
-                        radius = top.top().distance;
-                    }
-                    visits.set(successor_slot);
-                };
-                context.measure_batch(query, candidate_neighbors, metric, //
-                                      candidate_allowed, candidate_transform, candidate_accept);
-
-            } else {
                 for (compressed_slot_t successor_slot : candidate_neighbors) {
                     if (visits.set(successor_slot))
                         continue;
@@ -3992,7 +3955,6 @@ class index_gt {
                         // This will automatically evict poor matches:
                         top.insert({successor_dist, successor_slot}, top_limit);
                         radius = top.top().distance;
-                    }
                 }
             }
         }
@@ -4146,24 +4108,6 @@ class index_gt {
             if (!visits.reserve(visits.size() + candidate_neighbors.size()))
                 return false;
 
-            if constexpr (parallel_metric_k) {
-                auto candidate_allowed = [&](compressed_slot_t successor_slot) { return !visits.set(successor_slot); };
-                auto candidate_transform = [&](compressed_slot_t successor_slot) {
-                    return citerator_at(successor_slot);
-                };
-                auto candidate_accept = [&](compressed_slot_t successor_slot, distance_t successor_dist) {
-                    if (top.size() < top_limit || successor_dist < radius) {
-                        // This can substantially grow our priority queue:
-                        next.insert({-successor_dist, successor_slot});
-                        if (is_dummy<predicate_at>() ||
-                            predicate(member_cref_t{node_at_(successor_slot).ckey(), successor_slot}))
-                            top.insert({successor_dist, successor_slot}, top_limit);
-                        radius = top.top().distance;
-                    }
-                };
-                context.measure_batch(query, candidate_neighbors, metric, //
-                                      candidate_allowed, candidate_transform, candidate_accept);
-            } else {
                 for (compressed_slot_t successor_slot : candidate_neighbors) {
                     if (visits.set(successor_slot))
                         continue;
@@ -4176,7 +4120,6 @@ class index_gt {
                             predicate(member_cref_t{node_at_(successor_slot).ckey(), successor_slot}))
                             top.insert({successor_dist, successor_slot}, top_limit);
                         radius = top.top().distance;
-                    }
                 }
             }
         }
@@ -4231,19 +4174,6 @@ class index_gt {
         while (submitted_count < needed && consumed_count < top_count) {
             candidate_t candidate = top_data[consumed_count];
             bool good = true;
-            if constexpr (parallel_metric_k) {
-                auto candidate_allowed = [=](candidate_t) { return true; };
-                auto candidate_transform = [&](candidate_t candidate) { return citerator_at(candidate.slot); };
-                auto candidate_accept = [&](candidate_t candidate, distance_t inter_result_dist) {
-                    if (inter_result_dist < candidate.distance) {
-                        good = false;
-                        return;
-                    }
-                };
-                context.measure_batch(candidate, span_gt<candidate_t>(top_data, submitted_count), metric, //
-                                      candidate_allowed, candidate_transform, candidate_accept);
-                refines_counter += submitted_count;
-            } else {
                 std::size_t idx = 0;
                 for (; idx < submitted_count; idx++) {
                     candidate_t submitted = top_data[idx];
@@ -4257,7 +4187,6 @@ class index_gt {
                     }
                 }
                 refines_counter += idx;
-            }
 
             if (good) {
                 top_data[submitted_count] = top_data[consumed_count];
