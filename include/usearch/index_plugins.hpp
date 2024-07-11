@@ -1503,7 +1503,13 @@ class metric_punned_t {
         switch (isa_kind_) {
         case simsimd_cap_serial_k: return "serial";
         case simsimd_cap_neon_k: return "neon";
+        case simsimd_cap_neon_i8_k: return "neon_i8";
+        case simsimd_cap_neon_f16_k: return "neon_f16";
+        case simsimd_cap_neon_bf16_k: return "neon_bf16";
         case simsimd_cap_sve_k: return "sve";
+        case simsimd_cap_sve_i8_k: return "sve_i8";
+        case simsimd_cap_sve_f16_k: return "sve_f16";
+        case simsimd_cap_sve_bf16_k: return "sve_bf16";
         case simsimd_cap_haswell_k: return "haswell";
         case simsimd_cap_skylake_k: return "skylake";
         case simsimd_cap_ice_k: return "ice";
