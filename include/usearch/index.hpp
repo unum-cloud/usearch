@@ -2307,8 +2307,8 @@ class index_gt {
     }
 
     struct state_result_t {
-        error_t error;
         index_gt index;
+        error_t error;
 
         explicit operator bool() const noexcept { return !error; }
         state_result_t failed(error_t message) noexcept {

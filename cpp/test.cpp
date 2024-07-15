@@ -251,7 +251,7 @@ void test_minimal_three_vectors(index_at& index, //
     {
         auto copy_result = index.copy();
         expect(copy_result);
-        auto& copied_index = copy_result.index;
+        index_at copied_index = std::move(copy_result.index);
 
         // Perform single entry search
         auto search_result = copied_index.search(vector_first.data(), 5, args...);
@@ -298,9 +298,23 @@ void test_minimal_three_vectors(index_at& index, //
         expect_eq(3ull, head_result.head.count_present);
     }
 
+    // Try loading and move assignment
+    {
+        index_at loaded_index;
+        auto load_result = loaded_index.load("tmp.usearch");
+        expect(load_result);
+        index = std::move(loaded_index);
+    }
+
+    // Check the copy of the restored index
+    {
+        auto copy_result = index.copy();
+        expect(copy_result);
+        index_at copied_index = std::move(copy_result.index);
+        expect_eq(copied_index.size(), 3);
+    }
+
     // Search again over reconstructed index
-    auto load_result = index.load("tmp.usearch");
-    expect(load_result);
     {
         matched_count = index.search(vector_first.data(), 5, args...).dump_to(matched_keys, matched_distances);
         expect_eq(matched_count, 3);
@@ -404,6 +418,13 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
 
     // Search again over mapped index
     expect(index.save("tmp.usearch"));
+
+    {
+        auto copy_result = index.copy();
+        expect(copy_result);
+        index_at copied_index = std::move(copy_result.index);
+        expect_eq(copied_index.size(), vectors.size());
+    }
 
     // Check for duplicates
     if constexpr (punned_ak) {
@@ -996,17 +1017,16 @@ int main(int, char**) {
     // Make sure the initializers and the algorithms can work with inadequately small values.
     // Be warned - this combinatorial explosion of tests produces close to __500'000__ tests!
     std::printf("Testing allowed, but absurd index configs\n");
-    for (std::size_t connectivity : {2, 3})      // ! Zero maps to default, one degenerates
-        for (std::size_t dimensions : {1, 2, 3}) // ! Zero will raise
-            for (std::size_t expansion_add : {0, 1, 3})
-                for (std::size_t expansion_search : {0, 1, 3})
-                    for (std::size_t count_vectors : {0, 1, 2, 17})
-                        for (std::size_t count_wanted : {0, 1, 3, 19}) {
-                            test_absurd<std::int64_t, slot32_t>(dimensions, connectivity, expansion_add,
-                                                                expansion_search, count_vectors, count_wanted);
-                            test_absurd<uint40_t, uint40_t>(dimensions, connectivity, expansion_add, expansion_search,
+    for (std::size_t connectivity : {2, 3})   // ! Zero maps to default, one degenerates
+        for (std::size_t dimensions : {1, 3}) // ! Zero will raise
+            for (std::size_t expansion : {0, 1, 3})
+                for (std::size_t count_vectors : {0, 1, 2, 17})
+                    for (std::size_t count_wanted : {0, 1, 3, 19}) {
+                        test_absurd<std::int64_t, slot32_t>(dimensions, connectivity, expansion, expansion,
                                                             count_vectors, count_wanted);
-                        }
+                        test_absurd<uint40_t, uint40_t>(dimensions, connectivity, expansion, expansion, count_vectors,
+                                                        count_wanted);
+                    }
 
     // TODO: Test absurd configs that are banned
     // for (metric_kind_t metric_kind : {metric_kind_t::cos_k, metric_kind_t::unknown_k, metric_kind_t::haversine_k}) {}
