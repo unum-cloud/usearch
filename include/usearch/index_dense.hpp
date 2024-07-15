@@ -1603,9 +1603,9 @@ class index_dense_gt {
         if (!cast_buffer)
             return state_result_t{}.failed("Failed to allocate memory for the casts!");
         available_threads_t available_threads;
-        if (!available_threads.reserve(available_threads_.capacity()))
-            return state_result_t{}.failed("Failed to allocate memory for the available threads!");
         std::size_t max_threads = limits().threads();
+        if (!available_threads.reserve(max_threads))
+            return state_result_t{}.failed("Failed to allocate memory for the available threads!");
         for (std::size_t i = 0; i < max_threads; i++)
             available_threads.push(i);
         index_t* raw = index_allocator_t{}.allocate(1);
