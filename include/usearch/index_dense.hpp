@@ -207,6 +207,40 @@ struct index_dense_metadata_result_t {
     }
 };
 
+inline scalar_kind_t convert_pre_2_10_scalar_kind(scalar_kind_t scalar_kind) noexcept {
+    // The old enum `scalar_kind_t` is defined without explicit constants from 0
+    switch (static_cast<std::underlying_type<scalar_kind_t>::type>(scalar_kind)) {
+    case 0: return scalar_kind_t::unknown_k;
+    case 1: return scalar_kind_t::b1x8_k;
+    case 2: return scalar_kind_t::u40_k;
+    case 3: return scalar_kind_t::uuid_k;
+    case 4: return scalar_kind_t::f64_k;
+    case 5: return scalar_kind_t::f32_k;
+    case 6: return scalar_kind_t::f16_k;
+    case 7: return scalar_kind_t::f8_k;
+    case 8: return scalar_kind_t::u64_k;
+    case 9: return scalar_kind_t::u32_k;
+    case 10: return scalar_kind_t::u8_k;
+    case 11: return scalar_kind_t::i64_k;
+    case 12: return scalar_kind_t::i32_k;
+    case 13: return scalar_kind_t::i16_k;
+    case 14: return scalar_kind_t::i8_k;
+    default: return scalar_kind;
+    }
+}
+
+inline void fix_pre_2_10_metadata(index_dense_head_t& head) {
+    // deal with incompatibility with pre-2.10 versions: https://github.com/unum-cloud/usearch/issues/423
+    if (head.version_major == 2 && head.version_minor < 10) {
+        head.kind_scalar = convert_pre_2_10_scalar_kind(head.kind_scalar);
+        head.kind_key = convert_pre_2_10_scalar_kind(head.kind_key);
+        head.kind_compressed_slot = convert_pre_2_10_scalar_kind(head.kind_compressed_slot);
+        // update minor versions so that no repeated conversion occurs
+        head.version_minor = 10;
+        head.version_patch = 0;
+    }
+}
+
 /**
  *  @brief  Extracts metadata from a pre-constructed index on disk,
  *          without loading it or mapping the whole binary file.
@@ -224,8 +258,10 @@ inline index_dense_metadata_result_t index_dense_metadata_from_path(char const* 
 
     // Check if the file immediately starts with the index, instead of vectors
     result.config.exclude_vectors = true;
-    if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
+    if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0) {
+        fix_pre_2_10_metadata(result.head);
         return result;
+    }
 
     if (std::fseek(file.get(), 0L, SEEK_END) != 0)
         return result.failed("Can't infer file size");
@@ -251,8 +287,10 @@ inline index_dense_metadata_result_t index_dense_metadata_from_path(char const* 
 
         result.config.exclude_vectors = false;
         result.config.use_64_bit_dimensions = false;
-        if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
+        if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0) {
+            fix_pre_2_10_metadata(result.head);
             return result;
+        }
     }
 
     // Check if it starts with 64-bit
@@ -266,8 +304,10 @@ inline index_dense_metadata_result_t index_dense_metadata_from_path(char const* 
         // Check if it starts with 64-bit
         result.config.exclude_vectors = false;
         result.config.use_64_bit_dimensions = true;
-        if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
+        if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0) {
+            fix_pre_2_10_metadata(result.head);
             return result;
+        }
     }
 
     return result.failed("Not a dense USearch index!");
@@ -1091,6 +1131,9 @@ class index_dense_gt {
             if (std::memcmp(buffer, default_magic(), std::strlen(default_magic())) != 0)
                 return result.failed("Magic header mismatch - the file isn't an index");
 
+            // fix pre-2.10 headers
+            fix_pre_2_10_metadata(head);
+
             // Validate the software version
             if (head.version_major != USEARCH_VERSION_MAJOR)
                 return result.failed("File format may be different, please rebuild");
@@ -1199,6 +1242,9 @@ class index_dense_gt {
             index_dense_head_t head{buffer};
             if (std::memcmp(buffer, default_magic(), std::strlen(default_magic())) != 0)
                 return result.failed("Magic header mismatch - the file isn't an index");
+
+            // fix pre-2.10 headers
+            fix_pre_2_10_metadata(head);
 
             // Validate the software version
             if (head.version_major != USEARCH_VERSION_MAJOR)
