@@ -2218,6 +2218,12 @@ class index_gt {
         }
     };
 
+    /// @brief  Number of "slots" available for `node_t` objects. Equals to @b `limits_.members`.
+    mutable std::atomic<std::size_t> nodes_capacity_{};
+
+    /// @brief  Number of "slots" already storing non-null nodes.
+    mutable std::atomic<std::size_t> nodes_count_{};
+
     index_config_t config_{};
     index_limits_t limits_{};
 
@@ -2226,12 +2232,6 @@ class index_gt {
 
     precomputed_constants_t pre_{};
     memory_mapped_file_t viewed_file_{};
-
-    /// @brief  Number of "slots" available for `node_t` objects. Equals to @b `limits_.members`.
-    usearch_align_m mutable std::atomic<std::size_t> nodes_capacity_{};
-
-    /// @brief  Number of "slots" already storing non-null nodes.
-    usearch_align_m mutable std::atomic<std::size_t> nodes_count_{};
 
     /// @brief  Controls access to `max_level_` and `entry_slot_`.
     ///         If any thread is updating those values, no other threads can `add()` or `search()`.
@@ -2274,9 +2274,9 @@ class index_gt {
      */
     explicit index_gt( //
         dynamic_allocator_t dynamic_allocator = {}, tape_allocator_t tape_allocator = {}) noexcept(false)
-        : config_(), limits_(0, 0), dynamic_allocator_(std::move(dynamic_allocator)),
-          tape_allocator_(std::move(tape_allocator)), pre_(precompute_({})), nodes_count_(0u), max_level_(-1),
-          entry_slot_(0u), nodes_(), nodes_mutexes_(), contexts_() {}
+        : nodes_capacity_(0u), nodes_count_(0u), config_(), limits_(0, 0),
+          dynamic_allocator_(std::move(dynamic_allocator)), tape_allocator_(std::move(tape_allocator)),
+          pre_(precompute_({})), max_level_(-1), entry_slot_(0u), nodes_(), nodes_mutexes_(), contexts_() {}
 
     /**
      *  @brief Default index constructor, suitable only for stateless allocators.

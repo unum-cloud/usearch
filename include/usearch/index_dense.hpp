@@ -659,7 +659,7 @@ class index_dense_gt {
     std::size_t connectivity() const { return typed_->connectivity(); }
     std::size_t size() const { return typed_->size() - free_keys_.size(); }
     std::size_t capacity() const { return typed_->capacity(); }
-    std::size_t max_level() const noexcept { return typed_->max_level(); }
+    std::size_t max_level() const { return typed_->max_level(); }
     index_dense_config_t const& config() const { return config_; }
     index_limits_t const& limits() const { return typed_->limits(); }
     bool multi() const { return config_.multi; }
@@ -672,10 +672,10 @@ class index_dense_gt {
     metric_t const& metric() const { return metric_; }
     void change_metric(metric_t metric) { metric_ = std::move(metric); }
 
-    scalar_kind_t scalar_kind() const noexcept { return metric_.scalar_kind(); }
-    std::size_t bytes_per_vector() const noexcept { return metric_.bytes_per_vector(); }
-    std::size_t scalar_words() const noexcept { return metric_.scalar_words(); }
-    std::size_t dimensions() const noexcept { return metric_.dimensions(); }
+    scalar_kind_t scalar_kind() const { return metric_.scalar_kind(); }
+    std::size_t bytes_per_vector() const { return metric_.bytes_per_vector(); }
+    std::size_t scalar_words() const { return metric_.scalar_words(); }
+    std::size_t dimensions() const { return metric_.dimensions(); }
 
     // Fetching and changing search criteria
     std::size_t expansion_add() const { return config_.expansion_add; }
@@ -932,7 +932,7 @@ class index_dense_gt {
      *  Will deallocate all threads/contexts.
      *  If the index is memory-mapped - releases the mapping and the descriptor.
      */
-    void reset() noexcept {
+    void reset() {
 
         unique_lock_t lookup_lock(slot_lookup_mutex_);
         std::unique_lock<std::mutex> free_lock(free_keys_mutex_);
@@ -1023,7 +1023,7 @@ class index_dense_gt {
     /**
      *  @brief  Estimate the binary length (in bytes) of the serialized index.
      */
-    std::size_t serialized_length(serialization_config_t config = {}) const noexcept {
+    std::size_t serialized_length(serialization_config_t config = {}) const {
         std::size_t dimensions_length = 0;
         std::size_t matrix_length = 0;
         if (!config.exclude_vectors) {
@@ -2229,7 +2229,7 @@ static join_result_t join(                                    //
     man_to_woman_at&& man_to_woman = man_to_woman_at{}, //
     woman_to_man_at&& woman_to_man = woman_to_man_at{}, //
     executor_at&& executor = executor_at{},             //
-    progress_at&& progress = progress_at{}) noexcept {
+    progress_at&& progress = progress_at{}) {
 
     return men.join(                                 //
         women, config,                               //
