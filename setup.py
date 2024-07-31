@@ -180,6 +180,7 @@ setup(
     description="Smaller & Faster Single-File Vector Search Engine from Unum",
     author="Ash Vardanian",
     author_email="info@unum.cloud",
+    url="https://github.com/unum-cloud/usearch",
     long_description=long_description,
     long_description_content_type="text/markdown",
     license="Apache-2.0",
