@@ -123,7 +123,7 @@ USEARCH_EXPORT char const* usearch_version(void) {
     int minor = USEARCH_VERSION_MINOR;
     int patch = USEARCH_VERSION_PATCH;
     static char version[32];
-    sprintf(version, "%d.%d.%d", major, minor, patch);
+    std::snprintf(version, sizeof(version), "%d.%d.%d", major, minor, patch);
     return version;
 }
 
