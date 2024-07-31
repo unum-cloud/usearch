@@ -1993,8 +1993,12 @@ class index_gt {
         member_iterator_gt() noexcept {}
         member_iterator_gt(index_t* index, compressed_slot_t slot) noexcept : index_(index), slot_(slot) {}
 
-        ref_t call_key(std::true_type) const noexcept { return ref_t{index_->node_at_(slot_).ckey(), slot_}; }
-        ref_t call_key(std::false_type) const noexcept { return ref_t{index_->node_at_(slot_).key(), slot_}; }
+        template <int> ref_t call_key(std::true_type) const noexcept {
+            return ref_t{index_->node_at_(slot_).ckey(), slot_};
+        }
+        template <int> ref_t call_key(std::false_type) const noexcept {
+            return ref_t{index_->node_at_(slot_).key(), slot_};
+        }
 
         index_t* index_{};
         compressed_slot_t slot_{};
@@ -2006,7 +2010,7 @@ class index_gt {
         using pointer = void;
         using reference = ref_t;
 
-        reference operator*() const noexcept { return call_key(std::is_const<index_t>()); }
+        reference operator*() const noexcept { return call_key<0>(std::is_const<index_t>()); }
         vector_key_t key() const noexcept { return index_->node_at_(slot_).ckey(); }
 
         friend inline compressed_slot_t get_slot(member_iterator_gt const& it) noexcept { return it.slot_; }
