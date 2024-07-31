@@ -56,6 +56,15 @@ template <> struct unum::usearch::default_free_value_gt<slot32_t> {
     static slot32_t value() noexcept { return static_cast<slot32_t>(std::numeric_limits<std::uint32_t>::max()); }
 };
 
+/*
+ *  Let's instantiate several templates to make all of their symbols available for testing.
+ *  https://dhashe.com/how-to-build-highly-debuggable-c-binaries.html
+ */
+template class unum::usearch::index_gt<float, std::int64_t, slot32_t>;
+template class unum::usearch::index_gt<float, std::int64_t, uint40_t>;
+template class unum::usearch::index_dense_gt<std::int64_t, slot32_t>;
+template class unum::usearch::index_dense_gt<std::int64_t, uint40_t>;
+
 /**
  *  @brief  Convenience wrapper combining combined allocation and construction of an index.
  */

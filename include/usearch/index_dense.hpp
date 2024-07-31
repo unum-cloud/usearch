@@ -685,8 +685,6 @@ class index_dense_gt {
 
     member_citerator_t cbegin() const { return typed_->cbegin(); }
     member_citerator_t cend() const { return typed_->cend(); }
-    member_citerator_t begin() const { return typed_->begin(); }
-    member_citerator_t end() const { return typed_->end(); }
     member_iterator_t begin() { return typed_->begin(); }
     member_iterator_t end() { return typed_->end(); }
 

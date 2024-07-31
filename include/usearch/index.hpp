@@ -2147,7 +2147,7 @@ class index_gt {
         misaligned_ptr_gt<compressed_slot_t const> begin() const noexcept { return tape_ + shift(); }
         misaligned_ptr_gt<compressed_slot_t const> end() const noexcept { return begin() + size(); }
         misaligned_ptr_gt<compressed_slot_t const> cbegin() noexcept { return tape_ + shift(); }
-        misaligned_ptr_gt<compressed_slot_t const> cend() noexcept { return begin() + size(); }
+        misaligned_ptr_gt<compressed_slot_t const> cend() noexcept { return cbegin() + size(); }
         compressed_slot_t operator[](std::size_t i) const noexcept {
             return misaligned_load<compressed_slot_t>(tape_ + shift(i));
         }
@@ -2311,10 +2311,7 @@ class index_gt {
         error_t error;
 
         explicit operator bool() const noexcept { return !error; }
-        state_result_t failed(error_t message) noexcept {
-            error = std::move(message);
-            return std::move(*this);
-        }
+        state_result_t failed(error_t message) noexcept { return {std::move(index), std::move(message)}; }
         operator index_gt&&() && {
             if (error)
                 __usearch_raise_runtime_error(error.what());
@@ -2335,9 +2332,10 @@ class index_gt {
         index_config_t config = {}, dynamic_allocator_t dynamic_allocator = {},
         tape_allocator_t tape_allocator = {}) noexcept {
 
-        error_t error = config.validate();
-        if (error)
-            return state_result_t{}.failed(std::move(error));
+        state_result_t result;
+        result.error = config.validate();
+        if (result.error)
+            return result;
 
         index_gt index;
         index.config_ = std::move(config);
@@ -2348,7 +2346,6 @@ class index_gt {
         index.max_level_ = -1;
         index.entry_slot_ = 0u;
 
-        state_result_t result;
         result.index = std::move(index);
         return result;
     }
@@ -3822,12 +3819,12 @@ class index_gt {
         using pointer = misaligned_ptr_gt<element_t>;
         using reference = misaligned_ref_gt<element_t>;
 
-        reference operator*() const noexcept { return slot(); }
+        value_type operator*() const noexcept { return neighbors_[current_]; }
         candidates_iterator_t(index_gt const& index, neighbors_ref_t neighbors, visits_hash_set_t& visits,
                               std::size_t progress) noexcept
             : index_(index), neighbors_(neighbors), visits_(visits), current_(progress) {}
         candidates_iterator_t operator++(int) noexcept {
-            return candidates_iterator_t(index_, visits_, neighbors_, current_ + 1).skip_missing();
+            return candidates_iterator_t(index_, neighbors_, visits_, current_ + 1).skip_missing();
         }
         candidates_iterator_t& operator++() noexcept {
             ++current_;
@@ -3837,7 +3834,7 @@ class index_gt {
         bool operator==(candidates_iterator_t const& other) noexcept { return current_ == other.current_; }
         bool operator!=(candidates_iterator_t const& other) noexcept { return current_ != other.current_; }
 
-        vector_key_t key() const noexcept { return index_->node_at_(slot()).key(); }
+        vector_key_t key() const noexcept { return index_.node_at_(slot()).key(); }
         compressed_slot_t slot() const noexcept { return neighbors_[current_]; }
         friend inline std::size_t get_slot(candidates_iterator_t const& it) noexcept { return it.slot(); }
         friend inline vector_key_t get_key(candidates_iterator_t const& it) noexcept { return it.key(); }
