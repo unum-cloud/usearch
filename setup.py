@@ -72,9 +72,9 @@ if is_linux:
         macros_args.extend(
             [
                 get_bool_env_w_name("SIMSIMD_TARGET_NEON", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_NEON_BF16", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_NEON_BF16", False),
                 get_bool_env_w_name("SIMSIMD_TARGET_SVE", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_SVE_BF16", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SVE_BF16", False),
                 get_bool_env_w_name("SIMSIMD_TARGET_HASWELL", True),
                 get_bool_env_w_name("SIMSIMD_TARGET_SKYLAKE", True),
                 get_bool_env_w_name("SIMSIMD_TARGET_ICE", True),
