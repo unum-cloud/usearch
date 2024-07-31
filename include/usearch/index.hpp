@@ -2559,8 +2559,8 @@ class index_gt {
         top_candidates_t const* top_{};
 
         friend class index_gt;
-        inline search_result_t(index_gt const& index, top_candidates_t& top) noexcept
-            : nodes_(index.nodes_), top_(&top) {}
+        inline search_result_t(index_gt const& index, top_candidates_t const* top) noexcept
+            : nodes_(index.nodes_), top_(top) {}
 
       public:
         /**  @brief  Number of search results found. */
@@ -2924,12 +2924,16 @@ class index_gt {
         if (!config.expansion)
             config.expansion = default_expansion_search();
 
-        context_t& context = contexts_[config.thread];
-        top_candidates_t& top = context.top_candidates;
-        search_result_t result{*this, top};
-        if (!nodes_count_)
+        // Using references is cleaner, but would result in UBSan false positives
+        context_t* context_ptr = contexts_.data() + config.thread;
+        top_candidates_t* top_ptr = context_ptr ? &context_ptr->top_candidates : nullptr;
+        search_result_t result{*this, top_ptr};
+        if (!nodes_count_.load(std::memory_order_relaxed))
             return result;
 
+        usearch_assert_m(contexts_.size() > config.thread, "Thread index out of bounds");
+        context_t& context = *context_ptr;
+        top_candidates_t& top = *top_ptr;
         // Go down the level, tracking only the closest match
         result.computed_distances = context.computed_distances;
         result.visited_members = context.iteration_cycles;
