@@ -1368,9 +1368,9 @@ class metric_punned_t {
     /// Distance function that takes two arrays and some callback state and returns a scalar.
     using metric_array_array_state_t = result_t (*)(uptr_t, uptr_t, uptr_t);
     /// Distance function callback, like `metric_array_array_size_t`, but depends on member variables.
-    using metric_rounted_t = result_t (metric_punned_t::*)(uptr_t, uptr_t) const;
+    using metric_routed_t = result_t (metric_punned_t::*)(uptr_t, uptr_t) const;
 
-    metric_rounted_t metric_routed_ = nullptr;
+    metric_routed_t metric_routed_ = nullptr;
     uptr_t metric_ptr_ = 0;
     uptr_t metric_third_arg_ = 0;
 
@@ -1464,7 +1464,7 @@ class metric_punned_t {
     }
 
     /**
-     *  @brief  Creates a metric using the provided function pointer for a statefull metric.
+     *  @brief  Creates a metric using the provided function pointer for a stateful metric.
      *          The third argument is the state that will be passed to the metric function.
      *
      *  @param  metric_uintptr  The function pointer to the metric function.
@@ -1473,9 +1473,9 @@ class metric_punned_t {
      *  @param  scalar_kind     The kind of scalar to use.
      *  @return                 A metric object that can be used to compute distances between vectors.
      */
-    inline static metric_punned_t statefull(std::uintptr_t metric_uintptr, std::uintptr_t metric_state,
-                                            metric_kind_t metric_kind = metric_kind_t::unknown_k,
-                                            scalar_kind_t scalar_kind = scalar_kind_t::unknown_k) noexcept {
+    inline static metric_punned_t stateful(std::uintptr_t metric_uintptr, std::uintptr_t metric_state,
+                                           metric_kind_t metric_kind = metric_kind_t::unknown_k,
+                                           scalar_kind_t scalar_kind = scalar_kind_t::unknown_k) noexcept {
         metric_punned_t metric;
         metric.metric_routed_ = &metric_punned_t::invoke_array_array_third;
         metric.metric_ptr_ = metric_uintptr;
@@ -1564,8 +1564,8 @@ class metric_punned_t {
 
         std::memcpy(&metric_ptr_, &simd_metric, sizeof(simd_metric));
         metric_routed_ = metric_kind_ == metric_kind_t::ip_k
-                             ? reinterpret_cast<metric_rounted_t>(&metric_punned_t::invoke_simsimd_reverse)
-                             : reinterpret_cast<metric_rounted_t>(&metric_punned_t::invoke_simsimd);
+                             ? reinterpret_cast<metric_routed_t>(&metric_punned_t::invoke_simsimd_reverse)
+                             : reinterpret_cast<metric_routed_t>(&metric_punned_t::invoke_simsimd);
         isa_kind_ = simd_kind;
         return true;
     }

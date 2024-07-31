@@ -102,10 +102,10 @@ void NativeIndex::change_expansion_add(size_t n) const { index_->change_expansio
 void NativeIndex::change_expansion_search(size_t n) const { index_->change_expansion_search(n); }
 
 void NativeIndex::change_metric(uptr_t metric, uptr_t state) const {
-    index_->change_metric(metric_punned_t::statefull( //
-        reinterpret_cast<std::uintptr_t>(metric),     //
-        reinterpret_cast<std::uintptr_t>(state),      //
-        index_->metric().metric_kind(),               //
+    index_->change_metric(metric_punned_t::stateful( //
+        reinterpret_cast<std::uintptr_t>(metric),    //
+        reinterpret_cast<std::uintptr_t>(state),     //
+        index_->metric().metric_kind(),              //
         index_->scalar_kind()));
 }
 

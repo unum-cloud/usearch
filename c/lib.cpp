@@ -354,9 +354,9 @@ USEARCH_EXPORT void usearch_change_metric(usearch_index_t index, usearch_metric_
     USEARCH_ASSERT(index && error && "Missing arguments");
     auto& index_dense = *reinterpret_cast<index_dense_t*>(index);
     auto metric_punned =
-        state ? metric_punned_t::statefull(reinterpret_cast<std::uintptr_t>(metric),
-                                           reinterpret_cast<std::uintptr_t>(state), metric_kind_to_cpp(kind),
-                                           index_dense.scalar_kind())
+        state ? metric_punned_t::stateful(reinterpret_cast<std::uintptr_t>(metric),
+                                          reinterpret_cast<std::uintptr_t>(state), metric_kind_to_cpp(kind),
+                                          index_dense.scalar_kind())
               : metric_punned_t::stateless(index_dense.dimensions(), reinterpret_cast<std::uintptr_t>(metric),
                                            metric_punned_signature_t::array_array_k, metric_kind_to_cpp(kind),
                                            index_dense.scalar_kind());
