@@ -1373,8 +1373,12 @@ mod tests {
 
         let first: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
         let second: [f32; 5] = [0.3, 0.2, 0.4, 0.0, 0.1];
+        let too_long: [f32; 6] = [0.3, 0.2, 0.4, 0.0, 0.1, 0.1];
+        let too_short: [f32; 4] = [0.3, 0.2, 0.4, 0.0];
         assert!(index.add(1, &first).is_ok());
         assert!(index.add(2, &second).is_ok());
+        assert!(index.add(3, &too_long).is_err());
+        assert!(index.add(4, &too_short).is_err());
         assert_eq!(index.size(), 2);
 
         // Test using Vec<T>
@@ -1392,6 +1396,27 @@ mod tests {
         let mut found = [0.0 as f32; 6]; // This isn't a multiple of the index's dimensions.
         let result = index.get(1, &mut found);
         assert!(result.is_err());
+    }
+    #[test]
+    fn test_search_vector() {
+        let mut options = IndexOptions::default();
+        options.dimensions = 5;
+        options.quantization = ScalarKind::F32;
+        let index = Index::new(&options).unwrap();
+        assert!(index.reserve(10).is_ok());
+
+        let first: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
+        let second: [f32; 5] = [0.3, 0.2, 0.4, 0.0, 0.1];
+        let too_long: [f32; 6] = [0.3, 0.2, 0.4, 0.0, 0.1, 0.1];
+        let too_short: [f32; 4] = [0.3, 0.2, 0.4, 0.0];
+        assert!(index.add(1, &first).is_ok());
+        assert!(index.add(2, &second).is_ok());
+        assert_eq!(index.size(), 2);
+        //assert!(index.add(3, &too_long).is_err());
+        //assert!(index.add(4, &too_short).is_err());
+
+        assert!(index.search(&too_long, 1).is_err());
+        assert!(index.search(&too_short, 1).is_err());
     }
 
     #[test]
