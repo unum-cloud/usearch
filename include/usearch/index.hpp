@@ -1981,6 +1981,7 @@ class index_gt {
     using dynamic_allocator_t = dynamic_allocator_at;
     using tape_allocator_t = tape_allocator_at;
     static_assert(sizeof(vector_key_t) >= sizeof(compressed_slot_t), "Having tiny keys doesn't make sense.");
+    static_assert(std::is_signed<distance_t>::value, "Distance must be a signed type, as we use the unary minus.");
 
     using member_cref_t = member_cref_gt<vector_key_t>;
     using member_ref_t = member_ref_gt<vector_key_t>;
@@ -4384,11 +4385,12 @@ static join_result_t join(               //
             bool woman_is_free = husband_slot == missing_slot;
             if (woman_is_free) {
                 // Engagement
-                man_to_woman_slots[free_man_slot] = woman.slot;
+                man_to_woman_slots[free_man_slot] = static_cast<compressed_slot_t>(woman.slot);
                 woman_to_man_slots[woman.slot] = free_man_slot;
                 engagements++;
             } else {
-                distance_t distance_from_husband = women_metric(women_values[woman.slot], men_values[husband_slot]);
+                distance_t distance_from_husband =
+                    women_metric(women_values[static_cast<compressed_slot_t>(woman.slot)], men_values[husband_slot]);
                 distance_t distance_from_candidate = match.distance;
                 if (distance_from_husband > distance_from_candidate) {
                     // Break-up
@@ -4398,7 +4400,7 @@ static join_result_t join(               //
                     men_locks.atomic_reset(husband_slot);
 
                     // New Engagement
-                    man_to_woman_slots[free_man_slot] = woman.slot;
+                    man_to_woman_slots[free_man_slot] = static_cast<compressed_slot_t>(woman.slot);
                     woman_to_man_slots[woman.slot] = free_man_slot;
                     engagements++;
 
@@ -4423,7 +4425,7 @@ static join_result_t join(               //
     for (std::size_t man_slot = 0; man_slot != men.size(); ++man_slot) {
         compressed_slot_t woman_slot = man_to_woman_slots[man_slot];
         if (woman_slot != missing_slot) {
-            man_key_t man = men.at(man_slot).key;
+            man_key_t man = men.at(static_cast<compressed_slot_t>(man_slot)).key;
             woman_key_t woman = women.at(woman_slot).key;
             man_to_woman[man] = woman;
             woman_to_man[woman] = man;

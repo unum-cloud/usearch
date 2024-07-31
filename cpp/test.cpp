@@ -897,7 +897,7 @@ template <typename key_at, typename slot_at> void test_strings() {
     namespace sz = ashvardanian::stringzilla;
 
     /// Levenshtein distance is an integer
-    using levenshtein_distance_t = std::uint64_t;
+    using levenshtein_distance_t = std::int64_t;
 
     // Aliases for the index overload
     using vector_key_t = key_at;
