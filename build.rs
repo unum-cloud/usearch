@@ -62,9 +62,19 @@ fn main() {
 
         let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
         let flags_to_try = match target_arch.as_str() {
-            "arm" | "aarch64" => vec!["SIMSIMD_TARGET_NEON", "SIMSIMD_TARGET_SVE"],
-            _ => vec![
+            "arm" | "aarch64" => vec![
+                "SIMSIMD_TARGET_SVE_BF16",
+                "SIMSIMD_TARGET_SVE_F16",
+                "SIMSIMD_TARGET_SVE_I8",
+                "SIMSIMD_TARGET_SVE",
+                "SIMSIMD_TARGET_NEON_BF16", 
+                "SIMSIMD_TARGET_NEON_F16", 
+                "SIMSIMD_TARGET_NEON_I8", 
+                "SIMSIMD_TARGET_NEON", 
+                ],
+                _ => vec![
                 "SIMSIMD_TARGET_SAPPHIRE",
+                "SIMSIMD_TARGET_GENOA",
                 "SIMSIMD_TARGET_ICE",
                 "SIMSIMD_TARGET_SKYLAKE",
                 "SIMSIMD_TARGET_HASWELL",

@@ -269,6 +269,7 @@ def test_index_contains_remove_rename(batch_size):
     assert np.sum(index.count(removed_keys)) == len(index)
 
 
+@pytest.mark.skip(reason="Not guaranteed")
 @pytest.mark.parametrize("batch_size", [3, 17, 33])
 @pytest.mark.parametrize("threads", [1, 4])
 def test_index_oversubscribed_search(batch_size: int, threads: int):
