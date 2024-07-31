@@ -332,11 +332,11 @@ USearch provides GoLang bindings, that depend on the C library that must be inst
 So one should first compile the C library, link it with GoLang, and only then run tests.
 
 ```sh
-cmake -B ./build_release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
-cmake --build ./build_release --config Release -j
+cmake -B build_release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
+cmake --build build_release --config Release -j
 
-mv ./c/libusearch_c.so ./golang/ # or .dylib to install the library on MacOS
-cp ./c/usearch.h ./golang/ # to make the header available to GoLang
+mv c/libusearch_c.so golang/ # or .dylib to install the library on MacOS
+cp c/usearch.h golang/ # to make the header available to GoLang
 
 cd golang && go test -v ; cd ..
 ```
@@ -349,9 +349,10 @@ The compilation settings are controlled by the `build.gradle` and are independen
 To setup the Gradle environment:
 
 ```sh
-sudo apt get install zip unzip
+sudo apt-get install zip
 curl -s "https://get.sdkman.io" | bash
-sdk install java gradle
+sdk install java
+sdk install gradle
 ```
 
 Afterwards, in a new terminal:
