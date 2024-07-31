@@ -45,6 +45,9 @@
 #if !defined(SIMSIMD_NATIVE_F16)
 #define SIMSIMD_NATIVE_F16 !USEARCH_USE_FP16LIB
 #endif
+
+// Overwrite the dynamic dispatch settings
+#undef SIMSIMD_DYNAMIC_DISPATCH
 #define SIMSIMD_DYNAMIC_DISPATCH 0
 // No problem, if some of the functions are unused or undefined
 #pragma GCC diagnostic push
