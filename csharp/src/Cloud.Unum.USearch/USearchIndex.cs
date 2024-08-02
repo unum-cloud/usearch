@@ -187,7 +187,6 @@ public class USearchIndex : IDisposable
             this.IncreaseCapacity(size_increase);
         }
     }
-
     /// <summary>
     /// Adds a vector with a specific key to the index.
     /// </summary>
@@ -196,8 +195,17 @@ public class USearchIndex : IDisposable
     public void Add(ulong key, float[] vector)
     {
         this.CheckIncreaseCapacity(1);
-        usearch_add(this._index, key, vector, ScalarKind.Float32, out IntPtr error);
-        HandleError(error);
+        GCHandle handle = GCHandle.Alloc(vector, GCHandleType.Pinned);
+        try
+        {
+            IntPtr vectorPtr = handle.AddrOfPinnedObject();
+            usearch_add(this._index, key, vectorPtr, ScalarKind.Float32, out IntPtr error);
+            HandleError(error);
+        }
+        finally
+        {
+            handle.Free();
+        }
     }
 
     /// <summary>
@@ -208,8 +216,17 @@ public class USearchIndex : IDisposable
     public void Add(ulong key, double[] vector)
     {
         this.CheckIncreaseCapacity(1);
-        usearch_add(this._index, key, vector, ScalarKind.Float64, out IntPtr error);
-        HandleError(error);
+        GCHandle handle = GCHandle.Alloc(vector, GCHandleType.Pinned);
+        try
+        {
+            IntPtr vectorPtr = handle.AddrOfPinnedObject();
+            usearch_add(this._index, key, vectorPtr, ScalarKind.Float64, out IntPtr error);
+            HandleError(error);
+        }
+        finally
+        {
+            handle.Free();
+        }
     }
 
     /// <summary>
@@ -222,8 +239,17 @@ public class USearchIndex : IDisposable
         this.CheckIncreaseCapacity((ulong)vectors.Length);
         for (int i = 0; i < vectors.Length; i++)
         {
-            usearch_add(this._index, keys[i], vectors[i], ScalarKind.Float32, out IntPtr error);
-            HandleError(error);
+            GCHandle handle = GCHandle.Alloc(vectors[i], GCHandleType.Pinned);
+            try
+            {
+                IntPtr vectorPtr = handle.AddrOfPinnedObject();
+                usearch_add(this._index, keys[i], vectorPtr, ScalarKind.Float32, out IntPtr error);
+                HandleError(error);
+            }
+            finally
+            {
+                handle.Free();
+            }
         }
     }
 
@@ -237,10 +263,20 @@ public class USearchIndex : IDisposable
         this.CheckIncreaseCapacity((ulong)vectors.Length);
         for (int i = 0; i < vectors.Length; i++)
         {
-            usearch_add(this._index, keys[i], vectors[i], ScalarKind.Float64, out IntPtr error);
-            HandleError(error);
+            GCHandle handle = GCHandle.Alloc(vectors[i], GCHandleType.Pinned);
+            try
+            {
+                IntPtr vectorPtr = handle.AddrOfPinnedObject();
+                usearch_add(this._index, keys[i], vectorPtr, ScalarKind.Float64, out IntPtr error);
+                HandleError(error);
+            }
+            finally
+            {
+                handle.Free();
+            }
         }
     }
+
 
     /// <summary>
     /// Retrieves the vector associated with the given key from the index.

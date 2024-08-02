@@ -201,8 +201,6 @@ function (setup_target TARGET_NAME)
                     -fPIC
                     -pedantic
                     -Wfatal-errors
-                    # Don't complain if the for-loops were not vectorzied
-                    -Wpass-failed=transform-warning
                     -fcolor-diagnostics
         )
         target_link_options(
@@ -243,10 +241,10 @@ function (setup_target TARGET_NAME)
         set_property(SOURCE bench.cpp PROPERTY LANGUAGE CUDA)
         set_target_properties(${TARGET_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
         set_target_properties(${TARGET_NAME} PROPERTIES CUDA_ARCHITECTURES "86")
-        
+
     elseif (CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
         target_compile_options(${TARGET_NAME} PRIVATE -w -ferror-limit=1)
-        
+
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(${TARGET_NAME} PRIVATE /wd4068 /wd4996)
         target_compile_options(

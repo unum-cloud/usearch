@@ -988,6 +988,16 @@ template <> struct cast_gt<f16_t, i8_t> : public cast_gt<f16_t, i8_converted_t> 
 template <> struct cast_gt<f32_t, i8_t> : public cast_gt<f32_t, i8_converted_t> {};
 template <> struct cast_gt<f64_t, i8_t> : public cast_gt<f64_t, i8_converted_t> {};
 
+/*  Don't complain if the vectorization of the inner loops fails:
+ *
+ *  > warning: loop not vectorized: the optimizer was unable to perform the requested transformation;
+ *  > the transformation might be disabled or specified as part of an unsupported transformation ordering
+ */
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpass-failed"
+#endif
+
 /**
  *  @brief  Inner (Dot) Product distance.
  */
@@ -1676,6 +1686,11 @@ class metric_punned_t {
         return static_cast<result_t>(typed_at{}((scalar_t const*)a, (scalar_t const*)b, a_dimensions));
     }
 };
+
+/* Allow complaining about vectorization after this point. */
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 /**
  *  @brief  View over a potentially-strided memory buffer, containing a row-major matrix.
