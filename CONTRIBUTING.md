@@ -410,8 +410,8 @@ USearch provides CSharp bindings, that depend on the C library that must be inst
 So one should first compile the C library, link it with CSharp, and only then run tests.
 
 ```sh
-cmake -B ./build_artifacts -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
-cmake --build ./build_artifacts --config Release -j
+cmake -B build_artifacts -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
+cmake --build build_artifacts --config Release -j
 ```
 
 Then, on Windows, copy the library to the CSharp project and run the tests:
@@ -435,6 +435,17 @@ cd csharp
 dotnet test -c Debug --logger "console;verbosity=detailed"
 dotnet test -c Release
 ```
+
+On macOS with Arm-based chips:
+
+```sh
+mkdir -p "csharp/lib/runtimes/osx-arm64/native"
+cp "build_artifacts/libusearch_c.dylib" "csharp/lib/runtimes/osx-arm64/native"
+cd csharp
+dotnet test -c Debug --logger "console;verbosity=detailed"
+dotnet test -c Release
+```
+
 
 ## Wolfram
 

@@ -69,8 +69,8 @@ public class UsearchIndexTests
         Trace.Assert(File.Exists(Path.Combine(pathUsearch, "tmp.usearch")));
 
         using var indexRestored = new USearchIndex(savedPath);
-        int matches = indexRestored.Search(vector, 10, out ulong[] keys, out float[] distances);
         Trace.Assert(indexRestored.Size() == 1);
+        int matches = indexRestored.Search(vector, 10, out ulong[] keys, out float[] distances);
         Trace.Assert(matches == 1);
         Trace.Assert(keys[0] == 42);
         Trace.Assert(distances[0] <= 0.001f);
