@@ -116,10 +116,23 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
     return static_cast<UInt32>(_native->expansion_search());
 }
 
-+ (instancetype)make:(USearchMetric)metricKind dimensions:(UInt32)dimensions connectivity:(UInt32)connectivity quantization:(USearchScalar)quantization {
++ (instancetype)make:(USearchMetric)metricKind
+          dimensions:(UInt32)dimensions
+        connectivity:(UInt32)connectivity
+        quantization:(USearchScalar)quantization {
+    // Create a single-vector index by default
+    return [self make:metricKind dimensions:dimensions connectivity:connectivity quantization:quantization multi:false];
+}
+
++ (instancetype)make:(USearchMetric)metricKind
+          dimensions:(UInt32)dimensions
+        connectivity:(UInt32)connectivity
+        quantization:(USearchScalar)quantization
+               multi:(BOOL)multi {
     std::size_t dims = static_cast<std::size_t>(dimensions);
 
-    index_config_t config(static_cast<std::size_t>(connectivity));
+    index_dense_config_t config(static_cast<std::size_t>(connectivity));
+    config.multi = multi;
     metric_punned_t metric(dims, to_native_metric(metricKind), to_native_scalar(quantization));
     if (metric.missing()) {
         @throw [NSException exceptionWithName:@"Can't create an index"
@@ -158,6 +171,18 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
     return static_cast<UInt32>(found);
 }
 
+- (UInt32)getSingle:(USearchKey)key
+             vector:(void *_Nonnull)vector
+              count:(UInt32)wanted {
+    std::size_t result = _native->get(key, (f32_t*)vector, static_cast<std::size_t>(wanted));
+
+    if (!result) {
+        return 0;
+    }
+
+    return static_cast<UInt32>(result);
+}
+
 - (void)addDouble:(USearchKey)key
            vector:(Float64 const *_Nonnull)vector {
     add_result_t result = _native->add(key, (f64_t const *)vector);
@@ -185,6 +210,18 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
     return static_cast<UInt32>(found);
 }
 
+- (UInt32)getDouble:(USearchKey)key
+             vector:(void *_Nonnull)vector
+              count:(UInt32)wanted {
+    std::size_t result = _native->get(key, (f64_t*)vector, static_cast<std::size_t>(wanted));
+
+    if (!result) {
+        return 0;
+    }
+
+    return static_cast<UInt32>(result);
+}
+
 - (void)addHalf:(USearchKey)key
          vector:(void const *_Nonnull)vector {
     add_result_t result = _native->add(key, (f16_t const *)vector);
@@ -210,6 +247,18 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     std::size_t found = result.dump_to(keys, distances);
     return static_cast<UInt32>(found);
+}
+
+- (UInt32)getHalf:(USearchKey)key
+           vector:(void *_Nonnull)vector
+            count:(UInt32)wanted {
+    std::size_t result = _native->get(key, (f16_t*)vector, static_cast<std::size_t>(wanted));
+
+    if (!result) {
+        return 0;
+    }
+
+    return static_cast<UInt32>(result);
 }
 
 - (void)clear {

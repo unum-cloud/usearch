@@ -53,6 +53,22 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
 + (instancetype)make:(USearchMetric)metric dimensions:(UInt32)dimensions connectivity:(UInt32)connectivity quantization:(USearchScalar)quantization NS_SWIFT_NAME(make(metric:dimensions:connectivity:quantization:));
 
 /**
+ * @brief Initializes a new index.
+ * @param metric The distance function to compare the dis-similarity of vectors.
+ * @param dimensions The number of dimensions planned for this index.
+ * @param connectivity Number of connections per node in the proximity graph.
+ * Higher connectivity improves quantization, increases memory usage, and reduces construction speed.
+ * @param quantization Quantization of internal vector representations. Lower quantization means higher speed.
+ * @param multi Enables indexing multiple vectors per key when true.
+ */
++ (instancetype)make:(USearchMetric)metricKind
+          dimensions:(UInt32)dimensions
+        connectivity:(UInt32)connectivity
+        quantization:(USearchScalar)quantization
+               multi:(BOOL)multi NS_SWIFT_NAME(make(metric:dimensions:connectivity:quantization:multi:));
+
+
+/**
  * @brief Pre-allocates space in the index for the given number of vectors.
  */
 - (void)reserve:(UInt32)count NS_SWIFT_NAME(reserve(_:));
@@ -78,6 +94,16 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
              distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(searchSingle(vector:count:keys:distances:));
 
 /**
+* @brief Retrieves a labeled single-precision vector from the index.
+* @param vector A buffer to store the vector.
+* @param count For multi-indexes, the number of vectors to retrieve.
+* @return Number of vectors exported to `vector`.
+*/
+- (UInt32)getSingle:(USearchKey)key
+    vector:(void *_Nonnull)vector
+    count:(UInt32)count NS_SWIFT_NAME(getSingle(key:vector:count:));
+
+/**
  * @brief Adds a labeled vector to the index.
  * @param vector Double-precision vector.
  */
@@ -96,6 +122,16 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
                  count:(UInt32)count
                   keys:(USearchKey *_Nullable)keys
              distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(searchDouble(vector:count:keys:distances:));
+
+/**
+* @brief Retrieves a labeled double-precision vector from the index.
+* @param vector A buffer to store the vector.
+* @param count For multi-indexes, the number of vectors to retrieve.
+* @return Number of vectors exported to `vector`.
+*/
+- (UInt32)getDouble:(USearchKey)key
+    vector:(void *_Nonnull)vector
+    count:(UInt32)count NS_SWIFT_NAME(getDouble(key:vector:count:));
 
 /**
  * @brief Adds a labeled vector to the index.
@@ -117,6 +153,15 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
                 keys:(USearchKey *_Nullable)keys
            distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(searchHalf(vector:count:keys:distances:));
 
+/**
+* @brief Retrieves a labeled half-precision vector from the index.
+* @param vector A buffer to store the vector.
+* @param count For multi-indexes, the number of vectors to retrieve.
+* @return Number of vectors exported to `vector`.
+*/
+- (UInt32)getHalf:(USearchKey)key
+        vector:(void *_Nonnull)vector
+        count:(UInt32)count NS_SWIFT_NAME(getHalf(key:vector:count:));
 
 - (Boolean)contains:(USearchKey)key NS_SWIFT_NAME(contains(key:));
 
