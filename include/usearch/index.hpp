@@ -1849,6 +1849,14 @@ class memory_mapped_file_t {
     }
 };
 
+/**
+ *  @brief  Metadata header for the serialized index.
+ *
+ *  This structure is very minimalistic by design. It contains no information
+ *  about the capacity of the index, so you'll have to `reserve` after loading.
+ *  It also contains no info on the metric or key types, so you'll have to store
+ *  that information elsewhere, like we do in `index_dense_head_t`.
+ */
 struct index_serialized_header_t {
     std::uint64_t size = 0;
     std::uint64_t connectivity = 0;
@@ -3718,16 +3726,16 @@ class index_gt {
         return {nodes_mutexes_, failed_to_acquire ? std::numeric_limits<std::size_t>::max() : slot};
     }
 
-    template <typename metric_at>
+    template <typename metric_at, bool require_non_empty_ak = false>
     candidates_view_t form_links_to_closest_( //
         metric_at&& metric, std::size_t new_slot, level_t level, context_t& context) usearch_noexcept_m {
 
         node_t new_node = node_at_(new_slot);
         top_candidates_t& top = context.top_candidates;
-        usearch_assert_m(top.size(), "No candidates found");
+        usearch_assert_m(top.size() || !require_non_empty_ak, "No candidates found");
         candidates_view_t top_view =
             refine_(metric, config_.connectivity, top, context, context.computed_distances_in_refines);
-        usearch_assert_m(top_view.size(), "This would lead to isolated nodes");
+        usearch_assert_m(top_view.size() || !require_non_empty_ak, "This would lead to isolated nodes");
 
         // Outgoing links from `new_slot`:
         neighbors_ref_t new_neighbors = neighbors_(new_node, level);

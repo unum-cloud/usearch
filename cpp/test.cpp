@@ -343,6 +343,54 @@ void test_minimal_three_vectors(index_at& index, //
 }
 
 /**
+ *  @brief  Tests value removals, by repeatedly adding and removing a couple of vectors.
+ *
+ *  @param index Reference to the index where vectors will be stored and searched.
+ *  @param vector_first First vector to be tested.
+ *  @param vector_second Second vector to be tested.
+ *  @param args Additional arguments for configuring search or index operations.
+ */
+template <typename index_at, typename scalar_at>
+void test_punned_add_remove_vector(             //
+    index_at& index,                            //
+    std::vector<scalar_at> const& vector_first, //
+    std::vector<scalar_at> const& vector_second) {
+
+    using index_t = index_at;
+    using vector_key_t = typename index_t::vector_key_t;
+
+    // Creating the index
+    expect(index.try_reserve(10));
+    expect(index.capacity() >= 10);
+
+    // IDs
+    vector_key_t key_first = 483367403120493160;
+    vector_key_t key_second = 483367403120558696;
+    vector_key_t key_third = 483367403120624232;
+    vector_key_t key_fourth = 483367403120624233;
+
+    // Adding, getting, and removing vectors
+    expect(index.add(key_first, vector_first.data()));
+    std::vector<float> found_slice(vector_first.size(), 0.0f);
+    expect_eq(index.get(key_first, found_slice.data()), 1);
+    expect(index.remove(key_first));
+
+    expect(index.add(key_second, vector_second.data()));
+    expect_eq(index.get(key_second, found_slice.data()), 1);
+    expect(index.remove(key_second));
+
+    expect(index.add(key_third, vector_second.data()));
+    expect_eq(index.get(key_third, found_slice.data()), 1);
+    expect(index.remove(key_third));
+
+    expect(index.add(key_fourth, vector_second.data()));
+    expect_eq(index.get(key_fourth, found_slice.data()), 1);
+    expect(index.remove(key_fourth));
+
+    expect_eq(index.size(), 0);
+}
+
+/**
  * Tests the normal operational mode of the library, dealing with a variable length collection
  * of `vectors` with monotonically increasing keys starting from `start_key`.
  *
@@ -618,10 +666,11 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         // Toy example
         if (vector_of_vectors.size() >= 3) {
             aligned_wrapper_gt<index_typed_t> aligned_index(config);
-            test_minimal_three_vectors<false, index_typed_t>(*aligned_index.index,     //
-                                                             42, vector_of_vectors[0], //
-                                                             43, vector_of_vectors[1], //
-                                                             44, vector_of_vectors[2], metric);
+            test_minimal_three_vectors<false, index_typed_t>( //
+                *aligned_index.index,                         //
+                42, vector_of_vectors[0],                     //
+                43, vector_of_vectors[1],                     //
+                44, vector_of_vectors[2], metric);
         }
         // Larger collection
         {
@@ -646,17 +695,23 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         // Toy example
         if (vector_of_vectors.size() >= 3) {
             index_result_t index_result = index_t::make(metric, config);
-            index_t& index = index_result.index;
-            test_minimal_three_vectors<true>(index,                    //
-                                             42, vector_of_vectors[0], //
-                                             43, vector_of_vectors[1], //
-                                             44, vector_of_vectors[2]);
+            test_minimal_three_vectors<true>( //
+                index_result.index,           //
+                42, vector_of_vectors[0],     //
+                43, vector_of_vectors[1],     //
+                44, vector_of_vectors[2]);
+        }
+        if (vector_of_vectors.size() >= 3 && enable_key_lookups) {
+            index_result_t index_result = index_t::make(metric, config);
+            test_punned_add_remove_vector( //
+                index_result.index,        //
+                vector_of_vectors[0],      //
+                vector_of_vectors[1]);
         }
         // Larger collection
         {
             index_result_t index_result = index_t::make(metric, config);
-            index_t& index = index_result.index;
-            test_collection<true>(index, 42, vector_of_vectors);
+            test_collection<true>(index_result.index, 42, vector_of_vectors);
         }
 
         // Try running benchmarks with a different number of threads
