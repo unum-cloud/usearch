@@ -1247,7 +1247,7 @@ impl Index {
     ///
     /// # Arguments
     ///
-    /// * `path` - The file path where the index will be saved.
+    /// * `buffer` - The buffer where the index will be saved.
     pub fn save_to_buffer(self: &Index, buffer: &mut [u8]) -> Result<(), cxx::Exception> {
         self.inner.save_to_buffer(buffer)
     }
@@ -1256,7 +1256,7 @@ impl Index {
     ///
     /// # Arguments
     ///
-    /// * `path` - The file path from where the index will be loaded.
+    /// * `buffer` - The buffer from where the index will be loaded.
     pub fn load_from_buffer(self: &Index, buffer: &[u8]) -> Result<(), cxx::Exception> {
         self.inner.load_from_buffer(buffer)
     }
@@ -1265,8 +1265,31 @@ impl Index {
     ///
     /// # Arguments
     ///
-    /// * `path` - The file path from where the view will be created.
-    pub fn view_from_buffer(self: &Index, buffer: &[u8]) -> Result<(), cxx::Exception> {
+    /// * `buffer` - The buffer from where the view will be created.
+    ///
+    /// # Safety
+    ///
+    /// This function is marked as `unsafe` because it stores a pointer to the input buffer.
+    /// The caller must ensure that the buffer outlives the index and is not dropped
+    /// or modified for the duration of the index's use. Dereferencing a pointer to a
+    /// temporary buffer after it has been dropped can lead to undefined behavior,
+    /// which violates Rust's memory safety guarantees.
+    ///
+    /// Example of misuse:
+    ///
+    /// ```rust,ignore
+    /// let index: usearch::Index = usearch::new_index(&usearch::IndexOptions::default()).unwrap();
+    ///
+    /// let temporary = vec![0u8; 100];
+    /// index.view_from_buffer(&temporary);
+    /// std::mem::drop(temporary);
+    ///
+    /// let query = vec![0.0; 256];
+    /// let results = index.search(&query, 5).unwrap();
+    /// ```
+    ///
+    /// The above example would result in use-after-free and undefined behavior.
+    pub unsafe fn view_from_buffer(self: &Index, buffer: &[u8]) -> Result<(), cxx::Exception> {
         self.inner.view_from_buffer(buffer)
     }
 }
