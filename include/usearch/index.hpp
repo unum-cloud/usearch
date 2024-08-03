@@ -1849,6 +1849,14 @@ class memory_mapped_file_t {
     }
 };
 
+/**
+ *  @brief  Metadata header for the serialized index.
+ *
+ *  This structure is very minimalistic by design. It contains no information
+ *  about the capacity of the index, so you'll have to `reserve` after loading.
+ *  It also contains no info on the metric or key types, so you'll have to store
+ *  that information elsewhere, like we do in `index_dense_head_t`.
+ */
 struct index_serialized_header_t {
     std::uint64_t size = 0;
     std::uint64_t connectivity = 0;
