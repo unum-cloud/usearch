@@ -284,7 +284,7 @@ USEARCH_EXPORT void usearch_change_expansion_search(usearch_index_t index, size_
 /**
  *  @brief Updates the number of threads that would be used to construct the index. Rarely used.
  *  @param[in] index The handle to the USearch index to be queried.
- *  @param[in] threads The new llimit for the number of concurrent threads.
+ *  @param[in] threads The new limit for the number of concurrent threads.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
 USEARCH_EXPORT void usearch_change_threads_add(usearch_index_t index, size_t threads, usearch_error_t* error);
@@ -292,7 +292,7 @@ USEARCH_EXPORT void usearch_change_threads_add(usearch_index_t index, size_t thr
 /**
  *  @brief Updates the number of threads that will be performing concurrent traversals. Rarely used.
  *  @param[in] index The handle to the USearch index to be queried.
- *  @param[in] threads The new llimit for the number of concurrent threads.
+ *  @param[in] threads The new limit for the number of concurrent threads.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
 USEARCH_EXPORT void usearch_change_threads_search(usearch_index_t index, size_t threads, usearch_error_t* error);
