@@ -153,6 +153,35 @@ void test_uint40() {
             expect_eq(input_clamped.value >= other_clamped.value, u40_from_u64 >= other_u40);
         }
     }
+
+    // Test equality and inequality operators
+    for (std::uint64_t input_u64 : test_numbers) {
+        uint64_octets_t input_clamped;
+        input_clamped.value = input_u64 & max_uint40_k;
+        uint40_t u40(input_clamped.value);
+
+        expect_eq(u40 == uint40_t(input_clamped.value), true);
+        expect_eq(u40 != uint40_t(input_clamped.value + 1), true);
+    }
+
+    // Test min and max functions
+    expect_eq(uint40_t::min(), uint40_t(0u));
+    expect_eq(uint40_t::max(), uint40_t(max_uint40_k));
+
+    // Test copy and move semantics
+    for (std::uint64_t input_u64 : test_numbers) {
+        uint40_t u40_orig(input_u64);
+
+        uint40_t u40_copy(u40_orig);
+        expect_eq(u40_orig, u40_copy);
+
+        uint40_t u40_move(std::move(u40_orig));
+        expect_eq(u40_copy, u40_move);
+    }
+
+    // Test default constructor (zero initialization)
+    uint40_t u40_default;
+    expect_eq(u40_default, uint40_t(0u));
 }
 
 /**
@@ -363,7 +392,7 @@ void test_punned_add_remove_vector(             //
     expect(index.try_reserve(10));
     expect(index.capacity() >= 10);
 
-    // IDs
+    // Max 64-bit unsigned key value is: 18446744073709551615
     vector_key_t key_first = 483367403120493160;
     vector_key_t key_second = 483367403120558696;
     vector_key_t key_third = 483367403120624232;
@@ -1069,6 +1098,7 @@ template <typename key_at, typename slot_at> void test_replacing_update() {
 
 int main(int, char**) {
     test_uint40();
+    test_cosine<float, std::int64_t, uint40_t>(10, 10);
 
     // Exact search without constructing indexes.
     // Great for validating the distance functions.

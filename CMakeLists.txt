@@ -151,7 +151,8 @@ function (setup_target TARGET_NAME)
             PRIVATE $<$<CONFIG:RELEASE>:-O3>
                     $<$<CONFIG:RELWITHDEBINFO>:-O3
                     -g>
-                    $<$<CONFIG:DEBUG>:-g
+                    $<$<CONFIG:DEBUG>:-O0
+                    -g
                     -fsanitize=address
                     -fsanitize=leak
                     -fsanitize=alignment
@@ -192,7 +193,8 @@ function (setup_target TARGET_NAME)
             PRIVATE $<$<CONFIG:RELEASE>:-O3>
                     $<$<CONFIG:RELWITHDEBINFO>:-O3
                     -g>
-                    $<$<CONFIG:DEBUG>:-g
+                    $<$<CONFIG:DEBUG>:-O0
+                    -g
                     -fsanitize=address
                     -fsanitize=alignment
                     -fsanitize=undefined
@@ -248,7 +250,7 @@ function (setup_target TARGET_NAME)
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(${TARGET_NAME} PRIVATE /wd4068 /wd4996)
         target_compile_options(
-            ${TARGET_NAME} PRIVATE $<$<CONFIG:DEBUG>:/DEBUG> $<$<CONFIG:RELEASE>:/O2> $<$<CONFIG:RELWITHDEBINFO>:/O2
+            ${TARGET_NAME} PRIVATE $<$<CONFIG:DEBUG>:/DEBUG> $<$<CONFIG:RELEASE>:/O3> $<$<CONFIG:RELWITHDEBINFO>:/O3
                                    /DEBUG>
         )
     endif ()

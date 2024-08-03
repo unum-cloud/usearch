@@ -980,7 +980,10 @@ class usearch_pack_m uint40_t {
 
   public:
     inline uint40_t() noexcept { broadcast(0); }
-    inline uint40_t(std::uint32_t n) noexcept { std::memcpy(&octets, &n, 4), octets[4] = 0; }
+    inline uint40_t(std::uint32_t n) noexcept {
+        std::memcpy(&octets, &n, 4);
+        octets[4] = 0;
+    }
 
 #ifdef USEARCH_64BIT_ENV
     inline uint40_t(std::uint64_t n) noexcept { std::memcpy(octets, &n, 5); }
@@ -997,9 +1000,10 @@ class usearch_pack_m uint40_t {
         std::memcpy(octets, &n, 5);
 #else
         std::memcpy(octets, &n, 4);
-#endif
+        octets[4] = 0;
+#endif // USEARCH_64BIT_ENV
     }
-#endif
+#endif // USEARCH_DEFINED_CLANG && USEARCH_DEFINED_APPLE
 
     inline operator std::size_t() const noexcept {
         std::size_t result = 0;
@@ -2891,7 +2895,8 @@ class index_gt {
                 //     remove_link_(slot, updated_slot, level);
                 neighbors_(updated_node, level).clear();
                 closest_view = form_links_to_closest_(metric, updated_slot, level, context);
-                closest_slot = closest_view[0].slot;
+                if (closest_view.size())
+                    closest_slot = closest_view[0].slot;
             }
             form_reverse_links_(metric, updated_slot, closest_view, value, level, context);
         }
