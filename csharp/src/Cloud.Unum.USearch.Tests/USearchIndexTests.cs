@@ -61,7 +61,7 @@ public class UsearchIndexTests
             expansionSearch: 19 // Control the quality of search, optional
         );
 
-        var vector = new float[] { 0.2f, 0.6f, 0.4f };
+        var vector = new double[] { 0.2f, 0.6f, 0.4f };
         index.Add(42, vector);
         index.Save(savedPath);
 
