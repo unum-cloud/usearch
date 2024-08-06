@@ -17,6 +17,38 @@ permissions:
   contents: read
 
 jobs:
+  versioning:
+    name: Update Version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run TinySemVer
+        uses: ashvardanian/tinysemver@v2.0.1
+        with:
+          verbose: "true"
+          version-file: "VERSION"
+          update-version-in: |
+            package.json:"version": "(\d+\.\d+\.\d+)"
+            CITATION.cff:^version: (\d+\.\d+\.\d+)
+            Cargo.toml:^version = "(\d+\.\d+\.\d+)"
+            wasmer.toml:^version = "(\d+\.\d+\.\d+)"
+            conanfile.py:version = "(\d+\.\d+\.\d+)"
+            java/README.md:<version>(\d+\.\d+\.\d+)</version>
+            README.md:version = {(\d+\.\d+\.\d+)}
+            csharp/nuget/nuget-package.props:>(\d+\.\d+\.\d+)</Version>
+            CMakeLists.txt:VERSION (\d+\.\d+\.\d+)
+          update-major-version-in: |
+            include/usearch/index.hpp:^#define USEARCH_VERSION_MAJOR (\d+)
+          update-minor-version-in: |
+            include/usearch/index.hpp:^#define USEARCH_VERSION_MINOR (\d+)
+          update-patch-version-in: |
+            include/usearch/index.hpp:^#define USEARCH_VERSION_PATCH (\d+)
+          dry-run: "true"
+
   test_ubuntu_gcc:
     name: Ubuntu (GCC 12)
     runs-on: ubuntu-22.04

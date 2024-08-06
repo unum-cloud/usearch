@@ -18,25 +18,44 @@ permissions:
 
 jobs:
   versioning:
-    name: Semantic Release
-    runs-on: ubuntu-22.04
+    name: Update Version
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
-
-      # This pipeline brings nothing but suffering :)
-      # - name: Set up Node.js
-      #   uses: actions/setup-node@v4
-      #   with:
-      #     node-version: 20
-      # - name: Set up Cargo
-      #   uses: actions-rs/toolchain@v1
-      #   with:
-      #     toolchain: stable
-      #     override: true
-      # - name: Bump version
-      #   run: npm install --save-dev --prefix ./package-ci @semantic-release/exec @semantic-release/git conventional-changelog-eslint semantic-release && npx --prefix ./package-ci semantic-release
+      - name: Set up Cargo
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Run TinySemVer
+        uses: ashvardanian/tinysemver@v2.0.1
+        with:
+          verbose: "true"
+          version-file: "VERSION"
+          update-version-in: |
+            package.json:"version": "(\d+\.\d+\.\d+)"
+            CITATION.cff:^version: (\d+\.\d+\.\d+)
+            Cargo.toml:^version = "(\d+\.\d+\.\d+)"
+            wasmer.toml:^version = "(\d+\.\d+\.\d+)"
+            conanfile.py:version = "(\d+\.\d+\.\d+)"
+            java/README.md:<version>(\d+\.\d+\.\d+)</version>
+            README.md:version = {(\d+\.\d+\.\d+)}
+            csharp/nuget/nuget-package.props:>(\d+\.\d+\.\d+)</Version>
+            CMakeLists.txt:VERSION (\d+\.\d+\.\d+)
+          update-major-version-in: |
+            include/usearch/index.hpp:^#define USEARCH_VERSION_MAJOR (\d+)
+          update-minor-version-in: |
+            include/usearch/index.hpp:^#define USEARCH_VERSION_MINOR (\d+)
+          update-patch-version-in: |
+            include/usearch/index.hpp:^#define USEARCH_VERSION_PATCH (\d+)
+          dry-run: "false"
+          push: "true"
+          create-release: "true"
+          github-token: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
 
   rebase:
     name: Rebase Dev. Branch

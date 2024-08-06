@@ -260,8 +260,8 @@ RUN npm install --build-from-source usearch
 To compile to WebAssembly make sure you have `emscripten` installed and run the following script:
 
 ```sh
-emcmake cmake -B ./build -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} -s TOTAL_MEMORY=64MB" && emmake make -C ./build
-node ./build/usearch.test.js
+emcmake cmake -B build -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} -s TOTAL_MEMORY=64MB" && emmake make -C build
+node build/usearch.test.js
 ```
 
 If you don't yet have `emcmake` installed:
