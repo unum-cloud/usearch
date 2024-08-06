@@ -217,7 +217,11 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 }
 
 - (void)reserve:(UInt32)count {
-    _native->reserve(static_cast<std::size_t>(count));
+    if (!_native->try_reserve(static_cast<std::size_t>(count))) {
+        @throw [NSException exceptionWithName:@"Can't reserve space"
+                                       reason:@"Memory allocation failed"
+                                     userInfo:nil];
+    }
 }
 
 - (Boolean)contains:(USearchKey)key {
@@ -225,7 +229,7 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 }
 
 - (UInt32)count:(USearchKey)key {
-    return _native->count(key);
+    return static_cast<UInt32>(_native->count(key));
 }
 
 - (void)remove:(USearchKey)key {

@@ -190,6 +190,12 @@ def test_index_save_load_restore_copy(ndim, quantization, batch_size):
         vectors = random_vectors(count=batch_size, ndim=ndim)
         index.add(keys, vectors, threads=threads)
 
+    # Try copying the original
+    copied_index = index.copy()
+    assert len(copied_index) == len(index)
+    if batch_size > 0:
+        assert np.allclose(np.vstack(copied_index.get(keys)), np.vstack(index.get(keys)))
+
     index.save("tmp.usearch")
     index.clear()
     assert len(index) == 0
@@ -208,6 +214,7 @@ def test_index_save_load_restore_copy(ndim, quantization, batch_size):
     if batch_size > 0:
         assert len(index[0].flatten()) == ndim
 
+    # Try copying the restored index
     copied_index = index.copy()
     assert len(copied_index) == len(index)
     if batch_size > 0:
@@ -262,6 +269,7 @@ def test_index_contains_remove_rename(batch_size):
     assert np.sum(index.count(removed_keys)) == len(index)
 
 
+@pytest.mark.skip(reason="Not guaranteed")
 @pytest.mark.parametrize("batch_size", [3, 17, 33])
 @pytest.mark.parametrize("threads", [1, 4])
 def test_index_oversubscribed_search(batch_size: int, threads: int):

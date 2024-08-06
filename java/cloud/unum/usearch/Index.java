@@ -1,4 +1,3 @@
-
 /**
  * Java bindings for Unum USearch vector search library.
  */
@@ -19,7 +18,7 @@ import java.io.IOException;
  *      "https://www3.ntu.edu.sg/home/ehchua/programming/java/javanativeinterface.html">Java
  *      Native Interface tutorial</a>
  */
-public class Index {
+public class Index implements AutoCloseable {
 
   private long c_ptr = 0;
 
@@ -39,21 +38,50 @@ public class Index {
    *                         during search operations
    */
   public Index(
-      String metric,
-      String quantization,
-      long dimensions,
-      long capacity,
-      long connectivity,
-      long expansion_add,
-      long expansion_search) {
-    c_ptr = c_create(
-        metric,
-        quantization,
-        dimensions,
-        capacity,
-        connectivity,
-        expansion_add,
-        expansion_search);
+    String metric,
+    String quantization,
+    long dimensions,
+    long capacity,
+    long connectivity,
+    long expansion_add,
+    long expansion_search
+  ) {
+    this(c_create(metric, quantization, dimensions, capacity, connectivity, expansion_add, expansion_search));
+  }
+
+  private Index(long c_ptr) {
+    this.c_ptr = c_ptr;
+  }
+
+  /**
+   * Loads an index from a file into memory.
+   *
+   * @param path path to load from
+   * @return a mutable Index.
+   * @throws {@Error} if any part of loading from path failed.
+   */
+  public static Index loadFromPath(String path) {
+    return new Index(c_createFromFile(path, false));
+  }
+
+  /**
+   * Loads an index view from a file into memory.
+   *
+   * @param path path to load from
+   * @return an immutable Index.
+   * @throws {@Error} if any part of loading from path failed.
+   */
+  public static Index viewFromPath(String path) {
+    return new Index(c_createFromFile(path, true));
+  }
+
+  @Override
+  public void close() {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    c_destroy(c_ptr);
+    c_ptr = 0;
   }
 
   /**
@@ -62,6 +90,9 @@ public class Index {
    * @return the number of vectors currently indexed.
    */
   public long size() {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
     return c_size(c_ptr);
   }
 
@@ -71,6 +102,9 @@ public class Index {
    * @return the connectivity parameter that limits connections-per-node in graph.
    */
   public long connectivity() {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
     return c_connectivity(c_ptr);
   }
 
@@ -80,6 +114,9 @@ public class Index {
    * @return the number of dimensions in the vectors.
    */
   public long dimensions() {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
     return c_dimensions(c_ptr);
   }
 
@@ -89,6 +126,9 @@ public class Index {
    * @return the total capacity including current size.
    */
   public long capacity() {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
     return c_capacity(c_ptr);
   }
 
@@ -98,6 +138,9 @@ public class Index {
    * @param capacity the desired total capacity including current size.
    */
   public void reserve(long capacity) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
     c_reserve(c_ptr, capacity);
   }
 
@@ -108,6 +151,9 @@ public class Index {
    * @param vector the vector data
    */
   public void add(int key, float vector[]) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
     c_add(c_ptr, key, vector);
   }
 
@@ -119,7 +165,24 @@ public class Index {
    * @return an array of keys of the nearest neighbors
    */
   public int[] search(float vector[], long count) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
     return c_search(c_ptr, vector, count);
+  }
+
+  /**
+   * Return the contents of the vector at key.
+   *
+   * @param key key to lookup.
+   * @return the contents of the vector.
+   * @throws {@link IllegalArgumentException} is key is not available.
+   */
+  public float[] get(int key) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    return c_get(c_ptr, key);
   }
 
   /**
@@ -128,6 +191,9 @@ public class Index {
    * @param path the file path where the index will be saved.
    */
   public void save(String path) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
     c_save(c_ptr, path);
   }
 
@@ -137,6 +203,9 @@ public class Index {
    * @param path the file path from where the index will be loaded.
    */
   public void load(String path) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
     c_load(c_ptr, path);
   }
 
@@ -146,6 +215,9 @@ public class Index {
    * @param path the file path from where the view will be created.
    */
   public void view(String path) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
     c_view(c_ptr, path);
   }
 
@@ -157,6 +229,9 @@ public class Index {
    *         otherwise.
    */
   public boolean remove(int key) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
     return c_remove(c_ptr, key);
   }
 
@@ -169,6 +244,9 @@ public class Index {
    *         otherwise.
    */
   public boolean rename(int from, int to) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
     return c_rename(c_ptr, from, to);
   }
 
@@ -192,8 +270,7 @@ public class Index {
     /**
      * Default constructor for the Config class.
      */
-    public Config() {
-    }
+    public Config() {}
 
     /**
      * Constructs an Index instance based on the current configuration settings.
@@ -202,13 +279,14 @@ public class Index {
      */
     public Index build() {
       return new Index(
-          _metric,
-          _quantization,
-          _dimensions,
-          _capacity,
-          _connectivity,
-          _expansion_add,
-          _expansion_search);
+        _metric,
+        _quantization,
+        _dimensions,
+        _capacity,
+        _connectivity,
+        _expansion_add,
+        _expansion_search
+      );
     }
 
     /**
@@ -296,7 +374,11 @@ public class Index {
       System.loadLibrary("usearch"); // used for tests. This library in classpath only
     } catch (UnsatisfiedLinkError e) {
       try {
-        NativeUtils.loadLibraryFromJar("/usearch/libusearch.so");
+        if (System.getProperty("os.name").equals("Mac OS X")) {
+          NativeUtils.loadLibraryFromJar("/usearch/libusearch.dylib");
+        } else {
+          NativeUtils.loadLibraryFromJar("/usearch/libusearch.so");
+        }
       } catch (IOException e1) {
         throw new RuntimeException(e1);
       }
@@ -309,19 +391,25 @@ public class Index {
    * @param args command line arguments (not used in this case)
    */
   public static void main(String[] args) {
-    Index index = new Index.Config().metric("cos").dimensions(100).build();
-    index.size();
+    try (
+      Index index = new Index.Config().metric("cos").dimensions(100).build()
+    ) {
+      index.size();
+    }
     System.out.println("Java tests passed!");
   }
 
   private static native long c_create(
-      String metric,
-      String quantization,
-      long dimensions,
-      long capacity,
-      long connectivity,
-      long expansion_add,
-      long expansion_search);
+    String metric,
+    String quantization,
+    long dimensions,
+    long capacity,
+    long connectivity,
+    long expansion_add,
+    long expansion_search
+  );
+
+  private static native long c_createFromFile(String path, boolean view);
 
   private static native void c_destroy(long ptr);
 
@@ -338,6 +426,8 @@ public class Index {
   private static native void c_add(long ptr, int key, float vector[]);
 
   private static native int[] c_search(long ptr, float vector[], long count);
+
+  private static native float[] c_get(long ptr, int key);
 
   private static native void c_save(long ptr, String path);
 

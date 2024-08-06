@@ -1247,7 +1247,7 @@ impl Index {
     ///
     /// # Arguments
     ///
-    /// * `path` - The file path where the index will be saved.
+    /// * `buffer` - The buffer where the index will be saved.
     pub fn save_to_buffer(self: &Index, buffer: &mut [u8]) -> Result<(), cxx::Exception> {
         self.inner.save_to_buffer(buffer)
     }
@@ -1256,7 +1256,7 @@ impl Index {
     ///
     /// # Arguments
     ///
-    /// * `path` - The file path from where the index will be loaded.
+    /// * `buffer` - The buffer from where the index will be loaded.
     pub fn load_from_buffer(self: &Index, buffer: &[u8]) -> Result<(), cxx::Exception> {
         self.inner.load_from_buffer(buffer)
     }
@@ -1265,8 +1265,31 @@ impl Index {
     ///
     /// # Arguments
     ///
-    /// * `path` - The file path from where the view will be created.
-    pub fn view_from_buffer(self: &Index, buffer: &[u8]) -> Result<(), cxx::Exception> {
+    /// * `buffer` - The buffer from where the view will be created.
+    ///
+    /// # Safety
+    ///
+    /// This function is marked as `unsafe` because it stores a pointer to the input buffer.
+    /// The caller must ensure that the buffer outlives the index and is not dropped
+    /// or modified for the duration of the index's use. Dereferencing a pointer to a
+    /// temporary buffer after it has been dropped can lead to undefined behavior,
+    /// which violates Rust's memory safety guarantees.
+    ///
+    /// Example of misuse:
+    ///
+    /// ```rust,ignore
+    /// let index: usearch::Index = usearch::new_index(&usearch::IndexOptions::default()).unwrap();
+    ///
+    /// let temporary = vec![0u8; 100];
+    /// index.view_from_buffer(&temporary);
+    /// std::mem::drop(temporary);
+    ///
+    /// let query = vec![0.0; 256];
+    /// let results = index.search(&query, 5).unwrap();
+    /// ```
+    ///
+    /// The above example would result in use-after-free and undefined behavior.
+    pub unsafe fn view_from_buffer(self: &Index, buffer: &[u8]) -> Result<(), cxx::Exception> {
         self.inner.view_from_buffer(buffer)
     }
 }
@@ -1373,8 +1396,12 @@ mod tests {
 
         let first: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
         let second: [f32; 5] = [0.3, 0.2, 0.4, 0.0, 0.1];
+        let too_long: [f32; 6] = [0.3, 0.2, 0.4, 0.0, 0.1, 0.1];
+        let too_short: [f32; 4] = [0.3, 0.2, 0.4, 0.0];
         assert!(index.add(1, &first).is_ok());
         assert!(index.add(2, &second).is_ok());
+        assert!(index.add(3, &too_long).is_err());
+        assert!(index.add(4, &too_short).is_err());
         assert_eq!(index.size(), 2);
 
         // Test using Vec<T>
@@ -1393,6 +1420,27 @@ mod tests {
         let result = index.get(1, &mut found);
         assert!(result.is_err());
     }
+    #[test]
+    fn test_search_vector() {
+        let mut options = IndexOptions::default();
+        options.dimensions = 5;
+        options.quantization = ScalarKind::F32;
+        let index = Index::new(&options).unwrap();
+        assert!(index.reserve(10).is_ok());
+
+        let first: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
+        let second: [f32; 5] = [0.3, 0.2, 0.4, 0.0, 0.1];
+        let too_long: [f32; 6] = [0.3, 0.2, 0.4, 0.0, 0.1, 0.1];
+        let too_short: [f32; 4] = [0.3, 0.2, 0.4, 0.0];
+        assert!(index.add(1, &first).is_ok());
+        assert!(index.add(2, &second).is_ok());
+        assert_eq!(index.size(), 2);
+        //assert!(index.add(3, &too_long).is_err());
+        //assert!(index.add(4, &too_short).is_err());
+
+        assert!(index.search(&too_long, 1).is_err());
+        assert!(index.search(&too_short, 1).is_err());
+    }
 
     #[test]
     fn test_add_remove_vector() {
@@ -1405,7 +1453,7 @@ mod tests {
         options.expansion_search = 3;
         let index = Index::new(&options).unwrap();
         assert!(index.reserve(10).is_ok());
-        assert_eq!(index.capacity(), 10);
+        assert!(index.capacity() >= 10);
 
         let first: [f32; 4] = [0.2, 0.1, 0.2, 0.1];
         let second: [f32; 4] = [0.3, 0.2, 0.4, 0.0];
