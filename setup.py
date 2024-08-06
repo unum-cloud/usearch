@@ -72,10 +72,13 @@ if is_linux:
         macros_args.extend(
             [
                 get_bool_env_w_name("SIMSIMD_TARGET_NEON", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_NEON_BF16", False),
                 get_bool_env_w_name("SIMSIMD_TARGET_SVE", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_SVE_BF16", False),
                 get_bool_env_w_name("SIMSIMD_TARGET_HASWELL", True),
                 get_bool_env_w_name("SIMSIMD_TARGET_SKYLAKE", True),
                 get_bool_env_w_name("SIMSIMD_TARGET_ICE", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_GENOA", True),
                 get_bool_env_w_name("SIMSIMD_TARGET_SAPPHIRE", True),
             ]
         )
@@ -108,10 +111,13 @@ if is_macos:
         macros_args.extend(
             [
                 get_bool_env_w_name("SIMSIMD_TARGET_NEON", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_NEON_BF16", False),
                 get_bool_env_w_name("SIMSIMD_TARGET_SVE", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_SVE_BF16", False),
                 get_bool_env_w_name("SIMSIMD_TARGET_HASWELL", True),
                 get_bool_env_w_name("SIMSIMD_TARGET_SKYLAKE", False),
                 get_bool_env_w_name("SIMSIMD_TARGET_ICE", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_GENOA", False),
                 get_bool_env_w_name("SIMSIMD_TARGET_SAPPHIRE", False),
             ]
         )
@@ -127,10 +133,13 @@ if is_windows:
         macros_args.extend(
             [
                 get_bool_env_w_name("SIMSIMD_TARGET_NEON", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_NEON_BF16", False),
                 get_bool_env_w_name("SIMSIMD_TARGET_SVE", False),
+                get_bool_env_w_name("SIMSIMD_TARGET_SVE_BF16", False),
                 get_bool_env_w_name("SIMSIMD_TARGET_HASWELL", True),
                 get_bool_env_w_name("SIMSIMD_TARGET_SKYLAKE", True),
                 get_bool_env_w_name("SIMSIMD_TARGET_ICE", True),
+                get_bool_env_w_name("SIMSIMD_TARGET_GENOA", False),
                 get_bool_env_w_name("SIMSIMD_TARGET_SAPPHIRE", False),
             ]
         )
@@ -171,6 +180,7 @@ setup(
     description="Smaller & Faster Single-File Vector Search Engine from Unum",
     author="Ash Vardanian",
     author_email="info@unum.cloud",
+    url="https://github.com/unum-cloud/usearch",
     long_description=long_description,
     long_description_content_type="text/markdown",
     license="Apache-2.0",

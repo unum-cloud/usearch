@@ -12,10 +12,13 @@ import (
 */
 import "C"
 
+// Key represents the type for keys used in the USearch index.
 type Key = uint64
 
+// Metric represents the type for different metrics used in distance calculations.
 type Metric uint8
 
+// Different metric kinds supported by the USearch library.
 const (
 	InnerProduct Metric = iota
 	Cosine
@@ -28,6 +31,7 @@ const (
 	Sorensen
 )
 
+// String returns the string representation of the Metric.
 func (m Metric) String() string {
 	switch m {
 	case L2sq:
@@ -53,8 +57,10 @@ func (m Metric) String() string {
 	}
 }
 
+// Quantization represents the type for different scalar kinds used in quantization.
 type Quantization uint8
 
+// Different quantization kinds supported by the USearch library.
 const (
 	F32 Quantization = iota
 	F16
@@ -63,6 +69,7 @@ const (
 	B1
 )
 
+// String returns the string representation of the Quantization.
 func (a Quantization) String() string {
 	switch a {
 	case F16:
@@ -80,23 +87,18 @@ func (a Quantization) String() string {
 	}
 }
 
+// IndexConfig represents the configuration options for initializing a USearch index.
 type IndexConfig struct {
-	// The scalar kind used for quantization of vector data during indexing.
-	Quantization Quantization
-	// The metric kind used for distance calculation between vectors.
-	Metric Metric
-	// The number of dimensions in the vectors to be indexed.
-	Dimensions uint
-	// The @b optional connectivity parameter that limits connections-per-node in graph.
-	Connectivity uint
-	// The @b optional expansion factor used for index construction when adding vectors.
-	ExpansionAdd uint
-	// The @b optional expansion factor used for index construction during search operations.
-	ExpansionSearch uint
-	// The @b optional multi flag.
-	Multi bool
+	Quantization    Quantization // The scalar kind used for quantization of vector data during indexing.
+	Metric          Metric       // The metric kind used for distance calculation between vectors.
+	Dimensions      uint         // The number of dimensions in the vectors to be indexed.
+	Connectivity    uint         // The optional connectivity parameter that limits connections-per-node in the graph.
+	ExpansionAdd    uint         // The optional expansion factor used for index construction when adding vectors.
+	ExpansionSearch uint         // The optional expansion factor used for index construction during search operations.
+	Multi           bool         // Indicates whether multiple vectors can map to the same key.
 }
 
+// DefaultConfig returns an IndexConfig with default values for the specified number of dimensions.
 func DefaultConfig(dimensions uint) IndexConfig {
 	c := IndexConfig{}
 	c.Dimensions = dimensions
@@ -109,12 +111,13 @@ func DefaultConfig(dimensions uint) IndexConfig {
 	return c
 }
 
+// Index represents a USearch index.
 type Index struct {
 	opaque_handle *C.void
 	config        IndexConfig
 }
 
-// Initializes a new instance of the index.
+// NewIndex initializes a new instance of the index with the specified configuration.
 func NewIndex(conf IndexConfig) (index *Index, err error) {
 	index = &Index{config: conf}
 
@@ -180,6 +183,7 @@ func NewIndex(conf IndexConfig) (index *Index, err error) {
 	return index, nil
 }
 
+// Len returns the number of vectors in the index.
 func (index *Index) Len() (len uint, err error) {
 	var errorMessage *C.char
 	len = uint(C.usearch_size((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (*C.usearch_error_t)(&errorMessage)))
@@ -189,6 +193,7 @@ func (index *Index) Len() (len uint, err error) {
 	return len, err
 }
 
+// Connectivity returns the connectivity parameter of the index.
 func (index *Index) Connectivity() (con uint, err error) {
 	var errorMessage *C.char
 	con = uint(C.usearch_connectivity((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (*C.usearch_error_t)(&errorMessage)))
@@ -198,6 +203,7 @@ func (index *Index) Connectivity() (con uint, err error) {
 	return con, err
 }
 
+// Dimensions returns the number of dimensions of the vectors in the index.
 func (index *Index) Dimensions() (dim uint, err error) {
 	var errorMessage *C.char
 	dim = uint(C.usearch_dimensions((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (*C.usearch_error_t)(&errorMessage)))
@@ -207,6 +213,7 @@ func (index *Index) Dimensions() (dim uint, err error) {
 	return dim, err
 }
 
+// Capacity returns the capacity (maximum number of vectors) of the index.
 func (index *Index) Capacity() (cap uint, err error) {
 	var errorMessage *C.char
 	cap = uint(C.usearch_capacity((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (*C.usearch_error_t)(&errorMessage)))
@@ -216,7 +223,7 @@ func (index *Index) Capacity() (cap uint, err error) {
 	return cap, err
 }
 
-// Frees the resources associated with the index.
+// Destroy frees the resources associated with the index.
 func (index *Index) Destroy() error {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -232,7 +239,7 @@ func (index *Index) Destroy() error {
 	return nil
 }
 
-// Reserves memory for a specified number of incoming vectors.
+// Reserve reserves memory for a specified number of incoming vectors.
 func (index *Index) Reserve(capacity uint) error {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -246,7 +253,7 @@ func (index *Index) Reserve(capacity uint) error {
 	return nil
 }
 
-// Adds a vector with a key to the index.
+// Add adds a vector with a specified key to the index.
 func (index *Index) Add(key Key, vec []float32) error {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -260,7 +267,7 @@ func (index *Index) Add(key Key, vec []float32) error {
 	return nil
 }
 
-// Removes the vector associated with the given key from the index.
+// Remove removes the vector associated with the given key from the index.
 func (index *Index) Remove(key Key) error {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -274,7 +281,7 @@ func (index *Index) Remove(key Key) error {
 	return nil
 }
 
-// Checks if the index contains a vector with a specific key.
+// Contains checks if the index contains a vector with a specific key.
 func (index *Index) Contains(key Key) (found bool, err error) {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -288,6 +295,7 @@ func (index *Index) Contains(key Key) (found bool, err error) {
 	return found, nil
 }
 
+// Get retrieves the vectors associated with the given key from the index.
 func (index *Index) Get(key Key, count uint) (vectors []float32, err error) {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -305,7 +313,7 @@ func (index *Index) Get(key Key, count uint) (vectors []float32, err error) {
 	return vectors, nil
 }
 
-// Performs k-Approximate Nearest Neighbors Search for closest vectors to query.
+// Search performs k-Approximate Nearest Neighbors Search for the closest vectors to the query vector.
 func (index *Index) Search(query []float32, limit uint) (keys []Key, distances []float32, err error) {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -327,7 +335,7 @@ func (index *Index) Search(query []float32, limit uint) (keys []Key, distances [
 	return keys, distances, nil
 }
 
-// Saves the index to a file.
+// Save saves the index to a specified file.
 func (index *Index) Save(path string) error {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -344,7 +352,7 @@ func (index *Index) Save(path string) error {
 	return nil
 }
 
-// Loads the index from a file.
+// Load loads the index from a specified file.
 func (index *Index) Load(path string) error {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")
@@ -361,7 +369,7 @@ func (index *Index) Load(path string) error {
 	return nil
 }
 
-// Creates a view of the index from a file without loading it into memory.
+// View creates a view of the index from a specified file without loading it into memory.
 func (index *Index) View(path string) error {
 	if index.opaque_handle == nil {
 		panic("Index is uninitialized")

@@ -125,7 +125,12 @@ static dense_index_py_t make_index(             //
     if (metric.missing())
         throw std::invalid_argument("Unsupported metric!");
 
-    return index_dense_t::make(metric, config);
+    using index_state_t = typename index_dense_t::state_result_t;
+    index_state_t state = index_dense_t::make(metric, config);
+    if (!state)
+        throw std::invalid_argument(state.error.release());
+
+    return std::move(state.index);
 }
 
 scalar_kind_t numpy_string_to_kind(std::string const& name) {
@@ -231,7 +236,7 @@ static void add_many_to_index(                            //
 
     if (!threads)
         threads = std::thread::hardware_concurrency();
-    if (!index.reserve(index_limits_t(ceil2(index.size() + vectors_count), threads)))
+    if (!index.try_reserve(index_limits_t(ceil2(index.size() + vectors_count), threads)))
         throw std::invalid_argument("Out of memory!");
 
     // clang-format off
@@ -263,7 +268,7 @@ static void search_typed(                                   //
 
     if (!threads)
         threads = std::thread::hardware_concurrency();
-    if (!index.reserve(index_limits_t(index.size(), threads)))
+    if (!index.try_reserve(index_limits_t(index.size(), threads)))
         throw std::invalid_argument("Out of memory!");
 
     // Progress status
@@ -342,7 +347,7 @@ static void search_typed(                                       //
         limits.members = index.size();
         limits.threads_add = 0;
         limits.threads_search = 1;
-        if (!index.reserve(limits)) {
+        if (!index.try_reserve(limits)) {
             atomic_error = "Out of memory!";
             return false;
         }
@@ -716,7 +721,7 @@ static void compact_index(dense_index_py_t& index, std::size_t threads, progress
 
     if (!threads)
         threads = std::thread::hardware_concurrency();
-    if (!index.reserve(index_limits_t(index.size(), threads)))
+    if (!index.try_reserve(index_limits_t(index.size(), threads)))
         throw std::invalid_argument("Out of memory!");
 
     index.compact(executor_default_t{threads}, progress_t{progress});
@@ -1050,7 +1055,7 @@ PYBIND11_MODULE(compiled, m) {
 
             if (!threads)
                 threads = std::thread::hardware_concurrency();
-            if (!index.reserve(index_limits_t(index.size(), threads)))
+            if (!index.try_reserve(index_limits_t(index.size(), threads)))
                 throw std::invalid_argument("Out of memory!");
 
             index.isolate(executor_default_t{threads});
@@ -1069,7 +1074,7 @@ PYBIND11_MODULE(compiled, m) {
 
             if (!threads)
                 threads = std::thread::hardware_concurrency();
-            if (!index.reserve(index_limits_t(index.size(), threads)))
+            if (!index.try_reserve(index_limits_t(index.size(), threads)))
                 throw std::invalid_argument("Out of memory!");
 
             index.isolate(executor_default_t{threads});

@@ -39,7 +39,7 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
         }
 
         index_dense_t index = index_dense_t::make(metric, config);
-        if (!index.reserve(static_cast<std::size_t>(capacity))) {
+        if (!index.try_reserve(static_cast<std::size_t>(capacity))) {
             jclass jc = (*env).FindClass("java/lang/Error");
             if (jc)
                 (*env).ThrowNew(jc, "Failed to reserve desired capacity!");
@@ -57,6 +57,22 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
 cleanup:
     (*env).ReleaseStringUTFChars(metric, metric_cstr);
     (*env).ReleaseStringUTFChars(quantization, quantization_cstr);
+    return result;
+}
+
+JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1createFromFile(JNIEnv *env, jclass, jstring path, jboolean view) {
+    char const* path_cstr = env->GetStringUTFChars(path, 0);
+    index_dense_t::state_result_t make_result = index_dense_t::make(path_cstr, view);
+    env->ReleaseStringUTFChars(path, path_cstr);
+    if (!make_result) {
+        jclass jc = env->FindClass("java/lang/Error");
+        if (jc) {
+            env->ThrowNew(jc, make_result.error.release());
+        }
+    }
+    index_dense_t* result_ptr = new index_dense_t(std::move(make_result.index));
+    jlong result;
+    std::memcpy(&result, &result_ptr, sizeof(jlong));
     return result;
 }
 
@@ -114,7 +130,7 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1capacity(JNIEnv*, jclas
 }
 
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1reserve(JNIEnv* env, jclass, jlong c_ptr, jlong capacity) {
-    if (!reinterpret_cast<index_dense_t*>(c_ptr)->reserve(static_cast<std::size_t>(capacity))) {
+    if (!reinterpret_cast<index_dense_t*>(c_ptr)->try_reserve(static_cast<std::size_t>(capacity))) {
         jclass jc = (*env).FindClass("java/lang/Error");
         if (jc)
             (*env).ThrowNew(jc, "Failed to grow vector index!");
@@ -139,6 +155,26 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add( //
             (*env).ThrowNew(jc, result.error.release());
     }
     (*env).ReleaseFloatArrayElements(vector, vector_data, 0);
+}
+
+JNIEXPORT jfloatArray JNICALL Java_cloud_unum_usearch_Index_c_1get(
+    JNIEnv *env, jclass, jlong c_ptr, jint key) {
+    
+    auto index = reinterpret_cast<index_dense_t*>(c_ptr);
+    size_t dim = index->dimensions();
+    std::unique_ptr<jfloat[]> vector(new jfloat[dim]);
+    if (index->get(key, vector.get()) == 0) {
+        jclass jc = env->FindClass("java/lang/IllegalArgumentException");
+        if (jc) {
+            env->ThrowNew(jc, "key not found");
+        }
+    }
+    jfloatArray jvector = env->NewFloatArray(dim);
+    if (jvector == nullptr) {  // out of memory
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(jvector, 0, dim, vector.get());
+    return jvector;
 }
 
 JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search( //

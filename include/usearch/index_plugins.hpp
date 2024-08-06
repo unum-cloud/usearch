@@ -3,13 +3,9 @@
 #include <float.h>  // `_Float16`
 #include <stdlib.h> // `aligned_alloc`
 
+#include <atomic>  // `std::atomic`
 #include <cstring> // `std::strncmp`
-#include <numeric> // `std::iota`
 #include <thread>  // `std::thread`
-#include <vector>  // `std::vector`
-
-#include <atomic> // `std::atomic`
-#include <thread> // `std::thread`
 
 #include <usearch/index.hpp> // `expected_gt` and macros
 
@@ -49,6 +45,9 @@
 #if !defined(SIMSIMD_NATIVE_F16)
 #define SIMSIMD_NATIVE_F16 !USEARCH_USE_FP16LIB
 #endif
+
+// Overwrite the dynamic dispatch settings
+#undef SIMSIMD_DYNAMIC_DISPATCH
 #define SIMSIMD_DYNAMIC_DISPATCH 0
 // No problem, if some of the functions are unused or undefined
 #pragma GCC diagnostic push
@@ -335,9 +334,12 @@ class f16_bits_t {
     inline explicit operator bool() const noexcept { return f16_to_f32(uint16_) > 0.5f; }
 
     inline f16_bits_t(i8_converted_t) noexcept;
+    inline f16_bits_t(std::int8_t v) noexcept : uint16_(v) {}
     inline f16_bits_t(bool v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(float v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(double v) noexcept : uint16_(f32_to_f16(static_cast<float>(v))) {}
+
+    inline bool operator<(const f16_bits_t& other) const noexcept { return float(*this) < float(other); }
 
     inline f16_bits_t operator+(f16_bits_t other) const noexcept { return {float(*this) + float(other)}; }
     inline f16_bits_t operator-(f16_bits_t other) const noexcept { return {float(*this) - float(other)}; }
@@ -382,14 +384,16 @@ class executor_stl_t {
 
     struct jthread_t {
         std::thread native_;
+        bool initialized_ = false;
 
         jthread_t() = default;
         jthread_t(jthread_t&&) = default;
         jthread_t(jthread_t const&) = delete;
-        template <typename callable_at> jthread_t(callable_at&& func) : native_([=]() { func(); }) {}
+        template <typename callable_at>
+        jthread_t(callable_at&& func) : native_([=]() { func(); }), initialized_(true) {}
 
         ~jthread_t() {
-            if (native_.joinable())
+            if (initialized_ && native_.joinable())
                 native_.join();
         }
     };
@@ -414,13 +418,13 @@ class executor_stl_t {
      */
     template <typename thread_aware_function_at>
     void fixed(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
-        std::vector<jthread_t> threads_pool;
+        buffer_gt<jthread_t> threads_pool(threads_count_ - 1); // Allocate space for threads minus the main thread
         std::size_t tasks_per_thread = tasks;
         std::size_t threads_count = (std::min)(threads_count_, tasks);
         if (threads_count > 1) {
             tasks_per_thread = (tasks / threads_count) + ((tasks % threads_count) != 0);
             for (std::size_t thread_idx = 1; thread_idx < threads_count; ++thread_idx) {
-                threads_pool.emplace_back([=]() {
+                new (&threads_pool[thread_idx - 1]) jthread_t([=]() {
                     for (std::size_t task_idx = thread_idx * tasks_per_thread;
                          task_idx < (std::min)(tasks, thread_idx * tasks_per_thread + tasks_per_thread); ++task_idx)
                         thread_aware_function(thread_idx, task_idx);
@@ -439,14 +443,14 @@ class executor_stl_t {
      */
     template <typename thread_aware_function_at>
     void dynamic(std::size_t tasks, thread_aware_function_at&& thread_aware_function) noexcept(false) {
-        std::vector<jthread_t> threads_pool;
+        buffer_gt<jthread_t> threads_pool(threads_count_ - 1);
         std::size_t tasks_per_thread = tasks;
         std::size_t threads_count = (std::min)(threads_count_, tasks);
         std::atomic_bool stop{false};
         if (threads_count > 1) {
             tasks_per_thread = (tasks / threads_count) + ((tasks % threads_count) != 0);
             for (std::size_t thread_idx = 1; thread_idx < threads_count; ++thread_idx) {
-                threads_pool.emplace_back([=, &stop]() {
+                new (&threads_pool[thread_idx - 1]) jthread_t([=, &stop]() {
                     for (std::size_t task_idx = thread_idx * tasks_per_thread;
                          task_idx < (std::min)(tasks, thread_idx * tasks_per_thread + tasks_per_thread) &&
                          !stop.load(std::memory_order_relaxed);
@@ -471,9 +475,9 @@ class executor_stl_t {
     void parallel(thread_aware_function_at&& thread_aware_function) noexcept(false) {
         if (threads_count_ == 1)
             return thread_aware_function(0);
-        std::vector<jthread_t> threads_pool;
+        buffer_gt<jthread_t> threads_pool(threads_count_ - 1);
         for (std::size_t thread_idx = 1; thread_idx < threads_count_; ++thread_idx)
-            threads_pool.emplace_back([=]() { thread_aware_function(thread_idx); });
+            new (&threads_pool[thread_idx - 1]) jthread_t([=]() { thread_aware_function(thread_idx); });
         thread_aware_function(0);
     }
 };
@@ -561,7 +565,8 @@ using executor_default_t = executor_stl_t;
 #endif
 
 /**
- *  @brief Uses OS-specific APIs for aligned memory allocations.
+ *  @brief  Uses OS-specific APIs for aligned memory allocations.
+ *          Available since C11, but only C++17, so we wrap the C version.
  */
 template <typename element_at = char, std::size_t alignment_ak = 64> //
 class aligned_allocator_gt {
@@ -578,12 +583,18 @@ class aligned_allocator_gt {
 
     pointer allocate(size_type length) const {
         std::size_t length_bytes = alignment_ak * divide_round_up<alignment_ak>(length * sizeof(value_type));
+        // Avoid overflow
+        if (length > length_bytes)
+            return nullptr;
         std::size_t alignment = alignment_ak;
-        // void* result = nullptr;
-        // int status = posix_memalign(&result, alignment, length_bytes);
-        // return status == 0 ? (pointer)result : nullptr;
 #if defined(USEARCH_DEFINED_WINDOWS)
         return (pointer)_aligned_malloc(length_bytes, alignment);
+#elif defined(USEARCH_DEFINED_APPLE)
+        // Apple Clang keeps complaining that `aligned_alloc` is only available
+        // with macOS 10.15 and newer, so let's use `posix_memalign` there.
+        void* result = nullptr;
+        int status = posix_memalign(&result, alignment, length_bytes);
+        return status == 0 ? (pointer)result : nullptr;
 #else
         return (pointer)aligned_alloc(alignment, length_bytes);
 #endif
@@ -600,6 +611,10 @@ class aligned_allocator_gt {
 
 using aligned_allocator_t = aligned_allocator_gt<>;
 
+/**
+ *  @brief  A simple RAM-page allocator that uses the OS-specific APIs for memory allocation.
+ *          Shouldn't be used frequently, as system calls are slow.
+ */
 class page_allocator_t {
   public:
     static constexpr std::size_t page_size() { return 4096; }
@@ -863,7 +878,7 @@ template <typename mutex_at = unfair_shared_mutex_t> class shared_lock_gt {
  *          avoiding unnecessary conversions.
  */
 template <typename from_scalar_at, typename to_scalar_at> struct cast_gt {
-    inline bool operator()(byte_t const* input, std::size_t dim, byte_t* output) const {
+    static bool try_(byte_t const* input, std::size_t dim, byte_t* output) noexcept {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
         to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
         auto converter = [](from_scalar_at from) { return to_scalar_at(from); };
@@ -873,29 +888,30 @@ template <typename from_scalar_at, typename to_scalar_at> struct cast_gt {
 };
 
 template <> struct cast_gt<f32_t, f32_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
+    static bool try_(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
 
 template <> struct cast_gt<f64_t, f64_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
+    static bool try_(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
 
 template <> struct cast_gt<f16_bits_t, f16_bits_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
+    static bool try_(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
 
 template <> struct cast_gt<i8_t, i8_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
+    static bool try_(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
 
 template <> struct cast_gt<b1x8_t, b1x8_t> {
-    bool operator()(byte_t const*, std::size_t, byte_t*) const { return false; }
+    static bool try_(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
 
 template <typename from_scalar_at> struct cast_gt<from_scalar_at, b1x8_t> {
-    inline bool operator()(byte_t const* input, std::size_t dim, byte_t* output) const {
+    inline static bool try_(byte_t const* input, std::size_t dim, byte_t* output) noexcept {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
         unsigned char* typed_output = reinterpret_cast<unsigned char*>(output);
+        std::memset(typed_output, 0, dim / CHAR_BIT);
         for (std::size_t i = 0; i != dim; ++i)
             // Converting from scalar types to boolean isn't trivial and depends on the type.
             // The most common case is to consider all positive values as `true` and all others as `false`.
@@ -913,7 +929,7 @@ template <typename from_scalar_at> struct cast_gt<from_scalar_at, b1x8_t> {
 };
 
 template <typename to_scalar_at> struct cast_gt<b1x8_t, to_scalar_at> {
-    inline bool operator()(byte_t const* input, std::size_t dim, byte_t* output) const {
+    static bool try_(byte_t const* input, std::size_t dim, byte_t* output) noexcept {
         unsigned char const* typed_input = reinterpret_cast<unsigned char const*>(input);
         to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
         for (std::size_t i = 0; i != dim; ++i)
@@ -953,12 +969,13 @@ class i8_converted_t {
     inline explicit operator std::int32_t() const noexcept { return int8_; }
     inline explicit operator std::int64_t() const noexcept { return int8_; }
 
+    // Even with `f16_t` arguments we may want to use `f32_t` for clamping and comparions.
     inline i8_converted_t(f16_t v)
-        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
+        : int8_(static_cast<std::int8_t>(usearch::clamp<f32_t>(v * divisor_k, min_k, max_k))) {}
     inline i8_converted_t(f32_t v)
-        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
+        : int8_(static_cast<std::int8_t>(usearch::clamp<f32_t>(v * divisor_k, min_k, max_k))) {}
     inline i8_converted_t(f64_t v)
-        : int8_(usearch::clamp<std::int8_t>(static_cast<std::int8_t>(v * divisor_k), min_k, max_k)) {}
+        : int8_(static_cast<std::int8_t>(usearch::clamp<f64_t>(v * divisor_k, min_k, max_k))) {}
 };
 
 f16_bits_t::f16_bits_t(i8_converted_t v) noexcept : uint16_(f32_to_f16(v)) {}
@@ -970,6 +987,16 @@ template <> struct cast_gt<i8_t, f64_t> : public cast_gt<i8_converted_t, f64_t> 
 template <> struct cast_gt<f16_t, i8_t> : public cast_gt<f16_t, i8_converted_t> {};
 template <> struct cast_gt<f32_t, i8_t> : public cast_gt<f32_t, i8_converted_t> {};
 template <> struct cast_gt<f64_t, i8_t> : public cast_gt<f64_t, i8_converted_t> {};
+
+/*  Don't complain if the vectorization of the inner loops fails:
+ *
+ *  > warning: loop not vectorized: the optimizer was unable to perform the requested transformation;
+ *  > the transformation might be disabled or specified as part of an unsupported transformation ordering
+ */
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpass-failed"
+#endif
 
 /**
  *  @brief  Inner (Dot) Product distance.
@@ -1351,9 +1378,9 @@ class metric_punned_t {
     /// Distance function that takes two arrays and some callback state and returns a scalar.
     using metric_array_array_state_t = result_t (*)(uptr_t, uptr_t, uptr_t);
     /// Distance function callback, like `metric_array_array_size_t`, but depends on member variables.
-    using metric_rounted_t = result_t (metric_punned_t::*)(uptr_t, uptr_t) const;
+    using metric_routed_t = result_t (metric_punned_t::*)(uptr_t, uptr_t) const;
 
-    metric_rounted_t metric_routed_ = nullptr;
+    metric_routed_t metric_routed_ = nullptr;
     uptr_t metric_ptr_ = 0;
     uptr_t metric_third_arg_ = 0;
 
@@ -1447,7 +1474,7 @@ class metric_punned_t {
     }
 
     /**
-     *  @brief  Creates a metric using the provided function pointer for a statefull metric.
+     *  @brief  Creates a metric using the provided function pointer for a stateful metric.
      *          The third argument is the state that will be passed to the metric function.
      *
      *  @param  metric_uintptr  The function pointer to the metric function.
@@ -1456,9 +1483,9 @@ class metric_punned_t {
      *  @param  scalar_kind     The kind of scalar to use.
      *  @return                 A metric object that can be used to compute distances between vectors.
      */
-    inline static metric_punned_t statefull(std::uintptr_t metric_uintptr, std::uintptr_t metric_state,
-                                            metric_kind_t metric_kind = metric_kind_t::unknown_k,
-                                            scalar_kind_t scalar_kind = scalar_kind_t::unknown_k) noexcept {
+    inline static metric_punned_t stateful(std::uintptr_t metric_uintptr, std::uintptr_t metric_state,
+                                           metric_kind_t metric_kind = metric_kind_t::unknown_k,
+                                           scalar_kind_t scalar_kind = scalar_kind_t::unknown_k) noexcept {
         metric_punned_t metric;
         metric.metric_routed_ = &metric_punned_t::invoke_array_array_third;
         metric.metric_ptr_ = metric_uintptr;
@@ -1475,7 +1502,7 @@ class metric_punned_t {
     inline explicit operator bool() const noexcept { return metric_routed_ && metric_ptr_; }
 
     /**
-     *  @brief  Checks fi we've failed to initialized the metric with provided arguments.
+     *  @brief  Checks if we've failed to initialize the metric with provided arguments.
      *
      *  It's different from `operator bool()` when it comes to explicitly uninitialized metrics.
      *  It's a common case, where a NULL state is created only to be overwritten later, when
@@ -1491,7 +1518,13 @@ class metric_punned_t {
         switch (isa_kind_) {
         case simsimd_cap_serial_k: return "serial";
         case simsimd_cap_neon_k: return "neon";
+        case simsimd_cap_neon_i8_k: return "neon_i8";
+        case simsimd_cap_neon_f16_k: return "neon_f16";
+        case simsimd_cap_neon_bf16_k: return "neon_bf16";
         case simsimd_cap_sve_k: return "sve";
+        case simsimd_cap_sve_i8_k: return "sve_i8";
+        case simsimd_cap_sve_f16_k: return "sve_f16";
+        case simsimd_cap_sve_bf16_k: return "sve_bf16";
         case simsimd_cap_haswell_k: return "haswell";
         case simsimd_cap_skylake_k: return "skylake";
         case simsimd_cap_ice_k: return "ice";
@@ -1541,8 +1574,8 @@ class metric_punned_t {
 
         std::memcpy(&metric_ptr_, &simd_metric, sizeof(simd_metric));
         metric_routed_ = metric_kind_ == metric_kind_t::ip_k
-                             ? reinterpret_cast<metric_rounted_t>(&metric_punned_t::invoke_simsimd_reverse)
-                             : reinterpret_cast<metric_rounted_t>(&metric_punned_t::invoke_simsimd);
+                             ? reinterpret_cast<metric_routed_t>(&metric_punned_t::invoke_simsimd_reverse)
+                             : reinterpret_cast<metric_routed_t>(&metric_punned_t::invoke_simsimd);
         isa_kind_ = simd_kind;
         return true;
     }
@@ -1550,9 +1583,14 @@ class metric_punned_t {
         static simsimd_capability_t static_capabilities = simsimd_capabilities();
         return configure_with_simsimd(static_capabilities);
     }
-    result_t invoke_simsimd(uptr_t a, uptr_t b) const noexcept {
+
+#if defined(USEARCH_DEFINED_CLANG) || defined(USEARCH_DEFINED_GCC)
+    __attribute__((no_sanitize("all")))
+#endif
+    result_t
+    invoke_simsimd(uptr_t a, uptr_t b) const noexcept {
         simsimd_distance_t result;
-        // Here `reinterpret_cast` raises warning... we know what we are doing!
+        // Here `reinterpret_cast` raises warning and UBSan reports an issue... we know what we are doing!
         auto function_pointer = (simsimd_metric_punned_t)(metric_ptr_);
         function_pointer(reinterpret_cast<void const*>(a), reinterpret_cast<void const*>(b), metric_third_arg_,
                          &result);
@@ -1648,6 +1686,11 @@ class metric_punned_t {
         return static_cast<result_t>(typed_at{}((scalar_t const*)a, (scalar_t const*)b, a_dimensions));
     }
 };
+
+/* Allow complaining about vectorization after this point. */
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 /**
  *  @brief  View over a potentially-strided memory buffer, containing a row-major matrix.
@@ -1959,6 +2002,7 @@ class flat_hash_multi_set_gt {
         clear(); // Clear all elements
         if (data_)
             allocator_t{}.deallocate(data_, buckets_ * bytes_per_bucket());
+        data_ = nullptr;
         buckets_ = 0;
         populated_slots_ = 0;
         capacity_slots_ = 0;

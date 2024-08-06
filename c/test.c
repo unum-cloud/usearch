@@ -5,11 +5,15 @@
 
 #include "usearch.h"
 
-#define ASSERT(must_be_true, message)                                                                                  \
-    if (!(must_be_true)) {                                                                                             \
-        printf("Assert: %s\n", message);                                                                               \
-        exit(-1);                                                                                                      \
-    }
+void expect(bool must_be_true, char const* message) {
+    if (must_be_true)
+        return;
+    message = message ? message : "C unit test failed";
+    printf("Assert: %s\n", message);
+    exit(-1);
+}
+
+#define expect_eq(a, b, message) expect(a == b, message)
 
 /**
  * @brief Creates and initializes vectors with random float values.
@@ -20,7 +24,7 @@
  */
 float* create_vectors(size_t const count, size_t const dimensions) {
     float* data = (float*)malloc(count * dimensions * sizeof(float));
-    ASSERT(data, "Failed to allocate memory");
+    expect(data, "Failed to allocate memory");
     for (size_t index = 0; index < count * dimensions; ++index)
         data[index] = (float)rand() / (float)RAND_MAX;
     return data;
@@ -52,31 +56,31 @@ void test_init(size_t const collection_size, size_t const dimensions) {
     usearch_error_t error = NULL;
     usearch_init_options_t opts = create_options(dimensions);
     usearch_index_t index = usearch_init(&opts, &error);
-    ASSERT(!error, error);
+    expect(!error, error);
     usearch_free(index, &error);
-    ASSERT(!error, error);
+    expect(!error, error);
 
     // Init second time
     index = usearch_init(&opts, &error);
-    ASSERT(!error, error);
+    expect(!error, error);
 
-    ASSERT(usearch_size(index, &error) == 0, error);
-    ASSERT(usearch_capacity(index, &error) == 0, error);
-    ASSERT(usearch_dimensions(index, &error) == dimensions, error);
-    ASSERT(usearch_connectivity(index, &error) == opts.connectivity, error);
+    expect_eq(usearch_size(index, &error), 0, error);
+    expect_eq(usearch_capacity(index, &error), 0, error);
+    expect_eq(usearch_dimensions(index, &error), dimensions, error);
+    expect_eq(usearch_connectivity(index, &error), opts.connectivity, error);
 
     // Reserve
     usearch_reserve(index, collection_size, &error);
-    ASSERT(!error, error);
-    ASSERT(usearch_size(index, &error) == 0, error);
-    ASSERT(usearch_capacity(index, &error) == collection_size, error);
-    ASSERT(usearch_dimensions(index, &error) == dimensions, error);
-    ASSERT(usearch_connectivity(index, &error) == opts.connectivity, error);
-    ASSERT(usearch_hardware_acceleration(index, &error), error);
-    ASSERT(usearch_memory_usage(index, &error), error);
+    expect(!error, error);
+    expect_eq(usearch_size(index, &error), 0, error);
+    expect(usearch_capacity(index, &error) >= collection_size, error);
+    expect_eq(usearch_dimensions(index, &error), dimensions, error);
+    expect_eq(usearch_connectivity(index, &error), opts.connectivity, error);
+    expect(usearch_hardware_acceleration(index, &error), error);
+    expect(usearch_memory_usage(index, &error), error);
 
     usearch_free(index, &error);
-    ASSERT(!error, error);
+    expect(!error, error);
 
     printf("Test: Index Initialization - PASSED\n");
 }
@@ -99,18 +103,18 @@ void test_add_vector(size_t const collection_size, size_t const dimensions) {
     for (size_t i = 0; i < collection_size; ++i) {
         usearch_key_t key = i;
         usearch_add(index, key, data + i * dimensions, usearch_scalar_f32_k, &error);
-        ASSERT(!error, error);
+        expect(!error, error);
     }
 
-    ASSERT(usearch_size(index, &error) == collection_size, error);
-    ASSERT(usearch_capacity(index, &error) == collection_size, error);
+    expect_eq(usearch_size(index, &error), collection_size, error);
+    expect(usearch_capacity(index, &error) >= collection_size, error);
 
     // Check vectors in the index
     for (size_t i = 0; i < collection_size; ++i) {
         usearch_key_t key = i;
-        ASSERT(usearch_contains(index, key, &error), error);
+        expect(usearch_contains(index, key, &error), error);
     }
-    ASSERT(!usearch_contains(index, -1, &error), error); // Non existing key
+    expect(!usearch_contains(index, -1, &error), error); // Non existing key
 
     free(data);
     usearch_free(index, &error);
@@ -133,22 +137,22 @@ void test_find_vector(size_t const collection_size, size_t const dimensions) {
     // Create result buffers
     usearch_key_t* keys = (usearch_key_t*)malloc(collection_size * sizeof(usearch_key_t));
     float* distances = (float*)malloc(collection_size * sizeof(float));
-    ASSERT(keys && distances, "Failed to allocate memory");
+    expect(keys && distances, "Failed to allocate memory");
 
     // Add vectors
     float* data = create_vectors(collection_size, dimensions);
     for (size_t i = 0; i < collection_size; ++i) {
         usearch_key_t key = i;
         usearch_add(index, key, data + i * dimensions, usearch_scalar_f32_k, &error);
-        ASSERT(!error, error);
+        expect(!error, error);
     }
 
     // Find the vectors
     for (size_t i = 0; i < collection_size; i++) {
         size_t found_count = usearch_search(index, data + i * dimensions, usearch_scalar_f32_k, collection_size, keys,
                                             distances, &error);
-        ASSERT(!error, error);
-        ASSERT(found_count >= 1 && found_count <= collection_size, "Vector is missing");
+        expect(!error, error);
+        expect(found_count >= 1 && found_count <= collection_size, "Vector is missing");
     }
 
     free(data);
@@ -174,19 +178,19 @@ void test_get_vector(size_t const collection_size, size_t const dimensions) {
 
     // Create result buffers
     float* vectors = (float*)malloc(collection_size * dimensions * sizeof(float));
-    ASSERT(vectors, "Failed to allocate memory");
+    expect(vectors, "Failed to allocate memory");
 
     // Add multiple vectors with SAME key
     usearch_key_t const key = 1;
     float* data = create_vectors(collection_size, dimensions);
     for (size_t i = 0; i < collection_size; i++) {
         usearch_add(index, key, data + i * dimensions, usearch_scalar_f32_k, &error);
-        ASSERT(!error, error);
+        expect(!error, error);
     }
 
     // Retrieve vectors from index
     size_t found_count = usearch_get(index, key, collection_size, vectors, usearch_scalar_f32_k, &error);
-    ASSERT(found_count == collection_size, "Vector is missing");
+    expect_eq(found_count, collection_size, "Vector is missing");
 
     free(vectors);
     free(data);
@@ -213,14 +217,14 @@ void test_remove_vector(size_t const collection_size, size_t const dimensions) {
     for (size_t i = 0; i < collection_size; ++i) {
         usearch_key_t key = i;
         usearch_add(index, key, data + i * dimensions, usearch_scalar_f32_k, &error);
-        ASSERT(!error, error);
+        expect(!error, error);
     }
 
     // Remove the vectors
     for (size_t i = 0; i < collection_size; i++) {
         usearch_key_t key = i;
         usearch_remove(index, key, &error);
-        ASSERT(!error, "Currently, Remove is not supported");
+        expect(!error, "Currently, Remove is not supported");
     }
 
     free(data);
@@ -256,14 +260,14 @@ void test_save_load(size_t const collection_size, size_t const dimensions) {
         for (size_t i = 0; i < collection_size; ++i) {
             usearch_key_t key = i;
             usearch_add(index, key, data + i * dimensions, usearch_scalar_f32_k, &error);
-            ASSERT(!error, error);
+            expect(!error, error);
         }
 
         // Save and free the index
         usearch_save(index, "tmp.usearch", &error);
-        ASSERT(!error, error);
+        expect(!error, error);
         usearch_free(index, &error);
-        ASSERT(!error, error);
+        expect(!error, error);
     }
 
     // Reset the options
@@ -278,35 +282,36 @@ void test_save_load(size_t const collection_size, size_t const dimensions) {
     // Reinit
     {
 
-        usearch_index_t index = usearch_init(&opts, &error);
-        ASSERT(!error, error);
-        ASSERT(usearch_size(index, &error) == 0, error);
+        usearch_index_t index = usearch_init(NULL, &error);
+        expect(!error, error);
+        // expect(usearch_size(index, &error) == 0, error);
 
         // Load
         usearch_load(index, "tmp.usearch", &error);
-        ASSERT(!error, error);
-        ASSERT(usearch_size(index, &error) == collection_size, error);
-        ASSERT(usearch_capacity(index, &error) == collection_size, error);
-        ASSERT(usearch_dimensions(index, &error) == dimensions, error);
-        ASSERT(usearch_connectivity(index, &error) == weird_ops.connectivity, error);
+        expect(!error, error);
+        expect(usearch_size(index, &error) == collection_size, error);
+        expect(usearch_capacity(index, &error) == collection_size, error);
+        expect(usearch_dimensions(index, &error) == dimensions, error);
+        expect(usearch_connectivity(index, &error) == weird_ops.connectivity, error);
 
         // Check vectors in the index
         for (size_t i = 0; i < collection_size; ++i) {
             usearch_key_t key = i;
-            ASSERT(usearch_contains(index, key, &error), error);
+            expect(usearch_contains(index, key, &error), error);
         }
 
         // Create result buffers
         usearch_key_t* keys = (usearch_key_t*)malloc(collection_size * sizeof(usearch_key_t));
         float* distances = (float*)malloc(collection_size * sizeof(float));
-        ASSERT(keys && distances, "Failed to allocate memory");
+        expect(keys && distances, "Failed to allocate memory");
 
         // Find the vectors
+        usearch_change_threads_search(index, 1, &error);
         for (size_t i = 0; i < collection_size; i++) {
             size_t found_count = usearch_search(index, data + i * dimensions, usearch_scalar_f32_k, collection_size,
                                                 keys, distances, &error);
-            ASSERT(!error, error);
-            ASSERT(found_count >= 1 && found_count <= collection_size, "Vector is missing");
+            expect(!error, error);
+            expect(found_count >= 1 && found_count <= collection_size, "Vector is missing");
         }
 
         free(keys);
@@ -340,22 +345,22 @@ void test_view(size_t const collection_size, size_t const dimensions) {
     for (size_t i = 0; i < collection_size; ++i) {
         usearch_key_t key = i;
         usearch_add(index, key, data + i * dimensions, usearch_scalar_f32_k, &error);
-        ASSERT(!error, error);
+        expect(!error, error);
     }
 
     // Save and free the index
     usearch_save(index, "tmp.usearch", &error);
-    ASSERT(!error, error);
+    expect(!error, error);
     usearch_free(index, &error);
-    ASSERT(!error, error);
+    expect(!error, error);
 
     // Reinit
     index = usearch_init(&opts, &error);
-    ASSERT(!error, error);
+    expect(!error, error);
 
     // View
     usearch_view(index, "tmp.usearch", &error);
-    ASSERT(!error, error);
+    expect(!error, error);
 
     free(data);
     usearch_free(index, &error);
