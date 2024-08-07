@@ -24,6 +24,8 @@ index.add(key: 43, vector: vectorB)
 
 let results = index.search(vector: vectorA, count: 10)
 assert(results.0[0] == 42)
+let retrieved: [[Float32]]? = index.get(key: 42)
+assert(retrieved![0] == vectorA)
 ```
 
 If using in a SwiftUI application, make sure to annulate the void responses:
