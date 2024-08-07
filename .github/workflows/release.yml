@@ -593,7 +593,7 @@ jobs:
   publish_rust:
     name: Publish Rust
     needs: versioning
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out refreshed version
         uses: actions/checkout@v4

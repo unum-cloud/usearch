@@ -27,6 +27,7 @@ fn main() {
         build
             .define("USEARCH_USE_SIMSIMD", "1")
             .define("SIMSIMD_DYNAMIC_DISPATCH", "1")
+            .define("SIMSIMD_NATIVE_BF16", "0")
             .define("SIMSIMD_NATIVE_F16", "0");
     } else {
         build.define("USEARCH_USE_SIMSIMD", "0");
@@ -67,12 +68,12 @@ fn main() {
                 "SIMSIMD_TARGET_SVE_F16",
                 "SIMSIMD_TARGET_SVE_I8",
                 "SIMSIMD_TARGET_SVE",
-                "SIMSIMD_TARGET_NEON_BF16", 
-                "SIMSIMD_TARGET_NEON_F16", 
-                "SIMSIMD_TARGET_NEON_I8", 
-                "SIMSIMD_TARGET_NEON", 
-                ],
-                _ => vec![
+                "SIMSIMD_TARGET_NEON_BF16",
+                "SIMSIMD_TARGET_NEON_F16",
+                "SIMSIMD_TARGET_NEON_I8",
+                "SIMSIMD_TARGET_NEON",
+            ],
+            _ => vec![
                 "SIMSIMD_TARGET_SAPPHIRE",
                 "SIMSIMD_TARGET_GENOA",
                 "SIMSIMD_TARGET_ICE",
