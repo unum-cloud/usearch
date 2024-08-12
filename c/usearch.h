@@ -434,7 +434,7 @@ USEARCH_EXPORT usearch_distance_t usearch_distance(       //
     usearch_metric_kind_t metric_kind, usearch_error_t* error);
 
 /**
- *  @brief Multi-threaded exact nearest neighbors search for equi-dimensional vectors.
+ *  @brief Multi-threaded many-to-many exact nearest neighbors search for equi-dimensional vectors.
  *  @param[in] dataset Pointer to the first scalar of the dataset matrix.
  *  @param[in] queries Pointer to the first scalar of the queries matrix.
  *  @param[in] dataset_size Number of vectors in the `dataset`.
@@ -446,10 +446,13 @@ USEARCH_EXPORT usearch_distance_t usearch_distance(       //
  *  @param[in] metric_kind The metric kind used for distance calculation between vectors.
  *  @param[in] count Upper bound on the number of neighbors to search, the "k" in "kANN".
  *  @param[in] threads Upper bound for the number of CPU threads to use.
- *  @param[out] keys Output buffer for up to `count` nearest neighbors keys.
- *  @param[out] distances Output buffer for up to `count` distances to nearest neighbors.
+ *  @param[out] keys Output matrix for `queries_size * count` nearest neighbors keys. Each row of the
+ *              matrix must be contiguous in memory, but different rows can be separated by `keys_stride` bytes.
+ *  @param[in] keys_stride Number of bytes between starts of consecutive rows od scalars in `keys`.
+ *  @param[out] distances Output matrix for `queries_size * count` distances to nearest neighbors. Each row of the
+ *              matrix must be contiguous in memory, but different rows can be separated by `keys_stride` bytes.
+ *  @param[in] distances_stride Number of bytes between starts of consecutive rows od scalars in `distances`.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
- *  @return Number of found matches.
  */
 USEARCH_EXPORT void usearch_exact_search(                            //
     void const* dataset, size_t dataset_size, size_t dataset_stride, //
