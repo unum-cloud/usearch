@@ -177,5 +177,9 @@ std::unique_ptr<NativeIndex> new_native_index(IndexOptions const& options) {
         throw std::invalid_argument("Unsupported metric or scalar type");
     index_dense_config_t config(options.connectivity, options.expansion_add, options.expansion_search);
     config.multi = options.multi;
-    return wrap(index_t::make(metric, config));
+    index_t index = index_t::make(metric, config);
+    // In Rust we have the luxury of returning a `Result` type even for the constructor.
+    // So let's pre-reserve the maximal number of threads and return the error if it fails.
+    index.reserve(index_limits_t{});
+    return wrap(std::move(index));
 }
