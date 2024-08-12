@@ -176,7 +176,7 @@ public class Index implements AutoCloseable {
    *
    * @param key key to lookup.
    * @return the contents of the vector.
-   * @throws linkIllegalArgumentException} is key is not available.
+   * @throws IllegalArgumentException is key is not available.
    */
   public float[] get(int key) {
     if (c_ptr == 0) {

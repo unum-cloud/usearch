@@ -1,7 +1,7 @@
 #pragma once
 #include "rust/cxx.h"
 
-// We don't have to forward decalre all of those:
+// We don't have to forward declare all of those:
 struct Matches;
 struct IndexOptions;
 enum class MetricKind;
