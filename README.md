@@ -400,7 +400,7 @@ def search(query: str) -> np.ndarray:
 server.run()
 ```
 
-Similar experiences can also be imlemented in other languages and on the client side, removing the network latency.
+Similar experiences can also be implemented in other languages and on the client side, removing the network latency.
 For Swift and iOS, check out the [`ashvardanian/SwiftSemanticSearch`](https://github.com/ashvardanian/SwiftSemanticSearch) repository.
 
 <table>
