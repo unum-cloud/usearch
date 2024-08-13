@@ -1528,6 +1528,7 @@ class metric_punned_t {
         case simsimd_cap_haswell_k: return "haswell";
         case simsimd_cap_skylake_k: return "skylake";
         case simsimd_cap_ice_k: return "ice";
+        case simsimd_cap_genoa_k: return "genoa";
         case simsimd_cap_sapphire_k: return "sapphire";
         default: return "unknown";
         }
