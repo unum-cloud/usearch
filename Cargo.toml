@@ -18,10 +18,10 @@ include = [
 ]
 
 [features]
-default = ["simsimd"] # SimSIMD is enabled by default
-simsimd = []          # No need to do anything to enable SimSIMD by default
-openmp = []           # Optional: Users can enable OpenMP
-fp16lib = []          # Optional: Users can enable FP16 support
+default = ["simsimd", "fp16lib"] # SimSIMD is enabled by default
+simsimd = []                     # No need to do anything to enable SimSIMD by default
+fp16lib = []                     # Without this FP16 we lose precision downcasting
+openmp = []                      # Optional: Users can enable OpenMP
 
 [lib]
 name = "usearch"
