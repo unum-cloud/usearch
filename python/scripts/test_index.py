@@ -27,6 +27,7 @@ quantizations = [
     ScalarKind.F32,
     ScalarKind.F64,
     ScalarKind.F16,
+    ScalarKind.BF16,
     ScalarKind.I8,
 ]
 dtypes = [np.float32, np.float64, np.float16]

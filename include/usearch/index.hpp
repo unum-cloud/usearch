@@ -2870,16 +2870,16 @@ class index_gt {
         result.computed_distances = context.computed_distances;
         result.visited_members = context.iteration_cycles;
 
-        // If we are updating the entry node itself, it won't contain any neighbors,
-        // so we should traverse a level down to find the closest match.
-        if (updated_node_level == max_level_copy)
-            updated_node_level--;
-
         // Go down the level, tracking only the closest match;
         // It may even be equal to the `updated_slot`
-        compressed_slot_t closest_slot = search_for_one_( //
-            value, metric, prefetch,                      //
-            entry_slot_copy, max_level_copy, updated_node_level, context);
+        compressed_slot_t closest_slot =
+            // If we are updating the entry node itself, it won't contain any neighbors,
+            // so we should traverse a level down to find the closest match.
+            updated_node_level == max_level_copy //
+                ? entry_slot_copy
+                : search_for_one_(             //
+                      value, metric, prefetch, //
+                      entry_slot_copy, max_level_copy, updated_node_level, context);
 
         // From `updated_node_level` down - perform proper extensive search
         for (level_t level = (std::min)(updated_node_level, max_level_copy); level >= 0; --level) {
@@ -2943,7 +2943,7 @@ class index_gt {
             config.expansion = default_expansion_search();
 
         // Using references is cleaner, but would result in UBSan false positives
-        context_t* context_ptr = contexts_.data() + config.thread;
+        context_t* context_ptr = contexts_.data() ? contexts_.data() + config.thread : nullptr;
         top_candidates_t* top_ptr = context_ptr ? &context_ptr->top_candidates : nullptr;
         search_result_t result{*this, top_ptr};
         if (!nodes_count_.load(std::memory_order_relaxed))
@@ -3697,6 +3697,7 @@ class index_gt {
     inline neighbors_ref_t neighbors_base_(node_t node) const noexcept { return {node.neighbors_tape()}; }
 
     inline neighbors_ref_t neighbors_non_base_(node_t node, level_t level) const noexcept {
+        usearch_assert_m(level > 0 && level <= node.level(), "Linking to missing level");
         return {node.neighbors_tape() + pre_.neighbors_base_bytes + (level - 1) * pre_.neighbors_bytes};
     }
 

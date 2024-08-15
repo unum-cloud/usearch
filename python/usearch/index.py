@@ -93,6 +93,8 @@ def _normalize_dtype(
     if dtype is None or dtype == "":
         if metric in MetricKindBitwise:
             return ScalarKind.B1
+        if _hardware_acceleration(dtype=ScalarKind.BF16, ndim=ndim, metric_kind=metric):
+            return ScalarKind.BF16
         if _hardware_acceleration(dtype=ScalarKind.F16, ndim=ndim, metric_kind=metric):
             return ScalarKind.F16
         return ScalarKind.F32
@@ -106,12 +108,14 @@ def _normalize_dtype(
     _normalize = {
         "f64": ScalarKind.F64,
         "f32": ScalarKind.F32,
+        "bf16": ScalarKind.BF16,
         "f16": ScalarKind.F16,
         "i8": ScalarKind.I8,
         "b1": ScalarKind.B1,
         "b1x8": ScalarKind.B1,
         "float64": ScalarKind.F64,
         "float32": ScalarKind.F32,
+        "bfloat16": ScalarKind.BF16,
         "float16": ScalarKind.F16,
         "int8": ScalarKind.I8,
         np.float64: ScalarKind.F64,

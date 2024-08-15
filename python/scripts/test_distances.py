@@ -25,6 +25,7 @@ from usearch.index import (
     [
         ScalarKind.F32,
         ScalarKind.F16,
+        ScalarKind.BF16,
         ScalarKind.I8,
     ],
 )

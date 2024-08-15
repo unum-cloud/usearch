@@ -70,20 +70,27 @@ struct uuid_t {
 };
 
 class f16_bits_t;
+class bf16_bits_t;
 class i8_converted_t;
 
 #if !USEARCH_USE_FP16LIB
 #if USEARCH_USE_SIMSIMD
 using f16_native_t = simsimd_f16_t;
+using bf16_native_t = simsimd_bf16_t;
 #elif defined(USEARCH_DEFINED_ARM)
 using f16_native_t = __fp16;
+using bf16_native_t = __fp16; // No better choice on most compilers!
 #else
 using f16_native_t = _Float16;
+using bf16_native_t = _Float16; // No better choice on most compilers!
 #endif
 using f16_t = f16_native_t;
+using bf16_t = bf16_native_t;
 #else
 using f16_native_t = void;
+using bf16_native_t = void;
 using f16_t = f16_bits_t;
+using bf16_t = bf16_bits_t;
 #endif
 
 using f64_t = double;
@@ -124,6 +131,7 @@ enum class scalar_kind_t : std::uint8_t {
     b1x8_k = 1,
     u40_k = 2,
     uuid_k = 3,
+    bf16_k = 4,
     // Common:
     f64_k = 10,
     f32_k = 11,
@@ -159,6 +167,8 @@ template <typename scalar_at> scalar_kind_t scalar_kind() noexcept {
         return scalar_kind_t::f32_k;
     if (std::is_same<scalar_at, f16_t>())
         return scalar_kind_t::f16_k;
+    if (std::is_same<scalar_at, bf16_t>())
+        return scalar_kind_t::bf16_k;
     if (std::is_same<scalar_at, i8_t>())
         return scalar_kind_t::i8_k;
     if (std::is_same<scalar_at, u64_t>())
@@ -201,6 +211,7 @@ inline std::size_t bits_per_scalar(scalar_kind_t scalar_kind) noexcept {
     case scalar_kind_t::f64_k: return 64;
     case scalar_kind_t::f32_k: return 32;
     case scalar_kind_t::f16_k: return 16;
+    case scalar_kind_t::bf16_k: return 16;
     case scalar_kind_t::i8_k: return 8;
     case scalar_kind_t::b1x8_k: return 1;
     default: return 0;
@@ -212,6 +223,7 @@ inline std::size_t bits_per_scalar_word(scalar_kind_t scalar_kind) noexcept {
     case scalar_kind_t::f64_k: return 64;
     case scalar_kind_t::f32_k: return 32;
     case scalar_kind_t::f16_k: return 16;
+    case scalar_kind_t::bf16_k: return 16;
     case scalar_kind_t::i8_k: return 8;
     case scalar_kind_t::b1x8_k: return 8;
     default: return 0;
@@ -222,6 +234,7 @@ inline char const* scalar_kind_name(scalar_kind_t scalar_kind) noexcept {
     switch (scalar_kind) {
     case scalar_kind_t::f32_k: return "f32";
     case scalar_kind_t::f16_k: return "f16";
+    case scalar_kind_t::bf16_k: return "bf16";
     case scalar_kind_t::f64_k: return "f64";
     case scalar_kind_t::i8_k: return "i8";
     case scalar_kind_t::b1x8_k: return "b1x8";
@@ -253,10 +266,14 @@ inline expected_gt<scalar_kind_t> scalar_kind_from_name(char const* name, std::s
         parsed.result = scalar_kind_t::f64_k;
     else if (str_equals(name, len, "f16"))
         parsed.result = scalar_kind_t::f16_k;
+    else if (str_equals(name, len, "bf16"))
+        parsed.result = scalar_kind_t::bf16_k;
     else if (str_equals(name, len, "i8"))
         parsed.result = scalar_kind_t::i8_k;
+    else if (str_equals(name, len, "b1"))
+        parsed.result = scalar_kind_t::b1x8_k;
     else
-        parsed.failed("Unknown type, choose: f32, f16, f64, i8");
+        parsed.failed("Unknown type, choose: f64, f32, f16, bf16, i8, b1");
     return parsed;
 }
 
@@ -289,11 +306,13 @@ inline expected_gt<metric_kind_t> metric_from_name(char const* name, std::size_t
                       "tanimoto, sorensen");
     return parsed;
 }
-
 inline expected_gt<metric_kind_t> metric_from_name(char const* name) {
     return metric_from_name(name, std::strlen(name));
 }
 
+/**
+ *  @brief Convenience function to upcast a half-precision floating point number to a single-precision one.
+ */
 inline float f16_to_f32(std::uint16_t u16) noexcept {
 #if !USEARCH_USE_FP16LIB
     f16_native_t f16;
@@ -304,6 +323,9 @@ inline float f16_to_f32(std::uint16_t u16) noexcept {
 #endif
 }
 
+/**
+ *  @brief Convenience function to downcast a single-precision floating point number to a half-precision one.
+ */
 inline std::uint16_t f32_to_f16(float f32) noexcept {
 #if !USEARCH_USE_FP16LIB
     f16_native_t f16 = f16_native_t(f32);
@@ -313,6 +335,36 @@ inline std::uint16_t f32_to_f16(float f32) noexcept {
 #else
     return fp16_ieee_from_fp32_value(f32);
 #endif
+}
+
+/**
+ *  @brief Convenience function to upcast a brain-floating point number to a single-precision one.
+ *  https://github.com/ashvardanian/SimSIMD/blob/ff51434d90c66f916e94ff05b24530b127aa4cff/include/simsimd/types.h#L395-L410
+ */
+inline float bf16_to_f32(std::uint16_t u16) noexcept {
+    union float_or_unsigned_int_t {
+        float f;
+        unsigned int i;
+    };
+    union float_or_unsigned_int_t result_union;
+    result_union.i = u16 << 16; // Zero extends the mantissa
+    return result_union.f;
+}
+
+/**
+ *  @brief Convenience function to downcast a single-precision floating point number to a brain-floating point one.
+ *  https://github.com/ashvardanian/SimSIMD/blob/ff51434d90c66f916e94ff05b24530b127aa4cff/include/simsimd/types.h#L412-L425
+ */
+inline std::uint16_t f32_to_bf16(float f32) noexcept {
+    union float_or_unsigned_int_t {
+        float f;
+        unsigned int i;
+    };
+    union float_or_unsigned_int_t value;
+    value.f = f32;
+    value.i >>= 16;
+    value.i &= 0xFFFF;
+    return (unsigned short)value.i;
 }
 
 /**
@@ -371,6 +423,66 @@ class f16_bits_t {
 
     inline f16_bits_t& operator/=(float v) noexcept {
         uint16_ = f32_to_f16(v / f16_to_f32(uint16_));
+        return *this;
+    }
+};
+
+/**
+ *  @brief  Numeric type for brain-floating point half-precision floating point.
+ *          If hardware support isn't available, falls back to a hardware
+ *          agnostic in-software implementation.
+ */
+class bf16_bits_t {
+    std::uint16_t uint16_{};
+
+  public:
+    inline bf16_bits_t() noexcept : uint16_(0) {}
+    inline bf16_bits_t(bf16_bits_t&&) = default;
+    inline bf16_bits_t& operator=(bf16_bits_t&&) = default;
+    inline bf16_bits_t(bf16_bits_t const&) = default;
+    inline bf16_bits_t& operator=(bf16_bits_t const&) = default;
+
+    inline operator float() const noexcept { return bf16_to_f32(uint16_); }
+    inline explicit operator bool() const noexcept { return bf16_to_f32(uint16_) > 0.5f; }
+
+    inline bf16_bits_t(i8_converted_t) noexcept;
+    inline bf16_bits_t(std::int8_t v) noexcept : uint16_(v) {}
+    inline bf16_bits_t(bool v) noexcept : uint16_(f32_to_bf16(v)) {}
+    inline bf16_bits_t(float v) noexcept : uint16_(f32_to_bf16(v)) {}
+    inline bf16_bits_t(double v) noexcept : uint16_(f32_to_bf16(static_cast<float>(v))) {}
+
+    inline bool operator<(const bf16_bits_t& other) const noexcept { return float(*this) < float(other); }
+
+    inline bf16_bits_t operator+(bf16_bits_t other) const noexcept { return {float(*this) + float(other)}; }
+    inline bf16_bits_t operator-(bf16_bits_t other) const noexcept { return {float(*this) - float(other)}; }
+    inline bf16_bits_t operator*(bf16_bits_t other) const noexcept { return {float(*this) * float(other)}; }
+    inline bf16_bits_t operator/(bf16_bits_t other) const noexcept { return {float(*this) / float(other)}; }
+    inline bf16_bits_t operator+(float other) const noexcept { return {float(*this) + other}; }
+    inline bf16_bits_t operator-(float other) const noexcept { return {float(*this) - other}; }
+    inline bf16_bits_t operator*(float other) const noexcept { return {float(*this) * other}; }
+    inline bf16_bits_t operator/(float other) const noexcept { return {float(*this) / other}; }
+    inline bf16_bits_t operator+(double other) const noexcept { return {float(*this) + other}; }
+    inline bf16_bits_t operator-(double other) const noexcept { return {float(*this) - other}; }
+    inline bf16_bits_t operator*(double other) const noexcept { return {float(*this) * other}; }
+    inline bf16_bits_t operator/(double other) const noexcept { return {float(*this) / other}; }
+
+    inline bf16_bits_t& operator+=(float v) noexcept {
+        uint16_ = f32_to_bf16(v + bf16_to_f32(uint16_));
+        return *this;
+    }
+
+    inline bf16_bits_t& operator-=(float v) noexcept {
+        uint16_ = f32_to_bf16(v - bf16_to_f32(uint16_));
+        return *this;
+    }
+
+    inline bf16_bits_t& operator*=(float v) noexcept {
+        uint16_ = f32_to_bf16(v * bf16_to_f32(uint16_));
+        return *this;
+    }
+
+    inline bf16_bits_t& operator/=(float v) noexcept {
+        uint16_ = f32_to_bf16(v / bf16_to_f32(uint16_));
         return *this;
     }
 };
@@ -1563,6 +1675,7 @@ class metric_punned_t {
         case scalar_kind_t::f32_k: datatype = simsimd_datatype_f32_k; break;
         case scalar_kind_t::f64_k: datatype = simsimd_datatype_f64_k; break;
         case scalar_kind_t::f16_k: datatype = simsimd_datatype_f16_k; break;
+        case scalar_kind_t::bf16_k: datatype = simsimd_datatype_bf16_k; break;
         case scalar_kind_t::i8_k: datatype = simsimd_datatype_i8_k; break;
         case scalar_kind_t::b1x8_k: datatype = simsimd_datatype_b8_k; break;
         default: break;
@@ -1615,9 +1728,10 @@ class metric_punned_t {
         switch (metric_kind_) {
         case metric_kind_t::ip_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<f32_t>>; break;
-            case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::bf16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<bf16_t, f32_t>>; break;
             case scalar_kind_t::i8_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<i8_t, f32_t>>; break;
+            case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<f32_t>>; break;
             case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<f64_t>>; break;
             default: metric_ptr_ = 0; break;
             }
@@ -1625,9 +1739,10 @@ class metric_punned_t {
         }
         case metric_kind_t::cos_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<f32_t>>; break;
-            case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::bf16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<bf16_t, f32_t>>; break;
             case scalar_kind_t::i8_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<i8_t, f32_t>>; break;
+            case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<f32_t>>; break;
             case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<f64_t>>; break;
             default: metric_ptr_ = 0; break;
             }
@@ -1635,9 +1750,10 @@ class metric_punned_t {
         }
         case metric_kind_t::l2sq_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<f32_t>>; break;
-            case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::bf16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<bf16_t, f32_t>>; break;
             case scalar_kind_t::i8_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<i8_t, f32_t>>; break;
+            case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<f32_t>>; break;
             case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<f64_t>>; break;
             default: metric_ptr_ = 0; break;
             }
@@ -1645,6 +1761,9 @@ class metric_punned_t {
         }
         case metric_kind_t::pearson_k: {
             switch (scalar_kind_) {
+            case scalar_kind_t::bf16_k:
+                metric_ptr_ = (uptr_t)&equidimensional_<metric_pearson_gt<bf16_t, f32_t>>;
+                break;
             case scalar_kind_t::i8_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_pearson_gt<i8_t, f32_t>>; break;
             case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_pearson_gt<f16_t, f32_t>>; break;
             case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_pearson_gt<f32_t>>; break;
@@ -1655,7 +1774,8 @@ class metric_punned_t {
         }
         case metric_kind_t::haversine_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::f16_k: metric_ptr_ = 0; break; //< Having half-precision 2D coordinates is a bit silly.
+            case scalar_kind_t::bf16_k: metric_ptr_ = 0; break; //< Half-precision 2D vectors are silly.
+            case scalar_kind_t::f16_k: metric_ptr_ = 0; break;  //< Half-precision 2D vectors are silly.
             case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_haversine_gt<f32_t>>; break;
             case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_haversine_gt<f64_t>>; break;
             default: metric_ptr_ = 0; break;
@@ -1664,6 +1784,9 @@ class metric_punned_t {
         }
         case metric_kind_t::divergence_k: {
             switch (scalar_kind_) {
+            case scalar_kind_t::bf16_k:
+                metric_ptr_ = (uptr_t)&equidimensional_<metric_divergence_gt<bf16_t, f32_t>>;
+                break;
             case scalar_kind_t::f16_k:
                 metric_ptr_ = (uptr_t)&equidimensional_<metric_divergence_gt<f16_t, f32_t>>;
                 break;
