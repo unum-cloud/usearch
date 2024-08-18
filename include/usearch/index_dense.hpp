@@ -321,7 +321,7 @@ inline index_dense_metadata_result_t index_dense_metadata_from_path(char const* 
 /**
  *  @brief  Extracts metadata from a pre-constructed index serialized into an in-memory buffer.
  */
-inline index_dense_metadata_result_t index_dense_metadata_from_buffer(memory_mapped_file_t file,
+inline index_dense_metadata_result_t index_dense_metadata_from_buffer(memory_mapped_file_t const& file,
                                                                       std::size_t offset = 0) noexcept {
     index_dense_metadata_result_t result;
 
@@ -329,7 +329,7 @@ inline index_dense_metadata_result_t index_dense_metadata_from_buffer(memory_map
     if (offset + sizeof(index_dense_head_buffer_t) >= file.size())
         return result.failed("End of file reached!");
 
-    byte_t* const file_data = file.data() + offset;
+    byte_t const* file_data = file.data() + offset;
     std::size_t const file_size = file.size() - offset;
     std::memcpy(&result.head_buffer, file_data, sizeof(index_dense_head_buffer_t));
 
