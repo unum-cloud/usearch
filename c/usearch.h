@@ -72,6 +72,17 @@ USEARCH_EXPORT typedef struct usearch_init_options_t {
     usearch_metric_t metric;
     /**
      *  @brief The scalar kind used for quantization of vector data during indexing.
+     *  In most cases, on modern hardware, it's recommended to use half-precision floating-point numbers.
+     *  When quantization is enabled, the "get"-like functions won't be able to recover the original data,
+     *  so you may want to replicate the original vectors elsewhere.
+     *
+     *  Quantizing to integers is also possible, but it's important to note that it's only valid for cosine-like
+     *  metrics. As part of the quantization process, the vectors are normalized to unit length and later scaled
+     *  to @b [-127,127] range to occupy the full 8-bit range.
+     *
+     *  Quantizing to 1-bit booleans is also possible, but it's only valid for binary metrics like Jaccard, Hamming,
+     *  etc. As part of the quantization process, the scalar components greater than zero are set to `true`, and the
+     *  rest to `false`.
      */
     usearch_scalar_kind_t quantization;
     /**

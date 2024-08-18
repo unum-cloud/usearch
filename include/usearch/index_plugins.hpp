@@ -70,7 +70,6 @@ struct uuid_t {
 };
 
 class f16_bits_t;
-class i8_converted_t;
 
 #if !USEARCH_USE_FP16LIB
 #if USEARCH_USE_SIMSIMD
@@ -99,6 +98,9 @@ using i32_t = std::int32_t;
 using i16_t = std::int16_t;
 using i8_t = std::int8_t;
 
+/**
+ *  @brief  Enumerates the most commonly used distance metrics, mostly for dense vector representations.
+ */
 enum class metric_kind_t : std::uint8_t {
     unknown_k = 0,
     // Classics:
@@ -111,13 +113,19 @@ enum class metric_kind_t : std::uint8_t {
     haversine_k = 'h',
     divergence_k = 'd',
 
-    // Sets:
-    jaccard_k = 'j',
+    // Dense Sets:
     hamming_k = 'b',
     tanimoto_k = 't',
     sorensen_k = 's',
+
+    // Sparse Sets:
+    jaccard_k = 'j',
 };
 
+/**
+ *  @brief  Enumerates the most commonly used scalar types, mostly for dense vector representations.
+ *          Doesn't include logical types, like complex numbers or quaternions.
+ */
 enum class scalar_kind_t : std::uint8_t {
     unknown_k = 0,
     // Custom:
@@ -198,33 +206,63 @@ inline bool str_equals(char const* begin, std::size_t len, char const* other_beg
 
 inline std::size_t bits_per_scalar(scalar_kind_t scalar_kind) noexcept {
     switch (scalar_kind) {
-    case scalar_kind_t::f64_k: return 64;
-    case scalar_kind_t::f32_k: return 32;
-    case scalar_kind_t::f16_k: return 16;
-    case scalar_kind_t::i8_k: return 8;
+    case scalar_kind_t::uuid_k: return 128;
+    case scalar_kind_t::u40_k: return 40;
     case scalar_kind_t::b1x8_k: return 1;
+    case scalar_kind_t::u64_k: return 64;
+    case scalar_kind_t::i64_k: return 64;
+    case scalar_kind_t::f64_k: return 64;
+    case scalar_kind_t::u32_k: return 32;
+    case scalar_kind_t::i32_k: return 32;
+    case scalar_kind_t::f32_k: return 32;
+    case scalar_kind_t::u16_k: return 16;
+    case scalar_kind_t::i16_k: return 16;
+    case scalar_kind_t::f16_k: return 16;
+    case scalar_kind_t::u8_k: return 8;
+    case scalar_kind_t::i8_k: return 8;
+    case scalar_kind_t::f8_k: return 8;
     default: return 0;
     }
 }
 
 inline std::size_t bits_per_scalar_word(scalar_kind_t scalar_kind) noexcept {
     switch (scalar_kind) {
-    case scalar_kind_t::f64_k: return 64;
-    case scalar_kind_t::f32_k: return 32;
-    case scalar_kind_t::f16_k: return 16;
-    case scalar_kind_t::i8_k: return 8;
+    case scalar_kind_t::uuid_k: return 128;
+    case scalar_kind_t::u40_k: return 40;
     case scalar_kind_t::b1x8_k: return 8;
+    case scalar_kind_t::u64_k: return 64;
+    case scalar_kind_t::i64_k: return 64;
+    case scalar_kind_t::f64_k: return 64;
+    case scalar_kind_t::u32_k: return 32;
+    case scalar_kind_t::i32_k: return 32;
+    case scalar_kind_t::f32_k: return 32;
+    case scalar_kind_t::u16_k: return 16;
+    case scalar_kind_t::i16_k: return 16;
+    case scalar_kind_t::f16_k: return 16;
+    case scalar_kind_t::u8_k: return 8;
+    case scalar_kind_t::i8_k: return 8;
+    case scalar_kind_t::f8_k: return 8;
     default: return 0;
     }
 }
 
 inline char const* scalar_kind_name(scalar_kind_t scalar_kind) noexcept {
     switch (scalar_kind) {
-    case scalar_kind_t::f32_k: return "f32";
-    case scalar_kind_t::f16_k: return "f16";
-    case scalar_kind_t::f64_k: return "f64";
-    case scalar_kind_t::i8_k: return "i8";
+    case scalar_kind_t::uuid_k: return "uuid";
+    case scalar_kind_t::u40_k: return "u40";
     case scalar_kind_t::b1x8_k: return "b1x8";
+    case scalar_kind_t::u64_k: return "u64";
+    case scalar_kind_t::i64_k: return "i64";
+    case scalar_kind_t::f64_k: return "f64";
+    case scalar_kind_t::u32_k: return "u32";
+    case scalar_kind_t::i32_k: return "i32";
+    case scalar_kind_t::f32_k: return "f32";
+    case scalar_kind_t::u16_k: return "u16";
+    case scalar_kind_t::i16_k: return "i16";
+    case scalar_kind_t::f16_k: return "f16";
+    case scalar_kind_t::u8_k: return "u8";
+    case scalar_kind_t::i8_k: return "i8";
+    case scalar_kind_t::f8_k: return "f8";
     default: return "";
     }
 }
@@ -242,8 +280,8 @@ inline char const* metric_kind_name(metric_kind_t metric) noexcept {
     case metric_kind_t::hamming_k: return "hamming";
     case metric_kind_t::tanimoto_k: return "tanimoto";
     case metric_kind_t::sorensen_k: return "sorensen";
+    default: return "";
     }
-    return "";
 }
 inline expected_gt<scalar_kind_t> scalar_kind_from_name(char const* name, std::size_t len) {
     expected_gt<scalar_kind_t> parsed;
@@ -333,8 +371,7 @@ class f16_bits_t {
     inline operator float() const noexcept { return f16_to_f32(uint16_); }
     inline explicit operator bool() const noexcept { return f16_to_f32(uint16_) > 0.5f; }
 
-    inline f16_bits_t(i8_converted_t) noexcept;
-    inline f16_bits_t(std::int8_t v) noexcept : uint16_(v) {}
+    inline f16_bits_t(std::int8_t v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(bool v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(float v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(double v) noexcept : uint16_(f32_to_f16(static_cast<float>(v))) {}
@@ -907,7 +944,7 @@ template <> struct cast_gt<b1x8_t, b1x8_t> {
     static bool try_(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
 
-template <typename from_scalar_at> struct cast_gt<from_scalar_at, b1x8_t> {
+template <typename from_scalar_at> struct cast_to_b1x8_gt {
     inline static bool try_(byte_t const* input, std::size_t dim, byte_t* output) noexcept {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
         unsigned char* typed_output = reinterpret_cast<unsigned char*>(output);
@@ -928,7 +965,7 @@ template <typename from_scalar_at> struct cast_gt<from_scalar_at, b1x8_t> {
     }
 };
 
-template <typename to_scalar_at> struct cast_gt<b1x8_t, to_scalar_at> {
+template <typename to_scalar_at> struct cast_from_b1x8_gt {
     static bool try_(byte_t const* input, std::size_t dim, byte_t* output) noexcept {
         unsigned char const* typed_input = reinterpret_cast<unsigned char const*>(input);
         to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
@@ -940,53 +977,55 @@ template <typename to_scalar_at> struct cast_gt<b1x8_t, to_scalar_at> {
     }
 };
 
-/**
- *  @brief  Numeric type for uniformly-distributed floating point
- *          values within [-1,1] range, quantized to integers [-100,100].
- */
-class i8_converted_t {
-    std::int8_t int8_{};
-
-  public:
-    constexpr static f32_t divisor_k = 100.f;
-    constexpr static std::int8_t min_k = -100;
-    constexpr static std::int8_t max_k = 100;
-
-    inline i8_converted_t() noexcept : int8_(0) {}
-    inline i8_converted_t(bool v) noexcept : int8_(v ? max_k : 0) {}
-
-    inline i8_converted_t(i8_converted_t&&) = default;
-    inline i8_converted_t& operator=(i8_converted_t&&) = default;
-    inline i8_converted_t(i8_converted_t const&) = default;
-    inline i8_converted_t& operator=(i8_converted_t const&) = default;
-
-    inline operator f16_t() const noexcept { return static_cast<f16_t>(f32_t(int8_) / divisor_k); }
-    inline operator f32_t() const noexcept { return f32_t(int8_) / divisor_k; }
-    inline operator f64_t() const noexcept { return f64_t(int8_) / divisor_k; }
-    inline explicit operator bool() const noexcept { return int8_ > (max_k / 2); }
-    inline explicit operator std::int8_t() const noexcept { return int8_; }
-    inline explicit operator std::int16_t() const noexcept { return int8_; }
-    inline explicit operator std::int32_t() const noexcept { return int8_; }
-    inline explicit operator std::int64_t() const noexcept { return int8_; }
-
-    // Even with `f16_t` arguments we may want to use `f32_t` for clamping and comparions.
-    inline i8_converted_t(f16_t v)
-        : int8_(static_cast<std::int8_t>(usearch::clamp<f32_t>(v * divisor_k, min_k, max_k))) {}
-    inline i8_converted_t(f32_t v)
-        : int8_(static_cast<std::int8_t>(usearch::clamp<f32_t>(v * divisor_k, min_k, max_k))) {}
-    inline i8_converted_t(f64_t v)
-        : int8_(static_cast<std::int8_t>(usearch::clamp<f64_t>(v * divisor_k, min_k, max_k))) {}
+template <typename from_scalar_at> struct cast_to_i8_gt {
+    inline static bool try_(byte_t const* input, std::size_t dim, byte_t* output) noexcept {
+        from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
+        std::int8_t* typed_output = reinterpret_cast<std::int8_t*>(output);
+        // Unlike other casting mechanisms, switching to small range integers is a two step procedure.
+        // First we want to estimate the magnitude of the vector to scale into [-1.0, 1.0] interval,
+        // instead of clamping. And then we scale the values into the [-127, 127] range.
+        // ! This makes an assumption, that the distance metric is dot-product-like, which may not
+        // ! be true in many cases, so it's recommended to avoid automatic casting from floats to
+        // ! integers.
+        double magnitude = 0.0;
+        for (std::size_t i = 0; i != dim; ++i)
+            magnitude += (double)typed_input[i] * (double)typed_input[i];
+        magnitude = std::sqrt(magnitude);
+        for (std::size_t i = 0; i != dim; ++i)
+            typed_output[i] =
+                static_cast<std::int8_t>(usearch::clamp<double>(typed_input[i] * 127.0 / magnitude, -127.0, 127.0));
+        return true;
+    }
 };
 
-f16_bits_t::f16_bits_t(i8_converted_t v) noexcept : uint16_(f32_to_f16(v)) {}
+template <typename to_scalar_at> struct cast_from_i8_gt {
+    static bool try_(byte_t const* input, std::size_t dim, byte_t* output) noexcept {
+        std::int8_t const* typed_input = reinterpret_cast<std::int8_t const*>(input);
+        to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
+        for (std::size_t i = 0; i != dim; ++i)
+            typed_output[i] = static_cast<to_scalar_at>(typed_input[i]) / 127.f;
+        return true;
+    }
+};
 
-template <> struct cast_gt<i8_t, f16_t> : public cast_gt<i8_converted_t, f16_t> {};
-template <> struct cast_gt<i8_t, f32_t> : public cast_gt<i8_converted_t, f32_t> {};
-template <> struct cast_gt<i8_t, f64_t> : public cast_gt<i8_converted_t, f64_t> {};
+template <> struct cast_gt<i8_t, f16_t> : public cast_from_i8_gt<f16_t> {};
+template <> struct cast_gt<i8_t, f32_t> : public cast_from_i8_gt<f32_t> {};
+template <> struct cast_gt<i8_t, f64_t> : public cast_from_i8_gt<f64_t> {};
 
-template <> struct cast_gt<f16_t, i8_t> : public cast_gt<f16_t, i8_converted_t> {};
-template <> struct cast_gt<f32_t, i8_t> : public cast_gt<f32_t, i8_converted_t> {};
-template <> struct cast_gt<f64_t, i8_t> : public cast_gt<f64_t, i8_converted_t> {};
+template <> struct cast_gt<f16_t, i8_t> : public cast_to_i8_gt<f16_t> {};
+template <> struct cast_gt<f32_t, i8_t> : public cast_to_i8_gt<f32_t> {};
+template <> struct cast_gt<f64_t, i8_t> : public cast_to_i8_gt<f64_t> {};
+
+template <> struct cast_gt<b1x8_t, f16_t> : public cast_from_b1x8_gt<f16_t> {};
+template <> struct cast_gt<b1x8_t, f32_t> : public cast_from_b1x8_gt<f32_t> {};
+template <> struct cast_gt<b1x8_t, f64_t> : public cast_from_b1x8_gt<f64_t> {};
+
+template <> struct cast_gt<f16_t, b1x8_t> : public cast_to_b1x8_gt<f16_t> {};
+template <> struct cast_gt<f32_t, b1x8_t> : public cast_to_b1x8_gt<f32_t> {};
+template <> struct cast_gt<f64_t, b1x8_t> : public cast_to_b1x8_gt<f64_t> {};
+
+template <> struct cast_gt<b1x8_t, i8_t> : public cast_from_b1x8_gt<i8_t> {};
+template <> struct cast_gt<i8_t, b1x8_t> : public cast_to_b1x8_gt<i8_t> {};
 
 /*  Don't complain if the vectorization of the inner loops fails:
  *
