@@ -95,7 +95,7 @@ struct index_dense_head_result_t {
  *  @brief  Configuration settings for the construction of dense
  *          equidimensional vector indexes.
  *
- *  Unlike the underlying `index_gt` class, incroporates the
+ *  Unlike the underlying `index_gt` class, incorporates the
  *  `::expansion_add` and `::expansion_search` parameters passed
  *  separately for the lower-level engine.
  */
@@ -207,8 +207,11 @@ struct index_dense_metadata_result_t {
     }
 };
 
+/**
+ *  @brief  Fixes serialized scalar-kind codes for pre-v2.10 versions, until we can upgrade to v3.
+ *          The old enum `scalar_kind_t` is defined without explicit constants from 0.
+ */
 inline scalar_kind_t convert_pre_2_10_scalar_kind(scalar_kind_t scalar_kind) noexcept {
-    // The old enum `scalar_kind_t` is defined without explicit constants from 0
     switch (static_cast<std::underlying_type<scalar_kind_t>::type>(scalar_kind)) {
     case 0: return scalar_kind_t::unknown_k;
     case 1: return scalar_kind_t::b1x8_k;
@@ -229,13 +232,15 @@ inline scalar_kind_t convert_pre_2_10_scalar_kind(scalar_kind_t scalar_kind) noe
     }
 }
 
+/**
+ *  @brief  Fixes the metadata for pre-v2.10 versions, until we can upgrade to v3.
+ *          Originates from: https://github.com/unum-cloud/usearch/issues/423
+ */
 inline void fix_pre_2_10_metadata(index_dense_head_t& head) {
-    // deal with incompatibility with pre-2.10 versions: https://github.com/unum-cloud/usearch/issues/423
     if (head.version_major == 2 && head.version_minor < 10) {
         head.kind_scalar = convert_pre_2_10_scalar_kind(head.kind_scalar);
         head.kind_key = convert_pre_2_10_scalar_kind(head.kind_key);
         head.kind_compressed_slot = convert_pre_2_10_scalar_kind(head.kind_compressed_slot);
-        // update minor versions so that no repeated conversion occurs
         head.version_minor = 10;
         head.version_patch = 0;
     }
@@ -316,7 +321,7 @@ inline index_dense_metadata_result_t index_dense_metadata_from_path(char const* 
 /**
  *  @brief  Extracts metadata from a pre-constructed index serialized into an in-memory buffer.
  */
-inline index_dense_metadata_result_t index_dense_metadata_from_buffer(memory_mapped_file_t file,
+inline index_dense_metadata_result_t index_dense_metadata_from_buffer(memory_mapped_file_t const& file,
                                                                       std::size_t offset = 0) noexcept {
     index_dense_metadata_result_t result;
 
@@ -324,7 +329,7 @@ inline index_dense_metadata_result_t index_dense_metadata_from_buffer(memory_map
     if (offset + sizeof(index_dense_head_buffer_t) >= file.size())
         return result.failed("End of file reached!");
 
-    byte_t* const file_data = file.data() + offset;
+    byte_t const* file_data = file.data() + offset;
     std::size_t const file_size = file.size() - offset;
     std::memcpy(&result.head_buffer, file_data, sizeof(index_dense_head_buffer_t));
 

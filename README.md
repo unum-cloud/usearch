@@ -249,7 +249,7 @@ assert!(
 Training a quantization model and dimension-reduction is a common approach to accelerate vector search.
 Those, however, are only sometimes reliable, can significantly affect the statistical properties of your data, and require regular adjustments if your distribution shifts.
 Instead, we have focused on high-precision arithmetic over low-precision downcasted vectors.
-The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f64_t`, `f32_t`, `f16_t`, `i8_t`, and single-bit representations.
+The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f64_t`, `f32_t`, `f16_t`, `i8_t`, and single-bit `b1x8_t` representations.
 You can use the following command to check, if hardware acceleration is enabled:
 
 ```sh
@@ -259,11 +259,19 @@ $ python -c 'from usearch.index import Index; print(Index(ndim=166, metric="tani
 > ice
 ```
 
+In most cases, it's recommended to use half-precision floating-point numbers on modern hardware.
+When quantization is enabled, the "get"-like functions won't be able to recover the original data, so you may want to replicate the original vectors elsewhere.
+When quantizing to `i8_t` integers, note that it's only valid for cosine-like metrics.
+As part of the quantization process, the vectors are normalized to unit length and later scaled to [-127, 127] range to occupy the full 8-bit range.
+When quantizing to `b1x8_t` single-bit representations, note that it's only valid for binary metrics like Jaccard, Hamming, etc.
+As part of the quantization process, the scalar components greater than zero are set to `true`, and the rest to `false`.
+
+![USearch uint40_t support](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-neighbor-types.png?raw=true)
+
 Using smaller numeric types will save you RAM needed to store the vectors, but you can also compress the neighbors lists forming our proximity graphs.
 By default, 32-bit `uint32_t` is used to enumerate those, which is not enough if you need to address over 4 Billion entries.
 For such cases we provide a custom `uint40_t` type, that will still be 37.5% more space-efficient than the commonly used 8-byte integers, and will scale up to 1 Trillion entries.
 
-![USearch uint40_t support](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-neighbor-types.png?raw=true)
 
 ## `Indexes` for Multi-Index Lookups
 
@@ -536,7 +544,7 @@ doi = {10.5281/zenodo.7949416},
 author = {Vardanian, Ash},
 title = {{USearch by Unum Cloud}},
 url = {https://github.com/unum-cloud/usearch},
-version = {2.13.3},
+version = {2.13.5},
 year = {2023},
 month = oct,
 }
