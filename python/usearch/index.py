@@ -128,6 +128,8 @@ def _normalize_dtype(
 
 
 def _to_numpy_dtype(dtype: ScalarKind):
+    if dtype == ScalarKind.BF16:
+        return None
     _normalize = {
         ScalarKind.F64: np.float64,
         ScalarKind.F32: np.float32,
@@ -738,10 +740,15 @@ class Index:
         """
         if not dtype:
             dtype = self.dtype
+            view_dtype = _to_numpy_dtype(dtype)
+            if view_dtype is None:
+                dtype = ScalarKind.F32
+                view_dtype = np.float32
         else:
             dtype = _normalize_dtype(dtype)
-
-        view_dtype = _to_numpy_dtype(dtype)
+            view_dtype = _to_numpy_dtype(dtype)
+            if view_dtype is None:
+                raise NotImplementedError("The requested representation type is not supported by NumPy")
 
         def cast(result):
             if result is not None:
