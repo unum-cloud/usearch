@@ -93,6 +93,8 @@ def _normalize_dtype(
     if dtype is None or dtype == "":
         if metric in MetricKindBitwise:
             return ScalarKind.B1
+        if _hardware_acceleration(dtype=ScalarKind.BF16, ndim=ndim, metric_kind=metric):
+            return ScalarKind.BF16
         if _hardware_acceleration(dtype=ScalarKind.F16, ndim=ndim, metric_kind=metric):
             return ScalarKind.F16
         return ScalarKind.F32
@@ -106,12 +108,14 @@ def _normalize_dtype(
     _normalize = {
         "f64": ScalarKind.F64,
         "f32": ScalarKind.F32,
+        "bf16": ScalarKind.BF16,
         "f16": ScalarKind.F16,
         "i8": ScalarKind.I8,
         "b1": ScalarKind.B1,
         "b1x8": ScalarKind.B1,
         "float64": ScalarKind.F64,
         "float32": ScalarKind.F32,
+        "bfloat16": ScalarKind.BF16,
         "float16": ScalarKind.F16,
         "int8": ScalarKind.I8,
         np.float64: ScalarKind.F64,
@@ -124,6 +128,8 @@ def _normalize_dtype(
 
 
 def _to_numpy_dtype(dtype: ScalarKind):
+    if dtype == ScalarKind.BF16:
+        return None
     _normalize = {
         ScalarKind.F64: np.float64,
         ScalarKind.F32: np.float32,
@@ -734,10 +740,15 @@ class Index:
         """
         if not dtype:
             dtype = self.dtype
+            view_dtype = _to_numpy_dtype(dtype)
+            if view_dtype is None:
+                dtype = ScalarKind.F32
+                view_dtype = np.float32
         else:
             dtype = _normalize_dtype(dtype)
-
-        view_dtype = _to_numpy_dtype(dtype)
+            view_dtype = _to_numpy_dtype(dtype)
+            if view_dtype is None:
+                raise NotImplementedError("The requested representation type is not supported by NumPy")
 
         def cast(result):
             if result is not None:

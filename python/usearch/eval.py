@@ -124,7 +124,7 @@ def self_recall(index: Index, sample: Union[float, int] = 1.0, **kwargs) -> Sear
     if "vectors" in kwargs:
         vectors = kwargs.pop("vectors")
     else:
-        vectors = index.get(keys, index.dtype)
+        vectors = index.get(keys)
 
     matches = index.search(vectors, **kwargs)
     count_matches: int = (

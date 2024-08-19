@@ -2240,6 +2240,7 @@ class index_dense_gt {
         case scalar_kind_t::f64_k: return make_casts_<f64_t>();
         case scalar_kind_t::f32_k: return make_casts_<f32_t>();
         case scalar_kind_t::f16_k: return make_casts_<f16_t>();
+        case scalar_kind_t::bf16_k: return make_casts_<bf16_t>();
         case scalar_kind_t::i8_k: return make_casts_<i8_t>();
         case scalar_kind_t::b1x8_k: return make_casts_<b1x8_t>();
         default: return {};

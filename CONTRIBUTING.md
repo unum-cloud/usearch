@@ -174,8 +174,8 @@ Following options are enabled:
 - The `-p no:warnings` option will suppress and allow warnings.
 
 ```sh
-pip install pytest pytest-repeat # for repeated fuzzy tests
-pytest # if you trust the default settings
+pip install pytest pytest-repeat            # for repeated fuzzy tests
+pytest                                      # if you trust the default settings
 pytest python/scripts/ -s -x -p no:warnings # to overwrite the default settings
 ```
 

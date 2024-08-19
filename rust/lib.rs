@@ -280,6 +280,8 @@ pub mod ffi {
         F32,
         /// 16-bit half-precision IEEE 754 floating-point number (different from `bf16`).
         F16,
+        /// 16-bit brain floating-point number.
+        BF16,
         /// 8-bit signed integer.
         I8,
         /// 1-bit binary value, packed 8 per byte.
@@ -515,7 +517,7 @@ impl Default for ffi::IndexOptions {
         Self {
             dimensions: 256,
             metric: MetricKind::Cos,
-            quantization: ScalarKind::F16,
+            quantization: ScalarKind::BF16,
             connectivity: 0,
             expansion_add: 0,
             expansion_search: 0,

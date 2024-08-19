@@ -28,6 +28,7 @@ metric_kind_t rust_to_cpp_metric(MetricKind value) {
 scalar_kind_t rust_to_cpp_scalar(ScalarKind value) {
     switch (value) {
     case ScalarKind::I8: return scalar_kind_t::i8_k;
+    case ScalarKind::BF16: return scalar_kind_t::bf16_k;
     case ScalarKind::F16: return scalar_kind_t::f16_k;
     case ScalarKind::F32: return scalar_kind_t::f32_k;
     case ScalarKind::F64: return scalar_kind_t::f64_k;

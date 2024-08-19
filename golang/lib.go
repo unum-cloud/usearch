@@ -63,6 +63,7 @@ type Quantization uint8
 // Different quantization kinds supported by the USearch library.
 const (
 	F32 Quantization = iota
+	BF16
 	F16
 	F64
 	I8
@@ -72,6 +73,8 @@ const (
 // String returns the string representation of the Quantization.
 func (a Quantization) String() string {
 	switch a {
+	case BF16:
+		return "BF16"
 	case F16:
 		return "F16"
 	case F32:
