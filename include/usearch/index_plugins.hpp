@@ -493,14 +493,14 @@ class bf16_bits_t {
     inline bf16_bits_t operator-(bf16_bits_t other) const noexcept { return {float(*this) - float(other)}; }
     inline bf16_bits_t operator*(bf16_bits_t other) const noexcept { return {float(*this) * float(other)}; }
     inline bf16_bits_t operator/(bf16_bits_t other) const noexcept { return {float(*this) / float(other)}; }
-    inline float operator+(float other) const noexcept { return {float(*this) + other}; }
-    inline float operator-(float other) const noexcept { return {float(*this) - other}; }
-    inline float operator*(float other) const noexcept { return {float(*this) * other}; }
-    inline float operator/(float other) const noexcept { return {float(*this) / other}; }
-    inline double operator+(double other) const noexcept { return {float(*this) + other}; }
-    inline double operator-(double other) const noexcept { return {float(*this) - other}; }
-    inline double operator*(double other) const noexcept { return {float(*this) * other}; }
-    inline double operator/(double other) const noexcept { return {float(*this) / other}; }
+    inline float operator+(float other) const noexcept { return float(*this) + other; }
+    inline float operator-(float other) const noexcept { return float(*this) - other; }
+    inline float operator*(float other) const noexcept { return float(*this) * other; }
+    inline float operator/(float other) const noexcept { return float(*this) / other; }
+    inline double operator+(double other) const noexcept { return float(*this) + other; }
+    inline double operator-(double other) const noexcept { return float(*this) - other; }
+    inline double operator*(double other) const noexcept { return float(*this) * other; }
+    inline double operator/(double other) const noexcept { return float(*this) / other; }
 
     inline bf16_bits_t& operator+=(float v) noexcept {
         uint16_ = f32_to_bf16(v + bf16_to_f32(uint16_));
