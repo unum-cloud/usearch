@@ -950,7 +950,7 @@ class index_dense_gt {
 
     void reserve(index_limits_t limits) {
         if (!try_reserve(limits))
-            throw std::bad_alloc();
+            __usearch_raise_runtime_error("failed to reserve memory");
     }
 
     /**
