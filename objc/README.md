@@ -106,4 +106,6 @@ UInt32 count = [index count:42];
 
 ## Performance Considerations
 
-Tune the `connectivity`, `quantization`, and other parameters according to the size and dimensionality of your dataset. These settings can significantly affect both the performance and accuracy of your searches. The choice of metric and scalar type (e.g., `USearchScalarF32`, `USearchScalarF16`) also influences the memory usage and computation speed.
+Tune the `connectivity`, `quantization`, and other parameters according to the size and dimensionality of your dataset.
+These settings can significantly affect both the performance and accuracy of your searches.
+The choice of metric and scalar type (e.g., `USearchScalarF32`, `USearchScalarF16`, `USearchScalarF16`) also influences the memory usage and computation speed.

@@ -10,6 +10,7 @@ typedef NS_ENUM(NSUInteger, USearchScalar) {
     USearchScalarF64,
     USearchScalarI8,
     USearchScalarB1
+    USearchScalarBF16,
 };
 
 typedef NS_ENUM(NSUInteger, USearchMetric) {

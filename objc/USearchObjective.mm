@@ -61,6 +61,9 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
         case USearchScalarF16:
             return scalar_kind_t::f16_k;
 
+        case USearchScalarBF16:
+            return scalar_kind_t::bf16_k;
+
         case USearchScalarF32:
             return scalar_kind_t::f32_k;
 
