@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.1)
 project(
     usearch
-    VERSION 2.13.0
+    VERSION 2.14.0
     LANGUAGES C CXX
     DESCRIPTION "Smaller & Faster Single-File Vector Search Engine from Unum"
     HOMEPAGE_URL "https://github.com/unum-cloud/usearch"
@@ -151,7 +151,8 @@ function (setup_target TARGET_NAME)
             PRIVATE $<$<CONFIG:RELEASE>:-O3>
                     $<$<CONFIG:RELWITHDEBINFO>:-O3
                     -g>
-                    $<$<CONFIG:DEBUG>:-g
+                    $<$<CONFIG:DEBUG>:-O0
+                    -g
                     -fsanitize=address
                     -fsanitize=leak
                     -fsanitize=alignment
@@ -192,7 +193,8 @@ function (setup_target TARGET_NAME)
             PRIVATE $<$<CONFIG:RELEASE>:-O3>
                     $<$<CONFIG:RELWITHDEBINFO>:-O3
                     -g>
-                    $<$<CONFIG:DEBUG>:-g
+                    $<$<CONFIG:DEBUG>:-O0
+                    -g
                     -fsanitize=address
                     -fsanitize=alignment
                     -fsanitize=undefined
@@ -201,8 +203,6 @@ function (setup_target TARGET_NAME)
                     -fPIC
                     -pedantic
                     -Wfatal-errors
-                    # Don't complain if the for-loops were not vectorzied
-                    -Wpass-failed=transform-warning
                     -fcolor-diagnostics
         )
         target_link_options(
@@ -243,14 +243,14 @@ function (setup_target TARGET_NAME)
         set_property(SOURCE bench.cpp PROPERTY LANGUAGE CUDA)
         set_target_properties(${TARGET_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
         set_target_properties(${TARGET_NAME} PROPERTIES CUDA_ARCHITECTURES "86")
-        
+
     elseif (CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
         target_compile_options(${TARGET_NAME} PRIVATE -w -ferror-limit=1)
-        
+
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(${TARGET_NAME} PRIVATE /wd4068 /wd4996)
         target_compile_options(
-            ${TARGET_NAME} PRIVATE $<$<CONFIG:DEBUG>:/DEBUG> $<$<CONFIG:RELEASE>:/O2> $<$<CONFIG:RELWITHDEBINFO>:/O2
+            ${TARGET_NAME} PRIVATE $<$<CONFIG:DEBUG>:/DEBUG> $<$<CONFIG:RELEASE>:/O3> $<$<CONFIG:RELWITHDEBINFO>:/O3
                                    /DEBUG>
         )
     endif ()

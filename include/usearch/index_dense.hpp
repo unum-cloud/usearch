@@ -95,7 +95,7 @@ struct index_dense_head_result_t {
  *  @brief  Configuration settings for the construction of dense
  *          equidimensional vector indexes.
  *
- *  Unlike the underlying `index_gt` class, incroporates the
+ *  Unlike the underlying `index_gt` class, incorporates the
  *  `::expansion_add` and `::expansion_search` parameters passed
  *  separately for the lower-level engine.
  */
@@ -208,6 +208,45 @@ struct index_dense_metadata_result_t {
 };
 
 /**
+ *  @brief  Fixes serialized scalar-kind codes for pre-v2.10 versions, until we can upgrade to v3.
+ *          The old enum `scalar_kind_t` is defined without explicit constants from 0.
+ */
+inline scalar_kind_t convert_pre_2_10_scalar_kind(scalar_kind_t scalar_kind) noexcept {
+    switch (static_cast<std::underlying_type<scalar_kind_t>::type>(scalar_kind)) {
+    case 0: return scalar_kind_t::unknown_k;
+    case 1: return scalar_kind_t::b1x8_k;
+    case 2: return scalar_kind_t::u40_k;
+    case 3: return scalar_kind_t::uuid_k;
+    case 4: return scalar_kind_t::f64_k;
+    case 5: return scalar_kind_t::f32_k;
+    case 6: return scalar_kind_t::f16_k;
+    case 7: return scalar_kind_t::f8_k;
+    case 8: return scalar_kind_t::u64_k;
+    case 9: return scalar_kind_t::u32_k;
+    case 10: return scalar_kind_t::u8_k;
+    case 11: return scalar_kind_t::i64_k;
+    case 12: return scalar_kind_t::i32_k;
+    case 13: return scalar_kind_t::i16_k;
+    case 14: return scalar_kind_t::i8_k;
+    default: return scalar_kind;
+    }
+}
+
+/**
+ *  @brief  Fixes the metadata for pre-v2.10 versions, until we can upgrade to v3.
+ *          Originates from: https://github.com/unum-cloud/usearch/issues/423
+ */
+inline void fix_pre_2_10_metadata(index_dense_head_t& head) {
+    if (head.version_major == 2 && head.version_minor < 10) {
+        head.kind_scalar = convert_pre_2_10_scalar_kind(head.kind_scalar);
+        head.kind_key = convert_pre_2_10_scalar_kind(head.kind_key);
+        head.kind_compressed_slot = convert_pre_2_10_scalar_kind(head.kind_compressed_slot);
+        head.version_minor = 10;
+        head.version_patch = 0;
+    }
+}
+
+/**
  *  @brief  Extracts metadata from a pre-constructed index on disk,
  *          without loading it or mapping the whole binary file.
  */
@@ -224,8 +263,10 @@ inline index_dense_metadata_result_t index_dense_metadata_from_path(char const* 
 
     // Check if the file immediately starts with the index, instead of vectors
     result.config.exclude_vectors = true;
-    if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
+    if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0) {
+        fix_pre_2_10_metadata(result.head);
         return result;
+    }
 
     if (std::fseek(file.get(), 0L, SEEK_END) != 0)
         return result.failed("Can't infer file size");
@@ -251,8 +292,10 @@ inline index_dense_metadata_result_t index_dense_metadata_from_path(char const* 
 
         result.config.exclude_vectors = false;
         result.config.use_64_bit_dimensions = false;
-        if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
+        if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0) {
+            fix_pre_2_10_metadata(result.head);
             return result;
+        }
     }
 
     // Check if it starts with 64-bit
@@ -266,8 +309,10 @@ inline index_dense_metadata_result_t index_dense_metadata_from_path(char const* 
         // Check if it starts with 64-bit
         result.config.exclude_vectors = false;
         result.config.use_64_bit_dimensions = true;
-        if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0)
+        if (std::memcmp(result.head_buffer, default_magic(), std::strlen(default_magic())) == 0) {
+            fix_pre_2_10_metadata(result.head);
             return result;
+        }
     }
 
     return result.failed("Not a dense USearch index!");
@@ -276,7 +321,7 @@ inline index_dense_metadata_result_t index_dense_metadata_from_path(char const* 
 /**
  *  @brief  Extracts metadata from a pre-constructed index serialized into an in-memory buffer.
  */
-inline index_dense_metadata_result_t index_dense_metadata_from_buffer(memory_mapped_file_t file,
+inline index_dense_metadata_result_t index_dense_metadata_from_buffer(memory_mapped_file_t const& file,
                                                                       std::size_t offset = 0) noexcept {
     index_dense_metadata_result_t result;
 
@@ -284,7 +329,7 @@ inline index_dense_metadata_result_t index_dense_metadata_from_buffer(memory_map
     if (offset + sizeof(index_dense_head_buffer_t) >= file.size())
         return result.failed("End of file reached!");
 
-    byte_t* const file_data = file.data() + offset;
+    byte_t const* file_data = file.data() + offset;
     std::size_t const file_size = file.size() - offset;
     std::memcpy(&result.head_buffer, file_data, sizeof(index_dense_head_buffer_t));
 
@@ -661,7 +706,7 @@ class index_dense_gt {
     std::size_t size() const noexcept { return typed_->size() - free_keys_.size(); }
     std::size_t capacity() const noexcept { return typed_->capacity(); }
     std::size_t max_level() const noexcept { return typed_->max_level(); }
-    index_dense_config_t const& config() const { return config_; }
+    index_dense_config_t const& config() const noexcept { return config_; }
     index_limits_t const& limits() const noexcept { return typed_->limits(); }
     bool multi() const noexcept { return config_.multi; }
     std::size_t currently_available_threads() const noexcept {
@@ -673,10 +718,10 @@ class index_dense_gt {
     metric_t const& metric() const noexcept { return metric_; }
     void change_metric(metric_t metric) noexcept { metric_ = std::move(metric); }
 
-    scalar_kind_t scalar_kind() const noexcept { return metric_.scalar_kind(); }
-    std::size_t bytes_per_vector() const noexcept { return metric_.bytes_per_vector(); }
-    std::size_t scalar_words() const noexcept { return metric_.scalar_words(); }
-    std::size_t dimensions() const noexcept { return metric_.dimensions(); }
+    scalar_kind_t scalar_kind() const { return metric_.scalar_kind(); }
+    std::size_t bytes_per_vector() const { return metric_.bytes_per_vector(); }
+    std::size_t scalar_words() const { return metric_.scalar_words(); }
+    std::size_t dimensions() const { return metric_.dimensions(); }
 
     // Fetching and changing search criteria
     std::size_t expansion_add() const noexcept { return config_.expansion_add; }
@@ -686,8 +731,6 @@ class index_dense_gt {
 
     member_citerator_t cbegin() const noexcept { return typed_->cbegin(); }
     member_citerator_t cend() const noexcept { return typed_->cend(); }
-    member_citerator_t begin() const noexcept { return typed_->begin(); }
-    member_citerator_t end() const noexcept { return typed_->end(); }
     member_iterator_t begin() noexcept { return typed_->begin(); }
     member_iterator_t end() noexcept { return typed_->end(); }
 
@@ -940,7 +983,7 @@ class index_dense_gt {
      *  Will deallocate all threads/contexts.
      *  If the index is memory-mapped - releases the mapping and the descriptor.
      */
-    void reset() noexcept {
+    void reset() {
 
         unique_lock_t lookup_lock(slot_lookup_mutex_);
         std::unique_lock<std::mutex> free_lock(free_keys_mutex_);
@@ -1031,7 +1074,7 @@ class index_dense_gt {
     /**
      *  @brief  Estimate the binary length (in bytes) of the serialized index.
      */
-    std::size_t serialized_length(serialization_config_t config = {}) const noexcept {
+    std::size_t serialized_length(serialization_config_t config = {}) const {
         std::size_t dimensions_length = 0;
         std::size_t matrix_length = 0;
         if (!config.exclude_vectors) {
@@ -1098,6 +1141,9 @@ class index_dense_gt {
             index_dense_head_t head{buffer};
             if (std::memcmp(buffer, default_magic(), std::strlen(default_magic())) != 0)
                 return result.failed("Magic header mismatch - the file isn't an index");
+
+            // fix pre-2.10 headers
+            fix_pre_2_10_metadata(head);
 
             // Validate the software version
             if (head.version_major != USEARCH_VERSION_MAJOR)
@@ -1207,6 +1253,9 @@ class index_dense_gt {
             index_dense_head_t head{buffer};
             if (std::memcmp(buffer, default_magic(), std::strlen(default_magic())) != 0)
                 return result.failed("Magic header mismatch - the file isn't an index");
+
+            // fix pre-2.10 headers
+            fix_pre_2_10_metadata(head);
 
             // Validate the software version
             if (head.version_major != USEARCH_VERSION_MAJOR)
@@ -1609,9 +1658,10 @@ class index_dense_gt {
         if (!cast_buffer)
             return state_result_t{}.failed("Failed to allocate memory for the casts!");
         available_threads_t available_threads;
-        if (!available_threads.reserve(available_threads_.capacity()))
+        std::size_t max_threads = limits().threads();
+        if (!available_threads.reserve(max_threads))
             return state_result_t{}.failed("Failed to allocate memory for the available threads!");
-        for (std::size_t i = 0; i < available_threads.capacity(); i++)
+        for (std::size_t i = 0; i < max_threads; i++)
             available_threads.push(i);
         index_t* raw = index_allocator_t{}.allocate(1);
         if (!raw)
@@ -1619,6 +1669,8 @@ class index_dense_gt {
 
         copy_result_t result;
         index_dense_gt& other = result.index;
+        index_limits_t other_limits = limits();
+        other_limits.members = 0;
         other.config_ = config_;
         other.cast_buffer_ = std::move(cast_buffer);
         other.casts_ = casts_;
@@ -1628,6 +1680,7 @@ class index_dense_gt {
         other.free_key_ = free_key_;
 
         new (raw) index_t(config());
+        raw->try_reserve(other_limits);
         other.typed_ = raw;
         return result;
     }
@@ -2193,6 +2246,7 @@ class index_dense_gt {
         case scalar_kind_t::f64_k: return make_casts_<f64_t>();
         case scalar_kind_t::f32_k: return make_casts_<f32_t>();
         case scalar_kind_t::f16_k: return make_casts_<f16_t>();
+        case scalar_kind_t::bf16_k: return make_casts_<bf16_t>();
         case scalar_kind_t::i8_k: return make_casts_<i8_t>();
         case scalar_kind_t::b1x8_k: return make_casts_<b1x8_t>();
         default: return {};
@@ -2233,7 +2287,7 @@ static join_result_t join(                                    //
     man_to_woman_at&& man_to_woman = man_to_woman_at{}, //
     woman_to_man_at&& woman_to_man = woman_to_man_at{}, //
     executor_at&& executor = executor_at{},             //
-    progress_at&& progress = progress_at{}) noexcept {
+    progress_at&& progress = progress_at{}) {
 
     return men.join(                                 //
         women, config,                               //

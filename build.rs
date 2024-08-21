@@ -23,14 +23,41 @@ fn main() {
         build.define("USEARCH_USE_FP16LIB", "0");
     }
 
+    // Define all possible SIMD targets as 1
+    let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+    let flags_to_try = match target_arch.as_str() {
+        "arm" | "aarch64" => vec![
+            "SIMSIMD_TARGET_SVE_BF16",
+            "SIMSIMD_TARGET_SVE_F16",
+            "SIMSIMD_TARGET_SVE_I8",
+            "SIMSIMD_TARGET_SVE",
+            "SIMSIMD_TARGET_NEON_BF16",
+            "SIMSIMD_TARGET_NEON_F16",
+            "SIMSIMD_TARGET_NEON_I8",
+            "SIMSIMD_TARGET_NEON",
+        ],
+        _ => vec![
+            "SIMSIMD_TARGET_SAPPHIRE",
+            "SIMSIMD_TARGET_GENOA",
+            "SIMSIMD_TARGET_ICE",
+            "SIMSIMD_TARGET_SKYLAKE",
+            "SIMSIMD_TARGET_HASWELL",
+        ],
+    };
+
     if cfg!(feature = "simsimd") {
-        build
-            .define("USEARCH_USE_SIMSIMD", "1")
-            .define("SIMSIMD_DYNAMIC_DISPATCH", "1")
-            .define("SIMSIMD_NATIVE_F16", "0");
+        build.define("USEARCH_USE_SIMSIMD", "1")
+        .define("SIMSIMD_DYNAMIC_DISPATCH", "1")
+        .define("SIMSIMD_NATIVE_BF16", "0")
+        .define("SIMSIMD_NATIVE_F16", "0");
+
+        for flag in &flags_to_try {
+            build.define(flag, "1");
+        }
     } else {
         build.define("USEARCH_USE_SIMSIMD", "0");
     }
+    
 
     // Conditional compilation depending on the target operating system.
     if cfg!(target_os = "linux") {
@@ -59,18 +86,6 @@ fn main() {
     let mut result = build.try_compile("usearch");
     if result.is_err() {
         print!("cargo:warning=Failed to compile with all SIMD backends...");
-
-        let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
-        let flags_to_try = match target_arch.as_str() {
-            "arm" | "aarch64" => vec!["SIMSIMD_TARGET_NEON", "SIMSIMD_TARGET_SVE"],
-            _ => vec![
-                "SIMSIMD_TARGET_SAPPHIRE",
-                "SIMSIMD_TARGET_ICE",
-                "SIMSIMD_TARGET_SKYLAKE",
-                "SIMSIMD_TARGET_HASWELL",
-            ],
-        };
-
         for flag in flags_to_try {
             build.define(flag, "0");
             result = build.try_compile("usearch");

@@ -1,7 +1,7 @@
 <h1 align="center">USearch</h1>
 <h3 align="center">
 Smaller & <a href="https://www.unum.cloud/blog/2023-11-07-scaling-vector-search-with-intel">Faster</a> Single-File<br/>
-Similarity Search Engine for <a href="https://github.com/ashvardanian/simsimd">Vectors</a> & 🔜 <a href="https://github.com/ashvardanian/stringzilla">Texts</a>
+Similarity Search & Clustering Engine for <a href="https://github.com/ashvardanian/simsimd">Vectors</a> & 🔜 <a href="https://github.com/ashvardanian/stringzilla">Texts</a>
 </h3>
 <br/>
 
@@ -71,13 +71,10 @@ Linux • MacOS • Windows • iOS • WebAssembly •
 
 __Technical Insights__ and related articles:
 
-- [Uses Horner's method for polynomial approximations, beating GCC 12 by 119x](https://ashvardanian.com/posts/gcc-12-vs-avx512fp16/).
 - [Uses Arm SVE and x86 AVX-512's masked loads to eliminate tail `for`-loops](https://ashvardanian.com/posts/simsimd-faster-scipy/#tails-of-the-past-the-significance-of-masked-loads).
-- [Uses AVX-512 FP16 for half-precision operations, that few compilers vectorize](https://ashvardanian.com/posts/simsimd-faster-scipy/#the-challenge-of-f16).
-- [Substitutes LibC's `sqrt` calls with bithacks using Jan Kadlec's constant](https://ashvardanian.com/posts/simsimd-faster-scipy/#bonus-section-bypassing-sqrt-and-libc-dependencies).
+- [Uses Horner's method for polynomial approximations, beating GCC 12 by 119x](https://ashvardanian.com/posts/gcc-12-vs-avx512fp16/).
 - [For every language implements a custom separate binding](https://ashvardanian.com/posts/porting-cpp-library-to-ten-languages/).
-- [For Python avoids slow PyBind11, and even `PyArg_ParseTuple` for speed](https://ashvardanian.com/posts/pybind11-cpython-tutorial/).
-- [For JavaScript uses typed arrays and NAPI for zero-copy calls](https://ashvardanian.com/posts/javascript-ai-vector-search/).
+
 
 ## Comparison with FAISS
 
@@ -119,17 +116,15 @@ USearch is compact and broadly compatible without sacrificing performance, prima
 Base functionality is identical to FAISS, and the interface must be familiar if you have ever investigated Approximate Nearest Neighbors search:
 
 ```py
-# pip install numpy usearch
+# pip install usearch
 
 import numpy as np
 from usearch.index import Index
 
-index = Index(ndim=3)
-
-vector = np.array([0.2, 0.6, 0.4])
-index.add(42, vector)
-
-matches = index.search(vector, 10)
+index = Index(ndim=3)               # Default settings for 3D vectors
+vector = np.array([0.2, 0.6, 0.4])  # Can be a matrix for batch operations
+index.add(42, vector)               # Add one or many vectors in parallel
+matches = index.search(vector, 10)  # Find 10 nearest neighbors
 
 assert matches[0].key == 42
 assert matches[0].distance <= 0.001
@@ -137,13 +132,13 @@ assert np.allclose(index[42], vector, atol=0.1) # Ensure high tolerance in mixed
 ```
 
 More settings are always available, and the API is designed to be as flexible as possible.
-The default storage/quantization level is hardware-dependant for efficiency, but `f16` is recommended for most modern CPUs.
+The default storage/quantization level is hardware-dependant for efficiency, but `bf16` is recommended for most modern CPUs.
 
 ```py
 index = Index(
     ndim=3, # Define the number of dimensions in input vectors
     metric='cos', # Choose 'l2sq', 'ip', 'haversine' or other metric, default = 'cos'
-    dtype='f16', # Store as 'f64', 'f32', 'f16', 'i8', 'b1'..., default = None
+    dtype='bf16', # Store as 'f64', 'f32', 'f16', 'i8', 'b1'..., default = None
     connectivity=16, # Optional: Limit number of neighbors per graph node
     expansion_add=128, # Optional: Control the recall of indexing
     expansion_search=64, # Optional: Control the quality of the search
@@ -254,7 +249,7 @@ assert!(
 Training a quantization model and dimension-reduction is a common approach to accelerate vector search.
 Those, however, are only sometimes reliable, can significantly affect the statistical properties of your data, and require regular adjustments if your distribution shifts.
 Instead, we have focused on high-precision arithmetic over low-precision downcasted vectors.
-The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f64_t`, `f32_t`, `f16_t`, `i8_t`, and single-bit representations.
+The same index, and `add` and `search` operations will automatically down-cast or up-cast between `f64_t`, `f32_t`, `f16_t`, `i8_t`, and single-bit `b1x8_t` representations.
 You can use the following command to check, if hardware acceleration is enabled:
 
 ```sh
@@ -264,11 +259,19 @@ $ python -c 'from usearch.index import Index; print(Index(ndim=166, metric="tani
 > ice
 ```
 
+In most cases, it's recommended to use half-precision floating-point numbers on modern hardware.
+When quantization is enabled, the "get"-like functions won't be able to recover the original data, so you may want to replicate the original vectors elsewhere.
+When quantizing to `i8_t` integers, note that it's only valid for cosine-like metrics.
+As part of the quantization process, the vectors are normalized to unit length and later scaled to [-127, 127] range to occupy the full 8-bit range.
+When quantizing to `b1x8_t` single-bit representations, note that it's only valid for binary metrics like Jaccard, Hamming, etc.
+As part of the quantization process, the scalar components greater than zero are set to `true`, and the rest to `false`.
+
+![USearch uint40_t support](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-neighbor-types.png?raw=true)
+
 Using smaller numeric types will save you RAM needed to store the vectors, but you can also compress the neighbors lists forming our proximity graphs.
 By default, 32-bit `uint32_t` is used to enumerate those, which is not enough if you need to address over 4 Billion entries.
 For such cases we provide a custom `uint40_t` type, that will still be 37.5% more space-efficient than the commonly used 8-byte integers, and will scale up to 1 Trillion entries.
 
-![USearch uint40_t support](https://github.com/unum-cloud/usearch/blob/main/assets/usearch-neighbor-types.png?raw=true)
 
 ## `Indexes` for Multi-Index Lookups
 
@@ -400,7 +403,7 @@ def search(query: str) -> np.ndarray:
 server.run()
 ```
 
-Similar experiences can also be imlemented in other languages and on the client side, removing the network latency.
+Similar experiences can also be implemented in other languages and on the client side, removing the network latency.
 For Swift and iOS, check out the [`ashvardanian/SwiftSemanticSearch`](https://github.com/ashvardanian/SwiftSemanticSearch) repository.
 
 <table>
@@ -541,7 +544,7 @@ doi = {10.5281/zenodo.7949416},
 author = {Vardanian, Ash},
 title = {{USearch by Unum Cloud}},
 url = {https://github.com/unum-cloud/usearch},
-version = {2.13.0},
+version = {2.14.0},
 year = {2023},
 month = oct,
 }

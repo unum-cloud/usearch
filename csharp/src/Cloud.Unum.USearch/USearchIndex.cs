@@ -187,7 +187,6 @@ public class USearchIndex : IDisposable
             this.IncreaseCapacity(size_increase);
         }
     }
-
     /// <summary>
     /// Adds a vector with a specific key to the index.
     /// </summary>
@@ -196,8 +195,17 @@ public class USearchIndex : IDisposable
     public void Add(ulong key, float[] vector)
     {
         this.CheckIncreaseCapacity(1);
-        usearch_add(this._index, key, vector, ScalarKind.Float32, out IntPtr error);
-        HandleError(error);
+        GCHandle handle = GCHandle.Alloc(vector, GCHandleType.Pinned);
+        try
+        {
+            IntPtr vectorPtr = handle.AddrOfPinnedObject();
+            usearch_add(this._index, key, vectorPtr, ScalarKind.Float32, out IntPtr error);
+            HandleError(error);
+        }
+        finally
+        {
+            handle.Free();
+        }
     }
 
     /// <summary>
@@ -208,8 +216,17 @@ public class USearchIndex : IDisposable
     public void Add(ulong key, double[] vector)
     {
         this.CheckIncreaseCapacity(1);
-        usearch_add(this._index, key, vector, ScalarKind.Float64, out IntPtr error);
-        HandleError(error);
+        GCHandle handle = GCHandle.Alloc(vector, GCHandleType.Pinned);
+        try
+        {
+            IntPtr vectorPtr = handle.AddrOfPinnedObject();
+            usearch_add(this._index, key, vectorPtr, ScalarKind.Float64, out IntPtr error);
+            HandleError(error);
+        }
+        finally
+        {
+            handle.Free();
+        }
     }
 
     /// <summary>
@@ -222,8 +239,17 @@ public class USearchIndex : IDisposable
         this.CheckIncreaseCapacity((ulong)vectors.Length);
         for (int i = 0; i < vectors.Length; i++)
         {
-            usearch_add(this._index, keys[i], vectors[i], ScalarKind.Float32, out IntPtr error);
-            HandleError(error);
+            GCHandle handle = GCHandle.Alloc(vectors[i], GCHandleType.Pinned);
+            try
+            {
+                IntPtr vectorPtr = handle.AddrOfPinnedObject();
+                usearch_add(this._index, keys[i], vectorPtr, ScalarKind.Float32, out IntPtr error);
+                HandleError(error);
+            }
+            finally
+            {
+                handle.Free();
+            }
         }
     }
 
@@ -237,10 +263,20 @@ public class USearchIndex : IDisposable
         this.CheckIncreaseCapacity((ulong)vectors.Length);
         for (int i = 0; i < vectors.Length; i++)
         {
-            usearch_add(this._index, keys[i], vectors[i], ScalarKind.Float64, out IntPtr error);
-            HandleError(error);
+            GCHandle handle = GCHandle.Alloc(vectors[i], GCHandleType.Pinned);
+            try
+            {
+                IntPtr vectorPtr = handle.AddrOfPinnedObject();
+                usearch_add(this._index, keys[i], vectorPtr, ScalarKind.Float64, out IntPtr error);
+                HandleError(error);
+            }
+            finally
+            {
+                handle.Free();
+            }
         }
     }
+
 
     /// <summary>
     /// Retrieves the vector associated with the given key from the index.
@@ -251,14 +287,23 @@ public class USearchIndex : IDisposable
     public int Get(ulong key, out float[] vector)
     {
         vector = new float[this._cachedDimensions];
-        int foundVectorsCount = checked((int)usearch_get(this._index, key, (UIntPtr)1, vector, ScalarKind.Float32, out IntPtr error));
-        HandleError(error);
-        if (foundVectorsCount < 1)
+        GCHandle handle = GCHandle.Alloc(vector, GCHandleType.Pinned);
+        try
         {
-            vector = null;
-        }
+            IntPtr vectorPtr = handle.AddrOfPinnedObject();
+            int foundVectorsCount = checked((int)NativeMethods.usearch_get(this._index, key, (UIntPtr)1, vectorPtr, ScalarKind.Float32, out IntPtr error));
+            HandleError(error);
+            if (foundVectorsCount < 1)
+            {
+                vector = null;
+            }
 
-        return foundVectorsCount;
+            return foundVectorsCount;
+        }
+        finally
+        {
+            handle.Free();
+        }
     }
 
     /// <summary>
@@ -271,23 +316,32 @@ public class USearchIndex : IDisposable
     public int Get(ulong key, int count, out float[][] vectors)
     {
         var flattenVectors = new float[count * (int)this._cachedDimensions];
-        int foundVectorsCount = checked((int)usearch_get(this._index, key, (UIntPtr)count, flattenVectors, ScalarKind.Float32, out IntPtr error));
-        HandleError(error);
-        if (foundVectorsCount < 1)
+        GCHandle handle = GCHandle.Alloc(flattenVectors, GCHandleType.Pinned);
+        try
         {
-            vectors = null;
-        }
-        else
-        {
-            vectors = new float[foundVectorsCount][];
-            for (int i = 0; i < foundVectorsCount; i++)
+            IntPtr vectorPtr = handle.AddrOfPinnedObject();
+            int foundVectorsCount = checked((int)NativeMethods.usearch_get(this._index, key, (UIntPtr)count, vectorPtr, ScalarKind.Float32, out IntPtr error));
+            HandleError(error);
+            if (foundVectorsCount < 1)
             {
-                vectors[i] = new float[this._cachedDimensions];
-                Array.Copy(flattenVectors, i * (int)this._cachedDimensions, vectors[i], 0, (int)this._cachedDimensions);
+                vectors = null;
             }
-        }
+            else
+            {
+                vectors = new float[foundVectorsCount][];
+                for (int i = 0; i < foundVectorsCount; i++)
+                {
+                    vectors[i] = new float[(int)this._cachedDimensions];
+                    Array.Copy(flattenVectors, i * (int)this._cachedDimensions, vectors[i], 0, (int)this._cachedDimensions);
+                }
+            }
 
-        return foundVectorsCount;
+            return foundVectorsCount;
+        }
+        finally
+        {
+            handle.Free();
+        }
     }
 
     /// <summary>
@@ -299,14 +353,23 @@ public class USearchIndex : IDisposable
     public int Get(ulong key, out double[] vector)
     {
         vector = new double[this._cachedDimensions];
-        int foundVectorsCount = checked((int)usearch_get(this._index, key, (UIntPtr)1, vector, ScalarKind.Float64, out IntPtr error));
-        HandleError(error);
-        if (foundVectorsCount < 1)
+        GCHandle handle = GCHandle.Alloc(vector, GCHandleType.Pinned);
+        try
         {
-            vector = null;
-        }
+            IntPtr vectorPtr = handle.AddrOfPinnedObject();
+            int foundVectorsCount = checked((int)NativeMethods.usearch_get(this._index, key, (UIntPtr)1, vectorPtr, ScalarKind.Float64, out IntPtr error));
+            HandleError(error);
+            if (foundVectorsCount < 1)
+            {
+                vector = null;
+            }
 
-        return foundVectorsCount;
+            return foundVectorsCount;
+        }
+        finally
+        {
+            handle.Free();
+        }
     }
 
     /// <summary>
@@ -319,23 +382,32 @@ public class USearchIndex : IDisposable
     public int Get(ulong key, int count, out double[][] vectors)
     {
         var flattenVectors = new double[count * (int)this._cachedDimensions];
-        int foundVectorsCount = checked((int)usearch_get(this._index, key, (UIntPtr)count, flattenVectors, ScalarKind.Float64, out IntPtr error));
-        HandleError(error);
-        if (foundVectorsCount < 1)
+        GCHandle handle = GCHandle.Alloc(flattenVectors, GCHandleType.Pinned);
+        try
         {
-            vectors = null;
-        }
-        else
-        {
-            vectors = new double[foundVectorsCount][];
-            for (int i = 0; i < foundVectorsCount; i++)
+            IntPtr vectorPtr = handle.AddrOfPinnedObject();
+            int foundVectorsCount = checked((int)NativeMethods.usearch_get(this._index, key, (UIntPtr)count, vectorPtr, ScalarKind.Float64, out IntPtr error));
+            HandleError(error);
+            if (foundVectorsCount < 1)
             {
-                vectors[i] = new double[this._cachedDimensions];
-                Array.Copy(flattenVectors, i * (int)this._cachedDimensions, vectors[i], 0, (int)this._cachedDimensions);
+                vectors = null;
             }
-        }
+            else
+            {
+                vectors = new double[foundVectorsCount][];
+                for (int i = 0; i < foundVectorsCount; i++)
+                {
+                    vectors[i] = new double[(int)this._cachedDimensions];
+                    Array.Copy(flattenVectors, i * (int)this._cachedDimensions, vectors[i], 0, (int)this._cachedDimensions);
+                }
+            }
 
-        return foundVectorsCount;
+            return foundVectorsCount;
+        }
+        finally
+        {
+            handle.Free();
+        }
     }
 
     /// <summary>
@@ -353,25 +425,30 @@ public class USearchIndex : IDisposable
         distances = new float[count];
 
         GCHandle handle = GCHandle.Alloc(queryVector, GCHandleType.Pinned);
-        int matches = 0;
+        GCHandle keysHandle = GCHandle.Alloc(keys, GCHandleType.Pinned);
+        GCHandle distancesHandle = GCHandle.Alloc(distances, GCHandleType.Pinned);
         try
         {
             IntPtr queryVectorPtr = handle.AddrOfPinnedObject();
-            matches = checked((int)usearch_search(this._index, queryVectorPtr, scalarKind, (UIntPtr)count, keys, distances, out IntPtr error));
+            IntPtr keysPtr = keysHandle.AddrOfPinnedObject();
+            IntPtr distancesPtr = distancesHandle.AddrOfPinnedObject();
+            int matches = checked((int)NativeMethods.usearch_search(this._index, queryVectorPtr, scalarKind, (UIntPtr)count, keysPtr, distancesPtr, out IntPtr error));
             HandleError(error);
+
+            if (matches < count)
+            {
+                Array.Resize(ref keys, matches);
+                Array.Resize(ref distances, matches);
+            }
+
+            return matches;
         }
         finally
         {
             handle.Free();
+            keysHandle.Free();
+            distancesHandle.Free();
         }
-
-        if (matches < count)
-        {
-            Array.Resize(ref keys, (int)matches);
-            Array.Resize(ref distances, (int)matches);
-        }
-
-        return matches;
     }
 
     /// <summary>
@@ -379,7 +456,7 @@ public class USearchIndex : IDisposable
     /// </summary>
     /// <param name="queryVector">The query vector data.</param>
     /// <param name="count">The number of nearest neighbors to search.</param>
-    /// <param name="keys">The keys of the nearest neighbors found.</param>
+    /// <param="keys">The keys of the nearest neighbors found.</param>
     /// <param name="distances">The distances to the nearest neighbors found.</param>
     /// <returns>The number of matches found.</returns>
     public int Search(float[] queryVector, int count, out ulong[] keys, out float[] distances)
@@ -391,9 +468,9 @@ public class USearchIndex : IDisposable
     /// Searches for the closest vectors to the query vector.
     /// </summary>
     /// <param name="queryVector">The query vector data.</param>
-    /// <param name="count">The number of nearest neighbors to search.</param>
-    /// <param name="keys">The keys of the nearest neighbors found.</param>
-    /// <param name="distances">The distances to the nearest neighbors found.</param>
+    /// <param="count">The number of nearest neighbors to search.</param>
+    /// <param="keys">The keys of the nearest neighbors found.</param>
+    /// <param="distances">The distances to the nearest neighbors found.</param>
     /// <returns>The number of matches found.</returns>
     public int Search(double[] queryVector, int count, out ulong[] keys, out float[] distances)
     {

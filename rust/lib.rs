@@ -280,6 +280,8 @@ pub mod ffi {
         F32,
         /// 16-bit half-precision IEEE 754 floating-point number (different from `bf16`).
         F16,
+        /// 16-bit brain floating-point number.
+        BF16,
         /// 8-bit signed integer.
         I8,
         /// 1-bit binary value, packed 8 per byte.
@@ -515,7 +517,7 @@ impl Default for ffi::IndexOptions {
         Self {
             dimensions: 256,
             metric: MetricKind::Cos,
-            quantization: ScalarKind::F16,
+            quantization: ScalarKind::BF16,
             connectivity: 0,
             expansion_add: 0,
             expansion_search: 0,
@@ -1247,7 +1249,7 @@ impl Index {
     ///
     /// # Arguments
     ///
-    /// * `path` - The file path where the index will be saved.
+    /// * `buffer` - The buffer where the index will be saved.
     pub fn save_to_buffer(self: &Index, buffer: &mut [u8]) -> Result<(), cxx::Exception> {
         self.inner.save_to_buffer(buffer)
     }
@@ -1256,7 +1258,7 @@ impl Index {
     ///
     /// # Arguments
     ///
-    /// * `path` - The file path from where the index will be loaded.
+    /// * `buffer` - The buffer from where the index will be loaded.
     pub fn load_from_buffer(self: &Index, buffer: &[u8]) -> Result<(), cxx::Exception> {
         self.inner.load_from_buffer(buffer)
     }
@@ -1265,8 +1267,31 @@ impl Index {
     ///
     /// # Arguments
     ///
-    /// * `path` - The file path from where the view will be created.
-    pub fn view_from_buffer(self: &Index, buffer: &[u8]) -> Result<(), cxx::Exception> {
+    /// * `buffer` - The buffer from where the view will be created.
+    ///
+    /// # Safety
+    ///
+    /// This function is marked as `unsafe` because it stores a pointer to the input buffer.
+    /// The caller must ensure that the buffer outlives the index and is not dropped
+    /// or modified for the duration of the index's use. Dereferencing a pointer to a
+    /// temporary buffer after it has been dropped can lead to undefined behavior,
+    /// which violates Rust's memory safety guarantees.
+    ///
+    /// Example of misuse:
+    ///
+    /// ```rust,ignore
+    /// let index: usearch::Index = usearch::new_index(&usearch::IndexOptions::default()).unwrap();
+    ///
+    /// let temporary = vec![0u8; 100];
+    /// index.view_from_buffer(&temporary);
+    /// std::mem::drop(temporary);
+    ///
+    /// let query = vec![0.0; 256];
+    /// let results = index.search(&query, 5).unwrap();
+    /// ```
+    ///
+    /// The above example would result in use-after-free and undefined behavior.
+    pub unsafe fn view_from_buffer(self: &Index, buffer: &[u8]) -> Result<(), cxx::Exception> {
         self.inner.view_from_buffer(buffer)
     }
 }
@@ -1373,8 +1398,12 @@ mod tests {
 
         let first: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
         let second: [f32; 5] = [0.3, 0.2, 0.4, 0.0, 0.1];
+        let too_long: [f32; 6] = [0.3, 0.2, 0.4, 0.0, 0.1, 0.1];
+        let too_short: [f32; 4] = [0.3, 0.2, 0.4, 0.0];
         assert!(index.add(1, &first).is_ok());
         assert!(index.add(2, &second).is_ok());
+        assert!(index.add(3, &too_long).is_err());
+        assert!(index.add(4, &too_short).is_err());
         assert_eq!(index.size(), 2);
 
         // Test using Vec<T>
@@ -1392,6 +1421,27 @@ mod tests {
         let mut found = [0.0 as f32; 6]; // This isn't a multiple of the index's dimensions.
         let result = index.get(1, &mut found);
         assert!(result.is_err());
+    }
+    #[test]
+    fn test_search_vector() {
+        let mut options = IndexOptions::default();
+        options.dimensions = 5;
+        options.quantization = ScalarKind::F32;
+        let index = Index::new(&options).unwrap();
+        assert!(index.reserve(10).is_ok());
+
+        let first: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
+        let second: [f32; 5] = [0.3, 0.2, 0.4, 0.0, 0.1];
+        let too_long: [f32; 6] = [0.3, 0.2, 0.4, 0.0, 0.1, 0.1];
+        let too_short: [f32; 4] = [0.3, 0.2, 0.4, 0.0];
+        assert!(index.add(1, &first).is_ok());
+        assert!(index.add(2, &second).is_ok());
+        assert_eq!(index.size(), 2);
+        //assert!(index.add(3, &too_long).is_err());
+        //assert!(index.add(4, &too_short).is_err());
+
+        assert!(index.search(&too_long, 1).is_err());
+        assert!(index.search(&too_short, 1).is_err());
     }
 
     #[test]
@@ -1591,6 +1641,28 @@ mod tests {
     }
 
     #[test]
+    fn test_zero_distances() {
+        let options = IndexOptions {
+            dimensions: 8,
+            metric: MetricKind::L2sq,
+            quantization: ScalarKind::F16,
+            ..Default::default()
+        };
+    
+        let index = new_index(&options).unwrap();
+        index.reserve(10).unwrap();
+        index.add(0, &[0.4, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
+        index.add(1, &[0.5, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
+        index.add(2, &[0.6, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
+
+        // Make sure non of the distances are zeros
+        let matches = index.search(&[0.05, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0], 2).unwrap();
+        for distance in matches.distances.iter() {
+            assert_ne!(*distance, 0.0);
+        }        
+    }
+
+        #[test]
     fn test_change_distance_function() {
         let mut options = IndexOptions::default();
         options.dimensions = 2; // Adjusted for simplicity in creating test vectors

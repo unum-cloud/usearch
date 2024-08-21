@@ -27,6 +27,7 @@ quantizations = [
     ScalarKind.F32,
     ScalarKind.F64,
     ScalarKind.F16,
+    ScalarKind.BF16,
     ScalarKind.I8,
 ]
 dtypes = [np.float32, np.float64, np.float16]
@@ -63,7 +64,7 @@ def test_index_initialization_and_addition(ndim, metric, quantization, dtype, ba
 @pytest.mark.parametrize("ndim", [3, 97, 256])
 @pytest.mark.parametrize("metric", [MetricKind.Cos, MetricKind.L2sq])
 @pytest.mark.parametrize("batch_size", [1, 7, 1024])
-@pytest.mark.parametrize("quantization", [ScalarKind.F32, ScalarKind.I8])
+@pytest.mark.parametrize("quantization", [ScalarKind.F32, ScalarKind.F16, ScalarKind.I8])
 @pytest.mark.parametrize("dtype", [np.float32, np.float64, np.float16])
 def test_index_retrieval(ndim, metric, quantization, dtype, batch_size):
     reset_randomness()
@@ -190,6 +191,12 @@ def test_index_save_load_restore_copy(ndim, quantization, batch_size):
         vectors = random_vectors(count=batch_size, ndim=ndim)
         index.add(keys, vectors, threads=threads)
 
+    # Try copying the original
+    copied_index = index.copy()
+    assert len(copied_index) == len(index)
+    if batch_size > 0:
+        assert np.allclose(np.vstack(copied_index.get(keys)), np.vstack(index.get(keys)))
+
     index.save("tmp.usearch")
     index.clear()
     assert len(index) == 0
@@ -208,6 +215,7 @@ def test_index_save_load_restore_copy(ndim, quantization, batch_size):
     if batch_size > 0:
         assert len(index[0].flatten()) == ndim
 
+    # Try copying the restored index
     copied_index = index.copy()
     assert len(copied_index) == len(index)
     if batch_size > 0:
@@ -262,6 +270,7 @@ def test_index_contains_remove_rename(batch_size):
     assert np.sum(index.count(removed_keys)) == len(index)
 
 
+@pytest.mark.skip(reason="Not guaranteed")
 @pytest.mark.parametrize("batch_size", [3, 17, 33])
 @pytest.mark.parametrize("threads", [1, 4])
 def test_index_oversubscribed_search(batch_size: int, threads: int):

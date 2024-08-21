@@ -45,6 +45,9 @@
 #if !defined(SIMSIMD_NATIVE_F16)
 #define SIMSIMD_NATIVE_F16 !USEARCH_USE_FP16LIB
 #endif
+
+// Overwrite the dynamic dispatch settings
+#undef SIMSIMD_DYNAMIC_DISPATCH
 #define SIMSIMD_DYNAMIC_DISPATCH 0
 // No problem, if some of the functions are unused or undefined
 #pragma GCC diagnostic push
@@ -67,20 +70,26 @@ struct uuid_t {
 };
 
 class f16_bits_t;
-class i8_converted_t;
+class bf16_bits_t;
 
 #if !USEARCH_USE_FP16LIB
 #if USEARCH_USE_SIMSIMD
 using f16_native_t = simsimd_f16_t;
+using bf16_native_t = simsimd_bf16_t;
 #elif defined(USEARCH_DEFINED_ARM)
 using f16_native_t = __fp16;
+using bf16_native_t = __fp16; // No better choice on most compilers!
 #else
 using f16_native_t = _Float16;
+using bf16_native_t = _Float16; // No better choice on most compilers!
 #endif
 using f16_t = f16_native_t;
+using bf16_t = bf16_native_t;
 #else
 using f16_native_t = void;
+using bf16_native_t = void;
 using f16_t = f16_bits_t;
+using bf16_t = bf16_bits_t;
 #endif
 
 using f64_t = double;
@@ -96,6 +105,9 @@ using i32_t = std::int32_t;
 using i16_t = std::int16_t;
 using i8_t = std::int8_t;
 
+/**
+ *  @brief  Enumerates the most commonly used distance metrics, mostly for dense vector representations.
+ */
 enum class metric_kind_t : std::uint8_t {
     unknown_k = 0,
     // Classics:
@@ -108,19 +120,26 @@ enum class metric_kind_t : std::uint8_t {
     haversine_k = 'h',
     divergence_k = 'd',
 
-    // Sets:
-    jaccard_k = 'j',
+    // Dense Sets:
     hamming_k = 'b',
     tanimoto_k = 't',
     sorensen_k = 's',
+
+    // Sparse Sets:
+    jaccard_k = 'j',
 };
 
+/**
+ *  @brief  Enumerates the most commonly used scalar types, mostly for dense vector representations.
+ *          Doesn't include logical types, like complex numbers or quaternions.
+ */
 enum class scalar_kind_t : std::uint8_t {
     unknown_k = 0,
     // Custom:
     b1x8_k = 1,
     u40_k = 2,
     uuid_k = 3,
+    bf16_k = 4,
     // Common:
     f64_k = 10,
     f32_k = 11,
@@ -156,6 +175,8 @@ template <typename scalar_at> scalar_kind_t scalar_kind() noexcept {
         return scalar_kind_t::f32_k;
     if (std::is_same<scalar_at, f16_t>())
         return scalar_kind_t::f16_k;
+    if (std::is_same<scalar_at, bf16_t>())
+        return scalar_kind_t::bf16_k;
     if (std::is_same<scalar_at, i8_t>())
         return scalar_kind_t::i8_k;
     if (std::is_same<scalar_at, u64_t>())
@@ -195,33 +216,66 @@ inline bool str_equals(char const* begin, std::size_t len, char const* other_beg
 
 inline std::size_t bits_per_scalar(scalar_kind_t scalar_kind) noexcept {
     switch (scalar_kind) {
-    case scalar_kind_t::f64_k: return 64;
-    case scalar_kind_t::f32_k: return 32;
-    case scalar_kind_t::f16_k: return 16;
-    case scalar_kind_t::i8_k: return 8;
+    case scalar_kind_t::uuid_k: return 128;
+    case scalar_kind_t::u40_k: return 40;
+    case scalar_kind_t::bf16_k: return 16;
     case scalar_kind_t::b1x8_k: return 1;
+    case scalar_kind_t::u64_k: return 64;
+    case scalar_kind_t::i64_k: return 64;
+    case scalar_kind_t::f64_k: return 64;
+    case scalar_kind_t::u32_k: return 32;
+    case scalar_kind_t::i32_k: return 32;
+    case scalar_kind_t::f32_k: return 32;
+    case scalar_kind_t::u16_k: return 16;
+    case scalar_kind_t::i16_k: return 16;
+    case scalar_kind_t::f16_k: return 16;
+    case scalar_kind_t::u8_k: return 8;
+    case scalar_kind_t::i8_k: return 8;
+    case scalar_kind_t::f8_k: return 8;
     default: return 0;
     }
 }
 
 inline std::size_t bits_per_scalar_word(scalar_kind_t scalar_kind) noexcept {
     switch (scalar_kind) {
-    case scalar_kind_t::f64_k: return 64;
-    case scalar_kind_t::f32_k: return 32;
-    case scalar_kind_t::f16_k: return 16;
-    case scalar_kind_t::i8_k: return 8;
+    case scalar_kind_t::uuid_k: return 128;
+    case scalar_kind_t::u40_k: return 40;
+    case scalar_kind_t::bf16_k: return 16;
     case scalar_kind_t::b1x8_k: return 8;
+    case scalar_kind_t::u64_k: return 64;
+    case scalar_kind_t::i64_k: return 64;
+    case scalar_kind_t::f64_k: return 64;
+    case scalar_kind_t::u32_k: return 32;
+    case scalar_kind_t::i32_k: return 32;
+    case scalar_kind_t::f32_k: return 32;
+    case scalar_kind_t::u16_k: return 16;
+    case scalar_kind_t::i16_k: return 16;
+    case scalar_kind_t::f16_k: return 16;
+    case scalar_kind_t::u8_k: return 8;
+    case scalar_kind_t::i8_k: return 8;
+    case scalar_kind_t::f8_k: return 8;
     default: return 0;
     }
 }
 
 inline char const* scalar_kind_name(scalar_kind_t scalar_kind) noexcept {
     switch (scalar_kind) {
-    case scalar_kind_t::f32_k: return "f32";
-    case scalar_kind_t::f16_k: return "f16";
-    case scalar_kind_t::f64_k: return "f64";
-    case scalar_kind_t::i8_k: return "i8";
+    case scalar_kind_t::uuid_k: return "uuid";
+    case scalar_kind_t::u40_k: return "u40";
+    case scalar_kind_t::bf16_k: return "bf16";
     case scalar_kind_t::b1x8_k: return "b1x8";
+    case scalar_kind_t::u64_k: return "u64";
+    case scalar_kind_t::i64_k: return "i64";
+    case scalar_kind_t::f64_k: return "f64";
+    case scalar_kind_t::u32_k: return "u32";
+    case scalar_kind_t::i32_k: return "i32";
+    case scalar_kind_t::f32_k: return "f32";
+    case scalar_kind_t::u16_k: return "u16";
+    case scalar_kind_t::i16_k: return "i16";
+    case scalar_kind_t::f16_k: return "f16";
+    case scalar_kind_t::u8_k: return "u8";
+    case scalar_kind_t::i8_k: return "i8";
+    case scalar_kind_t::f8_k: return "f8";
     default: return "";
     }
 }
@@ -239,8 +293,8 @@ inline char const* metric_kind_name(metric_kind_t metric) noexcept {
     case metric_kind_t::hamming_k: return "hamming";
     case metric_kind_t::tanimoto_k: return "tanimoto";
     case metric_kind_t::sorensen_k: return "sorensen";
+    default: return "";
     }
-    return "";
 }
 inline expected_gt<scalar_kind_t> scalar_kind_from_name(char const* name, std::size_t len) {
     expected_gt<scalar_kind_t> parsed;
@@ -250,10 +304,14 @@ inline expected_gt<scalar_kind_t> scalar_kind_from_name(char const* name, std::s
         parsed.result = scalar_kind_t::f64_k;
     else if (str_equals(name, len, "f16"))
         parsed.result = scalar_kind_t::f16_k;
+    else if (str_equals(name, len, "bf16"))
+        parsed.result = scalar_kind_t::bf16_k;
     else if (str_equals(name, len, "i8"))
         parsed.result = scalar_kind_t::i8_k;
+    else if (str_equals(name, len, "b1"))
+        parsed.result = scalar_kind_t::b1x8_k;
     else
-        parsed.failed("Unknown type, choose: f32, f16, f64, i8");
+        parsed.failed("Unknown type, choose: f64, f32, f16, bf16, i8, b1");
     return parsed;
 }
 
@@ -286,11 +344,13 @@ inline expected_gt<metric_kind_t> metric_from_name(char const* name, std::size_t
                       "tanimoto, sorensen");
     return parsed;
 }
-
 inline expected_gt<metric_kind_t> metric_from_name(char const* name) {
     return metric_from_name(name, std::strlen(name));
 }
 
+/**
+ *  @brief Convenience function to upcast a half-precision floating point number to a single-precision one.
+ */
 inline float f16_to_f32(std::uint16_t u16) noexcept {
 #if !USEARCH_USE_FP16LIB
     f16_native_t f16;
@@ -301,6 +361,9 @@ inline float f16_to_f32(std::uint16_t u16) noexcept {
 #endif
 }
 
+/**
+ *  @brief Convenience function to downcast a single-precision floating point number to a half-precision one.
+ */
 inline std::uint16_t f32_to_f16(float f32) noexcept {
 #if !USEARCH_USE_FP16LIB
     f16_native_t f16 = f16_native_t(f32);
@@ -310,6 +373,36 @@ inline std::uint16_t f32_to_f16(float f32) noexcept {
 #else
     return fp16_ieee_from_fp32_value(f32);
 #endif
+}
+
+/**
+ *  @brief Convenience function to upcast a brain-floating point number to a single-precision one.
+ *  https://github.com/ashvardanian/SimSIMD/blob/ff51434d90c66f916e94ff05b24530b127aa4cff/include/simsimd/types.h#L395-L410
+ */
+inline float bf16_to_f32(std::uint16_t u16) noexcept {
+    union float_or_unsigned_int_t {
+        float f;
+        unsigned int i;
+    };
+    union float_or_unsigned_int_t result_union;
+    result_union.i = u16 << 16; // Zero extends the mantissa
+    return result_union.f;
+}
+
+/**
+ *  @brief Convenience function to downcast a single-precision floating point number to a brain-floating point one.
+ *  https://github.com/ashvardanian/SimSIMD/blob/ff51434d90c66f916e94ff05b24530b127aa4cff/include/simsimd/types.h#L412-L425
+ */
+inline std::uint16_t f32_to_bf16(float f32) noexcept {
+    union float_or_unsigned_int_t {
+        float f;
+        unsigned int i;
+    };
+    union float_or_unsigned_int_t value;
+    value.f = f32;
+    value.i >>= 16;
+    value.i &= 0xFFFF;
+    return (unsigned short)value.i;
 }
 
 /**
@@ -330,8 +423,7 @@ class f16_bits_t {
     inline operator float() const noexcept { return f16_to_f32(uint16_); }
     inline explicit operator bool() const noexcept { return f16_to_f32(uint16_) > 0.5f; }
 
-    inline f16_bits_t(i8_converted_t) noexcept;
-    inline f16_bits_t(std::int8_t v) noexcept : uint16_(v) {}
+    inline f16_bits_t(std::int8_t v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(bool v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(float v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(double v) noexcept : uint16_(f32_to_f16(static_cast<float>(v))) {}
@@ -342,14 +434,14 @@ class f16_bits_t {
     inline f16_bits_t operator-(f16_bits_t other) const noexcept { return {float(*this) - float(other)}; }
     inline f16_bits_t operator*(f16_bits_t other) const noexcept { return {float(*this) * float(other)}; }
     inline f16_bits_t operator/(f16_bits_t other) const noexcept { return {float(*this) / float(other)}; }
-    inline f16_bits_t operator+(float other) const noexcept { return {float(*this) + other}; }
-    inline f16_bits_t operator-(float other) const noexcept { return {float(*this) - other}; }
-    inline f16_bits_t operator*(float other) const noexcept { return {float(*this) * other}; }
-    inline f16_bits_t operator/(float other) const noexcept { return {float(*this) / other}; }
-    inline f16_bits_t operator+(double other) const noexcept { return {float(*this) + other}; }
-    inline f16_bits_t operator-(double other) const noexcept { return {float(*this) - other}; }
-    inline f16_bits_t operator*(double other) const noexcept { return {float(*this) * other}; }
-    inline f16_bits_t operator/(double other) const noexcept { return {float(*this) / other}; }
+    inline float operator+(float other) const noexcept { return float(*this) + other; }
+    inline float operator-(float other) const noexcept { return float(*this) - other; }
+    inline float operator*(float other) const noexcept { return float(*this) * other; }
+    inline float operator/(float other) const noexcept { return float(*this) / other; }
+    inline double operator+(double other) const noexcept { return float(*this) + other; }
+    inline double operator-(double other) const noexcept { return float(*this) - other; }
+    inline double operator*(double other) const noexcept { return float(*this) * other; }
+    inline double operator/(double other) const noexcept { return float(*this) / other; }
 
     inline f16_bits_t& operator+=(float v) noexcept {
         uint16_ = f32_to_f16(v + f16_to_f32(uint16_));
@@ -368,6 +460,65 @@ class f16_bits_t {
 
     inline f16_bits_t& operator/=(float v) noexcept {
         uint16_ = f32_to_f16(v / f16_to_f32(uint16_));
+        return *this;
+    }
+};
+
+/**
+ *  @brief  Numeric type for brain-floating point half-precision floating point.
+ *          If hardware support isn't available, falls back to a hardware
+ *          agnostic in-software implementation.
+ */
+class bf16_bits_t {
+    std::uint16_t uint16_{};
+
+  public:
+    inline bf16_bits_t() noexcept : uint16_(0) {}
+    inline bf16_bits_t(bf16_bits_t&&) = default;
+    inline bf16_bits_t& operator=(bf16_bits_t&&) = default;
+    inline bf16_bits_t(bf16_bits_t const&) = default;
+    inline bf16_bits_t& operator=(bf16_bits_t const&) = default;
+
+    inline operator float() const noexcept { return bf16_to_f32(uint16_); }
+    inline explicit operator bool() const noexcept { return bf16_to_f32(uint16_) > 0.5f; }
+
+    inline bf16_bits_t(std::int8_t v) noexcept : uint16_(f32_to_bf16(v)) {}
+    inline bf16_bits_t(bool v) noexcept : uint16_(f32_to_bf16(v)) {}
+    inline bf16_bits_t(float v) noexcept : uint16_(f32_to_bf16(v)) {}
+    inline bf16_bits_t(double v) noexcept : uint16_(f32_to_bf16(static_cast<float>(v))) {}
+
+    inline bool operator<(bf16_bits_t const& other) const noexcept { return float(*this) < float(other); }
+
+    inline bf16_bits_t operator+(bf16_bits_t other) const noexcept { return {float(*this) + float(other)}; }
+    inline bf16_bits_t operator-(bf16_bits_t other) const noexcept { return {float(*this) - float(other)}; }
+    inline bf16_bits_t operator*(bf16_bits_t other) const noexcept { return {float(*this) * float(other)}; }
+    inline bf16_bits_t operator/(bf16_bits_t other) const noexcept { return {float(*this) / float(other)}; }
+    inline float operator+(float other) const noexcept { return float(*this) + other; }
+    inline float operator-(float other) const noexcept { return float(*this) - other; }
+    inline float operator*(float other) const noexcept { return float(*this) * other; }
+    inline float operator/(float other) const noexcept { return float(*this) / other; }
+    inline double operator+(double other) const noexcept { return float(*this) + other; }
+    inline double operator-(double other) const noexcept { return float(*this) - other; }
+    inline double operator*(double other) const noexcept { return float(*this) * other; }
+    inline double operator/(double other) const noexcept { return float(*this) / other; }
+
+    inline bf16_bits_t& operator+=(float v) noexcept {
+        uint16_ = f32_to_bf16(v + bf16_to_f32(uint16_));
+        return *this;
+    }
+
+    inline bf16_bits_t& operator-=(float v) noexcept {
+        uint16_ = f32_to_bf16(v - bf16_to_f32(uint16_));
+        return *this;
+    }
+
+    inline bf16_bits_t& operator*=(float v) noexcept {
+        uint16_ = f32_to_bf16(v * bf16_to_f32(uint16_));
+        return *this;
+    }
+
+    inline bf16_bits_t& operator/=(float v) noexcept {
+        uint16_ = f32_to_bf16(v / bf16_to_f32(uint16_));
         return *this;
     }
 };
@@ -572,7 +723,9 @@ class aligned_allocator_gt {
     using size_type = std::size_t;
     using pointer = element_at*;
     using const_pointer = element_at const*;
-    template <typename other_element_at> struct rebind { using other = aligned_allocator_gt<other_element_at>; };
+    template <typename other_element_at> struct rebind {
+        using other = aligned_allocator_gt<other_element_at>;
+    };
 
     constexpr std::size_t alignment() const { return alignment_ak; }
 
@@ -902,7 +1055,7 @@ template <> struct cast_gt<b1x8_t, b1x8_t> {
     static bool try_(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
 
-template <typename from_scalar_at> struct cast_gt<from_scalar_at, b1x8_t> {
+template <typename from_scalar_at> struct cast_to_b1x8_gt {
     inline static bool try_(byte_t const* input, std::size_t dim, byte_t* output) noexcept {
         from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
         unsigned char* typed_output = reinterpret_cast<unsigned char*>(output);
@@ -923,7 +1076,7 @@ template <typename from_scalar_at> struct cast_gt<from_scalar_at, b1x8_t> {
     }
 };
 
-template <typename to_scalar_at> struct cast_gt<b1x8_t, to_scalar_at> {
+template <typename to_scalar_at> struct cast_from_b1x8_gt {
     static bool try_(byte_t const* input, std::size_t dim, byte_t* output) noexcept {
         unsigned char const* typed_input = reinterpret_cast<unsigned char const*>(input);
         to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
@@ -935,53 +1088,69 @@ template <typename to_scalar_at> struct cast_gt<b1x8_t, to_scalar_at> {
     }
 };
 
-/**
- *  @brief  Numeric type for uniformly-distributed floating point
- *          values within [-1,1] range, quantized to integers [-100,100].
- */
-class i8_converted_t {
-    std::int8_t int8_{};
-
-  public:
-    constexpr static f32_t divisor_k = 100.f;
-    constexpr static std::int8_t min_k = -100;
-    constexpr static std::int8_t max_k = 100;
-
-    inline i8_converted_t() noexcept : int8_(0) {}
-    inline i8_converted_t(bool v) noexcept : int8_(v ? max_k : 0) {}
-
-    inline i8_converted_t(i8_converted_t&&) = default;
-    inline i8_converted_t& operator=(i8_converted_t&&) = default;
-    inline i8_converted_t(i8_converted_t const&) = default;
-    inline i8_converted_t& operator=(i8_converted_t const&) = default;
-
-    inline operator f16_t() const noexcept { return static_cast<f16_t>(f32_t(int8_) / divisor_k); }
-    inline operator f32_t() const noexcept { return f32_t(int8_) / divisor_k; }
-    inline operator f64_t() const noexcept { return f64_t(int8_) / divisor_k; }
-    inline explicit operator bool() const noexcept { return int8_ > (max_k / 2); }
-    inline explicit operator std::int8_t() const noexcept { return int8_; }
-    inline explicit operator std::int16_t() const noexcept { return int8_; }
-    inline explicit operator std::int32_t() const noexcept { return int8_; }
-    inline explicit operator std::int64_t() const noexcept { return int8_; }
-
-    // Even with `f16_t` arguments we may want to use `f32_t` for clamping and comparions.
-    inline i8_converted_t(f16_t v)
-        : int8_(static_cast<std::int8_t>(usearch::clamp<f32_t>(v * divisor_k, min_k, max_k))) {}
-    inline i8_converted_t(f32_t v)
-        : int8_(static_cast<std::int8_t>(usearch::clamp<f32_t>(v * divisor_k, min_k, max_k))) {}
-    inline i8_converted_t(f64_t v)
-        : int8_(static_cast<std::int8_t>(usearch::clamp<f64_t>(v * divisor_k, min_k, max_k))) {}
+template <typename from_scalar_at> struct cast_to_i8_gt {
+    inline static bool try_(byte_t const* input, std::size_t dim, byte_t* output) noexcept {
+        from_scalar_at const* typed_input = reinterpret_cast<from_scalar_at const*>(input);
+        std::int8_t* typed_output = reinterpret_cast<std::int8_t*>(output);
+        // Unlike other casting mechanisms, switching to small range integers is a two step procedure.
+        // First we want to estimate the magnitude of the vector to scale into [-1.0, 1.0] interval,
+        // instead of clamping. And then we scale the values into the [-127, 127] range.
+        // ! This makes an assumption, that the distance metric is dot-product-like, which may not
+        // ! be true in many cases, so it's recommended to avoid automatic casting from floats to
+        // ! integers.
+        double magnitude = 0.0;
+        for (std::size_t i = 0; i != dim; ++i)
+            magnitude += (double)typed_input[i] * (double)typed_input[i];
+        magnitude = std::sqrt(magnitude);
+        for (std::size_t i = 0; i != dim; ++i)
+            typed_output[i] =
+                static_cast<std::int8_t>(usearch::clamp<double>(typed_input[i] * 127.0 / magnitude, -127.0, 127.0));
+        return true;
+    }
 };
 
-f16_bits_t::f16_bits_t(i8_converted_t v) noexcept : uint16_(f32_to_f16(v)) {}
+template <typename to_scalar_at> struct cast_from_i8_gt {
+    static bool try_(byte_t const* input, std::size_t dim, byte_t* output) noexcept {
+        std::int8_t const* typed_input = reinterpret_cast<std::int8_t const*>(input);
+        to_scalar_at* typed_output = reinterpret_cast<to_scalar_at*>(output);
+        for (std::size_t i = 0; i != dim; ++i)
+            typed_output[i] = static_cast<to_scalar_at>(typed_input[i]) / 127.f;
+        return true;
+    }
+};
 
-template <> struct cast_gt<i8_t, f16_t> : public cast_gt<i8_converted_t, f16_t> {};
-template <> struct cast_gt<i8_t, f32_t> : public cast_gt<i8_converted_t, f32_t> {};
-template <> struct cast_gt<i8_t, f64_t> : public cast_gt<i8_converted_t, f64_t> {};
+template <> struct cast_gt<i8_t, f16_t> : public cast_from_i8_gt<f16_t> {};
+template <> struct cast_gt<i8_t, bf16_t> : public cast_from_i8_gt<bf16_t> {};
+template <> struct cast_gt<i8_t, f32_t> : public cast_from_i8_gt<f32_t> {};
+template <> struct cast_gt<i8_t, f64_t> : public cast_from_i8_gt<f64_t> {};
 
-template <> struct cast_gt<f16_t, i8_t> : public cast_gt<f16_t, i8_converted_t> {};
-template <> struct cast_gt<f32_t, i8_t> : public cast_gt<f32_t, i8_converted_t> {};
-template <> struct cast_gt<f64_t, i8_t> : public cast_gt<f64_t, i8_converted_t> {};
+template <> struct cast_gt<f16_t, i8_t> : public cast_to_i8_gt<f16_t> {};
+template <> struct cast_gt<bf16_t, i8_t> : public cast_to_i8_gt<bf16_t> {};
+template <> struct cast_gt<f32_t, i8_t> : public cast_to_i8_gt<f32_t> {};
+template <> struct cast_gt<f64_t, i8_t> : public cast_to_i8_gt<f64_t> {};
+
+template <> struct cast_gt<b1x8_t, f16_t> : public cast_from_b1x8_gt<f16_t> {};
+template <> struct cast_gt<b1x8_t, bf16_t> : public cast_from_b1x8_gt<bf16_t> {};
+template <> struct cast_gt<b1x8_t, f32_t> : public cast_from_b1x8_gt<f32_t> {};
+template <> struct cast_gt<b1x8_t, f64_t> : public cast_from_b1x8_gt<f64_t> {};
+
+template <> struct cast_gt<f16_t, b1x8_t> : public cast_to_b1x8_gt<f16_t> {};
+template <> struct cast_gt<bf16_t, b1x8_t> : public cast_to_b1x8_gt<bf16_t> {};
+template <> struct cast_gt<f32_t, b1x8_t> : public cast_to_b1x8_gt<f32_t> {};
+template <> struct cast_gt<f64_t, b1x8_t> : public cast_to_b1x8_gt<f64_t> {};
+
+template <> struct cast_gt<b1x8_t, i8_t> : public cast_from_b1x8_gt<i8_t> {};
+template <> struct cast_gt<i8_t, b1x8_t> : public cast_to_b1x8_gt<i8_t> {};
+
+/*  Don't complain if the vectorization of the inner loops fails:
+ *
+ *  > warning: loop not vectorized: the optimizer was unable to perform the requested transformation;
+ *  > the transformation might be disabled or specified as part of an unsupported transformation ordering
+ */
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpass-failed"
+#endif
 
 /**
  *  @brief  Inner (Dot) Product distance.
@@ -1363,9 +1532,9 @@ class metric_punned_t {
     /// Distance function that takes two arrays and some callback state and returns a scalar.
     using metric_array_array_state_t = result_t (*)(uptr_t, uptr_t, uptr_t);
     /// Distance function callback, like `metric_array_array_size_t`, but depends on member variables.
-    using metric_rounted_t = result_t (metric_punned_t::*)(uptr_t, uptr_t) const;
+    using metric_routed_t = result_t (metric_punned_t::*)(uptr_t, uptr_t) const;
 
-    metric_rounted_t metric_routed_ = nullptr;
+    metric_routed_t metric_routed_ = nullptr;
     uptr_t metric_ptr_ = 0;
     uptr_t metric_third_arg_ = 0;
 
@@ -1459,7 +1628,7 @@ class metric_punned_t {
     }
 
     /**
-     *  @brief  Creates a metric using the provided function pointer for a statefull metric.
+     *  @brief  Creates a metric using the provided function pointer for a stateful metric.
      *          The third argument is the state that will be passed to the metric function.
      *
      *  @param  metric_uintptr  The function pointer to the metric function.
@@ -1468,9 +1637,9 @@ class metric_punned_t {
      *  @param  scalar_kind     The kind of scalar to use.
      *  @return                 A metric object that can be used to compute distances between vectors.
      */
-    inline static metric_punned_t statefull(std::uintptr_t metric_uintptr, std::uintptr_t metric_state,
-                                            metric_kind_t metric_kind = metric_kind_t::unknown_k,
-                                            scalar_kind_t scalar_kind = scalar_kind_t::unknown_k) noexcept {
+    inline static metric_punned_t stateful(std::uintptr_t metric_uintptr, std::uintptr_t metric_state,
+                                           metric_kind_t metric_kind = metric_kind_t::unknown_k,
+                                           scalar_kind_t scalar_kind = scalar_kind_t::unknown_k) noexcept {
         metric_punned_t metric;
         metric.metric_routed_ = &metric_punned_t::invoke_array_array_third;
         metric.metric_ptr_ = metric_uintptr;
@@ -1503,10 +1672,17 @@ class metric_punned_t {
         switch (isa_kind_) {
         case simsimd_cap_serial_k: return "serial";
         case simsimd_cap_neon_k: return "neon";
+        case simsimd_cap_neon_i8_k: return "neon_i8";
+        case simsimd_cap_neon_f16_k: return "neon_f16";
+        case simsimd_cap_neon_bf16_k: return "neon_bf16";
         case simsimd_cap_sve_k: return "sve";
+        case simsimd_cap_sve_i8_k: return "sve_i8";
+        case simsimd_cap_sve_f16_k: return "sve_f16";
+        case simsimd_cap_sve_bf16_k: return "sve_bf16";
         case simsimd_cap_haswell_k: return "haswell";
         case simsimd_cap_skylake_k: return "skylake";
         case simsimd_cap_ice_k: return "ice";
+        case simsimd_cap_genoa_k: return "genoa";
         case simsimd_cap_sapphire_k: return "sapphire";
         default: return "unknown";
         }
@@ -1541,6 +1717,7 @@ class metric_punned_t {
         case scalar_kind_t::f32_k: datatype = simsimd_datatype_f32_k; break;
         case scalar_kind_t::f64_k: datatype = simsimd_datatype_f64_k; break;
         case scalar_kind_t::f16_k: datatype = simsimd_datatype_f16_k; break;
+        case scalar_kind_t::bf16_k: datatype = simsimd_datatype_bf16_k; break;
         case scalar_kind_t::i8_k: datatype = simsimd_datatype_i8_k; break;
         case scalar_kind_t::b1x8_k: datatype = simsimd_datatype_b8_k; break;
         default: break;
@@ -1553,8 +1730,8 @@ class metric_punned_t {
 
         std::memcpy(&metric_ptr_, &simd_metric, sizeof(simd_metric));
         metric_routed_ = metric_kind_ == metric_kind_t::ip_k
-                             ? reinterpret_cast<metric_rounted_t>(&metric_punned_t::invoke_simsimd_reverse)
-                             : reinterpret_cast<metric_rounted_t>(&metric_punned_t::invoke_simsimd);
+                             ? reinterpret_cast<metric_routed_t>(&metric_punned_t::invoke_simsimd_reverse)
+                             : reinterpret_cast<metric_routed_t>(&metric_punned_t::invoke_simsimd);
         isa_kind_ = simd_kind;
         return true;
     }
@@ -1593,9 +1770,10 @@ class metric_punned_t {
         switch (metric_kind_) {
         case metric_kind_t::ip_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<f32_t>>; break;
-            case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::bf16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<bf16_t, f32_t>>; break;
             case scalar_kind_t::i8_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<i8_t, f32_t>>; break;
+            case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<f32_t>>; break;
             case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_ip_gt<f64_t>>; break;
             default: metric_ptr_ = 0; break;
             }
@@ -1603,9 +1781,10 @@ class metric_punned_t {
         }
         case metric_kind_t::cos_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<f32_t>>; break;
-            case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::bf16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<bf16_t, f32_t>>; break;
             case scalar_kind_t::i8_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<i8_t, f32_t>>; break;
+            case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<f32_t>>; break;
             case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<f64_t>>; break;
             default: metric_ptr_ = 0; break;
             }
@@ -1613,9 +1792,10 @@ class metric_punned_t {
         }
         case metric_kind_t::l2sq_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<f32_t>>; break;
-            case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::bf16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<bf16_t, f32_t>>; break;
             case scalar_kind_t::i8_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<i8_t, f32_t>>; break;
+            case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<f16_t, f32_t>>; break;
+            case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<f32_t>>; break;
             case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<f64_t>>; break;
             default: metric_ptr_ = 0; break;
             }
@@ -1623,6 +1803,9 @@ class metric_punned_t {
         }
         case metric_kind_t::pearson_k: {
             switch (scalar_kind_) {
+            case scalar_kind_t::bf16_k:
+                metric_ptr_ = (uptr_t)&equidimensional_<metric_pearson_gt<bf16_t, f32_t>>;
+                break;
             case scalar_kind_t::i8_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_pearson_gt<i8_t, f32_t>>; break;
             case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_pearson_gt<f16_t, f32_t>>; break;
             case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_pearson_gt<f32_t>>; break;
@@ -1633,7 +1816,8 @@ class metric_punned_t {
         }
         case metric_kind_t::haversine_k: {
             switch (scalar_kind_) {
-            case scalar_kind_t::f16_k: metric_ptr_ = 0; break; //< Having half-precision 2D coordinates is a bit silly.
+            case scalar_kind_t::bf16_k: metric_ptr_ = 0; break; //< Half-precision 2D vectors are silly.
+            case scalar_kind_t::f16_k: metric_ptr_ = 0; break;  //< Half-precision 2D vectors are silly.
             case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_haversine_gt<f32_t>>; break;
             case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_haversine_gt<f64_t>>; break;
             default: metric_ptr_ = 0; break;
@@ -1642,6 +1826,9 @@ class metric_punned_t {
         }
         case metric_kind_t::divergence_k: {
             switch (scalar_kind_) {
+            case scalar_kind_t::bf16_k:
+                metric_ptr_ = (uptr_t)&equidimensional_<metric_divergence_gt<bf16_t, f32_t>>;
+                break;
             case scalar_kind_t::f16_k:
                 metric_ptr_ = (uptr_t)&equidimensional_<metric_divergence_gt<f16_t, f32_t>>;
                 break;
@@ -1665,6 +1852,11 @@ class metric_punned_t {
         return static_cast<result_t>(typed_at{}((scalar_t const*)a, (scalar_t const*)b, a_dimensions));
     }
 };
+
+/* Allow complaining about vectorization after this point. */
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 /**
  *  @brief  View over a potentially-strided memory buffer, containing a row-major matrix.
@@ -1976,6 +2168,7 @@ class flat_hash_multi_set_gt {
         clear(); // Clear all elements
         if (data_)
             allocator_t{}.deallocate(data_, buckets_ * bytes_per_bucket());
+        data_ = nullptr;
         buckets_ = 0;
         populated_slots_ = 0;
         capacity_slots_ = 0;

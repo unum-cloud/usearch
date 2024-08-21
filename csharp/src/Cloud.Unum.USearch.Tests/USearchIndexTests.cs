@@ -61,7 +61,7 @@ public class UsearchIndexTests
             expansionSearch: 19 // Control the quality of search, optional
         );
 
-        var vector = new float[] { 0.2f, 0.6f, 0.4f };
+        var vector = new double[] { 0.2f, 0.6f, 0.4f };
         index.Add(42, vector);
         index.Save(savedPath);
 
@@ -69,8 +69,8 @@ public class UsearchIndexTests
         Trace.Assert(File.Exists(Path.Combine(pathUsearch, "tmp.usearch")));
 
         using var indexRestored = new USearchIndex(savedPath);
-        int matches = indexRestored.Search(vector, 10, out ulong[] keys, out float[] distances);
         Trace.Assert(indexRestored.Size() == 1);
+        int matches = indexRestored.Search(vector, 10, out ulong[] keys, out float[] distances);
         Trace.Assert(matches == 1);
         Trace.Assert(keys[0] == 42);
         Trace.Assert(distances[0] <= 0.001f);

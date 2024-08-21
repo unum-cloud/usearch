@@ -72,6 +72,17 @@ USEARCH_EXPORT typedef struct usearch_init_options_t {
     usearch_metric_t metric;
     /**
      *  @brief The scalar kind used for quantization of vector data during indexing.
+     *  In most cases, on modern hardware, it's recommended to use half-precision floating-point numbers.
+     *  When quantization is enabled, the "get"-like functions won't be able to recover the original data,
+     *  so you may want to replicate the original vectors elsewhere.
+     *
+     *  Quantizing to integers is also possible, but it's important to note that it's only valid for cosine-like
+     *  metrics. As part of the quantization process, the vectors are normalized to unit length and later scaled
+     *  to @b [-127,127] range to occupy the full 8-bit range.
+     *
+     *  Quantizing to 1-bit booleans is also possible, but it's only valid for binary metrics like Jaccard, Hamming,
+     *  etc. As part of the quantization process, the scalar components greater than zero are set to `true`, and the
+     *  rest to `false`.
      */
     usearch_scalar_kind_t quantization;
     /**
@@ -284,7 +295,7 @@ USEARCH_EXPORT void usearch_change_expansion_search(usearch_index_t index, size_
 /**
  *  @brief Updates the number of threads that would be used to construct the index. Rarely used.
  *  @param[in] index The handle to the USearch index to be queried.
- *  @param[in] threads The new llimit for the number of concurrent threads.
+ *  @param[in] threads The new limit for the number of concurrent threads.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
 USEARCH_EXPORT void usearch_change_threads_add(usearch_index_t index, size_t threads, usearch_error_t* error);
@@ -292,7 +303,7 @@ USEARCH_EXPORT void usearch_change_threads_add(usearch_index_t index, size_t thr
 /**
  *  @brief Updates the number of threads that will be performing concurrent traversals. Rarely used.
  *  @param[in] index The handle to the USearch index to be queried.
- *  @param[in] threads The new llimit for the number of concurrent threads.
+ *  @param[in] threads The new limit for the number of concurrent threads.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  */
 USEARCH_EXPORT void usearch_change_threads_search(usearch_index_t index, size_t threads, usearch_error_t* error);
@@ -434,7 +445,7 @@ USEARCH_EXPORT usearch_distance_t usearch_distance(       //
     usearch_metric_kind_t metric_kind, usearch_error_t* error);
 
 /**
- *  @brief Multi-threaded exact nearest neighbors search for equi-dimensional vectors.
+ *  @brief Multi-threaded many-to-many exact nearest neighbors search for equi-dimensional vectors.
  *  @param[in] dataset Pointer to the first scalar of the dataset matrix.
  *  @param[in] queries Pointer to the first scalar of the queries matrix.
  *  @param[in] dataset_size Number of vectors in the `dataset`.
@@ -446,10 +457,13 @@ USEARCH_EXPORT usearch_distance_t usearch_distance(       //
  *  @param[in] metric_kind The metric kind used for distance calculation between vectors.
  *  @param[in] count Upper bound on the number of neighbors to search, the "k" in "kANN".
  *  @param[in] threads Upper bound for the number of CPU threads to use.
- *  @param[out] keys Output buffer for up to `count` nearest neighbors keys.
- *  @param[out] distances Output buffer for up to `count` distances to nearest neighbors.
+ *  @param[out] keys Output matrix for `queries_size * count` nearest neighbors keys. Each row of the
+ *              matrix must be contiguous in memory, but different rows can be separated by `keys_stride` bytes.
+ *  @param[in] keys_stride Number of bytes between starts of consecutive rows od scalars in `keys`.
+ *  @param[out] distances Output matrix for `queries_size * count` distances to nearest neighbors. Each row of the
+ *              matrix must be contiguous in memory, but different rows can be separated by `keys_stride` bytes.
+ *  @param[in] distances_stride Number of bytes between starts of consecutive rows od scalars in `distances`.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
- *  @return Number of found matches.
  */
 USEARCH_EXPORT void usearch_exact_search(                            //
     void const* dataset, size_t dataset_size, size_t dataset_stride, //

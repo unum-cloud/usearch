@@ -70,6 +70,7 @@ export enum ScalarKind {
   F32 = "f32",
   F64 = "f64",
   F16 = "f16",
+  BF16 = "bf16",
   I8 = "i8",
   B1 = "b1",
 }
@@ -610,12 +611,12 @@ function exactSearch(
 }
 
 const usearch = {
-    Index,
-    MetricKind,
-    ScalarKind,
-    Matches,
-    BatchMatches,
-    exactSearch,
+  Index,
+  MetricKind,
+  ScalarKind,
+  Matches,
+  BatchMatches,
+  exactSearch,
 };
 export default usearch;
 
