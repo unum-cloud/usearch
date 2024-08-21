@@ -70,20 +70,24 @@ Which would print the following instructions.
 
 ```txt
 SYNOPSIS
-        build_profile/bench_cpp [--vectors <path>] [--queries <path>] [--neighbors <path>] [-b] [-j
-                                <integer>] [-c <integer>] [--expansion-add <integer>]
-                                [--expansion-search <integer>] [--native|--f16quant|--i8quant]
-                                [--ip|--l2sq|--cos|--haversine] [-h]
+        build_profile/bench_cpp [--vectors <path>] [--queries <path>] [--neighbors <path>] [-o
+                                <path>] [-b] [-j <integer>] [-c <integer>] [--expansion-add
+                                <integer>] [--expansion-search <integer>] [--rows-skip <integer>]
+                                [--rows-take <integer>] [-bf16|-f16|-i8|-b1]
+                                [--ip|--l2sq|--cos|--hamming|--tanimoto|--sorensen|--haversine] [-h]
 
 OPTIONS
         --vectors <path>
-                    .fbin file path to construct the index
+                    .[fhbd]bin file path to construct the index
 
         --queries <path>
-                    .fbin file path to query the index
+                    .[fhbd]bin file path to query the index
 
         --neighbors <path>
                     .ibin file path with ground truth
+
+        -o, --output <path>
+                    .usearch output file path
 
         -b, --big   Will switch to uint40_t for neighbors lists with over 4B entries
         -j, --threads <integer>
@@ -98,12 +102,30 @@ OPTIONS
         --expansion-search <integer>
                     Affects search depth
 
-        --native    Use raw templates instead of type-punned classes
-        --f16quant  Enable `f16_t` quantization
-        --i8quant   Enable `int8_t` quantization
+        --rows-skip <integer>
+                    Number of vectors to skip
+
+        --rows-take <integer>
+                    Number of vectors to take
+
+        -bf16, --bf16quant
+                    Enable `bf16_t` quantization
+
+        -f16, --f16quant
+                    Enable `f16_t` quantization
+
+        -i8, --i8quant
+                    Enable `i8_t` quantization
+
+        -b1, --b1quant
+                    Enable `b1x8_t` quantization
+
         --ip        Choose Inner Product metric
         --l2sq      Choose L2 Euclidean metric
         --cos       Choose Angular metric
+        --hamming   Choose Hamming metric
+        --tanimoto  Choose Tanimoto metric
+        --sorensen  Choose Sorensen metric
         --haversine Choose Haversine metric
         -h, --help  Print this help information on this tool and exit
 ```

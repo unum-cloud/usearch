@@ -468,6 +468,7 @@ struct args_t {
 
     bool big = false;
 
+    bool quantize_bf16 = false;
     bool quantize_f16 = false;
     bool quantize_i8 = false;
     bool quantize_b1 = false;
@@ -500,6 +501,8 @@ struct args_t {
     }
 
     scalar_kind_t quantization() const noexcept {
+        if (quantize_bf16)
+            return scalar_kind_t::bf16_k;
         if (quantize_f16)
             return scalar_kind_t::f16_k;
         if (quantize_i8)
@@ -611,6 +614,7 @@ int main(int argc, char** argv) {
         (option("--rows-skip") & value("integer", args.vectors_to_skip)).doc("Number of vectors to skip"),
         (option("--rows-take") & value("integer", args.vectors_to_take)).doc("Number of vectors to take"),
         ( //
+            option("-bf16", "--bf16quant").set(args.quantize_bf16).doc("Enable `bf16_t` quantization") |
             option("-f16", "--f16quant").set(args.quantize_f16).doc("Enable `f16_t` quantization") |
             option("-i8", "--i8quant").set(args.quantize_i8).doc("Enable `i8_t` quantization") |
             option("-b1", "--b1quant").set(args.quantize_b1).doc("Enable `b1x8_t` quantization")),
