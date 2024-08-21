@@ -905,6 +905,7 @@ PYBIND11_MODULE(compiled, m) {
         .value("B1", scalar_kind_t::b1x8_k)
         .value("U40", scalar_kind_t::u40_k)
         .value("UUID", scalar_kind_t::uuid_k)
+        .value("BF16", scalar_kind_t::bf16_k)
         .value("F64", scalar_kind_t::f64_k)
         .value("F32", scalar_kind_t::f32_k)
         .value("F16", scalar_kind_t::f16_k)

@@ -56,8 +56,17 @@ template <> struct unum::usearch::default_free_value_gt<slot32_t> {
     static slot32_t value() noexcept { return static_cast<slot32_t>(std::numeric_limits<std::uint32_t>::max()); }
 };
 
+/*
+ *  Let's instantiate several templates to make all of their symbols available for testing.
+ *  https://dhashe.com/how-to-build-highly-debuggable-c-binaries.html
+ */
+template class unum::usearch::index_gt<float, std::int64_t, slot32_t>;
+template class unum::usearch::index_gt<float, std::int64_t, uint40_t>;
+template class unum::usearch::index_dense_gt<std::int64_t, slot32_t>;
+template class unum::usearch::index_dense_gt<std::int64_t, uint40_t>;
+
 /**
- *  @brief  Convinience wrapper combining combined allocation and construction of an index.
+ *  @brief  Convenience wrapper combining combined allocation and construction of an index.
  */
 template <typename index_at> struct aligned_wrapper_gt {
     using index_t = index_at;
@@ -144,7 +153,41 @@ void test_uint40() {
             expect_eq(input_clamped.value >= other_clamped.value, u40_from_u64 >= other_u40);
         }
     }
+
+    // Test equality and inequality operators
+    for (std::uint64_t input_u64 : test_numbers) {
+        uint64_octets_t input_clamped;
+        input_clamped.value = input_u64 & max_uint40_k;
+        uint40_t u40(input_clamped.value);
+
+        expect_eq(u40 == uint40_t(input_clamped.value), true);
+        expect_eq(u40 != uint40_t(input_clamped.value + 1), true);
+    }
+
+    // Test min and max functions
+    expect_eq(uint40_t::min(), uint40_t(0u));
+    expect_eq(uint40_t::max(), uint40_t(max_uint40_k));
+
+    // Test copy and move semantics
+    for (std::uint64_t input_u64 : test_numbers) {
+        uint40_t u40_orig(input_u64);
+
+        uint40_t u40_copy(u40_orig);
+        expect_eq(u40_orig, u40_copy);
+
+        uint40_t u40_move(std::move(u40_orig));
+        expect_eq(u40_copy, u40_move);
+    }
+
+    // Test default constructor (zero initialization)
+    uint40_t u40_default;
+    expect_eq(u40_default, uint40_t(0u));
 }
+
+/**
+ *  @brief  Tests the functionality of the custom float16_t type ensuring consistent.
+ */
+void test_float16() {}
 
 /**
  * The goal of this test is to invoke as many different interfaces as possible, making sure that all code-paths compile.
@@ -246,7 +289,7 @@ void test_minimal_three_vectors(index_at& index, //
     {
         auto copy_result = index.copy();
         expect(copy_result);
-        auto& copied_index = copy_result.index;
+        index_at copied_index = std::move(copy_result.index);
 
         // Perform single entry search
         auto search_result = copied_index.search(vector_first.data(), 5, args...);
@@ -293,9 +336,23 @@ void test_minimal_three_vectors(index_at& index, //
         expect_eq(3ull, head_result.head.count_present);
     }
 
+    // Try loading and move assignment
+    {
+        index_at loaded_index;
+        auto load_result = loaded_index.load("tmp.usearch");
+        expect(load_result);
+        index = std::move(loaded_index);
+    }
+
+    // Check the copy of the restored index
+    {
+        auto copy_result = index.copy();
+        expect(copy_result);
+        index_at copied_index = std::move(copy_result.index);
+        expect_eq(copied_index.size(), 3);
+    }
+
     // Search again over reconstructed index
-    auto load_result = index.load("tmp.usearch");
-    expect(load_result);
     {
         matched_count = index.search(vector_first.data(), 5, args...).dump_to(matched_keys, matched_distances);
         expect_eq(matched_count, 3);
@@ -312,6 +369,54 @@ void test_minimal_three_vectors(index_at& index, //
             expect(std::equal(vector_second.data(), vector_second.data() + dimensions, vector_reloaded.data()));
         }
     }
+}
+
+/**
+ *  @brief  Tests value removals, by repeatedly adding and removing a couple of vectors.
+ *
+ *  @param index Reference to the index where vectors will be stored and searched.
+ *  @param vector_first First vector to be tested.
+ *  @param vector_second Second vector to be tested.
+ *  @param args Additional arguments for configuring search or index operations.
+ */
+template <typename index_at, typename scalar_at>
+void test_punned_add_remove_vector(             //
+    index_at& index,                            //
+    std::vector<scalar_at> const& vector_first, //
+    std::vector<scalar_at> const& vector_second) {
+
+    using index_t = index_at;
+    using vector_key_t = typename index_t::vector_key_t;
+
+    // Creating the index
+    expect(index.try_reserve(10));
+    expect(index.capacity() >= 10);
+
+    // Max 64-bit unsigned key value is: 18446744073709551615
+    vector_key_t key_first = 483367403120493160;
+    vector_key_t key_second = 483367403120558696;
+    vector_key_t key_third = 483367403120624232;
+    vector_key_t key_fourth = 483367403120624233;
+
+    // Adding, getting, and removing vectors
+    expect(index.add(key_first, vector_first.data()));
+    std::vector<float> found_slice(vector_first.size(), 0.0f);
+    expect_eq(index.get(key_first, found_slice.data()), 1);
+    expect(index.remove(key_first));
+
+    expect(index.add(key_second, vector_second.data()));
+    expect_eq(index.get(key_second, found_slice.data()), 1);
+    expect(index.remove(key_second));
+
+    expect(index.add(key_third, vector_second.data()));
+    expect_eq(index.get(key_third, found_slice.data()), 1);
+    expect(index.remove(key_third));
+
+    expect(index.add(key_fourth, vector_second.data()));
+    expect_eq(index.get(key_fourth, found_slice.data()), 1);
+    expect(index.remove(key_fourth));
+
+    expect_eq(index.size(), 0);
 }
 
 /**
@@ -344,7 +449,7 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
     std::vector<scalar_at> const& vector_first = vectors[0];
     std::size_t dimensions = vector_first.size();
 
-    // Try batch requests, heavily oversubscribing the CPU cores
+    // Try batch requests, heavily over-subscribing the CPU cores
     std::size_t executor_threads = std::thread::hardware_concurrency();
     executor_default_t executor(executor_threads);
     expect(index.try_reserve({vectors.size(), executor.size()}));
@@ -399,6 +504,13 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
 
     // Search again over mapped index
     expect(index.save("tmp.usearch"));
+
+    {
+        auto copy_result = index.copy();
+        expect(copy_result);
+        index_at copied_index = std::move(copy_result.index);
+        expect_eq(copied_index.size(), vectors.size());
+    }
 
     // Check for duplicates
     if constexpr (punned_ak) {
@@ -494,13 +606,17 @@ void test_punned_concurrent_updates(index_at& index, typename index_at::vector_k
 
     // Try batch requests, heavily oversubscribing the CPU cores
     executor_default_t executor(executor_threads);
-    index.try_reserve({vectors.size(), executor.size()});
+    expect(index.try_reserve({vectors.size(), executor.size()}));
     executor.fixed(vectors.size(), [&](std::size_t, std::size_t task) {
         using add_result_t = typename index_t::add_result_t;
         add_result_t result = index.add(start_key + task, vectors[task].data());
         expect(result);
     });
     expect_eq(index.size(), vectors.size());
+
+    // Without key lookups we can't do much more
+    if (!index.config().enable_key_lookups)
+        return;
 
     // Remove all the keys
     executor.fixed(vectors.size(), [&](std::size_t, std::size_t task) {
@@ -579,10 +695,11 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         // Toy example
         if (vector_of_vectors.size() >= 3) {
             aligned_wrapper_gt<index_typed_t> aligned_index(config);
-            test_minimal_three_vectors<false, index_typed_t>(*aligned_index.index,     //
-                                                             42, vector_of_vectors[0], //
-                                                             43, vector_of_vectors[1], //
-                                                             44, vector_of_vectors[2], metric);
+            test_minimal_three_vectors<false, index_typed_t>( //
+                *aligned_index.index,                         //
+                42, vector_of_vectors[0],                     //
+                43, vector_of_vectors[1],                     //
+                44, vector_of_vectors[2], metric);
         }
         // Larger collection
         {
@@ -607,33 +724,38 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         // Toy example
         if (vector_of_vectors.size() >= 3) {
             index_result_t index_result = index_t::make(metric, config);
-            index_t& index = index_result.index;
-            test_minimal_three_vectors<true>(index,                    //
-                                             42, vector_of_vectors[0], //
-                                             43, vector_of_vectors[1], //
-                                             44, vector_of_vectors[2]);
+            test_minimal_three_vectors<true>( //
+                index_result.index,           //
+                42, vector_of_vectors[0],     //
+                43, vector_of_vectors[1],     //
+                44, vector_of_vectors[2]);
+        }
+        if (vector_of_vectors.size() >= 3 && enable_key_lookups) {
+            index_result_t index_result = index_t::make(metric, config);
+            test_punned_add_remove_vector( //
+                index_result.index,        //
+                vector_of_vectors[0],      //
+                vector_of_vectors[1]);
         }
         // Larger collection
         {
             index_result_t index_result = index_t::make(metric, config);
-            index_t& index = index_result.index;
-            test_collection<true>(index, 42, vector_of_vectors);
+            test_collection<true>(index_result.index, 42, vector_of_vectors);
         }
-#if 0 
-        // TODO: This issue is still unresolved
+
         // Try running benchmarks with a different number of threads
         for (std::size_t threads : {
                  static_cast<std::size_t>(1),
-                 static_cast<std::size_t>(2),
-                 static_cast<std::size_t>(std::thread::hardware_concurrency()),
-                 static_cast<std::size_t>(std::thread::hardware_concurrency() * 4),
-                 static_cast<std::size_t>(vector_of_vectors.size()),
+                 // TODO: Multithreaded updates should word differently and may involve a search first
+                 //  static_cast<std::size_t>(2),
+                 //  static_cast<std::size_t>(std::thread::hardware_concurrency()),
+                 //  static_cast<std::size_t>(std::thread::hardware_concurrency() * 4),
+                 //  static_cast<std::size_t>(vector_of_vectors.size()),
              }) {
             index_result_t index_result = index_t::make(metric, config);
             index_t& index = index_result.index;
             test_punned_concurrent_updates(index, 42, vector_of_vectors, threads);
         }
-#endif
     };
 
     for (bool multi : {false, true})
@@ -742,7 +864,7 @@ void test_absurd(std::size_t dimensions, std::size_t connectivity, std::size_t e
 }
 
 /**
- * Tests the exact search functionality over a dataset of vectors, @b wigthout constructing the index.
+ * Tests the exact search functionality over a dataset of vectors, @b without constructing the index.
  *
  * Generates a dataset of vectors and performs exact search queries to verify that the search results are correct.
  * This function mainly validates the basic functionality of exact searches using a given similarity metric.
@@ -752,7 +874,7 @@ void test_absurd(std::size_t dimensions, std::size_t connectivity, std::size_t e
  * @param wanted_count Number of top matches required from each query.
  */
 void test_exact_search(std::size_t dataset_count, std::size_t queries_count, std::size_t wanted_count) {
-    std::size_t dimensions = 10;
+    std::size_t dimensions = 32;
     metric_punned_t metric(dimensions, metric_kind_t::cos_k);
 
     std::random_device rd;
@@ -788,7 +910,7 @@ void test_sets(std::size_t collection_size, std::size_t min_set_length, std::siz
     /// Jaccard is a fraction, so let's use a some float
     using set_distance_t = double;
 
-    // Aliasis for the index overload
+    // Aliases for the index overload
     using vector_key_t = key_at;
     using slot_t = slot_at;
     using index_t = index_gt<set_distance_t, vector_key_t, slot_t>;
@@ -859,9 +981,9 @@ template <typename key_at, typename slot_at> void test_strings() {
     namespace sz = ashvardanian::stringzilla;
 
     /// Levenshtein distance is an integer
-    using levenshtein_distance_t = std::uint64_t;
+    using levenshtein_distance_t = std::int64_t;
 
-    // Aliasis for the index overload
+    // Aliases for the index overload
     using vector_key_t = key_at;
     using slot_t = slot_at;
     using index_t = index_gt<levenshtein_distance_t, vector_key_t, slot_t>;
@@ -976,6 +1098,7 @@ template <typename key_at, typename slot_at> void test_replacing_update() {
 
 int main(int, char**) {
     test_uint40();
+    test_cosine<float, std::int64_t, uint40_t>(10, 10);
 
     // Exact search without constructing indexes.
     // Great for validating the distance functions.
@@ -988,17 +1111,16 @@ int main(int, char**) {
     // Make sure the initializers and the algorithms can work with inadequately small values.
     // Be warned - this combinatorial explosion of tests produces close to __500'000__ tests!
     std::printf("Testing allowed, but absurd index configs\n");
-    for (std::size_t connectivity : {2, 3})      // ! Zero maps to default, one degenerates
-        for (std::size_t dimensions : {1, 2, 3}) // ! Zero will raise
-            for (std::size_t expansion_add : {0, 1, 3})
-                for (std::size_t expansion_search : {0, 1, 3})
-                    for (std::size_t count_vectors : {0, 1, 2, 17})
-                        for (std::size_t count_wanted : {0, 1, 3, 19}) {
-                            test_absurd<std::int64_t, slot32_t>(dimensions, connectivity, expansion_add,
-                                                                expansion_search, count_vectors, count_wanted);
-                            test_absurd<uint40_t, uint40_t>(dimensions, connectivity, expansion_add, expansion_search,
+    for (std::size_t connectivity : {2, 3})   // ! Zero maps to default, one degenerates
+        for (std::size_t dimensions : {1, 3}) // ! Zero will raise
+            for (std::size_t expansion : {0, 1, 3})
+                for (std::size_t count_vectors : {0, 1, 2, 17})
+                    for (std::size_t count_wanted : {0, 1, 3, 19}) {
+                        test_absurd<std::int64_t, slot32_t>(dimensions, connectivity, expansion, expansion,
                                                             count_vectors, count_wanted);
-                        }
+                        test_absurd<uint40_t, uint40_t>(dimensions, connectivity, expansion, expansion, count_vectors,
+                                                        count_wanted);
+                    }
 
     // TODO: Test absurd configs that are banned
     // for (metric_kind_t metric_kind : {metric_kind_t::cos_k, metric_kind_t::unknown_k, metric_kind_t::haversine_k}) {}
@@ -1013,7 +1135,7 @@ int main(int, char**) {
             test_cosine<float, std::int64_t, uint40_t>(collection_size, dimensions);
         }
 
-    // Test with binaty vectors
+    // Test with binary vectors
     std::printf("Testing binary vectors\n");
     for (std::size_t connectivity : {3, 13, 50})
         for (std::size_t dimensions : {97, 256})

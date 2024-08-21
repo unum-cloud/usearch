@@ -58,7 +58,7 @@ public class Index implements AutoCloseable {
    *
    * @param path path to load from
    * @return a mutable Index.
-   * @throws {@Error} if any part of loading from path failed.
+   * @throws Error if any part of loading from path failed.
    */
   public static Index loadFromPath(String path) {
     return new Index(c_createFromFile(path, false));
@@ -69,7 +69,7 @@ public class Index implements AutoCloseable {
    *
    * @param path path to load from
    * @return an immutable Index.
-   * @throws {@Error} if any part of loading from path failed.
+   * @throws Error if any part of loading from path failed.
    */
   public static Index viewFromPath(String path) {
     return new Index(c_createFromFile(path, true));
@@ -176,7 +176,7 @@ public class Index implements AutoCloseable {
    *
    * @param key key to lookup.
    * @return the contents of the vector.
-   * @throws {@link IllegalArgumentException} is key is not available.
+   * @throws IllegalArgumentException is key is not available.
    */
   public float[] get(int key) {
     if (c_ptr == 0) {

@@ -70,6 +70,7 @@ export enum ScalarKind {
   F32 = "f32",
   F64 = "f64",
   F16 = "f16",
+  BF16 = "bf16",
   I8 = "i8",
   B1 = "b1",
 }
@@ -608,6 +609,16 @@ function exactSearch(
     return new BatchMatches(...result, count);
   }
 }
+
+const usearch = {
+  Index,
+  MetricKind,
+  ScalarKind,
+  Matches,
+  BatchMatches,
+  exactSearch,
+};
+export default usearch;
 
 // utility functions to help find native builds
 

@@ -14,6 +14,7 @@ bin
 /build_release
 /build_debug
 /build_relwithdebinfo
+/build_profile
 /build_artifacts
 _deps
 CMakeCache.txt

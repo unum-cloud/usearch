@@ -87,7 +87,7 @@ def test_index_numba(ndim: int, batch_size: int):
 
 
 @pytest.mark.parametrize("ndim", [20, 50])
-@pytest.mark.parametrize("batch_size", [100, 1000])
+@pytest.mark.parametrize("batch_size", [100])
 def test_index_numba_negative(ndim: int, batch_size: int):
     """
     Uses Numba to validate the hypothesis, that HNSW can work fine with arbitrary

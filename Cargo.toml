@@ -1,6 +1,6 @@
 [package]
 name = "usearch"
-version = "2.13.0"
+version = "2.14.0"
 authors = ["Ash Vardanian <1983160+ashvardanian@users.noreply.github.com>"]
 description = "Smaller & Faster Single-File Vector Search Engine from Unum"
 edition = "2021"
@@ -18,10 +18,10 @@ include = [
 ]
 
 [features]
-default = ["simsimd"] # SimSIMD is enabled by default
-simsimd = []          # No need to do anything to enable SimSIMD by default
-openmp = []           # Optional: Users can enable OpenMP
-fp16lib = []          # Optional: Users can enable FP16 support
+default = ["simsimd", "fp16lib"] # SimSIMD is enabled by default
+simsimd = []                     # No need to do anything to enable SimSIMD by default
+fp16lib = []                     # Without this FP16 we lose precision downcasting
+openmp = []                      # Optional: Users can enable OpenMP
 
 [lib]
 name = "usearch"

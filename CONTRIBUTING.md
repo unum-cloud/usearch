@@ -84,8 +84,8 @@ Similarly, to use the most recent Clang compiler version from HomeBrew on MacOS:
 brew install clang++ clang cmake
 cmake \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER="/opt/homebrew/opt/llvm/bin/clang" \
-    -DCMAKE_CXX_COMPILER="/opt/homebrew/opt/llvm/bin/clang++" \
+    -DCMAKE_C_COMPILER="$(brew --prefix llvm)/bin/clang" \
+    -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" \
     -DUSEARCH_USE_FP16LIB=1 \
     -DUSEARCH_USE_OPENMP=1 \
     -DUSEARCH_USE_SIMSIMD=1 \
@@ -174,8 +174,8 @@ Following options are enabled:
 - The `-p no:warnings` option will suppress and allow warnings.
 
 ```sh
-pip install pytest pytest-repeat # for repeated fuzzy tests
-pytest # if you trust the default settings
+pip install pytest pytest-repeat            # for repeated fuzzy tests
+pytest                                      # if you trust the default settings
 pytest python/scripts/ -s -x -p no:warnings # to overwrite the default settings
 ```
 
@@ -260,8 +260,8 @@ RUN npm install --build-from-source usearch
 To compile to WebAssembly make sure you have `emscripten` installed and run the following script:
 
 ```sh
-emcmake cmake -B ./build -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} -s TOTAL_MEMORY=64MB" && emmake make -C ./build
-node ./build/usearch.test.js
+emcmake cmake -B build -DCMAKE_CXX_FLAGS="${CMAKE_CXX_FLAGS} -s TOTAL_MEMORY=64MB" && emmake make -C build
+node build/usearch.test.js
 ```
 
 If you don't yet have `emcmake` installed:
@@ -332,13 +332,13 @@ USearch provides GoLang bindings, that depend on the C library that must be inst
 So one should first compile the C library, link it with GoLang, and only then run tests.
 
 ```sh
-cmake -B ./build_release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
-cmake --build ./build_release --config Release -j
+cmake -B build_release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
+cmake --build build_release --config Release -j
 
-cd golang
-cp ../build_Release/libusearch_c.so . # or .dylib to install the library on MacOS
-cp ../c/usearch.h .                   # to make the header available to GoLang
-LD_LIBRARY_PATH=. go test -v          # You may not need the path
+mv c/libusearch_c.so golang/          # or .dylib to install the library on MacOS
+cp c/usearch.h golang/                # to make the header available to GoLang
+
+cd golang && LD_LIBRARY_PATH=. go test -v ; cd ..
 ```
 
 ## Java
@@ -349,9 +349,10 @@ The compilation settings are controlled by the `build.gradle` and are independen
 To setup the Gradle environment:
 
 ```sh
-sudo apt get install zip unzip
+sudo apt-get install zip
 curl -s "https://get.sdkman.io" | bash
-sdk install java gradle
+sdk install java
+sdk install gradle
 ```
 
 Afterwards, in a new terminal:
@@ -410,8 +411,8 @@ USearch provides CSharp bindings, that depend on the C library that must be inst
 So one should first compile the C library, link it with CSharp, and only then run tests.
 
 ```sh
-cmake -B ./build_artifacts -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
-cmake --build ./build_artifacts --config Release -j
+cmake -B build_artifacts -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
+cmake --build build_artifacts --config Release -j
 ```
 
 Then, on Windows, copy the library to the CSharp project and run the tests:
@@ -423,6 +424,29 @@ cd csharp
 dotnet test -c Debug --logger "console;verbosity=detailed"
 dotnet test -c Release
 ```
+
+On Linux, the process is similar:
+
+```sh
+mkdir -p "csharp/lib/runtimes/linux-x64/native" # for x86
+cp "build_artifacts/libusearch_c.so" "csharp/lib/runtimes/linux-x64/native" # for x86
+mkdir -p "csharp/lib/runtimes/linux-arm64/native" # for ARM
+cp "build_artifacts/libusearch_c.so" "csharp/lib/runtimes/linux-arm64/native" # for ARM
+cd csharp
+dotnet test -c Debug --logger "console;verbosity=detailed"
+dotnet test -c Release
+```
+
+On macOS with Arm-based chips:
+
+```sh
+mkdir -p "csharp/lib/runtimes/osx-arm64/native"
+cp "build_artifacts/libusearch_c.dylib" "csharp/lib/runtimes/osx-arm64/native"
+cd csharp
+dotnet test -c Debug --logger "console;verbosity=detailed"
+dotnet test -c Release
+```
+
 
 ## Wolfram
 

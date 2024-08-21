@@ -34,7 +34,7 @@ def run(
     q: int = 10,
     k: int = 100,
     ndim: int = 256,
-    dtype: Literal["b1", "i8", "f16", "f32", "f64"] = "f32",
+    dtype: Literal["b1", "i8", "f16", "bf16", "f32", "f64"] = "f32",
     metric: Literal["cos", "ip", "l2sq"] = "ip",
 ):
 
@@ -62,7 +62,7 @@ def run(
 
     if metric not in [MetricKind.L2sq, MetricKind.IP]:
         return
-    if dtype not in [ScalarKind.I8, ScalarKind.F16, ScalarKind.F32, ScalarKind.F64]:
+    if dtype not in [ScalarKind.I8, ScalarKind.F16, ScalarKind.BF16, ScalarKind.F32, ScalarKind.F64]:
         return
 
     start = time()
