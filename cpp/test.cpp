@@ -383,9 +383,16 @@ void test_collection(index_at& index, typename index_at::vector_key_t const star
 
         // Invoke the search kernel
         if constexpr (punned_ak) {
-            index_search_result_t result = index.search(task_data, count_requested, args...);
-            expect(result);
-            matched_count = result.dump_to(matched_keys.data(), matched_distances.data());
+            {
+                index_search_result_t result = index.search(task_data, count_requested, args...);
+                expect(result);
+                matched_count = result.dump_to(matched_keys.data(), matched_distances.data());
+            }
+
+            if (matched_count != max_possible_matches) {
+                auto unreachable_count = index.unreachable_nodes();
+                index_search_result_t other_result = index.search(task_data, count_requested, args...);
+            }
 
             // In approximate search we can't always expect the right answer to be found
             expect_eq(matched_count, max_possible_matches);
