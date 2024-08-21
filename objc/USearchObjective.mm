@@ -175,11 +175,6 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
              vector:(void *_Nonnull)vector
               count:(UInt32)wanted {
     std::size_t result = _native->get(key, (f32_t*)vector, static_cast<std::size_t>(wanted));
-
-    if (!result) {
-        return 0;
-    }
-
     return static_cast<UInt32>(result);
 }
 
@@ -214,11 +209,6 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
              vector:(void *_Nonnull)vector
               count:(UInt32)wanted {
     std::size_t result = _native->get(key, (f64_t*)vector, static_cast<std::size_t>(wanted));
-
-    if (!result) {
-        return 0;
-    }
-
     return static_cast<UInt32>(result);
 }
 
@@ -253,11 +243,6 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
            vector:(void *_Nonnull)vector
             count:(UInt32)wanted {
     std::size_t result = _native->get(key, (f16_t*)vector, static_cast<std::size_t>(wanted));
-
-    if (!result) {
-        return 0;
-    }
-
     return static_cast<UInt32>(result);
 }
 
