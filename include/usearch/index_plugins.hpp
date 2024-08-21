@@ -2088,7 +2088,7 @@ class flat_hash_multi_set_gt {
         // Allocate new memory
         data_ = (char*)allocator_t{}.allocate(other.buckets_ * bytes_per_bucket());
         if (!data_)
-            throw std::bad_alloc();
+            __usearch_raise_runtime_error("failed memory allocation");
 
         // Copy metadata
         buckets_ = other.buckets_;
@@ -2128,7 +2128,7 @@ class flat_hash_multi_set_gt {
         // Allocate new memory
         data_ = (char*)allocator_t{}.allocate(other.buckets_ * bytes_per_bucket());
         if (!data_)
-            throw std::bad_alloc();
+            __usearch_raise_runtime_error("failed memory allocation");
 
         // Copy metadata
         buckets_ = other.buckets_;
@@ -2501,7 +2501,7 @@ class flat_hash_multi_set_gt {
 
     void reserve(std::size_t capacity) {
         if (!try_reserve(capacity))
-            throw std::bad_alloc();
+            __usearch_raise_runtime_error("failed to reserve memory");
     }
 
     bool try_emplace(element_t const& element) noexcept {
