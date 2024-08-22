@@ -10,6 +10,9 @@ extension USearchIndex {
     public typealias Key = USearchKey
     public typealias Metric = USearchMetric
     public typealias Scalar = USearchScalar
+    /// Function type used to filter out keys in results during search.
+    /// The filter function should return true to include, and false to skip.
+    public typealias FilterFn = (Key) -> Bool
 
     /// Adds a labeled vector to the index.
     /// - Parameter key: Unique identifier for that object.
@@ -145,6 +148,76 @@ extension USearchIndex {
         ).map {
             Array(vector[$0 ..< $0 + Int(self.dimensions)])
         }
+    }
+
+    /// Approximate nearest neighbors search.
+    /// - Parameter vector: Single-precision query vector.
+    /// - Parameter count: Upper limit on the number of matches to retrieve.
+    /// - Parameter filter: Closure used to determine whether to skip a key in the results.
+    /// - Returns: Labels and distances to closest approximate matches in decreasing similarity order.
+    /// - Throws: If runs out of memory.
+    public func filteredSearch(vector: ArraySlice<Float32>, count: Int, filter: @escaping FilterFn) -> ([Key], [Float])
+    {
+        var matches: [Key] = Array(repeating: 0, count: count)
+        var distances: [Float] = Array(repeating: 0, count: count)
+        let results = vector.withContiguousStorageIfAvailable {
+            filteredSearchSingle(
+                vector: $0.baseAddress!,
+                count:
+                    CUnsignedInt(count),
+                filter: filter,
+                keys: &matches,
+                distances: &distances
+            )
+        }
+        matches.removeLast(count - Int(results!))
+        distances.removeLast(count - Int(results!))
+        return (matches, distances)
+    }
+
+    /// Approximate nearest neighbors search.
+    /// - Parameter vector: Single-precision query vector.
+    /// - Parameter count: Upper limit on the number of matches to retrieve.
+    /// - Parameter filter: Closure used to determine whether to skip a key in the results.
+    /// - Returns: Labels and distances to closest approximate matches in decreasing similarity order.
+    /// - Throws: If runs out of memory.
+    public func filteredSearch(vector: [Float32], count: Int, filter: @escaping FilterFn) -> ([Key], [Float]) {
+        filteredSearch(vector: vector[...], count: count, filter: filter)
+    }
+
+    /// Approximate nearest neighbors search.
+    /// - Parameter vector: Double-precision query vector.
+    /// - Parameter count: Upper limit on the number of matches to retrieve.
+    /// - Parameter filter: Closure used to determine whether to skip a key in the results.
+    /// - Returns: Labels and distances to closest approximate matches in decreasing similarity order.
+    /// - Throws: If runs out of memory.
+    public func filteredSearch(vector: ArraySlice<Float64>, count: Int, filter: @escaping FilterFn) -> ([Key], [Float])
+    {
+        var matches: [Key] = Array(repeating: 0, count: count)
+        var distances: [Float] = Array(repeating: 0, count: count)
+        let results = vector.withContiguousStorageIfAvailable {
+            filteredSearchDouble(
+                vector: $0.baseAddress!,
+                count:
+                    CUnsignedInt(count),
+                filter: filter,
+                keys: &matches,
+                distances: &distances
+            )
+        }
+        matches.removeLast(count - Int(results!))
+        distances.removeLast(count - Int(results!))
+        return (matches, distances)
+    }
+
+    /// Approximate nearest neighbors search.
+    /// - Parameter vector: Double-precision query vector.
+    /// - Parameter count: Upper limit on the number of matches to retrieve.
+    /// - Parameter filter: Closure used to determine whether to skip a key in the results.
+    /// - Returns: Labels and distances to closest approximate matches in decreasing similarity order.
+    /// - Throws: If runs out of memory.
+    public func filteredSearch(vector: [Float64], count: Int, filter: @escaping FilterFn) -> ([Key], [Float]) {
+        filteredSearch(vector: vector[...], count: count, filter: filter)
     }
 
     #if arch(arm64)
