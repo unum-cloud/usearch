@@ -1792,6 +1792,110 @@ class index_dense_gt {
     };
 
     /**
+     *  @brief  Implements K-Means clustering for all the points in the index.
+     *
+     *  Unlike the normal K-Means, we compute a hierarchical version.
+     *  1. Find the first layer that contains enough nodes to exceed `config.clusters`.
+     *  2. Assign random centroids to those points, and perform K-Means between them.
+     *  3. Iterate a few times and go down, assigning neighbors of the child nodes to the same cluster.
+     *
+     *  ! Doesn't guarantee that the clusters are balanced in size.
+     *  ! Brute-forces the centroids, so it's not very efficient for large datasets,
+     *  ! but benefits from initializing the centroids with the second largest level.
+     *  ! Not designed for multi-indexes.
+     *  ! Assumes all slots are occupied and no deletions are present.
+     *
+     *  @param[in] config Configuration parameters for K-Means clustering.
+     *  @param[in] executor Thread-pool to execute the job in parallel.
+     *  @param[in] progress Callback to report the execution progress.
+     *
+     *  @param[out] cluster_keys Pointer to the array where the cluster keys will be exported.
+     *  @param[out] cluster_distances Pointer to the array where the distances to those centroids will be exported.
+     */
+    template <                                   //
+        typename executor_at = dummy_executor_t, //
+        typename progress_at = dummy_progress_t  //
+        >
+    clustering_result_t cluster(                       //
+        index_dense_clustering_kmeans_config_t config, //
+        vector_key_t* member_keys,                     //
+        std::size_t* centroid_index,                   //
+        distance_t* centroid_distances,                //
+        f64_t** centroids,                             //
+        std::size_t* centroids_stride,                 //
+        executor_at&& executor = executor_at{},        //
+        progress_at&& progress = progress_at{}) {
+
+        clustering_result_t result;
+
+        // Perform sanity checks.
+        if (config.clusters < 2)
+            return result.failed("The number of clusters must be at least 2");
+        if (config.max_iterations < 1)
+            return result.failed("The number of iterations must be at least 1");
+        std::size_t const nodes_count = typed_->size();
+        std::size_t const vectors_count = size();
+        if (nodes_count != vectors_count)
+            return result.failed("Multi-indexes and deletions are not supported");
+        if (config.clusters >= vectors_count)
+            return result.failed("The number of clusters must be less than the number of vectors");
+
+        // Find the first level (top -> down) that has enough nodes to exceed `config.clusters`.
+        level_t level = static_cast<level_t>(max_level());
+        for (; level > 0; --level) {
+            if (stats(level).nodes > config.clusters)
+                break;
+        }
+
+        // Let's allocate memory for the centroids coordinates and make sure it's
+        // rows are aligned to cache lines to avoid false sharing.
+        using centroid_allocator_t = aligned_allocator_gt<f64_t, 64>;
+        std::size_t centroids_rows = config.clusters;
+        std::size_t centroids_row_bytes = metric_.bytes_per_vector();
+        std::size_t centroids_row_stride = divide_round_up<64>(centroids_row_bytes);
+        f64_t* centroids_data = centroid_allocator_t{}.allocate(centroids_rows * centroids_row_stride);
+        if (!centroids_data)
+            return result.failed("Out of memory!");
+
+        std::random_device random_device;
+        std::mt19937 random_engine(random_device());
+
+        // Randomly initialize centroids keys - go through all the non-removed slots.
+        {
+            std::size_t vectors_exported_count = 0;
+            slot_lookup_.for_each([&](key_and_slot_t const& key_and_slot) {
+                member_keys[key_and_slot.slot] = key_and_slot.key;
+                centroid_index[key_and_slot.slot] = random_engine() % centroids_rows;
+                ++vectors_exported_count;
+            });
+            usearch_assert_m(vectors_exported_count == vectors_count, "Vectors count mismatch");
+        }
+        std::fill(centroid_distances, centroid_distances + vectors_count, std::numeric_limits<distance_t>::max());
+
+        // Instead of generating random values for centroids,
+        // we can copy and upcast some random points from the bottom layer.
+        for (std::size_t i = 0; i < centroids_rows; i++) {
+            std::size_t slot = random_engine() % nodes_count;
+            byte_t const* vector = vectors_lookup_[slot];
+            if (!casts_.to_f64(vector, centroids_data + i * centroids_row_stride))
+                std::memcpy(centroids_data + i * centroids_row_stride, vector, centroids_row_bytes);
+            centroid_index[slot] = i;
+            centroid_distances[slot] = 0;
+        }
+
+        // Go down the layers, performing K-Means clustering on each one.
+        for (; level >= 0; --level) {
+            for (std::size_t slot = 0; slot < nodes_count; slot++) {
+                byte_t const* vector = vectors_lookup_[slot];
+                std::size_t closest_centroid = centroid_index[slot];
+                distance_t distance =
+                    metric_.distance(vector, centroids_data + closest_centroid * centroids_row_stride);
+                centroid_distances[slot] = distance;
+            }
+        }
+    }
+
+    /**
      *  @brief  Implements clustering, classifying the given objects (vectors of member keys)
      *          into a given number of clusters.
      *
@@ -1858,23 +1962,56 @@ class index_dense_gt {
     map_to_clusters:
         // Concurrently perform search until a certain depth
         executor.dynamic(queries_count, [&](std::size_t thread_idx, std::size_t query_idx) {
-            auto result = cluster(queries_begin[query_idx], level, thread_idx);
-            if (!result) {
-                atomic_error = result.error.release();
-                return false;
+            auto query_key = queries_begin[query_idx];
+            if (level) {
+                auto result = cluster(query_key, level, thread_idx);
+                if (!result) {
+                    atomic_error = result.error.release();
+                    return false;
+                }
+
+                cluster_keys[query_idx] = result.cluster.member.key;
+                cluster_distances[query_idx] = result.cluster.distance;
+
+                // Export in case we need to refine afterwards
+                clusters[query_idx].centroid = result.cluster.member.key;
+                clusters[query_idx].vector = vectors_lookup_[result.cluster.member.slot];
+                clusters[query_idx].merged_into = free_key();
+                clusters[query_idx].popularity = 1;
+
+                visited_members += result.visited_members;
+                computed_distances += result.computed_distances;
+            } else {
+                index_search_config_t search_config;
+                search_config.thread = thread_idx;
+                search_config.expansion = config_.expansion_search;
+                search_config.exact = false;
+
+                vector_key_t free_key_copy = free_key_;
+                auto allow = [free_key_copy](member_cref_t const& member) noexcept {
+                    return (vector_key_t)member.key != free_key_copy;
+                };
+                auto query_slot = slot_lookup_.find(key_and_slot_t::any_slot(query_key))->slot;
+                byte_t const* vector_data = vectors_lookup_[query_slot];
+                auto result = typed_->search(vector_data, 1, metric_proxy_t{*this}, search_config, allow);
+                if (!result) {
+                    atomic_error = result.error.release();
+                    return false;
+                }
+
+                cluster_keys[query_idx] = result.front().member.key;
+                cluster_distances[query_idx] = result.front().distance;
+
+                // Export in case we need to refine afterwards
+                clusters[query_idx].centroid = result.front().member.key;
+                clusters[query_idx].vector = vectors_lookup_[result.front().member.slot];
+                clusters[query_idx].merged_into = free_key();
+                clusters[query_idx].popularity = 1;
+
+                visited_members += result.visited_members;
+                computed_distances += result.computed_distances;
             }
 
-            cluster_keys[query_idx] = result.cluster.member.key;
-            cluster_distances[query_idx] = result.cluster.distance;
-
-            // Export in case we need to refine afterwards
-            clusters[query_idx].centroid = result.cluster.member.key;
-            clusters[query_idx].vector = vectors_lookup_[result.cluster.member.slot];
-            clusters[query_idx].merged_into = free_key();
-            clusters[query_idx].popularity = 1;
-
-            visited_members += result.visited_members;
-            computed_distances += result.computed_distances;
             return true;
         });
 
@@ -1995,7 +2132,6 @@ class index_dense_gt {
     add_result_t add_(                             //
         vector_key_t key, scalar_at const* vector, //
         std::size_t thread, bool force_vector_copy, cast_t const& cast) {
-
         if (!multi() && config().enable_key_lookups && contains(key))
             return add_result_t{}.failed("Duplicate keys not allowed in high-level wrappers");
 
@@ -2045,7 +2181,6 @@ class index_dense_gt {
     template <typename scalar_at, typename predicate_at>
     search_result_t search_(scalar_at const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread,
                             bool exact, cast_t const& cast) const {
-
         // Cast the vector, if needed for compatibility with `metric_`
         thread_lock_t lock = thread_lock_(thread);
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
@@ -2081,7 +2216,6 @@ class index_dense_gt {
     cluster_result_t cluster_(                      //
         scalar_at const* vector, std::size_t level, //
         std::size_t thread, cast_t const& cast) const {
-
         // Cast the vector, if needed for compatibility with `metric_`
         thread_lock_t lock = thread_lock_(thread);
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
@@ -2105,7 +2239,6 @@ class index_dense_gt {
     aggregated_distances_t distance_between_(      //
         vector_key_t key, scalar_at const* vector, //
         std::size_t thread, cast_t const& cast) const {
-
         // Cast the vector, if needed for compatibility with `metric_`
         thread_lock_t lock = thread_lock_(thread);
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
@@ -2149,7 +2282,6 @@ class index_dense_gt {
     }
 
     void reindex_keys_() {
-
         // Estimate number of entries first
         std::size_t count_total = typed_->size();
         std::size_t count_removed = 0;
@@ -2182,7 +2314,6 @@ class index_dense_gt {
 
     template <typename scalar_at>
     std::size_t get_(vector_key_t key, scalar_at* reconstructed, std::size_t vectors_limit, cast_t const& cast) const {
-
         if (!multi()) {
             compressed_slot_t slot;
             // Find the matching ID
