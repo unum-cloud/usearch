@@ -227,6 +227,7 @@ Testing and benchmarking:
 
 ```sh
 npm install -g typescript
+npm install
 npm run build-js
 npm test
 npm run bench
