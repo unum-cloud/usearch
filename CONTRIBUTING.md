@@ -335,8 +335,8 @@ So one should first compile the C library, link it with GoLang, and only then ru
 cmake -B build_release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
 cmake --build build_release --config Release -j
 
-mv c/libusearch_c.so golang/          # or .dylib to install the library on MacOS
-cp c/usearch.h golang/                # to make the header available to GoLang
+cp build_release/libusearch_c.so golang/ # or .dylib to install the library on MacOS
+cp c/usearch.h golang/                   # to make the header available to GoLang
 
 cd golang && LD_LIBRARY_PATH=. go test -v ; cd ..
 ```

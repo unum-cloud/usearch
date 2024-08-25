@@ -42,17 +42,17 @@ func TestUSearch(t *testing.T) {
 			t.Fatalf("Expected serialized length to be 112, got %d", found_len)
 		}
 
+		err = ind.Reserve(100)
+		if err != nil {
+			t.Fatalf("Failed to reserve capacity: %s", err)
+		}
+
 		mem, err := ind.MemoryUsage()
 		if err != nil {
 			t.Fatalf("Failed to retrieve serialized length: %s", err)
 		}
-		if mem != 0 {
-			t.Fatalf("Expected the empty index memory usage to be 0, got %d", mem)
-		}
-
-		err = ind.Reserve(100)
-		if err != nil {
-			t.Fatalf("Failed to reserve capacity: %s", err)
+		if mem == 0 {
+			t.Fatalf("Expected the empty index memory usage to be positive, got zero")
 		}
 
 		s, err := ind.HardwareAcceleration()
