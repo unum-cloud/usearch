@@ -72,25 +72,8 @@ struct uuid_t {
 class f16_bits_t;
 class bf16_bits_t;
 
-#if !USEARCH_USE_FP16LIB
-#if USEARCH_USE_SIMSIMD
-using f16_native_t = simsimd_f16_t;
-using bf16_native_t = simsimd_bf16_t;
-#elif defined(USEARCH_DEFINED_ARM)
-using f16_native_t = __fp16;
-using bf16_native_t = __fp16; // No better choice on most compilers!
-#else
-using f16_native_t = _Float16;
-using bf16_native_t = _Float16; // No better choice on most compilers!
-#endif
-using f16_t = f16_native_t;
-using bf16_t = bf16_native_t;
-#else
-using f16_native_t = void;
-using bf16_native_t = void;
 using f16_t = f16_bits_t;
 using bf16_t = bf16_bits_t;
-#endif
 
 using f64_t = double;
 using f32_t = float;
@@ -154,12 +137,6 @@ enum class scalar_kind_t : std::uint8_t {
     i32_k = 21,
     i16_k = 22,
     i8_k = 23,
-};
-
-enum class prefetching_kind_t {
-    none_k,
-    cpu_k,
-    io_uring_k,
 };
 
 template <typename scalar_at> scalar_kind_t scalar_kind() noexcept {
@@ -352,12 +329,14 @@ inline expected_gt<metric_kind_t> metric_from_name(char const* name) {
  *  @brief Convenience function to upcast a half-precision floating point number to a single-precision one.
  */
 inline float f16_to_f32(std::uint16_t u16) noexcept {
-#if !USEARCH_USE_FP16LIB
+#if USEARCH_USE_FP16LIB
+    return fp16_ieee_to_fp32_value(u16);
+#elif USEARCH_USE_SIMSIMD
+    return simsimd_uncompress_f16(u16);
+#else
     f16_native_t f16;
     std::memcpy(&f16, &u16, sizeof(std::uint16_t));
     return float(f16);
-#else
-    return fp16_ieee_to_fp32_value(u16);
 #endif
 }
 
@@ -365,13 +344,15 @@ inline float f16_to_f32(std::uint16_t u16) noexcept {
  *  @brief Convenience function to downcast a single-precision floating point number to a half-precision one.
  */
 inline std::uint16_t f32_to_f16(float f32) noexcept {
-#if !USEARCH_USE_FP16LIB
+#if USEARCH_USE_FP16LIB
+    return fp16_ieee_from_fp32_value(f32);
+#elif USEARCH_USE_SIMSIMD
+    return simsimd_compress_f16(f32);
+#else
     f16_native_t f16 = f16_native_t(f32);
     std::uint16_t u16;
     std::memcpy(&u16, &f16, sizeof(std::uint16_t));
     return u16;
-#else
-    return fp16_ieee_from_fp32_value(f32);
 #endif
 }
 
@@ -380,6 +361,9 @@ inline std::uint16_t f32_to_f16(float f32) noexcept {
  *  https://github.com/ashvardanian/SimSIMD/blob/ff51434d90c66f916e94ff05b24530b127aa4cff/include/simsimd/types.h#L395-L410
  */
 inline float bf16_to_f32(std::uint16_t u16) noexcept {
+#if USEARCH_USE_SIMSIMD
+    return simsimd_uncompress_bf16(u16);
+#else
     union float_or_unsigned_int_t {
         float f;
         unsigned int i;
@@ -387,6 +371,7 @@ inline float bf16_to_f32(std::uint16_t u16) noexcept {
     union float_or_unsigned_int_t result_union;
     result_union.i = u16 << 16; // Zero extends the mantissa
     return result_union.f;
+#endif
 }
 
 /**
@@ -394,6 +379,9 @@ inline float bf16_to_f32(std::uint16_t u16) noexcept {
  *  https://github.com/ashvardanian/SimSIMD/blob/ff51434d90c66f916e94ff05b24530b127aa4cff/include/simsimd/types.h#L412-L425
  */
 inline std::uint16_t f32_to_bf16(float f32) noexcept {
+#if USEARCH_USE_SIMSIMD
+    return simsimd_compress_bf16(f32);
+#else
     union float_or_unsigned_int_t {
         float f;
         unsigned int i;
@@ -403,6 +391,7 @@ inline std::uint16_t f32_to_bf16(float f32) noexcept {
     value.i >>= 16;
     value.i &= 0xFFFF;
     return (unsigned short)value.i;
+#endif
 }
 
 /**
@@ -1047,6 +1036,10 @@ template <> struct cast_gt<f16_bits_t, f16_bits_t> {
     static bool try_(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
 
+template <> struct cast_gt<bf16_bits_t, bf16_bits_t> {
+    static bool try_(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
+};
+
 template <> struct cast_gt<i8_t, i8_t> {
     static bool try_(byte_t const*, std::size_t, byte_t*) noexcept { return false; }
 };
@@ -1119,23 +1112,23 @@ template <typename to_scalar_at> struct cast_from_i8_gt {
     }
 };
 
-template <> struct cast_gt<i8_t, f16_t> : public cast_from_i8_gt<f16_t> {};
-template <> struct cast_gt<i8_t, bf16_t> : public cast_from_i8_gt<bf16_t> {};
+template <> struct cast_gt<i8_t, f16_bits_t> : public cast_from_i8_gt<f16_t> {};
+template <> struct cast_gt<i8_t, bf16_bits_t> : public cast_from_i8_gt<bf16_t> {};
 template <> struct cast_gt<i8_t, f32_t> : public cast_from_i8_gt<f32_t> {};
 template <> struct cast_gt<i8_t, f64_t> : public cast_from_i8_gt<f64_t> {};
 
-template <> struct cast_gt<f16_t, i8_t> : public cast_to_i8_gt<f16_t> {};
-template <> struct cast_gt<bf16_t, i8_t> : public cast_to_i8_gt<bf16_t> {};
+template <> struct cast_gt<f16_bits_t, i8_t> : public cast_to_i8_gt<f16_t> {};
+template <> struct cast_gt<bf16_bits_t, i8_t> : public cast_to_i8_gt<bf16_t> {};
 template <> struct cast_gt<f32_t, i8_t> : public cast_to_i8_gt<f32_t> {};
 template <> struct cast_gt<f64_t, i8_t> : public cast_to_i8_gt<f64_t> {};
 
-template <> struct cast_gt<b1x8_t, f16_t> : public cast_from_b1x8_gt<f16_t> {};
-template <> struct cast_gt<b1x8_t, bf16_t> : public cast_from_b1x8_gt<bf16_t> {};
+template <> struct cast_gt<b1x8_t, f16_bits_t> : public cast_from_b1x8_gt<f16_t> {};
+template <> struct cast_gt<b1x8_t, bf16_bits_t> : public cast_from_b1x8_gt<bf16_t> {};
 template <> struct cast_gt<b1x8_t, f32_t> : public cast_from_b1x8_gt<f32_t> {};
 template <> struct cast_gt<b1x8_t, f64_t> : public cast_from_b1x8_gt<f64_t> {};
 
-template <> struct cast_gt<f16_t, b1x8_t> : public cast_to_b1x8_gt<f16_t> {};
-template <> struct cast_gt<bf16_t, b1x8_t> : public cast_to_b1x8_gt<bf16_t> {};
+template <> struct cast_gt<f16_bits_t, b1x8_t> : public cast_to_b1x8_gt<f16_t> {};
+template <> struct cast_gt<bf16_bits_t, b1x8_t> : public cast_to_b1x8_gt<bf16_t> {};
 template <> struct cast_gt<f32_t, b1x8_t> : public cast_to_b1x8_gt<f32_t> {};
 template <> struct cast_gt<f64_t, b1x8_t> : public cast_to_b1x8_gt<f64_t> {};
 
