@@ -7,6 +7,7 @@ from collections.abc import Sequence
 # Python tooling, linters, and static analyzers. It also embeds JIT
 # into the primary `Index` class, connecting USearch with Numba.
 import os
+import sys
 import math
 from dataclasses import dataclass
 from typing import (
@@ -61,7 +62,15 @@ class CompiledMetric(NamedTuple):
     signature: MetricSignature
 
 
-Key = np.uint64
+# Define TypeAlias for older Python versions
+if sys.version_info >= (3, 10):
+    from typing import TypeAlias
+else:
+    TypeAlias = object  # Fallback for older Python versions
+
+Key: TypeAlias = np.uint64
+
+NoneType: TypeAlias = type(None)
 
 KeyOrKeysLike = Union[Key, Iterable[Key], int, Iterable[int], np.ndarray, memoryview]
 
@@ -70,8 +79,6 @@ VectorOrVectorsLike = Union[np.ndarray, Iterable[np.ndarray], memoryview]
 DTypeLike = Union[str, ScalarKind]
 
 MetricLike = Union[str, MetricKind, CompiledMetric]
-
-NoneType = type(None)
 
 PathOrBuffer = Union[str, os.PathLike, bytes]
 

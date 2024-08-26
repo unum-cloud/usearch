@@ -15,11 +15,13 @@ let package = Package(
         .target(
             name: "USearchObjective",
             path: "objc",
-            sources: ["USearchObjective.mm"],
+            sources: ["USearchObjective.mm"],            
             cxxSettings: [
                 .headerSearchPath("../include/"),
                 .headerSearchPath("../fp16/include/"),
-                .headerSearchPath("../simismd/include/"),
+                .headerSearchPath("../simsimd/include/"),
+                .define("USEARCH_USE_FP16LIB", to: "1"),
+                .define("USEARCH_USE_SIMSIMD", to: "1"),
             ]
         ),
         .target(

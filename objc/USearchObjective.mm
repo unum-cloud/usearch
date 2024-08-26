@@ -61,6 +61,9 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
         case USearchScalarF16:
             return scalar_kind_t::f16_k;
 
+        case USearchScalarBF16:
+            return scalar_kind_t::bf16_k;
+
         case USearchScalarF32:
             return scalar_kind_t::f32_k;
 
@@ -116,10 +119,23 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
     return static_cast<UInt32>(_native->expansion_search());
 }
 
-+ (instancetype)make:(USearchMetric)metricKind dimensions:(UInt32)dimensions connectivity:(UInt32)connectivity quantization:(USearchScalar)quantization {
++ (instancetype)make:(USearchMetric)metricKind
+          dimensions:(UInt32)dimensions
+        connectivity:(UInt32)connectivity
+        quantization:(USearchScalar)quantization {
+    // Create a single-vector index by default
+    return [self make:metricKind dimensions:dimensions connectivity:connectivity quantization:quantization multi:false];
+}
+
++ (instancetype)make:(USearchMetric)metricKind
+          dimensions:(UInt32)dimensions
+        connectivity:(UInt32)connectivity
+        quantization:(USearchScalar)quantization
+               multi:(BOOL)multi {
     std::size_t dims = static_cast<std::size_t>(dimensions);
 
-    index_config_t config(static_cast<std::size_t>(connectivity));
+    index_dense_config_t config(static_cast<std::size_t>(connectivity));
+    config.multi = multi;
     metric_punned_t metric(dims, to_native_metric(metricKind), to_native_scalar(quantization));
     if (metric.missing()) {
         @throw [NSException exceptionWithName:@"Can't create an index"
@@ -158,6 +174,30 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
     return static_cast<UInt32>(found);
 }
 
+- (UInt32)getSingle:(USearchKey)key
+             vector:(void *_Nonnull)vector
+              count:(UInt32)wanted {
+    std::size_t result = _native->get(key, (f32_t*)vector, static_cast<std::size_t>(wanted));
+    return static_cast<UInt32>(result);
+}
+
+- (UInt32)filteredSearchSingle:(Float32 const *_Nonnull)vector
+                 count:(UInt32)wanted
+                filter:(USearchFilterFn)predicate
+                  keys:(USearchKey *_Nullable)keys
+             distances:(Float32 *_Nullable)distances {
+    search_result_t result = _native->filtered_search(vector, static_cast<std::size_t>(wanted), predicate);
+
+    if (!result) {
+        @throw [NSException exceptionWithName:@"Can't find in index"
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
+                                     userInfo:nil];
+    }
+
+    std::size_t found = result.dump_to(keys, distances);
+    return static_cast<UInt32>(found);
+}
+
 - (void)addDouble:(USearchKey)key
            vector:(Float64 const *_Nonnull)vector {
     add_result_t result = _native->add(key, (f64_t const *)vector);
@@ -174,6 +214,30 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
                   keys:(USearchKey *_Nullable)keys
              distances:(Float32 *_Nullable)distances {
     search_result_t result = _native->search((f64_t const *)vector, static_cast<std::size_t>(wanted));
+
+    if (!result) {
+        @throw [NSException exceptionWithName:@"Can't find in index"
+                                       reason:[NSString stringWithUTF8String:result.error.release()]
+                                     userInfo:nil];
+    }
+
+    std::size_t found = result.dump_to(keys, distances);
+    return static_cast<UInt32>(found);
+}
+
+- (UInt32)getDouble:(USearchKey)key
+             vector:(void *_Nonnull)vector
+              count:(UInt32)wanted {
+    std::size_t result = _native->get(key, (f64_t*)vector, static_cast<std::size_t>(wanted));
+    return static_cast<UInt32>(result);
+}
+
+- (UInt32)filteredSearchDouble:(Float64 const *_Nonnull)vector
+                 count:(UInt32)wanted
+                filter:(USearchFilterFn)predicate
+                  keys:(USearchKey *_Nullable)keys
+             distances:(Float32 *_Nullable)distances {
+    search_result_t result = _native->filtered_search((f64_t const *) vector, static_cast<std::size_t>(wanted), predicate);
 
     if (!result) {
         @throw [NSException exceptionWithName:@"Can't find in index"
@@ -210,6 +274,13 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
     std::size_t found = result.dump_to(keys, distances);
     return static_cast<UInt32>(found);
+}
+
+- (UInt32)getHalf:(USearchKey)key
+           vector:(void *_Nonnull)vector
+            count:(UInt32)wanted {
+    std::size_t result = _native->get(key, (f16_t*)vector, static_cast<std::size_t>(wanted));
+    return static_cast<UInt32>(result);
 }
 
 - (void)clear {

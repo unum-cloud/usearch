@@ -10,6 +10,9 @@ extension USearchIndex {
     public typealias Key = USearchKey
     public typealias Metric = USearchMetric
     public typealias Scalar = USearchScalar
+    /// Function type used to filter out keys in results during search.
+    /// The filter function should return true to include, and false to skip.
+    public typealias FilterFn = (Key) -> Bool
 
     /// Adds a labeled vector to the index.
     /// - Parameter key: Unique identifier for that object.
@@ -54,6 +57,31 @@ extension USearchIndex {
         return search(vector: vector[...], count: count)
     }
 
+    /// Retrieve vectors for a given key.
+    /// - Parameter key: Unique identifier for that object.
+    /// - Parameter count: For multi-indexes, Number of vectors to retrieve. Defaults to 1.
+    /// - Returns: Two-dimensional array of Single-precision vectors.
+    /// - Throws: If runs out of memory.
+    public func get(key: USearchKey, count: Int = 1) -> [[Float]]? {
+        var vector: [Float] = Array(repeating: 0.0, count: Int(self.dimensions) * count)
+        let returnedCount = vector.withContiguousMutableStorageIfAvailable { buf in
+            guard let baseAddress = buf.baseAddress else { return UInt32(0) }
+            return getSingle(
+                key: key,
+                vector: baseAddress,
+                count: CUnsignedInt(count)
+            )
+        }
+        guard let count = returnedCount, count > 0 else { return nil }
+        return stride(
+            from: 0,
+            to: Int(count) * Int(self.dimensions),
+            by: Int(self.dimensions)
+        ).map {
+            Array(vector[$0 ..< $0 + Int(self.dimensions)])
+        }
+    }
+
     /// Adds a labeled vector to the index.
     /// - Parameter key: Unique identifier for that object.
     /// - Parameter vector: Double-precision vector.
@@ -95,6 +123,101 @@ extension USearchIndex {
     /// - Throws: If runs out of memory.
     public func search(vector: [Float64], count: Int) -> ([Key], [Float]) {
         search(vector: vector[...], count: count)
+    }
+
+    /// Retrieve vectors for a given key.
+    /// - Parameter key: Unique identifier for that object.
+    /// - Parameter count: For multi-indexes, Number of vectors to retrieve. Defaults to 1.
+    /// - Returns: Two-dimensional array of Double-precision vectors.
+    /// - Throws: If runs out of memory.
+    public func get(key: USearchKey, count: Int = 1) -> [[Float64]]? {
+        var vector: [Float64] = Array(repeating: 0.0, count: Int(self.dimensions) * count)
+        let count = vector.withContiguousMutableStorageIfAvailable { buf in
+            guard let baseAddress = buf.baseAddress else { return UInt32(0) }
+            return getDouble(
+                key: key,
+                vector: baseAddress,
+                count: CUnsignedInt(count)
+            )
+        }
+        guard let count = count, count > 0 else { return nil }
+        return stride(
+            from: 0,
+            to: Int(count) * Int(self.dimensions),
+            by: Int(self.dimensions)
+        ).map {
+            Array(vector[$0 ..< $0 + Int(self.dimensions)])
+        }
+    }
+
+    /// Approximate nearest neighbors search.
+    /// - Parameter vector: Single-precision query vector.
+    /// - Parameter count: Upper limit on the number of matches to retrieve.
+    /// - Parameter filter: Closure used to determine whether to skip a key in the results.
+    /// - Returns: Labels and distances to closest approximate matches in decreasing similarity order.
+    /// - Throws: If runs out of memory.
+    public func filteredSearch(vector: ArraySlice<Float32>, count: Int, filter: @escaping FilterFn) -> ([Key], [Float])
+    {
+        var matches: [Key] = Array(repeating: 0, count: count)
+        var distances: [Float] = Array(repeating: 0, count: count)
+        let results = vector.withContiguousStorageIfAvailable {
+            filteredSearchSingle(
+                vector: $0.baseAddress!,
+                count:
+                    CUnsignedInt(count),
+                filter: filter,
+                keys: &matches,
+                distances: &distances
+            )
+        }
+        matches.removeLast(count - Int(results!))
+        distances.removeLast(count - Int(results!))
+        return (matches, distances)
+    }
+
+    /// Approximate nearest neighbors search.
+    /// - Parameter vector: Single-precision query vector.
+    /// - Parameter count: Upper limit on the number of matches to retrieve.
+    /// - Parameter filter: Closure used to determine whether to skip a key in the results.
+    /// - Returns: Labels and distances to closest approximate matches in decreasing similarity order.
+    /// - Throws: If runs out of memory.
+    public func filteredSearch(vector: [Float32], count: Int, filter: @escaping FilterFn) -> ([Key], [Float]) {
+        filteredSearch(vector: vector[...], count: count, filter: filter)
+    }
+
+    /// Approximate nearest neighbors search.
+    /// - Parameter vector: Double-precision query vector.
+    /// - Parameter count: Upper limit on the number of matches to retrieve.
+    /// - Parameter filter: Closure used to determine whether to skip a key in the results.
+    /// - Returns: Labels and distances to closest approximate matches in decreasing similarity order.
+    /// - Throws: If runs out of memory.
+    public func filteredSearch(vector: ArraySlice<Float64>, count: Int, filter: @escaping FilterFn) -> ([Key], [Float])
+    {
+        var matches: [Key] = Array(repeating: 0, count: count)
+        var distances: [Float] = Array(repeating: 0, count: count)
+        let results = vector.withContiguousStorageIfAvailable {
+            filteredSearchDouble(
+                vector: $0.baseAddress!,
+                count:
+                    CUnsignedInt(count),
+                filter: filter,
+                keys: &matches,
+                distances: &distances
+            )
+        }
+        matches.removeLast(count - Int(results!))
+        distances.removeLast(count - Int(results!))
+        return (matches, distances)
+    }
+
+    /// Approximate nearest neighbors search.
+    /// - Parameter vector: Double-precision query vector.
+    /// - Parameter count: Upper limit on the number of matches to retrieve.
+    /// - Parameter filter: Closure used to determine whether to skip a key in the results.
+    /// - Returns: Labels and distances to closest approximate matches in decreasing similarity order.
+    /// - Throws: If runs out of memory.
+    public func filteredSearch(vector: [Float64], count: Int, filter: @escaping FilterFn) -> ([Key], [Float]) {
+        filteredSearch(vector: vector[...], count: count, filter: filter)
     }
 
     #if arch(arm64)
@@ -144,6 +267,32 @@ extension USearchIndex {
         @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, *)
         public func search(vector: [Float16], count: Int) -> ([Key], [Float]) {
             search(vector: vector[...], count: count)
+        }
+
+        /// Retrieve vectors for a given key.
+        /// - Parameter key: Unique identifier for that object.
+        /// - Parameter count: For multi-indexes, Number of vectors to retrieve. Defaults to 1.
+        /// - Returns: Two-dimensional array of Half-precision vectors.
+        /// - Throws: If runs out of memory.
+        @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, *)
+        public func get(key: USearchKey, count: Int = 1) -> [[Float16]]? {
+            var vector: [Float16] = Array(repeating: 0.0, count: Int(self.dimensions) * count)
+            let count = vector.withContiguousMutableStorageIfAvailable { buf in
+                guard let baseAddress = buf.baseAddress else { return UInt32(0) }
+                return getSingle(
+                    key: key,
+                    vector: baseAddress,
+                    count: CUnsignedInt(count)
+                )
+            }
+            guard let count = count, count > 0 else { return nil }
+            return stride(
+                from: 0,
+                to: Int(count) * Int(self.dimensions),
+                by: Int(self.dimensions)
+            ).map {
+                Array(vector[$0 ..< $0 + Int(self.dimensions)])
+            }
         }
 
     #endif
