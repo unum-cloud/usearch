@@ -8,7 +8,7 @@
 #define UNUM_USEARCH_HPP
 
 #define USEARCH_VERSION_MAJOR 2
-#define USEARCH_VERSION_MINOR 14
+#define USEARCH_VERSION_MINOR 15
 #define USEARCH_VERSION_PATCH 0
 
 // Inferring C++ version
