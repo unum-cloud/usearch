@@ -139,6 +139,9 @@ enum class scalar_kind_t : std::uint8_t {
     i8_k = 23,
 };
 
+/**
+ *  @brief  Maps a scalar type to its corresponding scalar_kind_t enumeration value.
+ */
 template <typename scalar_at> scalar_kind_t scalar_kind() noexcept {
     if (std::is_same<scalar_at, b1x8_t>())
         return scalar_kind_t::b1x8_k;
@@ -175,22 +178,43 @@ template <typename scalar_at> scalar_kind_t scalar_kind() noexcept {
     return scalar_kind_t::unknown_k;
 }
 
+/**
+ *  @brief  Converts an angle from degrees to radians.
+ */
 template <typename at> at angle_to_radians(at angle) noexcept { return angle * at(3.14159265358979323846) / at(180); }
 
+/**
+ *  @brief  Readability helper to compute the square of a given value.
+ */
 template <typename at> at square(at value) noexcept { return value * value; }
 
+/**
+ *  @brief  Clamps a value between a lower and upper bound using a custom comparator. Similar to `std::clamp`.
+ *          https://en.cppreference.com/w/cpp/algorithm/clamp
+ */
 template <typename at, typename compare_at> inline at clamp(at v, at lo, at hi, compare_at comp) noexcept {
     return comp(v, lo) ? lo : comp(hi, v) ? hi : v;
 }
+
+/**
+ *  @brief  Clamps a value between a lower and upper bound. Similar to `std::clamp`.
+ *          https://en.cppreference.com/w/cpp/algorithm/clamp
+ */
 template <typename at> inline at clamp(at v, at lo, at hi) noexcept {
     return usearch::clamp(v, lo, hi, std::less<at>{});
 }
 
-inline bool str_equals(char const* begin, std::size_t len, char const* other_begin) noexcept {
-    std::size_t other_len = std::strlen(other_begin);
-    return len == other_len && std::strncmp(begin, other_begin, len) == 0;
+/**
+ *  @brief  Compares two strings for equality, given a length for the first string.
+ */
+inline bool str_equals(char const* first_begin, std::size_t first_len, char const* second_begin) noexcept {
+    std::size_t second_len = std::strlen(second_begin);
+    return first_len == second_len && std::strncmp(first_begin, second_begin, first_len) == 0;
 }
 
+/**
+ *  @brief  Returns the number of bits required to represent a scalar type.
+ */
 inline std::size_t bits_per_scalar(scalar_kind_t scalar_kind) noexcept {
     switch (scalar_kind) {
     case scalar_kind_t::uuid_k: return 128;
@@ -213,6 +237,10 @@ inline std::size_t bits_per_scalar(scalar_kind_t scalar_kind) noexcept {
     }
 }
 
+/**
+ *  @brief  Returns the number of bits in a scalar word for a given scalar type.
+ *          Equivalent to `bits_per_scalar` for types that are not bit-packed.
+ */
 inline std::size_t bits_per_scalar_word(scalar_kind_t scalar_kind) noexcept {
     switch (scalar_kind) {
     case scalar_kind_t::uuid_k: return 128;
@@ -235,6 +263,9 @@ inline std::size_t bits_per_scalar_word(scalar_kind_t scalar_kind) noexcept {
     }
 }
 
+/**
+ *  @brief  Returns the string name of a given scalar type.
+ */
 inline char const* scalar_kind_name(scalar_kind_t scalar_kind) noexcept {
     switch (scalar_kind) {
     case scalar_kind_t::uuid_k: return "uuid";
@@ -257,6 +288,9 @@ inline char const* scalar_kind_name(scalar_kind_t scalar_kind) noexcept {
     }
 }
 
+/**
+ *  @brief  Returns the string name of a given distance metric.
+ */
 inline char const* metric_kind_name(metric_kind_t metric) noexcept {
     switch (metric) {
     case metric_kind_t::unknown_k: return "unknown";
@@ -273,6 +307,10 @@ inline char const* metric_kind_name(metric_kind_t metric) noexcept {
     default: return "";
     }
 }
+
+/**
+ *  @brief  Parses a string to identify the corresponding `scalar_kind_t` enumeration value.
+ */
 inline expected_gt<scalar_kind_t> scalar_kind_from_name(char const* name, std::size_t len) {
     expected_gt<scalar_kind_t> parsed;
     if (str_equals(name, len, "f32"))
@@ -292,10 +330,16 @@ inline expected_gt<scalar_kind_t> scalar_kind_from_name(char const* name, std::s
     return parsed;
 }
 
+/**
+ *  @brief  Parses a string to identify the corresponding `scalar_kind_t` enumeration value.
+ */
 inline expected_gt<scalar_kind_t> scalar_kind_from_name(char const* name) {
     return scalar_kind_from_name(name, std::strlen(name));
 }
 
+/**
+ *  @brief  Parses a string to identify the corresponding `metric_kind_t` enumeration value.
+ */
 inline expected_gt<metric_kind_t> metric_from_name(char const* name, std::size_t len) {
     expected_gt<metric_kind_t> parsed;
     if (str_equals(name, len, "l2sq") || str_equals(name, len, "euclidean_sq")) {
@@ -321,6 +365,10 @@ inline expected_gt<metric_kind_t> metric_from_name(char const* name, std::size_t
                       "tanimoto, sorensen");
     return parsed;
 }
+
+/**
+ *  @brief  Parses a string to identify the corresponding `metric_kind_t` enumeration value.
+ */
 inline expected_gt<metric_kind_t> metric_from_name(char const* name) {
     return metric_from_name(name, std::strlen(name));
 }
@@ -417,7 +465,7 @@ class f16_bits_t {
     inline f16_bits_t(float v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(double v) noexcept : uint16_(f32_to_f16(static_cast<float>(v))) {}
 
-    inline bool operator<(const f16_bits_t& other) const noexcept { return float(*this) < float(other); }
+    inline bool operator<(f16_bits_t const& other) const noexcept { return float(*this) < float(other); }
 
     inline f16_bits_t operator+(f16_bits_t other) const noexcept { return {float(*this) + float(other)}; }
     inline f16_bits_t operator-(f16_bits_t other) const noexcept { return {float(*this) - float(other)}; }
