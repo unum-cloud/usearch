@@ -268,7 +268,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macOS-11, windows-2022]
+        os: [ubuntu-22.04, macOS-12, windows-2022]
     steps:
       - name: Check out refreshed version
         uses: actions/checkout@v4
@@ -318,7 +318,7 @@ jobs:
             zip -r usearch_wasm_macos_"$arch"_${{ steps.set_version.outputs.version }}.zip libusearch_c.dylib
             mv usearch_wasm_macos_"$arch"_${{ steps.set_version.outputs.version }}.zip ../ && rm -rf libusearch_c.dylib
           done
-        if: matrix.os == 'macOS-11'
+        if: matrix.os == 'macOS-12'
 
       - name: Build library on Windows
         run: |
