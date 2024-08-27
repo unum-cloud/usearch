@@ -1419,7 +1419,10 @@ template <typename scalar_at = float, typename result_at = float> struct metric_
     }
 };
 
-struct cos_i8_t {
+/**
+ *  @brief  Cosine (Angular) distance for signed 8-bit integers using 16-bit intermediates.
+ */
+struct metric_cos_i8_t {
     using scalar_t = i8_t;
     using result_t = f32_t;
 
@@ -1445,7 +1448,11 @@ struct cos_i8_t {
     }
 };
 
-struct l2sq_i8_t {
+/**
+ *  @brief  Squared Euclidean (L2) distance for signed 8-bit integers using 16-bit intermediates.
+ *          Square root is avoided at the end, as it won't affect the ordering.
+ */
+struct metric_l2sq_i8_t {
     using scalar_t = i8_t;
     using result_t = f32_t;
 
@@ -1775,7 +1782,7 @@ class metric_punned_t {
         case metric_kind_t::cos_k: {
             switch (scalar_kind_) {
             case scalar_kind_t::bf16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<bf16_t, f32_t>>; break;
-            case scalar_kind_t::i8_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<i8_t, f32_t>>; break;
+            case scalar_kind_t::i8_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_i8_t>; break;
             case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<f16_t, f32_t>>; break;
             case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<f32_t>>; break;
             case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_cos_gt<f64_t>>; break;
@@ -1786,7 +1793,7 @@ class metric_punned_t {
         case metric_kind_t::l2sq_k: {
             switch (scalar_kind_) {
             case scalar_kind_t::bf16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<bf16_t, f32_t>>; break;
-            case scalar_kind_t::i8_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<i8_t, f32_t>>; break;
+            case scalar_kind_t::i8_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_i8_t>; break;
             case scalar_kind_t::f16_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<f16_t, f32_t>>; break;
             case scalar_kind_t::f32_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<f32_t>>; break;
             case scalar_kind_t::f64_k: metric_ptr_ = (uptr_t)&equidimensional_<metric_l2sq_gt<f64_t>>; break;
