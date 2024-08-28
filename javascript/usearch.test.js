@@ -47,13 +47,13 @@ test('Batch operations', () => {
 });
 
 test("Expected results", () => {
-    var index = new usearch.Index({
+    const index = new usearch.Index({
         metric: "l2sq",
         connectivity: 16,
         dimensions: 3,
     });
     index.add(42n, new Float32Array([0.2, 0.6, 0.4]));
-    var results = index.search(new Float32Array([0.2, 0.6, 0.4]), 10);
+    const results = index.search(new Float32Array([0.2, 0.6, 0.4]), 10);
 
     assert.equal(index.size(), 1);
     assert.deepEqual(results.keys, new BigUint64Array([42n]));

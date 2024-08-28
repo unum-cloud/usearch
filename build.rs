@@ -80,7 +80,13 @@ fn main() {
             .flag_if_supported("/std:c++17")
             .flag_if_supported("/O2")
             .flag_if_supported("/fp:fast")
-            .flag_if_supported("/W1"); // Reduce warnings verbosity
+            .flag_if_supported("/W1") // Reduce warnings verbosity
+            .flag_if_supported("/EHsc")
+            .flag_if_supported("/MD")
+            .flag_if_supported("/permissive-")
+            .flag_if_supported("/sdl-")
+            .define("_ALLOW_RUNTIME_LIBRARY_MISMATCH", None)
+            .define("_ALLOW_POINTER_TO_CONST_MISMATCH", None);
     }
 
     let mut result = build.try_compile("usearch");

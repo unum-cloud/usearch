@@ -66,7 +66,7 @@ NativeIndex::NativeIndex(std::unique_ptr<index_t> index) : index_(std::move(inde
 auto make_predicate(uptr_t metric, uptr_t metric_state) {
     return [=](vector_key_t key) {
         auto func = reinterpret_cast<bool (*)(uptr_t, vector_key_t)>(metric);
-        auto state = reinterpret_cast<uptr_t>(metric_state);
+        auto state = static_cast<uptr_t>(metric_state);
         return func(key, state);
     };
 }
@@ -104,8 +104,8 @@ void NativeIndex::change_expansion_search(size_t n) const { index_->change_expan
 
 void NativeIndex::change_metric(uptr_t metric, uptr_t state) const {
     index_->change_metric(metric_punned_t::stateful( //
-        reinterpret_cast<std::uintptr_t>(metric),    //
-        reinterpret_cast<std::uintptr_t>(state),     //
+        static_cast<std::uintptr_t>(metric),         //
+        static_cast<std::uintptr_t>(state),          //
         index_->metric().metric_kind(),              //
         index_->scalar_kind()));
 }
