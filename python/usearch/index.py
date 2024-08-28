@@ -860,37 +860,70 @@ class Index:
 
     @property
     def hardware_acceleration(self) -> str:
-        """Describes the kind of hardware-acceleration support used in
-        that exact instance of the `Index`, for that metric kind, and
-        the given number of dimensions.
+        """Describes the kind of hardware-acceleration support used in this instance.
 
-        :return: "auto", if nothing is available, ISA subset name otherwise
+        This indicates the type of hardware acceleration that is available and
+        being utilized for the current index configuration, including the metric
+        kind and number of dimensions.
+
+        :return: "auto" if no hardware acceleration is available, otherwise an ISA subset name.
         :rtype: str
         """
         return self._compiled.hardware_acceleration
 
     @property
     def size(self) -> int:
+        """Returns the number of vectors currently indexed.
+
+        :return: The number of vectors in the index.
+        :rtype: int
+        """
         return self._compiled.size
 
     @property
     def ndim(self) -> int:
+        """Returns the number of dimensions for vectors in the index.
+
+        :return: The dimensionality of vectors in the index.
+        :rtype: int
+        """
         return self._compiled.ndim
 
     @property
     def serialized_length(self) -> int:
+        """Returns the length in bytes required to serialize the index.
+
+        :return: The serialized length of the index in bytes.
+        :rtype: int
+        """
         return self._compiled.serialized_length
 
     @property
     def metric_kind(self) -> Union[MetricKind, CompiledMetric]:
+        """Returns the type of metric used for distance calculations.
+
+        :return: The metric kind used in the index.
+        :rtype: Union[MetricKind, CompiledMetric]
+        """
         return self._metric_jit.kind if self._metric_jit else self._metric_kind
 
     @property
     def metric(self) -> Union[MetricKind, CompiledMetric]:
+        """Returns the metric object used for distance calculations.
+
+        :return: The metric used in the index.
+        :rtype: Union[MetricKind, CompiledMetric]
+        """
         return self._metric_jit if self._metric_jit else self._metric_kind
 
     @metric.setter
     def metric(self, metric: MetricLike):
+        """Sets a new metric for the index.
+
+        :param metric: The new metric to be used.
+        :type metric: MetricLike
+        :raises ValueError: If the metric is not of type `CompiledMetric` or `MetricKind`.
+        """
         metric = _normalize_metric(metric)
         if isinstance(metric, MetricKind):
             metric_kind = metric
@@ -911,34 +944,82 @@ class Index:
 
     @property
     def dtype(self) -> ScalarKind:
+        """Returns the data type of the vectors in the index.
+
+        :return: The data type of the vectors.
+        :rtype: ScalarKind
+        """
         return self._compiled.dtype
 
     @property
     def connectivity(self) -> int:
+        """Returns the connectivity parameter of the index.
+
+        This parameter controls how many neighbors each node in the graph is connected to.
+
+        :return: The connectivity of the index.
+        :rtype: int
+        """
         return self._compiled.connectivity
 
     @property
     def capacity(self) -> int:
+        """Returns the current capacity of the index.
+
+        This indicates the maximum number of vectors that can be indexed without reallocation.
+
+        :return: The capacity of the index.
+        :rtype: int
+        """
         return self._compiled.capacity
 
     @property
     def memory_usage(self) -> int:
+        """Returns the memory usage of the index in bytes.
+
+        :return: The memory usage of the index.
+        :rtype: int
+        """
         return self._compiled.memory_usage
 
     @property
     def expansion_add(self) -> int:
+        """Returns the expansion parameter used during addition.
+
+        This parameter controls how many candidates are considered when adding new vectors to the index.
+
+        :return: The expansion parameter for additions.
+        :rtype: int
+        """
         return self._compiled.expansion_add
 
     @property
     def expansion_search(self) -> int:
+        """Returns the expansion parameter used during searches.
+
+        This parameter controls how many candidates are considered when searching in the index.
+
+        :return: The expansion parameter for searches.
+        :rtype: int
+        """
         return self._compiled.expansion_search
 
     @expansion_add.setter
     def expansion_add(self, v: int):
+        """Sets the expansion parameter used during addition.
+
+        :param v: The new expansion parameter for additions.
+        :type v: int
+        """
         self._compiled.expansion_add = v
 
     @expansion_search.setter
     def expansion_search(self, v: int):
+        """Sets the expansion parameter used during searches.
+
+        :param v: The new expansion parameter for searches.
+        :type v: int
+        """
         self._compiled.expansion_search = v
 
     def save(
@@ -946,6 +1027,17 @@ class Index:
         path_or_buffer: Union[str, os.PathLike, NoneType] = None,
         progress: Optional[ProgressCallback] = None,
     ) -> Optional[bytes]:
+        """Saves the index to a file or buffer.
+
+        If `path_or_buffer` is not provided, it defaults to the path stored in `self.path`.
+
+        :param path_or_buffer: The path or buffer where the index will be saved.
+        :type path_or_buffer: Union[str, os.PathLike, NoneType], optional
+        :param progress: A callback function for progress tracking.
+        :type progress: Optional[ProgressCallback], optional
+        :return: The index data as bytes if saving to a buffer, otherwise None.
+        :rtype: Optional[bytes]
+        """
         assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
 
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
@@ -959,6 +1051,17 @@ class Index:
         path_or_buffer: Union[str, os.PathLike, bytes, NoneType] = None,
         progress: Optional[ProgressCallback] = None,
     ):
+        """Loads the index from a file or buffer.
+
+        If `path_or_buffer` is not provided, it defaults to the path stored in `self.path`.
+
+        :param path_or_buffer: The path or buffer from which the index will be loaded.
+        :type path_or_buffer: Union[str, os.PathLike, bytes, NoneType], optional
+        :param progress: A callback function for progress tracking.
+        :type progress: Optional[ProgressCallback], optional
+        :raises Exception: If no source is defined.
+        :raises RuntimeError: If the file does not exist.
+        """
         assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
 
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
@@ -980,6 +1083,16 @@ class Index:
         path_or_buffer: Union[str, os.PathLike, bytes, bytearray, NoneType] = None,
         progress: Optional[ProgressCallback] = None,
     ):
+        """Maps the index from a file or buffer without loading it into memory.
+
+        If `path_or_buffer` is not provided, it defaults to the path stored in `self.path`.
+
+        :param path_or_buffer: The path or buffer to map the index from.
+        :type path_or_buffer: Union[str, os.PathLike, bytes, bytearray, NoneType], optional
+        :param progress: A callback function for progress tracking.
+        :type progress: Optional[ProgressCallback], optional
+        :raises Exception: If no source is defined.
+        """
         assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
 
         path_or_buffer = path_or_buffer if path_or_buffer else self.path
@@ -993,19 +1106,25 @@ class Index:
             self._compiled.view_index_from_path(os.fspath(path_or_buffer), progress)
 
     def clear(self):
-        """Erases all the vectors from the index, preserving the space for future insertions."""
+        """Erases all vectors from the index, preserving the allocated space for future insertions."""
         self._compiled.clear()
 
     def reset(self):
-        """Erases all members from index, closing files, and returning RAM to OS."""
+        """Erases all data from the index, closes any open files, and returns allocated memory to the OS."""
         if not hasattr(self, "_compiled"):
             return
         self._compiled.reset()
 
     def __del__(self):
+        """Destructor method to reset the index when the object is deleted."""
         self.reset()
 
     def copy(self) -> Index:
+        """Creates a copy of the current index.
+
+        :return: A new instance of the Index class with the same configuration and data.
+        :rtype: Index
+        """
         result = Index(
             ndim=self.ndim,
             metric=self.metric,
@@ -1112,6 +1231,18 @@ class Index:
         return Clustering(self, batch_matches, keys)
 
     def pairwise_distance(self, left: KeyOrKeysLike, right: KeyOrKeysLike) -> Union[np.ndarray, float]:
+        """Computes the pairwise distance between keys or key arrays.
+
+        If `left` and `right` are single keys, returns the distance between them.
+        If `left` and `right` are arrays of keys, returns a matrix of pairwise distances.
+
+        :param left: A single key or an iterable of keys.
+        :type left: KeyOrKeysLike
+        :param right: A single key or an iterable of keys.
+        :type right: KeyOrKeysLike
+        :return: Pairwise distance(s) between the provided keys.
+        :rtype: Union[np.ndarray, float]
+        """
         assert isinstance(left, Iterable) == isinstance(right, Iterable)
 
         if not isinstance(left, Iterable):
@@ -1123,22 +1254,47 @@ class Index:
 
     @property
     def keys(self) -> IndexedKeys:
+        """Returns all keys currently indexed.
+
+        :return: All indexed keys.
+        :rtype: IndexedKeys
+        """
         return IndexedKeys(self)
 
     @property
     def vectors(self) -> np.ndarray:
+        """Retrieves all vectors associated with the indexed keys.
+
+        :return: Array of vectors.
+        :rtype: np.ndarray
+        """
         return self.get(self.keys)
 
     @property
     def max_level(self) -> int:
+        """Returns the maximum level in the multi-level graph.
+
+        :return: The maximum level in the graph.
+        :rtype: int
+        """
         return self._compiled.max_level
 
     @property
     def nlevels(self) -> int:
+        """Returns the number of levels in the multi-level graph.
+
+        :return: Number of levels in the graph.
+        :rtype: int
+        """
         return self._compiled.max_level + 1
 
     @property
     def multi(self) -> bool:
+        """Indicates whether the index supports multi-value entries.
+
+        :return: True if the index supports multi-value entries, False otherwise.
+        :rtype: bool
+        """
         return self._compiled.multi
 
     @property
@@ -1149,44 +1305,51 @@ class Index:
         :rtype: _CompiledIndexStats
 
         Statistics:
-            - ``nodes`` (int): The number of nodes in that level.
-            - ``edges`` (int): The number of edges in that level.
-            - ``max_edges`` (int): The maximum possible number of edges in that level.
-            - ``allocated_bytes`` (int): The amount of allocated memory for that level.
+            - `nodes` (int): Number of nodes in the graph.
+            - `edges` (int): Number of edges in the graph.
+            - `max_edges` (int): Maximum possible number of edges in the graph.
+            - `allocated_bytes` (int): Memory allocated for the graph.
         """
         return self._compiled.stats
 
     @property
     def levels_stats(self) -> List[_CompiledIndexStats]:
-        """Get the accumulated statistics for every level graph.
+        """Get the accumulated statistics for each level of the graph.
 
-        :return: Statistics for every level graph.
+        :return: List of statistics for each level of the graph.
         :rtype: List[_CompiledIndexStats]
 
-        Statistics:
-            - ``nodes`` (int): The number of nodes in that level.
-            - ``edges`` (int): The number of edges in that level.
-            - ``max_edges`` (int): The maximum possible number of edges in that level.
-            - ``allocated_bytes`` (int): The amount of allocated memory for that level.
+        Statistics for each level:
+            - `nodes` (int): Number of nodes in the level.
+            - `edges` (int): Number of edges in the level.
+            - `max_edges` (int): Maximum possible number of edges in the level.
+            - `allocated_bytes` (int): Memory allocated for the level.
         """
         return self._compiled.levels_stats
 
     def level_stats(self, level: int) -> _CompiledIndexStats:
-        """Get statistics for one level of the index - one graph.
+        """Get statistics for a specific level of the graph.
 
-        :return: Statistics for one level of the index - one graph.
+        :param level: The level for which to retrieve statistics.
+        :type level: int
+        :return: Statistics for the specified level.
         :rtype: _CompiledIndexStats
 
         Statistics:
-            - ``nodes`` (int): The number of nodes in that level.
-            - ``edges`` (int): The number of edges in that level.
-            - ``max_edges`` (int): The maximum possible number of edges in that level.
-            - ``allocated_bytes`` (int): The amount of allocated memory for that level.
+            - `nodes` (int): Number of nodes in the level.
+            - `edges` (int): Number of edges in the level.
+            - `max_edges` (int): Maximum possible number of edges in the level.
+            - `allocated_bytes` (int): Memory allocated for the level.
         """
         return self._compiled.level_stats(level)
 
     @property
     def specs(self) -> Dict[str, Union[str, int, bool]]:
+        """Returns the specifications of the index.
+
+        :return: Dictionary of index specifications.
+        :rtype: Dict[str, Union[str, int, bool]]
+        """
         if not hasattr(self, "_compiled"):
             return "usearch.Index(failed)"
         return {
@@ -1208,9 +1371,17 @@ class Index:
         }
 
     def __repr__(self) -> str:
+        """Returns a string representation of the index object.
+
+        :return: String representation of the index.
+        :rtype: str
+        """
         if not hasattr(self, "_compiled"):
             return "usearch.Index(failed)"
-        f = "usearch.Index({} x {}, {}, multi: {}, connectivity: {}, expansion: {} & {}, {:,} vectors in {} levels, {} hardware acceleration)"
+        f = (
+            "usearch.Index({} x {}, {}, multi: {}, connectivity: {}, "
+            "expansion: {} & {}, {:,} vectors in {} levels, {} hardware acceleration)"
+        )
         return f.format(
             self.dtype,
             self.ndim,
@@ -1225,6 +1396,11 @@ class Index:
         )
 
     def __repr_pretty__(self) -> str:
+        """Returns a pretty-printed string representation of the index object.
+
+        :return: Pretty-printed string representation of the index.
+        :rtype: str
+        """
         if not hasattr(self, "_compiled"):
             return "usearch.Index(failed)"
         level_stats = [f"--- {i}. {self.level_stats(i).nodes:,} nodes" for i in range(self.nlevels)]
@@ -1254,6 +1430,13 @@ class Index:
         return lines
 
     def _repr_pretty_(self, printer, cycle):
+        """Handles pretty-printing of the object within interactive environments.
+
+        :param printer: The pretty printer instance.
+        :type printer: Any
+        :param cycle: Cycle flag indicating recursion.
+        :type cycle: bool
+        """
         printer.text(self.__repr_pretty__())
 
 
