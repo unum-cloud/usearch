@@ -1912,32 +1912,33 @@ class metric_punned_t {
  *  @brief  View over a potentially-strided memory buffer, containing a row-major matrix.
  */
 template <typename scalar_at> //
-class vectors_view_gt {
+class matrix_slice_gt {
     using scalar_t = scalar_at;
+    using byte_addressable_t = typename std::conditional<std::is_const<scalar_t>::value, byte_t const, byte_t>::type;
 
-    scalar_t const* begin_{};
+    scalar_t* begin_{};
     std::size_t dimensions_{};
     std::size_t count_{};
     std::size_t stride_bytes_{};
 
   public:
-    vectors_view_gt() noexcept = default;
-    vectors_view_gt(vectors_view_gt const&) noexcept = default;
-    vectors_view_gt& operator=(vectors_view_gt const&) noexcept = default;
+    matrix_slice_gt() noexcept = default;
+    matrix_slice_gt(matrix_slice_gt const&) noexcept = default;
+    matrix_slice_gt& operator=(matrix_slice_gt const&) noexcept = default;
 
-    vectors_view_gt(scalar_t const* begin, std::size_t dimensions, std::size_t count = 1) noexcept
-        : vectors_view_gt(begin, dimensions, count, dimensions * sizeof(scalar_at)) {}
+    matrix_slice_gt(scalar_t* begin, std::size_t dimensions, std::size_t count = 1) noexcept
+        : matrix_slice_gt(begin, dimensions, count, dimensions * sizeof(scalar_at)) {}
 
-    vectors_view_gt(scalar_t const* begin, std::size_t dimensions, std::size_t count, std::size_t stride_bytes) noexcept
+    matrix_slice_gt(scalar_t* begin, std::size_t dimensions, std::size_t count, std::size_t stride_bytes) noexcept
         : begin_(begin), dimensions_(dimensions), count_(count), stride_bytes_(stride_bytes) {}
 
     explicit operator bool() const noexcept { return begin_; }
     std::size_t size() const noexcept { return count_; }
     std::size_t dimensions() const noexcept { return dimensions_; }
     std::size_t stride() const noexcept { return stride_bytes_; }
-    scalar_t const* data() const noexcept { return begin_; }
-    scalar_t const* at(std::size_t i) const noexcept {
-        return reinterpret_cast<scalar_t const*>(reinterpret_cast<byte_t const*>(begin_) + i * stride_bytes_);
+    scalar_t* data() const noexcept { return begin_; }
+    scalar_t* at(std::size_t i) const noexcept {
+        return reinterpret_cast<scalar_t*>(reinterpret_cast<byte_addressable_t*>(begin_) + i * stride_bytes_);
     }
 };
 
@@ -1946,7 +1947,7 @@ struct exact_offset_and_distance_t {
     f32_t distance;
 };
 
-using exact_search_results_t = vectors_view_gt<exact_offset_and_distance_t>;
+using exact_search_results_t = matrix_slice_gt<exact_offset_and_distance_t>;
 
 /**
  *  @brief  Helper-structure for exact search operations.
@@ -1967,9 +1968,9 @@ class exact_search_t {
 
   public:
     template <typename scalar_at, typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
-    exact_search_results_t operator()(                                          //
-        vectors_view_gt<scalar_at> dataset, vectors_view_gt<scalar_at> queries, //
-        std::size_t wanted, metric_punned_t const& metric,                      //
+    exact_search_results_t operator()(                                                      //
+        matrix_slice_gt<scalar_at const> dataset, matrix_slice_gt<scalar_at const> queries, //
+        std::size_t wanted, metric_punned_t const& metric,                                  //
         executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
         return operator()(                                                                     //
             metric,                                                                            //
