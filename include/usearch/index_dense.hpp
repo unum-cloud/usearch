@@ -406,8 +406,6 @@ class index_dense_gt {
     using tape_allocator_t = memory_mapping_allocator_gt<64>;
 
   private:
-    /// @brief Schema: input buffer, bytes in input buffer, output buffer.
-    using cast_t = bool (*)(byte_t const*, std::size_t, byte_t*);
     /// @brief Punned index.
     using index_t = index_gt<                        //
         distance_t, vector_key_t, compressed_slot_t, //
@@ -446,19 +444,7 @@ class index_dense_gt {
 
     /// @brief  Temporary memory for every thread to store a casted vector.
     mutable cast_buffer_t cast_buffer_;
-    struct casts_t {
-        cast_t from_b1x8;
-        cast_t from_i8;
-        cast_t from_f16;
-        cast_t from_f32;
-        cast_t from_f64;
-
-        cast_t to_b1x8;
-        cast_t to_i8;
-        cast_t to_f16;
-        cast_t to_f32;
-        cast_t to_f64;
-    } casts_;
+    casts_punned_t casts_;
 
     /// @brief An instance of a potentially stateful `metric_t` used to initialize copies and forks.
     metric_t metric_;
@@ -677,7 +663,7 @@ class index_dense_gt {
         // In some cases the metric is not provided, and will be set later.
         if (metric) {
             scalar_kind_t scalar_kind = metric.scalar_kind();
-            index.casts_ = make_casts_(scalar_kind);
+            index.casts_ = casts_punned_t::make(scalar_kind);
             index.metric_ = metric;
         }
 
@@ -767,41 +753,41 @@ class index_dense_gt {
     };
 
     // clang-format off
-    add_result_t add(vector_key_t key, b1x8_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_b1x8); }
-    add_result_t add(vector_key_t key, i8_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_i8); }
-    add_result_t add(vector_key_t key, f16_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_f16); }
-    add_result_t add(vector_key_t key, f32_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_f32); }
-    add_result_t add(vector_key_t key, f64_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from_f64); }
+    add_result_t add(vector_key_t key, b1x8_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from.b1x8); }
+    add_result_t add(vector_key_t key, i8_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from.i8); }
+    add_result_t add(vector_key_t key, f16_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from.f16); }
+    add_result_t add(vector_key_t key, f32_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from.f32); }
+    add_result_t add(vector_key_t key, f64_t const* vector, std::size_t thread = any_thread(), bool force_vector_copy = true) { return add_(key, vector, thread, force_vector_copy, casts_.from.f64); }
 
-    search_result_t search(b1x8_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, dummy_predicate_t {}, thread, exact, casts_.from_b1x8); }
-    search_result_t search(i8_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, dummy_predicate_t {}, thread, exact, casts_.from_i8); }
-    search_result_t search(f16_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, dummy_predicate_t {}, thread, exact, casts_.from_f16); }
-    search_result_t search(f32_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, dummy_predicate_t {}, thread, exact, casts_.from_f32); }
-    search_result_t search(f64_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, dummy_predicate_t {}, thread, exact, casts_.from_f64); }
+    search_result_t search(b1x8_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, dummy_predicate_t {}, thread, exact, casts_.from.b1x8); }
+    search_result_t search(i8_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, dummy_predicate_t {}, thread, exact, casts_.from.i8); }
+    search_result_t search(f16_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, dummy_predicate_t {}, thread, exact, casts_.from.f16); }
+    search_result_t search(f32_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, dummy_predicate_t {}, thread, exact, casts_.from.f32); }
+    search_result_t search(f64_t const* vector, std::size_t wanted, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, dummy_predicate_t {}, thread, exact, casts_.from.f64); }
 
-    template <typename predicate_at> search_result_t filtered_search(b1x8_t const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from_b1x8); }
-    template <typename predicate_at> search_result_t filtered_search(i8_t const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from_i8); }
-    template <typename predicate_at> search_result_t filtered_search(f16_t const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from_f16); }
-    template <typename predicate_at> search_result_t filtered_search(f32_t const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from_f32); }
-    template <typename predicate_at> search_result_t filtered_search(f64_t const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from_f64); }
+    template <typename predicate_at> search_result_t filtered_search(b1x8_t const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from.b1x8); }
+    template <typename predicate_at> search_result_t filtered_search(i8_t const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from.i8); }
+    template <typename predicate_at> search_result_t filtered_search(f16_t const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from.f16); }
+    template <typename predicate_at> search_result_t filtered_search(f32_t const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from.f32); }
+    template <typename predicate_at> search_result_t filtered_search(f64_t const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from.f64); }
 
-    std::size_t get(vector_key_t key, b1x8_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_b1x8); }
-    std::size_t get(vector_key_t key, i8_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_i8); }
-    std::size_t get(vector_key_t key, f16_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f16); }
-    std::size_t get(vector_key_t key, f32_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f32); }
-    std::size_t get(vector_key_t key, f64_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_f64); }
+    std::size_t get(vector_key_t key, b1x8_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to.b1x8); }
+    std::size_t get(vector_key_t key, i8_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to.i8); }
+    std::size_t get(vector_key_t key, f16_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to.f16); }
+    std::size_t get(vector_key_t key, f32_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to.f32); }
+    std::size_t get(vector_key_t key, f64_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to.f64); }
 
-    cluster_result_t cluster(b1x8_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_b1x8); }
-    cluster_result_t cluster(i8_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_i8); }
-    cluster_result_t cluster(f16_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_f16); }
-    cluster_result_t cluster(f32_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_f32); }
-    cluster_result_t cluster(f64_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from_f64); }
+    cluster_result_t cluster(b1x8_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from.b1x8); }
+    cluster_result_t cluster(i8_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from.i8); }
+    cluster_result_t cluster(f16_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from.f16); }
+    cluster_result_t cluster(f32_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from.f32); }
+    cluster_result_t cluster(f64_t const* vector, std::size_t level, std::size_t thread = any_thread()) const { return cluster_(vector, level, thread, casts_.from.f64); }
 
-    aggregated_distances_t distance_between(vector_key_t key, b1x8_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_b1x8); }
-    aggregated_distances_t distance_between(vector_key_t key, i8_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_i8); }
-    aggregated_distances_t distance_between(vector_key_t key, f16_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_f16); }
-    aggregated_distances_t distance_between(vector_key_t key, f32_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_f32); }
-    aggregated_distances_t distance_between(vector_key_t key, f64_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to_f64); }
+    aggregated_distances_t distance_between(vector_key_t key, b1x8_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to.b1x8); }
+    aggregated_distances_t distance_between(vector_key_t key, i8_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to.i8); }
+    aggregated_distances_t distance_between(vector_key_t key, f16_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to.f16); }
+    aggregated_distances_t distance_between(vector_key_t key, f32_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to.f32); }
+    aggregated_distances_t distance_between(vector_key_t key, f64_t const* vector, std::size_t thread = any_thread()) const { return distance_between_(key, vector, thread, casts_.to.f64); }
     // clang-format on
 
     /**
@@ -1154,7 +1140,7 @@ class index_dense_gt {
             cast_buffer_ = cast_buffer_t(available_threads_.size() * metric_.bytes_per_vector());
             if (!cast_buffer_)
                 return result.failed("Failed to allocate memory for the casts");
-            casts_ = make_casts_(head.kind_scalar);
+            casts_ = casts_punned_t::make(head.kind_scalar);
         }
 
         // Pull the actual proximity graph
@@ -1266,7 +1252,7 @@ class index_dense_gt {
             cast_buffer_ = cast_buffer_t(available_threads_.size() * metric_.bytes_per_vector());
             if (!cast_buffer_)
                 return result.failed("Failed to allocate memory for the casts");
-            casts_ = make_casts_(head.kind_scalar);
+            casts_ = casts_punned_t::make(head.kind_scalar);
             offset += sizeof(buffer);
         }
 
@@ -1994,7 +1980,7 @@ class index_dense_gt {
     template <typename scalar_at>
     add_result_t add_(                             //
         vector_key_t key, scalar_at const* vector, //
-        std::size_t thread, bool force_vector_copy, cast_t const& cast) {
+        std::size_t thread, bool force_vector_copy, cast_punned_t const& cast) {
 
         if (!multi() && config().enable_key_lookups && contains(key))
             return add_result_t{}.failed("Duplicate keys not allowed in high-level wrappers");
@@ -2044,7 +2030,7 @@ class index_dense_gt {
 
     template <typename scalar_at, typename predicate_at>
     search_result_t search_(scalar_at const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread,
-                            bool exact, cast_t const& cast) const {
+                            bool exact, cast_punned_t const& cast) const {
 
         // Cast the vector, if needed for compatibility with `metric_`
         thread_lock_t lock = thread_lock_(thread);
@@ -2080,7 +2066,7 @@ class index_dense_gt {
     template <typename scalar_at>
     cluster_result_t cluster_(                      //
         scalar_at const* vector, std::size_t level, //
-        std::size_t thread, cast_t const& cast) const {
+        std::size_t thread, cast_punned_t const& cast) const {
 
         // Cast the vector, if needed for compatibility with `metric_`
         thread_lock_t lock = thread_lock_(thread);
@@ -2104,7 +2090,7 @@ class index_dense_gt {
     template <typename scalar_at>
     aggregated_distances_t distance_between_(      //
         vector_key_t key, scalar_at const* vector, //
-        std::size_t thread, cast_t const& cast) const {
+        std::size_t thread, cast_punned_t const& cast) const {
 
         // Cast the vector, if needed for compatibility with `metric_`
         thread_lock_t lock = thread_lock_(thread);
@@ -2181,7 +2167,8 @@ class index_dense_gt {
     }
 
     template <typename scalar_at>
-    std::size_t get_(vector_key_t key, scalar_at* reconstructed, std::size_t vectors_limit, cast_t const& cast) const {
+    std::size_t get_(vector_key_t key, scalar_at* reconstructed, std::size_t vectors_limit,
+                     cast_punned_t const& cast) const {
 
         if (!multi()) {
             compressed_slot_t slot;
@@ -2214,36 +2201,6 @@ class index_dense_gt {
                     std::memcpy(reconstructed_vector, punned_vector, metric_.bytes_per_vector());
             }
             return count_exported;
-        }
-    }
-
-    template <typename to_scalar_at> static casts_t make_casts_() {
-        casts_t result;
-
-        result.from_b1x8 = &cast_gt<b1x8_t, to_scalar_at>::try_;
-        result.from_i8 = &cast_gt<i8_t, to_scalar_at>::try_;
-        result.from_f16 = &cast_gt<f16_t, to_scalar_at>::try_;
-        result.from_f32 = &cast_gt<f32_t, to_scalar_at>::try_;
-        result.from_f64 = &cast_gt<f64_t, to_scalar_at>::try_;
-
-        result.to_b1x8 = &cast_gt<to_scalar_at, b1x8_t>::try_;
-        result.to_i8 = &cast_gt<to_scalar_at, i8_t>::try_;
-        result.to_f16 = &cast_gt<to_scalar_at, f16_t>::try_;
-        result.to_f32 = &cast_gt<to_scalar_at, f32_t>::try_;
-        result.to_f64 = &cast_gt<to_scalar_at, f64_t>::try_;
-
-        return result;
-    }
-
-    static casts_t make_casts_(scalar_kind_t scalar_kind) {
-        switch (scalar_kind) {
-        case scalar_kind_t::f64_k: return make_casts_<f64_t>();
-        case scalar_kind_t::f32_k: return make_casts_<f32_t>();
-        case scalar_kind_t::f16_k: return make_casts_<f16_t>();
-        case scalar_kind_t::bf16_k: return make_casts_<bf16_t>();
-        case scalar_kind_t::i8_k: return make_casts_<i8_t>();
-        case scalar_kind_t::b1x8_k: return make_casts_<b1x8_t>();
-        default: return {};
         }
     }
 };
