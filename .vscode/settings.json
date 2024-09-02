@@ -155,6 +155,7 @@
     "ibin",
     "jaccard",
     "Jemalloc",
+    "kmeans",
     "Kullback",
     "Leibler",
     "libjemalloc",

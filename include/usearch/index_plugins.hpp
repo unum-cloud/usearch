@@ -156,12 +156,6 @@ enum class scalar_kind_t : std::uint8_t {
     i8_k = 23,
 };
 
-enum class prefetching_kind_t {
-    none_k,
-    cpu_k,
-    io_uring_k,
-};
-
 template <typename scalar_at> scalar_kind_t scalar_kind() noexcept {
     if (std::is_same<scalar_at, b1x8_t>())
         return scalar_kind_t::b1x8_k;
@@ -1142,6 +1136,71 @@ template <> struct cast_gt<f64_t, b1x8_t> : public cast_to_b1x8_gt<f64_t> {};
 template <> struct cast_gt<b1x8_t, i8_t> : public cast_from_b1x8_gt<i8_t> {};
 template <> struct cast_gt<i8_t, b1x8_t> : public cast_to_b1x8_gt<i8_t> {};
 
+/**
+ *  @brief  Type-punned array casting function.
+ *          Arguments: input buffer, bytes in input buffer, output buffer.
+ *          Returns `true` if the casting was performed successfully, `false` otherwise.
+ */
+using cast_punned_t = bool (*)(byte_t const*, std::size_t, byte_t*);
+
+/**
+ *  @brief  A collection of casting functions for typical vector types.
+ *          Covers to/from conversions for boolean, integer, half-precision,
+ *          single-precision, and double-precision scalars.
+ */
+struct casts_punned_t {
+    struct group_t {
+        cast_punned_t b1x8{};
+        cast_punned_t i8{};
+        cast_punned_t f16{};
+        cast_punned_t f32{};
+        cast_punned_t f64{};
+
+        cast_punned_t operator[](scalar_kind_t scalar_kind) const noexcept {
+            switch (scalar_kind) {
+            case scalar_kind_t::f64_k: return f64;
+            case scalar_kind_t::f32_k: return f32;
+            case scalar_kind_t::f16_k: return f16;
+            case scalar_kind_t::bf16_k: return f16;
+            case scalar_kind_t::i8_k: return i8;
+            case scalar_kind_t::b1x8_k: return b1x8;
+            default: return nullptr;
+            }
+        }
+
+    } from, to;
+
+    template <typename scalar_at> static casts_punned_t make() noexcept {
+        casts_punned_t result;
+
+        result.from.b1x8 = &cast_gt<b1x8_t, scalar_at>::try_;
+        result.from.i8 = &cast_gt<i8_t, scalar_at>::try_;
+        result.from.f16 = &cast_gt<f16_t, scalar_at>::try_;
+        result.from.f32 = &cast_gt<f32_t, scalar_at>::try_;
+        result.from.f64 = &cast_gt<f64_t, scalar_at>::try_;
+
+        result.to.b1x8 = &cast_gt<scalar_at, b1x8_t>::try_;
+        result.to.i8 = &cast_gt<scalar_at, i8_t>::try_;
+        result.to.f16 = &cast_gt<scalar_at, f16_t>::try_;
+        result.to.f32 = &cast_gt<scalar_at, f32_t>::try_;
+        result.to.f64 = &cast_gt<scalar_at, f64_t>::try_;
+
+        return result;
+    }
+
+    static casts_punned_t make(scalar_kind_t scalar_kind) noexcept {
+        switch (scalar_kind) {
+        case scalar_kind_t::f64_k: return casts_punned_t::make<f64_t>();
+        case scalar_kind_t::f32_k: return casts_punned_t::make<f32_t>();
+        case scalar_kind_t::f16_k: return casts_punned_t::make<f16_t>();
+        case scalar_kind_t::bf16_k: return casts_punned_t::make<bf16_t>();
+        case scalar_kind_t::i8_k: return casts_punned_t::make<i8_t>();
+        case scalar_kind_t::b1x8_k: return casts_punned_t::make<b1x8_t>();
+        default: return {};
+        }
+    }
+};
+
 /*  Don't complain if the vectorization of the inner loops fails:
  *
  *  > warning: loop not vectorized: the optimizer was unable to perform the requested transformation;
@@ -1862,32 +1921,32 @@ class metric_punned_t {
  *  @brief  View over a potentially-strided memory buffer, containing a row-major matrix.
  */
 template <typename scalar_at> //
-class vectors_view_gt {
+class matrix_slice_gt {
     using scalar_t = scalar_at;
 
-    scalar_t const* begin_{};
+    scalar_t* begin_{};
     std::size_t dimensions_{};
     std::size_t count_{};
     std::size_t stride_bytes_{};
 
   public:
-    vectors_view_gt() noexcept = default;
-    vectors_view_gt(vectors_view_gt const&) noexcept = default;
-    vectors_view_gt& operator=(vectors_view_gt const&) noexcept = default;
+    matrix_slice_gt() noexcept = default;
+    matrix_slice_gt(matrix_slice_gt const&) noexcept = default;
+    matrix_slice_gt& operator=(matrix_slice_gt const&) noexcept = default;
 
-    vectors_view_gt(scalar_t const* begin, std::size_t dimensions, std::size_t count = 1) noexcept
-        : vectors_view_gt(begin, dimensions, count, dimensions * sizeof(scalar_at)) {}
+    matrix_slice_gt(scalar_t* begin, std::size_t dimensions, std::size_t count = 1) noexcept
+        : matrix_slice_gt(begin, dimensions, count, dimensions * sizeof(scalar_at)) {}
 
-    vectors_view_gt(scalar_t const* begin, std::size_t dimensions, std::size_t count, std::size_t stride_bytes) noexcept
+    matrix_slice_gt(scalar_t* begin, std::size_t dimensions, std::size_t count, std::size_t stride_bytes) noexcept
         : begin_(begin), dimensions_(dimensions), count_(count), stride_bytes_(stride_bytes) {}
 
     explicit operator bool() const noexcept { return begin_; }
     std::size_t size() const noexcept { return count_; }
     std::size_t dimensions() const noexcept { return dimensions_; }
     std::size_t stride() const noexcept { return stride_bytes_; }
-    scalar_t const* data() const noexcept { return begin_; }
-    scalar_t const* at(std::size_t i) const noexcept {
-        return reinterpret_cast<scalar_t const*>(reinterpret_cast<byte_t const*>(begin_) + i * stride_bytes_);
+    scalar_t* data() const noexcept { return begin_; }
+    scalar_t* at(std::size_t i) const noexcept {
+        return reinterpret_cast<scalar_t*>(reinterpret_cast<byte_t*>(begin_) + i * stride_bytes_);
     }
 };
 
@@ -1896,7 +1955,7 @@ struct exact_offset_and_distance_t {
     f32_t distance;
 };
 
-using exact_search_results_t = vectors_view_gt<exact_offset_and_distance_t>;
+using exact_search_results_t = matrix_slice_gt<exact_offset_and_distance_t const>;
 
 /**
  *  @brief  Helper-structure for exact search operations.
@@ -1917,9 +1976,9 @@ class exact_search_t {
 
   public:
     template <typename scalar_at, typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
-    exact_search_results_t operator()(                                          //
-        vectors_view_gt<scalar_at> dataset, vectors_view_gt<scalar_at> queries, //
-        std::size_t wanted, metric_punned_t const& metric,                      //
+    exact_search_results_t operator()(                                                      //
+        matrix_slice_gt<scalar_at const> dataset, matrix_slice_gt<scalar_at const> queries, //
+        std::size_t wanted, metric_punned_t const& metric,                                  //
         executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
         return operator()(                                                                     //
             metric,                                                                            //
@@ -2000,6 +2059,207 @@ class exact_search_t {
                 dataset_count * sizeof(exact_offset_and_distance_t)};
     }
 };
+
+struct kmeans_clustering_result_t {
+    error_t error{};
+    std::size_t computed_distances{};
+    std::size_t iterations{};
+
+    explicit operator bool() const noexcept { return !error; }
+    kmeans_clustering_result_t failed(error_t message) noexcept {
+        error = std::move(message);
+        return std::move(*this);
+    }
+};
+
+/**
+ *  @brief  Helper-class for K-Means clustering of dense vectors.
+ *          Doesn't require constructing the index, but benefits from mixed-precision logic.
+ *          ! Doesn't guarantee that the clusters are balanced in size.
+ *
+ *  The algorithm is as follows:
+ *  - Initialization: Select K initial centroids (randomly or with a heuristic).
+ *  - Assignment: Assign each data point to the nearest centroid based on the Euclidean distance.
+ *  - Update: Recalculate the centroids as the mean of all points assigned to each centroid.
+ *  - Repeat: Repeat the assignment and update steps until the centroids no longer change significantly.
+ */
+template <typename allocator_at = std::allocator<char>> class kmeans_clustering_gt {
+  public:
+    std::size_t max_iterations = 0;
+    f64_t tolerance = 0.0;
+    metric_kind_t metric_kind = metric_kind_t::l2sq_k;
+    scalar_kind_t quantization_kind = scalar_kind_t::bf16_k;
+
+    template <typename scalar_at, typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
+    kmeans_clustering_result_t operator()(                                              //
+        matrix_slice_gt<scalar_at const> dataset, matrix_slice_gt<scalar_at> centroids, //
+        executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
+        return operator()(                                                                     //
+            reinterpret_cast<byte_t const*>(dataset.data()), dataset.size(), dataset.stride(), //
+            reinterpret_cast<byte_t*>(centroids.data()), centroids.size(), centroids.stride(), //
+            scalar_kind<scalar_at>(), dataset.dimensions(), executor, progress);
+    }
+
+    template <typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
+    kmeans_clustering_result_t operator()(                                                 //
+        byte_t const* dataset_data, std::size_t dataset_count, std::size_t dataset_stride, //
+        byte_t* centroids_data, std::size_t wanted_clusters, std::size_t centroids_stride, //
+        scalar_kind_t original_scalar_kind, std::size_t dimensions, executor_at&& executor = executor_at{},
+        progress_at&& progress = progress_at{}) {
+
+        // Perform sanity checks for algorithm settings.
+        kmeans_clustering_result_t result;
+        if (max_iterations < 1)
+            return result.failed("The number of iterations must be at least 1");
+
+        // Perform sanity checks for input arguments.
+        if (wanted_clusters < 2)
+            return result.failed("The number of clusters must be at least 2");
+        if (wanted_clusters >= dataset_count)
+            return result.failed("The number of clusters must be less than the number of vectors");
+
+        metric_punned_t metric = metric_punned_t::builtin(dimensions, metric_kind, quantization_kind);
+        if (!metric)
+            return result.failed("Unsupported metric or scalar kind");
+
+        // Let's allocate memory for the centroids coordinates and make sure it's
+        // rows are aligned to cache lines to avoid false sharing.
+        buffer_gt<aligned_allocator_gt<distance_t, 64>> centroid_distances(dataset_count);
+        buffer_gt<aligned_allocator_gt<std::size_t, 64>> centroids_indexes(dataset_count);
+        buffer_gt<aligned_allocator_gt<std::atomic<std::size_t>, 64>> cluster_sizes(wanted_clusters);
+
+        // For a mixed precision computation, we keep the centroids represented in two forms -
+        // double precision and quantized the same way as in the index, to avoid paying conversion penalties.
+        // Double precision is needed to avoid accumulating errors when aggregating too many entries.
+        std::size_t const bytes_per_vector_original =
+            divide_round_up<CHAR_BIT>(dimensions * bits_per_scalar(original_scalar_kind));
+        std::size_t const bytes_per_vector_quantized = metric.bytes_per_vector();
+        std::size_t const stride_per_vector_quantized = divide_round_up<64>(bytes_per_vector_quantized);
+        buffer_gt<aligned_allocator_gt<byte_t, 64>> dataset_quantized(dataset_count * stride_per_vector_quantized);
+        buffer_gt<aligned_allocator_gt<byte_t, 64>> centroids_quantized(wanted_clusters * stride_per_vector_quantized);
+
+        // When aggregating centroids, we want to parallelize the operation and need more memory.
+        // For every thread we keep two double-precision vectors. One is the up-casting output buffer for quantized
+        // coordinates, and the other is the temporary buffer for the partial sums of the double-precision coordinates.
+        // The ordering:
+        //
+        //      - thread 0: [centroid 0, centroid 1, centroid 2, centroid 3, ...]
+        //      - thread 1: [centroid 0, centroid 1, centroid 2, centroid 3, ...]
+        //      - thread 2: [centroid 0, centroid 1, centroid 2, centroid 3, ...]
+        //
+        std::size_t const thread_count = executor.size();
+        buffer_gt<aligned_allocator_gt<f64_t, 64>> centroids_precise(wanted_clusters * dimensions * thread_count);
+        buffer_gt<aligned_allocator_gt<f64_t, 64>> dataset_precise(wanted_clusters * dimensions * thread_count);
+        if (!centroids_precise || !dataset_precise || !centroids_quantized || !centroids_indexes ||
+            !centroid_distances || !dataset_quantized)
+            return result.failed("No memory for result outputs!");
+
+        std::fill_n(centroids_indexes.data(), dataset_count, wanted_clusters);
+        std::fill_n(centroid_distances.data(), dataset_count, std::numeric_limits<distance_t>::max());
+
+        // Initialize the casting kernel for quantization and export.
+        casts_punned_t casts = casts_punned_t::make(quantization_kind);
+        cast_punned_t const& compress_dataset = casts.from[original_scalar_kind];
+        cast_punned_t const& decompress_dataset = casts.to[original_scalar_kind];
+        for (std::size_t i = 0; i < dataset_count; i++) {
+            byte_t const* vector = dataset_data + i * dataset_stride;
+            byte_t* quantized = dataset_quantized.data() + i * stride_per_vector_quantized;
+            if (!compress_dataset(vector, bytes_per_vector_original, quantized))
+                std::memcpy(quantized, vector, bytes_per_vector_original);
+        }
+
+        // Initialize centroids with random dataset vectors.
+        std::random_device random_device;
+        std::mt19937 random_engine(random_device());
+        for (std::size_t i = 0; i < wanted_clusters; i++) {
+            // Generate the random index of the dataset vector,
+            // that is unique and not already used as a centroid.
+            std::size_t random_index;
+            do {
+                random_index = random_engine() % dataset_count;
+                bool is_unique = true;
+                for (std::size_t j = 0; j < i; j++) {
+                    if (centroids_indexes[j] == random_index) {
+                        is_unique = false;
+                        break;
+                    }
+                }
+                if (is_unique)
+                    break;
+            } while (true);
+
+            // Copy the vector to the centroid and quantize it.
+            byte_t const* quantized_dataset = dataset_quantized.data() + random_index * stride_per_vector_quantized;
+            byte_t* quantized_centroid = centroids_quantized.data() + i * stride_per_vector_quantized;
+            std::memcpy(quantized_centroid, quantized_dataset, bytes_per_vector_quantized);
+            centroid_indexes[random_index] = i;
+            centroid_distances[random_index] = 0;
+        }
+
+        // In the future we can go down the layers, performing K-Means clustering on each one.
+        // For now, we just jump to the bottom layer and use our SIMD-accelerated kernels for mixed-precision compute.
+        std::size_t iterations = 0;
+        while (iterations < config.max_iterations) {
+
+            // For every point in the dataset, find the closest centroid.
+            executor.dynamic(dataset_count, [&](std::size_t thread_idx, std::size_t dataset_idx) {
+                byte_t const* quantized_dataset = dataset_quantized.data() + dataset_idx * stride_per_vector_quantized;
+                byte_t const* quantized_centroids = centroids_quantized.data();
+                distance_t& closest_distance = centroid_distances[dataset_idx];
+                std::size_t& closest_idx = centroids_indexes[dataset_idx];
+                for (std::size_t centroid_idx = 0; centroid_idx < wanted_clusters; centroid_idx++) {
+                    byte_t const* quantized_centroid = quantized_centroids + centroid_idx * stride_per_vector_quantized;
+                    distance_t distance = metric(quantized_dataset, quantized_centroid);
+                    if (distance < closest_distance) {
+                        closest_distance = distance;
+                        closest_idx = centroid_idx;
+                    }
+                }
+                return true;
+            });
+
+            // For every centroid, recalculate the mean of all points assigned to it.
+            // That part is problematic to parallelize on many-core-systems, because of the contention.
+            // Alternatively, a tree-like approach can be used, where every core accumulates it's own partial sums.
+            // And those are later aggregated by a single thread.
+            std::memset(centroids_precise.data(), 0, wanted_clusters * dimensions * 2 * thread_count * sizeof(f64_t));
+            executor.dynamic(dataset_count, [&](std::size_t thread_idx, std::size_t dataset_idx) {
+                std::size_t centroid_idx = centroids_indexes[dataset_idx];
+                byte_t const* quantized_dataset = dataset_quantized.data() + dataset_idx * stride_per_vector_quantized;
+                f64_t* centroid_precise =
+                    centroids_precise.data() + wanted_clusters * dimensions * thread_idx + centroid_idx * dimensions;
+
+                // Upcast the dataset point into a buffer of double-precision floats.
+                f64_t* dataset_precise =
+                    dataset_precise.data() + wanted_clusters * dimensions * thread_idx + centroid_idx * dimensions;
+                if (!decompress_dataset(quantized_dataset, dimensions, dataset_precise))
+                    std::memcpy(dataset_precise, quantized_dataset, bytes_per_vector_quantized);
+
+                // Now add the vector from the dataset into the centroid partial sum.
+                for (std::size_t i = 0; i < dimensions; i++)
+                    centroid_precise[i] += dataset_precise[i];
+
+                cluster_sizes[centroid_idx].fetch_add(1, std::memory_order_relaxed);
+                return true;
+            });
+
+            // Aggregate the partial sums into the final centroids - storing them in the high-precision
+            // buffer of the first thread. Normalization procedure is different for different metrics.
+            for (std::size_t centroid_idx = 0; centroid_idx < wanted_clusters; centroid_idx++) {
+                f64_t* centroid_precise_aggregated = centroids_precise.data() + centroid_idx * dimensions;
+                for (std::size_t thread_idx = 1; thread_idx < thread_count; thread_idx++) {
+                    f64_t* centroid_precise = centroids_precise.data() + wanted_clusters * dimensions * thread_idx +
+                                              centroid_idx * dimensions;
+                    for (std::size_t i = 0; i < dimensions; i++)
+                        centroid_precise_aggregated[i] += centroid_precise[i];
+                }
+                // Normalize:
+            }
+        }
+    }
+};
+
+using kmeans_clustering_t = kmeans_clustering_gt<>;
 
 /**
  *  @brief  C++11 Multi-Hash-Set with Linear Probing.
