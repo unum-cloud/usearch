@@ -42,13 +42,13 @@
 
 #if USEARCH_USE_SIMSIMD
 // Propagate the `f16` settings
-#if !defined(SIMSIMD_NATIVE_F16)
-#define SIMSIMD_NATIVE_F16 !USEARCH_USE_FP16LIB
+#if defined(USEARCH_CAN_COMPILE_FP16) || defined(USEARCH_CAN_COMPILE_FLOAT16)
+#define SIMSIMD_NATIVE_F16 1
 #endif
-
-// Overwrite the dynamic dispatch settings
-#undef SIMSIMD_DYNAMIC_DISPATCH
-#define SIMSIMD_DYNAMIC_DISPATCH 0
+// Propagate the `bf16` settings
+#if defined(USEARCH_CAN_COMPILE_BF16) || defined(USEARCH_CAN_COMPILE_BFLOAT16)
+#define SIMSIMD_NATIVE_BF16 1
+#endif
 // No problem, if some of the functions are unused or undefined
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
