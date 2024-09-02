@@ -2073,6 +2073,8 @@ struct kmeans_clustering_result_t {
     f64_t last_iteration_inertia{};
     /// @brief The total elapsed runtime of the algorithm in seconds.
     f64_t runtime_seconds{};
+    /// @brief The total distance between the points and their assigned centroids.
+    f64_t aggregate_distance{};
 
     explicit operator bool() const noexcept { return !error; }
     kmeans_clustering_result_t failed(error_t message) noexcept {
@@ -2110,12 +2112,14 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
     std::size_t min_point_shifts_per_iteration{};
 
     template <typename scalar_at, typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
-    kmeans_clustering_result_t operator()(                                             //
-        matrix_slice_gt<scalar_at const> points, matrix_slice_gt<scalar_at> centroids, //
+    kmeans_clustering_result_t operator()( //
+        matrix_slice_gt<scalar_at const> points, matrix_slice_gt<scalar_at> centroids,
+        span_gt<std::size_t> point_to_centroid_index, span_gt<distance_t> point_to_centroid_distance, //
         executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
-        return operator()(                                                                     //
-            reinterpret_cast<byte_t const*>(points.data()), points.size(), points.stride(),    //
-            reinterpret_cast<byte_t*>(centroids.data()), centroids.size(), centroids.stride(), //
+        return operator()(                                                                  //
+            reinterpret_cast<byte_t const*>(points.data()), points.size(), points.stride(), //
+            reinterpret_cast<byte_t*>(centroids.data()), centroids.size(), centroids.stride(),
+            point_to_centroid_index.data(), //
             scalar_kind<scalar_at>(), points.dimensions(), executor, progress);
     }
 
@@ -2123,7 +2127,7 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
     kmeans_clustering_result_t operator()(                                                 //
         byte_t const* points_data, std::size_t points_count, std::size_t points_stride,    //
         byte_t* centroids_data, std::size_t wanted_clusters, std::size_t centroids_stride, //
-        std::size_t* point_to_centroid_index,                                              //
+        std::size_t* point_to_centroid_index, distance_t* point_to_centroid_distance,      //
         scalar_kind_t original_scalar_kind, std::size_t dimensions, executor_at&& executor = executor_at{},
         progress_at&& progress = progress_at{}) {
 
@@ -2155,7 +2159,7 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
         std::size_t const bytes_per_vector_original =
             divide_round_up<CHAR_BIT>(dimensions * bits_per_scalar(original_scalar_kind));
         std::size_t const bytes_per_vector_quantized = metric.bytes_per_vector();
-        std::size_t const stride_per_vector_quantized = divide_round_up<64>(bytes_per_vector_quantized);
+        std::size_t const stride_per_vector_quantized = divide_round_up<64>(bytes_per_vector_quantized) * 64;
         buffer_gt<byte_t, aligned_allocator_gt<byte_t, 64>> points_quantized_buffer(points_count *
                                                                                     stride_per_vector_quantized);
         buffer_gt<byte_t, aligned_allocator_gt<byte_t, 64>> centroids_quantized_buffer(wanted_clusters *
@@ -2191,7 +2195,7 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
         for (std::size_t i = 0; i < points_count; i++) {
             byte_t const* vector = points_data + i * points_stride;
             byte_t* quantized = points_quantized_buffer.data() + i * stride_per_vector_quantized;
-            if (!compress_points(vector, bytes_per_vector_original, quantized))
+            if (!compress_points(vector, dimensions, quantized))
                 std::memcpy(quantized, vector, bytes_per_vector_original);
         }
 
@@ -2281,8 +2285,9 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
             // Alternatively, a tree-like approach can be used, where every core accumulates it's own partial sums.
             // And those are later aggregated by a single thread.
             std::memset(centroids_precise_buffer.data(), 0,
-                        wanted_clusters * dimensions * 2 * thread_count * sizeof(f64_t));
-            std::memset(cluster_sizes_buffer.data(), 0, wanted_clusters * sizeof(std::atomic<std::size_t>));
+                        wanted_clusters * dimensions * thread_count * sizeof(f64_t));
+            std::memset(reinterpret_cast<byte_t*>(cluster_sizes_buffer.data()), 0,
+                        wanted_clusters * sizeof(std::atomic<std::size_t>));
             executor.dynamic(points_count, [&](std::size_t thread_idx, std::size_t points_idx) {
                 std::size_t centroid_idx = point_to_centroid_index_buffer[points_idx];
                 byte_t const* quantized_point =
@@ -2337,21 +2342,27 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
                 // Quantize the centroid after normalization for further iterations
                 byte_t* quantized_centroid =
                     centroids_quantized_buffer.data() + centroid_idx * stride_per_vector_quantized;
-                if (!compress_precise(reinterpret_cast<byte_t*>(centroid_precise_aggregated),
-                                      bytes_per_vector_quantized, quantized_centroid))
+                if (!compress_precise(reinterpret_cast<byte_t*>(centroid_precise_aggregated), dimensions,
+                                      quantized_centroid))
                     std::memcpy(quantized_centroid, reinterpret_cast<byte_t*>(centroid_precise_aggregated),
                                 bytes_per_vector_quantized);
             }
         }
 
+        // Export stats.
         result.iterations = iterations;
+        result.computed_distances = points_count * wanted_clusters * iterations;
+        result.aggregate_distance =
+            std::accumulate(point_to_centroid_distance_buffer.begin(), point_to_centroid_distance_buffer.end(), 0.0);
 
         // We've finished all the iterations, now we can export the centroids back to the original precision.
         std::memcpy(point_to_centroid_index, point_to_centroid_index_buffer.data(), points_count * sizeof(std::size_t));
+        std::memcpy(point_to_centroid_distance, point_to_centroid_distance_buffer.data(),
+                    points_count * sizeof(distance_t));
         for (std::size_t i = 0; i < wanted_clusters; i++) {
             byte_t const* quantized_centroid = centroids_quantized_buffer.data() + i * stride_per_vector_quantized;
             byte_t* centroid = centroids_data + i * centroids_stride;
-            if (!decompress_points(quantized_centroid, bytes_per_vector_quantized, centroid))
+            if (!decompress_points(quantized_centroid, dimensions, centroid))
                 std::memcpy(centroid, quantized_centroid, bytes_per_vector_quantized);
         }
 
