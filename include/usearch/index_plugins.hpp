@@ -1924,6 +1924,7 @@ class metric_punned_t {
 template <typename scalar_at> //
 class matrix_slice_gt {
     using scalar_t = scalar_at;
+    using byte_addressable_t = typename std::conditional<std::is_const<scalar_t>::value, byte_t const, byte_t>::type;
 
     scalar_t* begin_{};
     std::size_t dimensions_{};
@@ -1947,7 +1948,7 @@ class matrix_slice_gt {
     std::size_t stride() const noexcept { return stride_bytes_; }
     scalar_t* data() const noexcept { return begin_; }
     scalar_t* at(std::size_t i) const noexcept {
-        return reinterpret_cast<scalar_t*>(reinterpret_cast<byte_t*>(begin_) + i * stride_bytes_);
+        return reinterpret_cast<scalar_t*>(reinterpret_cast<byte_addressable_t*>(begin_) + i * stride_bytes_);
     }
 };
 
