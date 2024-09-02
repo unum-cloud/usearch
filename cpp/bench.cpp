@@ -185,7 +185,7 @@ struct persisted_dataset_gt {
     std::size_t vectors_count() const noexcept {
         return vectors_to_take_ ? vectors_to_take_ : (vectors_.rows - vectors_to_skip_);
     }
-    vectors_view_gt<scalar_t> vectors_view() const noexcept {
+    matrix_slice_gt<scalar_t const> vectors_view() const noexcept {
         return {vector(vectors_to_skip_), vectors_count(), dimensions()};
     }
 };
@@ -224,7 +224,7 @@ struct in_memory_dataset_gt {
     scalar_t* query(std::size_t i) noexcept { return queries_.data() + i * dimensions_; }
     compressed_slot_t* neighborhood(std::size_t i) noexcept { return neighborhoods_.data() + i * neighborhood_size_; }
 
-    vectors_view_gt<scalar_t> vectors_view() const noexcept { return {vector(0), vectors_count(), dimensions()}; }
+    matrix_slice_gt<scalar_t const> vectors_view() const noexcept { return {vector(0), vectors_count(), dimensions()}; }
 };
 
 char const* getenv_or(char const* name, char const* default_) { return getenv(name) ? getenv(name) : default_; }

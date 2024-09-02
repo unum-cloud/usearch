@@ -9,7 +9,7 @@ typedef NS_ENUM(NSUInteger, USearchScalar) {
     USearchScalarF16,
     USearchScalarF64,
     USearchScalarI8,
-    USearchScalarB1
+    USearchScalarB1,
     USearchScalarBF16,
 };
 
@@ -28,6 +28,8 @@ typedef NS_ENUM(NSUInteger, USearchMetric) {
 };
 
 typedef UInt64 USearchKey;
+
+typedef bool (^USearchFilterFn)(USearchKey key);
 
 API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
 @interface USearchIndex : NSObject
@@ -105,6 +107,22 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
     count:(UInt32)count NS_SWIFT_NAME(getSingle(key:vector:count:));
 
 /**
+ * @brief Approximate nearest neighbors search.
+ * @param vector Double-precision query vector.
+ * @param count Upper limit on the number of matches to retrieve.
+ * @param filter Closure called for each key, determining whether to include or
+ *               skip key in the results.
+ * @param keys Optional output buffer for keys of approximate neighbors.
+ * @param distances Optional output buffer for (increasing) distances to approximate neighbors.
+ * @return Number of matches exported to `keys` and `distances`.
+ */
+- (UInt32)filteredSearchSingle:(Float32 const *_Nonnull)vector
+                 count:(UInt32)count
+                filter:(USearchFilterFn)filter
+                  keys:(USearchKey *_Nullable)keys
+             distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(filteredSearchSingle(vector:count:filter:keys:distances:));
+
+/**
  * @brief Adds a labeled vector to the index.
  * @param vector Double-precision vector.
  */
@@ -134,6 +152,21 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
     vector:(void *_Nonnull)vector
     count:(UInt32)count NS_SWIFT_NAME(getDouble(key:vector:count:));
 
+/**
+ * @brief Approximate nearest neighbors search.
+ * @param vector Double-precision query vector.
+ * @param count Upper limit on the number of matches to retrieve.
+ * @param filter Closure called for each key, determining whether to include or
+ *               skip key in the results.
+ * @param keys Optional output buffer for keys of approximate neighbors.
+ * @param distances Optional output buffer for (increasing) distances to approximate neighbors.
+ * @return Number of matches exported to `keys` and `distances`.
+ */
+- (UInt32)filteredSearchDouble:(Float64 const *_Nonnull)vector
+                 count:(UInt32)wanted
+                filter:(USearchFilterFn)predicate
+                  keys:(USearchKey *_Nullable)keys
+             distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(filteredSearchDouble(vector:count:filter:keys:distances:));
 /**
  * @brief Adds a labeled vector to the index.
  * @param vector Half-precision vector.
