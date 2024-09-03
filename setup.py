@@ -153,6 +153,7 @@ ext_modules = [
         extra_compile_args=compile_args,
         extra_link_args=link_args,
         define_macros=macros_args,
+        language="c++",
     ),
 ]
 
