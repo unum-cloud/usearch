@@ -15,7 +15,7 @@ let package = Package(
         .target(
             name: "USearchObjective",
             path: "objc",
-            sources: ["USearchObjective.mm"],            
+            sources: ["USearchObjective.mm", "../simsimd/c/lib.c"],
             cxxSettings: [
                 .headerSearchPath("../include/"),
                 .headerSearchPath("../fp16/include/"),

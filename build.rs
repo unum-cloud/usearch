@@ -46,10 +46,12 @@ fn main() {
     };
 
     if cfg!(feature = "simsimd") {
-        build.define("USEARCH_USE_SIMSIMD", "1")
-        .define("SIMSIMD_DYNAMIC_DISPATCH", "1")
-        .define("SIMSIMD_NATIVE_BF16", "0")
-        .define("SIMSIMD_NATIVE_F16", "0");
+        build
+            .file("simsimd/c/lib.c")
+            .define("USEARCH_USE_SIMSIMD", "1")
+            .define("SIMSIMD_DYNAMIC_DISPATCH", "1")
+            .define("SIMSIMD_NATIVE_BF16", "0")
+            .define("SIMSIMD_NATIVE_F16", "0");
 
         for flag in &flags_to_try {
             build.define(flag, "1");
@@ -57,7 +59,6 @@ fn main() {
     } else {
         build.define("USEARCH_USE_SIMSIMD", "0");
     }
-    
 
     // Conditional compilation depending on the target operating system.
     if cfg!(target_os = "linux") {
