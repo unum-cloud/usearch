@@ -230,7 +230,6 @@ npm install -g typescript
 npm install
 npm run build-js
 npm test
-npm run bench
 ```
 
 To compile for AWS Lambda you'd need to recompile the binding.

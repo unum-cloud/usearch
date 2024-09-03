@@ -934,18 +934,6 @@ class sorted_buffer_gt {
         return true;
     }
 
-    inline bool insert_sorted(element_t const* elements, std::size_t elements_count, std::size_t limit) noexcept {
-        if (!size_) {
-        }
-        // If we are inserting elements, we only perform full-scale binary search once,
-        // and then only compute successive insertion offsets based only on the tail.
-        std::size_t slot = std::lower_bound(elements_, elements_ + size_, elements[0], &less) - elements_;
-        if (slot == limit)
-            return false;
-        std::size_t to_move = size_ - slot - (size_ == limit);
-        std::size_t next_slot = std::lower_bound(elements_ + slot, elements_ + size_, elements[1], &less) - elements_;
-    }
-
     inline element_t pop() noexcept {
         size_--;
         element_t result = elements_[size_];
