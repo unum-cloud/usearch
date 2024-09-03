@@ -2616,6 +2616,16 @@ class index_gt {
             node_t node = nodes_[candidate.slot];
             return {member_cref_t{node.ckey(), candidate.slot}, candidate.distance};
         }
+
+        /**
+         *  @brief  Extracts the search results into a user-provided buffer, that unlike `dump_to`,
+         *          may already contain some data, so the new and old results are merged together.
+         *  @return The number of results stored in the buffer.
+         *  @param[in] keys The buffer to store the keys of the search results.
+         *  @param[in] distances The buffer to store the distances to the search results.
+         *  @param[in] old_count The number of results already stored in the buffers.
+         *  @param[in] max_count The maximum number of results that can be stored in the buffers.
+         */
         inline std::size_t merge_into(                 //
             vector_key_t* keys, distance_t* distances, //
             std::size_t old_count, std::size_t max_count) const noexcept {
@@ -2637,6 +2647,13 @@ class index_gt {
             }
             return merged_count;
         }
+
+        /**
+         *  @brief  Extracts the search results into a user-provided buffer.
+         *  @return The number of results stored in the buffer.
+         *  @param[in] keys The buffer to store the keys of the search results.
+         *  @param[in] distances The buffer to store the distances to the search results.
+         */
         inline std::size_t dump_to(vector_key_t* keys, distance_t* distances) const noexcept {
             for (std::size_t i = 0; i != count; ++i) {
                 match_t result = operator[](i);
@@ -2645,6 +2662,12 @@ class index_gt {
             }
             return count;
         }
+
+        /**
+         *  @brief  Extracts the search results into a user-provided buffer.
+         *  @return The number of results stored in the buffer.
+         *  @param[in] keys The buffer to store the keys of the search results.
+         */
         inline std::size_t dump_to(vector_key_t* keys) const noexcept {
             for (std::size_t i = 0; i != count; ++i) {
                 match_t result = operator[](i);
