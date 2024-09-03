@@ -565,7 +565,7 @@ template <typename scalar_at> struct rows_lookup_gt {
  *      2. vector of distances to those clusters,
  *      3. array with match counts, set to all ones,
  *      4. number of visited nodes,
- *      4. number of computed pairwise distances.
+ *      5. number of computed pairwise distances.
  */
 template <typename index_at>
 static py::tuple cluster_vectors(        //
@@ -639,7 +639,7 @@ static py::tuple cluster_vectors(        //
  *      2. vector of distances to those clusters,
  *      3. array with match counts, set to all ones,
  *      4. number of visited nodes,
- *      4. number of computed pairwise distances.
+ *      5. number of computed pairwise distances.
  */
 template <typename index_at>
 static py::tuple cluster_keys(                            //

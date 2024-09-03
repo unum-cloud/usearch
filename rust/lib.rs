@@ -1648,21 +1648,29 @@ mod tests {
             quantization: ScalarKind::F16,
             ..Default::default()
         };
-    
+
         let index = new_index(&options).unwrap();
         index.reserve(10).unwrap();
-        index.add(0, &[0.4, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
-        index.add(1, &[0.5, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
-        index.add(2, &[0.6, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
+        index
+            .add(0, &[0.4, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0])
+            .unwrap();
+        index
+            .add(1, &[0.5, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0])
+            .unwrap();
+        index
+            .add(2, &[0.6, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0])
+            .unwrap();
 
         // Make sure non of the distances are zeros
-        let matches = index.search(&[0.05, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0], 2).unwrap();
+        let matches = index
+            .search(&[0.05, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0], 2)
+            .unwrap();
         for distance in matches.distances.iter() {
             assert_ne!(*distance, 0.0);
-        }        
+        }
     }
 
-        #[test]
+    #[test]
     fn test_change_distance_function() {
         let mut options = IndexOptions::default();
         options.dimensions = 2; // Adjusted for simplicity in creating test vectors

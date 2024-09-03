@@ -64,7 +64,7 @@ def test_index_initialization_and_addition(ndim, metric, quantization, dtype, ba
 @pytest.mark.parametrize("ndim", [3, 97, 256])
 @pytest.mark.parametrize("metric", [MetricKind.Cos, MetricKind.L2sq])
 @pytest.mark.parametrize("batch_size", [1, 7, 1024])
-@pytest.mark.parametrize("quantization", [ScalarKind.F32, ScalarKind.I8])
+@pytest.mark.parametrize("quantization", [ScalarKind.F32, ScalarKind.F16, ScalarKind.I8])
 @pytest.mark.parametrize("dtype", [np.float32, np.float64, np.float16])
 def test_index_retrieval(ndim, metric, quantization, dtype, batch_size):
     reset_randomness()

@@ -57,9 +57,8 @@ def test_distances_continuous(metric, quantization, dtype):
     distance_different = index.pairwise_distance([0], [1])
 
     assert not np.allclose(distance_different, 0)
-    assert np.allclose(distance_itself_first, 0, rtol=rtol, atol=atol) and np.allclose(
-        distance_itself_second, 0, rtol=rtol, atol=atol
-    )
+    assert np.allclose(distance_itself_first, 0, rtol=rtol, atol=atol)
+    assert np.allclose(distance_itself_second, 0, rtol=rtol, atol=atol)
 
 
 @pytest.mark.parametrize(

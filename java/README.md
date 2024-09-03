@@ -6,7 +6,7 @@
 <dependency>
   <groupId>cloud.unum</groupId>
   <artifactId>usearch</artifactId>
-  <version>2.13.3</version>
+  <version>2.15.1</version>
 </dependency>
 ```
 

@@ -185,7 +185,7 @@ struct persisted_dataset_gt {
     std::size_t vectors_count() const noexcept {
         return vectors_to_take_ ? vectors_to_take_ : (vectors_.rows - vectors_to_skip_);
     }
-    vectors_view_gt<scalar_t> vectors_view() const noexcept {
+    matrix_slice_gt<scalar_t const> vectors_view() const noexcept {
         return {vector(vectors_to_skip_), vectors_count(), dimensions()};
     }
 };
@@ -224,7 +224,7 @@ struct in_memory_dataset_gt {
     scalar_t* query(std::size_t i) noexcept { return queries_.data() + i * dimensions_; }
     compressed_slot_t* neighborhood(std::size_t i) noexcept { return neighborhoods_.data() + i * neighborhood_size_; }
 
-    vectors_view_gt<scalar_t> vectors_view() const noexcept { return {vector(0), vectors_count(), dimensions()}; }
+    matrix_slice_gt<scalar_t const> vectors_view() const noexcept { return {vector(0), vectors_count(), dimensions()}; }
 };
 
 char const* getenv_or(char const* name, char const* default_) { return getenv(name) ? getenv(name) : default_; }
@@ -468,6 +468,7 @@ struct args_t {
 
     bool big = false;
 
+    bool quantize_bf16 = false;
     bool quantize_f16 = false;
     bool quantize_i8 = false;
     bool quantize_b1 = false;
@@ -500,6 +501,8 @@ struct args_t {
     }
 
     scalar_kind_t quantization() const noexcept {
+        if (quantize_bf16)
+            return scalar_kind_t::bf16_k;
         if (quantize_f16)
             return scalar_kind_t::f16_k;
         if (quantize_i8)
@@ -611,6 +614,7 @@ int main(int argc, char** argv) {
         (option("--rows-skip") & value("integer", args.vectors_to_skip)).doc("Number of vectors to skip"),
         (option("--rows-take") & value("integer", args.vectors_to_take)).doc("Number of vectors to take"),
         ( //
+            option("-bf16", "--bf16quant").set(args.quantize_bf16).doc("Enable `bf16_t` quantization") |
             option("-f16", "--f16quant").set(args.quantize_f16).doc("Enable `f16_t` quantization") |
             option("-i8", "--i8quant").set(args.quantize_i8).doc("Enable `i8_t` quantization") |
             option("-b1", "--b1quant").set(args.quantize_b1).doc("Enable `b1x8_t` quantization")),
