@@ -51,7 +51,12 @@
 #endif
 // No problem, if some of the functions are unused or undefined
 #pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wall"
+#pragma GCC diagnostic ignored "-Wunused"
 #pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 #pragma warning(push)
 #pragma warning(disable : 4101)
 #include <simsimd/simsimd.h>
@@ -380,7 +385,7 @@ inline float f16_to_f32(std::uint16_t u16) noexcept {
 #if USEARCH_USE_FP16LIB
     return fp16_ieee_to_fp32_value(u16);
 #elif USEARCH_USE_SIMSIMD
-    return simsimd_uncompress_f16(u16);
+    return simsimd_uncompress_f16((simsimd_f16_t const*)&u16);
 #else
 #warning "It's recommended to use SimSIMD and fp16lib for half-precision numerics"
     _Float16 f16;
@@ -396,7 +401,9 @@ inline std::uint16_t f32_to_f16(float f32) noexcept {
 #if USEARCH_USE_FP16LIB
     return fp16_ieee_from_fp32_value(f32);
 #elif USEARCH_USE_SIMSIMD
-    return simsimd_compress_f16(f32);
+    std::uint16_t result;
+    simsimd_compress_f16(f32, (simsimd_f16_t*)&result);
+    return result;
 #else
 #warning "It's recommended to use SimSIMD and fp16lib for half-precision numerics"
     _Float16 f16 = _Float16(f32);
@@ -412,7 +419,7 @@ inline std::uint16_t f32_to_f16(float f32) noexcept {
  */
 inline float bf16_to_f32(std::uint16_t u16) noexcept {
 #if USEARCH_USE_SIMSIMD
-    return simsimd_uncompress_bf16(u16);
+    return simsimd_uncompress_bf16((simsimd_bf16_t const*)&u16);
 #else
     union float_or_unsigned_int_t {
         float f;
@@ -430,7 +437,9 @@ inline float bf16_to_f32(std::uint16_t u16) noexcept {
  */
 inline std::uint16_t f32_to_bf16(float f32) noexcept {
 #if USEARCH_USE_SIMSIMD
-    return simsimd_compress_bf16(f32);
+    std::uint16_t result;
+    simsimd_compress_bf16(f32, (simsimd_bf16_t*)&result);
+    return result;
 #else
     union float_or_unsigned_int_t {
         float f;
