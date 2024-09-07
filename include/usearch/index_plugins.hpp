@@ -58,7 +58,8 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 #pragma warning(push)
-#pragma warning(disable : 4101)
+#pragma warning(disable : 4101) // "Unused variables"
+#pragma warning(disable : 4068) // "Unknown pragmas", when MSVC tries to read GCC pragmas
 #include <simsimd/simsimd.h>
 #pragma warning(pop)
 #pragma GCC diagnostic pop
