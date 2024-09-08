@@ -1,5 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const usearch = require('./dist/cjs/usearch.js');
 
 function assertAlmostEqual(actual, expected, tolerance = 1e-6) {
@@ -81,4 +84,51 @@ test('Operations with invalid values', () => {
     } catch (err) {
         assert.equal(err.message, 'Vectors must be a TypedArray or an array of arrays.');
     }
+});
+
+
+test('Serialization', async (t) => {
+    const indexPath = path.join(os.tmpdir(), 'usearch.test.index')
+
+    t.beforeEach(() => {
+        const index = new usearch.Index({
+            metric: "l2sq",
+            connectivity: 16,
+            dimensions: 3,
+        });
+        index.add(42n, new Float32Array([0.2, 0.6, 0.4]));
+        index.save(indexPath);
+    });
+
+    t.afterEach(() => {
+        fs.unlinkSync(indexPath);
+    });
+
+    await t.test('load', () => {
+        const index = new usearch.Index({
+            metric: "l2sq",
+            connectivity: 16,
+            dimensions: 3,
+        });
+        index.load(indexPath);
+        const results = index.search(new Float32Array([0.2, 0.6, 0.4]), 10);
+
+        assert.equal(index.size(), 1);
+        assert.deepEqual(results.keys, new BigUint64Array([42n]));
+        assertAlmostEqual(results.distances[0], new Float32Array([0]));
+    });
+
+    await t.test('view', () => {
+        const index = new usearch.Index({
+            metric: "l2sq",
+            connectivity: 16,
+            dimensions: 3,
+        });
+        index.view(indexPath);
+        const results = index.search(new Float32Array([0.2, 0.6, 0.4]), 10);
+
+        assert.equal(index.size(), 1);
+        assert.deepEqual(results.keys, new BigUint64Array([42n]));
+        assertAlmostEqual(results.distances[0], new Float32Array([0]));
+    });
 });
