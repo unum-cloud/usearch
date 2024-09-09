@@ -68,17 +68,19 @@ test('Operations with invalid values', () => {
     const keys = [NaN, 16n];
     const vectors = [new Float32Array([10, 30]), new Float32Array([1, 5])];
 
-    try {
-        indexBatch.add(keys, vectors);
-        throw new Error('indexBatch.add should have thrown an error.');
-    } catch (err) {
-        assert.equal(err.message, 'All keys must be positive integers or bigints.');
-    }
+    assert.throws(
+        () => indexBatch.add(keys, vectors),
+        {
+            name: 'Error',
+            message: 'All keys must be positive integers or bigints.'
+        }
+    );
 
-    try {
-        indexBatch.search(NaN, 2);
-        throw new Error('indexBatch.search should have thrown an error.');
-    } catch (err) {
-        assert.equal(err.message, 'Vectors must be a TypedArray or an array of arrays.');
-    }
+    assert.throws(
+        () => indexBatch.search(NaN, 2),
+        {
+            name: 'Error',
+            message: 'Vectors must be a TypedArray or an array of arrays.'
+        }
+    );
 });
