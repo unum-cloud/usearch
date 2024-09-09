@@ -66,12 +66,21 @@ def evaluate_clustering(X, labels, centroids):
     return np.mean(distances)
 
 
-def inverted_kmeans(X, k, max_iters=100, tol=1e-4):
-    # This algorithm is a bit different.
-    # In a typical KMeans algorithm - we would construct an index of centroids, and search all points in it.
-    # That's not very relevant, as there are very few centroids, and many points. Inverted setup makes more sense.
+def evaluate_clustering_cosine(X, labels, centroids):
+    """Evaluate clustering quality as average cosine distance to centroids"""
 
-    pass
+    # Normalize both data points and centroids
+    X_normalized = X / np.linalg.norm(X, axis=1, keepdims=True)
+    centroids_normalized = centroids / np.linalg.norm(centroids, axis=1, keepdims=True)
+
+    # Compute cosine similarity using dot product
+    cosine_similarities = np.sum(X_normalized * centroids_normalized[labels], axis=1)
+
+    # Convert cosine similarity to cosine distance
+    cosine_distances = 1 - cosine_similarities
+
+    # Return the average cosine distance
+    return np.mean(cosine_distances)
 
 
 def custom_faiss_clustering(X, k, max_iters=100):
@@ -84,15 +93,7 @@ def custom_faiss_clustering(X, k, max_iters=100):
 
 
 def custom_usearch_clustering(X, k, max_iters=100):
-    # index = Index(ndim=X.shape[1], metric="l2sq")
-    # index.add(None, X)
-    # clustering = index.cluster(min_count=k, max_count=k)
-    # query_ids = clustering.queries.flatten()
-    # cluster_ids = clustering.matches.keys.flatten()
-    # reordered_cluster_ids = cluster_ids[query_ids]
-    # return reordered_cluster_ids, X[query_ids]
-
-    assignments, distances, centroids = usearch.compiled.kmeans(X, k, max_iterations=max_iters)
+    assignments, distances, centroids = usearch.compiled.kmeans(X, k, max_iterations=max_iters, threads=192)
     return assignments, centroids
 
 
@@ -128,8 +129,17 @@ def main():
             assign_clusters_func = assign_clusters_usearch
         labels, centroids = kmeans(X, k, assign_clusters_func=assign_clusters_func)
 
+    print("centroids: ", centroids.shape, centroids)
+
     quality = evaluate_clustering(X, labels, centroids)
-    print(f"Clustering quality (average distance to centroids): {quality:.4f}")
+    quality_cosine = evaluate_clustering_cosine(X, labels, centroids)
+    print(f"Clustering quality (average distance to centroids): {quality:.4f}, cosine: {quality_cosine:.4f}")
+
+    # Let's compare it to some random uniform assignment
+    random_labels = np.random.randint(0, k, size=X.shape[0])
+    random_quality = evaluate_clustering(X, random_labels, centroids)
+    random_quality_cosine = evaluate_clustering_cosine(X, random_labels, centroids)
+    print(f"- while random assignment quality: {random_quality:.4f}, cosine: {random_quality_cosine:.4f}")
 
     cluster_sizes = np.unique(labels, return_counts=True)[1]
     cluster_sizes_mean = np.mean(cluster_sizes)

@@ -567,6 +567,10 @@ static py::tuple cluster_many_brute_force( //
     std::size_t dataset_stride = static_cast<std::size_t>(dataset_info.strides[0]);
     scalar_kind_t dataset_kind = numpy_string_to_kind(dataset_info.format);
     std::size_t bytes_per_scalar = bits_per_scalar_word(dataset_kind) / CHAR_BIT;
+    printf("dataset_stride: %d\n", (int)dataset_stride);
+    printf("dataset_dimensions: %d\n", (int)dataset_dimensions);
+    printf("dataset_kind: %d\n", (int)dataset_kind);
+    printf("bytes_per_scalar: %d\n", (int)bytes_per_scalar);
 
     std::vector<std::size_t> point_to_centroid_index(dataset_count, 0);
     std::vector<distance_t> point_to_centroid_distance(dataset_count, 0);
@@ -580,12 +584,12 @@ static py::tuple cluster_many_brute_force( //
     executor_default_t executor{threads};
     kmeans_clustering_t engine;
     engine.metric_kind = metric_kind;
-    engine.quantization_kind = scalar_kind_t::bf16_k;
+    engine.quantization_kind = scalar_kind_t::f32_k;
     engine.max_iterations = max_iterations;
 
     kmeans_clustering_result_t result = engine(                                           //
         reinterpret_cast<byte_t const*>(dataset_info.ptr), dataset_count, dataset_stride, //
-        centroids.data(), wanted, dataset_dimensions,                                     //
+        centroids.data(), wanted, dataset_dimensions * bytes_per_scalar,                  //
         point_to_centroid_index.data(), point_to_centroid_distance.data(), dataset_kind, dataset_dimensions, executor,
         [&](std::size_t passed, std::size_t total) { return PyErr_CheckSignals() == 0 && progress(passed, total); });
 
