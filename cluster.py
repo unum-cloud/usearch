@@ -84,6 +84,9 @@ def evaluate_clustering_cosine(X, labels, centroids):
 
 
 def custom_faiss_clustering(X, k, max_iters=100):
+    # Docs: https://github.com/facebookresearch/faiss/wiki/Faiss-building-blocks:-clustering,-PCA,-quantization
+    # Header: https://github.com/facebookresearch/faiss/blob/main/faiss/Clustering.h
+    # Source: https://github.com/facebookresearch/faiss/blob/main/faiss/Clustering.cpp
     verbose = False
     d: int = X.shape[1]
     kmeans = faiss.Kmeans(d, k, niter=max_iters, verbose=verbose)
@@ -92,8 +95,13 @@ def custom_faiss_clustering(X, k, max_iters=100):
     return I.flatten(), kmeans.centroids
 
 
-def custom_usearch_clustering(X, k, max_iters=100):
-    assignments, distances, centroids = usearch.compiled.kmeans(X, k, max_iterations=max_iters, threads=192)
+def custom_usearch_clustering(X, k, max_iters=100, dtype="bf16"):
+    assignments, distances, centroids = usearch.compiled.kmeans(
+        X,
+        k,
+        max_iterations=max_iters,
+        # dtype=dtype,
+    )
     return assignments, centroids
 
 
@@ -101,6 +109,7 @@ def main():
     parser = argparse.ArgumentParser(description="Compare KMeans clustering algorithms")
     parser.add_argument("--vectors", type=str, required=True, help="Path to binary matrix file")
     parser.add_argument("-k", type=int, required=True, help="Number of centroids")
+    parser.add_argument("-i", type=int, help="Upper bound on number of iterations")
     parser.add_argument("-n", type=int, help="Upper bound on number of points to use")
     parser.add_argument(
         "--method",
@@ -112,14 +121,15 @@ def main():
 
     args = parser.parse_args()
 
+    max_iters = args.i
     X = load_matrix(args.vectors, count_rows=args.n)
     k = args.k
     method = args.method
 
     if method == "custom_usearch":
-        labels, centroids = custom_usearch_clustering(X, k)
+        labels, centroids = custom_usearch_clustering(X, k, max_iters=max_iters)
     elif method == "custom_faiss":
-        labels, centroids = custom_faiss_clustering(X, k)
+        labels, centroids = custom_faiss_clustering(X, k, max_iters=max_iters)
     else:
         if method == "numpy":
             assign_clusters_func = assign_clusters_numpy
@@ -129,8 +139,6 @@ def main():
             assign_clusters_func = assign_clusters_usearch
         labels, centroids = kmeans(X, k, assign_clusters_func=assign_clusters_func)
 
-    print("centroids: ", centroids.shape, centroids)
-
     quality = evaluate_clustering(X, labels, centroids)
     quality_cosine = evaluate_clustering_cosine(X, labels, centroids)
     print(f"Clustering quality (average distance to centroids): {quality:.4f}, cosine: {quality_cosine:.4f}")
@@ -139,7 +147,7 @@ def main():
     random_labels = np.random.randint(0, k, size=X.shape[0])
     random_quality = evaluate_clustering(X, random_labels, centroids)
     random_quality_cosine = evaluate_clustering_cosine(X, random_labels, centroids)
-    print(f"- while random assignment quality: {random_quality:.4f}, cosine: {random_quality_cosine:.4f}")
+    print(f"... while random assignment quality: {random_quality:.4f}, cosine: {random_quality_cosine:.4f}")
 
     cluster_sizes = np.unique(labels, return_counts=True)[1]
     cluster_sizes_mean = np.mean(cluster_sizes)

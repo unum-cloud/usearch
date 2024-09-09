@@ -554,6 +554,7 @@ static py::tuple cluster_many_brute_force( //
     std::size_t wanted,                    //
     std::size_t max_iterations,            //
     std::size_t threads,                   //
+    scalar_kind_t scalar_kind,             //
     metric_kind_t metric_kind,             //
     progress_func_t const& progress_func) {
 
@@ -567,10 +568,6 @@ static py::tuple cluster_many_brute_force( //
     std::size_t dataset_stride = static_cast<std::size_t>(dataset_info.strides[0]);
     scalar_kind_t dataset_kind = numpy_string_to_kind(dataset_info.format);
     std::size_t bytes_per_scalar = bits_per_scalar_word(dataset_kind) / CHAR_BIT;
-    printf("dataset_stride: %d\n", (int)dataset_stride);
-    printf("dataset_dimensions: %d\n", (int)dataset_dimensions);
-    printf("dataset_kind: %d\n", (int)dataset_kind);
-    printf("bytes_per_scalar: %d\n", (int)bytes_per_scalar);
 
     std::vector<std::size_t> point_to_centroid_index(dataset_count, 0);
     std::vector<distance_t> point_to_centroid_distance(dataset_count, 0);
@@ -584,7 +581,7 @@ static py::tuple cluster_many_brute_force( //
     executor_default_t executor{threads};
     kmeans_clustering_t engine;
     engine.metric_kind = metric_kind;
-    engine.quantization_kind = scalar_kind_t::f32_k;
+    engine.quantization_kind = scalar_kind;
     engine.max_iterations = max_iterations;
 
     kmeans_clustering_result_t result = engine(                                           //
@@ -1020,6 +1017,7 @@ PYBIND11_MODULE(compiled, m) {
           py::kw_only(),                                  //
           py::arg("max_iterations") = 100,                //
           py::arg("threads") = 0,                         //
+          py::arg("dtype") = scalar_kind_t::bf16_k,       //
           py::arg("metric_kind") = metric_kind_t::l2sq_k, //
           py::arg("progress") = nullptr                   //
     );

@@ -2282,15 +2282,9 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
                 if (result.runtime_seconds >= runtime_limit_seconds)
                     break;
 
-            printf("iteration: %d\n", (int)iterations);
-            printf("- points_shifted: %d\n", (int)points_shifted.load());
-            printf("- duration: %f secs\n", (float)result.runtime_seconds);
-
             double aggregate_distance = 0.0;
             for (std::size_t i = 0; i < points_count; i++)
                 aggregate_distance += point_to_centroid_distance_buffer[i];
-            printf("- aggregate_distance: %f\n", (float)aggregate_distance);
-            printf("- average distance: %f\n", (float)aggregate_distance / points_count);
 
             // For every centroid, recalculate the mean of all points assigned to it.
             // That part is problematic to parallelize on many-core-systems, because of the contention.
@@ -2339,8 +2333,6 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
                     if (cluster_size > 0)
                         for (std::size_t i = 0; i < dimensions; i++)
                             centroid_precise_aggregated[i] /= static_cast<f64_t>(cluster_size);
-                    else
-                        printf("!!!! Empty cluster %d\n", (int)centroid_idx);
 
                 } else if (metric_kind == metric_kind_t::cos_k) {
                     // Normalize for Cosine distance
@@ -2360,15 +2352,6 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
                                       centroid_quantized))
                     std::memcpy(centroid_quantized, reinterpret_cast<byte_t*>(centroid_precise_aggregated),
                                 bytes_per_vector_quantized);
-
-                // Let's print the centroids for debugging purposes.
-                printf("- centroid %d: ", (int)centroid_idx);
-                for (std::size_t j = 0; j < dimensions; j++) {
-                    if (j > 0)
-                        printf(", ");
-                    printf("%.2f", (float)centroid_precise_aggregated[j]);
-                }
-                printf("\n");
             }
         }
 
@@ -2377,10 +2360,6 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
         result.computed_distances = points_count * wanted_clusters * iterations;
         result.aggregate_distance =
             std::accumulate(point_to_centroid_distance_buffer.begin(), point_to_centroid_distance_buffer.end(), 0.0);
-        printf("iterations: %d\n", (int)result.iterations);
-        printf("aggregate_distance: %f\n", (float)result.aggregate_distance);
-        printf("average distance: %f\n", (float)result.aggregate_distance / points_count);
-        printf("centroids stride is %d\n", (int)centroids_stride_bytes);
 
         // We've finished all the iterations, now we can export the centroids back to the original precision.
         std::memcpy(point_to_centroid_index, point_to_centroid_index_buffer.data(), points_count * sizeof(std::size_t));
