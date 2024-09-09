@@ -97,6 +97,6 @@ test('Invalid operations', async (t) => {
                 name: 'Error',
                 message: 'Duplicate keys not allowed in high-level wrappers'
             }
-        )
-    })
+        );
+    });
 });
