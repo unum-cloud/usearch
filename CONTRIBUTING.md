@@ -33,7 +33,7 @@ brew install libomp llvm # MacOS
 Using modern syntax, this is how you build and run the test suite:
 
 ```sh
-cmake -DUSEARCH_BUILD_TEST_CPP=1 -DCMAKE_BUILD_TYPE=Debug -B build_debug
+cmake -D USEARCH_BUILD_TEST_CPP=1 -D CMAKE_BUILD_TYPE=Debug -B build_debug
 cmake --build build_debug --config Debug
 build_debug/test_cpp
 ```
@@ -41,7 +41,7 @@ build_debug/test_cpp
 If there build mode is not specified, the default is `Release`.
 
 ```sh
-cmake -DUSEARCH_BUILD_TEST_CPP=1 -B build_release
+cmake -D USEARCH_BUILD_TEST_CPP=1 -B build_release
 cmake --build build_release --config Release
 build_release/test_cpp
 ```
@@ -49,7 +49,7 @@ build_release/test_cpp
 For development purposes, you may want to include symbols information in the build:
 
 ```sh
-cmake -DUSEARCH_BUILD_TEST_CPP=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo -B build_relwithdebinfo
+cmake -D USEARCH_BUILD_TEST_CPP=1 -D CMAKE_BUILD_TYPE=RelWithDebInfo -B build_relwithdebinfo
 cmake --build build_relwithdebinfo --config RelWithDebInfo
 build_relwithdebinfo/test_cpp
 ```
@@ -71,7 +71,7 @@ The CMakeLists.txt file has a number of options you can pass:
 Putting all of this together, compiling all targets on most platforms should work with the following snippet:
 
 ```sh
-cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_USE_FP16LIB=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1 -DUSEARCH_BUILD_TEST_CPP=1 -DUSEARCH_BUILD_BENCH_CPP=1 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_BUILD_SQLITE=0 -B build_release
+cmake -D CMAKE_BUILD_TYPE=Release -D USEARCH_USE_FP16LIB=1 -D USEARCH_USE_OPENMP=1 -D USEARCH_USE_SIMSIMD=1 -D USEARCH_USE_JEMALLOC=1 -D USEARCH_BUILD_TEST_CPP=1 -D USEARCH_BUILD_BENCH_CPP=1 -D USEARCH_BUILD_LIB_C=1 -D USEARCH_BUILD_TEST_C=1 -D USEARCH_BUILD_SQLITE=0 -B build_release
 
 cmake --build build_release --config Release
 build_release/test_cpp
@@ -83,17 +83,17 @@ Similarly, to use the most recent Clang compiler version from HomeBrew on MacOS:
 ```sh
 brew install clang++ clang cmake
 cmake \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER="$(brew --prefix llvm)/bin/clang" \
-    -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" \
-    -DUSEARCH_USE_FP16LIB=1 \
-    -DUSEARCH_USE_OPENMP=1 \
-    -DUSEARCH_USE_SIMSIMD=1 \
-    -DUSEARCH_USE_JEMALLOC=1 \
-    -DUSEARCH_BUILD_TEST_CPP=1 \
-    -DUSEARCH_BUILD_BENCH_CPP=1 \
-    -DUSEARCH_BUILD_LIB_C=1 \
-    -DUSEARCH_BUILD_TEST_C=1 \
+    -D CMAKE_BUILD_TYPE=Release \
+    -D CMAKE_C_COMPILER="$(brew --prefix llvm)/bin/clang" \
+    -D CMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" \
+    -D USEARCH_USE_FP16LIB=1 \
+    -D USEARCH_USE_OPENMP=1 \
+    -D USEARCH_USE_SIMSIMD=1 \
+    -D USEARCH_USE_JEMALLOC=1 \
+    -D USEARCH_BUILD_TEST_CPP=1 \
+    -D USEARCH_BUILD_BENCH_CPP=1 \
+    -D USEARCH_BUILD_LIB_C=1 \
+    -D USEARCH_BUILD_TEST_C=1 \
     -B build_release
 
 cmake --build build_release --config Release
@@ -147,11 +147,11 @@ export RANLIB="llvm-ranlib"
 export TARGET_ARCH="aarch64-linux-gnu" # Or "x86_64-linux-gnu"
 export BUILD_ARCH="arm64" # Or "amd64"
 
-cmake -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER_TARGET=${TARGET_ARCH} \
-    -DCMAKE_CXX_COMPILER_TARGET=${TARGET_ARCH} \
-    -DCMAKE_SYSTEM_NAME=Linux \
-    -DCMAKE_SYSTEM_PROCESSOR=${BUILD_ARCH} \
+cmake -D CMAKE_BUILD_TYPE=Release \
+    -D CMAKE_C_COMPILER_TARGET=${TARGET_ARCH} \
+    -D CMAKE_CXX_COMPILER_TARGET=${TARGET_ARCH} \
+    -D CMAKE_SYSTEM_NAME=Linux \
+    -D CMAKE_SYSTEM_PROCESSOR=${BUILD_ARCH} \
     -B build_artifacts
 cmake --build build_artifacts --config Release
 ```
@@ -227,9 +227,9 @@ Testing and benchmarking:
 
 ```sh
 npm install -g typescript
+npm install
 npm run build-js
 npm test
-npm run bench
 ```
 
 To compile for AWS Lambda you'd need to recompile the binding.
@@ -332,13 +332,13 @@ USearch provides GoLang bindings, that depend on the C library that must be inst
 So one should first compile the C library, link it with GoLang, and only then run tests.
 
 ```sh
-cmake -B build_release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
+cmake -B build_release -D USEARCH_BUILD_LIB_C=1 -D USEARCH_BUILD_TEST_C=1 -D USEARCH_USE_OPENMP=1 -D USEARCH_USE_SIMSIMD=1 
 cmake --build build_release --config Release -j
 
-mv c/libusearch_c.so golang/ # or .dylib to install the library on MacOS
-cp c/usearch.h golang/ # to make the header available to GoLang
+cp build_release/libusearch_c.so golang/ # or .dylib to install the library on MacOS
+cp c/usearch.h golang/                   # to make the header available to GoLang
 
-cd golang && go test -v ; cd ..
+cd golang && LD_LIBRARY_PATH=. go test -v ; cd ..
 ```
 
 ## Java

@@ -2,7 +2,7 @@
     "targets": [
         {
             "target_name": "usearch",
-            "sources": ["javascript/lib.cpp"],
+            "sources": ["javascript/lib.cpp", "simsimd/c/lib.c"],
             "cflags": [
                 "-fexceptions",
                 "-Wno-unknown-pragmas",

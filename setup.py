@@ -48,6 +48,8 @@ use_simsimd: bool = get_bool_env("USEARCH_USE_SIMSIMD", prefer_simsimd)
 use_fp16lib: bool = get_bool_env("USEARCH_USE_FP16LIB", prefer_fp16lib)
 use_openmp: bool = get_bool_env("USEARCH_USE_OPENMP", prefer_openmp)
 
+if use_simsimd:
+    sources.append("simsimd/c/lib.c")
 
 # Common arguments for all platforms
 macros_args.append(("USEARCH_USE_OPENMP", "1" if use_openmp else "0"))
@@ -151,6 +153,7 @@ ext_modules = [
         extra_compile_args=compile_args,
         extra_link_args=link_args,
         define_macros=macros_args,
+        language="c++",
     ),
 ]
 

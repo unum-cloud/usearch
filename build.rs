@@ -46,10 +46,12 @@ fn main() {
     };
 
     if cfg!(feature = "simsimd") {
-        build.define("USEARCH_USE_SIMSIMD", "1")
-        .define("SIMSIMD_DYNAMIC_DISPATCH", "1")
-        .define("SIMSIMD_NATIVE_BF16", "0")
-        .define("SIMSIMD_NATIVE_F16", "0");
+        build
+            .file("simsimd/c/lib.c")
+            .define("USEARCH_USE_SIMSIMD", "1")
+            .define("SIMSIMD_DYNAMIC_DISPATCH", "1")
+            .define("SIMSIMD_NATIVE_BF16", "0")
+            .define("SIMSIMD_NATIVE_F16", "0");
 
         for flag in &flags_to_try {
             build.define(flag, "1");
@@ -57,7 +59,6 @@ fn main() {
     } else {
         build.define("USEARCH_USE_SIMSIMD", "0");
     }
-    
 
     // Conditional compilation depending on the target operating system.
     if cfg!(target_os = "linux") {
@@ -80,7 +81,13 @@ fn main() {
             .flag_if_supported("/std:c++17")
             .flag_if_supported("/O2")
             .flag_if_supported("/fp:fast")
-            .flag_if_supported("/W1"); // Reduce warnings verbosity
+            .flag_if_supported("/W1") // Reduce warnings verbosity
+            .flag_if_supported("/EHsc")
+            .flag_if_supported("/MD")
+            .flag_if_supported("/permissive-")
+            .flag_if_supported("/sdl-")
+            .define("_ALLOW_RUNTIME_LIBRARY_MISMATCH", None)
+            .define("_ALLOW_POINTER_TO_CONST_MISMATCH", None);
     }
 
     let mut result = build.try_compile("usearch");

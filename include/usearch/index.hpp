@@ -8,8 +8,8 @@
 #define UNUM_USEARCH_HPP
 
 #define USEARCH_VERSION_MAJOR 2
-#define USEARCH_VERSION_MINOR 14
-#define USEARCH_VERSION_PATCH 0
+#define USEARCH_VERSION_MINOR 15
+#define USEARCH_VERSION_PATCH 1
 
 // Inferring C++ version
 // https://stackoverflow.com/a/61552074
@@ -932,18 +932,6 @@ class sorted_buffer_gt {
         elements_[slot] = element;
         size_ += size_ != limit;
         return true;
-    }
-
-    inline bool insert_sorted(element_t const* elements, std::size_t elements_count, std::size_t limit) noexcept {
-        if (!size_) {
-        }
-        // If we are inserting elements, we only perform full-scale binary search once,
-        // and then only compute successive insertion offsets based only on the tail.
-        std::size_t slot = std::lower_bound(elements_, elements_ + size_, elements[0], &less) - elements_;
-        if (slot == limit)
-            return false;
-        std::size_t to_move = size_ - slot - (size_ == limit);
-        std::size_t next_slot = std::lower_bound(elements_ + slot, elements_ + size_, elements[1], &less) - elements_;
     }
 
     inline element_t pop() noexcept {
@@ -2616,6 +2604,16 @@ class index_gt {
             node_t node = nodes_[candidate.slot];
             return {member_cref_t{node.ckey(), candidate.slot}, candidate.distance};
         }
+
+        /**
+         *  @brief  Extracts the search results into a user-provided buffer, that unlike `dump_to`,
+         *          may already contain some data, so the new and old results are merged together.
+         *  @return The number of results stored in the buffer.
+         *  @param[in] keys The buffer to store the keys of the search results.
+         *  @param[in] distances The buffer to store the distances to the search results.
+         *  @param[in] old_count The number of results already stored in the buffers.
+         *  @param[in] max_count The maximum number of results that can be stored in the buffers.
+         */
         inline std::size_t merge_into(                 //
             vector_key_t* keys, distance_t* distances, //
             std::size_t old_count, std::size_t max_count) const noexcept {
@@ -2637,6 +2635,13 @@ class index_gt {
             }
             return merged_count;
         }
+
+        /**
+         *  @brief  Extracts the search results into a user-provided buffer.
+         *  @return The number of results stored in the buffer.
+         *  @param[in] keys The buffer to store the keys of the search results.
+         *  @param[in] distances The buffer to store the distances to the search results.
+         */
         inline std::size_t dump_to(vector_key_t* keys, distance_t* distances) const noexcept {
             for (std::size_t i = 0; i != count; ++i) {
                 match_t result = operator[](i);
@@ -2645,6 +2650,12 @@ class index_gt {
             }
             return count;
         }
+
+        /**
+         *  @brief  Extracts the search results into a user-provided buffer.
+         *  @return The number of results stored in the buffer.
+         *  @param[in] keys The buffer to store the keys of the search results.
+         */
         inline std::size_t dump_to(vector_key_t* keys) const noexcept {
             for (std::size_t i = 0; i != count; ++i) {
                 match_t result = operator[](i);

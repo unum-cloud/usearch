@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.1)
 project(
     usearch
-    VERSION 2.14.0
+    VERSION 2.15.1
     LANGUAGES C CXX
     DESCRIPTION "Smaller & Faster Single-File Vector Search Engine from Unum"
     HOMEPAGE_URL "https://github.com/unum-cloud/usearch"
@@ -56,6 +56,63 @@ set(USEARCH_CMAKE_PROJECT_CONFIG_FILE "${USEARCH_CMAKE_CONFIG_DIR}/${PROJECT_NAM
 set(USEARCH_CMAKE_PROJECT_TARGETS_FILE "${USEARCH_CMAKE_CONFIG_DIR}/${PROJECT_NAME}Targets.cmake")
 set(USEARCH_PKGCONFIG_INSTALL_DIR "${CMAKE_INSTALL_DATADIR}/pkgconfig")
 
+include(CheckCSourceCompiles)
+# Check for `__fp16` support
+check_c_source_compiles(
+    [=[
+int
+main(int argc, char *argv)
+{
+  __fp16 a = 1.0;
+  __fp16 b = a + a;
+  return 0;
+}
+]=]
+    USEARCH_CAN_COMPILE_FP16
+)
+
+# Check for `_Float16` support
+check_c_source_compiles(
+    [=[
+int
+main(int argc, char *argv)
+{
+  _Float16 a = 1.0;
+  _Float16 b = a + a;
+  return 0;
+}
+]=]
+    USEARCH_CAN_COMPILE_FLOAT16
+)
+
+# Check for `__bf16` support
+check_c_source_compiles(
+    [=[
+int
+main(int argc, char *argv)
+{
+  __bf16 a = 1.0;
+  __bf16 b = a + a;
+  return 0;
+}
+]=]
+    USEARCH_CAN_COMPILE_BF16
+)
+
+# Check for `_Bfloat16` support
+check_c_source_compiles(
+    [=[
+int
+main(int argc, char *argv)
+{
+  _Bfloat16 a = 1.0;
+  _Bfloat16 b = a + a;
+  return 0;
+}
+]=]
+    USEARCH_CAN_COMPILE_BFLOAT16
+)
+
 # Define our header-only library
 add_library(${USEARCH_TARGET_NAME} INTERFACE)
 add_library(${PROJECT_NAME}::${USEARCH_TARGET_NAME} ALIAS ${USEARCH_TARGET_NAME})
@@ -73,6 +130,20 @@ target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE "USEARCH_USE_OPENMP=
 # Supplementary compilation settings affecting "index_plugins.hpp"
 target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE "USEARCH_USE_FP16LIB=$<BOOL:${USEARCH_USE_FP16LIB}>")
 target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE "USEARCH_USE_SIMSIMD=$<BOOL:${USEARCH_USE_SIMSIMD}>")
+
+# Define which types can be compiled
+if (USEARCH_CAN_COMPILE_FP16)
+    target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE "USEARCH_CAN_COMPILE_FP16=1")
+endif ()
+if (USEARCH_CAN_COMPILE_FLOAT16)
+    target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE "USEARCH_CAN_COMPILE_FLOAT16=1")
+endif ()
+if (USEARCH_CAN_COMPILE_BF16)
+    target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE "USEARCH_CAN_COMPILE_BF16=1")
+endif ()
+if (USEARCH_CAN_COMPILE_BFLOAT16)
+    target_compile_definitions(${USEARCH_TARGET_NAME} INTERFACE "USEARCH_CAN_COMPILE_BFLOAT16=1")
+endif ()
 
 target_include_directories(
     ${USEARCH_TARGET_NAME} ${USEARCH_SYSTEM_INCLUDE} INTERFACE $<BUILD_INTERFACE:${USEARCH_INCLUDE_BUILD_DIR}>
