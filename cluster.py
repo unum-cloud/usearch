@@ -95,12 +95,15 @@ def custom_faiss_clustering(X, k, max_iters=100):
     return I.flatten(), kmeans.centroids
 
 
-def custom_usearch_clustering(X, k, max_iters=100, dtype="bf16"):
+def custom_usearch_clustering(X, k, max_iters=100, metric="l2sq", dtype="bf16"):
+    metric = usearch.index._normalize_metric(metric)
+    dtype = usearch.index._normalize_dtype(dtype, ndim=X.shape[1], metric=metric)
     assignments, distances, centroids = usearch.compiled.kmeans(
         X,
         k,
         max_iterations=max_iters,
-        # dtype=dtype,
+        metric_kind=metric,
+        dtype=dtype,
     )
     return assignments, centroids
 
