@@ -512,6 +512,10 @@ pub struct Index {
     metric_fn: Option<MetricFunction>,
 }
 
+unsafe impl Send for Index {}
+unsafe impl Sync for Index {}
+
+
 impl Default for ffi::IndexOptions {
     fn default() -> Self {
         Self {
