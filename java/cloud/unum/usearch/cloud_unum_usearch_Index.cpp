@@ -147,7 +147,6 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add( //
 
     using vector_key_t = typename index_dense_t::vector_key_t;
     using add_result_t = typename index_dense_t::add_result_t;
-    printf("Adding %zu dims \n", (size_t)vector_dims);
 
     add_result_t result = reinterpret_cast<index_dense_t*>(c_ptr)->add(static_cast<vector_key_t>(key), vector_span);
     if (!result) {
