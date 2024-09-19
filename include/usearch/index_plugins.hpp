@@ -386,7 +386,7 @@ inline float f16_to_f32(std::uint16_t u16) noexcept {
 #if USEARCH_USE_FP16LIB
     return fp16_ieee_to_fp32_value(u16);
 #elif USEARCH_USE_SIMSIMD
-    return simsimd_uncompress_f16((simsimd_f16_t const*)&u16);
+    return simsimd_f16_to_f32((simsimd_f16_t const*)&u16);
 #else
 #warning "It's recommended to use SimSIMD and fp16lib for half-precision numerics"
     _Float16 f16;
@@ -403,7 +403,7 @@ inline std::uint16_t f32_to_f16(float f32) noexcept {
     return fp16_ieee_from_fp32_value(f32);
 #elif USEARCH_USE_SIMSIMD
     std::uint16_t result;
-    simsimd_compress_f16(f32, (simsimd_f16_t*)&result);
+    simsimd_f32_to_f16(f32, (simsimd_f16_t*)&result);
     return result;
 #else
 #warning "It's recommended to use SimSIMD and fp16lib for half-precision numerics"
@@ -420,15 +420,14 @@ inline std::uint16_t f32_to_f16(float f32) noexcept {
  */
 inline float bf16_to_f32(std::uint16_t u16) noexcept {
 #if USEARCH_USE_SIMSIMD
-    return simsimd_uncompress_bf16((simsimd_bf16_t const*)&u16);
+    return simsimd_bf16_to_f32((simsimd_bf16_t const*)&u16);
 #else
     union float_or_unsigned_int_t {
         float f;
         unsigned int i;
-    };
-    union float_or_unsigned_int_t result_union;
-    result_union.i = u16 << 16; // Zero extends the mantissa
-    return result_union.f;
+    } conv;
+    conv.i = u16 << 16; // Zero extends the mantissa
+    return conv.f;
 #endif
 }
 
@@ -439,18 +438,17 @@ inline float bf16_to_f32(std::uint16_t u16) noexcept {
 inline std::uint16_t f32_to_bf16(float f32) noexcept {
 #if USEARCH_USE_SIMSIMD
     std::uint16_t result;
-    simsimd_compress_bf16(f32, (simsimd_bf16_t*)&result);
+    simsimd_f32_to_bf16(f32, (simsimd_bf16_t*)&result);
     return result;
 #else
     union float_or_unsigned_int_t {
         float f;
         unsigned int i;
-    };
-    union float_or_unsigned_int_t value;
-    value.f = f32;
-    value.i >>= 16;
-    value.i &= 0xFFFF;
-    return (unsigned short)value.i;
+    } conv;
+    conv.f = f32;
+    conv.i >>= 16;
+    conv.i &= 0xFFFF;
+    return (unsigned short)conv.i;
 #endif
 }
 
