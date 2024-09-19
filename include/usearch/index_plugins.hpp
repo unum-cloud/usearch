@@ -43,11 +43,19 @@
 #if USEARCH_USE_SIMSIMD
 // Propagate the `f16` settings
 #if defined(USEARCH_CAN_COMPILE_FP16) || defined(USEARCH_CAN_COMPILE_FLOAT16)
+#if USEARCH_CAN_COMPILE_FP16 || USEARCH_CAN_COMPILE_FLOAT16
 #define SIMSIMD_NATIVE_F16 1
+#else
+#define SIMSIMD_NATIVE_F16 0
+#endif
 #endif
 // Propagate the `bf16` settings
 #if defined(USEARCH_CAN_COMPILE_BF16) || defined(USEARCH_CAN_COMPILE_BFLOAT16)
+#if USEARCH_CAN_COMPILE_BF16 || USEARCH_CAN_COMPILE_BFLOAT16
 #define SIMSIMD_NATIVE_BF16 1
+#else
+#define SIMSIMD_NATIVE_BF16 0
+#endif
 #endif
 // No problem, if some of the functions are unused or undefined
 #pragma GCC diagnostic push
