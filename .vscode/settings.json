@@ -130,6 +130,7 @@
     "astype",
     "autovec",
     "Availible",
+    "BFLOAT",
     "bidict",
     "BLAS",
     "Cdecl",
