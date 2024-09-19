@@ -175,6 +175,16 @@ if use_simsimd:
 if use_fp16lib:
     include_dirs.append("fp16/include")
 
+
+# On MacOS, `setuptools` doesn't properly use the `language="c++"` argument we pass.
+# The right thing would be to pass down `-x c++` to the compiler, before specifying the source files.
+# This nasty workaround overrides the `CC` environment variable with the `CXX` variable.
+cc_compiler_variable = os.environ.get("CC")
+cxx_compiler_variable = os.environ.get("CXX")
+if is_macos:
+    if cxx_compiler_variable:
+        os.environ["CC"] = cxx_compiler_variable
+
 setup(
     name=__lib_name__,
     version=__version__,
@@ -215,3 +225,8 @@ setup(
         "tqdm",
     ],
 )
+
+# Reset the CC environment variable, that we overrode earlier.
+if is_macos:
+    if cxx_compiler_variable:
+        os.environ["CC"] = cc_compiler_variable
