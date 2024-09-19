@@ -411,7 +411,7 @@ USearch provides CSharp bindings, that depend on the C library that must be inst
 So one should first compile the C library, link it with CSharp, and only then run tests.
 
 ```sh
-cmake -B build_artifacts -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 
+cmake -B build_artifacts -D USEARCH_BUILD_LIB_C=1 -D USEARCH_BUILD_TEST_C=1 -D USEARCH_USE_OPENMP=1 -D USEARCH_USE_SIMSIMD=1 
 cmake --build build_artifacts --config Release -j
 ```
 
