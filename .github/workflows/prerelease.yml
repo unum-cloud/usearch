@@ -269,6 +269,8 @@ jobs:
           dotnet test -c Debug --logger "console;verbosity=detailed" --filter "FullyQualifiedName!=Cloud.Unum.USearch.Tests.UsearchIndexTests.PersistAndRestore"
         shell: bash
         working-directory: ${{ github.workspace }}/csharp
+        env:
+          DYLD_PRINT_LIBRARIES: 1
 
   test_windows:
     name: Windows
