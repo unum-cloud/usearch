@@ -187,6 +187,9 @@ jobs:
           pip install pytest pytest-repeat numpy numba cppyy
           pip install --upgrade git+https://github.com/Maratyszcza/PeachPy
           python -m pip install .
+        env:
+          CXX: clang++
+          CC: clang++ # Override the default compiler
       - name: Test Python
         run: pytest
 
@@ -245,6 +248,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest pytest-repeat numpy
           python -m pip install .
+        env:
+          CXX: clang++
+          CC: clang++ # Override the default compiler
       - name: Test Python
         run: pytest
 
