@@ -46,10 +46,11 @@ fn main() {
     };
 
     if cfg!(feature = "simsimd") {
-        build.define("USEARCH_USE_SIMSIMD", "1")
-        .define("SIMSIMD_DYNAMIC_DISPATCH", "1")
-        .define("SIMSIMD_NATIVE_BF16", "0")
-        .define("SIMSIMD_NATIVE_F16", "0");
+        build
+            .define("USEARCH_USE_SIMSIMD", "1")
+            .define("SIMSIMD_DYNAMIC_DISPATCH", "1")
+            .define("SIMSIMD_NATIVE_BF16", "0")
+            .define("SIMSIMD_NATIVE_F16", "0");
 
         for flag in &flags_to_try {
             build.define(flag, "1");
@@ -57,17 +58,17 @@ fn main() {
     } else {
         build.define("USEARCH_USE_SIMSIMD", "0");
     }
-    
 
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
     // Conditional compilation depending on the target operating system.
-    if cfg!(target_os = "linux") {
+    if target_os == "linux" || target_os == "android" {
         build
             .flag_if_supported("-std=c++17")
             .flag_if_supported("-O3")
             .flag_if_supported("-ffast-math")
             .flag_if_supported("-fdiagnostics-color=always")
             .flag_if_supported("-g1"); // Simplify debugging
-    } else if cfg!(target_os = "macos") {
+    } else if target_os == "macos" {
         build
             .flag_if_supported("-mmacosx-version-min=10.15")
             .flag_if_supported("-std=c++17")
@@ -75,7 +76,7 @@ fn main() {
             .flag_if_supported("-ffast-math")
             .flag_if_supported("-fcolor-diagnostics")
             .flag_if_supported("-g1"); // Simplify debugging
-    } else if cfg!(target_os = "windows") {
+    } else if target_os == "windows" {
         build
             .flag_if_supported("/std:c++17")
             .flag_if_supported("/O2")
