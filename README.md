@@ -32,7 +32,7 @@ Spatial • Binary • Probabilistic • User-Defined Metrics
 <a href="https://unum-cloud.github.io/usearch/golang">GoLang</a> •
 <a href="https://unum-cloud.github.io/usearch/wolfram">Wolfram</a>
 <br/>
-Linux • MacOS • Windows • iOS • WebAssembly •
+Linux • MacOS • Windows • iOS • Android • WebAssembly •
 <a href="https://unum-cloud.github.io/usearch/sqlite">SQLite3</a>
 </p>
 
