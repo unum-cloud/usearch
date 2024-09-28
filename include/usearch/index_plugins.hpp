@@ -65,11 +65,15 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4101) // "Unused variables"
 #pragma warning(disable : 4068) // "Unknown pragmas", when MSVC tries to read GCC pragmas
+#endif // _MSC_VER
 #include <simsimd/simsimd.h>
+#ifdef _MSC_VER
 #pragma warning(pop)
+#endif // _MSC_VER
 #pragma GCC diagnostic pop
 #endif
 
