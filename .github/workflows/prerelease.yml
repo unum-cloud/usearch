@@ -101,11 +101,15 @@ jobs:
         run: npm test
 
         # Rust
+      - name: Set up Rust
+        run: |
+          rustup update stable
+          rustup default stable
+          rustc -vV
+      - name: Build Rust
+        run: cargo build
       - name: Test Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+        run: cargo test
 
         # Java
       - name: Setup Java
@@ -193,6 +197,17 @@ jobs:
       - name: Test Python
         run: pytest
 
+        # Rust
+      - name: Set up Rust
+        run: |
+          rustup update stable
+          rustup default stable
+          rustc -vV
+      - name: Build Rust
+        run: cargo build
+      - name: Test Rust
+        run: cargo test
+
         # C#
       - name: Setup .NET ${{ env.DOTNET_VERSION }}
         uses: actions/setup-dotnet@v3
@@ -260,6 +275,17 @@ jobs:
       - name: Test ObjC/Swift
         run: swift test
 
+        # Rust
+      - name: Set up Rust
+        run: |
+          rustup update stable
+          rustup default stable
+          rustc -vV
+      - name: Build Rust
+        run: cargo build
+      - name: Test Rust
+        run: cargo test
+
         # C#
       - name: Setup .NET ${{ env.DOTNET_VERSION }}
         uses: actions/setup-dotnet@v3
@@ -317,6 +343,17 @@ jobs:
         run: npm run build-js
       - name: Test JavaScript
         run: npm test
+
+        # Rust
+      - name: Set up Rust
+        run: |
+          rustup update stable
+          rustup default stable
+          rustc -vV
+      - name: Build Rust
+        run: cargo build
+      - name: Test Rust
+        run: cargo test
 
         # C#
       - name: Setup .NET ${{ env.DOTNET_VERSION }}
