@@ -27,6 +27,9 @@
 #define USEARCH_DEFINED_APPLE
 #elif defined(__linux__)
 #define USEARCH_DEFINED_LINUX
+#if defined(__ANDROID_API__)
+#define USEARCH_DEFINED_ANDROID
+#endif
 #endif
 
 // Inferring the compiler: Clang vs GCC
