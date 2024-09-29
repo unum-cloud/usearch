@@ -6,6 +6,7 @@
  */
 #pragma once
 #include "index.hpp"
+#include <limits>
 #include <stdlib.h> // `aligned_alloc`
 
 #include <usearch/index.hpp>
@@ -784,6 +785,18 @@ class index_dense_gt {
     template <typename predicate_at> search_result_t filtered_search(f16_t const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from_f16); }
     template <typename predicate_at> search_result_t filtered_search(f32_t const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from_f32); }
     template <typename predicate_at> search_result_t filtered_search(f64_t const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from_f64); }
+
+    search_result_t limited_search(b1x8_t const* vector, std::size_t wanted, distance_t max_distance, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, dummy_predicate_t {}, thread, exact, casts_.from_b1x8, max_distance); }
+    search_result_t limited_search(i8_t const* vector, std::size_t wanted, distance_t max_distance, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, dummy_predicate_t {}, thread, exact, casts_.from_i8, max_distance); }
+    search_result_t limited_search(f16_t const* vector, std::size_t wanted, distance_t max_distance, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, dummy_predicate_t {}, thread, exact, casts_.from_f16, max_distance); }
+    search_result_t limited_search(f32_t const* vector, std::size_t wanted, distance_t max_distance, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, dummy_predicate_t {}, thread, exact, casts_.from_f32, max_distance); }
+    search_result_t limited_search(f64_t const* vector, std::size_t wanted, distance_t max_distance, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, dummy_predicate_t {}, thread, exact, casts_.from_f64, max_distance); }
+
+    template <typename predicate_at> search_result_t filtered_limited_search(b1x8_t const* vector, std::size_t wanted, predicate_at&& predicate, distance_t max_distance, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from_b1x8, max_distance); }
+    template <typename predicate_at> search_result_t filtered_limited_search(i8_t const* vector, std::size_t wanted, predicate_at&& predicate, distance_t max_distance, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from_i8, max_distance); }
+    template <typename predicate_at> search_result_t filtered_limited_search(f16_t const* vector, std::size_t wanted, predicate_at&& predicate, distance_t max_distance, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from_f16, max_distance); }
+    template <typename predicate_at> search_result_t filtered_limited_search(f32_t const* vector, std::size_t wanted, predicate_at&& predicate, distance_t max_distance, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from_f32, max_distance); }
+    template <typename predicate_at> search_result_t filtered_limited_search(f64_t const* vector, std::size_t wanted, predicate_at&& predicate, distance_t max_distance, std::size_t thread = any_thread(), bool exact = false) const { return search_(vector, wanted, std::forward<predicate_at>(predicate), thread, exact, casts_.from_f64, max_distance); }
 
     std::size_t get(vector_key_t key, b1x8_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_b1x8); }
     std::size_t get(vector_key_t key, i8_t* vector, std::size_t vectors_count = 1) const { return get_(key, vector, vectors_count, casts_.to_i8); }
@@ -2044,7 +2057,8 @@ class index_dense_gt {
 
     template <typename scalar_at, typename predicate_at>
     search_result_t search_(scalar_at const* vector, std::size_t wanted, predicate_at&& predicate, std::size_t thread,
-                            bool exact, cast_t const& cast) const {
+                            bool exact, cast_t const& cast,
+                            distance_t max_distance = std::numeric_limits<distance_t>::max()) const {
 
         // Cast the vector, if needed for compatibility with `metric_`
         thread_lock_t lock = thread_lock_(thread);
@@ -2066,13 +2080,15 @@ class index_dense_gt {
             auto allow = [free_key_copy](member_cref_t const& member) noexcept {
                 return (vector_key_t)member.key != free_key_copy;
             };
-            auto typed_result = typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow);
+            auto typed_result = typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow,
+                                               dummy_prefetch_t{}, max_distance);
             return search_result_t{std::move(typed_result), std::move(lock)};
         } else {
             auto allow = [free_key_copy, &predicate](member_cref_t const& member) noexcept {
                 return (vector_key_t)member.key != free_key_copy && predicate(member.key);
             };
-            auto typed_result = typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow);
+            auto typed_result = typed_->search(vector_data, wanted, metric_proxy_t{*this}, search_config, allow,
+                                               dummy_prefetch_t{}, max_distance);
             return search_result_t{std::move(typed_result), std::move(lock)};
         }
     }

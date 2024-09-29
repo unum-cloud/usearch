@@ -247,15 +247,60 @@ void test_minimal_three_vectors(index_at& index, //
         expect(matched_count != 0);
     }
 
-    // Perform filtered exact search, keeping only odd values
     if constexpr (punned_ak) {
-        auto is_odd = [](vector_key_t key) -> bool { return (key & 1) != 0; };
-        auto search_result = index.filtered_search(vector_first.data(), 5, is_odd, args...);
+        auto search_result = index.search(vector_first.data(), 5, args...);
         expect(search_result);
         matched_count = search_result.dump_to(matched_keys, matched_distances);
         expect(matched_count != 0);
-        for (std::size_t i = 0; i < matched_count; i++)
-            expect(is_odd(matched_keys[i]));
+
+        // Perform filtered exact search, keeping only odd values
+        {
+            vector_key_t new_matched_keys[10] = {0};
+            distance_t new_matched_distances[10] = {0};
+            auto is_odd = [](vector_key_t key) -> bool { return (key & 1) != 0; };
+            std::size_t expected_count = 0;
+            for (std::size_t i = 0; i < matched_count; i++)
+                expected_count += is_odd(matched_keys[i]);
+            auto new_search_result = index.filtered_search(vector_first.data(), 5, is_odd, args...);
+            expect(new_search_result);
+            auto new_matched_count = new_search_result.dump_to(new_matched_keys, new_matched_distances);
+            expect(new_matched_count == expected_count);
+            for (std::size_t i = 0; i < new_matched_count; i++)
+                expect(is_odd(new_matched_keys[i]));
+        }
+
+        // Perform limited distance search, keeping only distance within 0.01
+        {
+            vector_key_t new_matched_keys[10] = {0};
+            distance_t new_matched_distances[10] = {0};
+            std::size_t expected_count = 0;
+            for (std::size_t i = 0; i < matched_count; i++)
+                expected_count += (matched_distances[i] <= 0.01);
+            auto new_search_result = index.limited_search(vector_first.data(), 5, 0.01, args...);
+            expect(new_search_result);
+            auto new_matched_count = new_search_result.dump_to(new_matched_keys, new_matched_distances);
+            expect(new_matched_count == expected_count);
+            for (std::size_t i = 0; i < new_matched_count; i++)
+                expect(new_matched_distances[i] <= 0.01);
+        }
+
+        // Perform filtered limited distance search, keeping only odd values and distance within 0.01
+        {
+            vector_key_t new_matched_keys[10] = {0};
+            distance_t new_matched_distances[10] = {0};
+            auto is_odd = [](vector_key_t key) -> bool { return (key & 1) != 0; };
+            std::size_t expected_count = 0;
+            for (std::size_t i = 0; i < matched_count; i++)
+                expected_count += is_odd(matched_keys[i]) && (matched_distances[i] <= 0.01);
+            auto new_search_result = index.filtered_limited_search(vector_first.data(), 5, is_odd, 0.01, args...);
+            expect(new_search_result);
+            auto new_matched_count = new_search_result.dump_to(new_matched_keys, new_matched_distances);
+            expect(new_matched_count == expected_count);
+            for (std::size_t i = 0; i < new_matched_count; i++) {
+                expect(new_matched_distances[i] <= 0.01);
+                expect(is_odd(new_matched_keys[i]));
+            }
+        }
     }
 
     // Validate scans

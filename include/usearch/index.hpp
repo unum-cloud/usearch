@@ -2918,6 +2918,7 @@ class index_gt {
      *  @param[in] wanted The upper bound for the number of results to return.
      *  @param[in] config Configuration options for this specific operation.
      *  @param[in] predicate Optional filtering predicate for `member_cref_t`.
+     *  @param[in] max_distance Optional maximum distance to consider for the search.
      *  @return Smart object referencing temporary memory. Valid until next `search()`, `add()`, or `cluster()`.
      */
     template <                                     //
@@ -2932,7 +2933,8 @@ class index_gt {
         metric_at&& metric,                        //
         index_search_config_t config = {},         //
         predicate_at&& predicate = predicate_at{}, //
-        prefetch_at&& prefetch = prefetch_at{}) const usearch_noexcept_m {
+        prefetch_at&& prefetch = prefetch_at{},    //
+        distance_t max_distance = std::numeric_limits<distance_t>::max()) const usearch_noexcept_m {
 
         // Someone is gonna fuzz this, so let's make sure we cover the basics
         if (!wanted)
@@ -2973,7 +2975,8 @@ class index_gt {
                 query, metric, prefetch, static_cast<compressed_slot_t>(entry_slot_), max_level_, 0, context);
 
             // For bottom layer we need a more optimized procedure
-            if (!search_to_find_in_base_(query, metric, predicate, prefetch, closest_slot, expansion, context))
+            if (!search_to_find_in_base_(query, metric, predicate, prefetch, closest_slot, expansion, context,
+                                         max_distance))
                 return result.failed("Out of memory!");
         }
 
@@ -4089,7 +4092,8 @@ class index_gt {
     template <typename value_at, typename metric_at, typename predicate_at, typename prefetch_at>
     bool search_to_find_in_base_(                                                               //
         value_at&& query, metric_at&& metric, predicate_at&& predicate, prefetch_at&& prefetch, //
-        compressed_slot_t start_slot, std::size_t expansion, context_t& context) const usearch_noexcept_m {
+        compressed_slot_t start_slot, std::size_t expansion, context_t& context,
+        distance_t max_distance) const usearch_noexcept_m {
 
         visits_hash_set_t& visits = context.visits;
         next_candidates_t& next = context.next_candidates; // pop min, push
@@ -4112,7 +4116,8 @@ class index_gt {
         visits.set(start_slot);
 
         // Don't populate the top list if the predicate is not satisfied
-        if (is_dummy<predicate_at>() || predicate(member_cref_t{node_at_(start_slot).ckey(), start_slot})) {
+        if ((is_dummy<predicate_at>() || predicate(member_cref_t{node_at_(start_slot).ckey(), start_slot})) &&
+            radius <= max_distance) {
             usearch_assert_m(top.capacity(),
                              "The `sorted_buffer_gt` must have been reserved in the search entry point");
             top.insert_reserved({radius, start_slot});
@@ -4122,6 +4127,8 @@ class index_gt {
 
             candidate_t candidate = next.top();
             if ((-candidate.distance) > radius && top.size() == top_limit)
+                break;
+            if ((-candidate.distance) > max_distance)
                 break;
 
             next.pop();
@@ -4144,7 +4151,7 @@ class index_gt {
                     continue;
 
                 distance_t successor_dist = context.measure(query, citerator_at(successor_slot), metric);
-                if (top.size() < top_limit || successor_dist < radius) {
+                if ((top.size() < top_limit || successor_dist < radius) && successor_dist <= max_distance) {
                     // This can substantially grow our priority queue:
                     next.insert({-successor_dist, successor_slot});
                     if (is_dummy<predicate_at>() ||
