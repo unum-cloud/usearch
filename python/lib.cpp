@@ -871,8 +871,13 @@ PYBIND11_MODULE(compiled, m) {
     m.attr("DEFAULT_EXPANSION_SEARCH") = py::int_(default_expansion_search());
 
     m.attr("USES_OPENMP") = py::int_(USEARCH_USE_OPENMP);
-    m.attr("USES_SIMSIMD") = py::int_(USEARCH_USE_SIMSIMD);
     m.attr("USES_FP16LIB") = py::int_(USEARCH_USE_FP16LIB);
+    m.attr("USES_SIMSIMD") = py::int_(USEARCH_USE_SIMSIMD);
+#if USEARCH_USE_SIMSIMD
+    m.attr("USES_SIMSIMD_DYNAMIC_DISPATCH") = py::int_(simsimd_uses_dynamic_dispatch());
+#else
+    m.attr("USES_SIMSIMD_DYNAMIC_DISPATCH") = py::int_(0);
+#endif
 
     m.attr("VERSION_MAJOR") = py::int_(USEARCH_VERSION_MAJOR);
     m.attr("VERSION_MINOR") = py::int_(USEARCH_VERSION_MINOR);

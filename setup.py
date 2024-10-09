@@ -6,7 +6,6 @@ from setuptools import setup
 
 from pybind11.setup_helpers import Pybind11Extension
 
-sources = ["python/lib.cpp"]
 compile_args = []
 link_args = []
 macros_args = []
@@ -46,17 +45,39 @@ prefer_simsimd: bool = True
 prefer_fp16lib: bool = True
 prefer_openmp: bool = is_linux and is_gcc
 
-use_simsimd: bool = get_bool_env("USEARCH_USE_SIMSIMD", prefer_simsimd)
+use_simsimd: bool = True  # get_bool_env("USEARCH_USE_SIMSIMD", prefer_simsimd)
 use_fp16lib: bool = get_bool_env("USEARCH_USE_FP16LIB", prefer_fp16lib)
 use_openmp: bool = get_bool_env("USEARCH_USE_OPENMP", prefer_openmp)
 
-if use_simsimd:
-    sources.append("simsimd/c/lib.c")
-
 # Common arguments for all platforms
 macros_args.append(("USEARCH_USE_OPENMP", "1" if use_openmp else "0"))
-macros_args.append(("USEARCH_USE_SIMSIMD", "1" if use_simsimd else "0"))
 macros_args.append(("USEARCH_USE_FP16LIB", "1" if use_fp16lib else "0"))
+macros_args.append(("USEARCH_USE_SIMSIMD", "1" if use_simsimd else "0"))
+
+
+#! Unlike OpenMP and FP16LIB, the SimSIMD is integrated differently.
+#! It will anyways use dynamic dispatch, and will not build the library as part of `usearch` package.
+#! It relies on the fact that SimSIMD ships it's own bindings for most platforms, and the user should
+#! install it separately!
+macros_args.extend(
+    [
+        ("SIMSIMD_DYNAMIC_DISPATCH", "1" if use_simsimd else "0"),
+        ("SIMSIMD_TARGET_NEON", "0"),  # ? Hide-out all complex intrinsics
+        ("SIMSIMD_TARGET_NEON_BF16", "0"),  # ? Hide-out all complex intrinsics
+        ("SIMSIMD_TARGET_NEON_F16", "0"),  # ? Hide-out all complex intrinsics
+        ("SIMSIMD_TARGET_NEON_I8", "0"),  # ? Hide-out all complex intrinsics
+        ("SIMSIMD_TARGET_SVE", "0"),  # ? Hide-out all complex intrinsics
+        ("SIMSIMD_TARGET_SVE_BF16", "0"),  # ? Hide-out all complex intrinsics
+        ("SIMSIMD_TARGET_SVE_F16", "0"),  # ? Hide-out all complex intrinsics
+        ("SIMSIMD_TARGET_SVE_I8", "0"),  # ? Hide-out all complex intrinsics
+        ("SIMSIMD_TARGET_SVE2", "0"),  # ? Hide-out all complex intrinsics
+        ("SIMSIMD_TARGET_HASWELL", "0"),  # ? Hide-out all complex intrinsics
+        ("SIMSIMD_TARGET_SKYLAKE", "0"),  # ? Hide-out all complex intrinsics
+        ("SIMSIMD_TARGET_ICE", "0"),  # ? Hide-out all complex intrinsics
+        ("SIMSIMD_TARGET_SAPPHIRE", "0"),  # ? Hide-out all complex intrinsics
+        ("SIMSIMD_TARGET_GENOA", "0"),  # ? Hide-out all complex intrinsics
+    ]
+)
 
 if is_linux:
     compile_args.append("-std=c++17")
@@ -71,21 +92,6 @@ if is_linux:
     if use_openmp:
         compile_args.append("-fopenmp")
         link_args.append("-lgomp")
-
-    if use_simsimd:
-        macros_args.extend(
-            [
-                get_bool_env_w_name("SIMSIMD_TARGET_NEON", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_NEON_BF16", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_SVE", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_SVE_BF16", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_HASWELL", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_SKYLAKE", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_ICE", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_GENOA", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_SAPPHIRE", True),
-            ]
-        )
 
 if is_macos:
     # MacOS 10.15 or higher is needed for `aligned_alloc` support.
@@ -111,47 +117,16 @@ if is_macos:
     #     link_args.append("-lomp")
     #     macros_args.append(("USEARCH_USE_OPENMP", "1"))
 
-    if use_simsimd:
-        macros_args.extend(
-            [
-                get_bool_env_w_name("SIMSIMD_TARGET_NEON", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_NEON_BF16", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_SVE", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_SVE_BF16", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_HASWELL", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_SKYLAKE", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_ICE", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_GENOA", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_SAPPHIRE", False),
-            ]
-        )
-
-
 if is_windows:
     compile_args.append("/std:c++17")
     compile_args.append("/O2")
     compile_args.append("/fp:fast")  # Enable fast math for MSVC
     compile_args.append("/W1")  # Reduce warnings verbosity
 
-    if use_simsimd:
-        macros_args.extend(
-            [
-                get_bool_env_w_name("SIMSIMD_TARGET_NEON", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_NEON_BF16", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_SVE", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_SVE_BF16", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_HASWELL", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_SKYLAKE", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_ICE", True),
-                get_bool_env_w_name("SIMSIMD_TARGET_GENOA", False),
-                get_bool_env_w_name("SIMSIMD_TARGET_SAPPHIRE", False),
-            ]
-        )
-
 ext_modules = [
     Pybind11Extension(
         "usearch.compiled",
-        sources,
+        ["python/lib.cpp"],
         extra_compile_args=compile_args,
         extra_link_args=link_args,
         define_macros=macros_args,
@@ -172,8 +147,13 @@ include_dirs = [
     "python",
     "stringzilla/include",
 ]
+install_requires = [
+    "numpy",
+    "tqdm",
+]
 if use_simsimd:
     include_dirs.append("simsimd/include")
+    install_requires.append("simsimd>=5.6.3")
 if use_fp16lib:
     include_dirs.append("fp16/include")
 
@@ -222,10 +202,7 @@ setup(
     ],
     include_dirs=include_dirs,
     ext_modules=ext_modules,
-    install_requires=[
-        "numpy",
-        "tqdm",
-    ],
+    install_requires=install_requires,
 )
 
 # Reset the CC environment variable, that we overrode earlier.

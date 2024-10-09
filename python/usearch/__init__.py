@@ -1,16 +1,30 @@
 import os
 import platform
-import tempfile
 import warnings
 import urllib.request
 from typing import Optional, Tuple
 from urllib.error import HTTPError
 
 
+#! SimSIMD must come before USearch import
+try:
+    import simsimd
+except ImportError:
+    pass
+
 from usearch.compiled import (
     VERSION_MAJOR,
     VERSION_MINOR,
     VERSION_PATCH,
+    # Default values:
+    DEFAULT_CONNECTIVITY,
+    DEFAULT_EXPANSION_ADD,
+    DEFAULT_EXPANSION_SEARCH,
+    # Dependencies:
+    USES_OPENMP,
+    USES_FP16LIB,
+    USES_SIMSIMD,
+    USES_SIMSIMD_DYNAMIC_DISPATCH,
 )
 
 __version__ = f"{VERSION_MAJOR}.{VERSION_MINOR}.{VERSION_PATCH}"
