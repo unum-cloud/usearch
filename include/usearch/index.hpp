@@ -9,7 +9,7 @@
 
 #define USEARCH_VERSION_MAJOR 2
 #define USEARCH_VERSION_MINOR 15
-#define USEARCH_VERSION_PATCH 1
+#define USEARCH_VERSION_PATCH 2
 
 // Inferring C++ version
 // https://stackoverflow.com/a/61552074
@@ -27,6 +27,9 @@
 #define USEARCH_DEFINED_APPLE
 #elif defined(__linux__)
 #define USEARCH_DEFINED_LINUX
+#if defined(__ANDROID_API__)
+#define USEARCH_DEFINED_ANDROID
+#endif
 #endif
 
 // Inferring the compiler: Clang vs GCC

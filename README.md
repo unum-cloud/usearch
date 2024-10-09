@@ -32,7 +32,7 @@ Spatial • Binary • Probabilistic • User-Defined Metrics
 <a href="https://unum-cloud.github.io/usearch/golang">GoLang</a> •
 <a href="https://unum-cloud.github.io/usearch/wolfram">Wolfram</a>
 <br/>
-Linux • MacOS • Windows • iOS • WebAssembly •
+Linux • MacOS • Windows • iOS • Android • WebAssembly •
 <a href="https://unum-cloud.github.io/usearch/sqlite">SQLite3</a>
 </p>
 
@@ -544,7 +544,7 @@ doi = {10.5281/zenodo.7949416},
 author = {Vardanian, Ash},
 title = {{USearch by Unum Cloud}},
 url = {https://github.com/unum-cloud/usearch},
-version = {2.15.1},
+version = {2.15.2},
 year = {2023},
 month = oct,
 }
