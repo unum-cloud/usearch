@@ -268,7 +268,7 @@ Napi::Value CompiledIndex::Count(Napi::CallbackInfo const& ctx) {
     std::size_t length = keys.ElementLength();
     Napi::Array result = Napi::Array::New(env, length);
     for (std::size_t i = 0; i < length; ++i)
-        result[i] = Napi::Boolean::New(env, native_->count(static_cast<default_key_t>(keys[i])));
+        result[i] = Napi::Number::New(env, native_->count(static_cast<default_key_t>(keys[i])));
     return result;
 }
 

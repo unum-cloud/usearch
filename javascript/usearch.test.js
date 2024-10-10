@@ -60,7 +60,27 @@ test("Expected results", () => {
     assertAlmostEqual(results.distances[0], new Float32Array([0]));
 });
 
+test('Expected count()', async (t) => {
+    const index = new usearch.Index({
+        metric: 'l2sq',
+        connectivity: 16,
+        dimensions: 3,
+    });
+    index.add(
+        [42n, 43n],
+        [new Float32Array([0.2, 0.6, 0.4]), new Float32Array([0.2, 0.6, 0.4])]
+    );
 
+    await t.test('Argument is a number', () => {
+        assert.equal(1, index.count(43n));
+    });
+    await t.test('Argument is a number (does not exist)', () => {
+        assert.equal(0, index.count(44n));
+    });
+    await t.test('Argument is an array', () => {
+        assert.deepEqual([1, 1, 0], index.count([42n, 43n, 44n]));
+    });
+});
 
 test('Operations with invalid values', () => {
     const indexBatch = new usearch.Index(2, 'l2sq');
