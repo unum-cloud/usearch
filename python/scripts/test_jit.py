@@ -1,8 +1,8 @@
 import pytest
 import numpy as np
 
+import usearch
 from usearch.eval import random_vectors
-
 from usearch.index import (
     Index,
     MetricKind,

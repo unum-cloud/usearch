@@ -1,7 +1,6 @@
 import sqlite3
 import json
 import math
-import sys
 
 import numpy as np
 import pytest

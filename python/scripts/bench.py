@@ -5,6 +5,7 @@ from dataclasses import asdict
 import numpy as np
 import pandas as pd
 
+import usearch
 from usearch.index import Index, Key, MetricKind, ScalarKind
 from usearch.numba import jit as njit
 from usearch.eval import Evaluation, AddTask

@@ -1,6 +1,7 @@
 import pytest
 import numpy as np
 
+import usearch
 from usearch.index import (
     Index,
     MetricKind,
