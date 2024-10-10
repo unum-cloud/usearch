@@ -45,7 +45,7 @@ prefer_simsimd: bool = True
 prefer_fp16lib: bool = True
 prefer_openmp: bool = is_linux and is_gcc
 
-use_simsimd: bool = True  # get_bool_env("USEARCH_USE_SIMSIMD", prefer_simsimd)
+use_simsimd: bool = get_bool_env("USEARCH_USE_SIMSIMD", prefer_simsimd)
 use_fp16lib: bool = get_bool_env("USEARCH_USE_FP16LIB", prefer_fp16lib)
 use_openmp: bool = get_bool_env("USEARCH_USE_OPENMP", prefer_openmp)
 
@@ -89,6 +89,10 @@ if is_linux:
     # Simplify debugging, but the normal `-g` may make builds much longer!
     compile_args.append("-g1")
 
+    # Linking to SimSIMD
+    compile_args.append("-Wl,--unresolved-symbols=ignore-in-shared-libs")
+    link_args.append("-static-libstdc++")
+
     if use_openmp:
         compile_args.append("-fopenmp")
         link_args.append("-lgomp")
@@ -122,6 +126,8 @@ if is_windows:
     compile_args.append("/O2")
     compile_args.append("/fp:fast")  # Enable fast math for MSVC
     compile_args.append("/W1")  # Reduce warnings verbosity
+    link_args.append("/FORCE")  # Force linkin with missing SimSIMD symbols
+
 
 ext_modules = [
     Pybind11Extension(
