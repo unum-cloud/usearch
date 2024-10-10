@@ -41,7 +41,10 @@ if is_linux:
             pass
 
 
-prefer_simsimd: bool = True
+# ? Is there a way we can bring back SimSIMD on Windows?
+# ? Using `ctypes.CDLL(simsimd.__file__)` breaks the CI
+# ? with "Windows fatal exception: access violation".
+prefer_simsimd: bool = not is_windows
 prefer_fp16lib: bool = True
 prefer_openmp: bool = is_linux and is_gcc
 
