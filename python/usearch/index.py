@@ -25,17 +25,6 @@ from typing import (
 import numpy as np
 from tqdm import tqdm
 
-#! Load SimSIMD before the USearch compiled module
-try:
-    import ctypes
-    import simsimd
-
-    #! We can't just use the `import simsimd` as on Linux and Windows (unlike MacOS),
-    #! the symbols are not automatically loaded into the global namespace.
-    simsimd_lib = ctypes.CDLL(simsimd.__file__, mode=ctypes.RTLD_GLOBAL)
-except ImportError:
-    pass  # Well, the user doesn't want SimSIMD, I assume :)
-
 # Precompiled symbols that won't be exposed directly:
 from usearch.compiled import (
     Index as _CompiledIndex,
