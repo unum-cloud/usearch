@@ -104,3 +104,21 @@ test('Operations with invalid values', () => {
         }
     );
 });
+
+test('Invalid operations', async (t) => {
+    await t.test('Add the same keys', () => {
+        const index = new usearch.Index({
+            metric: "l2sq",
+            connectivity: 16,
+            dimensions: 3,
+        });
+        index.add(42n, new Float32Array([0.2, 0.6, 0.4]));
+        assert.throws(
+            () => index.add(42n, new Float32Array([0.2, 0.6, 0.4])),
+            {
+                name: 'Error',
+                message: 'Duplicate keys not allowed in high-level wrappers'
+            }
+        );
+    });
+});

@@ -20,6 +20,8 @@
 using namespace unum::usearch;
 using namespace unum;
 
+using add_result_t = typename index_dense_t::add_result_t;
+
 class CompiledIndex : public Napi::ObjectWrap<CompiledIndex> {
   public:
     static Napi::Object Init(Napi::Env env, Napi::Object exports);
@@ -161,7 +163,10 @@ void CompiledIndex::Add(Napi::CallbackInfo const& ctx) {
     auto run_parallel = [&](auto vectors) {
         executor_stl_t executor;
         executor.fixed(tasks, [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
-            native_->add(static_cast<default_key_t>(keys[task_idx]), vectors + task_idx * native_->dimensions());
+            add_result_t result = native_->add(static_cast<default_key_t>(keys[task_idx]),
+                                               vectors + task_idx * native_->dimensions());
+            if (!result)
+                Napi::Error::New(ctx.Env(), result.error.release()).ThrowAsJavaScriptException();
         });
     };
 
