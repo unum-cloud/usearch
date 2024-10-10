@@ -11,6 +11,8 @@ env:
   PYTHONUTF8: 1
   PYTHON_VERSION: 3.11
   DOTNET_VERSION: 7.0.x
+  ANDROID_NDK_VERSION: 26.3.11579264
+  ANDROID_SDK_VERSION: 21
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -101,11 +103,15 @@ jobs:
         run: npm test
 
         # Rust
+      - name: Set up Rust
+        run: |
+          rustup update stable
+          rustup default stable
+          rustc -vV
+      - name: Build Rust
+        run: cargo build
       - name: Test Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+        run: cargo test
 
         # Java
       - name: Setup Java
@@ -193,6 +199,17 @@ jobs:
       - name: Test Python
         run: pytest
 
+        # Rust
+      - name: Set up Rust
+        run: |
+          rustup update stable
+          rustup default stable
+          rustc -vV
+      - name: Build Rust
+        run: cargo build
+      - name: Test Rust
+        run: cargo test
+
         # C#
       - name: Setup .NET ${{ env.DOTNET_VERSION }}
         uses: actions/setup-dotnet@v3
@@ -260,6 +277,17 @@ jobs:
       - name: Test ObjC/Swift
         run: swift test
 
+        # Rust
+      - name: Set up Rust
+        run: |
+          rustup update stable
+          rustup default stable
+          rustc -vV
+      - name: Build Rust
+        run: cargo build
+      - name: Test Rust
+        run: cargo test
+
         # C#
       - name: Setup .NET ${{ env.DOTNET_VERSION }}
         uses: actions/setup-dotnet@v3
@@ -317,6 +345,17 @@ jobs:
         run: npm run build-js
       - name: Test JavaScript
         run: npm test
+
+        # Rust
+      - name: Set up Rust
+        run: |
+          rustup update stable
+          rustup default stable
+          rustc -vV
+      - name: Build Rust
+        run: cargo build
+      - name: Test Rust
+        run: cargo test
 
         # C#
       - name: Setup .NET ${{ env.DOTNET_VERSION }}
@@ -421,3 +460,65 @@ jobs:
         run: |
           test -e build_artifacts/libusearch_c.so
           test -e build_artifacts/libusearch_sqlite.so
+
+  test_ubuntu_android_ndk:
+    name: Android NDK Build
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        include:
+          - processor: armv7a
+            abi: armeabi-v7a
+            target: armv7-linux-androideabi
+          - processor: aarch64
+            abi: arm64-v8a
+            target: aarch64-linux-android
+    steps:
+      - uses: actions/checkout@v4
+      - run: git submodule update --init --recursive
+
+      - name: Install NDK ndk
+        run: |
+          ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;${{ env.ANDROID_NDK_VERSION }}"
+
+      - name: Build C/C++
+        run: |
+          cmake -B build_artifacts \
+            -D CMAKE_BUILD_TYPE=RelWithDebInfo \
+            -D CMAKE_EXPORT_COMPILE_COMMANDS=1 \
+            -D CMAKE_TOOLCHAIN_FILE=${ANDROID_HOME}/ndk/${{ env.ANDROID_NDK_VERSION }}/build/cmake/android.toolchain.cmake \
+            -D CMAKE_ANDROID_STL_TYPE=c++_static \
+            -D ANDROID_PLATFORM=${{ env.ANDROID_SDK_VERSION }} \
+            -D ANDROID_ABI=${{ matrix.abi }} \
+            -D USEARCH_BUILD_LIB_C=1 \
+            -D USEARCH_BUILD_TEST_CPP=0 \
+            -D USEARCH_BUILD_BENCH_CPP=0
+
+          cmake --build build_artifacts --config RelWithDebInfo
+
+        # We can't run the produced builds, but we can make sure they exist
+      - name: Test artifacts presense
+        run: |
+          test -e build_artifacts/libusearch_c.so
+
+        # Rust
+      - name: Set up Rust
+        run: |
+          rustup update stable
+          rustup default stable
+          rustup target add ${{ matrix.target }}
+          rustc -vV
+
+      - name: Set up Rust Env
+        run: |
+          TOOLCHAIN=${ANDROID_HOME}/ndk/${{ env.ANDROID_NDK_VERSION }}/toolchains/llvm/prebuilt/linux-x86_64/bin/
+          NDK_CLANG=$(find ${TOOLCHAIN} -name "${{ matrix.processor }}*${{ env.ANDROID_SDK_VERSION }}-clang")
+          echo "CC_${{ matrix.target }}=${NDK_CLANG}" >> ${GITHUB_ENV}
+          echo "CXX_${{ matrix.target }}=${NDK_CLANG}++" >> ${GITHUB_ENV}
+          echo "AR_${{ matrix.target }}=${TOOLCHAIN}/llvm-ar" >> ${GITHUB_ENV}
+          echo "CARGO_${{ matrix.target }}=${NDK_CLANG}" >> ${GITHUB_ENV}
+          echo "CARGO_${{ matrix.target }}=${TOOLCHAIN}/llvm-ar" >> ${GITHUB_ENV}
+
+      - name: Build Rust
+        run: |
+          cargo build --target ${{ matrix.target }}
