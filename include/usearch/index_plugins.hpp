@@ -42,20 +42,38 @@
 
 #if USEARCH_USE_SIMSIMD
 // Propagate the `f16` settings
-#if !defined(SIMSIMD_NATIVE_F16)
-#define SIMSIMD_NATIVE_F16 !USEARCH_USE_FP16LIB
+#if defined(USEARCH_CAN_COMPILE_FP16) || defined(USEARCH_CAN_COMPILE_FLOAT16)
+#if USEARCH_CAN_COMPILE_FP16 || USEARCH_CAN_COMPILE_FLOAT16
+#define SIMSIMD_NATIVE_F16 1
+#else
+#define SIMSIMD_NATIVE_F16 0
 #endif
-
-// Overwrite the dynamic dispatch settings
-#undef SIMSIMD_DYNAMIC_DISPATCH
-#define SIMSIMD_DYNAMIC_DISPATCH 0
+#endif
+// Propagate the `bf16` settings
+#if defined(USEARCH_CAN_COMPILE_BF16) || defined(USEARCH_CAN_COMPILE_BFLOAT16)
+#if USEARCH_CAN_COMPILE_BF16 || USEARCH_CAN_COMPILE_BFLOAT16
+#define SIMSIMD_NATIVE_BF16 1
+#else
+#define SIMSIMD_NATIVE_BF16 0
+#endif
+#endif
 // No problem, if some of the functions are unused or undefined
 #pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wall"
+#pragma GCC diagnostic ignored "-Wunused"
 #pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#ifdef _MSC_VER
 #pragma warning(push)
-#pragma warning(disable : 4101)
+#pragma warning(disable : 4101) // "Unused variables"
+#pragma warning(disable : 4068) // "Unknown pragmas", when MSVC tries to read GCC pragmas
+#endif // _MSC_VER
 #include <simsimd/simsimd.h>
+#ifdef _MSC_VER
 #pragma warning(pop)
+#endif // _MSC_VER
 #pragma GCC diagnostic pop
 #endif
 
@@ -380,9 +398,10 @@ inline float f16_to_f32(std::uint16_t u16) noexcept {
 #if USEARCH_USE_FP16LIB
     return fp16_ieee_to_fp32_value(u16);
 #elif USEARCH_USE_SIMSIMD
-    return simsimd_uncompress_f16(u16);
+    return simsimd_f16_to_f32((simsimd_f16_t const*)&u16);
 #else
-    f16_native_t f16;
+#warning "It's recommended to use SimSIMD and fp16lib for half-precision numerics"
+    _Float16 f16;
     std::memcpy(&f16, &u16, sizeof(std::uint16_t));
     return float(f16);
 #endif
@@ -395,9 +414,12 @@ inline std::uint16_t f32_to_f16(float f32) noexcept {
 #if USEARCH_USE_FP16LIB
     return fp16_ieee_from_fp32_value(f32);
 #elif USEARCH_USE_SIMSIMD
-    return simsimd_compress_f16(f32);
+    std::uint16_t result;
+    simsimd_f32_to_f16(f32, (simsimd_f16_t*)&result);
+    return result;
 #else
-    f16_native_t f16 = f16_native_t(f32);
+#warning "It's recommended to use SimSIMD and fp16lib for half-precision numerics"
+    _Float16 f16 = _Float16(f32);
     std::uint16_t u16;
     std::memcpy(&u16, &f16, sizeof(std::uint16_t));
     return u16;
@@ -410,15 +432,14 @@ inline std::uint16_t f32_to_f16(float f32) noexcept {
  */
 inline float bf16_to_f32(std::uint16_t u16) noexcept {
 #if USEARCH_USE_SIMSIMD
-    return simsimd_uncompress_bf16(u16);
+    return simsimd_bf16_to_f32((simsimd_bf16_t const*)&u16);
 #else
     union float_or_unsigned_int_t {
         float f;
         unsigned int i;
-    };
-    union float_or_unsigned_int_t result_union;
-    result_union.i = u16 << 16; // Zero extends the mantissa
-    return result_union.f;
+    } conv;
+    conv.i = u16 << 16; // Zero extends the mantissa
+    return conv.f;
 #endif
 }
 
@@ -428,17 +449,18 @@ inline float bf16_to_f32(std::uint16_t u16) noexcept {
  */
 inline std::uint16_t f32_to_bf16(float f32) noexcept {
 #if USEARCH_USE_SIMSIMD
-    return simsimd_compress_bf16(f32);
+    std::uint16_t result;
+    simsimd_f32_to_bf16(f32, (simsimd_bf16_t*)&result);
+    return result;
 #else
     union float_or_unsigned_int_t {
         float f;
         unsigned int i;
-    };
-    union float_or_unsigned_int_t value;
-    value.f = f32;
-    value.i >>= 16;
-    value.i &= 0xFFFF;
-    return (unsigned short)value.i;
+    } conv;
+    conv.f = f32;
+    conv.i >>= 16;
+    conv.i &= 0xFFFF;
+    return (unsigned short)conv.i;
 #endif
 }
 
@@ -1183,6 +1205,71 @@ template <> struct cast_gt<f64_t, b1x8_t> : public cast_to_b1x8_gt<f64_t> {};
 template <> struct cast_gt<b1x8_t, i8_t> : public cast_from_b1x8_gt<i8_t> {};
 template <> struct cast_gt<i8_t, b1x8_t> : public cast_to_b1x8_gt<i8_t> {};
 
+/**
+ *  @brief  Type-punned array casting function.
+ *          Arguments: input buffer, bytes in input buffer, output buffer.
+ *          Returns `true` if the casting was performed successfully, `false` otherwise.
+ */
+using cast_punned_t = bool (*)(byte_t const*, std::size_t, byte_t*);
+
+/**
+ *  @brief  A collection of casting functions for typical vector types.
+ *          Covers to/from conversions for boolean, integer, half-precision,
+ *          single-precision, and double-precision scalars.
+ */
+struct casts_punned_t {
+    struct group_t {
+        cast_punned_t b1x8{};
+        cast_punned_t i8{};
+        cast_punned_t f16{};
+        cast_punned_t f32{};
+        cast_punned_t f64{};
+
+        cast_punned_t operator[](scalar_kind_t scalar_kind) const noexcept {
+            switch (scalar_kind) {
+            case scalar_kind_t::f64_k: return f64;
+            case scalar_kind_t::f32_k: return f32;
+            case scalar_kind_t::f16_k: return f16;
+            case scalar_kind_t::bf16_k: return f16;
+            case scalar_kind_t::i8_k: return i8;
+            case scalar_kind_t::b1x8_k: return b1x8;
+            default: return nullptr;
+            }
+        }
+
+    } from, to;
+
+    template <typename scalar_at> static casts_punned_t make() noexcept {
+        casts_punned_t result;
+
+        result.from.b1x8 = &cast_gt<b1x8_t, scalar_at>::try_;
+        result.from.i8 = &cast_gt<i8_t, scalar_at>::try_;
+        result.from.f16 = &cast_gt<f16_t, scalar_at>::try_;
+        result.from.f32 = &cast_gt<f32_t, scalar_at>::try_;
+        result.from.f64 = &cast_gt<f64_t, scalar_at>::try_;
+
+        result.to.b1x8 = &cast_gt<scalar_at, b1x8_t>::try_;
+        result.to.i8 = &cast_gt<scalar_at, i8_t>::try_;
+        result.to.f16 = &cast_gt<scalar_at, f16_t>::try_;
+        result.to.f32 = &cast_gt<scalar_at, f32_t>::try_;
+        result.to.f64 = &cast_gt<scalar_at, f64_t>::try_;
+
+        return result;
+    }
+
+    static casts_punned_t make(scalar_kind_t scalar_kind) noexcept {
+        switch (scalar_kind) {
+        case scalar_kind_t::f64_k: return casts_punned_t::make<f64_t>();
+        case scalar_kind_t::f32_k: return casts_punned_t::make<f32_t>();
+        case scalar_kind_t::f16_k: return casts_punned_t::make<f16_t>();
+        case scalar_kind_t::bf16_k: return casts_punned_t::make<bf16_t>();
+        case scalar_kind_t::i8_k: return casts_punned_t::make<i8_t>();
+        case scalar_kind_t::b1x8_k: return casts_punned_t::make<b1x8_t>();
+        default: return {};
+        }
+    }
+};
+
 /*  Don't complain if the vectorization of the inner loops fails:
  *
  *  > warning: loop not vectorized: the optimizer was unable to perform the requested transformation;
@@ -1910,32 +1997,33 @@ class metric_punned_t {
  *  @brief  View over a potentially-strided memory buffer, containing a row-major matrix.
  */
 template <typename scalar_at> //
-class vectors_view_gt {
+class matrix_slice_gt {
     using scalar_t = scalar_at;
+    using byte_addressable_t = typename std::conditional<std::is_const<scalar_t>::value, byte_t const, byte_t>::type;
 
-    scalar_t const* begin_{};
+    scalar_t* begin_{};
     std::size_t dimensions_{};
     std::size_t count_{};
     std::size_t stride_bytes_{};
 
   public:
-    vectors_view_gt() noexcept = default;
-    vectors_view_gt(vectors_view_gt const&) noexcept = default;
-    vectors_view_gt& operator=(vectors_view_gt const&) noexcept = default;
+    matrix_slice_gt() noexcept = default;
+    matrix_slice_gt(matrix_slice_gt const&) noexcept = default;
+    matrix_slice_gt& operator=(matrix_slice_gt const&) noexcept = default;
 
-    vectors_view_gt(scalar_t const* begin, std::size_t dimensions, std::size_t count = 1) noexcept
-        : vectors_view_gt(begin, dimensions, count, dimensions * sizeof(scalar_at)) {}
+    matrix_slice_gt(scalar_t* begin, std::size_t dimensions, std::size_t count = 1) noexcept
+        : matrix_slice_gt(begin, dimensions, count, dimensions * sizeof(scalar_at)) {}
 
-    vectors_view_gt(scalar_t const* begin, std::size_t dimensions, std::size_t count, std::size_t stride_bytes) noexcept
+    matrix_slice_gt(scalar_t* begin, std::size_t dimensions, std::size_t count, std::size_t stride_bytes) noexcept
         : begin_(begin), dimensions_(dimensions), count_(count), stride_bytes_(stride_bytes) {}
 
     explicit operator bool() const noexcept { return begin_; }
     std::size_t size() const noexcept { return count_; }
     std::size_t dimensions() const noexcept { return dimensions_; }
     std::size_t stride() const noexcept { return stride_bytes_; }
-    scalar_t const* data() const noexcept { return begin_; }
-    scalar_t const* at(std::size_t i) const noexcept {
-        return reinterpret_cast<scalar_t const*>(reinterpret_cast<byte_t const*>(begin_) + i * stride_bytes_);
+    scalar_t* data() const noexcept { return begin_; }
+    scalar_t* at(std::size_t i) const noexcept {
+        return reinterpret_cast<scalar_t*>(reinterpret_cast<byte_addressable_t*>(begin_) + i * stride_bytes_);
     }
 };
 
@@ -1944,7 +2032,7 @@ struct exact_offset_and_distance_t {
     f32_t distance;
 };
 
-using exact_search_results_t = vectors_view_gt<exact_offset_and_distance_t>;
+using exact_search_results_t = matrix_slice_gt<exact_offset_and_distance_t>;
 
 /**
  *  @brief  Helper-structure for exact search operations.
@@ -1965,9 +2053,9 @@ class exact_search_t {
 
   public:
     template <typename scalar_at, typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
-    exact_search_results_t operator()(                                          //
-        vectors_view_gt<scalar_at> dataset, vectors_view_gt<scalar_at> queries, //
-        std::size_t wanted, metric_punned_t const& metric,                      //
+    exact_search_results_t operator()(                                                      //
+        matrix_slice_gt<scalar_at const> dataset, matrix_slice_gt<scalar_at const> queries, //
+        std::size_t wanted, metric_punned_t const& metric,                                  //
         executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
         return operator()(                                                                     //
             metric,                                                                            //

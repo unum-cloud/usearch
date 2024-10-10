@@ -47,6 +47,7 @@ fn main() {
 
     if cfg!(feature = "simsimd") {
         build
+            .file("simsimd/c/lib.c")
             .define("USEARCH_USE_SIMSIMD", "1")
             .define("SIMSIMD_DYNAMIC_DISPATCH", "1")
             .define("SIMSIMD_NATIVE_BF16", "0")

@@ -12,11 +12,13 @@ wget -nc https://huggingface.co/datasets/unum-cloud/ann-arxiv-2m/resolve/main/e5
 rm -rf datasets/cc_3M/*.usearch datasets/arxiv_2M/*.usearch
 python python/scripts/join.py
 """
+
 from numpy import dot
 from numpy.linalg import norm
 from tqdm import tqdm
 from simsimd import cos_f32x4_neon, to_int
 
+import usearch
 from usearch.index import Index, MetricKind, CompiledMetric, MetricSignature
 from usearch.io import load_matrix
 from usearch.eval import measure_seconds
@@ -70,9 +72,7 @@ if len(b) != b_mat.shape[0]:
     b.save()
 
 
-print(
-    f"Loaded two indexes of size: {len(a):,} for {a_name} and {len(b):,} for {b_name}"
-)
+print(f"Loaded two indexes of size: {len(a):,} for {a_name} and {len(b):,} for {b_name}")
 min_elements = min(len(a), len(b))
 
 run_diagnostics = input("Would you like to run diagnostics? [Y/n]: ")
@@ -111,32 +111,16 @@ if len(run_diagnostics) == 0 or run_diagnostics.lower() == "y":
     )
 
     secs, a_self_recall = dt(lambda: a.search(a.vectors, **args).recall(a.keys))
-    print(
-        "Self-recall @{} of {} index: {:.2f}%, took {:.2f}s".format(
-            count, a_name, a_self_recall * 100, secs
-        )
-    )
+    print("Self-recall @{} of {} index: {:.2f}%, took {:.2f}s".format(count, a_name, a_self_recall * 100, secs))
 
     secs, b_self_recall = dt(lambda: b.search(b.vectors, **args).recall(b.keys))
-    print(
-        "Self-recall @{} of {} index: {:.2f}%, took {:.2f}s".format(
-            count, b_name, b_self_recall * 100, secs
-        )
-    )
+    print("Self-recall @{} of {} index: {:.2f}%, took {:.2f}s".format(count, b_name, b_self_recall * 100, secs))
 
     secs, ab_recall = dt(lambda: b.search(a.vectors, **args).recall(b.keys))
-    print(
-        "Cross-recall @{} of {} in {}: {:.2f}%, took {:.2f}s".format(
-            count, a_name, b_name, ab_recall * 100, secs
-        )
-    )
+    print("Cross-recall @{} of {} in {}: {:.2f}%, took {:.2f}s".format(count, a_name, b_name, ab_recall * 100, secs))
 
     secs, ba_recall = dt(lambda: a.search(b.vectors, **args).recall(a.keys))
-    print(
-        "Cross-recall @{} of {} in {}: {:.2f}%, took {:.2f}s".format(
-            count, b_name, a_name, ba_recall * 100, secs
-        )
-    )
+    print("Cross-recall @{} of {} in {}: {:.2f}%, took {:.2f}s".format(count, b_name, a_name, ba_recall * 100, secs))
 
 
 print("--------------------------------------")
@@ -150,6 +134,4 @@ for i, j in bimapping.items():
     recall += i == j
 
 recall *= 100.0 / min_elements
-print(
-    f"Took {secs:.2f}s to find {mapping_size:,} pairings with {recall:.2f}% being exact"
-)
+print(f"Took {secs:.2f}s to find {mapping_size:,} pairings with {recall:.2f}% being exact")

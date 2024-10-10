@@ -13,6 +13,7 @@ include = [
     "/include/**",
     "/fp16/include/**",
     "/simsimd/include/**",
+    "/simsimd/c/**",
     "/stringzilla/include/**",
     "/build.rs",
 ]

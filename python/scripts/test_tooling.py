@@ -3,10 +3,10 @@ import os
 import pytest
 import numpy as np
 
+import usearch
 from usearch.io import load_matrix, save_matrix
 from usearch.index import search
 from usearch.eval import random_vectors
-
 from usearch.index import Match, Matches, BatchMatches, Index, Indexes
 
 
@@ -70,9 +70,7 @@ def test_exact_search(rows: int, cols: int, k: int, reordered: bool):
         reordered_keys = keys
 
     matches: BatchMatches = search(original, original[reordered_keys], k, exact=True)
-    top_matches = (
-        [int(m.keys[0]) for m in matches] if rows > 1 else [int(matches.keys[0])]
-    )
+    top_matches = [int(m.keys[0]) for m in matches] if rows > 1 else [int(matches.keys[0])]
     assert top_matches == list(reordered_keys)
 
     matches: Matches = search(original, original[-1], k, exact=True)
