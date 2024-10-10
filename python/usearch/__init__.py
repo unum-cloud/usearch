@@ -5,12 +5,17 @@ import urllib.request
 from typing import Optional, Tuple
 from urllib.error import HTTPError
 
-
-#! SimSIMD must come before USearch import
+#! Load SimSIMD before the USearch compiled module
 try:
+    import ctypes
     import simsimd
+
+    #! We can't just use the `import simsimd` as on Linux and Windows (unlike MacOS),
+    #! the symbols are not automatically loaded into the global namespace.
+    simsimd_lib = ctypes.CDLL(simsimd.__file__, mode=ctypes.RTLD_GLOBAL)
 except ImportError:
-    pass
+    pass  # Well, the user doesn't want SimSIMD, I assume :)
+
 
 from usearch.compiled import (
     VERSION_MAJOR,
