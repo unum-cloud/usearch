@@ -131,6 +131,8 @@ void CompiledIndex::Load(Napi::CallbackInfo const& ctx) {
         auto result = native_->load(path.c_str());
         if (!result)
             Napi::TypeError::New(ctx.Env(), result.error.release()).ThrowAsJavaScriptException();
+        if (!native_->try_reserve(ceil2(native_->size())))
+            Napi::Error::New(ctx.Env(), "Failed to reserve memory").ThrowAsJavaScriptException();
 
     } catch (...) {
         Napi::TypeError::New(ctx.Env(), "Loading failed").ThrowAsJavaScriptException();
@@ -144,6 +146,8 @@ void CompiledIndex::View(Napi::CallbackInfo const& ctx) {
         auto result = native_->view(path.c_str());
         if (!result)
             Napi::TypeError::New(ctx.Env(), result.error.release()).ThrowAsJavaScriptException();
+        if (!native_->try_reserve(ceil2(native_->size())))
+            Napi::Error::New(ctx.Env(), "Failed to reserve memory").ThrowAsJavaScriptException();
 
     } catch (...) {
         Napi::TypeError::New(ctx.Env(), "Memory-mapping failed").ThrowAsJavaScriptException();
