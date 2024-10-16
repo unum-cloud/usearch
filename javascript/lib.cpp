@@ -20,6 +20,8 @@
 using namespace unum::usearch;
 using namespace unum;
 
+using add_result_t = typename index_dense_t::add_result_t;
+
 class CompiledIndex : public Napi::ObjectWrap<CompiledIndex> {
   public:
     static Napi::Object Init(Napi::Env env, Napi::Object exports);
@@ -129,6 +131,8 @@ void CompiledIndex::Load(Napi::CallbackInfo const& ctx) {
         auto result = native_->load(path.c_str());
         if (!result)
             Napi::TypeError::New(ctx.Env(), result.error.release()).ThrowAsJavaScriptException();
+        if (!native_->try_reserve(ceil2(native_->size())))
+            Napi::Error::New(ctx.Env(), "Failed to reserve memory").ThrowAsJavaScriptException();
 
     } catch (...) {
         Napi::TypeError::New(ctx.Env(), "Loading failed").ThrowAsJavaScriptException();
@@ -142,6 +146,8 @@ void CompiledIndex::View(Napi::CallbackInfo const& ctx) {
         auto result = native_->view(path.c_str());
         if (!result)
             Napi::TypeError::New(ctx.Env(), result.error.release()).ThrowAsJavaScriptException();
+        if (!native_->try_reserve(ceil2(native_->size())))
+            Napi::Error::New(ctx.Env(), "Failed to reserve memory").ThrowAsJavaScriptException();
 
     } catch (...) {
         Napi::TypeError::New(ctx.Env(), "Memory-mapping failed").ThrowAsJavaScriptException();
@@ -161,7 +167,10 @@ void CompiledIndex::Add(Napi::CallbackInfo const& ctx) {
     auto run_parallel = [&](auto vectors) {
         executor_stl_t executor;
         executor.fixed(tasks, [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
-            native_->add(static_cast<default_key_t>(keys[task_idx]), vectors + task_idx * native_->dimensions());
+            add_result_t result = native_->add(static_cast<default_key_t>(keys[task_idx]),
+                                               vectors + task_idx * native_->dimensions());
+            if (!result)
+                Napi::Error::New(ctx.Env(), result.error.release()).ThrowAsJavaScriptException();
         });
     };
 
@@ -268,7 +277,7 @@ Napi::Value CompiledIndex::Count(Napi::CallbackInfo const& ctx) {
     std::size_t length = keys.ElementLength();
     Napi::Array result = Napi::Array::New(env, length);
     for (std::size_t i = 0; i < length; ++i)
-        result[i] = Napi::Boolean::New(env, native_->count(static_cast<default_key_t>(keys[i])));
+        result[i] = Napi::Number::New(env, native_->count(static_cast<default_key_t>(keys[i])));
     return result;
 }
 
