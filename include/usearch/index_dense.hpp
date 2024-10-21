@@ -693,6 +693,9 @@ class index_dense_gt {
     std::size_t max_level() const { return typed_->max_level(); }
     index_dense_config_t const& config() const { return config_; }
     index_limits_t const& limits() const { return typed_->limits(); }
+    double inverse_log_connectivity() const { return typed_->inverse_log_connectivity(); }
+    std::size_t neighbors_base_bytes() const { return typed_->neighbors_base_bytes(); }
+    std::size_t neighbors_bytes() const { return typed_->neighbors_bytes(); }
     bool multi() const { return config_.multi; }
     std::size_t currently_available_threads() const {
         std::unique_lock<std::mutex> available_threads_lock(available_threads_mutex_);
