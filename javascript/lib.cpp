@@ -254,11 +254,14 @@ Napi::Value CompiledIndex::Remove(Napi::CallbackInfo const& ctx) {
     Napi::Env env = ctx.Env();
     Napi::BigUint64Array keys = ctx[0].As<Napi::BigUint64Array>();
     std::size_t length = keys.ElementLength();
-    Napi::Array result = Napi::Array::New(env, length);
+    Napi::Array results = Napi::Array::New(env, length);
     for (std::size_t i = 0; i < length; ++i) {
-        result[i] = Napi::Number::New(env, native_->remove(static_cast<default_key_t>(keys[i])).completed);
+        auto result = native_->remove(static_cast<default_key_t>(keys[i]));
+        if (!result)
+            Napi::Error::New(ctx.Env(), result.error.release()).ThrowAsJavaScriptException();
+        results[i] = Napi::Number::New(env, result.completed);
     }
-    return result;
+    return results;
 }
 
 Napi::Value CompiledIndex::Contains(Napi::CallbackInfo const& ctx) {
