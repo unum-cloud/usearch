@@ -3175,6 +3175,18 @@ class index_gt {
 
     std::size_t memory_usage_per_node(level_t level) const noexcept { return node_bytes_(level); }
 
+    double inverse_log_connectivity() const {
+        return pre_.inverse_log_connectivity;
+    }
+
+    std::size_t neighbors_base_bytes() const {
+        return pre_.neighbors_base_bytes;
+    }
+
+    std::size_t neighbors_bytes() const {
+        return pre_.neighbors_bytes;
+    }
+
 #if defined(USEARCH_USE_PRAGMA_REGION)
 #pragma endregion
 
