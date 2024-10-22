@@ -248,7 +248,7 @@ test('Serialization', async (t) => {
             () => index.remove(42n),
             {
                 name: 'Error',
-                message: "Can't remove to an immutable index"
+                message: "Can't remove from an immutable index"
             }
         );
     });
