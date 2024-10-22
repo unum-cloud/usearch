@@ -1461,7 +1461,7 @@ class index_dense_gt {
         usearch_assert_m(config().enable_key_lookups, "Key lookups are disabled");
         labeling_result_t result;
         if (typed_->is_immutable())
-            return result.failed("Can't remove to an immutable index");
+            return result.failed("Can't remove from an immutable index");
 
         unique_lock_t lookup_lock(slot_lookup_mutex_);
         auto matching_slots = slot_lookup_.equal_range(key_and_slot_t::any_slot(key));
