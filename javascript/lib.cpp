@@ -165,13 +165,16 @@ void CompiledIndex::Add(Napi::CallbackInfo const& ctx) {
 
     // Create an instance of the executor with the default number of threads
     auto run_parallel = [&](auto vectors) {
+        std::string error = "";
         executor_stl_t executor;
         executor.fixed(tasks, [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
             add_result_t result = native_->add(static_cast<default_key_t>(keys[task_idx]),
                                                vectors + task_idx * native_->dimensions());
             if (!result)
-                Napi::Error::New(ctx.Env(), result.error.release()).ThrowAsJavaScriptException();
+                error += "<key:" + std::to_string(keys[task_idx]) + " message:" + result.error.release() + ">";
         });
+        if (error.size() > 0)
+            Napi::Error::New(ctx.Env(), error).ThrowAsJavaScriptException();
     };
 
     Napi::TypedArray vectors = ctx[1].As<Napi::TypedArray>();
