@@ -162,7 +162,7 @@ install_requires = [
 ]
 if use_simsimd:
     include_dirs.append("simsimd/include")
-    install_requires.append("simsimd>=5.6.4")
+    install_requires.append("simsimd>=5.9.3,<6.0.0")
 if use_fp16lib:
     include_dirs.append("fp16/include")
 
