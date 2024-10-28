@@ -553,6 +553,10 @@ static py::tuple cluster_many_brute_force( //
     py::buffer dataset,                    //
     std::size_t wanted,                    //
     std::size_t max_iterations,            //
+    double inertia_threshold,              //
+    double max_seconds,                    //
+    double min_shifts,                     //
+    std::uint64_t seed,                    //
     std::size_t threads,                   //
     scalar_kind_t scalar_kind,             //
     metric_kind_t metric_kind,             //
@@ -583,6 +587,9 @@ static py::tuple cluster_many_brute_force( //
     engine.metric_kind = metric_kind;
     engine.quantization_kind = scalar_kind;
     engine.max_iterations = max_iterations;
+    engine.min_shifts = min_shifts;
+    engine.max_seconds = max_seconds;
+    engine.inertia_threshold = inertia_threshold;
 
     kmeans_clustering_result_t result = engine(                                           //
         reinterpret_cast<byte_t const*>(dataset_info.ptr), dataset_count, dataset_stride, //
@@ -999,27 +1006,33 @@ PYBIND11_MODULE(compiled, m) {
         return index_metadata(meta);
     });
 
-    m.def("exact_search", &search_many_brute_force,                               //
-          py::arg("dataset"),                                                     //
-          py::arg("queries"),                                                     //
-          py::arg("count") = 10,                                                  //
-          py::kw_only(),                                                          //
-          py::arg("threads") = 0,                                                 //
-          py::arg("metric_kind") = metric_kind_t::cos_k,                          //
-          py::arg("metric_signature") = metric_punned_signature_t::array_array_k, //
-          py::arg("metric_pointer") = 0,                                          //
-          py::arg("progress") = nullptr                                           //
+    m.def(                                                                      //
+        "exact_search", &search_many_brute_force,                               //
+        py::arg("dataset"),                                                     //
+        py::arg("queries"),                                                     //
+        py::arg("count") = 10,                                                  //
+        py::kw_only(),                                                          //
+        py::arg("threads") = 0,                                                 //
+        py::arg("metric_kind") = metric_kind_t::cos_k,                          //
+        py::arg("metric_signature") = metric_punned_signature_t::array_array_k, //
+        py::arg("metric_pointer") = 0,                                          //
+        py::arg("progress") = nullptr                                           //
     );
 
-    m.def("kmeans", &cluster_many_brute_force,            //
-          py::arg("dataset"),                             //
-          py::arg("count") = 10,                          //
-          py::kw_only(),                                  //
-          py::arg("max_iterations") = 100,                //
-          py::arg("threads") = 0,                         //
-          py::arg("dtype") = scalar_kind_t::bf16_k,       //
-          py::arg("metric_kind") = metric_kind_t::l2sq_k, //
-          py::arg("progress") = nullptr                   //
+    m.def(                                                                               //
+        "kmeans", &cluster_many_brute_force,                                             //
+        py::arg("dataset"),                                                              //
+        py::arg("count") = 10,                                                           //
+        py::kw_only(),                                                                   //
+        py::arg("max_iterations") = kmeans_clustering_t::max_iterations_default_k,       //
+        py::arg("inertia_threshold") = kmeans_clustering_t::inertia_threshold_default_k, //
+        py::arg("max_seconds") = kmeans_clustering_t::max_seconds_default_k,             //
+        py::arg("min_shifts") = kmeans_clustering_t::min_shifts_default_k,               //
+        py::arg("seed") = 0,                                                             //
+        py::arg("threads") = 0,                                                          //
+        py::arg("dtype") = scalar_kind_t::bf16_k,                                        //
+        py::arg("metric_kind") = metric_kind_t::l2sq_k,                                  //
+        py::arg("progress") = nullptr                                                    //
     );
 
     m.def(
@@ -1035,18 +1048,19 @@ PYBIND11_MODULE(compiled, m) {
 
     auto i = py::class_<dense_index_py_t, std::shared_ptr<dense_index_py_t>>(m, "Index");
 
-    i.def(py::init(&make_index),                                                  //
-          py::kw_only(),                                                          //
-          py::arg("ndim") = 0,                                                    //
-          py::arg("dtype") = scalar_kind_t::f32_k,                                //
-          py::arg("connectivity") = default_connectivity(),                       //
-          py::arg("expansion_add") = default_expansion_add(),                     //
-          py::arg("expansion_search") = default_expansion_search(),               //
-          py::arg("metric_kind") = metric_kind_t::cos_k,                          //
-          py::arg("metric_signature") = metric_punned_signature_t::array_array_k, //
-          py::arg("metric_pointer") = 0,                                          //
-          py::arg("multi") = false,                                               //
-          py::arg("enable_key_lookups") = true                                    //
+    i.def(                                                                      //
+        py::init(&make_index),                                                  //
+        py::kw_only(),                                                          //
+        py::arg("ndim") = 0,                                                    //
+        py::arg("dtype") = scalar_kind_t::f32_k,                                //
+        py::arg("connectivity") = default_connectivity(),                       //
+        py::arg("expansion_add") = default_expansion_add(),                     //
+        py::arg("expansion_search") = default_expansion_search(),               //
+        py::arg("metric_kind") = metric_kind_t::cos_k,                          //
+        py::arg("metric_signature") = metric_punned_signature_t::array_array_k, //
+        py::arg("metric_pointer") = 0,                                          //
+        py::arg("multi") = false,                                               //
+        py::arg("enable_key_lookups") = true                                    //
     );
 
     i.def(                                                //

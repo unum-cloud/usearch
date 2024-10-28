@@ -2168,14 +2168,30 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
     metric_kind_t metric_kind{metric_kind_t::l2sq_k};
     scalar_kind_t quantization_kind{scalar_kind_t::bf16_k};
 
+    static constexpr std::size_t max_iterations_default_k = 300;
+    static constexpr f64_t inertia_threshold_default_k = 1e-4;
+    static constexpr f64_t max_seconds_default_k = 60.0;
+    static constexpr f64_t min_shifts_default_k = 0.01;
+
     /// @brief Early-exit parameter - the maximum number of iterations to perform.
-    std::size_t max_iterations{};
+    std::size_t max_iterations{max_iterations_default_k};
     /// @brief Early-exit parameter - the threshold for the final inertia to terminate early.
-    f64_t final_inertia_threshold{};
+    f64_t inertia_threshold{inertia_threshold_default_k};
     /// @brief Early-exit parameter - the maximum runtime allowed in seconds.
-    f64_t runtime_limit_seconds{};
-    /// @brief Early-exit parameter - the minimum number of points that must change clusters per iteration.
-    std::size_t min_points_shifted_per_iteration{};
+    f64_t max_seconds{max_seconds_default_k};
+    /// @brief Early-exit parameter - the minimum share of points that must change clusters per iteration.
+    f64_t min_shifts{min_shifts_default_k};
+    /// @brief The random seed to use for centroid initialization.
+    std::uint64_t seed{0};
+
+    kmeans_clustering_gt(std::uint64_t seed) noexcept : seed(seed) {}
+    kmeans_clustering_gt() noexcept(false) {
+        std::random_device random_device;
+        seed = random_device();
+    }
+
+    kmeans_clustering_gt(kmeans_clustering_gt const&) = default;
+    kmeans_clustering_gt& operator=(kmeans_clustering_gt const&) = default;
 
     template <typename scalar_at, typename executor_at = dummy_executor_t, typename progress_at = dummy_progress_t>
     kmeans_clustering_result_t operator()( //
@@ -2269,8 +2285,8 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
         }
 
         // Initialize centroids with random points vectors.
-        std::random_device random_device;
-        std::mt19937 random_engine(random_device());
+        std::mt19937_64 random_engine;
+        random_engine.seed(seed);
         for (std::size_t i = 0; i < wanted_clusters; i++) {
             // Generate the random index of the points vector,
             // that is unique and not already used as a centroid.
@@ -2298,12 +2314,14 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
 
         auto start_time = std::chrono::high_resolution_clock::now();
         std::size_t iterations = 0;
+        std::size_t const min_points_shifted_per_iteration = static_cast<std::size_t>(min_shifts * points_count);
+        f64_t last_aggregate_distance = std::numeric_limits<f64_t>::max();
+
         while (iterations < max_iterations) {
             iterations++;
 
             // For every point, find the closest centroid.
             std::atomic<std::size_t> points_shifted = 0;
-            std::atomic<distance_t> total_inertia = 0;
             executor.dynamic(points_count, [&](std::size_t thread_idx, std::size_t points_idx) {
                 byte_t const* quantized_point =
                     points_quantized_buffer.data() + points_idx * stride_per_vector_quantized;
@@ -2327,30 +2345,31 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
                 }
 
                 closest_distance_ref = closest_distance_local;
-                // total_inertia.add(closest_distance_local * closest_distance_local, std::memory_order_relaxed);
                 return true;
             });
+
+            f64_t aggregate_distance = 0.0;
+            for (std::size_t i = 0; i < points_count; i++)
+                aggregate_distance += point_to_centroid_distance_buffer[i];
+            f64_t aggregate_distance_change =
+                std::abs(aggregate_distance - last_aggregate_distance) / last_aggregate_distance;
 
             auto current_time = std::chrono::high_resolution_clock::now();
             std::chrono::duration<f64_t> elapsed_time = current_time - start_time;
             result.runtime_seconds = elapsed_time.count();
-            result.last_iteration_inertia = total_inertia.load(std::memory_order_relaxed);
+            result.last_iteration_inertia = aggregate_distance_change;
             result.last_iteration_points_shifted = points_shifted.load(std::memory_order_relaxed);
 
             // Check for early-exit conditions
-            if (final_inertia_threshold != 0)
-                if (result.last_iteration_inertia <= final_inertia_threshold)
+            if (last_aggregate_distance != 0.0 && inertia_threshold != 0.0)
+                if (aggregate_distance_change <= inertia_threshold)
                     break;
             if (min_points_shifted_per_iteration != 0 || result.last_iteration_points_shifted == 0)
                 if (result.last_iteration_points_shifted <= min_points_shifted_per_iteration)
                     break;
-            if (runtime_limit_seconds != 0)
-                if (result.runtime_seconds >= runtime_limit_seconds)
+            if (max_seconds != 0)
+                if (result.runtime_seconds >= max_seconds)
                     break;
-
-            double aggregate_distance = 0.0;
-            for (std::size_t i = 0; i < points_count; i++)
-                aggregate_distance += point_to_centroid_distance_buffer[i];
 
             // For every centroid, recalculate the mean of all points assigned to it.
             // That part is problematic to parallelize on many-core-systems, because of the contention.
