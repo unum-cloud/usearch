@@ -126,6 +126,7 @@ def _normalize_dtype(
         "i8": ScalarKind.I8,
         "b1": ScalarKind.B1,
         "b1x8": ScalarKind.B1,
+        "bits": ScalarKind.B1,
         "float64": ScalarKind.F64,
         "float32": ScalarKind.F32,
         "bfloat16": ScalarKind.BF16,

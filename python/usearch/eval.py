@@ -359,7 +359,7 @@ class AddTask:
         return self.vectors.shape[0]
 
     def inplace_shuffle(self):
-        """Rorders the `vectors` and `keys`. Often used for robustness benchmarks."""
+        """Reorders the `vectors` and `keys`. Often used for robustness benchmarks."""
 
         new_order = np.arange(self.count)
         np.random.shuffle(new_order)
