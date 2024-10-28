@@ -4,9 +4,8 @@ from time import time
 import pytest
 import numpy as np
 
+import usearch
 from usearch.eval import random_vectors, self_recall, SearchStats
-from usearch.index import search
-
 from usearch.index import (
     Index,
     MetricKind,

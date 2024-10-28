@@ -4,6 +4,7 @@ from typing import Literal
 from faiss import knn, METRIC_L2, METRIC_INNER_PRODUCT
 import fire
 
+import usearch
 from usearch.compiled import hardware_acceleration
 from usearch.eval import random_vectors
 

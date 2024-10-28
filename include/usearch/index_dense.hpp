@@ -693,6 +693,9 @@ class index_dense_gt {
     std::size_t max_level() const { return typed_->max_level(); }
     index_dense_config_t const& config() const { return config_; }
     index_limits_t const& limits() const { return typed_->limits(); }
+    double inverse_log_connectivity() const { return typed_->inverse_log_connectivity(); }
+    std::size_t neighbors_base_bytes() const { return typed_->neighbors_base_bytes(); }
+    std::size_t neighbors_bytes() const { return typed_->neighbors_bytes(); }
     bool multi() const { return config_.multi; }
     std::size_t currently_available_threads() const {
         std::unique_lock<std::mutex> available_threads_lock(available_threads_mutex_);
@@ -1460,6 +1463,8 @@ class index_dense_gt {
     labeling_result_t remove(vector_key_t key) {
         usearch_assert_m(config().enable_key_lookups, "Key lookups are disabled");
         labeling_result_t result;
+        if (typed_->is_immutable())
+            return result.failed("Can't remove from an immutable index");
 
         unique_lock_t lookup_lock(slot_lookup_mutex_);
         auto matching_slots = slot_lookup_.equal_range(key_and_slot_t::any_slot(key));

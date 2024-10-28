@@ -25,12 +25,6 @@ from typing import (
 import numpy as np
 from tqdm import tqdm
 
-#! SimSIMD must come before USearch import
-try:
-    import simsimd
-except ImportError:
-    pass
-
 # Precompiled symbols that won't be exposed directly:
 from usearch.compiled import (
     Index as _CompiledIndex,
