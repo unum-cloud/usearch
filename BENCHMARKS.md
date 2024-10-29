@@ -58,6 +58,8 @@ Within this repository you will find two commonly used utilities:
 - `cpp/bench.cpp` the produces the `bench_cpp` binary for broad USearch benchmarks.
 - `python/bench.py` and `python/bench.ipynb` for interactive charts against FAISS.
 
+### C++ Benchmarking Utilities
+
 To achieve best highest results we suggest compiling locally for the target architecture.
 
 ```sh
@@ -147,10 +149,19 @@ build_profile/bench_cpp \
     --cos
 ```
 
-
 > Optional parameters include `connectivity`, `expansion_add`, `expansion_search`.
 
 For Python, jut open the Jupyter Notebook and start playing around.
+
+### Python Benchmarking Utilities
+
+Several benchmarking suites are available for Python: approximate search, exact search, and clustering.
+
+```sh
+python/scripts/bench.py --help
+python/scripts/bench_exact.py --help
+python/scripts/bench_cluster.py --help
+```
 
 ## Datasets
 

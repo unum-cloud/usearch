@@ -452,7 +452,7 @@ static py::tuple search_many_in_index( //
 }
 
 /**
- *  @brief  Brute-force exact search implementation, compatible with
+ *  @brief  Brute-force @b exact search implementation, compatible with
  *          NumPy-like Tensors and other objects supporting Buffer Protocol.
  */
 static py::tuple search_many_brute_force(       //
@@ -542,6 +542,81 @@ static py::tuple search_many_brute_force(       //
     results[2] = counts_py;
     results[3] = 0;
     results[4] = static_cast<std::size_t>(dataset_count * queries_count);
+    return results;
+}
+
+/**
+ *  @brief  Brute-force @b K-Means clustering, compatible with
+ *          NumPy-like Tensors and other objects supporting Buffer Protocol.
+ */
+static py::tuple cluster_many_brute_force( //
+    py::buffer dataset,                    //
+    std::size_t wanted,                    //
+    std::size_t max_iterations,            //
+    double inertia_threshold,              //
+    double max_seconds,                    //
+    double min_shifts,                     //
+    std::uint64_t seed,                    //
+    std::size_t threads,                   //
+    scalar_kind_t scalar_kind,             //
+    metric_kind_t metric_kind,             //
+    progress_func_t const& progress_func) {
+
+    using distance_t = typename kmeans_clustering_t::distance_t;
+    py::buffer_info dataset_info = dataset.request();
+    if (dataset_info.ndim != 2)
+        throw std::invalid_argument("Expects a matrix (rank-2 tensor) of dataset to cluster!");
+
+    std::size_t dataset_count = static_cast<std::size_t>(dataset_info.shape[0]);
+    std::size_t dataset_dimensions = static_cast<std::size_t>(dataset_info.shape[1]);
+    std::size_t dataset_stride = static_cast<std::size_t>(dataset_info.strides[0]);
+    scalar_kind_t dataset_kind = numpy_string_to_kind(dataset_info.format);
+    std::size_t bytes_per_scalar = bits_per_scalar_word(dataset_kind) / CHAR_BIT;
+
+    std::vector<std::size_t> point_to_centroid_index(dataset_count, 0);
+    std::vector<distance_t> point_to_centroid_distance(dataset_count, 0);
+    std::vector<byte_t> centroids(wanted * dataset_dimensions * bytes_per_scalar, 0);
+
+    if (!threads)
+        threads = std::thread::hardware_concurrency();
+
+    // Dispatch brute-force search
+    progress_t progress{progress_func};
+    executor_default_t executor{threads};
+    kmeans_clustering_t engine;
+    engine.metric_kind = metric_kind;
+    engine.quantization_kind = scalar_kind;
+    engine.max_iterations = max_iterations;
+    engine.min_shifts = min_shifts;
+    engine.max_seconds = max_seconds;
+    engine.inertia_threshold = inertia_threshold;
+
+    kmeans_clustering_result_t result = engine(                                           //
+        reinterpret_cast<byte_t const*>(dataset_info.ptr), dataset_count, dataset_stride, //
+        centroids.data(), wanted, dataset_dimensions * bytes_per_scalar,                  //
+        point_to_centroid_index.data(), point_to_centroid_distance.data(), dataset_kind, dataset_dimensions, executor,
+        [&](std::size_t passed, std::size_t total) { return PyErr_CheckSignals() == 0 && progress(passed, total); });
+
+    if (!result)
+        throw std::runtime_error(result.error.release());
+
+    // Following constructor doesn't seem to be documented, but it's used in the source code of `pybind11`
+    // https://github.com/pybind/pybind11/blob/aeda49ed0b4e6e8abba7abc265ace86a6c26ba66/include/pybind11/numpy.h#L918-L919
+    // https://github.com/pybind/pybind11/blob/aeda49ed0b4e6e8abba7abc265ace86a6c26ba66/include/pybind11/buffer_info.h#L60-L75
+    py::buffer_info centroids_info;
+    centroids_info.ptr = reinterpret_cast<void*>(centroids.data());
+    centroids_info.itemsize = dataset_info.itemsize;
+    centroids_info.size = wanted * dataset_dimensions;
+    centroids_info.format = dataset_info.format;
+    centroids_info.ndim = 2;
+    centroids_info.shape = {wanted, dataset_dimensions};
+    centroids_info.strides = {dataset_dimensions * bytes_per_scalar, bytes_per_scalar};
+
+    py::tuple results(3);
+    results[0] = py::array_t<std::size_t>({dataset_count}, point_to_centroid_index.data());
+    results[1] = py::array_t<distance_t>({dataset_count}, point_to_centroid_distance.data());
+    results[2] = py::array(centroids_info);
+
     return results;
 }
 
@@ -936,16 +1011,33 @@ PYBIND11_MODULE(compiled, m) {
         return index_metadata(meta);
     });
 
-    m.def("exact_search", &search_many_brute_force,                               //
-          py::arg("dataset"),                                                     //
-          py::arg("queries"),                                                     //
-          py::arg("count") = 10,                                                  //
-          py::kw_only(),                                                          //
-          py::arg("threads") = 0,                                                 //
-          py::arg("metric_kind") = metric_kind_t::cos_k,                          //
-          py::arg("metric_signature") = metric_punned_signature_t::array_array_k, //
-          py::arg("metric_pointer") = 0,                                          //
-          py::arg("progress") = nullptr                                           //
+    m.def(                                                                      //
+        "exact_search", &search_many_brute_force,                               //
+        py::arg("dataset"),                                                     //
+        py::arg("queries"),                                                     //
+        py::arg("count") = 10,                                                  //
+        py::kw_only(),                                                          //
+        py::arg("threads") = 0,                                                 //
+        py::arg("metric_kind") = metric_kind_t::cos_k,                          //
+        py::arg("metric_signature") = metric_punned_signature_t::array_array_k, //
+        py::arg("metric_pointer") = 0,                                          //
+        py::arg("progress") = nullptr                                           //
+    );
+
+    m.def(                                                                               //
+        "kmeans", &cluster_many_brute_force,                                             //
+        py::arg("dataset"),                                                              //
+        py::arg("count") = 10,                                                           //
+        py::kw_only(),                                                                   //
+        py::arg("max_iterations") = kmeans_clustering_t::max_iterations_default_k,       //
+        py::arg("inertia_threshold") = kmeans_clustering_t::inertia_threshold_default_k, //
+        py::arg("max_seconds") = kmeans_clustering_t::max_seconds_default_k,             //
+        py::arg("min_shifts") = kmeans_clustering_t::min_shifts_default_k,               //
+        py::arg("seed") = 0,                                                             //
+        py::arg("threads") = 0,                                                          //
+        py::arg("dtype") = scalar_kind_t::bf16_k,                                        //
+        py::arg("metric_kind") = metric_kind_t::l2sq_k,                                  //
+        py::arg("progress") = nullptr                                                    //
     );
 
     m.def(
@@ -961,18 +1053,19 @@ PYBIND11_MODULE(compiled, m) {
 
     auto i = py::class_<dense_index_py_t, std::shared_ptr<dense_index_py_t>>(m, "Index");
 
-    i.def(py::init(&make_index),                                                  //
-          py::kw_only(),                                                          //
-          py::arg("ndim") = 0,                                                    //
-          py::arg("dtype") = scalar_kind_t::f32_k,                                //
-          py::arg("connectivity") = default_connectivity(),                       //
-          py::arg("expansion_add") = default_expansion_add(),                     //
-          py::arg("expansion_search") = default_expansion_search(),               //
-          py::arg("metric_kind") = metric_kind_t::cos_k,                          //
-          py::arg("metric_signature") = metric_punned_signature_t::array_array_k, //
-          py::arg("metric_pointer") = 0,                                          //
-          py::arg("multi") = false,                                               //
-          py::arg("enable_key_lookups") = true                                    //
+    i.def(                                                                      //
+        py::init(&make_index),                                                  //
+        py::kw_only(),                                                          //
+        py::arg("ndim") = 0,                                                    //
+        py::arg("dtype") = scalar_kind_t::f32_k,                                //
+        py::arg("connectivity") = default_connectivity(),                       //
+        py::arg("expansion_add") = default_expansion_add(),                     //
+        py::arg("expansion_search") = default_expansion_search(),               //
+        py::arg("metric_kind") = metric_kind_t::cos_k,                          //
+        py::arg("metric_signature") = metric_punned_signature_t::array_array_k, //
+        py::arg("metric_pointer") = 0,                                          //
+        py::arg("multi") = false,                                               //
+        py::arg("enable_key_lookups") = true                                    //
     );
 
     i.def(                                                //

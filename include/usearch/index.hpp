@@ -370,7 +370,7 @@ template <typename scalar_at, typename allocator_at = std::allocator<scalar_at>>
     void reset() noexcept {
         if (!std::is_trivially_destructible<scalar_at>::value)
             for (std::size_t i = 0; i != size_; ++i)
-                destroy_at(data_ + i);
+                unum::usearch::destroy_at(data_ + i); //< Facing some symbol visibility/ambiguity issues
         allocator_at{}.deallocate(data_, size_);
         data_ = nullptr;
         size_ = 0;

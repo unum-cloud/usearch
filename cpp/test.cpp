@@ -1100,6 +1100,22 @@ int main(int, char**) {
     test_uint40();
     test_cosine<float, std::int64_t, uint40_t>(10, 10);
 
+    // Test plugins, like K-Means clustering.
+    {
+        std::size_t vectors_count = 1000, centroids_count = 10, dimensions = 256;
+        kmeans_clustering_t clustering;
+        clustering.max_iterations = 2;
+        std::vector<float> vectors(vectors_count * dimensions), centroids(centroids_count * dimensions);
+        matrix_slice_gt<float const> vectors_slice(vectors.data(), dimensions, vectors_count);
+        matrix_slice_gt<float> centroids_slice(centroids.data(), dimensions, centroids_count);
+        std::generate(vectors.begin(), vectors.end(), [] { return float(std::rand()) / float(INT_MAX); });
+        std::vector<std::size_t> assignments(vectors_count);
+        std::vector<distance_punned_t> distances(vectors_count);
+        auto clustering_result = clustering(vectors_slice, centroids_slice, {assignments.data(), assignments.size()},
+                                            {distances.data(), distances.size()});
+        expect(clustering_result);
+    }
+
     // Exact search without constructing indexes.
     // Great for validating the distance functions.
     std::printf("Testing exact search\n");

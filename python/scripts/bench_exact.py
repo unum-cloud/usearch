@@ -1,14 +1,15 @@
+#!/usr/bin/env python3
+import argparse
 from time import time
 from typing import Literal
 
 from faiss import knn, METRIC_L2, METRIC_INNER_PRODUCT
-import fire
 
 import usearch
 from usearch.compiled import hardware_acceleration
 from usearch.eval import random_vectors
 
-# Supplemantary imports for CLI arguments normalization
+# Supplementary imports for CLI arguments normalization
 from usearch.index import (
     ScalarKind,
     MetricKind,
@@ -36,7 +37,7 @@ def run(
     k: int = 100,
     ndim: int = 256,
     dtype: Literal["b1", "i8", "f16", "bf16", "f32", "f64"] = "f32",
-    metric: Literal["cos", "ip", "l2sq"] = "ip",
+    metric: Literal["ip", "cos", "l2sq"] = "ip",
 ):
 
     metric: MetricKind = _normalize_metric(metric)
@@ -73,5 +74,25 @@ def run(
     print(f"FAISS:   {format_duration(duration)} ({calculate_throughput(duration, q)})")
 
 
+def main():
+    parser = argparse.ArgumentParser(description="Compare KMeans clustering algorithms")
+    parser.add_argument("--ndim", default=256, type=int, help="Number of vector dimensions")
+    parser.add_argument("-n", default=10**5, type=int, help="Number of random vectors in a haystack")
+    parser.add_argument("-q", default=10, type=int, help="Number of query vectors")
+    parser.add_argument("-k", default=100, type=int, required=True, help="Number of closest neighbors to search for")
+    parser.add_argument("--dtype", type=str, choices=["b1", "i8", "f16", "bf16", "f32", "f64"], default="f32")
+    parser.add_argument("--metric", type=str, choices=["ip", "cos", "l2sq"], default="ip")
+
+    args = parser.parse_args()
+    run(
+        n=args.n,
+        q=args.q,
+        k=args.k,
+        ndim=args.ndim,
+        dtype=args.dtype,
+        metric=args.metric,
+    )
+
+
 if __name__ == "__main__":
-    fire.Fire(run)
+    main()

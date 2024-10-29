@@ -7,7 +7,8 @@ import usearch
 from usearch.io import load_matrix, save_matrix
 from usearch.index import search
 from usearch.eval import random_vectors
-from usearch.index import Match, Matches, BatchMatches, Index, Indexes
+
+from usearch.index import Match, Matches, BatchMatches, Index, Indexes, kmeans
 
 
 dimensions = [3, 97, 256]
@@ -131,3 +132,10 @@ def test_multi_index():
     matches = indexes.search(vectors, 10)
     assert len(matches) == 3
     assert len(matches[0].keys) == 2
+
+
+def test_kmeans(count_vectors: int = 100, ndim: int = 10, count_clusters: int = 5):
+    X = np.random.rand(count_vectors, ndim)
+    assignments, distances, centroids = kmeans(X, count_clusters)
+    assert len(assignments) == count_vectors
+    assert ((assignments >= 0) & (assignments < count_clusters)).all()

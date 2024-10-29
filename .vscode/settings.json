@@ -157,6 +157,7 @@
     "ivdep",
     "jaccard",
     "Jemalloc",
+    "kmeans",
     "Kullback",
     "Leibler",
     "libjemalloc",
