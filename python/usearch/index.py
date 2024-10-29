@@ -1591,7 +1591,7 @@ def kmeans(
     k,
     metric: str = "l2sq",
     dtype: str = "bf16",
-    max_iters: int = 300,
+    max_iterations: int = 300,
     inertia_threshold: float = 1e-4,
     max_seconds: float = 60.0,
     min_shifts: float = 0.01,
@@ -1618,7 +1618,7 @@ def kmeans(
         The data type used for clustering calculations. Default is "bf16" (Brain Float 16).
         Other supported types include "f32" (float32) and "f64" (float64), "f16" (float16),
         "i8" (int8), and b1 (boolean) bit-packed vectors.
-    max_iters : int, optional
+    max_iterations : int, optional
         The maximum number of iterations the algorithm should run. Default is 300.
     inertia_threshold : float, optional
         The threshold for inertia (sum of squared distances to centroids) to terminate early.
@@ -1669,7 +1669,7 @@ def kmeans(
         X,
         k,
         metric_kind=metric,
-        max_iterations=max_iters,
+        max_iterations=max_iterations,
         max_seconds=max_seconds,
         min_shifts=min_shifts,
         inertia_threshold=inertia_threshold,

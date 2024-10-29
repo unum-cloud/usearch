@@ -200,7 +200,7 @@ cibuildwheel --platform macos                   # works only on MacOS
 cibuildwheel --platform windows                 # works only on Windows
 ```
 
-You may need root previligies for multi-architecture builds:
+You may need root privileges for multi-architecture builds:
 
 ```sh
 sudo $(which cibuildwheel) --platform linux
