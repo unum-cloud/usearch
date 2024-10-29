@@ -1665,7 +1665,9 @@ def kmeans(
     """
     metric = _normalize_metric(metric)
     dtype = _normalize_dtype(dtype, ndim=X.shape[1], metric=metric)
-    seed = np.random.randint(0, 2**32 - 1) if seed is None else seed
+
+    # Generating a 64-bit unsigned integer in NumPy may be somewhat tricky.
+    seed = np.random.default_rng().integers(0, 2**64, dtype=np.uint64) if seed is None else seed
     assignments, distances, centroids = _kmeans(
         X,
         k,
