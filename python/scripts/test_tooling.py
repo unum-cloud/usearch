@@ -3,6 +3,7 @@ import os
 import pytest
 import numpy as np
 
+import usearch
 from usearch.io import load_matrix, save_matrix
 from usearch.index import search
 from usearch.eval import random_vectors

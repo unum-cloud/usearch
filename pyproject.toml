@@ -7,7 +7,14 @@
 #   * for PyPy versions from 3.7 to 3.10.
 #   = meaning 7 platforms * 10 Python versions = 70 builds.
 [build-system]
-requires = ["setuptools>=42", "wheel", "cmake>=3.22", "pybind11", "numpy"]
+requires = [
+    "setuptools>=42",
+    "wheel",
+    "cmake>=3.22",
+    "pybind11",
+    "numpy",
+    "simsimd>=5.9.3,<6.0.0",
+]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
@@ -66,6 +73,7 @@ before-build = [
     "rm -rf {project}/CMakeCache.txt {project}/build {project}/build_debug {project}/CMakeFiles.txt {project}/_deps {project}/.pytest_cache",
     "mkdir -p build/usearch",
     "git submodule update --init --recursive",
+    "export CC=$(echo CXX)",
 ]
 repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
 
