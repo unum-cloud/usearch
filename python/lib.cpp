@@ -24,6 +24,10 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#if defined(_WIN32)       //! On Windows, `ssize_t` is not defined by default
+typedef intptr_t ssize_t; //! Use `intptr_t` for a signed integer with the same width as `size_t`
+#endif
+
 #include <usearch/index_dense.hpp>
 #include <usearch/index_plugins.hpp>
 
