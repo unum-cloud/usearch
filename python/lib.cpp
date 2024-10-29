@@ -609,12 +609,13 @@ static py::tuple cluster_many_brute_force( //
     centroids_info.size = wanted * dataset_dimensions;
     centroids_info.format = dataset_info.format;
     centroids_info.ndim = 2;
-    centroids_info.shape = {wanted, dataset_dimensions};
-    centroids_info.strides = {dataset_dimensions * bytes_per_scalar, bytes_per_scalar};
+    centroids_info.shape = {static_cast<ssize_t>(wanted), static_cast<ssize_t>(dataset_dimensions)};
+    centroids_info.strides = {static_cast<ssize_t>(dataset_dimensions * bytes_per_scalar),
+                              static_cast<ssize_t>(bytes_per_scalar)};
 
     py::tuple results(3);
-    results[0] = py::array_t<std::size_t>({dataset_count}, point_to_centroid_index.data());
-    results[1] = py::array_t<distance_t>({dataset_count}, point_to_centroid_distance.data());
+    results[0] = py::array_t<std::size_t>({static_cast<ssize_t>(dataset_count)}, point_to_centroid_index.data());
+    results[1] = py::array_t<distance_t>({static_cast<ssize_t>(dataset_count)}, point_to_centroid_distance.data());
     results[2] = py::array(centroids_info);
 
     return results;
