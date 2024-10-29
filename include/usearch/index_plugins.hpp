@@ -2453,8 +2453,9 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
         // Export stats.
         result.iterations = iterations;
         result.computed_distances = points_count * wanted_clusters * iterations;
-        result.aggregate_distance =
-            std::accumulate(point_to_centroid_distance_buffer.begin(), point_to_centroid_distance_buffer.end(), 0.0);
+        result.aggregate_distance = 0;
+        for (distance_t distance : point_to_centroid_distance_buffer)
+            result.aggregate_distance += distance;
 
         // We've finished all the iterations, now we can export the centroids back to the original precision.
         std::memcpy(point_to_centroid_index, point_to_centroid_index_buffer.data(), points_count * sizeof(std::size_t));
