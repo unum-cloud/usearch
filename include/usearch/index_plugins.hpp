@@ -2331,7 +2331,7 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
             iterations++;
 
             // For every point, find the closest centroid.
-            std::atomic<std::size_t> points_shifted = 0;
+            std::atomic<std::size_t> points_shifted{0};
             executor.dynamic(points_count, [&](std::size_t thread_idx, std::size_t points_idx) {
                 byte_t const* quantized_point =
                     points_quantized_buffer.data() + points_idx * stride_per_vector_quantized;
