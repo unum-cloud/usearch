@@ -10,11 +10,11 @@ All major HNSW implementation share an identical list of hyper-parameters:
 
 The default values vary drastically.
 
-|  Library  | Connectivity | EF @ A | EF @ S |
-| :-------: | :----------: | :----: | :----: |
-| `hnswlib` |      16      |  200   |   10   |
-|  `FAISS`  |      32      |   40   |   16   |
-| `USearch` |      16      |  128   |   64   |
+| Library   | Connectivity | EF @ A | EF @ S |
+| :-------- | -----------: | -----: | -----: |
+| `hnswlib` |           16 |    200 |     10 |
+| `FAISS`   |           32 |     40 |     16 |
+| `USearch` |           16 |    128 |     64 |
 
 Below are the performance numbers for a benchmark running on the 64 cores of AWS `c7g.metal` "Graviton 3"-based instances.
 The main columns are:
@@ -26,27 +26,27 @@ The main columns are:
 ### Different "connectivity"
 
 | Vectors    | Connectivity | EF @ A | EF @ S | __Add__, QPS | __Search__, QPS | __Recall @1__ |
-| :--------- | :----------: | :----: | :----: | :----------: | :-------------: | ------------: |
-| `f32` x256 |      16      |  128   |   64   |    75'640    |     131'654     |         99.3% |
-| `f32` x256 |      12      |  128   |   64   |    81'747    |     149'728     |         99.0% |
-| `f32` x256 |      32      |  128   |   64   |    64'368    |     104'050     |         99.4% |
+| :--------- | -----------: | -----: | -----: | -----------: | --------------: | ------------: |
+| `f32` x256 |           16 |    128 |     64 |       75'640 |         131'654 |         99.3% |
+| `f32` x256 |           12 |    128 |     64 |       81'747 |         149'728 |         99.0% |
+| `f32` x256 |           32 |    128 |     64 |       64'368 |         104'050 |         99.4% |
 
 ### Different "expansion factors"
 
 | Vectors    | Connectivity | EF @ A | EF @ S | __Add__, QPS | __Search__, QPS | __Recall @1__ |
-| :--------- | :----------: | :----: | :----: | :----------: | :-------------: | ------------: |
-| `f32` x256 |      16      |  128   |   64   |    75'640    |     131'654     |         99.3% |
-| `f32` x256 |      16      |   64   |   32   |   128'644    |     228'422     |         97.2% |
-| `f32` x256 |      16      |  256   |  128   |    39'981    |     69'065      |         99.2% |
+| :--------- | -----------: | -----: | -----: | -----------: | --------------: | ------------: |
+| `f32` x256 |           16 |    128 |     64 |       75'640 |         131'654 |         99.3% |
+| `f32` x256 |           16 |     64 |     32 |      128'644 |         228'422 |         97.2% |
+| `f32` x256 |           16 |    256 |    128 |       39'981 |          69'065 |         99.2% |
 
 ### Different vectors "quantization"
 
 | Vectors      | Connectivity | EF @ A | EF @ S | __Add__, QPS | __Search__, QPS | __Recall @1__ |
-| :----------- | :----------: | :----: | :----: | :----------: | :-------------: | ------------: |
-| `f32` x256   |      16      |  128   |   64   |    87'995    |     171'856     |         99.1% |
-| `f16` x256   |      16      |  128   |   64   |    87'270    |     153'788     |         98.4% |
-| `f16` x256 ✳️ |      16      |  128   |   64   |    71'454    |     132'673     |         98.4% |
-| `i8` x256    |      16      |  128   |   64   |   115'923    |     274'653     |         98.9% |
+| :----------- | -----------: | -----: | -----: | -----------: | --------------: | ------------: |
+| `f32` x256   |           16 |    128 |     64 |       87'995 |         171'856 |         99.1% |
+| `f16` x256   |           16 |    128 |     64 |       87'270 |         153'788 |         98.4% |
+| `f16` x256 ✳️ |           16 |    128 |     64 |       71'454 |         132'673 |         98.4% |
+| `i8` x256    |           16 |    128 |     64 |      115'923 |         274'653 |         98.9% |
 
 As seen on the chart, for `f16` quantization, performance may differ depending on native hardware support for that numeric type.
 Also worth noting, 8-bit quantization results in almost no quantization loss and may perform better than `f16`.
@@ -58,9 +58,12 @@ Within this repository you will find two commonly used utilities:
 - `cpp/bench.cpp` the produces the `bench_cpp` binary for broad USearch benchmarks.
 - `python/bench.py` and `python/bench.ipynb` for interactive charts against FAISS.
 
+### C++ Benchmarking Utilities
+
 To achieve best highest results we suggest compiling locally for the target architecture.
 
 ```sh
+git submodule update --init --recursive
 cmake -USEARCH_BUILD_BENCH_CPP=1 -DUSEARCH_BUILD_TEST_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo -B build_profile
 cmake --build build_profile --config RelWithDebInfo -j
 build_profile/bench_cpp --help
@@ -146,10 +149,19 @@ build_profile/bench_cpp \
     --cos
 ```
 
-
 > Optional parameters include `connectivity`, `expansion_add`, `expansion_search`.
 
 For Python, jut open the Jupyter Notebook and start playing around.
+
+### Python Benchmarking Utilities
+
+Several benchmarking suites are available for Python: approximate search, exact search, and clustering.
+
+```sh
+python/scripts/bench.py --help
+python/scripts/bench_exact.py --help
+python/scripts/bench_cluster.py --help
+```
 
 ## Datasets
 

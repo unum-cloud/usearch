@@ -2,6 +2,7 @@ import org.gradle.internal.jvm.Jvm
 
 plugins {
     id 'java-library'
+    id 'c'
     id 'cpp'
     id 'maven-publish'
     id 'signing'
@@ -66,6 +67,15 @@ model {
                         srcDirs "include", "fp16/include", "simsimd/include", "${Jvm.current().javaHome}/include"
                     }
                 }
+                c {
+                    source {
+                        srcDirs "simsimd/c/"
+                        include "**/*.c"
+                    }
+                    exportedHeaders {
+                        srcDirs "simsimd/include"
+                    }
+                }
             }
             binaries.withType(StaticLibraryBinarySpec) {
                 buildable = false
@@ -83,6 +93,11 @@ model {
                     cppCompiler.args "-I${Jvm.current().javaHome}/include/win32"
                     cppCompiler.args '/std:c++11'
                 }
+                cppCompiler.args '-DUSEARCH_USE_FP16LIB=1'
+                cppCompiler.args '-DUSEARCH_USE_SIMSIMD=1'
+                cppCompiler.args '-DSIMSIMD_DYNAMIC_DISPATCH=1'
+                cppCompiler.args '-DSIMSIMD_NATIVE_BF16=0'
+                cppCompiler.args '-DSIMSIMD_NATIVE_F16=0'
             }
         }
     }

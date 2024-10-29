@@ -34,6 +34,7 @@ from usearch.compiled import (
     index_dense_metadata_from_buffer as _index_dense_metadata_from_buffer,
     exact_search as _exact_search,
     hardware_acceleration as _hardware_acceleration,
+    kmeans as _kmeans,
 )
 
 # Precompiled symbols that will be exposed
@@ -120,6 +121,7 @@ def _normalize_dtype(
         "i8": ScalarKind.I8,
         "b1": ScalarKind.B1,
         "b1x8": ScalarKind.B1,
+        "bits": ScalarKind.B1,
         "float64": ScalarKind.F64,
         "float32": ScalarKind.F32,
         "bfloat16": ScalarKind.BF16,
@@ -1583,3 +1585,98 @@ def search(
         threads=threads,
         progress=progress,
     )
+
+
+def kmeans(
+    X,
+    k,
+    metric: str = "l2sq",
+    dtype: str = "bf16",
+    max_iterations: int = 300,
+    inertia_threshold: float = 1e-4,
+    max_seconds: float = 60.0,
+    min_shifts: float = 0.01,
+    seed: Optional[int] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Performs KMeans clustering on a dataset using the USearch library with mixed-precision support.
+
+    This function clusters the given dataset `X` into `k` clusters by iteratively assigning points
+    to the nearest centroids and updating the centroids based on the mean of the points assigned to them.
+    The algorithm supports mixed-precision types and early termination based on convergence criteria
+    like the number of iterations, inertia threshold, maximum runtime, and minimum point shifts.
+
+    Parameters
+    ----------
+    X : numpy.ndarray
+        The input data, where each row represents a data point and each column represents a feature.
+    k : int
+        The number of clusters to form.
+    metric : str, optional
+        The distance metric used to calculate the distance between points and centroids.
+        Default is "l2sq" (squared Euclidean distance). Cosine "cos" distance is also supported.
+    dtype : str, optional
+        The data type used for clustering calculations. Default is "bf16" (Brain Float 16).
+        Other supported types include "f32" (float32) and "f64" (float64), "f16" (float16),
+        "i8" (int8), and b1 (boolean) bit-packed vectors.
+    max_iterations : int, optional
+        The maximum number of iterations the algorithm should run. Default is 300.
+    inertia_threshold : float, optional
+        The threshold for inertia (sum of squared distances to centroids) to terminate early.
+        When the change in inertia between iterations falls below this value, the algorithm stops.
+        Default is 1e-4.
+    max_seconds : float, optional
+        The maximum allowable runtime for the algorithm in seconds. If exceeded, the algorithm
+        terminates early. Default is 60.0 seconds.
+    min_shifts : float, optional
+        The minimum fraction of points that must change their assigned cluster between iterations
+        to continue. If fewer than this fraction of points change clusters, the algorithm terminates.
+        Default is 0.01 (1% of the total points).
+    seed : int, optional
+        The random seed used to initialize the centroids. Default is None.
+
+    Returns
+    -------
+    assignments : numpy.ndarray
+        An array containing the index of the assigned cluster for each point in the dataset.
+    distances : numpy.ndarray
+        An array containing the distance of each point to its assigned cluster centroid.
+    centroids : numpy.ndarray
+        The final centroids of the clusters.
+
+    Raises
+    ------
+    ValueError
+        If any of the input parameters are invalid, such as the number of clusters being greater
+        than the number of data points.
+
+    Notes
+    -----
+    This implementation utilizes mixed-precision computation to speed up the clustering process
+    while maintaining accuracy. It also incorporates early exit conditions to avoid unnecessary
+    computation when the clustering has stabilized, either by reaching a minimal inertia threshold,
+    exceeding the maximum runtime, or when very few points are changing clusters between iterations.
+
+    Example
+    -------
+    >>> X = np.random.rand(100, 10)
+    >>> k = 5
+    >>> assignments, distances, centroids = usearch.index.kmeans(X, k)
+    """
+    metric = _normalize_metric(metric)
+    dtype = _normalize_dtype(dtype, ndim=X.shape[1], metric=metric)
+
+    # Generating a 64-bit unsigned integer in NumPy may be somewhat tricky.
+    seed = np.random.default_rng().integers(0, 2**64, dtype=np.uint64) if seed is None else seed
+    assignments, distances, centroids = _kmeans(
+        X,
+        k,
+        metric_kind=metric,
+        max_iterations=max_iterations,
+        max_seconds=max_seconds,
+        min_shifts=min_shifts,
+        inertia_threshold=inertia_threshold,
+        dtype=dtype,
+        seed=seed,
+    )
+    return assignments, distances, centroids
