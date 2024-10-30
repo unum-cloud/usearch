@@ -63,7 +63,7 @@ def load_matrix(
         return None
 
     with open(filename, "rb") as f:
-        rows, cols = np.fromfile(f, count=2, dtype=np.int32)
+        rows, cols = np.fromfile(f, count=2, dtype=np.int32).astype(np.uint64)
         rows = (rows - start_row) if count_rows is None else count_rows
         row_offset = start_row * scalar_size * cols
 
