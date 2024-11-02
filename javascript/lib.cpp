@@ -44,6 +44,7 @@ class CompiledIndex : public Napi::ObjectWrap<CompiledIndex> {
     Napi::Value Count(Napi::CallbackInfo const& ctx);
 
     std::unique_ptr<index_dense_t> native_;
+    std::mutex mtx;
 };
 
 Napi::Object CompiledIndex::Init(Napi::Env env, Napi::Object exports) {
@@ -170,8 +171,10 @@ void CompiledIndex::Add(Napi::CallbackInfo const& ctx) {
         executor.fixed(tasks, [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
             add_result_t result = native_->add(static_cast<default_key_t>(keys[task_idx]),
                                                vectors + task_idx * native_->dimensions());
-            if (!result)
+            if (!result) {
+                std::lock_guard<std::mutex> lock(mtx);
                 error += "<key:" + std::to_string(keys[task_idx]) + " message:" + result.error.release() + ">";
+            }
         });
         if (error.size() > 0)
             Napi::Error::New(ctx.Env(), error).ThrowAsJavaScriptException();
