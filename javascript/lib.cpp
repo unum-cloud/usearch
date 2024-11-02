@@ -173,7 +173,12 @@ void CompiledIndex::Add(Napi::CallbackInfo const& ctx) {
                                                vectors + task_idx * native_->dimensions());
             if (!result) {
                 std::lock_guard<std::mutex> lock(mtx);
-                error += "<key:" + std::to_string(keys[task_idx]) + " message:" + result.error.release() + ">";
+                error
+                    .append("<key:")
+                    .append(std::to_string(keys[task_idx]))
+                    .append(" message:")
+                    .append(result.error.release())
+                    .append(">");
             }
         });
         if (error.size() > 0)
