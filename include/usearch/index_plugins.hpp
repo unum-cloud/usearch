@@ -1276,7 +1276,7 @@ struct casts_punned_t {
  *  > warning: loop not vectorized: the optimizer was unable to perform the requested transformation;
  *  > the transformation might be disabled or specified as part of an unsupported transformation ordering
  */
-#if defined(__clang__)
+#if defined(USEARCH_DEFINED_CLANG)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wpass-failed"
 #endif
@@ -1990,7 +1990,7 @@ class metric_punned_t {
 };
 
 /* Allow complaining about vectorization after this point. */
-#if defined(__clang__)
+#if defined(USEARCH_DEFINED_CLANG)
 #pragma clang diagnostic pop
 #endif
 
