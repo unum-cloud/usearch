@@ -22,21 +22,6 @@
 #include <sys/auxv.h> // `getauxval()`
 #endif
 
-#if !defined(USEARCH_USE_FP16LIB)
-#if defined(__AVX512F__)
-#define USEARCH_USE_FP16LIB 0
-#elif defined(USEARCH_DEFINED_ARM)
-#include <arm_fp16.h> // `__fp16`
-#define USEARCH_USE_FP16LIB 0
-#else
-#define USEARCH_USE_FP16LIB 1
-#endif
-#endif
-
-#if USEARCH_USE_FP16LIB
-#include <fp16/fp16.h>
-#endif
-
 #if !defined(USEARCH_USE_SIMSIMD)
 #define USEARCH_USE_SIMSIMD 0
 #endif
@@ -396,12 +381,10 @@ inline expected_gt<metric_kind_t> metric_from_name(char const* name) {
  *  @brief Convenience function to upcast a half-precision floating point number to a single-precision one.
  */
 inline float f16_to_f32(std::uint16_t u16) noexcept {
-#if USEARCH_USE_FP16LIB
-    return fp16_ieee_to_fp32_value(u16);
-#elif USEARCH_USE_SIMSIMD
+#if USEARCH_USE_SIMSIMD
     return simsimd_f16_to_f32((simsimd_f16_t const*)&u16);
 #else
-#warning "It's recommended to use SimSIMD and fp16lib for half-precision numerics"
+#warning "It's recommended to use SimSIMD for half-precision numerics"
     _Float16 f16;
     std::memcpy(&f16, &u16, sizeof(std::uint16_t));
     return float(f16);
@@ -412,14 +395,12 @@ inline float f16_to_f32(std::uint16_t u16) noexcept {
  *  @brief Convenience function to downcast a single-precision floating point number to a half-precision one.
  */
 inline std::uint16_t f32_to_f16(float f32) noexcept {
-#if USEARCH_USE_FP16LIB
-    return fp16_ieee_from_fp32_value(f32);
-#elif USEARCH_USE_SIMSIMD
+#if USEARCH_USE_SIMSIMD
     std::uint16_t result;
     simsimd_f32_to_f16(f32, (simsimd_f16_t*)&result);
     return result;
 #else
-#warning "It's recommended to use SimSIMD and fp16lib for half-precision numerics"
+#warning "It's recommended to use SimSIMD for half-precision numerics"
     _Float16 f16 = _Float16(f32);
     std::uint16_t u16;
     std::memcpy(&u16, &f16, sizeof(std::uint16_t));
