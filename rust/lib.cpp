@@ -104,6 +104,7 @@ void NativeIndex::change_expansion_search(size_t n) const { index_->change_expan
 
 void NativeIndex::change_metric(uptr_t metric, uptr_t state) const {
     index_->change_metric(metric_punned_t::stateful( //
+        index_->dimensions(),                        //
         static_cast<std::uintptr_t>(metric),         //
         static_cast<std::uintptr_t>(state),          //
         index_->metric().metric_kind(),              //

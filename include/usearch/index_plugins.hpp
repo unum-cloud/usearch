@@ -1767,20 +1767,22 @@ class metric_punned_t {
      *  @brief  Creates a metric using the provided function pointer for a stateful metric.
      *          The third argument is the state that will be passed to the metric function.
      *
+     *  @param  dimensions      The number of elements in the input arrays.
      *  @param  metric_uintptr  The function pointer to the metric function.
      *  @param  metric_state    The state to pass to the metric function.
      *  @param  metric_kind     The kind of metric to use.
      *  @param  scalar_kind     The kind of scalar to use.
      *  @return                 A metric object that can be used to compute distances between vectors.
      */
-    inline static metric_punned_t stateful(std::uintptr_t metric_uintptr, std::uintptr_t metric_state,
-                                           metric_kind_t metric_kind = metric_kind_t::unknown_k,
-                                           scalar_kind_t scalar_kind = scalar_kind_t::unknown_k) noexcept {
+    inline static metric_punned_t stateful( //
+        std::size_t dimensions, std::uintptr_t metric_uintptr, std::uintptr_t metric_state,
+        metric_kind_t metric_kind = metric_kind_t::unknown_k,
+        scalar_kind_t scalar_kind = scalar_kind_t::unknown_k) noexcept {
         metric_punned_t metric;
         metric.metric_routed_ = &metric_punned_t::invoke_array_array_third;
         metric.metric_ptr_ = metric_uintptr;
         metric.metric_third_arg_ = metric_state;
-        metric.dimensions_ = 0;
+        metric.dimensions_ = dimensions;
         metric.metric_kind_ = metric_kind;
         metric.scalar_kind_ = scalar_kind;
         return metric;
@@ -2223,6 +2225,8 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
         scalar_kind_t original_scalar_kind, std::size_t dimensions, executor_at&& executor = executor_at{},
         progress_at&& progress = progress_at{}) {
 
+        (void)progress; // TODO
+
         // Perform sanity checks for algorithm settings.
         kmeans_clustering_result_t result;
         if (max_iterations < 1)
@@ -2332,7 +2336,7 @@ template <typename allocator_at = std::allocator<char>> class kmeans_clustering_
 
             // For every point, find the closest centroid.
             std::atomic<std::size_t> points_shifted{0};
-            executor.dynamic(points_count, [&](std::size_t thread_idx, std::size_t points_idx) {
+            executor.dynamic(points_count, [&](std::size_t, std::size_t points_idx) {
                 byte_t const* quantized_point =
                     points_quantized_buffer.data() + points_idx * stride_per_vector_quantized;
                 byte_t const* quantized_centroids = centroids_quantized_buffer.data();
