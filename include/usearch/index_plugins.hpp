@@ -1651,7 +1651,7 @@ enum class metric_punned_signature_t {
 /**
  *  @brief  Type-punned metric class, which unlike STL's `std::function` avoids any memory allocations.
  *          It also provides additional APIs to check, if SIMD hardware-acceleration is available.
- *          Wraps the `simsimd_metric_punned_t` when available. The auto-vectorized backend otherwise.
+ *          Wraps the `simsimd_metric_dense_punned_t` when available. The auto-vectorized backend otherwise.
  */
 class metric_punned_t {
   public:
@@ -1860,9 +1860,10 @@ class metric_punned_t {
         case scalar_kind_t::b1x8_k: datatype = simsimd_datatype_b8_k; break;
         default: break;
         }
-        simsimd_metric_punned_t simd_metric = NULL;
+        simsimd_metric_dense_punned_t simd_metric = NULL;
         simsimd_capability_t simd_kind = simsimd_cap_any_k;
-        simsimd_find_metric_punned(kind, datatype, simd_caps, allowed, &simd_metric, &simd_kind);
+        simsimd_find_kernel_punned(kind, datatype, simd_caps, allowed, (simsimd_kernel_punned_t*)&simd_metric,
+                                   &simd_kind);
         if (simd_metric == nullptr)
             return false;
 
@@ -1885,7 +1886,7 @@ class metric_punned_t {
     invoke_simsimd(uptr_t a, uptr_t b) const noexcept {
         simsimd_distance_t result;
         // Here `reinterpret_cast` raises warning and UBSan reports an issue... we know what we are doing!
-        auto function_pointer = (simsimd_metric_punned_t)(metric_ptr_);
+        auto function_pointer = (simsimd_metric_dense_punned_t)(metric_ptr_);
         function_pointer(reinterpret_cast<void const*>(a), reinterpret_cast<void const*>(b), metric_third_arg_,
                          &result);
         return (result_t)result;
