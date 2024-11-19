@@ -203,7 +203,7 @@ function normalizeVectors(
   return flattenedVectors;
 }
 
-export interface IndexCongif {
+export interface IndexConfig {
   dimensions: number;
   metric: MetricKind;
   quantization: ScalarKind;
@@ -227,7 +227,7 @@ export class Index {
    * @throws Will throw an error if any of the parameters are of incorrect type or invalid value.
    */
   constructor(
-    dimensionsOrConfigs: number | bigint | IndexCongif,
+    dimensionsOrConfigs: number | bigint | IndexConfig,
     metric: MetricKind = MetricKind.Cos,
     quantization: ScalarKind = ScalarKind.F32,
     connectivity: number = 0,
