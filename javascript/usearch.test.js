@@ -166,7 +166,28 @@ test('Invalid operations', async (t) => {
             () => index.add(42n, new Float32Array([0.2, 0.6, 0.4])),
             {
                 name: 'Error',
-                message: 'Duplicate keys not allowed in high-level wrappers'
+                message: '<key:42 message:Duplicate keys not allowed in high-level wrappers>'
+            }
+        );
+    });
+
+    await t.test('Batch add containing the same key', () => {
+        const index = new usearch.Index({
+            metric: "l2sq",
+            connectivity: 16,
+            dimensions: 3,
+        });
+        index.add(42n, new Float32Array([0.2, 0.6, 0.4]));
+        assert.throws(
+            () =>  {
+              index.add(
+                [41n, 42n, 43n],
+                [[0.1, 0.6, 0.4], [0.2, 0.6, 0.4], [0.3, 0.6, 0.4]]
+              );
+            },
+            {
+                name: 'Error',
+                message: '<key:42 message:Duplicate keys not allowed in high-level wrappers>'
             }
         );
     });
@@ -232,7 +253,7 @@ test('Serialization', async (t) => {
             () => index.add(43n, new Float32Array([0.2, 0.6, 0.4])),
             {
                 name: 'Error',
-                message: "Can't add to an immutable index"
+                message: "<key:43 message:Can't add to an immutable index>"
             }
         );
     });
