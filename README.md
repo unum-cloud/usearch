@@ -536,6 +536,7 @@ index = Index(ndim=ndim, metric=CompiledMetric(
 - [x] Sentence-Transformers: Python [docs](https://www.sbert.net/docs/package_reference/quantization.html#sentence_transformers.quantization.semantic_search_usearch).
 - [x] Pathway: [Rust](https://github.com/pathwaycom/pathway).
 - [x] Memgraph: [C++ MVP](https://github.com/memgraph/memgraph/pull/2406), [C++ Stable](https://github.com/memgraph/memgraph/pull/2500), [docs](https://memgraph.com/docs/querying/vector-search)
+- [x] TiDB: [C++](https://github.com/pingcap/tiflash/pull/9486), [docs](https://docs.pingcap.com/tidb/stable/vector-search-index#vector-search-index)
 
 ## Citations
 
