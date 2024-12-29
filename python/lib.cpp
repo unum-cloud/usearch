@@ -222,12 +222,15 @@ static void add_many_to_index(                            //
 
     if (keys_info.itemsize != sizeof(dense_key_t))
         throw std::invalid_argument("Incompatible key type!");
+    if (keys_info.strides[0] != static_cast<Py_ssize_t>(keys_info.itemsize))
+        throw std::invalid_argument("Keys array must be C-contiguous.");
 
     if (keys_info.ndim != 1)
         throw std::invalid_argument("Keys must be placed in a single-dimensional array!");
-
     if (vectors_info.ndim != 2)
         throw std::invalid_argument("Expects a matrix of vectors to add!");
+    if (vectors_info.strides[1] != static_cast<Py_ssize_t>(vectors_info.itemsize))
+        throw std::invalid_argument("Matrix rows must be contiguous, try `ascontiguousarray`.");
 
     Py_ssize_t keys_count = keys_info.shape[0];
     Py_ssize_t vectors_count = vectors_info.shape[0];
@@ -428,6 +431,8 @@ static py::tuple search_many_in_index( //
     Py_ssize_t vectors_dimensions = vectors_info.shape[1];
     if (vectors_dimensions != static_cast<Py_ssize_t>(index.scalar_words()))
         throw std::invalid_argument("The number of vector dimensions doesn't match!");
+    if (vectors_info.strides[1] != static_cast<Py_ssize_t>(vectors_info.itemsize))
+        throw std::invalid_argument("Matrix rows must be contiguous, try `ascontiguousarray`.");
 
     py::array_t<dense_key_t> keys_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
     py::array_t<distance_t> distances_py({vectors_count, static_cast<Py_ssize_t>(wanted)});
@@ -474,6 +479,10 @@ static py::tuple search_many_brute_force(       //
     py::buffer_info queries_info = queries.request();
     if (dataset_info.ndim != 2 || queries_info.ndim != 2)
         throw std::invalid_argument("Expects a matrix of dataset to add!");
+    if (dataset_info.strides[1] != static_cast<Py_ssize_t>(dataset_info.itemsize))
+        throw std::invalid_argument("Dataset rows must be contiguous, try `ascontiguousarray`.");
+    if (queries_info.strides[1] != static_cast<Py_ssize_t>(queries_info.itemsize))
+        throw std::invalid_argument("Queries rows must be contiguous, try `ascontiguousarray`.");
 
     std::size_t dataset_count = static_cast<std::size_t>(dataset_info.shape[0]);
     std::size_t dataset_dimensions = static_cast<std::size_t>(dataset_info.shape[1]);
@@ -570,6 +579,8 @@ static py::tuple cluster_many_brute_force( //
     py::buffer_info dataset_info = dataset.request();
     if (dataset_info.ndim != 2)
         throw std::invalid_argument("Expects a matrix (rank-2 tensor) of dataset to cluster!");
+    if (dataset_info.strides[1] != static_cast<Py_ssize_t>(dataset_info.itemsize))
+        throw std::invalid_argument("Dataset rows must be contiguous, try `ascontiguousarray`.");
 
     std::size_t dataset_count = static_cast<std::size_t>(dataset_info.shape[0]);
     std::size_t dataset_dimensions = static_cast<std::size_t>(dataset_info.shape[1]);

@@ -121,11 +121,13 @@
     "xtr1common": "cpp",
     "xtree": "cpp",
     "xutility": "cpp",
-    "execution": "cpp"
+    "execution": "cpp",
+    "text_encoding": "cpp"
   },
   "cSpell.words": [
     "allclose",
     "arange",
+    "ascontiguousarray",
     "ashvardanian",
     "astype",
     "autovec",
@@ -182,6 +184,7 @@
     "pytest",
     "Quickstart",
     "relock",
+    "relwithdebinfo",
     "repr",
     "rtype",
     "SIMD",

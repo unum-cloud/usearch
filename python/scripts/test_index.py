@@ -88,6 +88,27 @@ def test_index_retrieval(ndim, metric, quantization, dtype, batch_size):
         vectors_batch_retrieved = vectors_batch_retrieved[vectors_reordering]
         assert np.allclose(vectors_batch_retrieved, vectors, atol=0.1)
 
+    if quantization != ScalarKind.I8 and batch_size > 1:
+        # When dealing with non-continuous data, it's important to check that
+        # the native bindings access them with correct strides or normalize
+        # similar to `np.ascontiguousarray`:
+        index = Index(ndim=ndim, metric=metric, dtype=quantization, multi=False)
+        vectors = random_vectors(count=batch_size, ndim=ndim + 1, dtype=dtype)
+        # Let's skip the first dimension of each vector:
+        vectors = vectors[:, 1:]
+        index.add(keys, vectors, threads=threads)
+        vectors_retrieved = np.vstack(index.get(keys, dtype))
+        assert np.allclose(vectors_retrieved, vectors, atol=0.1)
+
+        # Try a transposed version of the same vectors, that is not C-contiguous
+        # and should raise an exception!
+        index = Index(ndim=ndim, metric=metric, dtype=quantization, multi=False)
+        vectors = random_vectors(count=ndim, ndim=batch_size, dtype=dtype)  #! reversed dims
+        assert vectors.strides == (batch_size * dtype().itemsize, dtype().itemsize)
+        assert vectors.T.strides == (dtype().itemsize, batch_size * dtype().itemsize)
+        with pytest.raises(Exception):
+            index.add(keys, vectors.T, threads=threads)
+
 
 @pytest.mark.parametrize("ndim", [3, 97, 256])
 @pytest.mark.parametrize("metric", [MetricKind.Cos, MetricKind.L2sq])
@@ -104,6 +125,8 @@ def test_index_search(ndim, metric, quantization, dtype, batch_size):
 
     if batch_size == 1:
         matches: Matches = index.search(vectors, 10, threads=threads)
+        assert isinstance(matches, Matches)
+        assert isinstance(matches[0], Match)
         assert matches.keys.ndim == 1
         assert matches.keys.shape[0] == matches.distances.shape[0]
         assert len(matches) == batch_size
@@ -111,6 +134,9 @@ def test_index_search(ndim, metric, quantization, dtype, batch_size):
 
     else:
         matches: BatchMatches = index.search(vectors, 10, threads=threads)
+        assert isinstance(matches, BatchMatches)
+        assert isinstance(matches[0], Matches)
+        assert isinstance(matches[0][0], Match)
         assert matches.keys.ndim == 2
         assert matches.keys.shape[0] == matches.distances.shape[0]
         assert len(matches) == batch_size
