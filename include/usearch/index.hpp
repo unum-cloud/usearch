@@ -9,7 +9,7 @@
 
 #define USEARCH_VERSION_MAJOR 2
 #define USEARCH_VERSION_MINOR 16
-#define USEARCH_VERSION_PATCH 8
+#define USEARCH_VERSION_PATCH 9
 
 // Inferring C++ version
 // https://stackoverflow.com/a/61552074
