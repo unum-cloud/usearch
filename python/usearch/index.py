@@ -1530,7 +1530,7 @@ def search(
 
     if not exact:
         index = Index(
-            dataset.shape[1],
+            ndim=dataset.shape[1],
             metric=metric,
             dtype=dataset.dtype,
         )
