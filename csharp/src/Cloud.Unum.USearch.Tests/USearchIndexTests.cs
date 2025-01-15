@@ -166,6 +166,37 @@ public class UsearchIndexTests
     }
 
     [Fact]
+    public void Add_ByteVector_UpdatesIndexOptions()
+    {
+        // Arrange
+        const uint Dimensions = 10;
+        const uint AddKey = 1;
+        const uint NonExistentKey = 2;
+        const uint ExpectedSize = 1;
+        const uint ExpectedCapacity = 1;
+
+        var indexOptions = new IndexOptions(
+            metricKind: MetricKind.Cos,
+            quantization: ScalarKind.Int8,
+            dimensions: Dimensions
+        );
+
+        var inputVector = GenerateByteVector((int)Dimensions);
+
+        using (var index = new USearchIndex(indexOptions))
+        {
+            // Act
+            index.Add(AddKey, inputVector);
+
+            // Assert
+            Assert.True(index.Contains(AddKey));
+            Assert.False(index.Contains(NonExistentKey));
+            Assert.Equal(ExpectedSize, index.Size());
+            Assert.True(ExpectedCapacity <= index.Capacity());
+        }
+    }
+
+    [Fact]
     public void Add_DoubleVector_UpdatesIndexOptions()
     {
         // Arrange
@@ -212,6 +243,38 @@ public class UsearchIndexTests
         );
 
         var inputVector = GenerateFloatVector((int)Dimensions);
+
+        using (var index = new USearchIndex(indexOptions))
+        {
+            // Act
+            for (int i = 0; i < AddFactor; i++)
+            {
+                index.Add(AddKey, inputVector);
+            }
+
+            // Assert
+            Assert.True(index.Contains(AddKey));
+            Assert.Equal((uint)AddFactor, index.Size());
+            Assert.True((uint)AddFactor <= index.Capacity());
+        }
+    }
+
+    [Fact]
+    public void Add_ManyByteVectorsUnderSameKeySeparatelyInMultiKeyIndex_UpdatesIndexOptions()
+    {
+        // Arrange
+        const uint Dimensions = 10;
+        const ulong AddKey = 1;
+        const int AddFactor = 5;
+
+        var indexOptions = new IndexOptions(
+            metricKind: MetricKind.Cos,
+            quantization: ScalarKind.Int8,
+            dimensions: Dimensions,
+            multi: true
+        );
+
+        var inputVector = GenerateByteVector((int)Dimensions);
 
         using (var index = new USearchIndex(indexOptions))
         {
@@ -294,6 +357,39 @@ public class UsearchIndexTests
     }
 
     [Fact]
+    public void Add_ManyByteVectorsUnderSameKeyInBatchInMultiKeyIndex_UpdatesIndexOptions()
+    {
+        // Arrange
+        const uint Dimensions = 10;
+        const ulong AddKey = 1;
+        const uint BatchSize = 5;
+
+        var indexOptions = new IndexOptions(
+            metricKind: MetricKind.Cos,
+            quantization: ScalarKind.Int8,
+            dimensions: Dimensions,
+            multi: true
+        );
+
+        (var inputKeys, var inputVectors) = (
+            Enumerable.Repeat(AddKey, (int)BatchSize).ToArray(),
+            GenerateManyByteVectors((int)BatchSize, (int)Dimensions)
+        );
+
+        using (var index = new USearchIndex(indexOptions))
+        {
+            // Act
+            index.Add(inputKeys, inputVectors);
+
+            // Assert
+            Assert.True(index.Contains(AddKey));
+            Assert.Equal(BatchSize, index.Size());
+            Assert.True(BatchSize <= index.Capacity());
+            Assert.Equal((int)BatchSize, index.Count(AddKey));
+        }
+    }
+
+    [Fact]
     public void Add_ManyDoubleVectorsUnderSameKeyInBatchInMultiKeyIndex_UpdatesIndexOptions()
     {
         // Arrange
@@ -345,6 +441,39 @@ public class UsearchIndexTests
         (var inputKeys, var inputVectors) = (
             Enumerable.Repeat(AddKey, BatchSize).ToArray(),
             GenerateManyFloatVectors(BatchSize, (int)Dimensions)
+        );
+
+        using (var index = new USearchIndex(indexOptions))
+        {
+            index.Add(inputKeys, inputVectors);
+
+            // Act
+            int foundVectorsCount = index.Get(AddKey, RetrieveCount, out float[][] retrievedVectors);
+
+            // Assert
+            Assert.Equal(RetrieveCount, foundVectorsCount);
+        }
+    }
+
+    [Fact]
+    public void Get_ManyByteVectorsUnderSameKeyInMultiKeyIndex_ReturnsCorrectValue()
+    {
+        // Arrange
+        const uint Dimensions = 10;
+        const ulong AddKey = 1;
+        const int RetrieveCount = 5;
+        const int BatchSize = 10;
+
+        var indexOptions = new IndexOptions(
+            metricKind: MetricKind.Cos,
+            quantization: ScalarKind.Int8,
+            dimensions: Dimensions,
+            multi: true
+        );
+
+        (var inputKeys, var inputVectors) = (
+            Enumerable.Repeat(AddKey, BatchSize).ToArray(),
+            GenerateManyByteVectors(BatchSize, (int)Dimensions)
         );
 
         using (var index = new USearchIndex(indexOptions))
@@ -420,6 +549,33 @@ public class UsearchIndexTests
     }
 
     [Fact]
+    public void Get_AfterAddingByteVector_ReturnsEqualVector()
+    {
+        // Arrange
+        const uint Dimensions = 10;
+        const ulong AddKey = 1;
+
+        var indexOptions = new IndexOptions(
+            metricKind: MetricKind.Cos,
+            quantization: ScalarKind.Int8,
+            dimensions: Dimensions
+        );
+
+        (var inputKey, var inputVector) = (AddKey, GenerateByteVector((int)Dimensions));
+
+        using (var index = new USearchIndex(indexOptions))
+        {
+            index.Add(inputKey, inputVector);
+
+            // Act
+            index.Get(inputKey, out sbyte[] retrievedVector);
+
+            // Assert
+            Assert.Equal(inputVector, retrievedVector);
+        }
+    }
+
+    [Fact]
     public void Get_AfterAddingDoubleVector_ReturnsEqualVector()
     {
         // Arrange
@@ -460,6 +616,33 @@ public class UsearchIndexTests
         );
 
         (var inputKey, var inputVector) = (AddKey, GenerateFloatVector((int)Dimensions));
+
+        using (var index = new USearchIndex(indexOptions))
+        {
+            index.Add(inputKey, inputVector);
+
+            // Act
+            Action actual = () => index.Add(inputKey, inputVector);
+
+            // Assert
+            Assert.Throws<USearchException>(actual);
+        }
+    }
+
+    [Fact]
+    public void Add_AddingTwoByteVectorsUnderSameKey_ThrowsException()
+    {
+        // Arrange
+        const uint Dimensions = 10;
+        const ulong AddKey = 1;
+
+        var indexOptions = new IndexOptions(
+            metricKind: MetricKind.Cos,
+            quantization: ScalarKind.Int8,
+            dimensions: Dimensions
+        );
+
+        (var inputKey, var inputVector) = (AddKey, GenerateByteVector((int)Dimensions));
 
         using (var index = new USearchIndex(indexOptions))
         {
@@ -530,6 +713,35 @@ public class UsearchIndexTests
     }
 
     [Fact]
+    public void Remove_InsertedByteVector_ReturnsInsertedVectorsCount()
+    {
+        // Arrange
+        const uint Dimensions = 10;
+        const ulong AddKey = 1;
+        const int ExpectedRemoveReturn = 1;
+
+        var indexOptions = new IndexOptions(
+            metricKind: MetricKind.Cos,
+            quantization: ScalarKind.Int8,
+            dimensions: Dimensions
+        );
+
+        (var inputKey, var inputVector) = (AddKey, GenerateByteVector((int)Dimensions));
+
+
+        using (var index = new USearchIndex(indexOptions))
+        {
+            index.Add(inputKey, inputVector);
+
+            // Act
+            var removedCount = index.Remove(AddKey);
+
+            // Assert
+            Assert.Equal(ExpectedRemoveReturn, removedCount);
+        }
+    }
+
+    [Fact]
     public void Remove_InsertedDoubleVector_ReturnsInsertedVectorsCount()
     {
         // Arrange
@@ -575,6 +787,38 @@ public class UsearchIndexTests
         (var inputKeys, var inputVectors) = (
             Enumerable.Repeat(AddKey, BatchSize).ToArray(),
             GenerateManyFloatVectors(BatchSize, (int)Dimensions)
+        );
+
+        using (var index = new USearchIndex(indexOptions))
+        {
+            index.Add(inputKeys, inputVectors);
+
+            // Act
+            var removedCount = index.Remove(AddKey);
+
+            // Assert
+            Assert.Equal(BatchSize, removedCount);
+        }
+    }
+
+    [Fact]
+    public void Remove_InsertedManyByteVectorsUnderSameKeyInMultiKeyIndex_ReturnsInsertedVectorsCount()
+    {
+        // Arrange
+        const uint Dimensions = 10;
+        const ulong AddKey = 1;
+        const int BatchSize = 2;
+
+        var indexOptions = new IndexOptions(
+            metricKind: MetricKind.Cos,
+            quantization: ScalarKind.Int8,
+            dimensions: Dimensions,
+            multi: true
+        );
+
+        (var inputKeys, var inputVectors) = (
+            Enumerable.Repeat(AddKey, BatchSize).ToArray(),
+            GenerateManyByteVectors(BatchSize, (int)Dimensions)
         );
 
         using (var index = new USearchIndex(indexOptions))
@@ -960,6 +1204,21 @@ public class UsearchIndexTests
         for (int i = 0; i < n; i++)
         {
             result[i] = Enumerable.Range(0, vectorLength).Select(i => (float)i).ToArray();
+        }
+        return result;
+    }
+
+    private static sbyte[] GenerateByteVector(int vectorLength)
+    {
+        return Enumerable.Range(0, vectorLength).Select(i => (sbyte)i).ToArray();
+    }
+
+    private static sbyte[][] GenerateManyByteVectors(int n, int vectorLength)
+    {
+        var result = new sbyte[n][];
+        for (int i = 0; i < n; i++)
+        {
+            result[i] = Enumerable.Range(0, vectorLength).Select(i => (sbyte)i).ToArray();
         }
         return result;
     }
