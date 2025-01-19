@@ -29,24 +29,24 @@ class Test: XCTestCase {
         index.add(key: 43, vector: vectorB)
 
         let results = index.search(vector: vectorA, count: 10)
-        assert(results.0[0] == 42)
+        XCTAssertEqual(results.0[0], 42)
 
         let fetched: [[Float]]? = index.get(key: 42)
-        assert(fetched?[0] == vectorA)
+        XCTAssertEqual(fetched?[0], vectorA)
 
-        assert(index.contains(key: 42))
-        assert(index.count(key: 42) == 1)
-        assert(index.count(key: 49) == 0)
+        XCTAssertTrue(index.contains(key: 42))
+        XCTAssertEqual(index.count(key: 42), 1)
+        XCTAssertEqual(index.count(key: 49), 0)
         index.rename(from: 42, to: 49)
-        assert(index.count(key: 49) == 1)
+        XCTAssertEqual(index.count(key: 49), 1)
 
         let refetched: [[Float]]? = index.get(key: 49)
-        assert(refetched?[0] == vectorA)
+        XCTAssertEqual(refetched?[0], vectorA)
         let stale: [[Float]]? = index.get(key: 42)
-        assert(stale == nil)
+        XCTAssertNil(stale)
 
         index.remove(key: 49)
-        assert(index.count(key: 49) == 0)
+        XCTAssertEqual(index.count(key: 49), 0)
     }
 
     func testUnitMulti() throws {
@@ -68,26 +68,26 @@ class Test: XCTestCase {
         index.add(key: 42, vector: vectorB)
 
         let results = index.search(vector: vectorA, count: 10)
-        assert(results.0[0] == 42)
+        XCTAssertEqual(results.0[0], 42)
 
         let fetched: [[Float]]? = index.get(key: 42, count: 2)
-        assert(fetched?.contains(vectorA) == true)
-        assert(fetched?.contains(vectorB) == true)
+        XCTAssertEqual(fetched?.contains(vectorA), true)
+        XCTAssertEqual(fetched?.contains(vectorB), true)
 
-        assert(index.contains(key: 42))
-        assert(index.count(key: 42) == 2)
-        assert(index.count(key: 49) == 0)
+        XCTAssertTrue(index.contains(key: 42))
+        XCTAssertEqual(index.count(key: 42), 2)
+        XCTAssertEqual(index.count(key: 49), 0)
         index.rename(from: 42, to: 49)
-        assert(index.count(key: 49) == 2)
+        XCTAssertEqual(index.count(key: 49), 2)
 
         let refetched: [[Float]]? = index.get(key: 49, count: 2)
-        assert(refetched?.contains(vectorA) == true)
-        assert(refetched?.contains(vectorB) == true)
+        XCTAssertEqual(refetched?.contains(vectorA), true)
+        XCTAssertEqual(refetched?.contains(vectorB), true)
         let stale: [[Float]]? = index.get(key: 42)
-        assert(stale == nil)
+        XCTAssertNil(stale)
 
         index.remove(key: 49)
-        assert(index.count(key: 49) == 0)
+        XCTAssertEqual(index.count(key: 49), 0)
     }
 
     func testIssue399() {
