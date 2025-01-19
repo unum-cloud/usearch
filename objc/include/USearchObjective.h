@@ -27,6 +27,20 @@ typedef NS_ENUM(NSUInteger, USearchMetric) {
     USearchMetricSorensen
 };
 
+extern NSErrorDomain const USearchErrorDomain;
+typedef NS_ERROR_ENUM(USearchErrorDomain, USearchErrorCode) {
+    USearchUnsupportedMetric,
+    USearchAddError,
+    USearchFindError,
+    USearchAllocationError,
+    USearchRemoveError,
+    USearchRenameError,
+    USearchPathNotUTF8Encodable,
+    USearchSaveError,
+    USearchLoadError,
+    USearchViewError,
+};
+
 typedef UInt64 USearchKey;
 
 typedef bool (^USearchFilterFn)(USearchKey key);
@@ -53,7 +67,12 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
  * Higher connectivity improves quantization, increases memory usage, and reduces construction speed.
  * @param quantization Quantization of internal vector representations. Lower quantization means higher speed.
  */
-+ (instancetype)make:(USearchMetric)metric dimensions:(UInt32)dimensions connectivity:(UInt32)connectivity quantization:(USearchScalar)quantization NS_SWIFT_NAME(make(metric:dimensions:connectivity:quantization:));
++ (instancetype)make:(USearchMetric)metric
+          dimensions:(UInt32)dimensions
+        connectivity:(UInt32)connectivity
+        quantization:(USearchScalar)quantization
+               error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(make(metric:dimensions:connectivity:quantization:));
 
 /**
  * @brief Initializes a new index.
@@ -68,20 +87,26 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
           dimensions:(UInt32)dimensions
         connectivity:(UInt32)connectivity
         quantization:(USearchScalar)quantization
-               multi:(BOOL)multi NS_SWIFT_NAME(make(metric:dimensions:connectivity:quantization:multi:));
+               multi:(BOOL)multi
+               error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(make(metric:dimensions:connectivity:quantization:multi:));
 
 
 /**
  * @brief Pre-allocates space in the index for the given number of vectors.
  */
-- (void)reserve:(UInt32)count NS_SWIFT_NAME(reserve(_:));
+- (void)reserve:(UInt32)count
+          error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(reserve(_:));
 
 /**
  * @brief Adds a labeled vector to the index.
  * @param vector Single-precision vector.
  */
 - (void)addSingle:(USearchKey)key
-           vector:(Float32 const *_Nonnull)vector NS_SWIFT_NAME(addSingle(key:vector:));
+           vector:(Float32 const *_Nonnull)vector
+            error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(addSingle(key:vector:));
 
 /**
  * @brief Approximate nearest neighbors search.
@@ -94,7 +119,9 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
 - (UInt32)searchSingle:(Float32 const *_Nonnull)vector
                  count:(UInt32)count
                   keys:(USearchKey *_Nullable)keys
-             distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(searchSingle(vector:count:keys:distances:));
+             distances:(Float32 *_Nullable)distances
+                 error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(searchSingle(vector:count:keys:distances:));
 
 /**
 * @brief Retrieves a labeled single-precision vector from the index.
@@ -104,7 +131,9 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
 */
 - (UInt32)getSingle:(USearchKey)key
     vector:(void *_Nonnull)vector
-    count:(UInt32)count NS_SWIFT_NAME(getSingle(key:vector:count:));
+    count:(UInt32)count
+    error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(getSingle(key:vector:count:));
 
 /**
  * @brief Approximate nearest neighbors search.
@@ -120,14 +149,18 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
                  count:(UInt32)count
                 filter:(USearchFilterFn)filter
                   keys:(USearchKey *_Nullable)keys
-             distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(filteredSearchSingle(vector:count:filter:keys:distances:));
+             distances:(Float32 *_Nullable)distances
+                 error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(filteredSearchSingle(vector:count:filter:keys:distances:));
 
 /**
  * @brief Adds a labeled vector to the index.
  * @param vector Double-precision vector.
  */
 - (void)addDouble:(USearchKey)key
-           vector:(Float64 const *_Nonnull)vector NS_SWIFT_NAME(addDouble(key:vector:));
+           vector:(Float64 const *_Nonnull)vector
+            error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(addDouble(key:vector:));
 
 /**
  * @brief Approximate nearest neighbors search.
@@ -140,7 +173,9 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
 - (UInt32)searchDouble:(Float64 const *_Nonnull)vector
                  count:(UInt32)count
                   keys:(USearchKey *_Nullable)keys
-             distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(searchDouble(vector:count:keys:distances:));
+             distances:(Float32 *_Nullable)distances
+                 error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(searchDouble(vector:count:keys:distances:));
 
 /**
 * @brief Retrieves a labeled double-precision vector from the index.
@@ -150,7 +185,9 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
 */
 - (UInt32)getDouble:(USearchKey)key
     vector:(void *_Nonnull)vector
-    count:(UInt32)count NS_SWIFT_NAME(getDouble(key:vector:count:));
+    count:(UInt32)count
+    error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(getDouble(key:vector:count:));
 
 /**
  * @brief Approximate nearest neighbors search.
@@ -166,13 +203,17 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
                  count:(UInt32)wanted
                 filter:(USearchFilterFn)predicate
                   keys:(USearchKey *_Nullable)keys
-             distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(filteredSearchDouble(vector:count:filter:keys:distances:));
+             distances:(Float32 *_Nullable)distances
+                 error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(filteredSearchDouble(vector:count:filter:keys:distances:));
 /**
  * @brief Adds a labeled vector to the index.
  * @param vector Half-precision vector.
  */
 - (void)addHalf:(USearchKey)key
-         vector:(void const *_Nonnull)vector NS_SWIFT_NAME(addHalf(key:vector:));
+         vector:(void const *_Nonnull)vector
+          error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(addHalf(key:vector:));
 
 /**
  * @brief Approximate nearest neighbors search.
@@ -185,7 +226,9 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
 - (UInt32)searchHalf:(void const *_Nonnull)vector
                count:(UInt32)count
                 keys:(USearchKey *_Nullable)keys
-           distances:(Float32 *_Nullable)distances NS_SWIFT_NAME(searchHalf(vector:count:keys:distances:));
+           distances:(Float32 *_Nullable)distances
+               error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(searchHalf(vector:count:keys:distances:));
 
 /**
 * @brief Retrieves a labeled half-precision vector from the index.
@@ -194,39 +237,57 @@ API_AVAILABLE(ios(13.0), macos(10.15), tvos(13.0), watchos(6.0))
 * @return Number of vectors exported to `vector`.
 */
 - (UInt32)getHalf:(USearchKey)key
-        vector:(void *_Nonnull)vector
-        count:(UInt32)count NS_SWIFT_NAME(getHalf(key:vector:count:));
+           vector:(void *_Nonnull)vector
+            count:(UInt32)count
+            error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(getHalf(key:vector:count:));
 
-- (Boolean)contains:(USearchKey)key NS_SWIFT_NAME(contains(key:));
+- (Boolean)contains:(USearchKey)key
+              error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(contains(key:));
 
-- (UInt32)count:(USearchKey)key NS_SWIFT_NAME(count(key:));
+- (UInt32)count:(USearchKey)key
+          error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(count(key:));
 
-- (void)remove:(USearchKey)key NS_SWIFT_NAME(remove(key:));
+- (void)remove:(USearchKey)key
+         error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(remove(key:));
 
-- (void)rename:(USearchKey)key to:(USearchKey)key NS_SWIFT_NAME(rename(from:to:));
+- (void)rename:(USearchKey)key
+            to:(USearchKey)key
+         error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(rename(from:to:));
 
 
 /**
  * @brief Saves pre-constructed index to disk.
  */
-- (void)save:(NSString *)path NS_SWIFT_NAME(save(path:));
+- (void)save:(NSString *)path
+       error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(save(path:));
 
 /**
  * @brief Loads a pre-constructed index from index.
  */
-- (void)load:(NSString *)path NS_SWIFT_NAME(load(path:));
+- (void)load:(NSString *)path
+       error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(load(path:));
 
 /**
  * @brief Views a pre-constructed index from disk without loading it into RAM.
  *        Allows working with larger-than memory indexes and saving scarce
  *        memory on device in read-only workloads.
  */
-- (void)view:(NSString *)path NS_SWIFT_NAME(view(path:));
+- (void)view:(NSString *)path
+       error:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(view(path:));
 
 /**
  * @brief Removes all the data from index, while preserving the settings.
  */
-- (void)clear NS_SWIFT_NAME(clear());
+- (void)clear:(NSError**)error __attribute__((swift_error(nonnull_error)))
+NS_SWIFT_NAME(clear());
 
 @end
 

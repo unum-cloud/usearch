@@ -14,6 +14,8 @@ using labeling_result_t = typename index_dense_t::labeling_result_t;
 using search_result_t = typename index_dense_t::search_result_t;
 using shared_index_dense_t = std::shared_ptr<index_dense_t>;
 
+NSErrorDomain const USearchErrorDomain = @"cloud.unum.usearch.USearchErrorDomain";
+
 static_assert(std::is_same<USearchKey, index_dense_t::vector_key_t>::value, "Type mismatch between Objective-C and C++");
 
 metric_kind_t to_native_metric(USearchMetric m) {
@@ -122,25 +124,31 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 + (instancetype)make:(USearchMetric)metricKind
           dimensions:(UInt32)dimensions
         connectivity:(UInt32)connectivity
-        quantization:(USearchScalar)quantization {
+        quantization:(USearchScalar)quantization
+               error:(NSError**)error {
     // Create a single-vector index by default
-    return [self make:metricKind dimensions:dimensions connectivity:connectivity quantization:quantization multi:false];
+    return [self make:metricKind dimensions:dimensions connectivity:connectivity quantization:quantization multi:false error:error];
 }
 
 + (instancetype)make:(USearchMetric)metricKind
           dimensions:(UInt32)dimensions
         connectivity:(UInt32)connectivity
         quantization:(USearchScalar)quantization
-               multi:(BOOL)multi {
+               multi:(BOOL)multi
+               error:(NSError**)error {
     std::size_t dims = static_cast<std::size_t>(dimensions);
 
     index_dense_config_t config(static_cast<std::size_t>(connectivity));
     config.multi = multi;
     metric_punned_t metric(dims, to_native_metric(metricKind), to_native_scalar(quantization));
     if (metric.missing()) {
-        @throw [NSException exceptionWithName:@"Can't create an index"
-                                       reason:@"The metric is not supported"
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchUnsupportedMetric
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't create an index",
+            NSLocalizedFailureReasonErrorKey: @"The metric is not supported",
+        }];
+        return nil;
     }
 
     shared_index_dense_t ptr = std::make_shared<index_dense_t>(index_dense_t::make(metric, config));
@@ -148,26 +156,35 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 }
 
 - (void)addSingle:(USearchKey)key
-           vector:(Float32 const *_Nonnull)vector {
+           vector:(Float32 const *_Nonnull)vector
+            error:(NSError**)error {
     add_result_t result = _native->add(key, vector);
 
     if (!result) {
-        @throw [NSException exceptionWithName:@"Can't add to index"
-                                       reason:[NSString stringWithUTF8String:result.error.release()]
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchAddError
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't add to index",
+            NSLocalizedFailureReasonErrorKey: [NSString stringWithUTF8String:result.error.release()],
+        }];
     }
 }
 
 - (UInt32)searchSingle:(Float32 const *_Nonnull)vector
                  count:(UInt32)wanted
                   keys:(USearchKey *_Nullable)keys
-             distances:(Float32 *_Nullable)distances {
+             distances:(Float32 *_Nullable)distances
+                 error:(NSError**)error {
     search_result_t result = _native->search(vector, static_cast<std::size_t>(wanted));
 
     if (!result) {
-        @throw [NSException exceptionWithName:@"Can't find in index"
-                                       reason:[NSString stringWithUTF8String:result.error.release()]
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchFindError
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't find in index",
+            NSLocalizedFailureReasonErrorKey: [NSString stringWithUTF8String:result.error.release()],
+        }];
+        return 0;
     }
 
     std::size_t found = result.dump_to(keys, distances);
@@ -176,7 +193,8 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
 - (UInt32)getSingle:(USearchKey)key
              vector:(void *_Nonnull)vector
-              count:(UInt32)wanted {
+              count:(UInt32)wanted
+              error:(NSError**)error {
     std::size_t result = _native->get(key, (f32_t*)vector, static_cast<std::size_t>(wanted));
     return static_cast<UInt32>(result);
 }
@@ -185,13 +203,18 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
                  count:(UInt32)wanted
                 filter:(USearchFilterFn)predicate
                   keys:(USearchKey *_Nullable)keys
-             distances:(Float32 *_Nullable)distances {
+             distances:(Float32 *_Nullable)distances
+                 error:(NSError**)error {
     search_result_t result = _native->filtered_search(vector, static_cast<std::size_t>(wanted), predicate);
 
     if (!result) {
-        @throw [NSException exceptionWithName:@"Can't find in index"
-                                       reason:[NSString stringWithUTF8String:result.error.release()]
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchFindError
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't find in index",
+            NSLocalizedFailureReasonErrorKey: [NSString stringWithUTF8String:result.error.release()],
+        }];
+        return 0;
     }
 
     std::size_t found = result.dump_to(keys, distances);
@@ -199,26 +222,35 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 }
 
 - (void)addDouble:(USearchKey)key
-           vector:(Float64 const *_Nonnull)vector {
+           vector:(Float64 const *_Nonnull)vector
+            error:(NSError**)error {
     add_result_t result = _native->add(key, (f64_t const *)vector);
 
     if (!result) {
-        @throw [NSException exceptionWithName:@"Can't add to index"
-                                       reason:[NSString stringWithUTF8String:result.error.release()]
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchAddError
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't add to index",
+            NSLocalizedFailureReasonErrorKey: [NSString stringWithUTF8String:result.error.release()],
+        }];
     }
 }
 
 - (UInt32)searchDouble:(Float64 const *_Nonnull)vector
                  count:(UInt32)wanted
                   keys:(USearchKey *_Nullable)keys
-             distances:(Float32 *_Nullable)distances {
+             distances:(Float32 *_Nullable)distances
+                 error:(NSError**)error {
     search_result_t result = _native->search((f64_t const *)vector, static_cast<std::size_t>(wanted));
 
     if (!result) {
-        @throw [NSException exceptionWithName:@"Can't find in index"
-                                       reason:[NSString stringWithUTF8String:result.error.release()]
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchFindError
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't find in index",
+            NSLocalizedFailureReasonErrorKey: [NSString stringWithUTF8String:result.error.release()],
+        }];
+        return 0;
     }
 
     std::size_t found = result.dump_to(keys, distances);
@@ -227,7 +259,8 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
 - (UInt32)getDouble:(USearchKey)key
              vector:(void *_Nonnull)vector
-              count:(UInt32)wanted {
+              count:(UInt32)wanted
+              error:(NSError**)error {
     std::size_t result = _native->get(key, (f64_t*)vector, static_cast<std::size_t>(wanted));
     return static_cast<UInt32>(result);
 }
@@ -236,13 +269,18 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
                  count:(UInt32)wanted
                 filter:(USearchFilterFn)predicate
                   keys:(USearchKey *_Nullable)keys
-             distances:(Float32 *_Nullable)distances {
+             distances:(Float32 *_Nullable)distances
+                 error:(NSError**)error {
     search_result_t result = _native->filtered_search((f64_t const *) vector, static_cast<std::size_t>(wanted), predicate);
 
     if (!result) {
-        @throw [NSException exceptionWithName:@"Can't find in index"
-                                       reason:[NSString stringWithUTF8String:result.error.release()]
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchFindError
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't find in index",
+            NSLocalizedFailureReasonErrorKey: [NSString stringWithUTF8String:result.error.release()],
+        }];
+        return 0;
     }
 
     std::size_t found = result.dump_to(keys, distances);
@@ -250,26 +288,35 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 }
 
 - (void)addHalf:(USearchKey)key
-         vector:(void const *_Nonnull)vector {
+         vector:(void const *_Nonnull)vector
+          error:(NSError**)error {
     add_result_t result = _native->add(key, (f16_t const *)vector);
 
     if (!result) {
-        @throw [NSException exceptionWithName:@"Can't add to index"
-                                       reason:[NSString stringWithUTF8String:result.error.release()]
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchAddError
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't add to index",
+            NSLocalizedFailureReasonErrorKey: [NSString stringWithUTF8String:result.error.release()],
+        }];
     }
 }
 
 - (UInt32)searchHalf:(void const *_Nonnull)vector
                count:(UInt32)wanted
                 keys:(USearchKey *_Nullable)keys
-           distances:(Float32 *_Nullable)distances {
+           distances:(Float32 *_Nullable)distances
+               error:(NSError**)error {
     search_result_t result = _native->search((f16_t const *)vector, static_cast<std::size_t>(wanted));
 
     if (!result) {
-        @throw [NSException exceptionWithName:@"Can't find in index"
-                                       reason:[NSString stringWithUTF8String:result.error.release()]
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchFindError
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't find in index",
+            NSLocalizedFailureReasonErrorKey: [NSString stringWithUTF8String:result.error.release()],
+        }];
+        return 0;
     }
 
     std::size_t found = result.dump_to(keys, distances);
@@ -278,102 +325,134 @@ scalar_kind_t to_native_scalar(USearchScalar m) {
 
 - (UInt32)getHalf:(USearchKey)key
            vector:(void *_Nonnull)vector
-            count:(UInt32)wanted {
+            count:(UInt32)wanted
+            error:(NSError**)error {
     std::size_t result = _native->get(key, (f16_t*)vector, static_cast<std::size_t>(wanted));
     return static_cast<UInt32>(result);
 }
 
-- (void)clear {
+- (void)clear:(NSError**)error {
     _native->clear();
 }
 
-- (void)reserve:(UInt32)count {
+- (void)reserve:(UInt32)count error:(NSError**)error {
     if (!_native->try_reserve(static_cast<std::size_t>(count))) {
-        @throw [NSException exceptionWithName:@"Can't reserve space"
-                                       reason:@"Memory allocation failed"
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchAllocationError
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't reserve space",
+            NSLocalizedFailureReasonErrorKey: @"Memory allocation failed",
+        }];
     }
 }
 
-- (Boolean)contains:(USearchKey)key {
+- (Boolean)contains:(USearchKey)key error:(NSError**)error {
     return _native->contains(key);
 }
 
-- (UInt32)count:(USearchKey)key {
+- (UInt32)count:(USearchKey)key error:(NSError**)error {
     return static_cast<UInt32>(_native->count(key));
 }
 
-- (void)remove:(USearchKey)key {
+- (void)remove:(USearchKey)key
+         error:(NSError**)error {
     labeling_result_t result = _native->remove(key);
 
     if (!result) {
-        @throw [NSException exceptionWithName:@"Can't remove an entry"
-                                       reason:[NSString stringWithUTF8String:result.error.release()]
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchRemoveError
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't remove an entry",
+            NSLocalizedFailureReasonErrorKey: [NSString stringWithUTF8String:result.error.release()],
+        }];
     }
 }
 
-- (void)rename:(USearchKey)key to:(USearchKey)to {
+- (void)rename:(USearchKey)key to:(USearchKey)to error:(NSError**)error {
     labeling_result_t result = _native->rename(key, to);
 
     if (!result) {
-        @throw [NSException exceptionWithName:@"Can't rename the entry"
-                                       reason:[NSString stringWithUTF8String:result.error.release()]
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchRenameError
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't rename the entry",
+            NSLocalizedFailureReasonErrorKey: [NSString stringWithUTF8String:result.error.release()],
+        }];
     }
 }
 
-- (void)save:(NSString *)path {
+- (void)save:(NSString *)path error:(NSError**)error {
     char const *path_c = [path UTF8String];
 
     if (!path_c) {
-        @throw [NSException exceptionWithName:@"Can't save to disk"
-                                       reason:@"The path must be convertible to UTF8"
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchPathNotUTF8Encodable
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't save to disk",
+            NSLocalizedFailureReasonErrorKey: @"The path must be convertible to UTF8",
+        }];
+        return;
     }
 
     serialization_result_t result = _native->save(path_c);
 
     if (!result) {
-        @throw [NSException exceptionWithName:@"Can't save to disk"
-                                       reason:[NSString stringWithUTF8String:result.error.release()]
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchSaveError
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't save to disk",
+            NSLocalizedFailureReasonErrorKey: [NSString stringWithUTF8String:result.error.release()],
+        }];
     }
 }
 
-- (void)load:(NSString *)path {
+- (void)load:(NSString *)path error:(NSError**)error {
     char const *path_c = [path UTF8String];
 
     if (!path_c) {
-        @throw [NSException exceptionWithName:@"Can't load from disk"
-                                       reason:@"The path must be convertible to UTF8"
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchPathNotUTF8Encodable
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't load from disk",
+            NSLocalizedFailureReasonErrorKey: @"The path must be convertible to UTF8",
+        }];
+        return;
     }
 
     serialization_result_t result = _native->load(path_c);
 
     if (!result) {
-        @throw [NSException exceptionWithName:@"Can't load from disk"
-                                       reason:[NSString stringWithUTF8String:result.error.release()]
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchLoadError
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't load from disk",
+            NSLocalizedFailureReasonErrorKey: [NSString stringWithUTF8String:result.error.release()],
+        }];
     }
 }
 
-- (void)view:(NSString *)path {
+- (void)view:(NSString *)path error:(NSError**)error {
     char const *path_c = [path UTF8String];
 
     if (!path_c) {
-        @throw [NSException exceptionWithName:@"Can't view from disk"
-                                       reason:@"The path must be convertible to UTF8"
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchPathNotUTF8Encodable
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't view from disk",
+            NSLocalizedFailureReasonErrorKey: @"The path must be convertible to UTF8",
+        }];
+        return;
     }
 
     serialization_result_t result = _native->view(path_c);
 
     if (!result) {
-        @throw [NSException exceptionWithName:@"Can't view from disk"
-                                       reason:[NSString stringWithUTF8String:result.error.release()]
-                                     userInfo:nil];
+        *error = [NSError errorWithDomain:USearchErrorDomain
+                                     code:USearchViewError
+                                 userInfo:@{
+            NSLocalizedDescriptionKey: @"Can't view from disk",
+            NSLocalizedFailureReasonErrorKey: [NSString stringWithUTF8String:result.error.release()],
+        }];
     }
 }
 
