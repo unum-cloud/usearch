@@ -44,6 +44,7 @@ class CompiledIndex : public Napi::ObjectWrap<CompiledIndex> {
     Napi::Value Count(Napi::CallbackInfo const& ctx);
 
     std::unique_ptr<index_dense_t> native_;
+    std::mutex mtx;
 };
 
 Napi::Object CompiledIndex::Init(Napi::Env env, Napi::Object exports) {
@@ -165,13 +166,23 @@ void CompiledIndex::Add(Napi::CallbackInfo const& ctx) {
 
     // Create an instance of the executor with the default number of threads
     auto run_parallel = [&](auto vectors) {
+        std::string error = "";
         executor_stl_t executor;
         executor.fixed(tasks, [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
             add_result_t result = native_->add(static_cast<default_key_t>(keys[task_idx]),
                                                vectors + task_idx * native_->dimensions());
-            if (!result)
-                Napi::Error::New(ctx.Env(), result.error.release()).ThrowAsJavaScriptException();
+            if (!result) {
+                std::lock_guard<std::mutex> lock(mtx);
+                error
+                    .append("<key:")
+                    .append(std::to_string(keys[task_idx]))
+                    .append(" message:")
+                    .append(result.error.release())
+                    .append(">");
+            }
         });
+        if (error.size() > 0)
+            Napi::Error::New(ctx.Env(), error).ThrowAsJavaScriptException();
     };
 
     Napi::TypedArray vectors = ctx[1].As<Napi::TypedArray>();
