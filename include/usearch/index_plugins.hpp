@@ -581,6 +581,11 @@ class bf16_bits_t {
         uint16_ = f32_to_bf16(v / bf16_to_f32(uint16_));
         return *this;
     }
+
+    inline bf16_bits_t& operator=(float v) noexcept {
+        uint16_ = f32_to_bf16(v);
+        return *this;
+    }
 };
 
 /**
@@ -1223,6 +1228,7 @@ struct casts_punned_t {
         cast_punned_t b1x8{};
         cast_punned_t i8{};
         cast_punned_t f16{};
+        cast_punned_t bf16{};
         cast_punned_t f32{};
         cast_punned_t f64{};
 
@@ -1231,7 +1237,7 @@ struct casts_punned_t {
             case scalar_kind_t::f64_k: return f64;
             case scalar_kind_t::f32_k: return f32;
             case scalar_kind_t::f16_k: return f16;
-            case scalar_kind_t::bf16_k: return f16;
+            case scalar_kind_t::bf16_k: return bf16;
             case scalar_kind_t::i8_k: return i8;
             case scalar_kind_t::b1x8_k: return b1x8;
             default: return nullptr;
@@ -1246,12 +1252,14 @@ struct casts_punned_t {
         result.from.b1x8 = &cast_gt<b1x8_t, scalar_at>::try_;
         result.from.i8 = &cast_gt<i8_t, scalar_at>::try_;
         result.from.f16 = &cast_gt<f16_t, scalar_at>::try_;
+        result.from.bf16 = &cast_gt<bf16_t, scalar_at>::try_;
         result.from.f32 = &cast_gt<f32_t, scalar_at>::try_;
         result.from.f64 = &cast_gt<f64_t, scalar_at>::try_;
 
         result.to.b1x8 = &cast_gt<scalar_at, b1x8_t>::try_;
         result.to.i8 = &cast_gt<scalar_at, i8_t>::try_;
         result.to.f16 = &cast_gt<scalar_at, f16_t>::try_;
+        result.to.bf16 = &cast_gt<scalar_at, bf16_t>::try_;
         result.to.f32 = &cast_gt<scalar_at, f32_t>::try_;
         result.to.f64 = &cast_gt<scalar_at, f64_t>::try_;
 
