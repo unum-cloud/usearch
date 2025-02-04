@@ -5,7 +5,7 @@
 //  Created by Ash Vardanian on 5/11/23.
 //
 
-@available(iOS 13, macOS 10.15, tvOS 13.0, watchOS 6.0, *)
+@available(iOS 13, macOS 11.0, tvOS 13.0, watchOS 6.0, *)
 extension USearchIndex {
     public typealias Key = USearchKey
     public typealias Metric = USearchMetric

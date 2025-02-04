@@ -1,0 +1,9 @@
+module usearch_cxx {
+    header "index.hpp"
+    header "index_dense.hpp"
+    header "index_plugins.hpp"
+
+    requires cplusplus
+
+    export *
+}

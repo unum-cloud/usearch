@@ -1,4 +1,4 @@
-// swift-tools-version:5.3
+// swift-tools-version:5.9
 
 import PackageDescription
 
@@ -26,10 +26,19 @@ let package = Package(
         ),
         .target(
             name: "USearch",
-            dependencies: ["USearchObjective"],
             path: "swift",
             exclude: ["README.md", "Test.swift"],
-            sources: ["USearch.swift", "Index+Sugar.swift"]
+            sources: ["USearchIndex.swift", "Index+Sugar.swift"],
+            cxxSettings: [
+                .headerSearchPath("../include/"),
+                .headerSearchPath("../fp16/include/"),
+                .headerSearchPath("../simsimd/include/"),
+                .define("USEARCH_USE_FP16LIB", to: "1"),
+                .define("USEARCH_USE_SIMSIMD", to: "1"),
+            ],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
         ),
         .testTarget(
             name: "USearchTests",
