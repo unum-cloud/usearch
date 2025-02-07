@@ -1971,7 +1971,14 @@ class index_dense_gt {
 
         available_threads_mutex_.lock();
         usearch_assert_m(available_threads_.size(), "No available threads to lock");
-        available_threads_.try_pop(thread_id);
+        while (true) {
+            if (available_threads_.try_pop(thread_id)) {
+                break;
+        }
+            available_threads_mutex_.unlock();
+            usleep(10);
+            available_threads_mutex_.lock();
+        }
         available_threads_mutex_.unlock();
         return {*this, thread_id, true};
     }
