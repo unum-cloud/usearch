@@ -1974,7 +1974,7 @@ class index_dense_gt {
         while (true) {
             if (available_threads_.try_pop(thread_id)) {
                 break;
-        }
+            }
             available_threads_mutex_.unlock();
             usleep(10);
             available_threads_mutex_.lock();
