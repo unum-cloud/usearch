@@ -80,21 +80,82 @@ public enum USearchError: Error {
     case outOfMemory
     case unknownScalarKind
     case unknownMetricKind
+    case fileReadError
+    case fileTypeError
+    case keyLookupsDisabled
+    case keyMissing
+    case serializationError
+    case deserializationError
+    case immutableError
+    case keyCountError
+    case renameCollisionError
+    case indexTooSmallToClusterError
+    case duplicateKeysError
+    case reservationError
 
     case pathNotUTF8Encodable
 
     case unknownError(String)
 
-    static func fromErrorString(_ errorString: String) -> USearchError? {
+    static func fromErrorString(_ errorString: String) -> USearchError {
         switch errorString {
-        case "Out of memory!", "Out of memory when preparing contexts!", "Out of memory, allocating a temporary buffer for batch results":
+        case
+            "Out of memory!",
+            "Out of memory",
+            "Out of memory when preparing contexts!",
+            "Out of memory, allocating a temporary buffer for batch results",
+            "Failed to allocate memory for the index!",
+            "Failed to allocate memory for the casts",
+            "Failed to reserve memory for the index",
+            "Failed to allocate memory for the available threads!",
+            "Failed to allocate memory for the index",
+            "Can't allocate memory for a free-list",
+            "Failed to allocate memory for the casts!":
             return .outOfMemory
         case "Unknown scalar kind!":
             return .unknownScalarKind
         case "Unknown metric kind!":
             return .unknownMetricKind
+        case "End of file reached!", "Can't infer file size":
+            return .fileReadError
+        case "Not a dense USearch index!":
+            return .fileTypeError
+        case "Key lookups are disabled!":
+            return .keyLookupsDisabled
+        case "Key missing!":
+            return .keyMissing
+        case "Failed to serialize into stream":
+            return .serializationError
+        case
+            "Failed to read 32-bit dimensions of the matrix",
+            "Failed to read 64-bit dimensions of the matrix",
+            "Failed to allocate memory to address vectors",
+            "Failed to read vectors",
+            "Failed to read the index ", // space left intentionally blank
+            "Magic header mismatch - the file isn't an index",
+            "File format may be different, please rebuild",
+            "Key type doesn't match, consider rebuilding",
+            "Slot type doesn't match, consider rebuilding",
+            "Index size and the number of vectors doesn't match",
+            "File is corrupted and lacks matrix dimensions",
+            "File is corrupted and lacks a header":
+            return .deserializationError
+        case
+            "Can't add to an immutable index",
+            "Can't remove from an immutable index":
+            return .immutableError
+        case "Free keys count mismatch":
+            return .keyCountError
+        case "Renaming impossible, the key is already in use":
+            return .renameCollisionError
+        case "Index too small to cluster!":
+            return .indexTooSmallToClusterError
+        case "Duplicate keys not allowed in high-level wrappers":
+            return .duplicateKeysError
+        case "Reserve capacity ahead of insertions!":
+            return .reservationError
         default:
-            return nil
+            return .unknownError(errorString)
         }
     }
 }

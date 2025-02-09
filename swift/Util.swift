@@ -11,16 +11,11 @@ func throwing<T>(_ fn: (inout UnsafeMutablePointer<usearch_error_t?>) -> T) thro
     var err: UnsafeMutablePointer<usearch_error_t?> = .allocate(capacity: 1)
     let result = fn(&err)
 
-    guard let errorCString = err.pointee else {
-        return result
+    if let errorCString = err.pointee {
+        throw USearchError.fromErrorString(String(cString: errorCString))
     }
 
-    let errorString = String(cString: errorCString)
-    guard let error = USearchError.fromErrorString(errorString) else {
-        throw USearchError.unknownError(errorString)
-    }
-
-    throw error
+    return result
 }
 
 func pointer<T>(_ value: T) -> UnsafeMutablePointer<T> {
