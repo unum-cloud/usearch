@@ -472,6 +472,14 @@ USEARCH_EXPORT void usearch_exact_search(                            //
     usearch_distance_t* distances, size_t distances_stride,          //
     usearch_error_t* error);
 
+/**
+ * @brief Erases all the vectors from the index.
+ *  @param[inout] index The handle to the USearch index to be modified.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT void usearch_clear(usearch_index_t index,
+                                  usearch_error_t* error);
+
 #ifdef __cplusplus
 }
 #endif
