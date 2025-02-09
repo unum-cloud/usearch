@@ -1,14 +1,26 @@
-// swift-tools-version:5.3
+// swift-tools-version:5.9
 
 import PackageDescription
+
+let cxxSettings: [PackageDescription.CXXSetting] = [
+    .headerSearchPath("../include/"),
+    .headerSearchPath("../fp16/include/"),
+    .headerSearchPath("../simsimd/include/"),
+    .define("USEARCH_USE_FP16LIB", to: "1"),
+    .define("USEARCH_USE_SIMSIMD", to: "1"),
+]
 
 let package = Package(
     name: "USearch",
     products: [
         .library(
+            name: "USearchObjective",
+            targets: ["USearchObjective"]
+        ),
+        .library(
             name: "USearch",
-            targets: ["USearchObjective", "USearch"]
-        )
+            targets: ["USearch"]
+        ),
     ],
     dependencies: [],
     targets: [
@@ -16,27 +28,37 @@ let package = Package(
             name: "USearchObjective",
             path: "objc",
             sources: ["USearchObjective.mm", "../simsimd/c/lib.c"],
-            cxxSettings: [
-                .headerSearchPath("../include/"),
-                .headerSearchPath("../fp16/include/"),
-                .headerSearchPath("../simsimd/include/"),
-                .define("USEARCH_USE_FP16LIB", to: "1"),
-                .define("USEARCH_USE_SIMSIMD", to: "1"),
+            cxxSettings: cxxSettings
+        ),
+        .target(
+            name: "usearch_c",
+            path: "c",
+            sources: ["usearch.h", "lib.cpp"],
+            publicHeadersPath: ".",
+            cxxSettings: cxxSettings,
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
             ]
         ),
         .target(
             name: "USearch",
-            dependencies: ["USearchObjective"],
+            dependencies: ["usearch_c"],
             path: "swift",
             exclude: ["README.md", "Test.swift"],
-            sources: ["USearch.swift", "Index+Sugar.swift"]
+            sources: ["USearchIndex.swift", "USearchIndex+Sugar.swift", "Util.swift"],
+            cxxSettings: cxxSettings,
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
         ),
         .testTarget(
-            name: "USearchTests",
+            name: "USearchTestsSwift",
             dependencies: ["USearch"],
             path: "swift",
-            exclude: ["USearch.swift", "Index+Sugar.swift", "README.md"],
-            sources: ["Test.swift"]
+            sources: ["Test.swift"],
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
         ),
     ],
     cxxLanguageStandard: CXXLanguageStandard.cxx11

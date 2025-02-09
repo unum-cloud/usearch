@@ -1,6 +1,10 @@
 #ifndef UNUM_USEARCH_H
 #define UNUM_USEARCH_H
 
+#include <stdbool.h> // `bool`
+#include <stddef.h>  // `size_t`
+#include <stdint.h>  // `uint64_t`
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -12,10 +16,6 @@ extern "C" {
 #define USEARCH_EXPORT
 #endif
 #endif
-
-#include <stdbool.h> // `bool`
-#include <stddef.h>  // `size_t`
-#include <stdint.h>  // `uint64_t`
 
 USEARCH_EXPORT typedef void* usearch_index_t;
 USEARCH_EXPORT typedef uint64_t usearch_key_t;
@@ -471,6 +471,14 @@ USEARCH_EXPORT void usearch_exact_search(                            //
     usearch_key_t* keys, size_t keys_stride,                         //
     usearch_distance_t* distances, size_t distances_stride,          //
     usearch_error_t* error);
+
+/**
+ * @brief Erases all the vectors from the index.
+ *  @param[inout] index The handle to the USearch index to be modified.
+ *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
+ */
+USEARCH_EXPORT void usearch_clear(usearch_index_t index,
+                                  usearch_error_t* error);
 
 #ifdef __cplusplus
 }
