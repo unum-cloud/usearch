@@ -1,6 +1,10 @@
 #ifndef UNUM_USEARCH_H
 #define UNUM_USEARCH_H
 
+#include <stdbool.h> // `bool`
+#include <stddef.h>  // `size_t`
+#include <stdint.h>  // `uint64_t`
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -12,10 +16,6 @@ extern "C" {
 #define USEARCH_EXPORT
 #endif
 #endif
-
-#include <stdbool.h> // `bool`
-#include <stddef.h>  // `size_t`
-#include <stdint.h>  // `uint64_t`
 
 USEARCH_EXPORT typedef void* usearch_index_t;
 USEARCH_EXPORT typedef uint64_t usearch_key_t;
