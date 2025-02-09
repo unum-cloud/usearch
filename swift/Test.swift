@@ -16,7 +16,7 @@ class Test: XCTestCase {
             metric: USearchMetric.l2sq,
             dimensions: 4,
             connectivity: 8,
-            quantization: USearchScalar.F32
+            quantization: USearchScalar.f32
         )
         let vectorA: [Float32] = [0.3, 0.5, 1.2, 1.4]
         let vectorB: [Float32] = [0.4, 0.2, 1.2, 1.1]
@@ -54,7 +54,7 @@ class Test: XCTestCase {
             metric: USearchMetric.l2sq,
             dimensions: 4,
             connectivity: 8,
-            quantization: USearchScalar.F32,
+            quantization: USearchScalar.f32,
             multi: true
         )
         let vectorA: [Float32] = [0.3, 0.5, 1.2, 1.4]
@@ -95,7 +95,7 @@ class Test: XCTestCase {
             metric: USearchMetric.l2sq,
             dimensions: 1,
             connectivity: 8,
-            quantization: USearchScalar.F32
+            quantization: USearchScalar.f32
         )
         try index.reserve(3)
 
@@ -103,20 +103,20 @@ class Test: XCTestCase {
         try index.add(key: 1, vector: [1.1])
         try index.add(key: 2, vector: [2.1])
         try index.add(key: 3, vector: [3.1])
-        XCTAssertEqual(index.count, 3)
+        try XCTAssertEqual(index.count, 3)
         XCTAssertEqual(try index.search(vector: [1.0], count: 3).0, [1, 2, 3])  // works 😎
 
         // replace second-added entry then ensure all 3 are still returned
         try index.remove(key: 2)
         try index.add(key: 2, vector: [2.2])
-        XCTAssertEqual(index.count, 3)
+        try XCTAssertEqual(index.count, 3)
         XCTAssertEqual(try index.search(vector: [1.0], count: 3).0, [1, 2, 3])  // works 😎
 
         // replace first-added entry then ensure all 3 are still returned
         try index.remove(key: 1)
         try index.add(key: 1, vector: [1.2])
         let afterReplacingInitial = try index.search(vector: [1.0], count: 3).0
-        XCTAssertEqual(index.count, 3)
+        try XCTAssertEqual(index.count, 3)
         XCTAssertEqual(afterReplacingInitial, [1, 2, 3])  // v2.11.7 fails with "[1] != [1, 2, 3]" 😨
     }
 
@@ -125,7 +125,7 @@ class Test: XCTestCase {
             metric: USearchMetric.l2sq,
             dimensions: 1,
             connectivity: 8,
-            quantization: USearchScalar.F32
+            quantization: USearchScalar.f32
         )
         try index.reserve(3)
 
@@ -133,7 +133,7 @@ class Test: XCTestCase {
         try index.add(key: 1, vector: [1.1])
         try index.add(key: 2, vector: [2.1])
         try index.add(key: 3, vector: [3.1])
-        XCTAssertEqual(index.count, 3)
+        try XCTAssertEqual(index.count, 3)
 
         // filter which accepts all keys:
         XCTAssertEqual(
@@ -181,7 +181,7 @@ class Test: XCTestCase {
             metric: USearchMetric.l2sq,
             dimensions: 1,
             connectivity: 8,
-            quantization: USearchScalar.F64
+            quantization: USearchScalar.f64
         )
         try index.reserve(3)
 
@@ -189,7 +189,7 @@ class Test: XCTestCase {
         try index.add(key: 1, vector: [Float64(1.1)])
         try index.add(key: 2, vector: [Float64(2.1)])
         try index.add(key: 3, vector: [Float64(3.1)])
-        XCTAssertEqual(index.count, 3)
+        try XCTAssertEqual(index.count, 3)
 
         // filter which accepts all keys:
         XCTAssertEqual(

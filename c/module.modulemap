@@ -1,0 +1,7 @@
+module usearch_c {
+    header "usearch.h"
+
+    requires cplusplus
+
+    export *
+}

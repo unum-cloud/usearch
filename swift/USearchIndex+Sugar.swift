@@ -1,11 +1,11 @@
 //
-//  Index+Sugar.swift
+//  USearchIndex+Sugar.swift
 //
 //
 //  Created by Ash Vardanian on 5/11/23.
 //
 
-@available(iOS 13, macOS 10.15, tvOS 13.0, watchOS 6.0, *)
+@available(iOS 13, macOS 11.0, tvOS 13.0, watchOS 6.0, *)
 extension USearchIndex {
     public typealias Key = USearchKey
     public typealias Metric = USearchMetric
@@ -63,7 +63,7 @@ extension USearchIndex {
     /// - Returns: Two-dimensional array of Single-precision vectors.
     /// - Throws: If runs out of memory.
     public func get(key: USearchKey, count: Int = 1) throws -> [[Float]]? {
-        var vector: [Float] = Array(repeating: 0.0, count: Int(self.dimensions) * count)
+        var vector: [Float] = try Array(repeating: 0.0, count: Int(self.dimensions) * count)
         let returnedCount = try vector.withContiguousMutableStorageIfAvailable { buf in
             guard let baseAddress = buf.baseAddress else { return UInt32(0) }
             return try getSingle(
@@ -73,12 +73,12 @@ extension USearchIndex {
             )
         }
         guard let count = returnedCount, count > 0 else { return nil }
-        return stride(
+        return try stride(
             from: 0,
-            to: Int(count) * Int(self.dimensions),
-            by: Int(self.dimensions)
+            to: try Int(count) * Int(self.dimensions),
+            by: try Int(self.dimensions)
         ).map {
-            Array(vector[$0 ..< $0 + Int(self.dimensions)])
+            try Array(vector[$0 ..< $0 + Int(self.dimensions)])
         }
     }
 
@@ -131,7 +131,7 @@ extension USearchIndex {
     /// - Returns: Two-dimensional array of Double-precision vectors.
     /// - Throws: If runs out of memory.
     public func get(key: USearchKey, count: Int = 1) throws -> [[Float64]]? {
-        var vector: [Float64] = Array(repeating: 0.0, count: Int(self.dimensions) * count)
+        var vector: [Float64] = try Array(repeating: 0.0, count: Int(self.dimensions) * count)
         let count = try vector.withContiguousMutableStorageIfAvailable { buf in
             guard let baseAddress = buf.baseAddress else { return UInt32(0) }
             return try getDouble(
@@ -141,12 +141,12 @@ extension USearchIndex {
             )
         }
         guard let count = count, count > 0 else { return nil }
-        return stride(
+        return try stride(
             from: 0,
-            to: Int(count) * Int(self.dimensions),
-            by: Int(self.dimensions)
+            to: try Int(count) * Int(self.dimensions),
+            by: try Int(self.dimensions)
         ).map {
-            Array(vector[$0 ..< $0 + Int(self.dimensions)])
+            try Array(vector[$0 ..< $0 + Int(self.dimensions)])
         }
     }
 
@@ -276,27 +276,31 @@ extension USearchIndex {
         /// - Throws: If runs out of memory.
         @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, *)
         public func get(key: USearchKey, count: Int = 1) throws -> [[Float16]]? {
-            var vector: [Float16] = Array(repeating: 0.0, count: Int(self.dimensions) * count)
+            var vector: [Float16] = try Array(repeating: 0.0, count: Int(self.dimensions) * count)
             let count = try vector.withContiguousMutableStorageIfAvailable { buf in
                 guard let baseAddress = buf.baseAddress else { return UInt32(0) }
-                return try getSingle(
+                return try getHalf(
                     key: key,
                     vector: baseAddress,
                     count: CUnsignedInt(count)
                 )
             }
             guard let count = count, count > 0 else { return nil }
-            return stride(
+            return try stride(
                 from: 0,
-                to: Int(count) * Int(self.dimensions),
-                by: Int(self.dimensions)
+                to: try Int(count) * Int(self.dimensions),
+                by: try Int(self.dimensions)
             ).map {
-                Array(vector[$0 ..< $0 + Int(self.dimensions)])
+                try Array(vector[$0 ..< $0 + Int(self.dimensions)])
             }
         }
 
     #endif
 
     /// Number of vectors in the index.
-    public var count: Int { return Int(length) }
+    public var count: Int {
+        get throws {
+            return try Int(length)
+        }
+    }
 }
