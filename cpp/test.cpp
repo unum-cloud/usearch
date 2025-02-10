@@ -355,8 +355,13 @@ void test_minimal_three_vectors(index_at& index, //
     // Search again over reconstructed index
     {
         matched_count = index.search(vector_first.data(), 5, args...).dump_to(matched_keys, matched_distances);
+        
+        std::printf("matched_count: %zu \n", matched_count);
         expect_eq(matched_count, 3);
+        std::printf("matched_keys[0]: %zu \n", matched_keys[0]);
+        std::printf("key_first: %zu \n", key_first);
         expect_eq(matched_keys[0], key_first);
+        std::printf("matched_distances[0]: %f \n", matched_distances[0]);
         expect(std::abs(matched_distances[0]) < 0.01);
     }
 
@@ -1099,6 +1104,9 @@ template <typename key_at, typename slot_at> void test_replacing_update() {
 int main(int, char**) {
     test_uint40();
     test_cosine<float, std::int64_t, uint40_t>(10, 10);
+
+    // Test for bf16 scalar elements type
+    test_cosine<bf16_t, std::int64_t, uint40_t>(10, 10);
 
     // Test plugins, like K-Means clustering.
     {
