@@ -2183,6 +2183,7 @@ class index_gt {
      */
     struct usearch_align_m context_t {
         top_candidates_t top_candidates{};
+        top_candidates_t top_for_refine{};
         next_candidates_t next_candidates{};
         visits_hash_set_t visits{};
         std::default_random_engine level_generator{};
@@ -2497,6 +2498,14 @@ class index_gt {
         // Move the nodes info, and deallocate previous buffers.
         if (nodes_)
             std::memcpy(new_nodes.data(), nodes_.data(), sizeof(node_t) * size());
+
+        std::size_t connectivity_max = (std::max)(config_.connectivity_base, config_.connectivity);
+        // pre-reserve the capacity for 'top_for_refine'
+        for (size_t i = 0; i < new_contexts.size(); ++i) {
+            if (!new_contexts[i].top_for_refine.reserve(connectivity_max + 1)) {
+                return false;
+            }
+        }
 
         limits_ = limits;
         nodes_capacity_ = limits.members;
@@ -3817,19 +3826,18 @@ class index_gt {
                 continue;
             }
 
-            // To fit a new connection we need to drop an existing one.
-            top.clear();
-            usearch_assert_m((top.capacity() >= (close_header.size() + 1)),
-                             "The memory must have been reserved in `add`");
-            top.insert_reserved({context.measure(value, citerator_at(close_slot), metric), new_slot});
+            // In order to keep the memory of 'new_neighbors' not be ovverided, we use the 'top_for_refine' here.
+            top_candidates_t& top_for_refine = context.top_for_refine;
+            top_for_refine.clear();
+            top_for_refine.insert_reserved({context.measure(value, citerator_at(close_slot), metric), new_slot});
             for (compressed_slot_t successor_slot : close_header)
-                top.insert_reserved(
+                top_for_refine.insert_reserved(
                     {context.measure(citerator_at(close_slot), citerator_at(successor_slot), metric), successor_slot});
 
             // Export the results:
             close_header.clear();
             candidates_view_t top_view =
-                refine_(metric, connectivity_max, top, context, context.computed_distances_in_reverse_refines);
+                refine_(metric, connectivity_max, top_for_refine, context, context.computed_distances_in_reverse_refines);
             usearch_assert_m(top_view.size(), "This would lead to isolated nodes");
             for (std::size_t idx = 0; idx != top_view.size(); idx++)
                 close_header.push_back(top_view[idx].slot);
