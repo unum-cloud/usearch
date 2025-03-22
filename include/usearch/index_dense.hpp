@@ -1986,7 +1986,19 @@ class index_dense_gt {
             return {*this, thread_id, false};
 
         available_threads_mutex_.lock();
-        usearch_assert_m(available_threads_.size(), "No available threads to lock");
+        /// -----
+        /// Clickhouse-specific patch
+        ///
+        /// In Debug builds, this assert threw an exception but the mutex was not released. As a result, the next
+        /// calls hanged. In Release builds, the assert was disabled but there were still be random crashes if there
+        /// were more concurrent callers than pre-allocated internal data structures.
+        /// usearch_assert_m(available_threads_.size(), "No available threads to lock");
+        if (available_threads_.size() == 0)
+        {
+            available_threads_mutex_.unlock();
+            return {*this, any_thread(), false}; /// invalid thread_id
+        }
+        /// -----
         available_threads_.try_pop(thread_id);
         available_threads_mutex_.unlock();
         return {*this, thread_id, true};
@@ -2009,6 +2021,13 @@ class index_dense_gt {
 
         // Cast the vector, if needed for compatibility with `metric_`
         thread_lock_t lock = thread_lock_(thread);
+
+        /// -----
+        /// Clickhouse-specific patch
+        if (lock.thread_id == any_thread())
+            return add_result_t().failed("Too many threads");
+        /// -----
+
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
         {
             byte_t* casted_data = cast_buffer_.data() + metric_.bytes_per_vector() * lock.thread_id;
@@ -2055,6 +2074,11 @@ class index_dense_gt {
 
         // Cast the vector, if needed for compatibility with `metric_`
         thread_lock_t lock = thread_lock_(thread);
+        /// -----
+        /// Clickhouse-specific patch
+        if (lock.thread_id == any_thread())
+            return search_result_t(*this).failed("Too many threads");
+        /// -----
         byte_t const* vector_data = reinterpret_cast<byte_t const*>(vector);
         {
             byte_t* casted_data = cast_buffer_.data() + metric_.bytes_per_vector() * lock.thread_id;
