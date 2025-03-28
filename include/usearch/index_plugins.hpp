@@ -879,6 +879,12 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
 
     static constexpr std::size_t min_capacity() { return 1024 * 1024 * 4; }
     static constexpr std::size_t capacity_multiplier() { return 2; }
+    /// -----
+    /// Clickhouse-specific patch
+    /// After reaching 512 MB, switch the allocation strategy from exponential to additive.
+    /// See https://github.com/ClickHouse/ClickHouse/issues/78056 for details
+    static constexpr std::size_t additive_alloc_threshold() { return 512 * 1024 * 1024; }
+    /// -----
     static constexpr std::size_t head_size() {
         /// Pointer to the the previous arena and the size of the current one.
         return divide_round_up<alignment_ak>(sizeof(byte_t*) + sizeof(std::size_t)) * alignment_ak;
@@ -889,6 +895,10 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
     std::size_t last_usage_ = head_size();
     std::size_t last_capacity_ = min_capacity();
     std::size_t wasted_space_ = 0;
+    /// -----
+    /// Clickhouse-specific patch
+    std::size_t total_allocated_ = 0;
+    /// -----
 
   public:
     using value_type = byte_t;
@@ -899,13 +909,21 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
     memory_mapping_allocator_gt() = default;
     memory_mapping_allocator_gt(memory_mapping_allocator_gt&& other) noexcept
         : last_arena_(exchange(other.last_arena_, nullptr)), last_usage_(exchange(other.last_usage_, 0)),
-          last_capacity_(exchange(other.last_capacity_, 0)), wasted_space_(exchange(other.wasted_space_, 0)) {}
+          last_capacity_(exchange(other.last_capacity_, 0)), wasted_space_(exchange(other.wasted_space_, 0)),
+          /// -----
+          /// Clickhouse-specific patch
+          total_allocated_(exchange(other.total_allocated_, 0)) {}
+          /// ----
 
     memory_mapping_allocator_gt& operator=(memory_mapping_allocator_gt&& other) noexcept {
         std::swap(last_arena_, other.last_arena_);
         std::swap(last_usage_, other.last_usage_);
         std::swap(last_capacity_, other.last_capacity_);
         std::swap(wasted_space_, other.wasted_space_);
+        /// -----
+        /// Clickhouse-specific patch
+        std::swap(total_allocated_, other.total_allocated_);
+        /// -----
         return *this;
     }
 
@@ -930,6 +948,10 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
         last_usage_ = head_size();
         last_capacity_ = min_capacity();
         wasted_space_ = 0;
+        /// -----
+        /// Clickhouse-specific patch
+        total_allocated_ = 0;
+        /// -----
     }
 
     /**
@@ -958,6 +980,11 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
         std::unique_lock<std::mutex> lock(mutex_);
         if (!last_arena_ || (last_usage_ + extended_bytes >= last_capacity_)) {
             std::size_t new_cap = (std::max)(last_capacity_, ceil2(extended_bytes)) * capacity_multiplier();
+            /// -----
+            /// Clickhouse-specific patch
+            if (new_cap >= additive_alloc_threshold())
+                new_cap = additive_alloc_threshold();
+            /// -----
             byte_t* new_arena = page_allocator_t{}.allocate(new_cap);
             if (!new_arena)
                 return nullptr;
@@ -968,6 +995,10 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
             last_arena_ = new_arena;
             last_capacity_ = new_cap;
             last_usage_ = head_size();
+            /// -----
+            /// Clickhouse-specific patch
+            total_allocated_ += new_cap;
+            /// ----
         }
 
         wasted_space_ += extended_bytes - count_bytes;
@@ -978,17 +1009,13 @@ template <std::size_t alignment_ak = 1> class memory_mapping_allocator_gt {
      *  @brief Returns the amount of memory used by the allocator across all arenas.
      *  @return The amount of space in bytes.
      */
+    /// -----
+    /// Clickhouse-specific patch
+    /// Replaced the earlier iterative computation with a simple tracking variable.
     std::size_t total_allocated() const noexcept {
-        if (!last_arena_)
-            return 0;
-        std::size_t total_used = 0;
-        std::size_t last_capacity = last_capacity_;
-        do {
-            total_used += last_capacity;
-            last_capacity /= capacity_multiplier();
-        } while (last_capacity >= min_capacity());
-        return total_used;
+        return total_allocated_;
     }
+    /// -----
 
     /**
      *  @brief Returns the amount of wasted space due to alignment.
