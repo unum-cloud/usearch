@@ -74,26 +74,26 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1reserve
 /*
  * Class:     cloud_unum_usearch_Index
  * Method:    c_add
- * Signature: (JI[F)V
+ * Signature: (JJ[F)V
  */
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add
-  (JNIEnv *, jclass, jlong, jint, jfloatArray);
+  (JNIEnv *, jclass, jlong, jlong, jfloatArray);
 
 /*
  * Class:     cloud_unum_usearch_Index
  * Method:    c_search
- * Signature: (J[FJ)[I
+ * Signature: (J[FJ)[J
  */
-JNIEXPORT jintArray JNICALL Java_cloud_unum_usearch_Index_c_1search
+JNIEXPORT jlongArray JNICALL Java_cloud_unum_usearch_Index_c_1search
   (JNIEnv *, jclass, jlong, jfloatArray, jlong);
 
 /*
  * Class:     cloud_unum_usearch_Index
  * Method:    c_get
- * Signature: (JI)[F
+ * Signature: (JJ)[F
  */
 JNIEXPORT jfloatArray JNICALL Java_cloud_unum_usearch_Index_c_1get
-  (JNIEnv *, jclass, jlong, jint);
+  (JNIEnv *, jclass, jlong, jlong);
 
 /*
  * Class:     cloud_unum_usearch_Index
@@ -122,18 +122,18 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1view
 /*
  * Class:     cloud_unum_usearch_Index
  * Method:    c_remove
- * Signature: (JI)Z
+ * Signature: (JJ)Z
  */
 JNIEXPORT jboolean JNICALL Java_cloud_unum_usearch_Index_c_1remove
-  (JNIEnv *, jclass, jlong, jint);
+  (JNIEnv *, jclass, jlong, jlong);
 
 /*
  * Class:     cloud_unum_usearch_Index
  * Method:    c_rename
- * Signature: (JII)Z
+ * Signature: (JJJ)Z
  */
 JNIEXPORT jboolean JNICALL Java_cloud_unum_usearch_Index_c_1rename
-  (JNIEnv *, jclass, jlong, jint, jint);
+  (JNIEnv *, jclass, jlong, jlong, jlong);
 
 #ifdef __cplusplus
 }

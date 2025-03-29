@@ -150,7 +150,7 @@ public class Index implements AutoCloseable {
    * @param key    the key associated with the vector
    * @param vector the vector data
    */
-  public void add(int key, float vector[]) {
+  public void add(long key, float vector[]) {
     if (c_ptr == 0) {
       throw new IllegalStateException("Index already closed");
     }
@@ -164,7 +164,7 @@ public class Index implements AutoCloseable {
    * @param count  the number of nearest neighbors to search
    * @return an array of keys of the nearest neighbors
    */
-  public int[] search(float vector[], long count) {
+  public long[] search(float vector[], long count) {
     if (c_ptr == 0) {
       throw new IllegalStateException("Index already closed");
     }
@@ -178,7 +178,7 @@ public class Index implements AutoCloseable {
    * @return the contents of the vector.
    * @throws IllegalArgumentException is key is not available.
    */
-  public float[] get(int key) {
+  public float[] get(long key) {
     if (c_ptr == 0) {
       throw new IllegalStateException("Index already closed");
     }
@@ -243,7 +243,7 @@ public class Index implements AutoCloseable {
    * @return {@code true} if the vector was successfully renamed, {@code false}
    *         otherwise.
    */
-  public boolean rename(int from, int to) {
+  public boolean rename(long from, long to) {
     if (c_ptr == 0) {
       throw new IllegalStateException("Index already closed");
     }
@@ -423,11 +423,11 @@ public class Index implements AutoCloseable {
 
   private static native void c_reserve(long ptr, long capacity);
 
-  private static native void c_add(long ptr, int key, float vector[]);
+  private static native void c_add(long ptr, long key, float vector[]);
 
-  private static native int[] c_search(long ptr, float vector[], long count);
+  private static native long[] c_search(long ptr, float vector[], long count);
 
-  private static native float[] c_get(long ptr, int key);
+  private static native float[] c_get(long ptr, long key);
 
   private static native void c_save(long ptr, String path);
 
@@ -435,7 +435,7 @@ public class Index implements AutoCloseable {
 
   private static native void c_view(long ptr, String path);
 
-  private static native boolean c_remove(long ptr, int key);
+  private static native boolean c_remove(long ptr, long key);
 
-  private static native boolean c_rename(long ptr, int from, int to);
+  private static native boolean c_rename(long ptr, long from, long to);
 }
