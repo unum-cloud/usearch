@@ -344,3 +344,22 @@ def test_index_clustering(ndim, metric, quantization, dtype, batch_size):
     clusters: Clustering = index.cluster(min_count=3, max_count=10, threads=threads)
     unique_clusters = set(clusters.matches.keys.flatten().tolist())
     assert len(unique_clusters) >= 3 and len(unique_clusters) <= 10
+
+@pytest.mark.parametrize("batch_size", [32])
+def test_index__delitem__(batch_size):
+    reset_randomness()
+    if batch_size <= 1:
+        return
+
+    ndim = 8
+    index = Index(ndim=ndim, multi=False)
+    keys = np.arange(batch_size)
+    vectors = random_vectors(count=batch_size, ndim=ndim)
+
+    index.add(keys, vectors, threads=threads)
+    assert np.all(index.contains(keys))
+
+    del index[0]
+    
+    assert len(index) == (len(keys) - 1)
+    assert keys[0] not in index
