@@ -514,7 +514,7 @@ struct args_t {
 };
 
 template <typename index_at, typename dataset_at> //
-void run_punned(dataset_at& dataset, args_t const& args, index_config_t config, index_limits_t limits) {
+void run_punned(dataset_at& dataset, args_t const& args, index_dense_config_t config, index_limits_t limits) {
 
     scalar_kind_t quantization = args.quantization();
     std::printf("-- Quantization: %s\n", scalar_kind_name(quantization));
