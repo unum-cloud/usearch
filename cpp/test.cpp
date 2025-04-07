@@ -872,7 +872,9 @@ void test_absurd(std::size_t dimensions, std::size_t connectivity, std::size_t e
  * @param dataset_count Number of vectors in the dataset.
  * @param queries_count Number of query vectors.
  * @param wanted_count Number of top matches required from each query.
+ * @tparam scalar_at Data type of the elements in the vectors.
  */
+template <typename scalar_at>
 void test_exact_search(std::size_t dataset_count, std::size_t queries_count, std::size_t wanted_count) {
     std::size_t dimensions = 32;
     metric_punned_t metric(dimensions, metric_kind_t::cos_k);
@@ -880,8 +882,8 @@ void test_exact_search(std::size_t dataset_count, std::size_t queries_count, std
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> dis(0.0, 1.0);
-    std::vector<float> dataset(dataset_count * dimensions);
-    std::generate(dataset.begin(), dataset.end(), [&] { return dis(gen); });
+    std::vector<scalar_at> dataset(dataset_count * dimensions);
+    std::generate(dataset.begin(), dataset.end(), [&] { return static_cast<scalar_at>(dis(gen)); });
 
     exact_search_t search;
     auto results = search(                                                        //
@@ -1100,6 +1102,10 @@ int main(int, char**) {
     test_uint40();
     test_cosine<float, std::int64_t, uint40_t>(10, 10);
 
+    // Non-default floating-point types may result in many compilation & rounding issues.
+    test_cosine<f16_t, std::int64_t, uint40_t>(10, 10);
+    test_cosine<bf16_t, std::int64_t, uint40_t>(10, 10);
+
     // Test plugins, like K-Means clustering.
     {
         std::size_t vectors_count = 1000, centroids_count = 10, dimensions = 256;
@@ -1121,8 +1127,11 @@ int main(int, char**) {
     std::printf("Testing exact search\n");
     for (std::size_t dataset_count : {10, 100})
         for (std::size_t queries_count : {1, 10})
-            for (std::size_t wanted_count : {1, 5})
-                test_exact_search(dataset_count, queries_count, wanted_count);
+            for (std::size_t wanted_count : {1, 5}) {
+                test_exact_search<float>(dataset_count, queries_count, wanted_count);
+                test_exact_search<f16_t>(dataset_count, queries_count, wanted_count);
+                test_exact_search<bf16_t>(dataset_count, queries_count, wanted_count);
+            }
 
     // Make sure the initializers and the algorithms can work with inadequately small values.
     // Be warned - this combinatorial explosion of tests produces close to __500'000__ tests!
@@ -1149,6 +1158,8 @@ int main(int, char**) {
             test_cosine<float, std::int64_t, slot32_t>(collection_size, dimensions);
             std::printf("- Indexing %zu vectors with cos: <float, std::int64_t, uint40_t> \n", collection_size);
             test_cosine<float, std::int64_t, uint40_t>(collection_size, dimensions);
+            std::printf("- Indexing %zu vectors with cos: <bf16, std::int64_t, uint40_t> \n", collection_size);
+            test_cosine<bf16_t, std::int64_t, uint40_t>(collection_size, dimensions);
         }
 
     // Test with binary vectors

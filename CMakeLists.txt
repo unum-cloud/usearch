@@ -1,6 +1,6 @@
 # This CMake file is heavily inspired by following `usearch` CMake:
 # https://github.com/nlohmann/json/blob/develop/CMakeLists.txt
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.11 FATAL_ERROR)
 project(
     usearch
     VERSION 2.17.5
@@ -154,13 +154,13 @@ if (USEARCH_USE_FP16LIB)
         ${USEARCH_TARGET_NAME} ${USEARCH_SYSTEM_INCLUDE} INTERFACE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/fp16/include>
                                                                    $<INSTALL_INTERFACE:fp16/include>
     )
-endif()
+endif ()
 if (USEARCH_USE_SIMSIMD)
     target_include_directories(
-        ${USEARCH_TARGET_NAME} ${USEARCH_SYSTEM_INCLUDE} INTERFACE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/simsimd/include>
-                                                                   $<INSTALL_INTERFACE:simsimd/include>
+        ${USEARCH_TARGET_NAME} ${USEARCH_SYSTEM_INCLUDE}
+        INTERFACE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/simsimd/include> $<INSTALL_INTERFACE:simsimd/include>
     )
-endif()
+endif ()
 
 # Install a pkg-config file, so other tools can find this
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/pkg-config.pc.in" "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc")
@@ -386,7 +386,8 @@ function (setup_target TARGET_NAME)
 
 endfunction ()
 
-# Must be called before "add_subdirectory()". See https://stackoverflow.com/questions/30250494/ctest-not-detecting-tests.
+# Must be called before "add_subdirectory()". See
+# https://stackoverflow.com/questions/30250494/ctest-not-detecting-tests.
 enable_testing()
 
 if (${USEARCH_BUILD_TEST_CPP} OR ${USEARCH_BUILD_BENCH_CPP})
