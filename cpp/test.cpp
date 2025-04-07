@@ -1101,6 +1101,9 @@ template <typename key_at, typename slot_at> void test_replacing_update() {
 int main(int, char**) {
     test_uint40();
     test_cosine<float, std::int64_t, uint40_t>(10, 10);
+
+    // Non-default floating-point types may result in many compilation & rounding issues.
+    test_cosine<f16_t, std::int64_t, uint40_t>(10, 10);
     test_cosine<bf16_t, std::int64_t, uint40_t>(10, 10);
 
     // Test plugins, like K-Means clustering.
@@ -1126,6 +1129,7 @@ int main(int, char**) {
         for (std::size_t queries_count : {1, 10})
             for (std::size_t wanted_count : {1, 5}) {
                 test_exact_search<float>(dataset_count, queries_count, wanted_count);
+                test_exact_search<f16_t>(dataset_count, queries_count, wanted_count);
                 test_exact_search<bf16_t>(dataset_count, queries_count, wanted_count);
             }
 
