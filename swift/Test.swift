@@ -37,15 +37,15 @@ class Test: XCTestCase {
         XCTAssertTrue(try index.contains(key: 42))
         XCTAssertEqual(try index.count(key: 42), 1)
         XCTAssertEqual(try index.count(key: 49), 0)
-        try index.rename(from: 42, to: 49)
+        try _ = index.rename(from: 42, to: 49)
         XCTAssertEqual(try index.count(key: 49), 1)
 
-        let refetched: [[Float]]? = try index.get(key: 49)
-        XCTAssertEqual(refetched?[0], vectorA)
+        let fetched_renamed: [[Float]]? = try index.get(key: 49)
+        XCTAssertEqual(fetched_renamed?[0], vectorA)
         let stale: [[Float]]? = try index.get(key: 42)
         XCTAssertNil(stale)
 
-        try index.remove(key: 49)
+        try _ = index.remove(key: 49)
         XCTAssertEqual(try index.count(key: 49), 0)
     }
 
@@ -86,7 +86,7 @@ class Test: XCTestCase {
         let stale: [[Float]]? = try index.get(key: 42)
         XCTAssertNil(stale)
 
-        try index.remove(key: 49)
+        try _ = index.remove(key: 49)
         XCTAssertEqual(try index.count(key: 49), 0)
     }
 
@@ -107,13 +107,13 @@ class Test: XCTestCase {
         XCTAssertEqual(try index.search(vector: [1.0], count: 3).0, [1, 2, 3])  // works 😎
 
         // replace second-added entry then ensure all 3 are still returned
-        try index.remove(key: 2)
+        try _ = index.remove(key: 2)
         try index.add(key: 2, vector: [2.2])
         try XCTAssertEqual(index.count, 3)
         XCTAssertEqual(try index.search(vector: [1.0], count: 3).0, [1, 2, 3])  // works 😎
 
         // replace first-added entry then ensure all 3 are still returned
-        try index.remove(key: 1)
+        try _ = index.remove(key: 1)
         try index.add(key: 1, vector: [1.2])
         let afterReplacingInitial = try index.search(vector: [1.0], count: 3).0
         try XCTAssertEqual(index.count, 3)
