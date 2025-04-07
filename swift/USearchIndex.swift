@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import usearch_c
+import USearchC
 
 public enum USearchScalar: UInt {
     case f32
