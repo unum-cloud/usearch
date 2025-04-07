@@ -207,7 +207,7 @@ jobs:
 
   create_macos_dylib_library:
     name: Create Library for MacOS
-    runs-on: macos-12
+    runs-on: macos-15
     needs: versioning
     strategy:
       fail-fast: false
@@ -268,7 +268,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macOS-12, windows-2022]
+        os: [ubuntu-22.04, macos-15, windows-2022]
     steps:
       - name: Check out refreshed version
         uses: actions/checkout@v4
@@ -318,7 +318,7 @@ jobs:
             zip -r usearch_wasm_macos_"$arch"_${{ steps.set_version.outputs.version }}.zip libusearch_c.dylib
             mv usearch_wasm_macos_"$arch"_${{ steps.set_version.outputs.version }}.zip ../ && rm -rf libusearch_c.dylib
           done
-        if: matrix.os == 'macOS-12'
+        if: matrix.os == 'macos-15'
 
       - name: Build library on Windows
         run: |
@@ -647,7 +647,7 @@ jobs:
   publish_swift:
     name: Publish ObjC & Swift
     needs: versioning
-    runs-on: macos-12
+    runs-on: macos-15
     steps:
       - name: Check out refreshed version
         uses: actions/checkout@v4
@@ -737,7 +737,7 @@ jobs:
           cp "${{ github.workspace }}/build_artifacts/libusearch_c.so" "${{ github.workspace }}/csharp/lib/runtimes/linux-x64/native"
 
       - name: Build C library for MacOS
-        if: matrix.os == 'macos-12'
+        if: matrix.os == 'macos-15'
         run: |
           brew update
           brew install cmake
