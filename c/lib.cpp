@@ -493,4 +493,9 @@ USEARCH_EXPORT void usearch_exact_search(                             //
             query_distances[i] = static_cast<usearch_distance_t>(query_result[i].distance);
     }
 }
+
+USEARCH_EXPORT void usearch_clear(usearch_index_t index, usearch_error_t* error) {
+    USEARCH_ASSERT(index && error && "Missing arguments");
+    reinterpret_cast<index_dense_t*>(index)->clear();
+}
 }
