@@ -539,7 +539,7 @@ jobs:
           export STRIP=aarch64-linux-gnu-strip
           npm run prebuild-arm64
           aarch64-linux-gnu-strip prebuilds/linux-arm64/*node
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: prebuilds
           path: prebuilds
@@ -756,7 +756,7 @@ jobs:
           cp "${{ github.workspace }}\build_artifacts\libusearch_c.dll" "${{ github.workspace }}\csharp\lib\runtimes\win-x64\native"
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: usearch-csharp-dependencies
           path: ${{ github.workspace }}/csharp/lib/**/*
