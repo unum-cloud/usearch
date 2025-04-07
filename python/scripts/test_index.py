@@ -280,6 +280,7 @@ def test_index_contains_remove_rename(batch_size):
     removed_keys = keys[: batch_size // 2]
     remaining_keys = keys[batch_size // 2 :]
     index.remove(removed_keys)
+    del index[removed_keys] # ! This will trigger the `__delitem__` dunder method
     assert len(index) == (len(keys) - len(removed_keys))
     assert np.sum(index.contains(keys)) == len(remaining_keys)
     assert np.sum(index.count(keys)) == len(remaining_keys)

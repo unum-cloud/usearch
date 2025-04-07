@@ -524,6 +524,11 @@ class f16_bits_t {
     }
 };
 
+#if USEARCH_USE_OPENMP
+#pragma omp declare reduction(+ : unum::usearch::f16_bits_t : omp_out = omp_out + omp_in)                             \
+    initializer(omp_priv = unum::usearch::f16_bits_t())
+#endif
+
 /**
  *  @brief  Numeric type for brain-floating point half-precision floating point.
  *          If hardware support isn't available, falls back to a hardware
@@ -582,11 +587,16 @@ class bf16_bits_t {
         return *this;
     }
 
-    inline bf16_bits_t& operator=(int v) noexcept {
-        uint16_ = f32_to_bf16(static_cast<float>(v));
+    inline bf16_bits_t& operator=(float v) noexcept {
+        uint16_ = f32_to_bf16(v);
         return *this;
     }
 };
+
+#if USEARCH_USE_OPENMP
+#pragma omp declare reduction(+ : unum::usearch::bf16_bits_t : omp_out = omp_out + omp_in)                             \
+    initializer(omp_priv = unum::usearch::bf16_bits_t())
+#endif
 
 /**
  *  @brief  An STL-based executor or a "thread-pool" for parallel execution.
@@ -765,7 +775,9 @@ class executor_openmp_t {
     template <typename thread_aware_function_at>
     void parallel(thread_aware_function_at&& thread_aware_function) noexcept(false) {
 #pragma omp parallel
-        { thread_aware_function(omp_get_thread_num()); }
+        {
+            thread_aware_function(omp_get_thread_num());
+        }
     }
 };
 

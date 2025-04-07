@@ -181,7 +181,6 @@ USEARCH_EXPORT void usearch_view(usearch_index_t index, char const* path, usearc
  *  @param[in] path The file path from where the index will be loaded.
  *  @param[out] options Pointer to the `usearch_init_options_t` structure to be populated.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
- *  @return A handle to the initialized USearch index, or `NULL` on failure.
  */
 USEARCH_EXPORT void usearch_metadata(char const* path, usearch_init_options_t* options, usearch_error_t* error);
 
@@ -219,7 +218,6 @@ USEARCH_EXPORT void usearch_view_buffer(usearch_index_t index, void const* buffe
  *  @param[in] buffer The in-memory continuous buffer from where the view will be created.
  *  @param[out] options Pointer to the `usearch_init_options_t` structure to be populated.
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
- *  @return A handle to the initialized USearch index, or `NULL` on failure.
  */
 USEARCH_EXPORT void usearch_metadata_buffer(void const* buffer, size_t length, usearch_init_options_t* options,
                                             usearch_error_t* error);
@@ -356,7 +354,7 @@ USEARCH_EXPORT bool usearch_contains(usearch_index_t index, usearch_key_t key, u
  *  @param[out] error Pointer to a string where the error message will be stored, if an error occurs.
  *  @return Number of vectors found under that key.
  */
-USEARCH_EXPORT size_t usearch_count(usearch_index_t index, usearch_key_t, usearch_error_t* error);
+USEARCH_EXPORT size_t usearch_count(usearch_index_t index, usearch_key_t key, usearch_error_t* error);
 
 /**
  *  @brief Performs k-Approximate Nearest Neighbors (kANN) Search for closest vectors to query.
