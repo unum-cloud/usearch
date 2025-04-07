@@ -820,7 +820,7 @@ class Index:
             return self._compiled.remove_many(keys, compact=compact, threads=threads)
 
     def __delitem__(self, keys: KeyOrKeysLike) -> Union[int, np.ndarray]:
-        raise self.remove(keys)
+        return self.remove(keys)
 
     def rename(
         self,
