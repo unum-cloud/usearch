@@ -5,16 +5,23 @@
 //  Created by Dan Palmer on 09/02/2025.
 //
 
-import usearch_c
+import USearchC
 
 func throwing<T>(_ fn: (inout UnsafeMutablePointer<usearch_error_t?>) -> T) throws -> T {
-    var err: UnsafeMutablePointer<usearch_error_t?> = .allocate(capacity: 1)
+    // Allocate and initialize the pointer to nil.
+    var err = UnsafeMutablePointer<usearch_error_t?>.allocate(capacity: 1)
+    err.initialize(to: nil)
+    
+    // Ensure the allocated memory is deallocated when done.
+    defer {
+        err.deinitialize(count: 1)
+        err.deallocate()
+    }
+    
     let result = fn(&err)
-
     if let errorCString = err.pointee {
         throw USearchError.fromErrorString(String(cString: errorCString))
     }
-
     return result
 }
 
