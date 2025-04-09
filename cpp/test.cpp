@@ -1098,6 +1098,148 @@ template <typename key_at, typename slot_at> void test_replacing_update() {
     expect_eq(final_search[2].member.key, 44);
 }
 
+/**
+ * @brief Tests merging.
+ */
+void test_merge(std::size_t base_n) {
+    using index_t = index_gt<>;
+    using distance_t = typename index_t::distance_t;
+    using key_t = typename index_t::key_t;
+    using compressed_slot_t = typename index_t::compressed_slot_t;
+    using member_ref_t = typename index_t::member_ref_t;
+    using member_cref_t = typename index_t::member_cref_t;
+    using member_citerator_t = typename index_t::member_citerator_t;
+    using add_result_t = typename index_t::add_result_t;
+
+    using value_t = float;
+
+    auto create_index = []() {
+        auto index_result = index_t::make();
+        expect(index_result);
+        return std::move(index_result.index);
+    };
+
+    struct metric_t {
+        std::unordered_map<compressed_slot_t, value_t> values;
+
+        metric_t() : values() {}
+        distance_t compute(value_t const& a, value_t const& b) {
+            if (b > a) {
+                return b - a;
+            } else {
+                return a - b;
+            }
+        }
+        distance_t operator()(value_t const& a, member_cref_t const& b) { return compute(a, values.at(get_slot(b))); }
+        distance_t operator()(value_t const& a, member_citerator_t const& b) {
+            return compute(a, values.at(get_slot(b)));
+        }
+        distance_t operator()(member_citerator_t const& a, member_citerator_t const& b) {
+            return compute(values.at(get_slot(a)), values.at(get_slot(b)));
+        }
+    };
+
+    auto add = [](index_t& index, key_t const key, value_t const value, metric_t& metric) {
+        auto on_success = [&](member_ref_t member) { metric.values[member.slot] = value; };
+        add_result_t result = index.add(key, value, metric, {}, on_success);
+        expect(result);
+    };
+
+    std::size_t n_nodes1 = base_n;
+    std::size_t n_nodes2 = base_n * 2;
+
+    // Prepare expected index
+    auto expected_index = create_index();
+    metric_t expected_metric;
+    expect(expected_index.reserve(n_nodes1 + n_nodes2));
+
+    // Prepare index 1
+    auto index1 = create_index();
+    metric_t metric1;
+    expect(index1.reserve(n_nodes1));
+    {
+        // Use static seed for easy to reproduce
+        std::default_random_engine engine(n_nodes1);
+        std::uniform_real_distribution<float> distribution(-1.0, 1.0);
+        for (std::size_t i = 0; i < n_nodes1; ++i) {
+            std::size_t key = 10000 + i;
+            value_t value = distribution(engine);
+            add(index1, key, value, metric1);
+            add(expected_index, key, value, expected_metric);
+        }
+    }
+    expect_eq(index1.size(), n_nodes1);
+    expect_eq(expected_index.size(), n_nodes1);
+
+    // Prepare index 2
+    auto index2 = create_index();
+    metric_t metric2;
+    expect(index2.reserve(n_nodes2));
+    {
+        // Use static seed for easy to reproduce
+        std::default_random_engine engine(n_nodes2);
+        std::uniform_real_distribution<float> distribution(-1.0, 1.0);
+        for (std::size_t i = 0; i < n_nodes2; ++i) {
+            std::size_t key = 20000 + i;
+            value_t value = distribution(engine);
+            add(index2, key, value, metric2);
+            add(expected_index, key, value, expected_metric);
+        }
+    }
+    expect_eq(index2.size(), n_nodes2);
+    expect_eq(expected_index.size(), n_nodes1 + n_nodes2);
+
+    // Merge indexes
+    char const* merge_file_path = "merge.usearch";
+    auto merged_index = create_index();
+    expect(merged_index.save(merge_file_path));
+    memory_mapped_file_t file{merge_file_path, true};
+    expect(merged_index.load(std::move(file)));
+    metric_t merged_metric;
+    auto merge_on_success = [&](member_ref_t member, value_t const& value) {
+        merged_metric.values[member.slot] = value;
+    };
+
+    // Merge index1
+    auto get_value1 = [&](member_cref_t member) -> value_t& { return metric1.values[member.slot]; };
+    expect(merged_index.merge(index1, get_value1, merged_metric, {}, merge_on_success));
+    expect_eq(merged_index.size(), n_nodes1);
+    // Assert after we merge index1
+    auto search = merged_index.search(0.75f, 3, merged_metric);
+    auto expected_search = index1.search(0.75f, 3, expected_metric);
+    expect_eq(search.size(), 3);
+    expect(search[0].distance <= expected_search[0].distance);
+    expect(search[1].distance <= expected_search[1].distance);
+    expect(search[2].distance <= expected_search[2].distance);
+    auto loaded_index = create_index();
+    loaded_index.view(merge_file_path);
+    search = merged_index.search(0.75f, 3, merged_metric);
+
+    // Merge index2
+    auto get_value2 = [&](member_cref_t member) -> value_t& { return metric2.values[member.slot]; };
+    expect(merged_index.merge(index2, get_value2, merged_metric, {}, merge_on_success));
+    // Assert after we merge index1 and index2
+    expect_eq(merged_index.size(), n_nodes1 + n_nodes2);
+    search = merged_index.search(0.75f, 3, merged_metric);
+    expected_search = expected_index.search(0.75f, 3, expected_metric);
+    expect_eq(search.size(), 3);
+    expect(search[0].distance <= expected_search[0].distance);
+    expect(search[1].distance <= expected_search[1].distance);
+    expect(search[2].distance <= expected_search[2].distance);
+
+    // Re-load the merged index
+    merged_index.reset();
+    merged_index.load(merge_file_path);
+
+    // Assert after we reload the merged index
+    expect_eq(merged_index.size(), n_nodes1 + n_nodes2);
+    search = merged_index.search(0.75f, 3, merged_metric);
+    expect_eq(search.size(), 3);
+    expect(search[0].distance <= expected_search[0].distance);
+    expect(search[1].distance <= expected_search[1].distance);
+    expect(search[2].distance <= expected_search[2].distance);
+}
+
 int main(int, char**) {
     test_uint40();
     test_cosine<float, std::int64_t, uint40_t>(10, 10);
@@ -1173,6 +1315,11 @@ int main(int, char**) {
     for (std::size_t set_size : {1, 100, 1000})
         test_sets<std::int64_t, slot32_t>(set_size, 20, 30);
     test_strings<std::int64_t, slot32_t>();
+
+    // Test merge
+    std::printf("Testing merge\n");
+    test_merge(10);   // Use only the 0-level layer
+    test_merge(1000); // Use multiple layers
 
     return 0;
 }
