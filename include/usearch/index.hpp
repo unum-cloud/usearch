@@ -202,7 +202,7 @@ template <typename at> void misaligned_store(void* ptr, at v) noexcept {
 }
 
 /// @brief  Simply dereferencing misaligned pointers can be dangerous.
-template <typename at> at misaligned_load(const void* ptr) noexcept {
+template <typename at> at misaligned_load(void const* ptr) noexcept {
     static_assert(!std::is_reference<at>::value, "Can't load a reference");
     at v;
     std::memcpy(&v, ptr, sizeof(at));
