@@ -1076,8 +1076,9 @@ class index_dense_gt {
 
     /**
      *  @brief Parses the index from file to RAM.
-     *  @param[in] path The path to the file.
+     *  @param[in] input The input stream to read from.
      *  @param[in] config Configuration parameters for imports.
+     *  @param[in] progress Callback to report the execution progress.
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
     template <typename input_callback_at, typename progress_at = dummy_progress_t>
@@ -1186,8 +1187,10 @@ class index_dense_gt {
 
     /**
      *  @brief Parses the index from file, without loading it into RAM.
-     *  @param[in] path The path to the file.
+     *  @param[in] file The input file to read from.
+     *  @param[in] offset The offset in the file to start reading from.
      *  @param[in] config Configuration parameters for imports.
+     *  @param[in] progress Callback to report the execution progress.
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
     template <typename progress_at = dummy_progress_t>
@@ -1307,8 +1310,9 @@ class index_dense_gt {
 
     /**
      *  @brief Saves the index to a file.
-     *  @param[in] path The path to the file.
+     *  @param[in] file The output file to write to.
      *  @param[in] config Configuration parameters for exports.
+     *  @param[in] progress Callback to report the execution progress.
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
     template <typename progress_at = dummy_progress_t>
@@ -1362,8 +1366,9 @@ class index_dense_gt {
 
     /**
      *  @brief Parses the index from file to RAM.
-     *  @param[in] path The path to the file.
+     *  @param[in] file The input file to read from.
      *  @param[in] config Configuration parameters for imports.
+     *  @param[in] progress Progress callback.
      *  @return Outcome descriptor explicitly convertible to boolean.
      */
     template <typename progress_at = dummy_progress_t>
