@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
     for (std::size_t i = 0; i != results.size(); ++i)
         // You can access the following properties of every match:
         // results[i].element.key, results[i].element.vector, results[i].distance;
-        std::printf("Found matching key: %zu", results[i].member.key);
+        std::printf("Found matching key: %zu\n", index_dense_t::key_t(results[i].member.key));
     return 0;
 }
 ```
