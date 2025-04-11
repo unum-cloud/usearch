@@ -202,7 +202,7 @@ template <typename at> void misaligned_store(void* ptr, at v) noexcept {
 }
 
 /// @brief  Simply dereferencing misaligned pointers can be dangerous.
-template <typename at> at misaligned_load(void* ptr) noexcept {
+template <typename at> at misaligned_load(void const* ptr) noexcept {
     static_assert(!std::is_reference<at>::value, "Can't load a reference");
     at v;
     std::memcpy(&v, ptr, sizeof(at));
@@ -1900,7 +1900,7 @@ template <typename key_at> inline key_at get_key(member_ref_gt<key_at> const& m)
  *          If classical containers store @b Key->Value mappings, this one can
  *          be seen as a network of keys, accelerating approximate @b Value~>Key visited_members.
  *
- *  Unlike most implementations, this one is generic anc can be used for any search,
+ *  Unlike most implementations, this one is generic and can be used for any search,
  *  not just within equi-dimensional vectors. Examples range from Texts to similar Chess
  *  positions, Geo-Spatial Search, and even Graphs.
  *
