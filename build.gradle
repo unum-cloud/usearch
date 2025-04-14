@@ -135,10 +135,6 @@ test {
 
 jar {
     dependsOn("usearchSharedLibrary")
-    from("$buildDir/libs/usearch/shared") {
-        include "libusearch.so", "libusearch.dylib", "libusearch.dll"
-        into "usearch"
-    }
     from sourceSets.main.output
 }
 
