@@ -2977,6 +2977,8 @@ class index_gt {
         if (config.exact) {
             if (!top.reserve(wanted))
                 return result.failed("Out of memory!");
+            if (!is_dummy<predicate_at>(prefetch))
+                prefetch(citerator_at(0), citerator_at(size()));
             search_exact_(query, metric, predicate, wanted, context);
         } else {
             next_candidates_t& next = context.next_candidates;
