@@ -1303,6 +1303,8 @@ struct casts_punned_t {
 
 /**
  *  @brief  Inner (Dot) Product distance.
+ *          Vectors should be normalized to unit length,
+ *          otherwise `::metric_cos_gt` should be used instead.
  */
 template <typename scalar_at = float, typename result_at = scalar_at> struct metric_ip_gt {
     using scalar_t = scalar_at;
