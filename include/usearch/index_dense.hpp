@@ -1970,6 +1970,7 @@ class index_dense_gt {
 
         result.computed_distances = computed_distances;
         result.visited_members = visited_members;
+        result.clusters = unique_clusters;
 
         (void)progress;
         return result;
