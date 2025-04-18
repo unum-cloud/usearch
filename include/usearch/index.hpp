@@ -85,18 +85,20 @@
 #endif
 
 // STL includes
-#include <algorithm> // `std::sort_heap`
-#include <atomic>    // `std::atomic`
-#include <bitset>    // `std::bitset`
-#include <climits>   // `CHAR_BIT`
-#include <cmath>     // `std::sqrt`
-#include <cstring>   // `std::memset`
-#include <iterator>  // `std::reverse_iterator`
-#include <mutex>     // `std::unique_lock` - replacement candidate
-#include <random>    // `std::default_random_engine` - replacement candidate
-#include <stdexcept> // `std::runtime_exception`
-#include <thread>    // `std::thread`
-#include <utility>   // `std::pair`
+#include <algorithm>  // `std::sort_heap`
+#include <atomic>     // `std::atomic`
+#include <bitset>     // `std::bitset`
+#include <climits>    // `CHAR_BIT`
+#include <cmath>      // `std::sqrt`
+#include <cstring>    // `std::memset`
+#include <filesystem> // `std::filesystem`
+#include <fstream>    // `std::ofstream`
+#include <iterator>   // `std::reverse_iterator`
+#include <mutex>      // `std::unique_lock` - replacement candidate
+#include <random>     // `std::default_random_engine` - replacement candidate
+#include <stdexcept>  // `std::runtime_exception`
+#include <thread>     // `std::thread`
+#include <utility>    // `std::pair`
 
 // Helper macros for concatenation and stringification
 #define usearch_concat_helper_m(a, b) a##b
@@ -1400,6 +1402,8 @@ struct index_config_t {
 struct index_limits_t {
     /// @brief Maximum number of entries in the index.
     std::size_t members = 0;
+    /// @brief Maximum level in the index. -1 uses the current max_level().
+    std::int16_t level = -1;
     /// @brief Max number of threads simultaneously updating entries.
     std::size_t threads_add = std::thread::hardware_concurrency();
     /// @brief Max number of threads simultaneously searching entries.
@@ -1421,6 +1425,10 @@ struct index_update_config_t {
 
     /// @brief Optional thread identifier for multi-threaded construction.
     std::size_t thread = 0;
+
+    /// @brief Optional target level to be used for new node. -1 means random
+    /// and 0 or more means the specified level.
+    std::int16_t requested_level = -1;
 };
 
 struct index_search_config_t {
@@ -1489,6 +1497,17 @@ struct dummy_predicate_t {
  */
 struct dummy_callback_t {
     template <typename member_at> void operator()(member_at&&) const noexcept {}
+};
+
+/**
+ *  @brief An example of what a USearch-compatible ad-hoc operation on in-flight entries in merging.
+ *
+ *  This kind of callbacks is used when the engine is merging and you  want to patch
+ *  the entries, while their are still under locks -  limiting concurrent access and providing
+ *  consistency.
+ */
+struct dummy_merge_callback_t {
+    template <typename member_at, typename value_at> void operator()(member_at&&, value_at const&) const noexcept {}
 };
 
 /**
@@ -1720,9 +1739,10 @@ class input_file_t {
  *  The class automatically closes the file when the object is destroyed.
  */
 class memory_mapped_file_t {
-    char const* path_{}; /**< The path to the file to be memory-mapped. */
-    void* ptr_{};        /**< A pointer to the memory-mapping. */
-    size_t length_{};    /**< The length of the memory-mapped file in bytes. */
+    char const* path_{};      /**< The path to the file to be memory-mapped. */
+    void* ptr_{};             /**< A pointer to the memory-mapping. */
+    size_t length_{};         /**< The length of the memory-mapped file in bytes. */
+    bool is_writable_{false}; /**< Whether the memory-mapped file is writable or not. */
 
 #if defined(USEARCH_DEFINED_WINDOWS)
     HANDLE file_handle_{};    /**< The file handle on Windows. */
@@ -1736,13 +1756,15 @@ class memory_mapped_file_t {
     byte_t* data() noexcept { return reinterpret_cast<byte_t*>(ptr_); }
     byte_t const* data() const noexcept { return reinterpret_cast<byte_t const*>(ptr_); }
     std::size_t size() const noexcept { return static_cast<std::size_t>(length_); }
+    bool is_writable() const noexcept { return is_writable_; }
 
     memory_mapped_file_t() noexcept {}
-    memory_mapped_file_t(char const* path) noexcept : path_(path) {}
+    memory_mapped_file_t(char const* path, bool is_writable = false) noexcept
+        : path_(path), is_writable_(is_writable) {}
     ~memory_mapped_file_t() noexcept { close(); }
     memory_mapped_file_t(memory_mapped_file_t&& other) noexcept
         : path_(exchange(other.path_, nullptr)), ptr_(exchange(other.ptr_, nullptr)),
-          length_(exchange(other.length_, 0)),
+          length_(exchange(other.length_, 0)), is_writable_(other.is_writable_),
 #if defined(USEARCH_DEFINED_WINDOWS)
           file_handle_(exchange(other.file_handle_, nullptr)), mapping_handle_(exchange(other.mapping_handle_, nullptr))
 #else
@@ -1757,6 +1779,7 @@ class memory_mapped_file_t {
         std::swap(path_, other.path_);
         std::swap(ptr_, other.ptr_);
         std::swap(length_, other.length_);
+        std::swap(is_writable_, other.is_writable_);
 #if defined(USEARCH_DEFINED_WINDOWS)
         std::swap(file_handle_, other.file_handle_);
         std::swap(mapping_handle_, other.mapping_handle_);
@@ -1773,19 +1796,31 @@ class memory_mapped_file_t {
 
 #if defined(USEARCH_DEFINED_WINDOWS)
 
+        DWARD file_desired_access = GENERIC_READ;
+        DWARD share_mode = FILE_SHARE_READ;
+        DWORD creation_disposition = OPEN_EXISTING;
+        if (is_writable_) {
+            file_desired_access |= GENERIC_WRITE;
+            share_mode |= FILE_SHARE_WRITE;
+        }
         HANDLE file_handle =
-            CreateFile(path_, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+            CreateFile(path_, file_desired_access, share_mode, 0, creation_disposition, FILE_ATTRIBUTE_NORMAL, 0);
         if (file_handle == INVALID_HANDLE_VALUE)
             return result.failed("Opening file failed!");
 
         std::size_t file_length = GetFileSize(file_handle, 0);
-        HANDLE mapping_handle = CreateFileMapping(file_handle, 0, PAGE_READONLY, 0, 0, 0);
+        DWORD protect = is_writable_ ? PAGE_READWRITE : PAGE_READONLY;
+        HANDLE mapping_handle = CreateFileMapping(file_handle, 0, protect, 0, 0, 0);
         if (mapping_handle == 0) {
             CloseHandle(file_handle);
             return result.failed("Mapping file failed!");
         }
 
-        byte_t* file = (byte_t*)MapViewOfFile(mapping_handle, FILE_MAP_READ, 0, 0, file_length);
+        DWORD map_desired_access = FILE_MAP_READ;
+        if (is_writable_) {
+            map_desired_access |= FILE_MAP_WRITE;
+        }
+        byte_t* file = (byte_t*)MapViewOfFile(mapping_handle, map_desired_access, 0, 0, file_length);
         if (file == 0) {
             CloseHandle(mapping_handle);
             CloseHandle(file_handle);
@@ -1797,11 +1832,11 @@ class memory_mapped_file_t {
         length_ = file_length;
 #else
 
+        int open_flags = is_writable_ ? O_RDWR : O_RDONLY;
 #if defined(USEARCH_DEFINED_LINUX)
-        int descriptor = open(path_, O_RDONLY | O_NOATIME);
-#else
-        int descriptor = open(path_, O_RDONLY);
+        open_flags |= O_NOATIME;
 #endif
+        int descriptor = open(path_, open_flags);
         if (descriptor < 0)
             return result.failed(std::strerror(errno));
 
@@ -1814,7 +1849,10 @@ class memory_mapped_file_t {
         }
 
         // Map the entire file
-        byte_t* file = (byte_t*)mmap(NULL, file_stat.st_size, PROT_READ, MAP_SHARED, descriptor, 0);
+        int map_prot = PROT_READ;
+        if (is_writable_)
+            map_prot |= PROT_WRITE;
+        byte_t* file = (byte_t*)mmap(NULL, file_stat.st_size, map_prot, MAP_SHARED, descriptor, 0);
         if (file == MAP_FAILED) {
             ::close(descriptor);
             return result.failed(std::strerror(errno));
@@ -1845,6 +1883,24 @@ class memory_mapped_file_t {
 #endif
         ptr_ = nullptr;
         length_ = 0;
+    }
+
+    /**
+     *  @brief  Increase file size.
+     *
+     *  This uses sparse file if possible.
+     *
+     *  The memory mapped file must be closed and writable.
+     */
+    void reserve(std::size_t new_size) noexcept {
+        if (!path_) {
+            return;
+        }
+        if (!is_writable_) {
+            return;
+        }
+        // Make this file sparse if possible.
+        std::filesystem::resize_file(path_, new_size);
     }
 };
 
@@ -2243,7 +2299,15 @@ class index_gt {
     tape_allocator_t tape_allocator_{};
 
     precomputed_constants_t pre_{};
-    memory_mapped_file_t viewed_file_{};
+    /// @brief  The associated memory mapped file.
+    memory_mapped_file_t mapped_file_{};
+    /// @brief  The offset speficied when the mapped file is loaded.
+    std::size_t mapped_file_offset_{0};
+    /// @brief  The offset that will be used when the next node is allocated from
+    ///         the mapped file by `node_malloc_()`.
+    std::size_t mapped_file_next_node_offset_{0};
+    /// @brief  Whether the index is mutable or not.
+    bool is_mutable_{true};
 
     /// @brief  Controls access to `max_level_` and `entry_slot_`.
     ///         If any thread is updating those values, no other threads can `add()` or `search()`.
@@ -2275,7 +2339,7 @@ class index_gt {
     std::size_t max_level() const noexcept { return nodes_count_ ? static_cast<std::size_t>(max_level_) : 0; }
     index_config_t const& config() const noexcept { return config_; }
     index_limits_t const& limits() const noexcept { return limits_; }
-    bool is_immutable() const noexcept { return bool(viewed_file_); }
+    bool is_immutable() const noexcept { return !is_mutable_; }
     explicit operator bool() const noexcept { return config_.is_valid(); }
 
     /**
@@ -2431,6 +2495,7 @@ class index_gt {
      *
      *  Will change both `size()` and `capacity()` to zero.
      *  Will deallocate all threads/contexts.
+     *  If the index is memory-mapped and mutable - writes headers and levels.
      *  If the index is memory-mapped - releases the mapping and the descriptor.
      */
     void reset() noexcept {
@@ -2441,7 +2506,10 @@ class index_gt {
         nodes_mutexes_ = {};
         limits_ = index_limits_t{0, 0};
         nodes_capacity_ = 0;
-        viewed_file_ = memory_mapped_file_t{};
+        mapped_file_ = memory_mapped_file_t{};
+        mapped_file_offset_ = 0;
+        mapped_file_next_node_offset_ = 0;
+        is_mutable_ = true;
         tape_allocator_ = {};
     }
 
@@ -2454,7 +2522,10 @@ class index_gt {
         std::swap(dynamic_allocator_, other.dynamic_allocator_);
         std::swap(tape_allocator_, other.tape_allocator_);
         std::swap(pre_, other.pre_);
-        std::swap(viewed_file_, other.viewed_file_);
+        std::swap(mapped_file_, other.mapped_file_);
+        std::swap(mapped_file_offset_, other.mapped_file_offset_);
+        std::swap(mapped_file_next_node_offset_, other.mapped_file_next_node_offset_);
+        std::swap(is_mutable_, other.is_mutable_);
         std::swap(max_level_, other.max_level_);
         std::swap(entry_slot_, other.entry_slot_);
         std::swap(nodes_, other.nodes_);
@@ -2478,7 +2549,8 @@ class index_gt {
 
         if (limits.threads_add <= limits_.threads_add          //
             && limits.threads_search <= limits_.threads_search //
-            && limits.members <= limits_.members)
+            && limits.members <= limits_.members               //
+            && limits.level <= limits_.level)
             return true;
 
         // In some cases, we don't want to update the number of members,
@@ -2498,11 +2570,63 @@ class index_gt {
         if (nodes_)
             std::memcpy(new_nodes.data(), nodes_.data(), sizeof(node_t) * size());
 
+        if (mapped_file_ && is_mutable_ && limits.members > size()) {
+            // Extends associated memory-mapped file when the index is mutable.
+            if (!mapped_file_.open_if_not()) {
+                return false;
+            }
+            // Compute offsets and new file size.
+            std::size_t base_offset = mapped_file_offset_ + sizeof(index_serialized_header_t);
+            std::size_t nodes_block_offset = base_offset + size() * sizeof(level_t);
+            std::size_t nodes_block_end_offset = nodes_block_offset;
+            std::size_t new_nodes_block_offset = base_offset + limits.members * sizeof(level_t);
+            std::size_t new_file_size = new_nodes_block_offset;
+            for (std::size_t i = 0; i != size(); ++i) {
+                std::size_t node_size = node_bytes_(node_at_(i).level());
+                new_file_size += node_size;
+                nodes_block_end_offset += node_size;
+            }
+            if (limits.level < 0) {
+                limits.level = max_level();
+            }
+            // Assume new nodes use at most limits.level levels.
+            new_file_size += (limits.members - size()) * (node_bytes_(limits.level) + sizeof(level_t));
+
+            // Close before we extend the associated memory mapped file.
+            mapped_file_.close();
+            // Extend the associated memory mapped file.
+            mapped_file_.reserve(new_file_size);
+            // Re-open the associated memory mapped file for updating new_nodes.
+            if (!mapped_file_.open_if_not()) {
+                return false;
+            }
+
+            // Update new_nodes for new address.
+            if (nodes_block_end_offset != nodes_block_offset) {
+                // Move old node data to new node data space:
+                //
+                // Before: | header | level_t * old_size | old_nodes |
+                // After:  | header | level_t * new_size      | new_nodes    |
+                //                                       |<-->|
+                //                             We need to move for this space.
+                std::memmove(mapped_file_.data() + new_nodes_block_offset, mapped_file_.data() + nodes_block_offset,
+                             nodes_block_end_offset - nodes_block_offset);
+            }
+            // Update node addresses and the next node offset for node_malloc_().
+            std::size_t node_offset = new_nodes_block_offset;
+            for (std::size_t i = 0; i != size(); ++i) {
+                new_nodes[i] = node_t{mapped_file_.data() + node_offset};
+                node_offset += node_bytes_(new_nodes[i].level());
+            }
+            mapped_file_next_node_offset_ = node_offset;
+        }
+
         limits_ = limits;
         nodes_capacity_ = limits.members;
         nodes_ = std::move(new_nodes);
         contexts_ = std::move(new_contexts);
         nodes_mutexes_ = std::move(new_mutexes);
+
         return true;
     }
 
@@ -2686,6 +2810,25 @@ class index_gt {
     };
 
     /**
+     *  @brief Returns index_serialized_header_t on mapped file.
+     *
+     *  Caller must check "mapped_file_ && is_mutable_" before calls this.
+     */
+    index_serialized_header_t* mapped_header_() noexcept {
+        return reinterpret_cast<index_serialized_header_t*>(mapped_file_.data() + mapped_file_offset_);
+    }
+
+    /**
+     *  @brief Returns levels on mapped file.
+     *
+     *  Caller must check "mapped_file_ && is_mutable_" before calls this.
+     */
+    misaligned_ptr_gt<level_t> mapped_levels_() noexcept {
+        return misaligned_ptr_gt<level_t>{mapped_file_.data() + mapped_file_offset_ +
+                                          sizeof(index_serialized_header_t)};
+    }
+
+    /**
      *  @brief  Inserts a new entry into the index. Thread-safe. Supports @b heterogeneous lookups.
      *          Expects needed capacity to be reserved ahead of time: `size() < capacity()`.
      *
@@ -2738,7 +2881,8 @@ class index_gt {
         std::unique_lock<std::mutex> new_level_lock(global_mutex_);
         level_t max_level_copy = max_level_;                                             // Copy under lock
         compressed_slot_t entry_slot_copy = static_cast<compressed_slot_t>(entry_slot_); // Copy under lock
-        level_t new_target_level = choose_random_level_(context.level_generator);
+        level_t new_target_level =
+            config.requested_level < 0 ? choose_random_level_(context.level_generator) : config.requested_level;
 
         // Make sure we are not overflowing
         std::size_t capacity = nodes_capacity_.load();
@@ -2754,11 +2898,19 @@ class index_gt {
             nodes_count_.fetch_sub(1);
             return result.failed("Out of memory!");
         }
+        if (mapped_file_ && is_mutable_) {
+            misaligned_ptr_gt<level_t> levels = mapped_levels_();
+            levels[old_size] = new_target_level;
+        }
         if (new_target_level <= max_level_copy)
             new_level_lock.unlock();
 
         nodes_[old_size] = new_node;
         result.new_size = old_size + 1;
+        if (mapped_file_ && is_mutable_) {
+            index_serialized_header_t* header = mapped_header_();
+            header->size = result.new_size;
+        }
         compressed_slot_t new_slot = result.slot = static_cast<compressed_slot_t>(old_size);
         callback(at(result.slot));
 
@@ -2766,6 +2918,11 @@ class index_gt {
         if (!old_size) {
             entry_slot_ = result.slot;
             max_level_ = new_target_level;
+            if (mapped_file_ && is_mutable_) {
+                index_serialized_header_t* header = mapped_header_();
+                header->entry_slot = entry_slot_;
+                header->max_level = max_level_;
+            }
             return result;
         }
 
@@ -2927,6 +3084,184 @@ class index_gt {
 
         callback(at(updated_slot));
         return result;
+    }
+
+    /**
+     *  @brief  Merge an index to this index.
+     *
+     *  @param[in] index The index that has nodes to be merged.
+     *  @param[in] get_value Callable object getting a value from `index`.
+     *  @param[in] metric Callable object measuring distance between value and present objects.
+     *  @param[in] metric Callable object measuring distance between value and present objects.
+     *  @param[in] config Configuration options for this specific operation.
+     *  @param[in] callback On-success callback, executed while the `member_ref_t` is still under lock.
+     */
+    template <                                               //
+        typename metric_at,                                  //
+        typename get_value_at,                               //
+        typename merge_callback_at = dummy_merge_callback_t, //
+        typename prefetch_at = dummy_prefetch_t              //
+        >
+    add_result_t merge(                                                      //
+        index_gt const& index, get_value_at&& get_value, metric_at&& metric, //
+        index_update_config_t update_config = {}, merge_callback_at&& callback = merge_callback_at{},
+        prefetch_at&& prefetch = prefetch_at{}) noexcept {
+        if (index.size() == 0) {
+            add_result_t result;
+            result.new_size = size();
+            return result;
+        }
+
+        // base: this (This index)
+        // target: index (The given index)
+
+        // Reserve spaces.
+        std::size_t new_members = size() + index.size();
+        index_limits_t limits;
+        limits.members = new_members;
+        // New nodes use at most the target index's max level.
+        limits.level = index.max_level();
+        if (!reserve(limits)) {
+            add_result_t result;
+            return result.failed("Out of memory");
+        }
+
+        bool same_connectivity = (config_.connectivity == index.config_.connectivity &&
+                                  config_.connectivity_base == index.config_.connectivity_base);
+
+        add_result_t merge_result;
+        if (size() == 0 && same_connectivity) {
+            // If the base index is empty, we just copy nodes in the target index.
+            for (member_cref_t target_member : index) {
+                auto value = get_value(target_member);
+                const std::size_t target_slot = get_slot(target_member);
+                const std::size_t base_slot = target_slot;
+                node_t target_node = index.node_at_(target_slot);
+                nodes_[base_slot] = node_make_copy_(index.node_bytes_(target_node));
+                callback(at(base_slot), value);
+            }
+            nodes_count_ = index.nodes_count_.load();
+            max_level_ = index.max_level_;
+            entry_slot_ = index.entry_slot_;
+            if (mapped_file_ && is_mutable_) {
+                index_serialized_header_t* header = mapped_header_();
+                header->size = nodes_count_;
+                header->max_level = max_level_;
+                header->entry_slot = entry_slot_;
+                misaligned_ptr_gt<level_t> levels = mapped_levels_();
+                for (std::size_t i = 0; i != size(); ++i) {
+                    level_t level = nodes_[i].level();
+                    levels[i] = level;
+                }
+            }
+        } else if (index.max_level() > 0 && same_connectivity) {
+            // If the target index has multiple layers, we use
+            // optimized merge.
+            //
+            // It adds nodes that exists in level > 0 layers in the
+            // target index to the base index without removing
+            // existing connections. These nodes connect to nodes in
+            // the base index and the target index.
+            //
+            // It adds other nodes (that exist in only the level == 0
+            // layer) in the target index to the base index without
+            // connecting to any nodes in the base index. These nodes
+            // connect to nodes in only the target index. These nodes
+            // don't have any connections to nodes in the base index.
+
+            std::size_t nodes_count_copy = nodes_count_;
+
+            // The 1st path:
+            // * Add all nodes in the target index to the index without
+            //   keeping connections in the target index
+            // * Create slot in the target index -> slot in the base
+            //   index map for the 2nd path
+            buffer_gt<std::size_t> target_slot_to_base(index.size());
+            for (member_cref_t target_member : index) {
+                auto value = get_value(target_member);
+                const std::size_t target_slot = get_slot(target_member);
+                node_t target_node = index.node_at_(target_slot);
+                level_t level = target_node.level();
+                if (level == 0) {
+                    const std::size_t old_base_size = nodes_count_.fetch_add(1);
+                    node_t new_base_node = node_make_(target_node.key(), 0);
+                    if (!new_base_node) {
+                        nodes_count_.fetch_add(1);
+                        return merge_result.failed("Out of memory!");
+                    }
+                    const std::size_t base_slot = old_base_size;
+                    target_slot_to_base[target_slot] = base_slot;
+                    nodes_[old_base_size] = new_base_node;
+                    callback(at(base_slot), value);
+                } else {
+                    update_config.requested_level = level;
+                    auto merge_callback = [&](member_ref_t m) {
+                        target_slot_to_base[target_slot] = get_slot(m);
+                        callback(m, value);
+                    };
+                    add_result_t result =
+                        add(get_key(target_member), value, metric, update_config, merge_callback, prefetch);
+                    if (!result) {
+                        return result;
+                    }
+                }
+            }
+
+            // The 2nd path:
+            // * Restore connection information in the target index
+            for (member_cref_t target_member : index) {
+                const std::size_t target_slot = get_slot(target_member);
+                node_t target_node = index.node_at_(target_slot);
+                const std::size_t base_slot = target_slot_to_base[target_slot];
+                node_t base_node = node_at_(base_slot);
+                if (target_node.level() == 0) {
+                    neighbors_ref_t base_neighbors = neighbors_(base_node, 0);
+                    for (auto target_neighbor : index.neighbors_(target_node, 0)) {
+                        base_neighbors.push_back(target_slot_to_base[target_neighbor]);
+                    }
+                } else {
+                    for (level_t level = 0; level != target_node.level(); ++level) {
+                        neighbors_ref_t base_neighbors = neighbors_(base_node, level);
+                        std::size_t max_neighbors = level == 0 ? config_.connectivity_base : config_.connectivity;
+                        std::size_t remained_neighbors_size = max_neighbors - base_neighbors.size();
+                        neighbors_ref_t target_neighbors = index.neighbors_(target_node, level);
+                        std::size_t addable_neighbors_size = std::min(target_neighbors.size(), remained_neighbors_size);
+                        for (std::size_t i = 0; i != addable_neighbors_size; ++i) {
+                            compressed_slot_t target_slot = target_neighbors[i];
+                            base_neighbors.push_back(target_slot_to_base[target_slot]);
+                        }
+                    }
+                }
+            }
+
+            if (mapped_file_ && is_mutable_) {
+                index_serialized_header_t* header = mapped_header_();
+                header->size = nodes_count_;
+                misaligned_ptr_gt<level_t> levels = mapped_levels_();
+                // Update levels of only added nodes
+                for (std::size_t i = nodes_count_copy; i != nodes_count_; ++i) {
+                    level_t level = nodes_[i].level();
+                    levels[i] = level;
+                }
+            }
+        } else {
+            // Add all values in the target index to the base index.
+            for (const auto& member : index) {
+                auto value = get_value(member);
+                auto merge_callback = [&](member_ref_t m) { callback(m, value); };
+                add_result_t result = add(get_key(member), value, metric, update_config, merge_callback, prefetch);
+                if (!result) {
+                    return result;
+                }
+            }
+            // We don't need to update mapped header and levels here
+            // because add() updates them.
+        }
+        merge_result.new_size = new_members;
+        // Should we set more members in merge_result? Or should we
+        // define merge_result_t that only has new_size?
+
+        return merge_result;
     }
 
     /**
@@ -3163,7 +3498,7 @@ class index_gt {
      */
     std::size_t memory_usage(std::size_t allocator_entry_bytes = default_allocator_entry_bytes()) const noexcept {
         std::size_t total = 0;
-        if (!viewed_file_) {
+        if (!mapped_file_) {
             stats_t s = stats();
             total += s.allocated_bytes;
             total += s.nodes * allocator_entry_bytes;
@@ -3272,7 +3607,6 @@ class index_gt {
 
         // We are loading an empty index, no more work to do
         if (!header.size) {
-            reset();
             return result;
         }
 
@@ -3409,6 +3743,8 @@ class index_gt {
 
     /**
      *  @brief  Loads the serialized binary index representation from disk to RAM.
+     *          If file is writable, this loads @b without copying
+     *          data into RAM, and fetching it on-demand like view() does.
      *          Adjusts the configuration properties of the constructed index to
      *          match the settings in the file.
      */
@@ -3416,21 +3752,29 @@ class index_gt {
     serialization_result_t load(memory_mapped_file_t file, std::size_t offset = 0,
                                 progress_at&& progress = {}) noexcept {
 
-        serialization_result_t io_result = file.open_if_not();
-        if (!io_result)
-            return io_result;
+        if (file.is_writable()) {
+            serialization_result_t result = view(std::move(file), offset, std::forward<progress_at>(progress));
+            if (!result)
+                return result;
 
-        serialization_result_t stream_result = load_from_stream(
-            [&](void* buffer, std::size_t length) {
-                if (offset + length > file.size())
-                    return false;
-                std::memcpy(buffer, file.data() + offset, length);
-                offset += length;
-                return true;
-            },
-            std::forward<progress_at>(progress));
+            is_mutable_ = true;
+            return {};
+        } else {
+            serialization_result_t io_result = file.open_if_not();
+            if (!io_result)
+                return io_result;
 
-        return stream_result;
+            serialization_result_t stream_result = load_from_stream(
+                [&](void* buffer, std::size_t length) {
+                    if (offset + length > file.size())
+                        return false;
+                    std::memcpy(buffer, file.data() + offset, length);
+                    offset += length;
+                    return true;
+                },
+                std::forward<progress_at>(progress));
+            return stream_result;
+        }
     }
 
     /**
@@ -3455,8 +3799,16 @@ class index_gt {
             return result.failed("File is corrupted and lacks a header");
         std::memcpy(&header, file.data() + offset, sizeof(header));
 
+        // Keep offset for re-using later.
+        mapped_file_offset_ = offset;
+        // Viewed index is immutable.
+        is_mutable_ = false;
+
         if (!header.size) {
-            reset();
+            // This is one of success paths. So keep the associated file.
+            mapped_file_ = std::move(file);
+            // No levels space exists for an empty index.
+            mapped_file_next_node_offset_ = offset + sizeof(header);
             return result;
         }
 
@@ -3504,7 +3856,7 @@ class index_gt {
             if (!progress(i + 1, header.size))
                 return result.failed("Terminated by user");
         }
-        viewed_file_ = std::move(file);
+        mapped_file_ = std::move(file);
         return {};
     }
 
@@ -3688,9 +4040,21 @@ class index_gt {
         return pre_.neighbors_base_bytes + pre_.neighbors_bytes * level;
     }
 
+    byte_t* node_malloc_raw_(std::size_t node_bytes) noexcept {
+        if (mapped_file_) {
+            // Mutable memory mapped index allocates a node space from
+            // the next free node space.
+            byte_t* data = mapped_file_.data() + mapped_file_next_node_offset_;
+            mapped_file_next_node_offset_ += node_bytes;
+            return data;
+        } else {
+            return reinterpret_cast<byte_t*>(tape_allocator_.allocate(node_bytes));
+        }
+    }
+
     span_bytes_t node_malloc_(level_t level) noexcept {
         std::size_t node_bytes = node_bytes_(level);
-        byte_t* data = (byte_t*)tape_allocator_.allocate(node_bytes);
+        byte_t* data = node_malloc_raw_(node_bytes);
         return data ? span_bytes_t{data, node_bytes} : span_bytes_t{};
     }
 
@@ -3707,7 +4071,7 @@ class index_gt {
     }
 
     node_t node_make_copy_(span_bytes_t old_bytes) noexcept {
-        byte_t* data = (byte_t*)tape_allocator_.allocate(old_bytes.size());
+        byte_t* data = node_malloc_raw_(old_bytes.size());
         if (!data)
             return {};
         std::memcpy(data, old_bytes.data(), old_bytes.size());
@@ -3715,7 +4079,7 @@ class index_gt {
     }
 
     void node_free_(std::size_t idx) noexcept {
-        if (viewed_file_)
+        if (mapped_file_)
             return;
 
         node_t& node = nodes_[idx];
