@@ -604,7 +604,7 @@ class Index:
             raise e
 
     @staticmethod
-    def restore(path_or_buffer: PathOrBuffer, view: bool = False) -> Optional[Index]:
+    def restore(path_or_buffer: PathOrBuffer, view: bool = False, **kwargs) -> Optional[Index]:
         meta = Index.metadata(path_or_buffer)
         if not meta:
             return None
@@ -613,6 +613,7 @@ class Index:
             ndim=meta["dimensions"],
             dtype=meta["kind_scalar"],
             metric=meta["kind_metric"],
+            **kwargs,
         )
 
         if view:
