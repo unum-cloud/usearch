@@ -151,6 +151,7 @@
     "FAISS",
     "fbin",
     "furo",
+    "geospatial",
     "googleanalytics",
     "groundtruth",
     "hashable",
@@ -170,6 +171,7 @@
     "longlong",
     "memmap",
     "MSVC",
+    "Multimodal",
     "Napi",
     "ndarray",
     "NDCG",
@@ -208,7 +210,10 @@
     "usecases",
     "Vardanian",
     "vectorize",
-    "Xunit"
+    "Vincenty",
+    "Wasmer",
+    "Xunit",
+    "Yuga"
   ],
   "autoDocstring.docstringFormat": "sphinx",
   "java.configuration.updateBuildConfiguration": "interactive",

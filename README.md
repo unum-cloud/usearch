@@ -161,7 +161,7 @@ This can result in __20x cost reduction__ on AWS and other public clouds.
 index.save("index.usearch")
 
 loaded_copy = index.load("index.usearch")
-view = Index.restore("index.usearch", view=True)
+view = Index.restore("index.usearch", view=True, ...)
 
 other_view = Index(ndim=..., metric=...)
 other_view.view("index.usearch")
