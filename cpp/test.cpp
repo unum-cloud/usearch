@@ -877,7 +877,7 @@ void test_absurd(std::size_t dimensions, std::size_t connectivity, std::size_t e
 template <typename scalar_at>
 void test_exact_search(std::size_t dataset_count, std::size_t queries_count, std::size_t wanted_count) {
     std::size_t dimensions = 32;
-    metric_punned_t metric(dimensions, metric_kind_t::cos_k);
+    metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -886,9 +886,9 @@ void test_exact_search(std::size_t dataset_count, std::size_t queries_count, std
     std::generate(dataset.begin(), dataset.end(), [&] { return static_cast<scalar_at>(dis(gen)); });
 
     exact_search_t search;
-    auto results = search(                                                        //
-        (byte_t const*)dataset.data(), dataset_count, dimensions * sizeof(float), //
-        (byte_t const*)dataset.data(), queries_count, dimensions * sizeof(float), //
+    auto results = search(                                                            //
+        (byte_t const*)dataset.data(), dataset_count, dimensions * sizeof(scalar_at), //
+        (byte_t const*)dataset.data(), queries_count, dimensions * sizeof(scalar_at), //
         wanted_count, metric);
 
     for (std::size_t i = 0; i < results.size(); ++i)
