@@ -1,4 +1,35 @@
-const test = require('node:test');
+const nodeTest = require('node:test');
+const realTest = nodeTest.test; // the original function
+
+function loggedTest(name, options, fn) {
+    // The API has two call signatures:
+    //   test(name, fn)
+    //   test(name, options, fn)
+    if (typeof options === 'function') {
+        fn = options;
+        options = undefined;
+    }
+
+    // Wrap the body so we can log before / after
+    const wrapped = async (t) => {
+        console.log('▶', name);
+        try {
+            await fn(t); // run the user’s test
+            console.log('✓', name);
+        } catch (err) {
+            console.log('✖', name);
+            throw err; // re-throw so the runner records the failure
+        }
+    };
+
+    // Delegate back to the real test() with the same options
+    return options ? realTest(name, options, wrapped) : realTest(name, wrapped);
+}
+
+// Replace both the export and the global the runner puts on each module
+global.test = loggedTest;
+module.exports = loggedTest; // for completeness if this file is `require`d
+
 const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
