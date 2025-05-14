@@ -21,7 +21,10 @@
 using namespace unum::usearch;
 using namespace unum;
 
+using index_error_t = usearch::error_t;
 using add_result_t = typename index_dense_t::add_result_t;
+using search_result_t = typename index_dense_t::search_result_t;
+using state_result_t = typename index_dense_t::state_result_t;
 
 class CompiledIndex : public Napi::ObjectWrap<CompiledIndex> {
   public:
@@ -79,7 +82,6 @@ std::size_t napi_argument_to_size(Napi::Value v) {
 }
 
 CompiledIndex::CompiledIndex(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<CompiledIndex>(ctx) {
-
     // Directly assign the parameters without checks
     std::size_t dimensions = napi_argument_to_size(ctx[0]);
     metric_kind_t metric_kind = metric_from_name(ctx[1].As<Napi::String>().Utf8Value().c_str());
@@ -97,7 +99,12 @@ CompiledIndex::CompiledIndex(Napi::CallbackInfo const& ctx) : Napi::ObjectWrap<C
 
     index_dense_config_t config(connectivity, expansion_add, expansion_search);
     config.multi = multi;
-    native_.reset(new index_dense_t(index_dense_t::make(metric, config)));
+    state_result_t result = index_dense_t::make(metric, config);
+    if (!result) {
+        Napi::TypeError::New(ctx.Env(), result.error.release()).ThrowAsJavaScriptException();
+        return;
+    }
+    native_.reset(new index_dense_t(std::move(result.index)));
     if (!native_)
         Napi::Error::New(ctx.Env(), "Out of memory!").ThrowAsJavaScriptException();
 }
@@ -184,6 +191,9 @@ void CompiledIndex::Add(Napi::CallbackInfo const& ctx) {
 
     // Run insertions concurrently
     auto run_parallel = [&](auto vectors) {
+        // Errors can be set only from the main thread, so before spawning workers
+        // we need temporary space to keep the message
+        index_error_t first_error{};
         std::atomic<bool> failed{false};
         executor_default_t executor{threads};
         executor.fixed(tasks, [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
@@ -192,23 +202,33 @@ void CompiledIndex::Add(Napi::CallbackInfo const& ctx) {
             auto key = static_cast<default_key_t>(keys[task_idx]);
             auto vector = vectors + task_idx * native_->dimensions();
             add_result_t result = native_->add(key, vector);
-            if (!result)
-                if (!failed.exchange(true))
-                    Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
+            if (!result) {
+                if (!failed.exchange(true)) {
+                    first_error = std::move(result.error);
+                } else {
+                    result.error.release();
+                }
+            }
         });
+        if (failed)
+            Napi::TypeError::New(env, first_error.release()).ThrowAsJavaScriptException();
     };
 
     // Dispatch the parallel tasks based on the `TypedArray` type
-    if (vectors.TypedArrayType() == napi_float32_array) {
-        run_parallel(vectors.As<Napi::Float32Array>().Data());
-    } else if (vectors.TypedArrayType() == napi_float64_array) {
-        run_parallel(vectors.As<Napi::Float64Array>().Data());
-    } else if (vectors.TypedArrayType() == napi_int8_array) {
-        run_parallel(vectors.As<Napi::Int8Array>().Data());
-    } else {
-        Napi::TypeError::New(env,
-                             "Unsupported TypedArray. Supported types are Float32Array, Float64Array, and Int8Array.")
-            .ThrowAsJavaScriptException();
+    try {
+        if (vectors.TypedArrayType() == napi_float32_array) {
+            run_parallel(vectors.As<Napi::Float32Array>().Data());
+        } else if (vectors.TypedArrayType() == napi_float64_array) {
+            run_parallel(vectors.As<Napi::Float64Array>().Data());
+        } else if (vectors.TypedArrayType() == napi_int8_array) {
+            run_parallel(vectors.As<Napi::Int8Array>().Data());
+        } else {
+            Napi::TypeError::New(
+                env, "Unsupported TypedArray. Supported types are Float32Array, Float64Array, and Int8Array.")
+                .ThrowAsJavaScriptException();
+        }
+    } catch (...) {
+        Napi::TypeError::New(env, "Insertion failed").ThrowAsJavaScriptException();
     }
 }
 
@@ -240,24 +260,32 @@ Napi::Value CompiledIndex::Search(Napi::CallbackInfo const& ctx) {
         auto distances_data = distances_js.Data();
         auto counts_data = counts_js.Data();
 
+        // Errors can be set only from the main thread, so before spawning workers
+        // we need temporary space to keep the message
+        index_error_t first_error{};
         std::atomic<bool> failed{false};
         executor_default_t executor{threads};
         executor.fixed(tasks, [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
             if (failed.load())
                 return;
             auto vector = vectors + task_idx * native_->dimensions();
-            auto result = native_->search(vector, wanted);
+            search_result_t result = native_->search(vector, wanted);
             if (!result) {
-                if (!failed.exchange(true))
-                    Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
+                if (!failed.exchange(true)) {
+                    first_error = std::move(result.error);
+                } else {
+                    result.error.release();
+                }
             } else {
-                auto matches = matches_data + task_idx * native_->dimensions();
-                auto distances = distances_data + task_idx * native_->dimensions();
+                auto matches = matches_data + task_idx * wanted;
+                auto distances = distances_data + task_idx * wanted;
                 counts_data[task_idx] = result.dump_to(matches, distances);
             }
         });
-        if (failed)
+        if (failed) {
+            Napi::TypeError::New(env, first_error.release()).ThrowAsJavaScriptException();
             return env.Null();
+        }
 
         result_js.Set(0u, matches_js);
         result_js.Set(1u, distances_js);
@@ -266,16 +294,21 @@ Napi::Value CompiledIndex::Search(Napi::CallbackInfo const& ctx) {
     };
 
     // Dispatch the parallel tasks based on the `TypedArray` type
-    if (queries.TypedArrayType() == napi_float32_array) {
-        return run_parallel(queries.As<Napi::Float32Array>().Data());
-    } else if (queries.TypedArrayType() == napi_float64_array) {
-        return run_parallel(queries.As<Napi::Float64Array>().Data());
-    } else if (queries.TypedArrayType() == napi_int8_array) {
-        return run_parallel(queries.As<Napi::Int8Array>().Data());
-    } else {
-        Napi::TypeError::New(env,
-                             "Unsupported TypedArray. Supported types are Float32Array, Float64Array, and Int8Array.")
-            .ThrowAsJavaScriptException();
+    try {
+        if (queries.TypedArrayType() == napi_float32_array) {
+            return run_parallel(queries.As<Napi::Float32Array>().Data());
+        } else if (queries.TypedArrayType() == napi_float64_array) {
+            return run_parallel(queries.As<Napi::Float64Array>().Data());
+        } else if (queries.TypedArrayType() == napi_int8_array) {
+            return run_parallel(queries.As<Napi::Int8Array>().Data());
+        } else {
+            Napi::TypeError::New(
+                env, "Unsupported TypedArray. Supported types are Float32Array, Float64Array, and Int8Array.")
+                .ThrowAsJavaScriptException();
+            return env.Null();
+        }
+    } catch (...) {
+        Napi::TypeError::New(env, "Search failed").ThrowAsJavaScriptException();
         return env.Null();
     }
 }
