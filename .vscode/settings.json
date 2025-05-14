@@ -122,7 +122,8 @@
     "xtree": "cpp",
     "xutility": "cpp",
     "execution": "cpp",
-    "text_encoding": "cpp"
+    "text_encoding": "cpp",
+    "__functional_03": "cpp"
   },
   "cSpell.words": [
     "allclose",
@@ -230,5 +231,11 @@
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "golang.go"
   },
+  "editor.tabSize": 4,
+  "editor.insertSpaces": true,
+  "prettier.singleQuote": true,
+  "prettier.tabWidth": 4,
+  "prettier.useTabs": false
+
   "dotnet.defaultSolution": "csharp/Cloud.Unum.USearch.sln"
 }
