@@ -171,6 +171,8 @@ void CompiledIndex::Add(Napi::CallbackInfo const& ctx) {
 
     // Optional arguments
     std::size_t threads = napi_argument_to_size(ctx[2]);
+    if (threads == 0)
+        threads = std::thread::hardware_concurrency();
 
     // Ensure there is enough capacity and memory
     std::size_t tasks = keys.ElementLength();
@@ -223,6 +225,8 @@ Napi::Value CompiledIndex::Search(Napi::CallbackInfo const& ctx) {
     Napi::TypedArray queries = ctx[0].As<Napi::TypedArray>();
     std::size_t wanted = napi_argument_to_size(ctx[1]);
     std::size_t threads = napi_argument_to_size(ctx[2]);
+    if (threads == 0)
+        threads = std::thread::hardware_concurrency();
 
     // Run queries concurrently
     std::size_t tasks = queries.ElementLength() / native_->dimensions();
@@ -330,6 +334,8 @@ Napi::Value exactSearch(Napi::CallbackInfo const& ctx) {
     std::size_t wanted = napi_argument_to_size(ctx[3]);
     metric_kind_t metric_kind = metric_from_name(ctx[4].As<Napi::String>().Utf8Value().c_str());
     std::size_t threads = napi_argument_to_size(ctx[5]);
+    if (threads == 0)
+        threads = std::thread::hardware_concurrency();
 
     // Check the types used
     scalar_kind_t quantization;
