@@ -160,11 +160,8 @@ void CompiledIndex::Add(Napi::CallbackInfo const& ctx) {
     Napi::Env env = ctx.Env();
 
     // Check the number of arguments
-    constexpr std::size_t min_args_k = 2; // mandatory: keys, vectors
-    constexpr std::size_t max_args_k = 3; // optional: threads
-    if (ctx.Length() < min_args_k || ctx.Length() > max_args_k) {
-        Napi::TypeError::New(env, "`Add` expects 2 to 3 arguments: keys, vectors[, threads]")
-            .ThrowAsJavaScriptException();
+    if (ctx.Length() != 3) {
+        Napi::TypeError::New(env, "`Add` expects 3 arguments: keys, vectors[, threads]").ThrowAsJavaScriptException();
         return;
     }
 
@@ -173,9 +170,7 @@ void CompiledIndex::Add(Napi::CallbackInfo const& ctx) {
     Napi::TypedArray vectors = ctx[1].As<Napi::TypedArray>();
 
     // Optional arguments
-    std::size_t threads = ctx.Length() >= 3 //
-                              ? napi_argument_to_size(ctx[2])
-                              : std::thread::hardware_concurrency();
+    std::size_t threads = napi_argument_to_size(ctx[2]);
 
     // Ensure there is enough capacity and memory
     std::size_t tasks = keys.ElementLength();
@@ -219,22 +214,15 @@ Napi::Value CompiledIndex::Search(Napi::CallbackInfo const& ctx) {
     Napi::Env env = ctx.Env();
 
     // Check the number of arguments
-    constexpr std::size_t min_args_k = 2; // mandatory: queries, k
-    constexpr std::size_t max_args_k = 3; // optional: threads
-    if (ctx.Length() < min_args_k || ctx.Length() > max_args_k) {
-        Napi::TypeError::New(env, "`Search` expects 2 to 3 arguments: queries, k[, threads]")
-            .ThrowAsJavaScriptException();
+    if (ctx.Length() != 3) {
+        Napi::TypeError::New(env, "`Search` expects 3 arguments: queries, k[, threads]").ThrowAsJavaScriptException();
         return env.Null();
     }
 
     // Extract mandatory arguments
     Napi::TypedArray queries = ctx[0].As<Napi::TypedArray>();
     std::size_t wanted = napi_argument_to_size(ctx[1]);
-
-    // Optional arguments
-    std::size_t threads = ctx.Length() >= 3 //
-                              ? napi_argument_to_size(ctx[2])
-                              : std::thread::hardware_concurrency();
+    std::size_t threads = napi_argument_to_size(ctx[2]);
 
     // Run queries concurrently
     std::size_t tasks = queries.ElementLength() / native_->dimensions();
@@ -326,11 +314,9 @@ Napi::Value exactSearch(Napi::CallbackInfo const& ctx) {
     Napi::Env env = ctx.Env();
 
     // Check the number of arguments
-    constexpr std::size_t min_args_k = 5; // mandatory: dataset, queries, dims, k, metric
-    constexpr std::size_t max_args_k = 6; // optional: threads
-    if (ctx.Length() < min_args_k || ctx.Length() > max_args_k) {
-        Napi::TypeError::New(
-            env, "`exactSearch` expects 5 to 6 arguments: dataset, queries, dimensions, k, metric[, threads].")
+    if (ctx.Length() != 6) {
+        Napi::TypeError::New(env,
+                             "`exactSearch` expects 6 arguments: dataset, queries, dimensions, k, metric[, threads].")
             .ThrowAsJavaScriptException();
         return env.Null();
     }
@@ -343,9 +329,7 @@ Napi::Value exactSearch(Napi::CallbackInfo const& ctx) {
     std::size_t dimensions = napi_argument_to_size(ctx[2]);
     std::size_t wanted = napi_argument_to_size(ctx[3]);
     metric_kind_t metric_kind = metric_from_name(ctx[4].As<Napi::String>().Utf8Value().c_str());
-
-    // Optional arguments
-    std::size_t threads = ctx.Length() >= 6 ? napi_argument_to_size(ctx[5]) : std::thread::hardware_concurrency();
+    std::size_t threads = napi_argument_to_size(ctx[5]);
 
     // Check the types used
     scalar_kind_t quantization;
