@@ -49,7 +49,7 @@ test('Single-entry operations', async (t) => {
 
         assert.equal(index.remove(15n), 1);
 
-        assert.equal(index.size(), 3, 'size after remoing elements should be 3');
+        assert.equal(index.size(), 3, 'size after removing elements should be 3');
         assert.equal(index.contains(15), false, 'entry must be absent after insertion');
 
         const results = index.search(new Float32Array([13, 14]), 2);
@@ -166,7 +166,28 @@ test('Invalid operations', async (t) => {
             () => index.add(42n, new Float32Array([0.2, 0.6, 0.4])),
             {
                 name: 'Error',
-                message: 'Duplicate keys not allowed in high-level wrappers'
+                message: '<key:42 message:Duplicate keys not allowed in high-level wrappers>'
+            }
+        );
+    });
+
+    await t.test('Batch add containing the same key', () => {
+        const index = new usearch.Index({
+            metric: "l2sq",
+            connectivity: 16,
+            dimensions: 3,
+        });
+        index.add(42n, new Float32Array([0.2, 0.6, 0.4]));
+        assert.throws(
+            () => {
+                index.add(
+                    [41n, 42n, 43n],
+                    [[0.1, 0.6, 0.4], [0.2, 0.6, 0.4], [0.3, 0.6, 0.4]]
+                );
+            },
+            {
+                name: 'Error',
+                message: '<key:42 message:Duplicate keys not allowed in high-level wrappers>'
             }
         );
     });
@@ -207,7 +228,7 @@ test('Serialization', async (t) => {
     // todo: Skip as the test fails only on windows.
     // The following error in afterEach().
     // `error: "EBUSY: resource busy or locked, unlink`
-    await t.test('view: Read data', {skip: process.platform === 'win32'}, () => {
+    await t.test('view: Read data', { skip: process.platform === 'win32' }, () => {
         const index = new usearch.Index({
             metric: "l2sq",
             connectivity: 16,
@@ -221,7 +242,7 @@ test('Serialization', async (t) => {
         assertAlmostEqual(results.distances[0], new Float32Array([0]));
     });
 
-    await t.test('view: Invalid operations: add', {skip: process.platform === 'win32'}, () => {
+    await t.test('view: Invalid operations: add', { skip: process.platform === 'win32' }, () => {
         const index = new usearch.Index({
             metric: "l2sq",
             connectivity: 16,
@@ -232,12 +253,12 @@ test('Serialization', async (t) => {
             () => index.add(43n, new Float32Array([0.2, 0.6, 0.4])),
             {
                 name: 'Error',
-                message: "Can't add to an immutable index"
+                message: "<key:43 message:Can't add to an immutable index>"
             }
         );
     });
 
-    await t.test('view: Invalid operations: remove', {skip: process.platform === 'win32'}, () => {
+    await t.test('view: Invalid operations: remove', { skip: process.platform === 'win32' }, () => {
         const index = new usearch.Index({
             metric: "l2sq",
             connectivity: 16,

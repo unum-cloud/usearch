@@ -78,6 +78,14 @@ const batchResults = index.search(vectors, 2);
 const firstMatch = batchResults.get(0);
 ```
 
+Multi-threading is supported for batch operations:
+
+```js
+const threads_count = 0; // Zero for auto-detection or pass an unsigned integer
+index.add(keys, vectors, threads_count);
+const batchResults = index.search(vectors, 2, threads_count);
+```
+
 ## Index Introspection
 
 Inspect and interact with the index:

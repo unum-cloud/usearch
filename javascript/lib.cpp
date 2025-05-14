@@ -9,7 +9,8 @@
  *  @see NodeJS docs: https://nodejs.org/api/addons.html#hello-world
  *
  */
-#include <new> // `std::bad_alloc`
+#include <new>    // `std::bad_alloc`
+#include <thread> // `std::thread::hardware_concurrency()`
 
 #define NAPI_CPP_EXCEPTIONS
 #include <napi.h>
@@ -44,6 +45,7 @@ class CompiledIndex : public Napi::ObjectWrap<CompiledIndex> {
     Napi::Value Count(Napi::CallbackInfo const& ctx);
 
     std::unique_ptr<index_dense_t> native_;
+    std::mutex mtx;
 };
 
 Napi::Object CompiledIndex::Init(Napi::Env env, Napi::Object exports) {
@@ -155,26 +157,51 @@ void CompiledIndex::View(Napi::CallbackInfo const& ctx) {
 }
 
 void CompiledIndex::Add(Napi::CallbackInfo const& ctx) {
+    Napi::Env env = ctx.Env();
+
+    // Check the number of arguments
+    constexpr std::size_t min_args_k = 2; // mandatory: keys, vectors
+    constexpr std::size_t max_args_k = 3; // optional: threads
+    if (ctx.Length() < min_args_k || ctx.Length() > max_args_k) {
+        Napi::TypeError::New(env, "`Add` expects 2 to 3 arguments: keys, vectors[, threads]")
+            .ThrowAsJavaScriptException();
+        return;
+    }
+
     // Extract keys and vectors from arguments
     Napi::BigUint64Array keys = ctx[0].As<Napi::BigUint64Array>();
+    Napi::TypedArray vectors = ctx[1].As<Napi::TypedArray>();
+
+    // Optional arguments
+    std::size_t threads = ctx.Length() >= 3 //
+                              ? napi_argument_to_size(ctx[2])
+                              : std::thread::hardware_concurrency();
+
+    // Ensure there is enough capacity and memory
     std::size_t tasks = keys.ElementLength();
-
-    // Ensure there is enough capacity
     if (native_->size() + tasks >= native_->capacity())
-        native_->reserve(ceil2(native_->size() + tasks));
+        if (!native_->try_reserve({ceil2(native_->size() + tasks), threads})) {
+            Napi::TypeError::New(env, "Failed to reserve memory").ThrowAsJavaScriptException();
+            return;
+        }
 
-    // Create an instance of the executor with the default number of threads
+    // Run insertions concurrently
     auto run_parallel = [&](auto vectors) {
-        executor_stl_t executor;
+        std::atomic<bool> failed{false};
+        executor_default_t executor{threads};
         executor.fixed(tasks, [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
-            add_result_t result = native_->add(static_cast<default_key_t>(keys[task_idx]),
-                                               vectors + task_idx * native_->dimensions());
+            if (failed.load())
+                return;
+            auto key = static_cast<default_key_t>(keys[task_idx]);
+            auto vector = vectors + task_idx * native_->dimensions();
+            add_result_t result = native_->add(key, vector);
             if (!result)
-                Napi::Error::New(ctx.Env(), result.error.release()).ThrowAsJavaScriptException();
+                if (!failed.exchange(true))
+                    Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
         });
     };
 
-    Napi::TypedArray vectors = ctx[1].As<Napi::TypedArray>();
+    // Dispatch the parallel tasks based on the `TypedArray` type
     if (vectors.TypedArrayType() == napi_float32_array) {
         run_parallel(vectors.As<Napi::Float32Array>().Data());
     } else if (vectors.TypedArrayType() == napi_float64_array) {
@@ -182,7 +209,7 @@ void CompiledIndex::Add(Napi::CallbackInfo const& ctx) {
     } else if (vectors.TypedArrayType() == napi_int8_array) {
         run_parallel(vectors.As<Napi::Int8Array>().Data());
     } else {
-        Napi::TypeError::New(ctx.Env(),
+        Napi::TypeError::New(env,
                              "Unsupported TypedArray. Supported types are Float32Array, Float64Array, and Int8Array.")
             .ThrowAsJavaScriptException();
     }
@@ -190,10 +217,27 @@ void CompiledIndex::Add(Napi::CallbackInfo const& ctx) {
 
 Napi::Value CompiledIndex::Search(Napi::CallbackInfo const& ctx) {
     Napi::Env env = ctx.Env();
+
+    // Check the number of arguments
+    constexpr std::size_t min_args_k = 2; // mandatory: queries, k
+    constexpr std::size_t max_args_k = 3; // optional: threads
+    if (ctx.Length() < min_args_k || ctx.Length() > max_args_k) {
+        Napi::TypeError::New(env, "`Search` expects 2 to 3 arguments: queries, k[, threads]")
+            .ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    // Extract mandatory arguments
     Napi::TypedArray queries = ctx[0].As<Napi::TypedArray>();
-    std::size_t tasks = queries.ElementLength() / native_->dimensions();
     std::size_t wanted = napi_argument_to_size(ctx[1]);
 
+    // Optional arguments
+    std::size_t threads = ctx.Length() >= 3 //
+                              ? napi_argument_to_size(ctx[2])
+                              : std::thread::hardware_concurrency();
+
+    // Run queries concurrently
+    std::size_t tasks = queries.ElementLength() / native_->dimensions();
     auto run_parallel = [&](auto vectors) -> Napi::Value {
         Napi::Array result_js = Napi::Array::New(env, 3);
         Napi::BigUint64Array matches_js = Napi::BigUint64Array::New(env, tasks * wanted);
@@ -204,31 +248,24 @@ Napi::Value CompiledIndex::Search(Napi::CallbackInfo const& ctx) {
         auto distances_data = distances_js.Data();
         auto counts_data = counts_js.Data();
 
-        try {
-            bool failed = false;
-            executor_stl_t executor;
-            executor.fixed(tasks, [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
-                auto result = native_->search(vectors + task_idx * native_->dimensions(), wanted);
-                if (!result) {
-                    failed = true;
+        std::atomic<bool> failed{false};
+        executor_default_t executor{threads};
+        executor.fixed(tasks, [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
+            if (failed.load())
+                return;
+            auto vector = vectors + task_idx * native_->dimensions();
+            auto result = native_->search(vector, wanted);
+            if (!result) {
+                if (!failed.exchange(true))
                     Napi::TypeError::New(env, result.error.release()).ThrowAsJavaScriptException();
-                } else {
-                    counts_data[task_idx] = result.dump_to(matches_data + task_idx * native_->dimensions(),
-                                                           distances_data + task_idx * native_->dimensions());
-                }
-            });
-
-            if (failed)
-                return env.Null();
-
-        } catch (std::bad_alloc const&) {
-            Napi::TypeError::New(env, "Out of memory").ThrowAsJavaScriptException();
+            } else {
+                auto matches = matches_data + task_idx * native_->dimensions();
+                auto distances = distances_data + task_idx * native_->dimensions();
+                counts_data[task_idx] = result.dump_to(matches, distances);
+            }
+        });
+        if (failed)
             return env.Null();
-
-        } catch (...) {
-            Napi::TypeError::New(env, "Search failed").ThrowAsJavaScriptException();
-            return env.Null();
-        }
 
         result_js.Set(0u, matches_js);
         result_js.Set(1u, distances_js);
@@ -236,6 +273,7 @@ Napi::Value CompiledIndex::Search(Napi::CallbackInfo const& ctx) {
         return result_js;
     };
 
+    // Dispatch the parallel tasks based on the `TypedArray` type
     if (queries.TypedArrayType() == napi_float32_array) {
         return run_parallel(queries.As<Napi::Float32Array>().Data());
     } else if (queries.TypedArrayType() == napi_float64_array) {
@@ -287,21 +325,38 @@ Napi::Value CompiledIndex::Count(Napi::CallbackInfo const& ctx) {
 Napi::Value exactSearch(Napi::CallbackInfo const& ctx) {
     Napi::Env env = ctx.Env();
 
+    // Check the number of arguments
+    constexpr std::size_t min_args_k = 5; // mandatory: dataset, queries, dims, k, metric
+    constexpr std::size_t max_args_k = 6; // optional: threads
+    if (ctx.Length() < min_args_k || ctx.Length() > max_args_k) {
+        Napi::TypeError::New(
+            env, "`exactSearch` expects 5 to 6 arguments: dataset, queries, dimensions, k, metric[, threads].")
+            .ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
     // Extracting parameters directly without additional type checks.
     Napi::TypedArray dataset = ctx[0].As<Napi::TypedArray>();
     Napi::ArrayBuffer datasetBuffer = dataset.ArrayBuffer();
     Napi::TypedArray queries = ctx[1].As<Napi::TypedArray>();
     Napi::ArrayBuffer queriesBuffer = queries.ArrayBuffer();
-    std::uint64_t dimensions = napi_argument_to_size(ctx[2]);
-    std::uint64_t wanted = napi_argument_to_size(ctx[3]);
+    std::size_t dimensions = napi_argument_to_size(ctx[2]);
+    std::size_t wanted = napi_argument_to_size(ctx[3]);
     metric_kind_t metric_kind = metric_from_name(ctx[4].As<Napi::String>().Utf8Value().c_str());
 
+    // Optional arguments
+    std::size_t threads = ctx.Length() >= 6 ? napi_argument_to_size(ctx[5]) : std::thread::hardware_concurrency();
+
+    // Check the types used
     scalar_kind_t quantization;
     std::size_t bytes_per_scalar;
     switch (queries.TypedArrayType()) {
     case napi_float64_array: quantization = scalar_kind_t::f64_k, bytes_per_scalar = 8; break;
+    case napi_float32_array: quantization = scalar_kind_t::f32_k, bytes_per_scalar = 4; break;
     case napi_int8_array: quantization = scalar_kind_t::i8_k, bytes_per_scalar = 1; break;
-    default: quantization = scalar_kind_t::f32_k, bytes_per_scalar = 4; break;
+    default:
+        Napi::TypeError::New(env, "Unsupported TypedArray for queries.").ThrowAsJavaScriptException();
+        return env.Null();
     }
 
     metric_punned_t metric(dimensions, metric_kind, quantization);
@@ -310,7 +365,7 @@ Napi::Value exactSearch(Napi::CallbackInfo const& ctx) {
         return env.Null();
     }
 
-    executor_default_t executor;
+    executor_default_t executor(threads);
     exact_search_t search;
 
     // Performing the exact search.
