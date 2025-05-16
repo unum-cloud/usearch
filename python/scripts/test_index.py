@@ -262,6 +262,40 @@ def test_index_save_load_restore_copy(ndim, quantization, batch_size):
     os.remove("tmp.usearch")
 
 
+@pytest.mark.parametrize("ndim", [1, 3, 8, 32, 256, 4096])
+@pytest.mark.parametrize("batch_size", [0, 1, 7, 1024])
+@pytest.mark.parametrize("quantization", [ScalarKind.F32, ScalarKind.I8])
+def test_index_restore_multithread_search(
+    ndim, quantization, batch_size, tmp_path
+):
+    index_dir = tmp_path / "indexes"
+    index_dir.mkdir(exist_ok=True)
+    index_path = index_dir / "tmp.usearch"
+
+    reset_randomness()
+    index = Index(ndim=ndim, dtype=quantization, multi=False)
+
+    if batch_size > 0:
+        keys = np.arange(batch_size)
+        vectors = random_vectors(count=batch_size, ndim=ndim)
+        index.add(keys, vectors, threads=threads)
+
+    index.save(index_path)
+
+    query = random_vectors(count=batch_size, ndim=ndim)
+
+    # When restoring from disk, search *must not* fail if using multiple
+    # threads.
+
+    index_restore = Index.restore(index_path, view=False)
+    result = index_restore.search(query, count=10, threads=threads)
+
+    index_restore_view = Index.restore(index_path, view=True)
+    result_view = index_restore_view.search(query, count=10, threads=threads)
+
+    assert np.allclose(result.distances, result_view.distances)
+
+
 @pytest.mark.parametrize("batch_size", [32])
 def test_index_contains_remove_rename(batch_size):
     reset_randomness()
