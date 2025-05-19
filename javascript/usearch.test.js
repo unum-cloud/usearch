@@ -125,6 +125,44 @@ test("Multithread search returns same results", () => {
     assertAlmostEqual(results_1.distances, results_2.distances);
 });
 
+test("Exact search", async (t) => {
+    const dataset = [new Float32Array([0.2, 0.6, 0.4]), new Float32Array([0.6, 0.6, 0.4])];
+    const queries = new Float32Array([0.2, 0.6, 0.4]);
+    const dimensions = 3;
+    const count = 2;
+    const metric = "l2sq";
+
+    console.log(Object.keys(usearch));
+
+    let result = usearch.exactSearch(
+        dataset,
+        queries,
+        dimensions,
+        count,
+        metric,
+        1, // threads
+    )
+
+    assert.deepEqual(result.keys, new BigUint64Array([0n, 1n]));
+    assertAlmostEqual(new Float32Array([0]), result.distances[0]);
+    assertAlmostEqual(new Float32Array([0.16]), result.distances[1]);
+
+    // Using more threads gives the same results.
+
+    result = usearch.exactSearch(
+        dataset,
+        queries,
+        dimensions,
+        count,
+        metric,
+        2, // threads
+    )
+
+    assert.deepEqual(result.keys, new BigUint64Array([0n, 1n]));
+    assertAlmostEqual(new Float32Array([0]), result.distances[0]);
+    assertAlmostEqual(new Float32Array([0.16]), result.distances[1]);
+});
+
 
 test('Expected count()', async (t) => {
     const index = new usearch.Index({

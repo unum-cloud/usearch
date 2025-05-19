@@ -296,6 +296,7 @@ Napi::Value exactSearch(Napi::CallbackInfo const& ctx) {
     std::uint64_t dimensions = napi_argument_to_size(ctx[2]);
     std::uint64_t wanted = napi_argument_to_size(ctx[3]);
     metric_kind_t metric_kind = metric_from_name(ctx[4].As<Napi::String>().Utf8Value().c_str());
+    std::size_t threads = napi_argument_to_size(ctx[5]);
 
     scalar_kind_t quantization;
     std::size_t bytes_per_scalar;
@@ -311,7 +312,7 @@ Napi::Value exactSearch(Napi::CallbackInfo const& ctx) {
         return env.Null();
     }
 
-    executor_default_t executor;
+    executor_default_t executor{threads};
     exact_search_t search;
 
     // Performing the exact search.

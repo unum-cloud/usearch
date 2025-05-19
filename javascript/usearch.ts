@@ -37,7 +37,8 @@ interface Compiled {
     queries: VectorOrMatrix,
     dimensions: number,
     count: number,
-    metric: MetricKind
+    metric: MetricKind,
+    threads: number
   ): CompiledSearchResult;
 }
 
@@ -554,12 +555,13 @@ type NumberArrayConstructor =
  * //    distances: Float32Array [ some_value ],
  * // }
  */
-function exactSearch(
+export function exactSearch(
   dataset: VectorOrMatrix,
   queries: VectorOrMatrix,
   dimensions: number,
   count: number,
-  metric: MetricKind
+  metric: MetricKind,
+  threads: number = 0
 ): Matches | BatchMatches {
   // Validate and normalize the dimensions and count
   dimensions = Number(dimensions);
@@ -599,7 +601,8 @@ function exactSearch(
     queries,
     dimensions,
     count,
-    metric
+    metric,
+    threads
   );
 
   // Create and return a Matches or BatchMatches object with the result
