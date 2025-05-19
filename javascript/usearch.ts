@@ -562,8 +562,9 @@ type NumberArrayConstructor =
  * const dimensions = 2; // The number of elements in each vector.
  * const count = 1; // The number of nearest neighbors to return for each query.
  * const metric = MetricKind.IP; // Using the Inner Product distance metric.
+ * const threads = 0; // How many threads to use to perform the search.
  *
- * const result = exactSearch(dataset, queries, dimensions, count, metric);
+ * const result = exactSearch(dataset, queries, dimensions, count, metric, threads);
  * // result might be:
  * // {
  * //    keys: BigUint64Array [ 1n ],
