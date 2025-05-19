@@ -570,7 +570,7 @@ type NumberArrayConstructor =
  * //    distances: Float32Array [ some_value ],
  * // }
  */
-function exactSearch(
+export function exactSearch(
   dataset: VectorOrMatrix,
   queries: VectorOrMatrix,
   dimensions: number,
