@@ -193,6 +193,7 @@ Napi::Value CompiledIndex::Search(Napi::CallbackInfo const& ctx) {
     Napi::TypedArray queries = ctx[0].As<Napi::TypedArray>();
     std::size_t tasks = queries.ElementLength() / native_->dimensions();
     std::size_t wanted = napi_argument_to_size(ctx[1]);
+    std::size_t threads = napi_argument_to_size(ctx[2]);
 
     auto run_parallel = [&](auto vectors) -> Napi::Value {
         Napi::Array result_js = Napi::Array::New(env, 3);
@@ -206,7 +207,7 @@ Napi::Value CompiledIndex::Search(Napi::CallbackInfo const& ctx) {
 
         try {
             bool failed = false;
-            executor_stl_t executor;
+            executor_stl_t executor{threads};
             executor.fixed(tasks, [&](std::size_t /*thread_idx*/, std::size_t task_idx) {
                 auto result = native_->search(vectors + task_idx * native_->dimensions(), wanted);
                 if (!result) {
