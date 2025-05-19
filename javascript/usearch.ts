@@ -17,7 +17,7 @@ type CompiledSearchResult = [
 
 interface CompiledIndex {
   add(keys: BigUint64Array, vectors: Vector): void;
-  search(vectors: VectorOrMatrix, k: number): CompiledSearchResult;
+  search(vectors: VectorOrMatrix, k: number, threads: number): CompiledSearchResult;
   contains(keys: BigUint64Array): boolean[];
   count(keys: BigUint64Array): number | number[];
   remove(keys: BigUint64Array): number[];
@@ -37,7 +37,8 @@ interface Compiled {
     queries: VectorOrMatrix,
     dimensions: number,
     count: number,
-    metric: MetricKind
+    metric: MetricKind,
+    threads: number
   ): CompiledSearchResult;
 }
 
@@ -372,11 +373,12 @@ export class Index {
    *
    * @param {Float32Array|Float64Array|Int8Array|Array<Array<number>>} vectors - Input matrix representing query vectors, can be a TypedArray or an array of TypedArray.
    * @param {number} k - The number of nearest neighbors to search for each query vector.
+   * @param {number} threads - The number of threads to use when searching.
    * @return {Matches|BatchMatches} - Search results for one or more queries, containing keys, distances, and counts of the matches found.
    * @throws Will throw an error if `k` is not a positive integer or if the size of the vectors is not a multiple of dimensions.
    * @throws Will throw an error if `vectors` is not a valid input type (TypedArray or an array of TypedArray) or if its flattened size is not a multiple of dimensions.
    */
-  search(vectors: VectorOrMatrix, k: number): Matches | BatchMatches {
+  search(vectors: VectorOrMatrix, k: number, threads: number = 0): Matches | BatchMatches {
     if ((!Number.isNaN(k) && typeof k !== "number") || k <= 0) {
       throw new Error(
         "`k` must be a positive integer representing the number of nearest neighbors to search for."
@@ -389,7 +391,7 @@ export class Index {
     );
 
     // Call the compiled method and create Matches or BatchMatches object with the result
-    const result = this.#compiledIndex.search(normalizedVectors, k);
+    const result = this.#compiledIndex.search(normalizedVectors, k, threads);
     const countInQueries =
       normalizedVectors.length / Number(this.#compiledIndex.dimensions());
     const batchMatches = new BatchMatches(...result, k);
@@ -533,6 +535,7 @@ type NumberArrayConstructor =
  * @param {number} dimensions - The dimensionality of the vectors in both the dataset and the queries. It defines the number of elements in each vector.
  * @param {number} count - The number of nearest neighbors to return for each query. If the dataset contains fewer vectors than the specified count, the result will contain only the available vectors.
  * @param {MetricKind} metric - The distance metric to be used for the search.
+ * @param {number} threads - The number of threads to use when searching.
  * @return {Matches|BatchMatches} - Returns a `Matches` or `BatchMatches` object containing the results of the search.
  * @throws Will throw an error if `dimensions` and `count` are not positive integers.
  * @throws Will throw an error if `metric` is not a valid MetricKind.
@@ -546,20 +549,22 @@ type NumberArrayConstructor =
  * const dimensions = 2; // The number of elements in each vector.
  * const count = 1; // The number of nearest neighbors to return for each query.
  * const metric = MetricKind.IP; // Using the Inner Product distance metric.
+ * const threads = 0; // How many threads to use to perform the search.
  *
- * const result = exactSearch(dataset, queries, dimensions, count, metric);
+ * const result = exactSearch(dataset, queries, dimensions, count, metric, threads);
  * // result might be:
  * // {
  * //    keys: BigUint64Array [ 1n ],
  * //    distances: Float32Array [ some_value ],
  * // }
  */
-function exactSearch(
+export function exactSearch(
   dataset: VectorOrMatrix,
   queries: VectorOrMatrix,
   dimensions: number,
   count: number,
-  metric: MetricKind
+  metric: MetricKind,
+  threads: number = 0
 ): Matches | BatchMatches {
   // Validate and normalize the dimensions and count
   dimensions = Number(dimensions);
@@ -599,7 +604,8 @@ function exactSearch(
     queries,
     dimensions,
     count,
-    metric
+    metric,
+    threads
   );
 
   // Create and return a Matches or BatchMatches object with the result

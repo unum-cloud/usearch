@@ -842,8 +842,20 @@ static py::dict index_metadata(index_dense_metadata_result_t const& meta) {
 
 // clang-format off
 template <typename index_at> void save_index_to_path(index_at const& index, std::string const& path, progress_func_t const& progress) { index.save(path.c_str(), {}, progress_t{progress}).error.raise(); }
-template <typename index_at> void load_index_from_path(index_at& index, std::string const& path, progress_func_t const& progress) { index.load(path.c_str(), {}, progress_t{progress}).error.raise(); }
-template <typename index_at> void view_index_from_path(index_at& index, std::string const& path, progress_func_t const& progress) { index.view(path.c_str(), 0, {}, progress_t{progress}).error.raise(); }
+template <typename index_at> void load_index_from_path(index_at& index, std::string const& path, progress_func_t const& progress) {
+  index.load(path.c_str(), {}, progress_t{progress}).error.raise();
+  // Reserve memory and threads for restored index.
+  std::size_t threads = std::thread::hardware_concurrency();
+  if (!index.try_reserve(index_limits_t(index.size(), threads)))
+    throw std::invalid_argument("Out of memory!");
+}
+template <typename index_at> void view_index_from_path(index_at& index, std::string const& path, progress_func_t const& progress) {
+  index.view(path.c_str(), 0, {}, progress_t{progress}).error.raise();
+  // Reserve memory and threads for restored index.
+  std::size_t threads = std::thread::hardware_concurrency();
+  if (!index.try_reserve(index_limits_t(index.size(), threads)))
+    throw std::invalid_argument("Out of memory!");
+}
 template <typename index_at> void reset_index(index_at& index) { index.reset(); }
 template <typename index_at> void clear_index(index_at& index) { index.clear(); }
 template <typename index_at> std::size_t max_level(index_at const &index) { return index.max_level(); }
