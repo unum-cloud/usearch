@@ -14,6 +14,8 @@ function assertAlmostEqual(actual, expected, tolerance = 1e-6) {
     );
 }
 
+const THREADS = 2;
+
 
 test('Single-entry operations', async (t) => {
     await t.test('index info', () => {
@@ -119,7 +121,7 @@ test("Multithread search returns same results", () => {
     assert.equal(index.size(), 1);
 
     const results_1 = index.search(new Float32Array([0.2, 0.6, 0.4]), 10, 0);
-    const results_2 = index.search(new Float32Array([0.2, 0.6, 0.4]), 10, 2);
+    const results_2 = index.search(new Float32Array([0.2, 0.6, 0.4]), 10, THREADS);
 
     assert.deepEqual(results_1.keys, results_2.keys);
     assertAlmostEqual(results_1.distances, results_2.distances);
@@ -132,35 +134,35 @@ test("Exact search", async (t) => {
     const count = 2;
     const metric = "l2sq";
 
-    console.log(Object.keys(usearch));
+    await t.test("Single core search", () => {
+        const result = usearch.exactSearch(
+            dataset,
+            queries,
+            dimensions,
+            count,
+            metric,
+            1, // threads
+        )
 
-    let result = usearch.exactSearch(
-        dataset,
-        queries,
-        dimensions,
-        count,
-        metric,
-        1, // threads
-    )
+        assert.deepEqual(result.keys, new BigUint64Array([0n, 1n]));
+        assertAlmostEqual(new Float32Array([0]), result.distances[0]);
+        assertAlmostEqual(new Float32Array([0.16]), result.distances[1]);
+    });
 
-    assert.deepEqual(result.keys, new BigUint64Array([0n, 1n]));
-    assertAlmostEqual(new Float32Array([0]), result.distances[0]);
-    assertAlmostEqual(new Float32Array([0.16]), result.distances[1]);
+    await t.test("Multicore search", () => {
+        const result = usearch.exactSearch(
+            dataset,
+            queries,
+            dimensions,
+            count,
+            metric,
+            THREADS, // threads
+        )
 
-    // Using more threads gives the same results.
-
-    result = usearch.exactSearch(
-        dataset,
-        queries,
-        dimensions,
-        count,
-        metric,
-        2, // threads
-    )
-
-    assert.deepEqual(result.keys, new BigUint64Array([0n, 1n]));
-    assertAlmostEqual(new Float32Array([0]), result.distances[0]);
-    assertAlmostEqual(new Float32Array([0.16]), result.distances[1]);
+        assert.deepEqual(result.keys, new BigUint64Array([0n, 1n]));
+        assertAlmostEqual(new Float32Array([0]), result.distances[0]);
+        assertAlmostEqual(new Float32Array([0.16]), result.distances[1]);
+    });
 });
 
 
@@ -252,7 +254,7 @@ test('Serialization', async (t) => {
             dimensions: 3,
         });
         index.load(indexPath);
-        const results = index.search(new Float32Array([0.2, 0.6, 0.4]), 10);
+        const results = index.search(new Float32Array([0.2, 0.6, 0.4]), 10, THREADS);
 
         assert.equal(index.size(), 1);
         assert.deepEqual(results.keys, new BigUint64Array([42n]));
@@ -269,7 +271,7 @@ test('Serialization', async (t) => {
             dimensions: 3,
         });
         index.view(indexPath);
-        const results = index.search(new Float32Array([0.2, 0.6, 0.4]), 10);
+        const results = index.search(new Float32Array([0.2, 0.6, 0.4]), 10, THREADS);
 
         assert.equal(index.size(), 1);
         assert.deepEqual(results.keys, new BigUint64Array([42n]));
