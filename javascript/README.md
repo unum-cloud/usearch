@@ -10,12 +10,6 @@ For Node.js environments, install USearch using `npm`:
 npm install usearch
 ```
 
-For front-end applications using WASM, use the Wasmer package manager:
-
-```sh
-wasmer install unum/usearch
-```
-
 ## Quickstart
 
 Create an index, add vectors, and perform searches with ease:
