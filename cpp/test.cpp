@@ -14,6 +14,7 @@
  */
 #include <algorithm>     // `std::shuffle`
 #include <cassert>       // `assert`
+#include <cmath>         // `std::abs`
 #include <random>        // `std::default_random_engine`
 #include <stdexcept>     // `std::terminate`
 #include <unordered_map> // `std::unordered_map`
@@ -673,16 +674,16 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         scalar_t const* row(std::size_t i) const noexcept { return (*vector_of_vectors_ptr)[i].data(); }
 
         float operator()(member_cref_t const& a, member_cref_t const& b) const {
-            return metric_cos_gt<scalar_t>{}(row(get_slot(b)), row(get_slot(a)), dimensions);
+            return metric_cos_gt<scalar_t, float>{}(row(get_slot(b)), row(get_slot(a)), dimensions);
         }
         float operator()(scalar_t const* some_vector, member_cref_t const& member) const {
-            return metric_cos_gt<scalar_t>{}(some_vector, row(get_slot(member)), dimensions);
+            return metric_cos_gt<scalar_t, float>{}(some_vector, row(get_slot(member)), dimensions);
         }
         float operator()(member_citerator_t const& a, member_citerator_t const& b) const {
-            return metric_cos_gt<scalar_t>{}(row(get_slot(b)), row(get_slot(a)), dimensions);
+            return metric_cos_gt<scalar_t, float>{}(row(get_slot(b)), row(get_slot(a)), dimensions);
         }
         float operator()(scalar_t const* some_vector, member_citerator_t const& member) const {
-            return metric_cos_gt<scalar_t>{}(some_vector, row(get_slot(member)), dimensions);
+            return metric_cos_gt<scalar_t, float>{}(some_vector, row(get_slot(member)), dimensions);
         }
     };
 
