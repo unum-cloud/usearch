@@ -226,10 +226,10 @@ nvm install 20
 Testing:
 
 ```sh
-npm install -g typescript
-npm install
-npm run build-js
-npm test
+npm install -g typescript   # Install TypeScript globally
+npm install                 # Compile `javascript/lib.cpp`
+npm run build-js            # Generate JS from TS
+npm test                    # Run the test suite
 ```
 
 To compile for AWS Lambda you'd need to recompile the binding.

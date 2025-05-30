@@ -368,7 +368,7 @@ jobs:
           echo "last_release_id=$(echo "$response" | jq -r '.id')" >> $GITHUB_OUTPUT
 
       - name: Download release assets
-        uses: robinraju/release-downloader@v1.8
+        uses: robinraju/release-downloader@v1.12
         with:
           latest: true
           fileName: "*"
@@ -544,6 +544,7 @@ jobs:
           name: prebuilds
           path: prebuilds
           retention-days: 1
+          overwrite: true
 
   publish_javascript:
     name: Publish JavaScript
@@ -564,7 +565,7 @@ jobs:
           node-version: 20
 
       - name: Download prebuilds
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
 
       - name: Look for links
         run: find . -type f -links +1
@@ -760,6 +761,7 @@ jobs:
         with:
           name: usearch-csharp-dependencies
           path: ${{ github.workspace }}/csharp/lib/**/*
+          overwrite: true
 
   publish_csharp:
     name: Publish C#
@@ -781,7 +783,7 @@ jobs:
         run: git submodule update --init --recursive
 
       - name: Download usearch libs artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: usearch-csharp-dependencies
           path: ${{ env.USEARCH_LIBS }}
@@ -861,21 +863,22 @@ jobs:
     if: ${{ always() }}
     needs: build_docs
     steps:
-      - uses: robinraju/release-downloader@v1.8
+      - name: Download release assets
+        uses: robinraju/release-downloader@v1.12
         with:
           latest: true
           fileName: docs.tar.gz
       - name: Unpack docs
         run: tar -xf ./docs.tar.gz
       - name: Setup GitHub Pages
-        uses: actions/configure-pages@v2
+        uses: actions/configure-pages@v5
       - name: Upload artifacts
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v3
         with:
           path: ./build/docs/html
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v1
+        uses: actions/deploy-pages@v4
 
   deploy_docs_vercel:
     name: Deploy Vercel

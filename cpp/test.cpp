@@ -14,6 +14,7 @@
  */
 #include <algorithm>     // `std::shuffle`
 #include <cassert>       // `assert`
+#include <cmath>         // `std::abs`
 #include <random>        // `std::default_random_engine`
 #include <stdexcept>     // `std::terminate`
 #include <unordered_map> // `std::unordered_map`
@@ -673,16 +674,16 @@ void test_cosine(std::size_t collection_size, std::size_t dimensions) {
         scalar_t const* row(std::size_t i) const noexcept { return (*vector_of_vectors_ptr)[i].data(); }
 
         float operator()(member_cref_t const& a, member_cref_t const& b) const {
-            return metric_cos_gt<scalar_t>{}(row(get_slot(b)), row(get_slot(a)), dimensions);
+            return metric_cos_gt<scalar_t, float>{}(row(get_slot(b)), row(get_slot(a)), dimensions);
         }
         float operator()(scalar_t const* some_vector, member_cref_t const& member) const {
-            return metric_cos_gt<scalar_t>{}(some_vector, row(get_slot(member)), dimensions);
+            return metric_cos_gt<scalar_t, float>{}(some_vector, row(get_slot(member)), dimensions);
         }
         float operator()(member_citerator_t const& a, member_citerator_t const& b) const {
-            return metric_cos_gt<scalar_t>{}(row(get_slot(b)), row(get_slot(a)), dimensions);
+            return metric_cos_gt<scalar_t, float>{}(row(get_slot(b)), row(get_slot(a)), dimensions);
         }
         float operator()(scalar_t const* some_vector, member_citerator_t const& member) const {
-            return metric_cos_gt<scalar_t>{}(some_vector, row(get_slot(member)), dimensions);
+            return metric_cos_gt<scalar_t, float>{}(some_vector, row(get_slot(member)), dimensions);
         }
     };
 
@@ -877,7 +878,7 @@ void test_absurd(std::size_t dimensions, std::size_t connectivity, std::size_t e
 template <typename scalar_at>
 void test_exact_search(std::size_t dataset_count, std::size_t queries_count, std::size_t wanted_count) {
     std::size_t dimensions = 32;
-    metric_punned_t metric(dimensions, metric_kind_t::cos_k);
+    metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -886,9 +887,9 @@ void test_exact_search(std::size_t dataset_count, std::size_t queries_count, std
     std::generate(dataset.begin(), dataset.end(), [&] { return static_cast<scalar_at>(dis(gen)); });
 
     exact_search_t search;
-    auto results = search(                                                        //
-        (byte_t const*)dataset.data(), dataset_count, dimensions * sizeof(float), //
-        (byte_t const*)dataset.data(), queries_count, dimensions * sizeof(float), //
+    auto results = search(                                                            //
+        (byte_t const*)dataset.data(), dataset_count, dimensions * sizeof(scalar_at), //
+        (byte_t const*)dataset.data(), queries_count, dimensions * sizeof(scalar_at), //
         wanted_count, metric);
 
     for (std::size_t i = 0; i < results.size(); ++i)
@@ -1098,6 +1099,51 @@ template <typename key_at, typename slot_at> void test_replacing_update() {
     expect_eq(final_search[2].member.key, 44);
 }
 
+/**
+ * Tests the filtered search functionality of the index.
+ */
+void test_filtered_search() {
+    constexpr std::size_t dataset_count = 2048;
+    constexpr std::size_t dimensions = 32;
+    metric_punned_t metric(dimensions, metric_kind_t::cos_k);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dis(0.0, 1.0);
+    using vector_of_vectors_t = std::vector<std::vector<float>>;
+
+    vector_of_vectors_t vector_of_vectors(dataset_count);
+    for (auto& vector : vector_of_vectors) {
+        vector.resize(dimensions);
+        std::generate(vector.begin(), vector.end(), [&] { return dis(gen); });
+    }
+
+    index_dense_t index = index_dense_t::make(metric);
+    index.reserve(dataset_count);
+    for (std::size_t idx = 0; idx < dataset_count; ++idx)
+        index.add(idx, vector_of_vectors[idx].data());
+    expect_eq(index.size(), dataset_count);
+
+    {
+        auto predicate = [](index_dense_t::key_t key) { return key != 0; };
+        auto results = index.filtered_search(vector_of_vectors[0].data(), 10, predicate);
+        expect_eq(10, results.size()); // ! Should not contain 0
+        for (std::size_t i = 0; i != results.size(); ++i)
+            expect(0 != results[i].member.key);
+    }
+    {
+        auto predicate = [](index_dense_t::key_t) { return false; };
+        auto results = index.filtered_search(vector_of_vectors[0].data(), 10, predicate);
+        expect_eq(0, results.size()); // ! Should not contain 0
+    }
+    {
+        auto predicate = [](index_dense_t::key_t key) { return key == 10; };
+        auto results = index.filtered_search(vector_of_vectors[0].data(), 10, predicate);
+        expect_eq(1, results.size()); // ! Should not contain 0
+        expect_eq(10, results[0].member.key);
+    }
+}
+
 int main(int, char**) {
     test_uint40();
     test_cosine<float, std::int64_t, uint40_t>(10, 10);
@@ -1174,5 +1220,6 @@ int main(int, char**) {
         test_sets<std::int64_t, slot32_t>(set_size, 20, 30);
     test_strings<std::int64_t, slot32_t>();
 
+    test_filtered_search();
     return 0;
 }
