@@ -5,7 +5,7 @@
 //  Created by Ash Vardanian on 5/11/23.
 //
 
-@available(iOS 13, macOS 11.0, tvOS 13.0, watchOS 6.0, *)
+@available(iOS 13, macOS 11.0, tvOS 13.0, watchOS 6.0, visionOS 1.0, *)
 extension USearchIndex {
     public typealias Key = USearchKey
     public typealias Metric = USearchMetric
@@ -226,7 +226,7 @@ extension USearchIndex {
         /// - Parameter key: Unique identifier for that object.
         /// - Parameter vector: Half-precision vector.
         /// - Throws: If runs out of memory.
-        @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, *)
+        @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, visionOS 1.0, *)
         public func add(key: Key, vector: ArraySlice<Float16>) throws {
             try vector.withContiguousStorageIfAvailable { buffer in
                 try addHalf(key: key, vector: buffer.baseAddress!)
@@ -237,7 +237,7 @@ extension USearchIndex {
         /// - Parameter key: Unique identifier for that object.
         /// - Parameter vector: Half-precision vector.
         /// - Throws: If runs out of memory.
-        @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, *)
+        @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, visionOS 1.0, *)
         public func add(key: Key, vector: [Float16]) throws {
             try add(key: key, vector: vector[...])
         }
@@ -247,7 +247,7 @@ extension USearchIndex {
         /// - Parameter count: Upper limit on the number of matches to retrieve.
         /// - Returns: Labels and distances to closest approximate matches in decreasing similarity order.
         /// - Throws: If runs out of memory.
-        @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, *)
+        @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, visionOS 1.0, *)
         public func search(vector: ArraySlice<Float16>, count: Int) throws -> ([Key], [Float]) {
             var matches: [Key] = Array(repeating: 0, count: count)
             var distances: [Float] = Array(repeating: 0, count: count)
@@ -264,7 +264,7 @@ extension USearchIndex {
         /// - Parameter count: Upper limit on the number of matches to retrieve.
         /// - Returns: Labels and distances to closest approximate matches in decreasing similarity order.
         /// - Throws: If runs out of memory.
-        @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, *)
+        @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, visionOS 1.0, *)
         public func search(vector: [Float16], count: Int) throws -> ([Key], [Float]) {
             try search(vector: vector[...], count: count)
         }
@@ -274,7 +274,7 @@ extension USearchIndex {
         /// - Parameter count: For multi-indexes, Number of vectors to retrieve. Defaults to 1.
         /// - Returns: Two-dimensional array of Half-precision vectors.
         /// - Throws: If runs out of memory.
-        @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, *)
+        @available(macOS 11.0, iOS 14.0, watchOS 7.0, tvOS 14.0, visionOS 1.0, *)
         public func get(key: USearchKey, count: Int = 1) throws -> [[Float16]]? {
             var vector: [Float16] = try Array(repeating: 0.0, count: Int(self.dimensions) * count)
             let count = try vector.withContiguousMutableStorageIfAvailable { buf in

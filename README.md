@@ -161,7 +161,7 @@ This can result in __20x cost reduction__ on AWS and other public clouds.
 index.save("index.usearch")
 
 loaded_copy = index.load("index.usearch")
-view = Index.restore("index.usearch", view=True)
+view = Index.restore("index.usearch", view=True, ...)
 
 other_view = Index(ndim=..., metric=...)
 other_view.view("index.usearch")
@@ -528,7 +528,11 @@ index = Index(ndim=ndim, metric=CompiledMetric(
 
 - [x] ClickHouse: [C++](https://github.com/ClickHouse/ClickHouse/pull/53447), [docs](https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/annindexes#usearch).
 - [x] DuckDB: [post](https://duckdb.org/2024/05/03/vector-similarity-search-vss.html).
+- [x] ScyllaDB: [Rust](https://github.com/scylladb/vector-store), [presentation](https://www.slideshare.net/slideshow/vector-search-with-scylladb-by-szymon-wasik/276571548).
+- [x] TiDB & TiFlash: [C++](https://github.com/pingcap/tiflash), [announcement](https://www.pingcap.com/article/introduce-vector-search-indexes-in-tidb/).
+- [x] YugaByte: [C++](https://github.com/yugabyte/yugabyte-db/blob/366b9f5e3c4df3a1a17d553db41d6dc50146f488/src/yb/vector_index/usearch_wrapper.cc).
 - [x] Google: [UniSim](https://github.com/google/unisim), [RetSim](https://arxiv.org/abs/2311.17264) paper.
+- [x] MemGraph: [C++](https://github.com/memgraph/memgraph/blob/784dd8520f65050d033aea8b29446e84e487d091/src/storage/v2/indices/vector_index.cpp), [announcement](https://memgraph.com/blog/simplify-data-retrieval-memgraph-vector-search).
 - [x] LanternDB: [C++](https://github.com/lanterndata/lantern), [Rust](https://github.com/lanterndata/lantern_extras), [docs](https://lantern.dev/blog/hnsw-index-creation).
 - [x] LangChain: [Python](https://github.com/langchain-ai/langchain/releases/tag/v0.0.257) and [JavaScript](https://github.com/hwchase17/langchainjs/releases/tag/0.0.125).
 - [x] Microsoft Semantic Kernel: [Python](https://github.com/microsoft/semantic-kernel/releases/tag/python-0.3.9.dev) and C#.
@@ -546,7 +550,7 @@ doi = {10.5281/zenodo.7949416},
 author = {Vardanian, Ash},
 title = {{USearch by Unum Cloud}},
 url = {https://github.com/unum-cloud/usearch},
-version = {2.17.7},
+version = {2.17.9},
 year = {2023},
 month = oct,
 }

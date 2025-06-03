@@ -16,7 +16,7 @@ type CompiledSearchResult = [
 ];
 
 interface CompiledIndex {
-  add(keys: BigUint64Array, vectors: Vector): void;
+  add(keys: BigUint64Array, vectors: Vector, threads: number): void;
   search(vectors: VectorOrMatrix, k: number, threads: number): CompiledSearchResult;
   contains(keys: BigUint64Array): boolean[];
   count(keys: BigUint64Array): number | number[];
@@ -327,10 +327,12 @@ export class Index {
    *        If a single key is provided, it is associated with all provided vectors.
    * @param {Float32Array|Float64Array|Int8Array} vectors - Input matrix representing vectors,
    *        matrix of size n * d, where n is the number of vectors, and d is their dimensionality.
+   * @param {number} [threads=0] - Optional, default is 0. Number of threads to use for indexing.
+   *        If set to 0, the number of threads is determined automatically.
    * @throws Will throw an error if the length of keys doesn't match the number of vectors
    *         or if it's not a single key.
    */
-  add(keys: bigint | bigint[] | BigUint64Array, vectors: Vector) {
+  add(keys: bigint | bigint[] | BigUint64Array, vectors: Vector, threads: number = 0): void {
     let normalizedKeys = normalizeKeys(keys);
     let normalizedVectors = normalizeVectors(
       vectors,
@@ -352,8 +354,14 @@ export class Index {
       );
     }
 
+    if ((!Number.isNaN(threads) && typeof threads !== "number") || threads < 0) {
+      throw new Error(
+        "`threads` must be a non-negative integer representing the number of threads to use for searching."
+      );
+    }
+
     // Call the compiled method
-    this.#compiledIndex.add(normalizedKeys, normalizedVectors);
+    this.#compiledIndex.add(normalizedKeys, normalizedVectors, threads);
   }
 
   /**
@@ -373,7 +381,7 @@ export class Index {
    *
    * @param {Float32Array|Float64Array|Int8Array|Array<Array<number>>} vectors - Input matrix representing query vectors, can be a TypedArray or an array of TypedArray.
    * @param {number} k - The number of nearest neighbors to search for each query vector.
-   * @param {number} threads - The number of threads to use when searching.
+   * @param {number} [threads=0] - Optional, default is 0. Number of threads to use for searching. If set to 0, the number of threads is determined automatically.
    * @return {Matches|BatchMatches} - Search results for one or more queries, containing keys, distances, and counts of the matches found.
    * @throws Will throw an error if `k` is not a positive integer or if the size of the vectors is not a multiple of dimensions.
    * @throws Will throw an error if `vectors` is not a valid input type (TypedArray or an array of TypedArray) or if its flattened size is not a multiple of dimensions.
@@ -382,6 +390,11 @@ export class Index {
     if ((!Number.isNaN(k) && typeof k !== "number") || k <= 0) {
       throw new Error(
         "`k` must be a positive integer representing the number of nearest neighbors to search for."
+      );
+    }
+    if ((!Number.isNaN(threads) && typeof threads !== "number") || threads < 0) {
+      throw new Error(
+        "`threads` must be a non-negative integer representing the number of threads to use for searching."
       );
     }
 
@@ -535,7 +548,7 @@ type NumberArrayConstructor =
  * @param {number} dimensions - The dimensionality of the vectors in both the dataset and the queries. It defines the number of elements in each vector.
  * @param {number} count - The number of nearest neighbors to return for each query. If the dataset contains fewer vectors than the specified count, the result will contain only the available vectors.
  * @param {MetricKind} metric - The distance metric to be used for the search.
- * @param {number} threads - The number of threads to use when searching.
+ * @param {number} [threads=0] - Optional, default is 0. The number of threads to use for the search. If set to 0, the number of threads is determined automatically.
  * @return {Matches|BatchMatches} - Returns a `Matches` or `BatchMatches` object containing the results of the search.
  * @throws Will throw an error if `dimensions` and `count` are not positive integers.
  * @throws Will throw an error if `metric` is not a valid MetricKind.
@@ -571,6 +584,11 @@ export function exactSearch(
   count = Number(count);
   if (count <= 0 || dimensions <= 0) {
     throw new Error("Dimensions and count must be positive integers.");
+  }
+  if ((!Number.isNaN(threads) && typeof threads !== "number") || threads < 0) {
+    throw new Error(
+      "`threads` must be a non-negative integer representing the number of threads to use for searching."
+    );
   }
 
   // Validate metric

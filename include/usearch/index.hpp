@@ -9,7 +9,7 @@
 
 #define USEARCH_VERSION_MAJOR 2
 #define USEARCH_VERSION_MINOR 17
-#define USEARCH_VERSION_PATCH 7
+#define USEARCH_VERSION_PATCH 9
 
 // Inferring C++ version
 // https://stackoverflow.com/a/61552074
@@ -2183,6 +2183,7 @@ class index_gt {
      */
     struct usearch_align_m context_t {
         top_candidates_t top_candidates{};
+        top_candidates_t top_for_refine{};
         next_candidates_t next_candidates{};
         visits_hash_set_t visits{};
         std::default_random_engine level_generator{};
@@ -2497,6 +2498,13 @@ class index_gt {
         // Move the nodes info, and deallocate previous buffers.
         if (nodes_)
             std::memcpy(new_nodes.data(), nodes_.data(), sizeof(node_t) * size());
+
+        // Pre-reserve the capacity for `top_for_refine`, which always contains at most one more
+        // element than the connectivity factors.
+        std::size_t connectivity_max = (std::max)(config_.connectivity_base, config_.connectivity);
+        for (std::size_t i = 0; i != new_contexts.size(); ++i)
+            if (!new_contexts[i].top_for_refine.reserve(connectivity_max + 1))
+                return false;
 
         limits_ = limits;
         nodes_capacity_ = limits.members;
@@ -3179,17 +3187,11 @@ class index_gt {
 
     std::size_t memory_usage_per_node(level_t level) const noexcept { return node_bytes_(level); }
 
-    double inverse_log_connectivity() const {
-        return pre_.inverse_log_connectivity;
-    }
+    double inverse_log_connectivity() const { return pre_.inverse_log_connectivity; }
 
-    std::size_t neighbors_base_bytes() const {
-        return pre_.neighbors_base_bytes;
-    }
+    std::size_t neighbors_base_bytes() const { return pre_.neighbors_base_bytes; }
 
-    std::size_t neighbors_bytes() const {
-        return pre_.neighbors_bytes;
-    }
+    std::size_t neighbors_bytes() const { return pre_.neighbors_bytes; }
 
 #if defined(USEARCH_USE_PRAGMA_REGION)
 #pragma endregion
@@ -3790,7 +3792,7 @@ class index_gt {
         metric_at&& metric, compressed_slot_t new_slot, candidates_view_t new_neighbors, value_at&& value,
         level_t level, context_t& context) usearch_noexcept_m {
 
-        top_candidates_t& top = context.top_candidates;
+        top_candidates_t& top_for_refine = context.top_for_refine;
         std::size_t const connectivity_max = level ? config_.connectivity : config_.connectivity_base;
 
         // Reverse links from the neighbors:
@@ -3817,19 +3819,16 @@ class index_gt {
                 continue;
             }
 
-            // To fit a new connection we need to drop an existing one.
-            top.clear();
-            usearch_assert_m((top.capacity() >= (close_header.size() + 1)),
-                             "The memory must have been reserved in `add`");
-            top.insert_reserved({context.measure(value, citerator_at(close_slot), metric), new_slot});
+            top_for_refine.clear();
+            top_for_refine.insert_reserved({context.measure(value, citerator_at(close_slot), metric), new_slot});
             for (compressed_slot_t successor_slot : close_header)
-                top.insert_reserved(
+                top_for_refine.insert_reserved(
                     {context.measure(citerator_at(close_slot), citerator_at(successor_slot), metric), successor_slot});
 
             // Export the results:
             close_header.clear();
-            candidates_view_t top_view =
-                refine_(metric, connectivity_max, top, context, context.computed_distances_in_reverse_refines);
+            candidates_view_t top_view = refine_(metric, connectivity_max, top_for_refine, context,
+                                                 context.computed_distances_in_reverse_refines);
             usearch_assert_m(top_view.size(), "This would lead to isolated nodes");
             for (std::size_t idx = 0; idx != top_view.size(); idx++)
                 close_header.push_back(top_view[idx].slot);
@@ -4178,9 +4177,10 @@ class index_gt {
                     // This can substantially grow our priority queue:
                     next.insert({-successor_dist, successor_slot});
                     if (is_dummy<predicate_at>() ||
-                        predicate(member_cref_t{node_at_(successor_slot).ckey(), successor_slot}))
+                        predicate(member_cref_t{node_at_(successor_slot).ckey(), successor_slot})) {
                         top.insert({successor_dist, successor_slot}, top_limit);
-                    radius = top.top().distance;
+                        radius = top.top().distance;
+                    }
                 }
             }
         }

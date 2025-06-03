@@ -27,7 +27,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Run TinySemVer
-        uses: ashvardanian/tinysemver@v2.0.7
+        uses: ashvardanian/tinysemver@v2.1.1
         with:
           verbose: "true"
           version-file: "VERSION"
@@ -368,7 +368,7 @@ jobs:
           echo "last_release_id=$(echo "$response" | jq -r '.id')" >> $GITHUB_OUTPUT
 
       - name: Download release assets
-        uses: robinraju/release-downloader@v1.8
+        uses: robinraju/release-downloader@v1.12
         with:
           latest: true
           fileName: "*"
@@ -420,12 +420,12 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["37", "38", "39", "310", "311", "312", "313"]
+        python-version: ['37', '38', '39', '310', '311', '312', '313', '313t']
     steps:
       - name: Check out refreshed version
         uses: actions/checkout@v4
         with:
-          ref: "main"
+          ref: 'main'
       - name: Setup Docker
         if: matrix.os == 'ubuntu-22.04'
         uses: crazy-max/ghaction-setup-docker@v1.0.0
@@ -442,6 +442,7 @@ jobs:
         run: cibuildwheel --output-dir wheelhouse
         env:
           CIBW_BUILD: cp${{ matrix.python-version }}-*
+          CIBW_ENABLE: cpython-freethreading # No-GIL 3.13t builds
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -544,6 +545,7 @@ jobs:
           name: prebuilds
           path: prebuilds
           retention-days: 1
+          overwrite: true
 
   publish_javascript:
     name: Publish JavaScript
@@ -564,7 +566,7 @@ jobs:
           node-version: 20
 
       - name: Download prebuilds
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
 
       - name: Look for links
         run: find . -type f -links +1
@@ -760,6 +762,7 @@ jobs:
         with:
           name: usearch-csharp-dependencies
           path: ${{ github.workspace }}/csharp/lib/**/*
+          overwrite: true
 
   publish_csharp:
     name: Publish C#
@@ -781,7 +784,7 @@ jobs:
         run: git submodule update --init --recursive
 
       - name: Download usearch libs artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: usearch-csharp-dependencies
           path: ${{ env.USEARCH_LIBS }}
@@ -861,21 +864,22 @@ jobs:
     if: ${{ always() }}
     needs: build_docs
     steps:
-      - uses: robinraju/release-downloader@v1.8
+      - name: Download release assets
+        uses: robinraju/release-downloader@v1.12
         with:
           latest: true
           fileName: docs.tar.gz
       - name: Unpack docs
         run: tar -xf ./docs.tar.gz
       - name: Setup GitHub Pages
-        uses: actions/configure-pages@v2
+        uses: actions/configure-pages@v5
       - name: Upload artifacts
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v3
         with:
           path: ./build/docs/html
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v1
+        uses: actions/deploy-pages@v4
 
   deploy_docs_vercel:
     name: Deploy Vercel

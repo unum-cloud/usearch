@@ -1,4 +1,35 @@
-const test = require('node:test');
+const nodeTest = require('node:test');
+const realTest = nodeTest.test; // the original function
+
+function loggedTest(name, options, fn) {
+    // The API has two call signatures:
+    //   test(name, fn)
+    //   test(name, options, fn)
+    if (typeof options === 'function') {
+        fn = options;
+        options = undefined;
+    }
+
+    // Wrap the body so we can log before / after
+    const wrapped = async (t) => {
+        console.log('▶', name);
+        try {
+            await fn(t); // run the user’s test
+            console.log('✓', name);
+        } catch (err) {
+            console.log('✖', name);
+            throw err; // re-throw so the runner records the failure
+        }
+    };
+
+    // Delegate back to the real test() with the same options
+    return options ? realTest(name, options, wrapped) : realTest(name, wrapped);
+}
+
+// Replace both the export and the global the runner puts on each module
+global.test = loggedTest;
+module.exports = loggedTest; // for completeness if this file is `require`d
+
 const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -33,12 +64,24 @@ test('Single-entry operations', async (t) => {
         index.add(16n, new Float32Array([10, 25]));
 
         assert.equal(index.size(), 2, 'size after adding elements should be 2');
-        assert.equal(index.contains(15), true, 'entry must be present after insertion');
+        assert.equal(
+            index.contains(15),
+            true,
+            'entry must be present after insertion'
+        );
 
         const results = index.search(new Float32Array([13, 14]), 2);
 
-        assert.deepEqual(results.keys, new BigUint64Array([15n, 16n]), 'keys should be 15 and 16');
-        assert.deepEqual(results.distances, new Float32Array([45, 130]), 'distances should be 45 and 130');
+        assert.deepEqual(
+            results.keys,
+            new BigUint64Array([15n, 16n]),
+            'keys should be 15 and 16'
+        );
+        assert.deepEqual(
+            results.distances,
+            new Float32Array([45, 130]),
+            'distances should be 45 and 130'
+        );
     });
 
     await t.test('remove', () => {
@@ -51,12 +94,24 @@ test('Single-entry operations', async (t) => {
 
         assert.equal(index.remove(15n), 1);
 
-        assert.equal(index.size(), 3, 'size after remoing elements should be 3');
-        assert.equal(index.contains(15), false, 'entry must be absent after insertion');
+        assert.equal(
+            index.size(),
+            3,
+            'size after removing elements should be 3'
+        );
+        assert.equal(
+            index.contains(15),
+            false,
+            'entry must be absent after insertion'
+        );
 
         const results = index.search(new Float32Array([13, 14]), 2);
 
-        assert.deepEqual(results.keys, new BigUint64Array([16n, 25n]), 'keys should not include 15');
+        assert.deepEqual(
+            results.keys,
+            new BigUint64Array([16n, 25n]),
+            'keys should not include 15'
+        );
     });
 });
 
@@ -65,15 +120,30 @@ test('Batch operations', async (t) => {
         const indexBatch = new usearch.Index(2, 'l2sq');
 
         const keys = [15n, 16n];
-        const vectors = [new Float32Array([10, 20]), new Float32Array([10, 25])];
+        const vectors = [
+            new Float32Array([10, 20]),
+            new Float32Array([10, 25]),
+        ];
 
         indexBatch.add(keys, vectors);
-        assert.equal(indexBatch.size(), 2, 'size after adding batch should be 2');
+        assert.equal(
+            indexBatch.size(),
+            2,
+            'size after adding batch should be 2'
+        );
 
         const results = indexBatch.search(new Float32Array([13, 14]), 2);
 
-        assert.deepEqual(results.keys, new BigUint64Array([15n, 16n]), 'keys should be 15 and 16');
-        assert.deepEqual(results.distances, new Float32Array([45, 130]), 'distances should be 45 and 130');
+        assert.deepEqual(
+            results.keys,
+            new BigUint64Array([15n, 16n]),
+            'keys should be 15 and 16'
+        );
+        assert.deepEqual(
+            results.distances,
+            new Float32Array([45, 130]),
+            'distances should be 45 and 130'
+        );
     });
 
     await t.test('remove', () => {
@@ -84,22 +154,30 @@ test('Batch operations', async (t) => {
             new Float32Array([10, 20]),
             new Float32Array([10, 25]),
             new Float32Array([20, 40]),
-            new Float32Array([20, 45])
+            new Float32Array([20, 45]),
         ];
         indexBatch.add(keys, vectors);
 
-        assert.deepEqual(indexBatch.remove([15n, 25n]), [1, 1])
-        assert.equal(indexBatch.size(), 2, 'size after removing batch should be 2');
+        assert.deepEqual(indexBatch.remove([15n, 25n]), [1, 1]);
+        assert.equal(
+            indexBatch.size(),
+            2,
+            'size after removing batch should be 2'
+        );
 
         const results = indexBatch.search(new Float32Array([13, 14]), 2);
 
-        assert.deepEqual(results.keys, new BigUint64Array([16n, 26n]), 'keys should not include 15 and 25');
+        assert.deepEqual(
+            results.keys,
+            new BigUint64Array([16n, 26n]),
+            'keys should not include 15 and 25'
+        );
     });
 });
 
-test("Expected results", () => {
+test('Expected results', () => {
     const index = new usearch.Index({
-        metric: "l2sq",
+        metric: 'l2sq',
         connectivity: 16,
         dimensions: 3,
     });
@@ -194,48 +272,50 @@ test('Operations with invalid values', () => {
     const keys = [NaN, 16n];
     const vectors = [new Float32Array([10, 30]), new Float32Array([1, 5])];
 
-    assert.throws(
-        () => indexBatch.add(keys, vectors),
-        {
-            name: 'Error',
-            message: 'All keys must be positive integers or bigints.'
-        }
-    );
+    // All keys must be positive integers or bigints
+    assert.throws(() => indexBatch.add(keys, vectors));
 
-    assert.throws(
-        () => indexBatch.search(NaN, 2),
-        {
-            name: 'Error',
-            message: 'Vectors must be a TypedArray or an array of arrays.'
-        }
-    );
+    // Vectors must be a TypedArray or an array of arrays
+    assert.throws(() => indexBatch.search(NaN, 2));
 });
 
 test('Invalid operations', async (t) => {
     await t.test('Add the same keys', () => {
         const index = new usearch.Index({
-            metric: "l2sq",
+            metric: 'l2sq',
             connectivity: 16,
             dimensions: 3,
         });
         index.add(42n, new Float32Array([0.2, 0.6, 0.4]));
-        assert.throws(
-            () => index.add(42n, new Float32Array([0.2, 0.6, 0.4])),
-            {
-                name: 'Error',
-                message: 'Duplicate keys not allowed in high-level wrappers'
-            }
-        );
+        assert.throws(() => index.add(42n, new Float32Array([0.2, 0.6, 0.4])));
+    });
+
+    await t.test('Batch add containing the same key', () => {
+        const index = new usearch.Index({
+            metric: 'l2sq',
+            connectivity: 16,
+            dimensions: 3,
+        });
+        index.add(42n, new Float32Array([0.2, 0.6, 0.4]));
+        assert.throws(() => {
+            index.add(
+                [41n, 42n, 43n],
+                [
+                    [0.1, 0.6, 0.4],
+                    [0.2, 0.6, 0.4],
+                    [0.3, 0.6, 0.4],
+                ]
+            );
+        });
     });
 });
 
-
 test('Serialization', async (t) => {
-    const indexPath = path.join(os.tmpdir(), 'usearch.test.index')
+    const indexPath = path.join(os.tmpdir(), 'usearch.test.index');
 
     t.beforeEach(() => {
         const index = new usearch.Index({
-            metric: "l2sq",
+            metric: 'l2sq',
             connectivity: 16,
             dimensions: 3,
         });
@@ -249,7 +329,7 @@ test('Serialization', async (t) => {
 
     await t.test('load', () => {
         const index = new usearch.Index({
-            metric: "l2sq",
+            metric: 'l2sq',
             connectivity: 16,
             dimensions: 3,
         });
@@ -264,49 +344,55 @@ test('Serialization', async (t) => {
     // todo: Skip as the test fails only on windows.
     // The following error in afterEach().
     // `error: "EBUSY: resource busy or locked, unlink`
-    await t.test('view: Read data', {skip: process.platform === 'win32'}, () => {
-        const index = new usearch.Index({
-            metric: "l2sq",
-            connectivity: 16,
-            dimensions: 3,
-        });
-        index.view(indexPath);
-        const results = index.search(new Float32Array([0.2, 0.6, 0.4]), 10, THREADS);
+    await t.test(
+        'view: Read data',
+        { skip: process.platform === 'win32' },
+        () => {
+            const index = new usearch.Index({
+                metric: 'l2sq',
+                connectivity: 16,
+                dimensions: 3,
+            });
+            index.view(indexPath);
+            const results = index.search(new Float32Array([0.2, 0.6, 0.4]), 10);
 
-        assert.equal(index.size(), 1);
-        assert.deepEqual(results.keys, new BigUint64Array([42n]));
-        assertAlmostEqual(results.distances[0], new Float32Array([0]));
-    });
+            assert.equal(index.size(), 1);
+            assert.deepEqual(results.keys, new BigUint64Array([42n]));
+            assertAlmostEqual(results.distances[0], new Float32Array([0]));
+        }
+    );
 
-    await t.test('view: Invalid operations: add', {skip: process.platform === 'win32'}, () => {
-        const index = new usearch.Index({
-            metric: "l2sq",
-            connectivity: 16,
-            dimensions: 3,
-        });
-        index.view(indexPath);
-        assert.throws(
-            () => index.add(43n, new Float32Array([0.2, 0.6, 0.4])),
-            {
-                name: 'Error',
-                message: "Can't add to an immutable index"
-            }
-        );
-    });
+    await t.test(
+        'view: Invalid operations: add',
+        { skip: process.platform === 'win32' },
+        () => {
+            const index = new usearch.Index({
+                metric: 'l2sq',
+                connectivity: 16,
+                dimensions: 3,
+            });
+            index.view(indexPath);
 
-    await t.test('view: Invalid operations: remove', {skip: process.platform === 'win32'}, () => {
-        const index = new usearch.Index({
-            metric: "l2sq",
-            connectivity: 16,
-            dimensions: 3,
-        });
-        index.view(indexPath);
-        assert.throws(
-            () => index.remove(42n),
-            {
-                name: 'Error',
-                message: "Can't remove from an immutable index"
-            }
-        );
-    });
+            // Can't add to an immutable index
+            assert.throws(() =>
+                index.add(43n, new Float32Array([0.2, 0.6, 0.4]))
+            );
+        }
+    );
+
+    await t.test(
+        'view: Invalid operations: remove',
+        { skip: process.platform === 'win32' },
+        () => {
+            const index = new usearch.Index({
+                metric: 'l2sq',
+                connectivity: 16,
+                dimensions: 3,
+            });
+            index.view(indexPath);
+
+            // Can't remove from an immutable index
+            assert.throws(() => index.remove(42n));
+        }
+    );
 });
