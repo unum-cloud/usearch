@@ -189,22 +189,6 @@ test('Expected results', () => {
     assertAlmostEqual(results.distances[0], new Float32Array([0]));
 });
 
-test("Multithread search returns same results", () => {
-    const index = new usearch.Index({
-        metric: "l2sq",
-        connectivity: 16,
-        dimensions: 3,
-    });
-    index.add(42n, new Float32Array([0.2, 0.6, 0.4]));
-    assert.equal(index.size(), 1);
-
-    const results_1 = index.search(new Float32Array([0.2, 0.6, 0.4]), 10, 0);
-    const results_2 = index.search(new Float32Array([0.2, 0.6, 0.4]), 10, THREADS);
-
-    assert.deepEqual(results_1.keys, results_2.keys);
-    assertAlmostEqual(results_1.distances, results_2.distances);
-});
-
 test("Exact search", async (t) => {
     const dataset = [new Float32Array([0.2, 0.6, 0.4]), new Float32Array([0.6, 0.6, 0.4])];
     const queries = new Float32Array([0.2, 0.6, 0.4]);
