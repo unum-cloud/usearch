@@ -218,7 +218,7 @@ test('Exact search', async (t) => {
     assertAlmostEqual(new Float32Array([0.16]), result.distances[1]);
   });
 
-  await t.test('Multicore search', () => {
+  await t.test('Multithreaded search', () => {
     const result = usearch.exactSearch(
       dataset,
       queries,
