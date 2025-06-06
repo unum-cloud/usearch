@@ -1415,9 +1415,7 @@ mod tests {
     use crate::ffi::ScalarKind;
 
     use crate::b1x8;
-    use crate::f16;
     use crate::new_index;
-    use crate::Distance;
     use crate::Index;
     use crate::Key;
 
