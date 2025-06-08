@@ -567,6 +567,8 @@ jobs:
 
       - name: Download prebuilds
         uses: actions/download-artifact@v4
+        with:
+          name: prebuilds
 
       - name: Look for links
         run: find . -type f -links +1
