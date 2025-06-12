@@ -624,7 +624,7 @@ class index_dense_gt {
         }
         operator index_dense_gt&&() && {
             if (error)
-                __usearch_raise_runtime_error(error.what());
+                usearch_raise_runtime_error(error.what());
             return std::move(index);
         }
     };
@@ -946,7 +946,7 @@ class index_dense_gt {
 
     void reserve(index_limits_t limits) {
         if (!try_reserve(limits))
-            __usearch_raise_runtime_error("failed to reserve memory");
+            usearch_raise_runtime_error("failed to reserve memory");
     }
 
     /**
@@ -1148,7 +1148,9 @@ class index_dense_gt {
 
             config_.multi = head.multi;
             metric_ = metric_t::builtin(head.dimensions, head.kind_metric, head.kind_scalar);
-            cast_buffer_ = cast_buffer_t(available_threads_.size() * metric_.bytes_per_vector());
+            // available_threads_.size() will be updated to old_limits.threads() later in this
+            // method, so use that as the number of threads to prepare for.
+            cast_buffer_ = cast_buffer_t(old_limits.threads() * metric_.bytes_per_vector());
             if (!cast_buffer_)
                 return result.failed("Failed to allocate memory for the casts");
             casts_ = casts_punned_t::make(head.kind_scalar);
@@ -1262,7 +1264,9 @@ class index_dense_gt {
 
             config_.multi = head.multi;
             metric_ = metric_t::builtin(head.dimensions, head.kind_metric, head.kind_scalar);
-            cast_buffer_ = cast_buffer_t(available_threads_.size() * metric_.bytes_per_vector());
+            // available_threads_.size() will be updated to old_limits.threads() later in this
+            // method, so use that as the number of threads to prepare for.
+            cast_buffer_ = cast_buffer_t(old_limits.threads() * metric_.bytes_per_vector());
             if (!cast_buffer_)
                 return result.failed("Failed to allocate memory for the casts");
             casts_ = casts_punned_t::make(head.kind_scalar);
