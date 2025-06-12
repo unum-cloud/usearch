@@ -149,15 +149,15 @@
 #else
 #define usearch_assert_m(must_be_true, message)                                                                        \
     if (!(must_be_true)) {                                                                                             \
-        __usearch_raise_runtime_error(message);                                                                        \
+        usearch_raise_runtime_error(message);                                                                          \
     }
 #define usearch_noexcept_m
 #endif
 
 extern "C" {
-/// @brief  Helper function to simplify debugging - trace just one symbol - `__usearch_raise_runtime_error`.
+/// @brief  Helper function to simplify debugging - trace just one symbol - `usearch_raise_runtime_error`.
 ///         Assuming the `extern C` block, the name won't be mangled.
-inline static void __usearch_raise_runtime_error(char const* message) {
+inline static void usearch_raise_runtime_error(char const* message) {
     // On Windows we compile with `/EHc` flag, which specifies that functions
     // with C linkage do not throw C++ exceptions.
 #if !defined(__cpp_exceptions) || defined(USEARCH_DEFINED_WINDOWS)
@@ -2327,7 +2327,7 @@ class index_gt {
         state_result_t failed(error_t message) noexcept { return {std::move(index), std::move(message)}; }
         operator index_gt&&() && {
             if (error)
-                __usearch_raise_runtime_error(error.what());
+                usearch_raise_runtime_error(error.what());
             return std::move(index);
         }
     };
