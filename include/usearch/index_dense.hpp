@@ -624,7 +624,7 @@ class index_dense_gt {
         }
         operator index_dense_gt&&() && {
             if (error)
-                __usearch_raise_runtime_error(error.what());
+                usearch_raise_runtime_error(error.what());
             return std::move(index);
         }
     };
@@ -946,7 +946,7 @@ class index_dense_gt {
 
     void reserve(index_limits_t limits) {
         if (!try_reserve(limits))
-            __usearch_raise_runtime_error("failed to reserve memory");
+            usearch_raise_runtime_error("failed to reserve memory");
     }
 
     /**
