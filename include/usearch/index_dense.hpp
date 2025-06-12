@@ -1148,7 +1148,9 @@ class index_dense_gt {
 
             config_.multi = head.multi;
             metric_ = metric_t::builtin(head.dimensions, head.kind_metric, head.kind_scalar);
-            cast_buffer_ = cast_buffer_t(available_threads_.size() * metric_.bytes_per_vector());
+            // available_threads_.size() will be updated to old_limits.threads() later in this
+            // method, so use that as the number of threads to prepare for.
+            cast_buffer_ = cast_buffer_t(old_limits.threads() * metric_.bytes_per_vector());
             if (!cast_buffer_)
                 return result.failed("Failed to allocate memory for the casts");
             casts_ = casts_punned_t::make(head.kind_scalar);
@@ -1262,7 +1264,9 @@ class index_dense_gt {
 
             config_.multi = head.multi;
             metric_ = metric_t::builtin(head.dimensions, head.kind_metric, head.kind_scalar);
-            cast_buffer_ = cast_buffer_t(available_threads_.size() * metric_.bytes_per_vector());
+            // available_threads_.size() will be updated to old_limits.threads() later in this
+            // method, so use that as the number of threads to prepare for.
+            cast_buffer_ = cast_buffer_t(old_limits.threads() * metric_.bytes_per_vector());
             if (!cast_buffer_)
                 return result.failed("Failed to allocate memory for the casts");
             casts_ = casts_punned_t::make(head.kind_scalar);
