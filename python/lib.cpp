@@ -852,8 +852,8 @@ template <typename index_at> typename index_at::stats_t compute_stats(index_at c
 template <typename index_at> typename index_at::stats_t compute_level_stats(index_at const &index, std::size_t level) { return index.stats(level); }
 // clang-format on
 
-template <typename py_bytes_at> memory_mapped_file_t memory_map_from_bytes(py_bytes_at&& bytes) {
-    py::buffer_info info(py::buffer(bytes).request());
+memory_mapped_file_t memory_map_from_buffer_obj(py::object const& obj) {
+    py::buffer_info info(py::buffer(obj).request());
     return {(byte_t*)(info.ptr), static_cast<std::size_t>(info.size)};
 }
 
@@ -884,12 +884,12 @@ template <typename index_at> py::object save_index_to_buffer(index_at const& ind
 }
 
 template <typename index_at>
-void load_index_from_buffer(index_at& index, py::bytes const& buffer, progress_func_t const& progress) {
-    index.load(memory_map_from_bytes(buffer), {}, {}, progress_t{progress}).error.raise();
+void load_index_from_buffer(index_at& index, py::object const& buffer_obj, progress_func_t const& progress) {
+    index.load(memory_map_from_buffer_obj(buffer_obj), {}, {}, progress_t{progress}).error.raise();
 }
 template <typename index_at>
-void view_index_from_buffer(index_at& index, py::bytes const& buffer, progress_func_t const& progress) {
-    index.view(memory_map_from_bytes(buffer), {}, {}, progress_t{progress}).error.raise();
+void view_index_from_buffer(index_at& index, py::object const& buffer_obj, progress_func_t const& progress) {
+    index.view(memory_map_from_buffer_obj(buffer_obj), {}, {}, progress_t{progress}).error.raise();
 }
 
 template <typename index_at> std::vector<typename index_at::stats_t> compute_levels_stats(index_at const& index) {
@@ -1021,8 +1021,8 @@ PYBIND11_MODULE(compiled, m) {
         return index_metadata(meta);
     });
 
-    m.def("index_dense_metadata_from_buffer", [](py::bytes const& buffer) -> py::dict {
-        index_dense_metadata_result_t meta = index_dense_metadata_from_buffer(memory_map_from_bytes(buffer));
+    m.def("index_dense_metadata_from_buffer", [](py::object const& buffer_obj) -> py::dict {
+        index_dense_metadata_result_t meta = index_dense_metadata_from_buffer(memory_map_from_buffer_obj(buffer_obj));
         forward_error(meta);
         return index_metadata(meta);
     });
@@ -1319,9 +1319,9 @@ PYBIND11_MODULE(compiled, m) {
           py::arg("progress") = nullptr);
 
     i.def("save_index_to_buffer", &save_index_to_buffer<dense_index_py_t>, py::arg("progress") = nullptr);
-    i.def("load_index_from_buffer", &load_index_from_buffer<dense_index_py_t>, py::arg("buffer"),
+    i.def("load_index_from_buffer", &load_index_from_buffer<dense_index_py_t>, py::arg("buffer_obj"),
           py::arg("progress") = nullptr);
-    i.def("view_index_from_buffer", &view_index_from_buffer<dense_index_py_t>, py::arg("buffer"),
+    i.def("view_index_from_buffer", &view_index_from_buffer<dense_index_py_t>, py::arg("buffer_obj"),
           py::arg("progress") = nullptr);
 
     i.def("reset", &reset_index<dense_index_py_t>);

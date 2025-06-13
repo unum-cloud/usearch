@@ -4,7 +4,6 @@ from time import time
 import pytest
 import numpy as np
 
-import usearch
 from usearch.eval import random_vectors, self_recall, SearchStats
 from usearch.index import (
     Index,
@@ -202,6 +201,32 @@ def test_index_stats(batch_size):
     assert index.level_stats(0).nodes == batch_size
 
     assert index.levels_stats[index.max_level].nodes > 0
+
+
+@pytest.mark.parametrize("use_view", [True, False])
+def test_index_load_from_buffer(use_view: bool, ndim: int=3, batch_size: int=10):
+    reset_randomness()
+
+    index = Index(ndim=ndim, multi=False)
+    keys = np.arange(batch_size)
+    vectors = random_vectors(count=batch_size, ndim=ndim)
+    index.add(keys, vectors, threads=threads)
+
+    buffer = index.save()
+    assert isinstance(buffer, bytearray)
+
+    def _test_load(obj):
+        index.clear()
+        assert len(index) == 0
+        index.view(obj) if use_view else index.load(obj)
+        assert len(index) == batch_size
+
+    _test_load(bytes(buffer))
+    _test_load(bytearray(buffer))
+    _test_load(memoryview(buffer))
+    _test_load(np.array(buffer))
+    with pytest.raises(TypeError):
+        _test_load(123)
 
 
 @pytest.mark.parametrize("ndim", [1, 3, 8, 32, 256, 4096])
