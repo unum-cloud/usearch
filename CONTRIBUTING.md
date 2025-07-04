@@ -160,7 +160,15 @@ cmake --build build_artifacts --config Release
 
 Python bindings are built using PyBind11 and are available on [PyPi](https://pypi.org/project/usearch/).
 The compilation settings are controlled by the `setup.py` and are independent from CMake used for C/C++ builds.
-To install USearch locally:
+To install USearch locally using `uv`:
+
+```sh
+uv venv --python 3.11           # or your preferred Python version
+source .venv/bin/activate       # to activate the virtual environment
+uv pip install -e .             # to build locally from source
+```
+
+Or using `pip` directly:
 
 ```sh
 pip install -e .
@@ -183,7 +191,7 @@ Linting:
 
 ```sh
 pip install ruff
-ruff --format=github --select=E9,F63,F7,F82 --target-version=py37 python
+ruff --format=github --select=E9,F63,F7,F82 --target-version=py310 python
 ```
 
 Before merging your changes you may want to test your changes against the entire matrix of Python versions USearch supports.

@@ -10,7 +10,7 @@ env:
   GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
   PYTHONUTF8: 1
   PYTHON_VERSION: 3.11
-  DOTNET_VERSION: 7.0.x
+  DOTNET_VERSION: 8.0.x
   ANDROID_NDK_VERSION: 26.3.11579264
   ANDROID_SDK_VERSION: 21
 
@@ -390,7 +390,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['37', '38', '39', '310', '311', '312', '313', '313t']
+        python-version: ['38', '39', '310', '311', '312', '313', '313t']
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
