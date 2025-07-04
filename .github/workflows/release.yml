@@ -420,7 +420,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['37', '38', '39', '310', '311', '312', '313', '313t']
+        python-version: ['38', '39', '310', '311', '312', '313', '313t']
     steps:
       - name: Check out refreshed version
         uses: actions/checkout@v4
