@@ -191,7 +191,7 @@ Linting:
 
 ```sh
 pip install ruff
-ruff --format=github --select=E9,F63,F7,F82 --target-version=py37 python
+ruff --format=github --select=E9,F63,F7,F82 --target-version=py310 python
 ```
 
 Before merging your changes you may want to test your changes against the entire matrix of Python versions USearch supports.
