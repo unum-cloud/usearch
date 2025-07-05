@@ -281,7 +281,7 @@ def test_index_contains_remove_rename(batch_size):
     removed_keys = keys[: batch_size // 2]
     remaining_keys = keys[batch_size // 2 :]
     index.remove(removed_keys)
-    del index[removed_keys] # ! This will trigger the `__delitem__` dunder method
+    del index[removed_keys]  # ! This will trigger the `__delitem__` dunder method
     assert len(index) == (len(keys) - len(removed_keys))
     assert np.sum(index.contains(keys)) == len(remaining_keys)
     assert np.sum(index.count(keys)) == len(remaining_keys)
@@ -348,9 +348,11 @@ def test_index_clustering(ndim, metric, quantization, dtype, batch_size):
     assert len(unique_clusters) >= 3 and len(unique_clusters) <= 10
 
 
+
 @pytest.mark.parametrize("ndim", [8, 32, 128])
 @pytest.mark.parametrize("batch_size", [500, 1024])
 def test_index_search_same_results_as_brute(ndim, batch_size):
+    reset_randomness()
     vec = random_vectors(count=batch_size,
                          metric=MetricKind.Tanimoto,
                          dtype=np.uint8,
@@ -363,3 +365,33 @@ def test_index_search_same_results_as_brute(ndim, batch_size):
     search_index.add(keys, vec)
     res_index = search_index.search(vec, len(vec), exact=True)
     np.testing.assert_array_almost_equal(res_brute.distances, res_index.distances)
+
+
+def test_index_copied_memory_usage():
+    """Test that copy=False results in lower memory usage than copy=True."""
+    reset_randomness()
+
+    ndim = 128
+    batch_size = 1000
+    dtype = np.float32  # ! Ensure same type for both vectors and index
+    vectors = random_vectors(count=batch_size, ndim=ndim, dtype=dtype)
+    keys = np.arange(batch_size)
+
+    # Create index with `copy=True`
+    index_copied = Index(ndim=ndim, metric=MetricKind.Cos, dtype=dtype, multi=False)
+    index_copied.add(keys, vectors, copy=True, threads=threads)
+
+    # Create index with `copy=False`
+    index_viewing = Index(ndim=ndim, metric=MetricKind.Cos, dtype=dtype, multi=False)
+    index_viewing.add(keys, vectors, copy=False, threads=threads)
+
+    # Both should have same number of entries
+    assert len(index_copied) == len(index_viewing) == batch_size
+
+    # Memory usage should be larger when `copy=True`
+    memory_with_copy = index_copied.memory_usage
+    memory_without_copy = index_viewing.memory_usage
+
+    assert (
+        memory_with_copy > memory_without_copy
+    ), f"Expected default index addition to use more memory than copy=False ({memory_with_copy} vs {memory_without_copy})"
