@@ -14,6 +14,7 @@ from usearch.index import (
     Matches,
     BatchMatches,
     Clustering,
+    search,
 )
 from usearch.index import (
     DEFAULT_CONNECTIVITY,
@@ -345,3 +346,20 @@ def test_index_clustering(ndim, metric, quantization, dtype, batch_size):
     clusters: Clustering = index.cluster(min_count=3, max_count=10, threads=threads)
     unique_clusters = set(clusters.matches.keys.flatten().tolist())
     assert len(unique_clusters) >= 3 and len(unique_clusters) <= 10
+
+
+@pytest.mark.parametrize("ndim", [8, 32, 128])
+@pytest.mark.parametrize("batch_size", [500, 1024])
+def test_index_search_same_results_as_brute(ndim, batch_size):
+    vec = random_vectors(count=batch_size,
+                         metric=MetricKind.Tanimoto,
+                         dtype=np.uint8,
+                         ndim=ndim)
+    # Brute force search
+    res_brute = search(vec, vec, len(vec), metric=MetricKind.Tanimoto, exact=True)
+    # Exact index search
+    search_index = Index(ndim=ndim, metric=MetricKind.Tanimoto)
+    keys = np.arange(len(vec))
+    search_index.add(keys, vec)
+    res_index = search_index.search(vec, len(vec), exact=True)
+    np.testing.assert_array_almost_equal(res_brute.distances, res_index.distances)
