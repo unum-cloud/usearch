@@ -81,7 +81,9 @@ DTypeLike = Union[str, ScalarKind]
 
 MetricLike = Union[str, MetricKind, CompiledMetric]
 
-PathOrBuffer = Union[str, os.PathLike, bytes]
+BytesLike = Union[bytes, bytearray, memoryview]
+
+PathOrBuffer = Union[str, os.PathLike, BytesLike]
 
 ProgressCallback = Callable[[int, int], bool]
 
@@ -591,9 +593,7 @@ class Index:
     @staticmethod
     def metadata(path_or_buffer: PathOrBuffer) -> Optional[dict]:
         try:
-            if isinstance(path_or_buffer, bytearray):
-                path_or_buffer = bytes(path_or_buffer)
-            if isinstance(path_or_buffer, bytes):
+            if hasattr(path_or_buffer, "__buffer__"):
                 return _index_dense_metadata_from_buffer(path_or_buffer)
             else:
                 path_or_buffer = os.fspath(path_or_buffer)
@@ -1043,7 +1043,7 @@ class Index:
         """
         assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
 
-        path_or_buffer = path_or_buffer if path_or_buffer else self.path
+        path_or_buffer = path_or_buffer if path_or_buffer is not None else self.path
         if path_or_buffer is None:
             return self._compiled.save_index_to_buffer(progress)
         else:
@@ -1051,7 +1051,7 @@ class Index:
 
     def load(
         self,
-        path_or_buffer: Union[str, os.PathLike, bytes, NoneType] = None,
+        path_or_buffer: Union[PathOrBuffer, NoneType] = None,
         progress: Optional[ProgressCallback] = None,
     ):
         """Loads the index from a file or buffer.
@@ -1059,7 +1059,7 @@ class Index:
         If `path_or_buffer` is not provided, it defaults to the path stored in `self.path`.
 
         :param path_or_buffer: The path or buffer from which the index will be loaded.
-        :type path_or_buffer: Union[str, os.PathLike, bytes, NoneType], optional
+        :type path_or_buffer: Union[str, os.PathLike, BytesLike, NoneType], optional
         :param progress: A callback function for progress tracking.
         :type progress: Optional[ProgressCallback], optional
         :raises Exception: If no source is defined.
@@ -1067,23 +1067,21 @@ class Index:
         """
         assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
 
-        path_or_buffer = path_or_buffer if path_or_buffer else self.path
+        path_or_buffer = path_or_buffer if path_or_buffer is not None else self.path
         if path_or_buffer is None:
-            raise Exception("Define the source")
-        if isinstance(path_or_buffer, bytearray):
-            path_or_buffer = bytes(path_or_buffer)
-        if isinstance(path_or_buffer, bytes):
+            raise ValueError("path_or_buffer is required")
+        if hasattr(path_or_buffer, "__buffer__"):
             self._compiled.load_index_from_buffer(path_or_buffer, progress)
         else:
             path_or_buffer = os.fspath(path_or_buffer)
             if os.path.exists(path_or_buffer):
                 self._compiled.load_index_from_path(path_or_buffer, progress)
             else:
-                raise RuntimeError("Missing file!")
+                raise FileNotFoundError(f"File not found: {path_or_buffer}")
 
     def view(
         self,
-        path_or_buffer: Union[str, os.PathLike, bytes, bytearray, NoneType] = None,
+        path_or_buffer: Union[PathOrBuffer, NoneType] = None,
         progress: Optional[ProgressCallback] = None,
     ):
         """Maps the index from a file or buffer without loading it into memory.
@@ -1098,12 +1096,10 @@ class Index:
         """
         assert not progress or _match_signature(progress, [int, int], bool), "Invalid callback signature"
 
-        path_or_buffer = path_or_buffer if path_or_buffer else self.path
+        path_or_buffer = path_or_buffer if path_or_buffer is not None else self.path
         if path_or_buffer is None:
-            raise Exception("Define the source")
-        if isinstance(path_or_buffer, bytearray):
-            path_or_buffer = bytes(path_or_buffer)
-        if isinstance(path_or_buffer, bytes):
+            raise ValueError("path_or_buffer is required")
+        if hasattr(path_or_buffer, "__buffer__"):
             self._compiled.view_index_from_buffer(path_or_buffer, progress)
         else:
             self._compiled.view_index_from_path(os.fspath(path_or_buffer), progress)
