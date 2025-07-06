@@ -178,6 +178,16 @@ def _normalize_metric(metric) -> MetricKind:
     return metric
 
 
+def _is_buffer(obj: Any) -> bool:
+    """Check if the object is a buffer-like object.
+    More portable than `hasattr(obj, "__buffer__")`, which requires Python 3.11+."""
+    try:
+        memoryview(obj)
+        return True
+    except TypeError:
+        return False
+
+
 def _search_in_compiled(
     compiled_callable: Callable,
     vectors: np.ndarray,
@@ -593,7 +603,7 @@ class Index:
     @staticmethod
     def metadata(path_or_buffer: PathOrBuffer) -> Optional[dict]:
         try:
-            if hasattr(path_or_buffer, "__buffer__"):
+            if _is_buffer(path_or_buffer):
                 return _index_dense_metadata_from_buffer(path_or_buffer)
             else:
                 path_or_buffer = os.fspath(path_or_buffer)
@@ -1070,7 +1080,7 @@ class Index:
         path_or_buffer = path_or_buffer if path_or_buffer is not None else self.path
         if path_or_buffer is None:
             raise ValueError("path_or_buffer is required")
-        if hasattr(path_or_buffer, "__buffer__"):
+        if _is_buffer(path_or_buffer):
             self._compiled.load_index_from_buffer(path_or_buffer, progress)
         else:
             path_or_buffer = os.fspath(path_or_buffer)
@@ -1099,7 +1109,7 @@ class Index:
         path_or_buffer = path_or_buffer if path_or_buffer is not None else self.path
         if path_or_buffer is None:
             raise ValueError("path_or_buffer is required")
-        if hasattr(path_or_buffer, "__buffer__"):
+        if _is_buffer(path_or_buffer):
             self._compiled.view_index_from_buffer(path_or_buffer, progress)
         else:
             self._compiled.view_index_from_path(os.fspath(path_or_buffer), progress)
