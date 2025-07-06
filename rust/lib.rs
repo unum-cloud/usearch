@@ -1345,9 +1345,7 @@ mod tests {
     use crate::ffi::ScalarKind;
 
     use crate::b1x8;
-    use crate::f16;
     use crate::new_index;
-    use crate::Distance;
     use crate::Index;
     use crate::Key;
 
@@ -1730,7 +1728,7 @@ mod tests {
         });
         index.change_metric(stateful_distance);
 
-        let another_vector: [f32; 2] = [1.0, 0.0];
+        let another_vector: [f32; 2] = [0.0, 1.0];
         index.add(2, &another_vector).unwrap();
     }
 
@@ -1762,5 +1760,116 @@ mod tests {
         assert_eq!(results.distances[0], 2.0);
         assert_eq!(results.keys[1], 42);
         assert_eq!(results.distances[1], 6.0);
+    }
+
+    #[test]
+    fn test_concurrency() {
+        use fork_union as fu;
+        use rand::{Rng, SeedableRng};
+        use rand_chacha::ChaCha8Rng;
+        use rand_distr::Uniform;
+        use std::sync::Arc;
+
+        const DIMENSIONS: usize = 128;
+        const VECTOR_COUNT: usize = 1000;
+        const THREAD_COUNT: usize = 4;
+
+        let options = IndexOptions {
+            dimensions: DIMENSIONS,
+            metric: MetricKind::Cos,
+            quantization: ScalarKind::F32,
+            ..Default::default()
+        };
+
+        let index = Arc::new(Index::new(&options).unwrap());
+        index.reserve(VECTOR_COUNT).unwrap();
+
+        // Generate deterministic vectors using rand crate for reproducible testing
+        let seed = 42; // Fixed seed for reproducibility
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        let uniform = Uniform::new(-1.0f32, 1.0f32).unwrap();
+
+        // Store reference vectors for validation
+        let mut reference_vectors: Vec<[f32; DIMENSIONS]> = Vec::with_capacity(VECTOR_COUNT);
+        for _ in 0..VECTOR_COUNT {
+            let mut vector = [0.0f32; DIMENSIONS];
+            // Fill with random values in [-1, 1]
+            for j in 0..DIMENSIONS {
+                vector[j] = rng.sample(uniform);
+            }
+            reference_vectors.push(vector);
+        }
+
+        let mut pool = fu::spawn(THREAD_COUNT);
+
+        // Concurrent indexing
+        pool.for_n(VECTOR_COUNT, |prong| {
+            let index_clone = Arc::clone(&index);
+            let i = prong.task_index;
+            let vector = reference_vectors[i].clone();
+            index_clone.add(i as u64, &vector).unwrap();
+        });
+
+        assert_eq!(index.size(), VECTOR_COUNT);
+
+        // Concurrent retrieval and validation
+        let mut pool = fu::spawn(THREAD_COUNT);
+        let validation_results = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+        pool.for_n(VECTOR_COUNT, |prong| {
+            let index_clone = Arc::clone(&index);
+            let results_clone = Arc::clone(&validation_results);
+            let i = prong.task_index;
+            let expected_vector = &reference_vectors[i];
+
+            let mut retrieved_vector = [0.0f32; DIMENSIONS];
+            let count = index_clone.get(i as u64, &mut retrieved_vector).unwrap();
+            assert_eq!(count, 1);
+
+            // Validate retrieved vector matches expected
+            let matches = retrieved_vector
+                .iter()
+                .zip(expected_vector.iter())
+                .all(|(a, b)| (a - b).abs() < 1e-6);
+
+            let mut results = results_clone.lock().unwrap();
+            results.push(matches);
+        });
+
+        let validation_results = validation_results.lock().unwrap();
+        assert_eq!(validation_results.len(), VECTOR_COUNT);
+        assert!(
+            validation_results.iter().all(|&x| x),
+            "All retrieved vectors should match the original ones"
+        );
+
+        // Concurrent search testing
+        let mut pool = fu::spawn(THREAD_COUNT);
+        let search_results = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+        pool.for_n(100, |prong| {
+            // Test 100 searches
+            let index_clone = Arc::clone(&index);
+            let results_clone = Arc::clone(&search_results);
+            let query_idx = prong.task_index % VECTOR_COUNT;
+            let query_vector = &reference_vectors[query_idx];
+
+            let matches = index_clone.search(query_vector, 10).unwrap();
+
+            // The first result should be the exact match with distance ~0
+            let exact_match_found = matches.keys.len() > 0
+                && matches.keys[0] == query_idx as u64
+                && matches.distances[0] < 1e-6;
+
+            let mut results = results_clone.lock().unwrap();
+            results.push(exact_match_found);
+        });
+
+        let search_results = search_results.lock().unwrap();
+        assert_eq!(search_results.len(), 100);
+        assert!(
+            search_results.iter().all(|&x| x),
+            "All searches should find exact matches"
+        );
     }
 }
