@@ -464,11 +464,11 @@ pub use ffi::{IndexOptions, MetricKind, ScalarKind};
 ///
 /// In this example, `dimensions` should be defined and valid for the vectors `a` and `b`.
 pub enum MetricFunction {
-    B1X8Metric(std::boxed::Box<dyn Fn(*const b1x8, *const b1x8) -> Distance + Send + Sync>),
-    I8Metric(std::boxed::Box<dyn Fn(*const i8, *const i8) -> Distance + Send + Sync>),
-    F16Metric(std::boxed::Box<dyn Fn(*const f16, *const f16) -> Distance + Send + Sync>),
-    F32Metric(std::boxed::Box<dyn Fn(*const f32, *const f32) -> Distance + Send + Sync>),
-    F64Metric(std::boxed::Box<dyn Fn(*const f64, *const f64) -> Distance + Send + Sync>),
+    B1X8Metric(*mut std::boxed::Box<dyn Fn(*const b1x8, *const b1x8) -> Distance + Send + Sync>),
+    I8Metric(*mut std::boxed::Box<dyn Fn(*const i8, *const i8) -> Distance + Send + Sync>),
+    F16Metric(*mut std::boxed::Box<dyn Fn(*const f16, *const f16) -> Distance + Send + Sync>),
+    F32Metric(*mut std::boxed::Box<dyn Fn(*const f32, *const f32) -> Distance + Send + Sync>),
+    F64Metric(*mut std::boxed::Box<dyn Fn(*const f64, *const f64) -> Distance + Send + Sync>),
 }
 
 /// Approximate Nearest Neighbors search index for dense vectors.
@@ -514,6 +514,30 @@ pub struct Index {
 
 unsafe impl Send for Index {}
 unsafe impl Sync for Index {}
+
+impl Drop for Index {
+    fn drop(&mut self) {
+        if let Some(metric) = &self.metric_fn {
+            match metric {
+                MetricFunction::B1X8Metric(pointer) => unsafe {
+                    drop(Box::from_raw(*pointer));
+                },
+                MetricFunction::I8Metric(pointer) => unsafe {
+                    drop(Box::from_raw(*pointer));
+                },
+                MetricFunction::F16Metric(pointer) => unsafe {
+                    drop(Box::from_raw(*pointer));
+                },
+                MetricFunction::F32Metric(pointer) => unsafe {
+                    drop(Box::from_raw(*pointer));
+                },
+                MetricFunction::F64Metric(pointer) => unsafe {
+                    drop(Box::from_raw(*pointer));
+                },
+            }
+        }
+    }
+}
 
 
 impl Default for ffi::IndexOptions {
@@ -675,7 +699,7 @@ impl VectorType for f32 {
     ) -> Result<(), cxx::Exception> {
         // Store the metric function in the Index.
         type MetricFn = Box<dyn Fn(*const f32, *const f32) -> Distance>;
-        index.metric_fn = Some(MetricFunction::F32Metric(metric));
+        index.metric_fn = Some(MetricFunction::F32Metric(Box::into_raw(Box::new(metric))));
 
         // Trampoline is the function that knows how to call the Rust closure.
         // The `first` is a pointer to the first vector, `second` is a pointer to the second vector,
@@ -684,21 +708,20 @@ impl VectorType for f32 {
         extern "C" fn trampoline(first: usize, second: usize, closure_address: usize) -> Distance {
             let first_ptr = first as *const f32;
             let second_ptr = second as *const f32;
-            let closure: *mut &MetricFn = closure_address as *mut &MetricFn;
+            let closure: *mut MetricFn = closure_address as *mut MetricFn;
             unsafe { (*closure)(first_ptr, second_ptr) }
         }
 
         let trampoline_fn: usize = trampoline as *const () as usize;
         let closure_address = match index.metric_fn {
-            Some(MetricFunction::F32Metric(ref metric)) => {
-                let wrapped = Box::new(metric);
-                Box::into_raw(wrapped)
+            Some(MetricFunction::F32Metric(metric)) => {
+                metric as *mut () as usize
             }
             _ => panic!("Expected F32Metric"),
         };
         index
             .inner
-            .change_metric(trampoline_fn, closure_address as *mut () as usize);
+            .change_metric(trampoline_fn, closure_address);
 
         Ok(())
     }
@@ -745,7 +768,7 @@ impl VectorType for i8 {
     ) -> Result<(), cxx::Exception> {
         // Store the metric function in the Index.
         type MetricFn = Box<dyn Fn(*const i8, *const i8) -> Distance>;
-        index.metric_fn = Some(MetricFunction::I8Metric(metric));
+        index.metric_fn = Some(MetricFunction::I8Metric(Box::into_raw(Box::new(metric))));
 
         // Trampoline is the function that knows how to call the Rust closure.
         // The `first` is a pointer to the first vector, `second` is a pointer to the second vector,
@@ -754,21 +777,20 @@ impl VectorType for i8 {
         extern "C" fn trampoline(first: usize, second: usize, closure_address: usize) -> Distance {
             let first_ptr = first as *const i8;
             let second_ptr = second as *const i8;
-            let closure: *mut &MetricFn = closure_address as *mut &MetricFn;
+            let closure: *mut MetricFn = closure_address as *mut MetricFn;
             unsafe { (*closure)(first_ptr, second_ptr) }
         }
 
         let trampoline_fn: usize = trampoline as *const () as usize;
         let closure_address = match index.metric_fn {
-            Some(MetricFunction::I8Metric(ref metric)) => {
-                let wrapped = Box::new(metric);
-                Box::into_raw(wrapped)
+            Some(MetricFunction::I8Metric(metric)) => {
+                metric as *mut () as usize
             }
             _ => panic!("Expected I8Metric"),
         };
         index
             .inner
-            .change_metric(trampoline_fn, closure_address as *mut () as usize);
+            .change_metric(trampoline_fn, closure_address);
 
         Ok(())
     }
@@ -815,7 +837,7 @@ impl VectorType for f64 {
     ) -> Result<(), cxx::Exception> {
         // Store the metric function in the Index.
         type MetricFn = Box<dyn Fn(*const f64, *const f64) -> Distance>;
-        index.metric_fn = Some(MetricFunction::F64Metric(metric));
+        index.metric_fn = Some(MetricFunction::F64Metric(Box::into_raw(Box::new(metric))));
 
         // Trampoline is the function that knows how to call the Rust closure.
         // The `first` is a pointer to the first vector, `second` is a pointer to the second vector,
@@ -824,21 +846,20 @@ impl VectorType for f64 {
         extern "C" fn trampoline(first: usize, second: usize, closure_address: usize) -> Distance {
             let first_ptr = first as *const f64;
             let second_ptr = second as *const f64;
-            let closure: *mut &MetricFn = closure_address as *mut &MetricFn;
+            let closure: *mut MetricFn = closure_address as *mut MetricFn;
             unsafe { (*closure)(first_ptr, second_ptr) }
         }
 
         let trampoline_fn: usize = trampoline as *const () as usize;
         let closure_address = match index.metric_fn {
-            Some(MetricFunction::I8Metric(ref metric)) => {
-                let wrapped = Box::new(metric);
-                Box::into_raw(wrapped)
+            Some(MetricFunction::F64Metric(metric)) => {
+                metric as *mut () as usize
             }
             _ => panic!("Expected F64Metric"),
         };
         index
             .inner
-            .change_metric(trampoline_fn, closure_address as *mut () as usize);
+            .change_metric(trampoline_fn, closure_address);
 
         Ok(())
     }
@@ -889,7 +910,7 @@ impl VectorType for f16 {
     ) -> Result<(), cxx::Exception> {
         // Store the metric function in the Index.
         type MetricFn = Box<dyn Fn(*const f16, *const f16) -> Distance>;
-        index.metric_fn = Some(MetricFunction::F16Metric(metric));
+        index.metric_fn = Some(MetricFunction::F16Metric(Box::into_raw(Box::new(metric))));
 
         // Trampoline is the function that knows how to call the Rust closure.
         // The `first` is a pointer to the first vector, `second` is a pointer to the second vector,
@@ -898,21 +919,20 @@ impl VectorType for f16 {
         extern "C" fn trampoline(first: usize, second: usize, closure_address: usize) -> Distance {
             let first_ptr = first as *const f16;
             let second_ptr = second as *const f16;
-            let closure: *mut &MetricFn = closure_address as *mut &MetricFn;
+            let closure: *mut MetricFn = closure_address as *mut MetricFn;
             unsafe { (*closure)(first_ptr, second_ptr) }
         }
 
         let trampoline_fn: usize = trampoline as *const () as usize;
         let closure_address = match index.metric_fn {
-            Some(MetricFunction::I8Metric(ref metric)) => {
-                let wrapped = Box::new(metric);
-                Box::into_raw(wrapped)
+            Some(MetricFunction::F16Metric(metric)) => {
+                metric as *mut () as usize
             }
             _ => panic!("Expected F16Metric"),
         };
         index
             .inner
-            .change_metric(trampoline_fn, closure_address as *mut () as usize);
+            .change_metric(trampoline_fn, closure_address);
 
         Ok(())
     }
@@ -963,7 +983,7 @@ impl VectorType for b1x8 {
     ) -> Result<(), cxx::Exception> {
         // Store the metric function in the Index.
         type MetricFn = Box<dyn Fn(*const b1x8, *const b1x8) -> Distance>;
-        index.metric_fn = Some(MetricFunction::B1X8Metric(metric));
+        index.metric_fn = Some(MetricFunction::B1X8Metric(Box::into_raw(Box::new(metric))));
 
         // Trampoline is the function that knows how to call the Rust closure.
         // The `first` is a pointer to the first vector, `second` is a pointer to the second vector,
@@ -972,21 +992,20 @@ impl VectorType for b1x8 {
         extern "C" fn trampoline(first: usize, second: usize, closure_address: usize) -> Distance {
             let first_ptr = first as *const b1x8;
             let second_ptr = second as *const b1x8;
-            let closure: *mut &MetricFn = closure_address as *mut &MetricFn;
+            let closure: *mut MetricFn = closure_address as *mut MetricFn;
             unsafe { (*closure)(first_ptr, second_ptr) }
         }
 
         let trampoline_fn: usize = trampoline as *const () as usize;
         let closure_address = match index.metric_fn {
-            Some(MetricFunction::I8Metric(ref metric)) => {
-                let wrapped = Box::new(metric);
-                Box::into_raw(wrapped)
+            Some(MetricFunction::B1X8Metric(metric)) => {
+                metric as *mut () as usize
             }
             _ => panic!("Expected F1X8Metric"),
         };
         index
             .inner
-            .change_metric(trampoline_fn, closure_address as *mut () as usize);
+            .change_metric(trampoline_fn, closure_address);
 
         Ok(())
     }
@@ -1710,7 +1729,7 @@ mod tests {
                 + (a_slice[1] - b_slice[1]).abs() * second_factor
         });
         index.change_metric(stateful_distance);
-        
+
         let another_vector: [f32; 2] = [1.0, 0.0];
         index.add(2, &vector).unwrap();
     }
