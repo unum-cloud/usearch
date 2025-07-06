@@ -425,8 +425,7 @@ pub use ffi::{IndexOptions, MetricKind, ScalarKind};
 ///
 /// - `B1X8Metric`: A metric function for binary vectors packed in `u8` containers, represented here by `b1x8`.
 /// - `I8Metric`: A metric function for vectors of 8-bit signed integers (`i8`).
-/// - `F16Metric`: A metric function for vectors of 16-bit floating-point numbers, using a custom `f16` type
-///   to represent half-precision floats.
+/// - `F16Metric`: A metric function for vectors of 16-bit half-precision floating-point numbers (`f16`).
 /// - `F32Metric`: A metric function for vectors of 32-bit floating-point numbers (`f32`).
 /// - `F64Metric`: A metric function for vectors of 64-bit floating-point numbers (`f64`).
 ///
@@ -447,19 +446,17 @@ pub use ffi::{IndexOptions, MetricKind, ScalarKind};
 /// # Examples
 ///
 /// ```
-/// use usearch::{MetricFunction, Distance, f16, b1x8};
+/// use usearch::{Distance, f16, b1x8};
 ///
-/// // Example of defining a custom Euclidean distance function for f32 vectors
-/// let euclidean: MetricFunction = MetricFunction::F32Metric(Box::new(|a, b| {
-///     // Safety: Assume a and b are valid for the number of dimensions in context.
+/// let euclidean_fn = Box::new(|a: *const f32, b: *const f32| -> f32 {
 ///     let dimensions = 256;
 ///     let a = unsafe { std::slice::from_raw_parts(a, dimensions) };
 ///     let b = unsafe { std::slice::from_raw_parts(b, dimensions) };
 ///     a.iter().zip(b.iter())
-///         .map(|(a, b)| (a - b).powi(2))
+///         .map(|(a, b)| (*a - *b).powi(2))
 ///         .sum::<f32>()
 ///         .sqrt()
-/// }));
+/// });
 /// ```
 ///
 /// In this example, `dimensions` should be defined and valid for the vectors `a` and `b`.
@@ -538,7 +535,6 @@ impl Drop for Index {
         }
     }
 }
-
 
 impl Default for ffi::IndexOptions {
     fn default() -> Self {
@@ -714,14 +710,10 @@ impl VectorType for f32 {
 
         let trampoline_fn: usize = trampoline as *const () as usize;
         let closure_address = match index.metric_fn {
-            Some(MetricFunction::F32Metric(metric)) => {
-                metric as *mut () as usize
-            }
+            Some(MetricFunction::F32Metric(metric)) => metric as *mut () as usize,
             _ => panic!("Expected F32Metric"),
         };
-        index
-            .inner
-            .change_metric(trampoline_fn, closure_address);
+        index.inner.change_metric(trampoline_fn, closure_address);
 
         Ok(())
     }
@@ -783,14 +775,10 @@ impl VectorType for i8 {
 
         let trampoline_fn: usize = trampoline as *const () as usize;
         let closure_address = match index.metric_fn {
-            Some(MetricFunction::I8Metric(metric)) => {
-                metric as *mut () as usize
-            }
+            Some(MetricFunction::I8Metric(metric)) => metric as *mut () as usize,
             _ => panic!("Expected I8Metric"),
         };
-        index
-            .inner
-            .change_metric(trampoline_fn, closure_address);
+        index.inner.change_metric(trampoline_fn, closure_address);
 
         Ok(())
     }
@@ -852,14 +840,10 @@ impl VectorType for f64 {
 
         let trampoline_fn: usize = trampoline as *const () as usize;
         let closure_address = match index.metric_fn {
-            Some(MetricFunction::F64Metric(metric)) => {
-                metric as *mut () as usize
-            }
+            Some(MetricFunction::F64Metric(metric)) => metric as *mut () as usize,
             _ => panic!("Expected F64Metric"),
         };
-        index
-            .inner
-            .change_metric(trampoline_fn, closure_address);
+        index.inner.change_metric(trampoline_fn, closure_address);
 
         Ok(())
     }
@@ -925,14 +909,10 @@ impl VectorType for f16 {
 
         let trampoline_fn: usize = trampoline as *const () as usize;
         let closure_address = match index.metric_fn {
-            Some(MetricFunction::F16Metric(metric)) => {
-                metric as *mut () as usize
-            }
+            Some(MetricFunction::F16Metric(metric)) => metric as *mut () as usize,
             _ => panic!("Expected F16Metric"),
         };
-        index
-            .inner
-            .change_metric(trampoline_fn, closure_address);
+        index.inner.change_metric(trampoline_fn, closure_address);
 
         Ok(())
     }
@@ -998,14 +978,10 @@ impl VectorType for b1x8 {
 
         let trampoline_fn: usize = trampoline as *const () as usize;
         let closure_address = match index.metric_fn {
-            Some(MetricFunction::B1X8Metric(metric)) => {
-                metric as *mut () as usize
-            }
+            Some(MetricFunction::B1X8Metric(metric)) => metric as *mut () as usize,
             _ => panic!("Expected F1X8Metric"),
         };
-        index
-            .inner
-            .change_metric(trampoline_fn, closure_address);
+        index.inner.change_metric(trampoline_fn, closure_address);
 
         Ok(())
     }
