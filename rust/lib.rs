@@ -1731,7 +1731,7 @@ mod tests {
         index.change_metric(stateful_distance);
 
         let another_vector: [f32; 2] = [1.0, 0.0];
-        index.add(2, &vector).unwrap();
+        index.add(2, &another_vector).unwrap();
     }
 
     #[test]
