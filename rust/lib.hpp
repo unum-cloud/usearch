@@ -25,6 +25,7 @@ class NativeIndex {
     NativeIndex(std::unique_ptr<index_dense_t> index);
 
     void reserve(size_t) const;
+    void reserve_capacity_and_threads(size_t, size_t) const;
 
     void add_b1x8(vector_key_t key, rust::Slice<uint8_t const> vector) const;
     void add_i8(vector_key_t key, rust::Slice<int8_t const> vector) const;

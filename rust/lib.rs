@@ -332,6 +332,7 @@ pub mod ffi {
 
         pub fn new_native_index(options: &IndexOptions) -> Result<UniquePtr<NativeIndex>>;
         pub fn reserve(self: &NativeIndex, capacity: usize) -> Result<()>;
+        pub fn reserve_capacity_and_threads(self: &NativeIndex, capacity: usize, threads: usize) -> Result<()>;
         pub fn dimensions(self: &NativeIndex) -> usize;
         pub fn connectivity(self: &NativeIndex) -> usize;
         pub fn size(self: &NativeIndex) -> usize;
@@ -1143,6 +1144,20 @@ impl Index {
         self.inner.reserve(capacity)
     }
 
+    /// Reserves memory for a specified number of incoming vectors & active threads.
+    ///
+    /// # Arguments
+    ///
+    /// * `capacity` - The desired total capacity, including the current size.
+    /// * `threads` - The number of threads to use for the operation.
+    pub fn reserve_capacity_and_threads(
+        self: &Index,
+        capacity: usize,
+        threads: usize,
+    ) -> Result<(), cxx::Exception> {
+        self.inner.reserve_capacity_and_threads(capacity, threads)
+    }
+
     /// Retrieves the number of dimensions in the vectors indexed.
     pub fn dimensions(self: &Index) -> usize {
         self.inner.dimensions()
@@ -1758,7 +1773,7 @@ mod tests {
         };
 
         let index = Arc::new(Index::new(&options).unwrap());
-        index.reserve(VECTOR_COUNT).unwrap();
+        index.reserve_capacity_and_threads(VECTOR_COUNT, THREAD_COUNT).unwrap();
 
         // Generate deterministic vectors using rand crate for reproducible testing
         let seed = 42; // Fixed seed for reproducibility
