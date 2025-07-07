@@ -1,13 +1,17 @@
 package usearch
 
 import (
+	"sync/atomic"
+	"fmt"
 	"math"
 	"runtime"
+	"sync"
 	"testing"
 )
 
 func TestUSearch(t *testing.T) {
 	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 
 	t.Run("Test Index Initialization", func(t *testing.T) {
 		dim := uint(128)
@@ -226,4 +230,69 @@ func TestUSearch(t *testing.T) {
 
 		// TODO: Check file save/load/metadata
 	})
+}
+
+func TestNewIndex(t *testing.T) {
+	var once sync.Once
+	var wg sync.WaitGroup
+	nthread := 16
+	var ndone atomic.Int64 
+	ncreate := 100000
+
+	for j := 0; j < nthread; j++ {
+		wg.Add(1)
+		go func(tid int) {
+			defer wg.Done()
+			for n := 0; n < ncreate; n++ {
+
+				if n%nthread != tid {
+					continue
+				}
+				ndone.Add(1)
+				dim := uint(128)
+				config := IndexConfig{Quantization: I8, Metric: L2sq, Dimensions: dim}
+				index, err := NewIndex(config)
+				if err != nil {
+					t.Fatalf("Failed to create index: %s", err)
+				}
+
+				err = index.Reserve(dim)
+				if err != nil {
+					t.Fatalf("Failed to create index: %s", err)
+				}
+
+				vec := make([]float32, dim)
+				for i := uint(0); i < 10; i++ {
+					vec[i] = float32(i) + 0.2
+					err = index.Add(uint64(i), vec)
+					if err != nil {
+						t.Fatalf("Failed to insert: %s", err)
+					}
+				}
+
+				once.Do(func() {
+
+					s, err := index.HardwareAcceleration()
+					if err != nil {
+						t.Fatalf("Failed to retrieve hardware acceleration: %s", err)
+					}
+					if s == "" {
+						t.Fatalf("An empty string was returned from HardwareAcceleration")
+					}
+					fmt.Printf("HarewareAcceleration: %s\n", s)
+				})
+
+				err = index.Destroy()
+				if err != nil {
+					t.Fatalf("Failed to destroy index: %s", err)
+				}
+			}
+
+		}(j)
+		wg.Wait()
+	}
+
+	if int(ndone.Load()) != ncreate {
+		t.Fatalf("ncreate is different %d = %d", ncreate, int(ndone.Load()))
+	}
 }
