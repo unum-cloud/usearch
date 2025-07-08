@@ -116,7 +116,7 @@ I'd recommend putting the following breakpoints when debugging the code in GDB:
 - `__ubsan::ScopedReport::~ScopedReport` - to catch undefined behavior.
 - `__GI_exit` - to stop at exit points - the end of running any executable.
 - `__builtin_unreachable` - to catch all the places where the code is expected to be unreachable.
-- `__usearch_raise_runtime_error` - for USearch-specific assertions.
+- `usearch_raise_runtime_error` - for USearch-specific assertions.
 
 ### Cross Compilation
 
@@ -160,7 +160,15 @@ cmake --build build_artifacts --config Release
 
 Python bindings are built using PyBind11 and are available on [PyPi](https://pypi.org/project/usearch/).
 The compilation settings are controlled by the `setup.py` and are independent from CMake used for C/C++ builds.
-To install USearch locally:
+To install USearch locally using `uv`:
+
+```sh
+uv venv --python 3.11           # or your preferred Python version
+source .venv/bin/activate       # to activate the virtual environment
+uv pip install -e .             # to build locally from source
+```
+
+Or using `pip` directly:
 
 ```sh
 pip install -e .
@@ -174,16 +182,16 @@ Following options are enabled:
 - The `-p no:warnings` option will suppress and allow warnings.
 
 ```sh
-pip install pytest pytest-repeat            # for repeated fuzzy tests
-pytest                                      # if you trust the default settings
-pytest python/scripts/ -s -x -p no:warnings # to overwrite the default settings
+uv pip install pytest pytest-repeat numpy             # for repeated fuzzy tests
+python -m pytest                                      # if you trust the default settings
+python -m pytest python/scripts/ -s -x -p no:warnings # to overwrite the default settings
 ```
 
 Linting:
 
 ```sh
 pip install ruff
-ruff --format=github --select=E9,F63,F7,F82 --target-version=py37 python
+ruff --format=github --select=E9,F63,F7,F82 --target-version=py310 python
 ```
 
 Before merging your changes you may want to test your changes against the entire matrix of Python versions USearch supports.

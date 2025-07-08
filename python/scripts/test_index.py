@@ -4,7 +4,6 @@ from time import time
 import pytest
 import numpy as np
 
-import usearch
 from usearch.eval import random_vectors, self_recall, SearchStats
 from usearch.index import (
     Index,
@@ -204,6 +203,32 @@ def test_index_stats(batch_size):
     assert index.levels_stats[index.max_level].nodes > 0
 
 
+@pytest.mark.parametrize("use_view", [True, False])
+def test_index_load_from_buffer(use_view: bool, ndim: int=3, batch_size: int=10):
+    reset_randomness()
+
+    index = Index(ndim=ndim, multi=False)
+    keys = np.arange(batch_size)
+    vectors = random_vectors(count=batch_size, ndim=ndim)
+    index.add(keys, vectors, threads=threads)
+
+    buffer = index.save()
+    assert isinstance(buffer, bytearray)
+
+    def _test_load(obj):
+        index.clear()
+        assert len(index) == 0
+        index.view(obj) if use_view else index.load(obj)
+        assert len(index) == batch_size
+
+    _test_load(bytes(buffer))
+    _test_load(bytearray(buffer))
+    _test_load(memoryview(buffer))
+    _test_load(np.array(buffer))
+    with pytest.raises(TypeError):
+        _test_load(123)
+
+
 @pytest.mark.parametrize("ndim", [1, 3, 8, 32, 256, 4096])
 @pytest.mark.parametrize("batch_size", [0, 1, 7, 1024])
 @pytest.mark.parametrize("quantization", [ScalarKind.F32, ScalarKind.I8])
@@ -280,7 +305,7 @@ def test_index_contains_remove_rename(batch_size):
     removed_keys = keys[: batch_size // 2]
     remaining_keys = keys[batch_size // 2 :]
     index.remove(removed_keys)
-    del index[removed_keys] # ! This will trigger the `__delitem__` dunder method
+    del index[removed_keys]  # ! This will trigger the `__delitem__` dunder method
     assert len(index) == (len(keys) - len(removed_keys))
     assert np.sum(index.contains(keys)) == len(remaining_keys)
     assert np.sum(index.count(keys)) == len(remaining_keys)
@@ -345,3 +370,33 @@ def test_index_clustering(ndim, metric, quantization, dtype, batch_size):
     clusters: Clustering = index.cluster(min_count=3, max_count=10, threads=threads)
     unique_clusters = set(clusters.matches.keys.flatten().tolist())
     assert len(unique_clusters) >= 3 and len(unique_clusters) <= 10
+
+
+def test_index_copied_memory_usage():
+    """Test that copy=False results in lower memory usage than copy=True."""
+    reset_randomness()
+
+    ndim = 128
+    batch_size = 1000
+    dtype = np.float32  # ! Ensure same type for both vectors and index
+    vectors = random_vectors(count=batch_size, ndim=ndim, dtype=dtype)
+    keys = np.arange(batch_size)
+
+    # Create index with `copy=True`
+    index_copied = Index(ndim=ndim, metric=MetricKind.Cos, dtype=dtype, multi=False)
+    index_copied.add(keys, vectors, copy=True, threads=threads)
+
+    # Create index with `copy=False`
+    index_viewing = Index(ndim=ndim, metric=MetricKind.Cos, dtype=dtype, multi=False)
+    index_viewing.add(keys, vectors, copy=False, threads=threads)
+
+    # Both should have same number of entries
+    assert len(index_copied) == len(index_viewing) == batch_size
+
+    # Memory usage should be larger when `copy=True`
+    memory_with_copy = index_copied.memory_usage
+    memory_without_copy = index_viewing.memory_usage
+
+    assert (
+        memory_with_copy > memory_without_copy
+    ), f"Expected default index addition to use more memory than copy=False ({memory_with_copy} vs {memory_without_copy})"

@@ -36,7 +36,7 @@ void __expect(bool must_be_true, char const* file, int line, char const* message
     message = message ? message : "C++ unit test failed";
     char buffer[512];
     std::snprintf(buffer, sizeof(buffer), "%s at %s:%d", message, file, line);
-    __usearch_raise_runtime_error(buffer);
+    usearch_raise_runtime_error(buffer);
 }
 
 template <typename value_at>

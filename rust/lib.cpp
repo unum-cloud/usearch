@@ -162,6 +162,9 @@ size_t NativeIndex::count(vector_key_t key) const { return index_->count(key); }
 bool NativeIndex::contains(vector_key_t key) const { return index_->contains(key); }
 
 void NativeIndex::reserve(size_t capacity) const { index_->reserve(capacity); }
+void NativeIndex::reserve_capacity_and_threads(size_t capacity, size_t threads) const {
+    index_->reserve({capacity, threads});
+}
 
 size_t NativeIndex::dimensions() const { return index_->dimensions(); }
 size_t NativeIndex::connectivity() const { return index_->connectivity(); }
