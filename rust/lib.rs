@@ -2005,7 +2005,7 @@ mod tests {
             let query_idx = prong.task_index % VECTOR_COUNT;
             let query_vector = &reference_vectors[query_idx];
 
-            let matches = index_clone.search(query_vector, 10).unwrap();
+            let matches = index_clone.exact_search(query_vector, 10).unwrap();
 
             // The first result should be the exact match with distance ~0
             let exact_match_found = matches.keys.len() > 0
