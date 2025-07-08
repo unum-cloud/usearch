@@ -351,20 +351,29 @@ def test_index_clustering(ndim, metric, quantization, dtype, batch_size):
 
 @pytest.mark.parametrize("ndim", [8, 32, 128])
 @pytest.mark.parametrize("batch_size", [500, 1024])
-def test_index_search_same_results_as_brute(ndim, batch_size):
+@pytest.mark.parametrize("convert", [True, False])
+def test_index_search_same_results_as_brute(ndim, batch_size, convert):
     reset_randomness()
     vec = random_vectors(count=batch_size,
                          metric=MetricKind.Tanimoto,
                          dtype=np.uint8,
                          ndim=ndim)
+
+    if convert:
+        vec = vec.astype(np.int8)
+
     # Brute force search
     res_brute = search(vec, vec, len(vec), metric=MetricKind.Tanimoto, exact=True)
+
+    if convert:
+        vec = vec.astype(np.uint8)
+
     # Exact index search
     search_index = Index(ndim=ndim, metric=MetricKind.Tanimoto)
     keys = np.arange(len(vec))
     search_index.add(keys, vec)
     res_index = search_index.search(vec, len(vec), exact=True)
-    np.testing.assert_array_almost_equal(res_brute.distances, res_index.distances)
+    assert np.isclose(res_brute.distances, res_index.distances).all()
 
 
 def test_index_copied_memory_usage():
