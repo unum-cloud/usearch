@@ -351,6 +351,16 @@ pub mod ffi {
         pub fn search_f32(self: &NativeIndex, query: &[f32], count: usize) -> Result<Matches>;
         pub fn search_f64(self: &NativeIndex, query: &[f64], count: usize) -> Result<Matches>;
 
+        pub fn exact_search_b1x8(self: &NativeIndex, query: &[u8], count: usize)
+            -> Result<Matches>;
+        pub fn exact_search_i8(self: &NativeIndex, query: &[i8], count: usize) -> Result<Matches>;
+        pub fn exact_search_f16(self: &NativeIndex, query: &[i16], count: usize)
+            -> Result<Matches>;
+        pub fn exact_search_f32(self: &NativeIndex, query: &[f32], count: usize)
+            -> Result<Matches>;
+        pub fn exact_search_f64(self: &NativeIndex, query: &[f64], count: usize)
+            -> Result<Matches>;
+
         pub fn filtered_search_b1x8(
             self: &NativeIndex,
             query: &[u8],
@@ -613,6 +623,26 @@ pub trait VectorType {
     where
         Self: Sized;
 
+    /// Performs an exact (brute force) search in the index using the given query vector, returning
+    /// up to `count` closest matches. This search checks all vectors in the index, guaranteeing to find
+    /// the true nearest neighbors, but will be slower especially for large indices.
+    ///
+    /// # Parameters
+    /// - `index`: A reference to the `Index` where the search is to be performed.
+    /// - `query`: A slice representing the query vector.
+    /// - `count`: The maximum number of matches to return.
+    ///
+    /// # Returns
+    /// - `Ok(ffi::Matches)` containing the matches found.
+    /// - `Err(cxx::Exception)` if an error occurred during the search operation.
+    fn exact_search(
+        index: &Index,
+        query: &[Self],
+        count: usize,
+    ) -> Result<ffi::Matches, cxx::Exception>
+    where
+        Self: Sized;
+
     /// Performs a filtered search in the index using a query vector and a custom
     /// filter function, returning up to `count` matches that satisfy the filter.
     ///
@@ -658,12 +688,23 @@ impl VectorType for f32 {
     fn search(index: &Index, query: &[Self], count: usize) -> Result<ffi::Matches, cxx::Exception> {
         index.inner.search_f32(query, count)
     }
+
+    fn exact_search(
+        index: &Index,
+        query: &[Self],
+        count: usize,
+    ) -> Result<ffi::Matches, cxx::Exception> {
+        index.inner.exact_search_f32(query, count)
+    }
+
     fn get(index: &Index, key: Key, vector: &mut [Self]) -> Result<usize, cxx::Exception> {
         index.inner.get_f32(key, vector)
     }
+
     fn add(index: &Index, key: Key, vector: &[Self]) -> Result<(), cxx::Exception> {
         index.inner.add_f32(key, vector)
     }
+
     fn filtered_search<F>(
         index: &Index,
         query: &[Self],
@@ -724,12 +765,23 @@ impl VectorType for i8 {
     fn search(index: &Index, query: &[Self], count: usize) -> Result<ffi::Matches, cxx::Exception> {
         index.inner.search_i8(query, count)
     }
+
+    fn exact_search(
+        index: &Index,
+        query: &[Self],
+        count: usize,
+    ) -> Result<ffi::Matches, cxx::Exception> {
+        index.inner.exact_search_i8(query, count)
+    }
+
     fn get(index: &Index, key: Key, vector: &mut [Self]) -> Result<usize, cxx::Exception> {
         index.inner.get_i8(key, vector)
     }
+
     fn add(index: &Index, key: Key, vector: &[Self]) -> Result<(), cxx::Exception> {
         index.inner.add_i8(key, vector)
     }
+
     fn filtered_search<F>(
         index: &Index,
         query: &[Self],
@@ -789,12 +841,23 @@ impl VectorType for f64 {
     fn search(index: &Index, query: &[Self], count: usize) -> Result<ffi::Matches, cxx::Exception> {
         index.inner.search_f64(query, count)
     }
+
+    fn exact_search(
+        index: &Index,
+        query: &[Self],
+        count: usize,
+    ) -> Result<ffi::Matches, cxx::Exception> {
+        index.inner.exact_search_f64(query, count)
+    }
+
     fn get(index: &Index, key: Key, vector: &mut [Self]) -> Result<usize, cxx::Exception> {
         index.inner.get_f64(key, vector)
     }
+
     fn add(index: &Index, key: Key, vector: &[Self]) -> Result<(), cxx::Exception> {
         index.inner.add_f64(key, vector)
     }
+
     fn filtered_search<F>(
         index: &Index,
         query: &[Self],
@@ -854,12 +917,23 @@ impl VectorType for f16 {
     fn search(index: &Index, query: &[Self], count: usize) -> Result<ffi::Matches, cxx::Exception> {
         index.inner.search_f16(f16::to_i16s(query), count)
     }
+
+    fn exact_search(
+        index: &Index,
+        query: &[Self],
+        count: usize,
+    ) -> Result<ffi::Matches, cxx::Exception> {
+        index.inner.exact_search_f16(f16::to_i16s(query), count)
+    }
+
     fn get(index: &Index, key: Key, vector: &mut [Self]) -> Result<usize, cxx::Exception> {
         index.inner.get_f16(key, f16::to_mut_i16s(vector))
     }
+
     fn add(index: &Index, key: Key, vector: &[Self]) -> Result<(), cxx::Exception> {
         index.inner.add_f16(key, f16::to_i16s(vector))
     }
+
     fn filtered_search<F>(
         index: &Index,
         query: &[Self],
@@ -923,12 +997,23 @@ impl VectorType for b1x8 {
     fn search(index: &Index, query: &[Self], count: usize) -> Result<ffi::Matches, cxx::Exception> {
         index.inner.search_b1x8(b1x8::to_u8s(query), count)
     }
+
+    fn exact_search(
+        index: &Index,
+        query: &[Self],
+        count: usize,
+    ) -> Result<ffi::Matches, cxx::Exception> {
+        index.inner.exact_search_b1x8(b1x8::to_u8s(query), count)
+    }
+
     fn get(index: &Index, key: Key, vector: &mut [Self]) -> Result<usize, cxx::Exception> {
         index.inner.get_b1x8(key, b1x8::to_mut_u8s(vector))
     }
+
     fn add(index: &Index, key: Key, vector: &[Self]) -> Result<(), cxx::Exception> {
         index.inner.add_b1x8(key, b1x8::to_u8s(vector))
     }
+
     fn filtered_search<F>(
         index: &Index,
         query: &[Self],
@@ -1057,6 +1142,26 @@ impl Index {
         count: usize,
     ) -> Result<ffi::Matches, cxx::Exception> {
         T::search(self, query, count)
+    }
+
+    /// Performs exact (brute force) Nearest Neighbors Search for closest vectors to the provided query.
+    /// This search checks all vectors in the index, guaranteeing to find the true nearest neighbors,
+    /// but may be slower for large indices.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - A slice containing the query vector data.
+    /// * `count` - The maximum number of neighbors to search for.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the matches found.
+    pub fn exact_search<T: VectorType>(
+        self: &Index,
+        query: &[T],
+        count: usize,
+    ) -> Result<ffi::Matches, cxx::Exception> {
+        T::exact_search(self, query, count)
     }
 
     /// Performs k-Approximate Nearest Neighbors (kANN) Search for closest vectors to the provided query
@@ -1695,6 +1800,61 @@ mod tests {
         for distance in matches.distances.iter() {
             assert_ne!(*distance, 0.0);
         }
+    }
+
+    #[test]
+    fn test_exact_search() {
+        use std::collections::HashSet;
+
+        // Create an index with many vectors
+        let options = IndexOptions {
+            dimensions: 4,
+            metric: MetricKind::L2sq,
+            quantization: ScalarKind::F32,
+            ..Default::default()
+        };
+        let index = new_index(&options).unwrap();
+        index.reserve(100).unwrap();
+        // Add 100 vectors to the index
+        for i in 0..100 {
+            let vec = vec![
+                i as f32 * 0.1,
+                (i as f32 * 0.05).sin(),
+                (i as f32 * 0.05).cos(),
+                0.0,
+            ];
+            index.add(i, &vec).unwrap();
+        }
+        // Query vector
+        let query = vec![4.5, 0.0, 1.0, 0.0];
+        // Compare approximate and exact search results
+        let approx_matches = index.search(&query, 10).unwrap();
+        let exact_matches = index.exact_search(&query, 10).unwrap();
+        // Collect the keys from both result sets
+        let approx_keys: HashSet<Key> = approx_matches.keys.iter().cloned().collect();
+        let exact_keys: HashSet<Key> = exact_matches.keys.iter().cloned().collect();
+        // Check that both methods return 10 results
+        assert_eq!(approx_matches.keys.len(), 10);
+        assert_eq!(exact_matches.keys.len(), 10);
+
+        // The exact search should find the true nearest neighbors
+        // Verify that the minimum distance in exact results is <= minimum distance in approximate results
+        assert!(exact_matches.distances[0] <= approx_matches.distances[0]);
+        // The nearest neighbor according to exact search might be different from approximate search
+        println!(
+            "Approximate search first match: key={}, distance={}",
+            approx_matches.keys[0], approx_matches.distances[0]
+        );
+        println!(
+            "Exact search first match: key={}, distance={}",
+            exact_matches.keys[0], exact_matches.distances[0]
+        );
+        // Results from both should be mostly similar, but may differ due to approximation
+        let intersection: HashSet<_> = approx_keys.intersection(&exact_keys).collect();
+        println!(
+            "Number of common results between approximate and exact search: {}",
+            intersection.len()
+        );
     }
 
     #[test]
