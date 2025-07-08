@@ -304,13 +304,14 @@ def test_index_restore_multithread_search(ndim, quantization, batch_size, thread
     query = random_vectors(count=batch_size, ndim=ndim)
     result_original = index.search(query, count=10, threads=threads)
     dumped_index: bytes = index.save()
+    dumped_index_view = memoryview(dumped_index)
 
     # When restoring from disk, search must not fail if using multiple threads.
     index_restored = Index.restore(dumped_index, view=False)
     result_restored = index_restored.search(query, count=10, threads=threads)
     assert np.allclose(result_original.distances, result_restored.distances)
 
-    index_viewed = Index.restore(dumped_index, view=True)
+    index_viewed = Index.restore(dumped_index_view, view=True)
     result_view = index_viewed.search(query, count=10, threads=threads)
     assert np.allclose(result_original.distances, result_view.distances)
 
