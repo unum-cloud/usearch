@@ -182,9 +182,9 @@ Following options are enabled:
 - The `-p no:warnings` option will suppress and allow warnings.
 
 ```sh
-pip install pytest pytest-repeat            # for repeated fuzzy tests
-pytest                                      # if you trust the default settings
-pytest python/scripts/ -s -x -p no:warnings # to overwrite the default settings
+uv pip install pytest pytest-repeat numpy             # for repeated fuzzy tests
+python -m pytest                                      # if you trust the default settings
+python -m pytest python/scripts/ -s -x -p no:warnings # to overwrite the default settings
 ```
 
 Linting:
@@ -285,6 +285,7 @@ The compilation settings are controlled by the `build.rs` and are independent fr
 
 ```sh
 cargo test -p usearch -- --nocapture --test-threads=1
+cargo clippy --all-targets --all-features
 ```
 
 Publishing the crate is a bit more complicated than normally.
