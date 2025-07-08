@@ -285,6 +285,7 @@ The compilation settings are controlled by the `build.rs` and are independent fr
 
 ```sh
 cargo test -p usearch -- --nocapture --test-threads=1
+cargo clippy --all-targets --all-features
 ```
 
 Publishing the crate is a bit more complicated than normally.

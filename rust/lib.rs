@@ -332,7 +332,12 @@ pub mod ffi {
 
         pub fn new_native_index(options: &IndexOptions) -> Result<UniquePtr<NativeIndex>>;
         pub fn reserve(self: &NativeIndex, capacity: usize) -> Result<()>;
-        pub fn reserve_capacity_and_threads(self: &NativeIndex, capacity: usize, threads: usize) -> Result<()>;
+        pub fn reserve_capacity_and_threads(
+            self: &NativeIndex,
+            capacity: usize,
+            threads: usize,
+        ) -> Result<()>;
+
         pub fn dimensions(self: &NativeIndex) -> usize;
         pub fn connectivity(self: &NativeIndex) -> usize;
         pub fn size(self: &NativeIndex) -> usize;
@@ -722,13 +727,11 @@ impl VectorType for f32 {
         }
 
         // Temporarily cast the closure to a raw pointer for passing.
-        unsafe {
-            let trampoline_fn: usize = std::mem::transmute(trampoline::<F> as *const ());
-            let closure_address: usize = &filter as *const F as usize;
-            index
-                .inner
-                .filtered_search_f32(query, count, trampoline_fn, closure_address)
-        }
+        let trampoline_fn: usize = trampoline::<F> as *const () as usize;
+        let closure_address: usize = &filter as *const F as usize;
+        index
+            .inner
+            .filtered_search_f32(query, count, trampoline_fn, closure_address)
     }
 
     fn change_metric(
@@ -799,13 +802,11 @@ impl VectorType for i8 {
         }
 
         // Temporarily cast the closure to a raw pointer for passing.
-        unsafe {
-            let trampoline_fn: usize = std::mem::transmute(trampoline::<F> as *const ());
-            let closure_address: usize = &filter as *const F as usize;
-            index
-                .inner
-                .filtered_search_i8(query, count, trampoline_fn, closure_address)
-        }
+        let trampoline_fn: usize = trampoline::<F> as *const () as usize;
+        let closure_address: usize = &filter as *const F as usize;
+        index
+            .inner
+            .filtered_search_i8(query, count, trampoline_fn, closure_address)
     }
     fn change_metric(
         index: &mut Index,
@@ -875,13 +876,11 @@ impl VectorType for f64 {
         }
 
         // Temporarily cast the closure to a raw pointer for passing.
-        unsafe {
-            let trampoline_fn: usize = std::mem::transmute(trampoline::<F> as *const ());
-            let closure_address: usize = &filter as *const F as usize;
-            index
-                .inner
-                .filtered_search_f64(query, count, trampoline_fn, closure_address)
-        }
+        let trampoline_fn: usize = trampoline::<F> as *const () as usize;
+        let closure_address: usize = &filter as *const F as usize;
+        index
+            .inner
+            .filtered_search_f64(query, count, trampoline_fn, closure_address)
     }
     fn change_metric(
         index: &mut Index,
@@ -951,16 +950,14 @@ impl VectorType for f16 {
         }
 
         // Temporarily cast the closure to a raw pointer for passing.
-        unsafe {
-            let trampoline_fn: usize = std::mem::transmute(trampoline::<F> as *const ());
-            let closure_address: usize = &filter as *const F as usize;
-            index.inner.filtered_search_f16(
-                f16::to_i16s(query),
-                count,
-                trampoline_fn,
-                closure_address,
-            )
-        }
+        let trampoline_fn: usize = trampoline::<F> as *const () as usize;
+        let closure_address: usize = &filter as *const F as usize;
+        index.inner.filtered_search_f16(
+            f16::to_i16s(query),
+            count,
+            trampoline_fn,
+            closure_address,
+        )
     }
 
     fn change_metric(
@@ -1031,16 +1028,14 @@ impl VectorType for b1x8 {
         }
 
         // Temporarily cast the closure to a raw pointer for passing.
-        unsafe {
-            let trampoline_fn: usize = std::mem::transmute(trampoline::<F> as *const ());
-            let closure_address: usize = &filter as *const F as usize;
-            index.inner.filtered_search_b1x8(
-                b1x8::to_u8s(query),
-                count,
-                trampoline_fn,
-                closure_address,
-            )
-        }
+        let trampoline_fn: usize = trampoline::<F> as *const () as usize;
+        let closure_address: usize = &filter as *const F as usize;
+        index.inner.filtered_search_b1x8(
+            b1x8::to_u8s(query),
+            count,
+            trampoline_fn,
+            closure_address,
+        )
     }
 
     fn change_metric(
@@ -1232,12 +1227,9 @@ impl Index {
         let dim = self.dimensions();
         let max_matches = self.count(key);
         vector.resize(dim * max_matches, T::default());
-        let matches = T::get(self, key, &mut vector[..]);
-        if matches.is_err() {
-            return matches;
-        }
-        vector.resize(dim * matches.as_ref().unwrap(), T::default());
-        return matches;
+        let matches = T::get(self, key, &mut vector[..])?;
+        vector.resize(dim * matches, T::default());
+        Ok(matches)
     }
 
     /// Reserves memory for a specified number of incoming vectors.
@@ -1449,7 +1441,7 @@ mod tests {
 
     #[test]
     fn print_specs() {
-        print!("--------------------------------------------------\n");
+        println!("--------------------------------------------------");
         println!("OS: {}", env::consts::OS);
         println!(
             "Rust version: {}",
@@ -1517,14 +1509,16 @@ mod tests {
             "b1 hardware acceleration: {}",
             b1_index.hardware_acceleration()
         );
-        print!("--------------------------------------------------\n");
+        println!("--------------------------------------------------");
     }
 
     #[test]
     fn test_add_get_vector() {
-        let mut options = IndexOptions::default();
-        options.dimensions = 5;
-        options.quantization = ScalarKind::F32;
+        let options = IndexOptions {
+            dimensions: 5,
+            quantization: ScalarKind::F32,
+            ..Default::default()
+        };
         let index = Index::new(&options).unwrap();
         assert!(index.reserve(10).is_ok());
 
@@ -1545,20 +1539,22 @@ mod tests {
         assert_eq!(found_vec, first.to_vec());
 
         // Test using slice
-        let mut found_slice = [0.0 as f32; 5];
+        let mut found_slice = [0.0f32; 5];
         assert_eq!(index.get(1, &mut found_slice).unwrap(), 1);
         assert_eq!(found_slice, first);
 
         // Create a slice with incorrect size
-        let mut found = [0.0 as f32; 6]; // This isn't a multiple of the index's dimensions.
+        let mut found = [0.0f32; 6]; // This isn't a multiple of the index's dimensions.
         let result = index.get(1, &mut found);
         assert!(result.is_err());
     }
     #[test]
     fn test_search_vector() {
-        let mut options = IndexOptions::default();
-        options.dimensions = 5;
-        options.quantization = ScalarKind::F32;
+        let options = IndexOptions {
+            dimensions: 5,
+            quantization: ScalarKind::F32,
+            ..Default::default()
+        };
         let index = Index::new(&options).unwrap();
         assert!(index.reserve(10).is_ok());
 
@@ -1578,13 +1574,15 @@ mod tests {
 
     #[test]
     fn test_add_remove_vector() {
-        let mut options = IndexOptions::default();
-        options.dimensions = 4;
-        options.metric = MetricKind::IP;
-        options.quantization = ScalarKind::F64;
-        options.connectivity = 10;
-        options.expansion_add = 128;
-        options.expansion_search = 3;
+        let options = IndexOptions {
+            dimensions: 4,
+            metric: MetricKind::IP,
+            quantization: ScalarKind::F64,
+            connectivity: 10,
+            expansion_add: 128,
+            expansion_search: 3,
+            ..Default::default()
+        };
         let index = Index::new(&options).unwrap();
         assert!(index.reserve(10).is_ok());
         assert!(index.capacity() >= 10);
@@ -1599,22 +1597,22 @@ mod tests {
         let id4 = 483367403120624233;
 
         assert!(index.add(id1, &first).is_ok());
-        let mut found_slice = [0.0 as f32; 4];
+        let mut found_slice = [0.0f32; 4];
         assert_eq!(index.get(id1, &mut found_slice).unwrap(), 1);
         assert!(index.remove(id1).is_ok());
 
         assert!(index.add(id2, &second).is_ok());
-        let mut found_slice = [0.0 as f32; 4];
+        let mut found_slice = [0.0f32; 4];
         assert_eq!(index.get(id2, &mut found_slice).unwrap(), 1);
         assert!(index.remove(id2).is_ok());
 
         assert!(index.add(id3, &second).is_ok());
-        let mut found_slice = [0.0 as f32; 4];
+        let mut found_slice = [0.0f32; 4];
         assert_eq!(index.get(id3, &mut found_slice).unwrap(), 1);
         assert!(index.remove(id3).is_ok());
 
         assert!(index.add(id4, &second).is_ok());
-        let mut found_slice = [0.0 as f32; 4];
+        let mut found_slice = [0.0f32; 4];
         assert_eq!(index.get(id4, &mut found_slice).unwrap(), 1);
         assert!(index.remove(id4).is_ok());
 
@@ -1623,8 +1621,10 @@ mod tests {
 
     #[test]
     fn integration() {
-        let mut options = IndexOptions::default();
-        options.dimensions = 5;
+        let mut options = IndexOptions {
+            dimensions: 5,
+            ..Default::default()
+        };
 
         let index = Index::new(&options).unwrap();
 
@@ -1640,7 +1640,7 @@ mod tests {
         let first: [f32; 5] = [0.2, 0.1, 0.2, 0.1, 0.3];
         let second: [f32; 5] = [0.3, 0.2, 0.4, 0.0, 0.1];
 
-        print!("--------------------------------------------------\n");
+        println!("--------------------------------------------------");
         println!(
             "before add, memory_usage: {} \
             cap: {} \
@@ -1675,7 +1675,7 @@ mod tests {
         let results = index.search(&first, 10).unwrap();
         println!("{:?}", results);
         assert_eq!(results.keys.len(), 2);
-        print!("--------------------------------------------------\n");
+        println!("--------------------------------------------------");
 
         // Validate serialization
         assert!(index.save("index.rust.usearch").is_ok());
@@ -1693,8 +1693,7 @@ mod tests {
         options.dimensions = 2;
         assert!(new_index(&options).is_ok());
 
-        let mut serialization_buffer = Vec::new();
-        serialization_buffer.resize(index.serialized_length(), 0);
+        let mut serialization_buffer = vec![0; index.serialized_length()];
         assert!(index.save_to_buffer(&mut serialization_buffer).is_ok());
 
         let deserialized_index = new_index(&options).unwrap();
@@ -1722,8 +1721,10 @@ mod tests {
 
     #[test]
     fn test_search_with_stateless_filter() {
-        let mut options = IndexOptions::default();
-        options.dimensions = 5;
+        let options = IndexOptions {
+            dimensions: 5,
+            ..Default::default()
+        };
         let index = Index::new(&options).unwrap();
         index.reserve(10).unwrap();
 
@@ -1747,8 +1748,10 @@ mod tests {
     fn test_search_with_stateful_filter() {
         use std::collections::HashSet;
 
-        let mut options = IndexOptions::default();
-        options.dimensions = 5;
+        let options = IndexOptions {
+            dimensions: 5,
+            ..Default::default()
+        };
         let index = Index::new(&options).unwrap();
         index.reserve(10).unwrap();
 
@@ -1859,8 +1862,10 @@ mod tests {
 
     #[test]
     fn test_change_distance_function() {
-        let mut options = IndexOptions::default();
-        options.dimensions = 2; // Adjusted for simplicity in creating test vectors
+        let options = IndexOptions {
+            dimensions: 2, // Adjusted for simplicity in creating test vectors
+            ..Default::default()
+        };
         let mut index = Index::new(&options).unwrap();
         index.reserve(10).unwrap();
 
@@ -1933,7 +1938,9 @@ mod tests {
         };
 
         let index = Arc::new(Index::new(&options).unwrap());
-        index.reserve_capacity_and_threads(VECTOR_COUNT, THREAD_COUNT).unwrap();
+        index
+            .reserve_capacity_and_threads(VECTOR_COUNT, THREAD_COUNT)
+            .unwrap();
 
         // Generate deterministic vectors using rand crate for reproducible testing
         let seed = 42; // Fixed seed for reproducibility
@@ -1945,8 +1952,8 @@ mod tests {
         for _ in 0..VECTOR_COUNT {
             let mut vector = [0.0f32; DIMENSIONS];
             // Fill with random values in [-1, 1]
-            for j in 0..DIMENSIONS {
-                vector[j] = rng.sample(uniform);
+            for item in vector.iter_mut().take(DIMENSIONS) {
+                *item = rng.sample(uniform);
             }
             reference_vectors.push(vector);
         }
@@ -1957,7 +1964,7 @@ mod tests {
         pool.for_n(VECTOR_COUNT, |prong| {
             let index_clone = Arc::clone(&index);
             let i = prong.task_index;
-            let vector = reference_vectors[i].clone();
+            let vector = reference_vectors[i];
             index_clone.add(i as u64, &vector).unwrap();
         });
 
@@ -2008,7 +2015,7 @@ mod tests {
             let matches = index_clone.exact_search(query_vector, 10).unwrap();
 
             // The first result should be the exact match with distance ~0
-            let exact_match_found = matches.keys.len() > 0
+            let exact_match_found = !matches.keys.is_empty()
                 && matches.keys[0] == query_idx as u64
                 && matches.distances[0] < 1e-6;
 

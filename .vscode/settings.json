@@ -135,8 +135,7 @@
     "xstring": "cpp",
     "xtr1common": "cpp",
     "xtree": "cpp",
-    "xutility": "cpp",
-    "*.rs": "cpp"
+    "xutility": "cpp"
   },
   "cSpell.words": [
     "allclose",
