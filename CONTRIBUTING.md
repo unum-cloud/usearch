@@ -163,15 +163,15 @@ The compilation settings are controlled by the `setup.py` and are independent fr
 To install USearch locally using `uv`:
 
 ```sh
-uv venv --python 3.11           # or your preferred Python version
-source .venv/bin/activate       # to activate the virtual environment
-uv pip install -e .             # to build locally from source
+uv venv --python 3.11                   # or your preferred Python version
+source .venv/bin/activate               # to activate the virtual environment
+uv pip install -e . --force-reinstall   # to build locally from source
 ```
 
 Or using `pip` directly:
 
 ```sh
-pip install -e .
+pip install -e . --force-reinstall
 ```
 
 For testing USearch uses PyTest, which is pre-configured in `pyproject.toml`.
