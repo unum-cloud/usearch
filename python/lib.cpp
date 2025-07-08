@@ -1003,11 +1003,11 @@ PYBIND11_MODULE(compiled, m) {
     m.attr("VERSION_MINOR") = py::int_(USEARCH_VERSION_MINOR);
     m.attr("VERSION_PATCH") = py::int_(USEARCH_VERSION_PATCH);
 
-    py::enum_<metric_punned_signature_t>(m, "MetricSignature")
+    py::enum_<metric_punned_signature_t>(m, "MetricSignature", py::arithmetic())
         .value("ArrayArray", metric_punned_signature_t::array_array_k)
         .value("ArrayArraySize", metric_punned_signature_t::array_array_size_k);
 
-    py::enum_<metric_kind_t>(m, "MetricKind")
+    py::enum_<metric_kind_t>(m, "MetricKind", py::arithmetic())
         .value("Unknown", metric_kind_t::unknown_k)
 
         .value("IP", metric_kind_t::ip_k)
@@ -1025,7 +1025,7 @@ PYBIND11_MODULE(compiled, m) {
         .value("Cosine", metric_kind_t::cos_k)
         .value("InnerProduct", metric_kind_t::ip_k);
 
-    py::enum_<scalar_kind_t>(m, "ScalarKind")
+    py::enum_<scalar_kind_t>(m, "ScalarKind", py::arithmetic())
         .value("Unknown", scalar_kind_t::unknown_k)
         .value("B1", scalar_kind_t::b1x8_k)
         .value("U40", scalar_kind_t::u40_k)
