@@ -902,8 +902,8 @@ template <typename index_at> py::object save_index_to_buffer(index_at const& ind
 }
 
 template <typename index_at>
-void load_index_from_buffer(index_at& index, py::bytes const& buffer, progress_func_t const& progress) {
-    index.load(memory_map_from_bytes(buffer), {}, {}, progress_t{progress}).error.raise();
+void load_index_from_buffer(index_at& index, py::object const& buffer_obj, progress_func_t const& progress) {
+    index.load(memory_map_from_bytes(buffer_obj), {}, {}, progress_t{progress}).error.raise();
 
     // Reserve memory and threads for restored index.
     std::size_t threads = std::thread::hardware_concurrency();
@@ -912,8 +912,8 @@ void load_index_from_buffer(index_at& index, py::bytes const& buffer, progress_f
 }
 
 template <typename index_at>
-void view_index_from_buffer(index_at& index, py::bytes const& buffer, progress_func_t const& progress) {
-    index.view(memory_map_from_bytes(buffer), {}, {}, progress_t{progress}).error.raise();
+void view_index_from_buffer(index_at& index, py::object const& buffer_obj, progress_func_t const& progress) {
+    index.view(memory_map_from_bytes(buffer_obj), {}, {}, progress_t{progress}).error.raise();
 
     // Reserve memory and threads for restored index.
     std::size_t threads = std::thread::hardware_concurrency();
@@ -1051,7 +1051,7 @@ PYBIND11_MODULE(compiled, m) {
     });
 
     m.def("index_dense_metadata_from_buffer", [](py::object const& buffer_obj) -> py::dict {
-        index_dense_metadata_result_t meta = index_dense_metadata_from_buffer(memory_map_from_buffer_obj(buffer_obj));
+        index_dense_metadata_result_t meta = index_dense_metadata_from_buffer(memory_map_from_bytes(buffer_obj));
         forward_error(meta);
         return index_metadata(meta);
     });
