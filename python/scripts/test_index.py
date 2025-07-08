@@ -403,6 +403,16 @@ def test_index_clustering(ndim, metric, quantization, dtype, batch_size):
     assert len(unique_clusters) >= 3 and len(unique_clusters) <= 10
 
 
+def test_index_keys_iteration():
+    """Test that iterating over index.keys works without infinite loop."""
+    index = Index(ndim=3)
+    index.add(keys=[42], vectors=np.array([0.2, 0.3, 0.5]))
+    
+    keys_list = list(index.keys)
+    assert len(keys_list) == 1
+    assert keys_list[0] == 42
+
+
 def test_index_copied_memory_usage():
     """Test that copy=False results in lower memory usage than copy=True."""
     reset_randomness()
