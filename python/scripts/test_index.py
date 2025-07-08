@@ -204,7 +204,7 @@ def test_index_stats(batch_size):
 
 
 @pytest.mark.parametrize("use_view", [True, False])
-def test_index_load_from_buffer(use_view: bool, ndim: int=3, batch_size: int=10):
+def test_index_load_from_buffer(use_view: bool, ndim: int = 3, batch_size: int = 10):
     reset_randomness()
 
     index = Index(ndim=ndim, multi=False)
@@ -285,6 +285,37 @@ def test_index_save_load_restore_copy(ndim, quantization, batch_size):
     deserialized_index.reset()
     index.reset()
     os.remove("tmp.usearch")
+
+
+@pytest.mark.parametrize("ndim", [3, 8, 32, 256, 4096])
+@pytest.mark.parametrize("batch_size", [1, 7, 1024])
+@pytest.mark.parametrize("threads", [1, 3, 7])
+def test_index_restore_multithread_search(ndim, batch_size, threads):
+
+    reset_randomness()
+    quantization = ScalarKind.F32
+    index = Index(ndim=ndim, dtype=quantization, multi=False)
+
+    if batch_size > 0:
+        keys = np.arange(batch_size)
+        vectors = random_vectors(count=batch_size, ndim=ndim, dtype=quantization)
+        index.add(keys, vectors, threads=threads)
+
+    query = random_vectors(count=batch_size, ndim=ndim, dtype=quantization)
+    k = min(batch_size, 10)
+
+    result_original = index.search(query, count=k, threads=threads)
+    dumped_index: bytes = index.save()
+    dumped_index_view = memoryview(dumped_index)
+
+    # When restoring from disk, search must not fail if using multiple threads.
+    index_restored = Index.restore(dumped_index, view=False)
+    result_restored = index_restored.search(query, count=k, threads=threads)
+    assert np.allclose(result_original.distances, result_restored.distances, atol=0.1)
+
+    index_viewed = Index.restore(dumped_index_view, view=True)
+    result_view = index_viewed.search(query, count=k, threads=threads)
+    assert np.allclose(result_original.distances, result_view.distances, atol=0.1)
 
 
 @pytest.mark.parametrize("batch_size", [32])

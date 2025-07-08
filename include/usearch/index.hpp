@@ -1751,6 +1751,9 @@ class memory_mapped_file_t {
     {
     }
 
+    memory_mapped_file_t(memory_mapped_file_t const&) = delete;
+    memory_mapped_file_t& operator=(memory_mapped_file_t const&) = delete;
+
     memory_mapped_file_t(byte_t* data, std::size_t length) noexcept : ptr_(data), length_(length) {}
 
     memory_mapped_file_t& operator=(memory_mapped_file_t&& other) noexcept {
