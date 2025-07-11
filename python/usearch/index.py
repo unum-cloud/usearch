@@ -459,8 +459,8 @@ class IndexedKeys(Sequence):
     ) -> Union[Key, np.ndarray]:
         if isinstance(offset_offsets_or_slice, slice):
             start, stop, step = offset_offsets_or_slice.indices(len(self))
-            if step:
-                raise
+            if step != 1:
+                raise ValueError("Slicing with a step is not supported")
             return self.index._compiled.get_keys_in_slice(start, stop - start)
 
         elif isinstance(offset_offsets_or_slice, Iterable):
@@ -469,6 +469,10 @@ class IndexedKeys(Sequence):
 
         else:
             offset = int(offset_offsets_or_slice)
+            if offset < 0:
+                offset += len(self)
+            if offset < 0 or offset >= len(self):
+                raise IndexError("Index out of range")
             return self.index._compiled.get_key_at_offset(offset)
 
     def __array__(self, dtype=None) -> np.ndarray:

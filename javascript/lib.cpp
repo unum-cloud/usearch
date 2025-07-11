@@ -388,7 +388,7 @@ Napi::Value exactSearch(Napi::CallbackInfo const& ctx) {
         return env.Null();
     }
 
-    executor_default_t executor(threads);
+    executor_default_t executor{threads};
     exact_search_t search;
 
     // Performing the exact search.
