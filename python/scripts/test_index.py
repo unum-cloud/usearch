@@ -289,7 +289,7 @@ def test_index_save_load_restore_copy(ndim, quantization, batch_size):
 
 @pytest.mark.parametrize("ndim", [3, 8, 32, 256, 4096])
 @pytest.mark.parametrize("batch_size", [1, 7, 1024])
-@pytest.mark.parametrize("threads", [1, 3, 7])
+@pytest.mark.parametrize("threads", [1, 3, 7, 150])
 def test_index_restore_multithread_search(ndim, batch_size, threads):
 
     reset_randomness()
@@ -407,7 +407,7 @@ def test_index_keys_iteration():
     """Test that iterating over index.keys works without infinite loop."""
     index = Index(ndim=3)
     index.add(keys=[42], vectors=np.array([0.2, 0.3, 0.5]))
-    
+
     keys_list = list(index.keys)
     assert len(keys_list) == 1
     assert keys_list[0] == 42

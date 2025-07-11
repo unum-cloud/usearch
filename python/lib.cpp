@@ -420,8 +420,8 @@ static py::tuple search_many_in_index( //
     if (wanted == 0)
         return py::tuple(5);
 
-    if (index.limits().threads_search < threads)
-        throw std::invalid_argument("Can't use that many threads!");
+    // Clamp threads to hardware limit instead of throwing
+    threads = std::min<std::size_t>(threads, std::thread::hardware_concurrency());
 
     py::buffer_info vectors_info = vectors.request();
     if (vectors_info.ndim != 2)
@@ -663,8 +663,8 @@ static py::tuple cluster_vectors(        //
     index_at& index, py::buffer queries, //
     std::size_t min_count, std::size_t max_count, std::size_t threads, progress_func_t const& progress) {
 
-    if (index.limits().threads_search < threads)
-        throw std::invalid_argument("Can't use that many threads!");
+    // Clamp threads to hardware limit instead of throwing
+    threads = std::min<std::size_t>(threads, std::thread::hardware_concurrency());
 
     py::buffer_info queries_info = queries.request();
     if (queries_info.ndim != 2)
@@ -737,8 +737,8 @@ static py::tuple cluster_keys(                            //
     index_at& index, py::array_t<dense_key_t> queries_py, //
     std::size_t min_count, std::size_t max_count, std::size_t threads, progress_func_t const& progress) {
 
-    if (index.limits().threads_search < threads)
-        throw std::invalid_argument("Can't use that many threads!");
+    // Clamp threads to hardware limit instead of throwing
+    threads = std::min<std::size_t>(threads, std::thread::hardware_concurrency());
 
     std::size_t queries_count = static_cast<std::size_t>(queries_py.size());
     auto queries_py1d = queries_py.template unchecked<1>();
