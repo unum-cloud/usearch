@@ -17,6 +17,11 @@
 //!
 //! Refer to the `Index` struct for detailed usage examples.
 
+/// Returns the version of the USearch crate.
+pub fn version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
 /// The key type used to identify vectors in the index.
 /// It is a 64-bit unsigned integer.
 pub type Key = u64;
