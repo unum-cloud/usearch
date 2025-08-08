@@ -880,11 +880,11 @@ void test_exact_search(std::size_t dataset_count, std::size_t queries_count, std
     std::size_t dimensions = 32;
     metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<> dis(0.0, 1.0);
+    std::random_device seed_source;
+    std::mt19937 generator(seed_source());
+    std::uniform_real_distribution<> distribution(0.0, 1.0); // ! We can't pass `scalar_at` to the distribution
     std::vector<scalar_at> dataset(dataset_count * dimensions);
-    std::generate(dataset.begin(), dataset.end(), [&] { return static_cast<scalar_at>(dis(gen)); });
+    std::generate(dataset.begin(), dataset.end(), [&] { return static_cast<scalar_at>(distribution(generator)); });
 
     exact_search_t search;
     auto results = search(                                                            //
@@ -1107,15 +1107,15 @@ void test_filtered_search() {
     constexpr std::size_t dimensions = 32;
     metric_punned_t metric(dimensions, metric_kind_t::cos_k);
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<> dis(0.0, 1.0);
+    std::random_device seed_source;
+    std::mt19937 generator(seed_source());
+    std::uniform_real_distribution<float> distribution(0.0, 1.0);
     using vector_of_vectors_t = std::vector<std::vector<float>>;
 
     vector_of_vectors_t vector_of_vectors(dataset_count);
     for (auto& vector : vector_of_vectors) {
         vector.resize(dimensions);
-        std::generate(vector.begin(), vector.end(), [&] { return dis(gen); });
+        std::generate(vector.begin(), vector.end(), [&] { return distribution(generator); });
     }
 
     index_dense_t index = index_dense_t::make(metric);
@@ -1141,6 +1141,41 @@ void test_filtered_search() {
         auto results = index.filtered_search(vector_of_vectors[0].data(), 10, predicate);
         expect_eq(1, results.size()); // ! Should not contain 0
         expect_eq(10, results[0].member.key);
+    }
+}
+
+void test_isolate() {
+    constexpr std::size_t dataset_count = 16;
+    constexpr std::size_t dimensions = 32;
+    metric_punned_t metric(dimensions, metric_kind_t::cos_k);
+
+    std::random_device seed_source;
+    std::mt19937 generator(seed_source());
+    std::uniform_real_distribution<float> distribution(0.0, 1.0);
+    using vector_of_vectors_t = std::vector<std::vector<float>>;
+
+    vector_of_vectors_t vector_of_vectors(dataset_count);
+    for (auto& vector : vector_of_vectors) {
+        vector.resize(dimensions);
+        std::generate(vector.begin(), vector.end(), [&] { return distribution(generator); });
+    }
+
+    index_dense_t index = index_dense_t::make(metric);
+    index.reserve(dataset_count);
+    for (std::size_t idx = 0; idx < dataset_count; ++idx) {
+        index.add(idx, vector_of_vectors[idx].data());
+    }
+    expect_eq(index.size(), dataset_count);
+
+    for (std::size_t idx = 0; idx < dataset_count; ++idx) {
+        if (idx % 2 == 0)
+            index.remove(idx);
+    }
+
+    auto result = index.isolate();
+    for (std::size_t idx = 0; idx < dataset_count; ++idx) {
+        auto result = index.search(vector_of_vectors[idx].data(), 16);
+        expect_eq(result.size(), dataset_count / 2);
     }
 }
 
@@ -1221,5 +1256,6 @@ int main(int, char**) {
     test_strings<std::int64_t, slot32_t>();
 
     test_filtered_search();
+    test_isolate();
     return 0;
 }

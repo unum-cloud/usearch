@@ -2177,6 +2177,20 @@ class index_gt {
             misaligned_store<compressed_slot_t>(tape_ + shift(n), slot);
             misaligned_store<neighbors_count_t>(tape_, n + 1);
         }
+        template <typename allow_slot_at> std::size_t erase_if(allow_slot_at&& allow_slot) noexcept {
+            std::size_t old_count = misaligned_load<neighbors_count_t>(tape_);
+            std::size_t removed_count = 0;
+            for (std::size_t i = 0; i < old_count; ++i) {
+                compressed_slot_t slot = misaligned_load<compressed_slot_t>(tape_ + shift(i));
+                if (allow_slot(slot)) {
+                    removed_count++;
+                } else {
+                    misaligned_store<compressed_slot_t>(tape_ + shift(i - removed_count), slot);
+                }
+            }
+            misaligned_store<neighbors_count_t>(tape_, old_count - removed_count);
+            return removed_count;
+        }
     };
 
     /**
@@ -3654,14 +3668,10 @@ class index_gt {
             node_t node = node_at_(node_idx);
             for (level_t level = 0; level <= node.level(); ++level) {
                 neighbors_ref_t neighbors = neighbors_(node, level);
-                std::size_t old_size = neighbors.size();
-                neighbors.clear();
-                for (std::size_t i = 0; i != old_size; ++i) {
-                    compressed_slot_t neighbor_slot = neighbors[i];
+                neighbors.erase_if([&](compressed_slot_t neighbor_slot) {
                     node_t neighbor = node_at_(neighbor_slot);
-                    if (allow_member(member_cref_t{neighbor.ckey(), neighbor_slot}))
-                        neighbors.push_back(neighbor_slot);
-                }
+                    return !allow_member(member_cref_t{neighbor.ckey(), neighbor_slot});
+                });
             }
             ++processed;
             if (thread_idx == 0)
