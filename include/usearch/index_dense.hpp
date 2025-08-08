@@ -1709,12 +1709,12 @@ class index_dense_gt {
     compaction_result_t isolate(executor_at&& executor = executor_at{}, progress_at&& progress = progress_at{}) {
         compaction_result_t result;
         std::atomic<std::size_t> pruned_edges;
-        auto disallow = [&](member_cref_t const& member) noexcept {
+        auto allow = [&](member_cref_t const& member) noexcept {
             bool freed = member.key == free_key_;
             pruned_edges += freed;
-            return freed;
+            return not freed;
         };
-        typed_->isolate(disallow, std::forward<executor_at>(executor), std::forward<progress_at>(progress));
+        typed_->isolate(allow, std::forward<executor_at>(executor), std::forward<progress_at>(progress));
         result.pruned_edges = pruned_edges;
         return result;
     }
