@@ -3655,9 +3655,12 @@ class index_gt {
             for (level_t level = 0; level <= node.level(); ++level) {
                 neighbors_ref_t neighbors = neighbors_(node, level);
                 std::size_t old_size = neighbors.size();
+
+                std::vector<compressed_slot_t> old_neighbors(neighbors.begin(), neighbors.end());
                 neighbors.clear();
+
                 for (std::size_t i = 0; i != old_size; ++i) {
-                    compressed_slot_t neighbor_slot = neighbors[i];
+                    compressed_slot_t neighbor_slot = old_neighbors[i];
                     node_t neighbor = node_at_(neighbor_slot);
                     if (allow_member(member_cref_t{neighbor.ckey(), neighbor_slot}))
                         neighbors.push_back(neighbor_slot);
