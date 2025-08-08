@@ -1144,6 +1144,41 @@ void test_filtered_search() {
     }
 }
 
+void test_isolate() {
+    constexpr std::size_t dataset_count = 16;
+    constexpr std::size_t dimensions = 32;
+    metric_punned_t metric(dimensions, metric_kind_t::cos_k);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dis(0.0, 1.0);
+    using vector_of_vectors_t = std::vector<std::vector<float>>;
+
+    vector_of_vectors_t vector_of_vectors(dataset_count);
+    for (auto& vector : vector_of_vectors) {
+        vector.resize(dimensions);
+        std::generate(vector.begin(), vector.end(), [&] { return dis(gen); });
+    }
+
+    index_dense_t index = index_dense_t::make(metric);
+    index.reserve(dataset_count);
+    for (std::size_t idx = 0; idx < dataset_count; ++idx) {
+        index.add(idx, vector_of_vectors[idx].data());
+    }
+    expect_eq(index.size(), dataset_count);
+
+    for (std::size_t idx = 0; idx < dataset_count; ++idx) {
+        if (idx % 2 == 0)
+            index.remove(idx);
+    }
+
+    auto result = index.isolate();
+    for (std::size_t idx = 0; idx < dataset_count; ++idx) {
+        auto result = index.search(vector_of_vectors[idx].data(), 16);
+        expect_eq(result.size(), dataset_count / 2);
+    }
+}
+
 int main(int, char**) {
     test_uint40();
     test_cosine<float, std::int64_t, uint40_t>(10, 10);
@@ -1221,5 +1256,6 @@ int main(int, char**) {
     test_strings<std::int64_t, slot32_t>();
 
     test_filtered_search();
+    test_isolate();
     return 0;
 }
