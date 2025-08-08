@@ -880,11 +880,11 @@ void test_exact_search(std::size_t dataset_count, std::size_t queries_count, std
     std::size_t dimensions = 32;
     metric_punned_t metric(dimensions, metric_kind_t::cos_k, scalar_kind<scalar_at>());
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<> dis(0.0, 1.0);
+    std::random_device seed_source;
+    std::mt19937 generator(seed_source());
+    std::uniform_real_distribution<> distribution(0.0, 1.0); // ! We can't pass `scalar_at` to the distribution
     std::vector<scalar_at> dataset(dataset_count * dimensions);
-    std::generate(dataset.begin(), dataset.end(), [&] { return static_cast<scalar_at>(dis(gen)); });
+    std::generate(dataset.begin(), dataset.end(), [&] { return static_cast<scalar_at>(distribution(generator)); });
 
     exact_search_t search;
     auto results = search(                                                            //
@@ -1107,15 +1107,15 @@ void test_filtered_search() {
     constexpr std::size_t dimensions = 32;
     metric_punned_t metric(dimensions, metric_kind_t::cos_k);
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<> dis(0.0, 1.0);
+    std::random_device seed_source;
+    std::mt19937 generator(seed_source());
+    std::uniform_real_distribution<float> distribution(0.0, 1.0);
     using vector_of_vectors_t = std::vector<std::vector<float>>;
 
     vector_of_vectors_t vector_of_vectors(dataset_count);
     for (auto& vector : vector_of_vectors) {
         vector.resize(dimensions);
-        std::generate(vector.begin(), vector.end(), [&] { return dis(gen); });
+        std::generate(vector.begin(), vector.end(), [&] { return distribution(generator); });
     }
 
     index_dense_t index = index_dense_t::make(metric);
@@ -1149,15 +1149,15 @@ void test_isolate() {
     constexpr std::size_t dimensions = 32;
     metric_punned_t metric(dimensions, metric_kind_t::cos_k);
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<> dis(0.0, 1.0);
+    std::random_device seed_source;
+    std::mt19937 generator(seed_source());
+    std::uniform_real_distribution<float> distribution(0.0, 1.0);
     using vector_of_vectors_t = std::vector<std::vector<float>>;
 
     vector_of_vectors_t vector_of_vectors(dataset_count);
     for (auto& vector : vector_of_vectors) {
         vector.resize(dimensions);
-        std::generate(vector.begin(), vector.end(), [&] { return dis(gen); });
+        std::generate(vector.begin(), vector.end(), [&] { return distribution(generator); });
     }
 
     index_dense_t index = index_dense_t::make(metric);
