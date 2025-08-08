@@ -1712,7 +1712,7 @@ class index_dense_gt {
         auto allow = [&](member_cref_t const& member) noexcept {
             bool freed = member.key == free_key_;
             pruned_edges += freed;
-            return not freed;
+            return !freed;
         };
         typed_->isolate(allow, std::forward<executor_at>(executor), std::forward<progress_at>(progress));
         result.pruned_edges = pruned_edges;
