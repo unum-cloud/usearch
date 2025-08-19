@@ -157,6 +157,38 @@ test('Batch operations', async (t) => {
       'keys should not include 15 and 25'
     );
   });
+
+  await t.test('search', () => {
+    const indexBatch = new usearch.Index(3, 'l2sq');
+
+    const keys = [15n, 16n];
+    const vectors = [new Float32Array([10, 20, 30]), new Float32Array([10, 25, 35])];
+
+    indexBatch.add(keys, vectors);
+    assert.equal(indexBatch.size(), 2, 'size after adding batch should be 2');
+
+    const results = indexBatch.search([new Float32Array([13, 14, 15]), new Float32Array([13, 14, 15])], 2);
+    
+    assert.equal(results.k, 2, 'k should be 2');
+
+    assert.deepEqual(
+      results.counts,
+      new BigUint64Array([ 2n, 2n ]) ,
+      'counts should be 2 for both keys'
+    );
+
+    assert.deepEqual(
+      results.keys,
+      new BigUint64Array([15n, 16n, 15n, 16n]),
+      'keys should be 15 and 16'
+    );
+    assert.deepEqual(
+      results.distances,
+      new Float32Array( [ 270, 530, 270, 530 ]),
+      'distances should be 270 and 530'
+    );
+  });
+
 });
 
 test('Expected results', () => {
