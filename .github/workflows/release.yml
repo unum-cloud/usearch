@@ -566,7 +566,7 @@ jobs:
         with:
           pattern: prebuilds-*
           merge-multiple: true
-          path: javascript
+          path: prebuilds
 
       - name: Look for links
         run: find . -type f -links +1
