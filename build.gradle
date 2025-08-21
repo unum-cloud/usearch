@@ -191,14 +191,17 @@ publishing {
     }
 
 
-    // Publishing to GitHub is much easier ;)
+    // Maven Central via central.sonatype.com
     repositories {
         maven {
-            name = "OSSRH"
-            url = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+            name = "MavenCentral"
+            url = "https://central.sonatype.com/api/v1/publisher/upload"
             credentials {
-                username = System.getenv("MAVEN_USERNAME")
-                password = System.getenv("MAVEN_PASSWORD")
+                username = System.getenv("MAVEN_CENTRAL_USERNAME") 
+                password = System.getenv("MAVEN_CENTRAL_TOKEN")
+            }
+            authentication {
+                basic(BasicAuthentication)
             }
         }
     }
