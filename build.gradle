@@ -8,7 +8,7 @@ plugins {
     id 'signing'
 }
 
-group "cloud.unum"
+group = "cloud.unum"
 version = file("VERSION").text.trim()
 
 java {
@@ -115,7 +115,7 @@ model {
 }
 
 test {
-    forkEvery 1
+    forkEvery = 1
 
     dependsOn jar
 
