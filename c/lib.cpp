@@ -401,7 +401,7 @@ USEARCH_EXPORT size_t usearch_search(                                           
         return 0;
     }
 
-    return result.dump_to(found_keys, found_distances);
+    return result.dump_to(found_keys, found_distances, results_limit);
 }
 
 USEARCH_EXPORT size_t usearch_filtered_search(                                 //
@@ -419,7 +419,7 @@ USEARCH_EXPORT size_t usearch_filtered_search(                                 /
         return 0;
     }
 
-    return result.dump_to(found_keys, found_distances);
+    return result.dump_to(found_keys, found_distances, results_limit);
 }
 
 USEARCH_EXPORT size_t usearch_get(                          //

@@ -292,7 +292,7 @@ static void search_typed(                                   //
         }
 
         counts_py1d(task_idx) =
-            static_cast<Py_ssize_t>(result.dump_to(&keys_py2d(task_idx, 0), &distances_py2d(task_idx, 0)));
+            static_cast<Py_ssize_t>(result.dump_to(&keys_py2d(task_idx, 0), &distances_py2d(task_idx, 0), wanted));
 
         stats_visited_members += result.visited_members;
         stats_computed_distances += result.computed_distances;

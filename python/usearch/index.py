@@ -291,7 +291,7 @@ def _add_to_compiled(
 
 @dataclass
 class Match:
-    """This class contains information about retrieved vector."""
+    """Single search result with key and distance."""
 
     key: int
     distance: float
@@ -302,8 +302,7 @@ class Match:
 
 @dataclass
 class Matches:
-    """This class contains information about multiple retrieved vectors for single query,
-    i.e it is a set of `Match` instances."""
+    """Search results for a single query."""
 
     keys: np.ndarray
     distances: np.ndarray
@@ -324,10 +323,7 @@ class Matches:
             raise IndexError(f"`index` must be an integer under {len(self)}")
 
     def to_list(self) -> List[tuple]:
-        """
-        Convert matches to the list of tuples which contain matches' indices and distances to them.
-        """
-
+        """Convert to list of (key, distance) tuples."""
         return [(int(key), float(distance)) for key, distance in zip(self.keys, self.distances)]
 
     def __repr__(self) -> str:
@@ -336,8 +332,18 @@ class Matches:
 
 @dataclass
 class BatchMatches(Sequence):
-    """This class contains information about multiple retrieved vectors for multiple queries,
-    i.e it is a set of `Matches` instances."""
+    """Search results for multiple queries in batch operations.
+
+    Unused positions in arrays contain sentinel values (default keys, max distances).
+    Access individual results via indexing: batch_matches[i] returns valid matches only.
+
+    Attributes:
+        keys: 2D array of shape (n_queries, k) containing match keys
+        distances: 2D array of shape (n_queries, k) containing distances  
+        counts: 1D array of shape (n_queries,) with actual number of matches per query
+        visited_members: Total graph nodes visited during search
+        computed_distances: Total distance computations performed
+    """
 
     keys: np.ndarray
     distances: np.ndarray
@@ -445,7 +451,7 @@ class Clustering:
 
 
 class IndexedKeys(Sequence):
-    """Smart-reference for the range of keys present in a specific `Index`"""
+    """View of all keys in the index."""
 
     def __init__(self, index: Index) -> None:
         self.index = index
@@ -482,13 +488,16 @@ class IndexedKeys(Sequence):
 
 
 class Index:
-    """Fast vector-search engine for dense equi-dimensional embeddings.
+    """Fast approximate nearest neighbor search for dense vectors.
 
-    Vector keys must be integers.
-    Vectors must have the same number of dimensions within the index.
-    Supports Inner Product, Cosine Distance, L^n measures like the Euclidean metric,
-    as well as automatic downcasting to low-precision floating-point and integral
-    representations.
+    Supports various distance metrics (cosine, euclidean, inner product, etc.) 
+    and automatic precision optimization. Vector keys must be integers.
+    All vectors must have the same dimensionality.
+
+    Example:
+        >>> index = Index(ndim=128, metric='cos')
+        >>> index.add(key=42, vector=np.random.rand(128))
+        >>> matches = index.search(query_vector, count=10)
     """
 
     def __init__(
@@ -699,13 +708,19 @@ class Index:
         log: Union[str, bool] = False,
         progress: Optional[ProgressCallback] = None,
     ) -> Union[Matches, BatchMatches]:
-        """
-        Performs approximate nearest neighbors search for one or more queries.
-
+        """Performs approximate nearest neighbors search for one or more queries.
+        
+        When searching with batch queries, returns BatchMatches that pre-allocates arrays
+        for the requested `count` size. If fewer matches exist than requested (e.g., when
+        count > index size), use individual query access via batch_matches[i] to get only
+        valid results, or check batch_matches.counts to see actual result counts per query.
+        
         :param vectors: Query vector or vectors.
         :type vectors: VectorOrVectorsLike
         :param count: Upper count on the number of matches to find
         :type count: int, defaults to 10
+            When count > index size, only available vectors will be returned.
+            For BatchMatches, unused positions contain sentinel values.
         :param threads: Optimal number of cores to use
         :type threads: int, defaults to 0
         :param exact: Perform exhaustive linear-time exact search
@@ -716,6 +731,8 @@ class Index:
         :type progress: Optional[ProgressCallback], defaults to None
         :return: Matches for one or more queries
         :rtype: Union[Matches, BatchMatches]
+            For single queries: Matches with only valid results
+            For batch queries: BatchMatches - use indexing for individual results
         """
 
         return _search_in_compiled(

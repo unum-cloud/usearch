@@ -49,7 +49,7 @@ Matches search_(index_dense_t& index, scalar_at const* vec, size_t vec_dims, siz
 
     search_result_t result = index.search(vec, count, index_dense_t::any_thread(), exact);
     result.error.raise();
-    count = result.dump_to(matches.keys.data(), matches.distances.data());
+    count = result.dump_to(matches.keys.data(), matches.distances.data(), count);
     matches.keys.truncate(count);
     matches.distances.truncate(count);
     return matches;
@@ -68,7 +68,7 @@ Matches filtered_search_(index_dense_t& index, scalar_at const* vec, size_t vec_
 
     search_result_t result = index.filtered_search(vec, count, std::forward<predicate_at>(predicate));
     result.error.raise();
-    count = result.dump_to(matches.keys.data(), matches.distances.data());
+    count = result.dump_to(matches.keys.data(), matches.distances.data(), count);
     matches.keys.truncate(count);
     matches.distances.truncate(count);
     return matches;

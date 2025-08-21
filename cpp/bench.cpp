@@ -327,7 +327,7 @@ void search_many( //
         config.thread = omp_get_thread_num();
 #endif
         span_gt<scalar_at const> vector{vectors + dims * i, dims};
-        index.search(vector, wanted, config.thread).dump_to(ids + wanted * i, distances + wanted * i);
+        index.search(vector, wanted, config.thread).dump_to(ids + wanted * i, distances + wanted * i, wanted);
         printer.progress++;
         if (config.thread == 0)
             printer.refresh();

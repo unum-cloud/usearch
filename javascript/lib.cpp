@@ -279,7 +279,7 @@ Napi::Value CompiledIndex::Search(Napi::CallbackInfo const& ctx) {
             } else {
                 auto matches = matches_data + task_idx * wanted;
                 auto distances = distances_data + task_idx * wanted;
-                counts_data[task_idx] = result.dump_to(matches, distances);
+                counts_data[task_idx] = result.dump_to(matches, distances, wanted);
             }
         });
         if (failed) {

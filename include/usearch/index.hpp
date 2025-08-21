@@ -2695,6 +2695,49 @@ class index_gt {
             }
             return count;
         }
+
+        /**
+         *  @brief  Extracts the search results into a user-provided buffer.
+         *  @return The number of results stored in the buffer.
+         *  @param[in] keys The buffer to store the keys of the search results.
+         *  @param[in] distances The buffer to store the distances to the search results.
+         *  @param[in] capacity The maximum number of results that can be stored in the buffers.
+         */
+        inline std::size_t dump_to(vector_key_t* keys, distance_t* distances, std::size_t capacity) const noexcept {
+            std::size_t i = 0;
+            std::size_t initialized_count = (std::min)(count, capacity);
+            for (; i != initialized_count; ++i) {
+                match_t result = operator[](i);
+                keys[i] = result.member.key;
+                distances[i] = result.distance;
+            }
+            for (; i != capacity; ++i) {
+                keys[i] = vector_key_t{};
+                distances[i] = std::numeric_limits<distance_t>::has_signaling_NaN
+                                   ? std::numeric_limits<distance_t>::signaling_NaN()
+                                   : std::numeric_limits<distance_t>::max();
+            }
+            return initialized_count;
+        }
+
+        /**
+         *  @brief  Extracts the search results into a user-provided buffer.
+         *  @return The number of results stored in the buffer.
+         *  @param[in] keys The buffer to store the keys of the search results.
+         *  @param[in] capacity The maximum number of results that can be stored in the buffers.
+         */
+        inline std::size_t dump_to(vector_key_t* keys, std::size_t capacity) const noexcept {
+            std::size_t i = 0;
+            std::size_t initialized_count = (std::min)(this->count, capacity);
+            for (; i != initialized_count; ++i) {
+                match_t result = operator[](i);
+                keys[i] = result.member.key;
+            }
+            for (; i != capacity; ++i)
+                keys[i] = vector_key_t{};
+
+            return initialized_count;
+        }
     };
 
     struct cluster_result_t {
