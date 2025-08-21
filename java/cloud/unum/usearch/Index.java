@@ -375,9 +375,9 @@ public class Index implements AutoCloseable {
     } catch (UnsatisfiedLinkError e) {
       try {
         if (System.getProperty("os.name").equals("Mac OS X")) {
-          NativeUtils.loadLibraryFromJar("/usearch/libusearch.dylib");
+          NativeUtils.loadLibraryFromJar("/usearch/shared/libusearch.dylib");
         } else {
-          NativeUtils.loadLibraryFromJar("/usearch/libusearch.so");
+          NativeUtils.loadLibraryFromJar("/usearch/shared/libusearch.so");
         }
       } catch (IOException e1) {
         throw new RuntimeException(e1);
