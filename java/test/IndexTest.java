@@ -8,6 +8,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.ThreadLocalRandom;
 
+import org.junit.AfterClass;
 import org.junit.Test;
 
 import cloud.unum.usearch.Index;
@@ -34,6 +35,10 @@ public class IndexTest {
             long[] keys = index.search(vec, 5);
         }
 
+    }
+
+    @AfterClass
+    public static void tearDown() {
         System.out.println("Java Tests Passed!");
     }
 

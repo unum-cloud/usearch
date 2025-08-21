@@ -374,10 +374,13 @@ public class Index implements AutoCloseable {
       System.loadLibrary("usearch"); // used for tests. This library in classpath only
     } catch (UnsatisfiedLinkError e) {
       try {
-        if (System.getProperty("os.name").equals("Mac OS X")) {
-          NativeUtils.loadLibraryFromJar("/usearch/libusearch.dylib");
+        String osName = System.getProperty("os.name").toLowerCase();
+        if (osName.contains("mac")) {
+          NativeUtils.loadLibraryFromJar("/usearch-native/libusearch.dylib");
+        } else if (osName.contains("windows")) {
+          NativeUtils.loadLibraryFromJar("/usearch-native/libusearch.dll");
         } else {
-          NativeUtils.loadLibraryFromJar("/usearch/libusearch.so");
+          NativeUtils.loadLibraryFromJar("/usearch-native/libusearch.so");
         }
       } catch (IOException e1) {
         throw new RuntimeException(e1);

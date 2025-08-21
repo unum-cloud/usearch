@@ -29,7 +29,7 @@ sourceSets {
         // Ensure native libraries are included in the main source set
         resources {
             srcDirs "$buildDir/libs"
-            include "usearch/**"
+            include "usearch-native/**"
         }
     }
     test {
@@ -137,7 +137,7 @@ jar {
     dependsOn("usearchSharedLibrary")
     from("$buildDir/libs/usearch/shared") {
         include "libusearch.so", "libusearch.dylib", "libusearch.dll"
-        into "usearch"
+        into "usearch-native"
     }
     from sourceSets.main.output
 }
