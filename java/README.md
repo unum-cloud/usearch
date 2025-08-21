@@ -20,19 +20,19 @@ import cloud.unum.usearch.Index;
 public class Main {
     public static void main(String[] args) {
         try (Index index = new Index.Config()
-                .metric("cos")
-                .quantization("f32")
+                .metric(Index.Metric.COSINE)              // Or "cos"
+                .quantization(Index.Quantization.FLOAT32) // Or "f32"
                 .dimensions(3)
                 .capacity(100)
                 .build()) {
             
             // Add to Index
             float[] vector = {0.1f, 0.2f, 0.3f};
-            index.add(42, vector);
+            index.add(42L, vector);
 
             // Search
-            int[] keys = index.search(new float[]{0.1f, 0.2f, 0.3f}, 10);
-            for (int key : keys) {
+            long[] keys = index.search(new float[]{0.1f, 0.2f, 0.3f}, 10);
+            for (long key : keys) {
                 System.out.println("Found key: " + key);
             }
         } catch (Exception e) {
@@ -58,9 +58,9 @@ It is generally not recommended to use HNSW indexes in case of frequent removals
 For small updates, you can use the following methods:
 
 ```java
-float[] vector = index.get(42);
-boolean removed = index.remove(42);
-boolean renamed = index.rename(43, 42);
+float[] vector = index.get(42L);
+boolean removed = index.remove(42L);
+boolean renamed = index.rename(43L, 42L);
 ```
 
 To obtain metadata:
