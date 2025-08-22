@@ -191,7 +191,9 @@ publishing {
     }
 
 
-    // Maven Central via central.sonatype.com
+    // Maven Central via central.sonatype.com would be great, but it doesn't support Gradle yet :(
+    // Info: https://central.sonatype.org/publish/publish-portal-gradle/
+    /*
     repositories {
         maven {
             name = "MavenCentral"
@@ -205,6 +207,7 @@ publishing {
             }
         }
     }
+    */
 
     repositories {
         maven {
