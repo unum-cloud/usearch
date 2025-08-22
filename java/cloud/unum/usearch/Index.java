@@ -443,17 +443,70 @@ public class Index implements AutoCloseable {
       System.loadLibrary("usearch"); // used for tests. This library in classpath only
     } catch (UnsatisfiedLinkError e) {
       try {
-        String osName = System.getProperty("os.name").toLowerCase();
-        if (osName.contains("mac")) {
-          NativeUtils.loadLibraryFromJar("/usearch-native/libusearch.dylib");
-        } else if (osName.contains("windows")) {
-          NativeUtils.loadLibraryFromJar("/usearch-native/libusearch.dll");
-        } else {
-          NativeUtils.loadLibraryFromJar("/usearch-native/libusearch.so");
-        }
+        loadLibraryFromJar();
       } catch (IOException e1) {
-        throw new RuntimeException(e1);
+        throw new RuntimeException("Failed to load USearch native library: " + e1.getMessage(), e1);
       }
+    }
+  }
+
+  private static void loadLibraryFromJar() throws IOException {
+    String osName = System.getProperty("os.name").toLowerCase();
+    String osArch = System.getProperty("os.arch").toLowerCase();
+    
+    String libName;
+    if (osName.contains("mac") || osName.contains("darwin")) {
+      libName = "libusearch.dylib";
+    } else if (osName.contains("windows")) {
+      libName = "libusearch.dll";
+    } else {
+      libName = "libusearch.so";
+    }
+    
+    // Try architecture-specific first, then fall back to generic
+    String[] searchPaths = {
+      "/usearch-native/" + getArchSpecificPath() + "/" + libName,  // e.g., /usearch-native/linux-x86_64/libusearch.so
+      "/usearch-native/" + libName                                 // fallback to generic path
+    };
+    
+    IOException lastException = null;
+    for (String path : searchPaths) {
+      try {
+        NativeUtils.loadLibraryFromJar(path);
+        return; // Success!
+      } catch (IOException e) {
+        lastException = e;
+        // Continue to next path
+      }
+    }
+    
+    throw new IOException("Could not find native library for " + osName + " " + osArch + 
+                         ". Tried paths: " + String.join(", ", searchPaths), lastException);
+  }
+  
+  private static String getArchSpecificPath() {
+    String osName = System.getProperty("os.name").toLowerCase();
+    String osArch = System.getProperty("os.arch").toLowerCase();
+    
+    // Normalize architecture names
+    String normalizedArch;
+    if (osArch.equals("amd64") || osArch.equals("x86_64")) {
+      normalizedArch = "x86_64";
+    } else if (osArch.equals("aarch64") || osArch.equals("arm64")) {
+      normalizedArch = "arm64";
+    } else if (osArch.equals("x86") || osArch.equals("i386")) {
+      normalizedArch = "x86";
+    } else {
+      normalizedArch = osArch;
+    }
+    
+    // Create platform-specific path
+    if (osName.contains("mac") || osName.contains("darwin")) {
+      return "darwin-" + normalizedArch;
+    } else if (osName.contains("windows")) {
+      return "windows-" + normalizedArch;
+    } else {
+      return "linux-" + normalizedArch;
     }
   }
 
