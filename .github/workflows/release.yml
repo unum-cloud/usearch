@@ -618,7 +618,7 @@ jobs:
     needs: [versioning, create_linux_deb_package, create_windows_dll_library, create_macos_dylib_library]
     runs-on: ubuntu-24.04
     permissions:
-      contents: read
+      contents: write
       packages: write
     env:
       MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}

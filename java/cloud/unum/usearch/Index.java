@@ -68,24 +68,43 @@ import java.io.IOException;
 
 public class Index implements AutoCloseable {
 
-  // Metric constants for API convenience
+  /**
+   * Distance metric constants for vector similarity calculations.
+   * These constants can be used with {@link Config#metric(String)}.
+   */
   public static final class Metric {
+    /** Inner product (dot product) similarity */
     public static final String INNER_PRODUCT = "ip";
+    /** Cosine similarity for normalized vectors */
     public static final String COSINE = "cos";
+    /** Euclidean distance (L2) */
     public static final String EUCLIDEAN = "l2";
+    /** Squared Euclidean distance (faster, no sqrt) */
     public static final String EUCLIDEAN_SQUARED = "l2sq";
+    /** Haversine distance for geographic coordinates */
     public static final String HAVERSINE = "haversine";
+    /** Hamming distance for binary vectors */
     public static final String HAMMING = "hamming";
+    /** Jaccard similarity coefficient */
     public static final String JACCARD = "jaccard";
   }
 
-  // Quantization constants for API convenience  
+  /**
+   * Scalar quantization types for vector storage.
+   * These constants can be used with {@link Config#quantization(String)}.
+   */
   public static final class Quantization {
+    /** 64-bit floating point (double precision) */
     public static final String FLOAT64 = "f64";
+    /** 32-bit floating point (single precision) */
     public static final String FLOAT32 = "f32";
+    /** Brain Float 16 (half precision with a wider exponent) */
     public static final String BFLOAT16 = "bf16";
+    /** 16-bit floating point (half precision) */
     public static final String FLOAT16 = "f16";
+    /** 8-bit integer quantization */
     public static final String INT8 = "i8";
+    /** Binary quantization (1 bit per dimension, 8 dimensions per word) */
     public static final String BINARY = "b1";
   }
 
