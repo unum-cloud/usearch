@@ -231,7 +231,7 @@
   ],
   "autoDocstring.docstringFormat": "sphinx",
   "dotnet.defaultSolution": "csharp/Cloud.Unum.USearch.sln",
-  "java.configuration.updateBuildConfiguration": "interactive",
+  "java.configuration.updateBuildConfiguration": "automatic",
   "editor.insertSpaces": true,
   "editor.tabSize": 4,
   "prettier.singleQuote": true,

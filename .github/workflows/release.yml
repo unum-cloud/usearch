@@ -647,24 +647,27 @@ jobs:
           
       - name: Extract native libraries for all platforms
         run: |
-          # Extract Linux libraries (from .so files and .deb packages)
-          find temp-natives -name "*.so" -exec cp {} build/libs/usearch/shared/ \;
-          find temp-natives -name "*.deb" -exec dpkg-deb -x {} temp-extract \;
-          find temp-extract -name "*.so" -exec cp {} build/libs/usearch/shared/ \; 2>/dev/null || true
+          mkdir -p temp-extract
           
-          # Extract Windows libraries (from .tar and .dll files) 
-          find temp-natives -name "*.dll" -exec cp {} build/libs/usearch/shared/ \;
+          echo "=== Extracting Linux libraries ==="
+          find temp-natives -name "*linux*libusearch_c*.so" -exec cp {} build/libs/usearch/shared/ \; 2>/dev/null || true
+          find temp-natives -name "*.deb" -exec dpkg-deb -x {} temp-extract \; 2>/dev/null || true
+          find temp-extract -name "libusearch_c.so" -exec cp {} build/libs/usearch/shared/ \; 2>/dev/null || true
+          
+          echo "=== Extracting Windows libraries ==="
           find temp-natives -name "*windows*.tar" -exec tar -xf {} -C temp-extract \; 2>/dev/null || true
-          find temp-extract -name "*.dll" -exec cp {} build/libs/usearch/shared/ \; 2>/dev/null || true
+          find temp-extract -name "libusearch_c.dll" -exec cp {} build/libs/usearch/shared/ \; 2>/dev/null || true
+          find temp-natives -name "*libusearch_c*.dll" -exec cp {} build/libs/usearch/shared/ \; 2>/dev/null || true
           
-          # Extract macOS libraries (from .dylib files and .zip files)
-          find temp-natives -name "*.dylib" -exec cp {} build/libs/usearch/shared/ \;
+          echo "=== Extracting macOS libraries ==="
           find temp-natives -name "*macos*.zip" -exec unzip -j {} -d temp-extract \; 2>/dev/null || true
-          find temp-extract -name "*.dylib" -exec cp {} build/libs/usearch/shared/ \; 2>/dev/null || true
+          find temp-extract -name "libusearch_c.dylib" -exec cp {} build/libs/usearch/shared/ \; 2>/dev/null || true
+          find temp-natives -name "*libusearch_c*.dylib" -exec cp {} build/libs/usearch/shared/ \; 2>/dev/null || true
           
-          # Show what we collected
-          echo "Collected native libraries:"
-          ls -la build/libs/usearch/shared/
+          echo "=== Collected libraries ==="
+          ls -la build/libs/usearch/shared/ || echo "No libraries found"
+          echo "=== Temp natives directory contents ==="
+          find temp-natives -name "*libusearch*" -type f | head -20
           
       - name: Set up Java
         uses: actions/setup-java@v4.5.0

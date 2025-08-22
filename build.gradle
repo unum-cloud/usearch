@@ -63,6 +63,7 @@ model {
 
     components {
         usearch(NativeLibrarySpec) {
+            baseName = "usearch_c"  // Matches the naming convention in CMake builds for convenience
             sources {
                 cpp {
                     source {
@@ -144,7 +145,7 @@ jar {
     
     // Include all native libraries, organized by platform if possible
     from("$buildDir/libs/usearch/shared") {
-        include "libusearch.so", "libusearch.dylib", "libusearch.dll"
+        include "libusearch_c.so", "libusearch_c.dylib", "libusearch_c.dll"
         into "usearch-native"
         
         // Organize by platform if we can detect it
@@ -154,11 +155,11 @@ jar {
             String archName = osArch.contains("64") ? "x86_64" : 
                              osArch.contains("aarch") || osArch.contains("arm") ? "arm64" : osArch
             
-            if (details.name.endsWith(".so")) {
+            if (details.name.endsWith("_c.so")) {
                 details.path = "usearch-native/linux-${archName}/${details.name}"
-            } else if (details.name.endsWith(".dylib")) {
+            } else if (details.name.endsWith("_c.dylib")) {
                 details.path = "usearch-native/darwin-${archName}/${details.name}"
-            } else if (details.name.endsWith(".dll")) {
+            } else if (details.name.endsWith("_c.dll")) {
                 details.path = "usearch-native/windows-${archName}/${details.name}"
             }
         }
