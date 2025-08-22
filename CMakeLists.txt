@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.11 FATAL_ERROR)
 project(
     usearch
-    VERSION 2.19.5
+    VERSION 2.19.6
     LANGUAGES C CXX
     DESCRIPTION "Smaller & Faster Single-File Vector Search Engine from Unum"
     HOMEPAGE_URL "https://github.com/unum-cloud/usearch"
