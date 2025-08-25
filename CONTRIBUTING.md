@@ -156,6 +156,38 @@ cmake -D CMAKE_BUILD_TYPE=Release \
 cmake --build build_artifacts --config Release
 ```
 
+For Android development, you can cross-compile for ARM architectures without requiring the full Android NDK setup.
+Here's an example targeting 32-bit ARM (`armeabi-v7a`):
+
+```sh
+sudo apt-get update
+sudo apt-get install -y clang lld crossbuild-essential-armhf
+
+# Cross-compile for 32-bit ARM (Android compatible)
+CMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+cmake -B build_artifacts \
+  -D CMAKE_C_COMPILER=clang \
+  -D CMAKE_CXX_COMPILER=clang++ \
+  -D CMAKE_C_COMPILER_TARGET=armv7-linux-gnueabihf \
+  -D CMAKE_CXX_COMPILER_TARGET=armv7-linux-gnueabihf \
+  -D CMAKE_SYSTEM_NAME=Linux \
+  -D CMAKE_SYSTEM_PROCESSOR=armv7 \
+  -D CMAKE_C_FLAGS="--target=armv7-linux-gnueabihf -march=armv7-a" \
+  -D CMAKE_CXX_FLAGS="--target=armv7-linux-gnueabihf -march=armv7-a" \
+  -D CMAKE_BUILD_TYPE=RelWithDebInfo \
+  -D USEARCH_BUILD_LIB_C=1 \
+  -D USEARCH_BUILD_TEST_CPP=0 \
+  -D USEARCH_BUILD_BENCH_CPP=0 \
+  -D USEARCH_USE_SIMSIMD=0 \
+  -D USEARCH_USE_FP16LIB=1
+
+cmake --build build_artifacts --config RelWithDebInfo
+file build_artifacts/libusearch_c.so # Verify the output
+# Should show: ELF 32-bit LSB shared object, ARM, EABI5 version 1 (SYSV), dynamically linked, ...
+```
+
+The resulting `libusearch_c.so` can be used in Android projects by placing it in `src/main/jniLibs/armeabi-v7a/` for 32-bit ARM or `arm64-v8a/` for 64-bit ARM.
+
 ## Python 3
 
 Python bindings are built using PyBind11 and are available on [PyPi](https://pypi.org/project/usearch/).

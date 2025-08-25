@@ -457,15 +457,16 @@ jobs:
           cmake --build build_artifacts --config RelWithDebInfo
 
         # We can't run the produced builds, but we can make sure they exist
-      - name: Test artifacts presense
+      - name: Test artifacts presence
         run: |
           test -e build_artifacts/libusearch_c.so
           test -e build_artifacts/libusearch_sqlite.so
 
-  test_ubuntu_android_ndk:
-    name: Android NDK Build
+  test_android:
+    name: Android
     runs-on: ubuntu-22.04
     strategy:
+      fail-fast: false
       matrix:
         include:
           - processor: armv7a
@@ -478,7 +479,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: git submodule update --init --recursive
 
-      - name: Install NDK ndk
+      - name: Install NDK
         run: |
           ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;${{ env.ANDROID_NDK_VERSION }}"
 
@@ -498,9 +499,8 @@ jobs:
           cmake --build build_artifacts --config RelWithDebInfo
 
         # We can't run the produced builds, but we can make sure they exist
-      - name: Test artifacts presense
-        run: |
-          test -e build_artifacts/libusearch_c.so
+      - name: Test artifacts presence
+        run: test -e build_artifacts/libusearch_c.so
 
         # Rust
       - name: Set up Rust
@@ -521,5 +521,20 @@ jobs:
           echo "CARGO_${{ matrix.target }}=${TOOLCHAIN}/llvm-ar" >> ${GITHUB_ENV}
 
       - name: Build Rust
+        run: cargo build --target ${{ matrix.target }}
+      
+        # Java
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "adopt"
+      
+        # We skip native compilation with Gradle and focus just on the Java part,
+        # assuming the we won't be able to tun the tests without emulation
+      - name: Test Java bindings with Android library
         run: |
-          cargo build --target ${{ matrix.target }}
+          mkdir -p build/libs/usearch/shared/
+          cp build_artifacts/libusearch_c.so build/libs/usearch/shared/
+          javac -cp . java/cloud/unum/usearch/*.java
+          echo "Java compilation successful with Android NDK library"
