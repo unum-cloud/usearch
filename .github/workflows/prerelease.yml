@@ -523,3 +523,81 @@ jobs:
       - name: Build Rust
         run: |
           cargo build --target ${{ matrix.target }}
+
+  test_android_ndk_gradle:
+    name: Android Gradle Build Test
+    runs-on: ubuntu-24.04
+    env:
+      CC: clang
+      CXX: clang++
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            target: aarch64-linux-gnu
+            march: armv8-a
+            processor: aarch64
+          - arch: arm32
+            target: armv7-linux-gnueabihf
+            march: armv7-a
+            processor: armv7
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "adopt"
+      
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y cmake build-essential clang lld crossbuild-essential-arm64 crossbuild-essential-armhf
+      
+      - name: Cross-compile C Library for ${{ matrix.arch }}
+        run: |
+          CMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+          cmake -B build_android_${{ matrix.arch }} \
+            -D CMAKE_C_COMPILER=clang \
+            -D CMAKE_CXX_COMPILER=clang++ \
+            -D CMAKE_C_COMPILER_TARGET=${{ matrix.target }} \
+            -D CMAKE_CXX_COMPILER_TARGET=${{ matrix.target }} \
+            -D CMAKE_SYSTEM_NAME=Linux \
+            -D CMAKE_SYSTEM_PROCESSOR=${{ matrix.processor }} \
+            -D CMAKE_C_FLAGS="--target=${{ matrix.target }} -march=${{ matrix.march }}" \
+            -D CMAKE_CXX_FLAGS="--target=${{ matrix.target }} -march=${{ matrix.march }}" \
+            -D CMAKE_BUILD_TYPE=RelWithDebInfo \
+            -D USEARCH_BUILD_LIB_C=1 \
+            -D USEARCH_BUILD_TEST_CPP=0 \
+            -D USEARCH_BUILD_BENCH_CPP=0 \
+            -D USEARCH_USE_SIMSIMD=0 \
+            -D USEARCH_USE_FP16LIB=1
+          
+          cmake --build build_android_${{ matrix.arch }} --config RelWithDebInfo --parallel $(nproc)
+      
+      - name: Verify cross-compiled library
+        run: |
+          file build_android_${{ matrix.arch }}/libusearch_c.so
+          ls -la build_android_${{ matrix.arch }}/libusearch_c.so
+      
+      - name: Prepare Gradle build with cross-compiled library
+        run: |
+          mkdir -p build/libs/usearch_c/shared/
+          cp build_android_${{ matrix.arch }}/libusearch_c.so build/libs/usearch_c/shared/
+      
+      - name: Build and test Java with Gradle
+        run: |
+          gradle clean build test
+      
+      - name: Upload Android build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: usearch-android-${{ matrix.arch }}-binaries
+          path: |
+            build_android_${{ matrix.arch }}/libusearch_c.so
+            build_android_${{ matrix.arch }}/libusearch_static_c.a
+            build/libs/*.jar
