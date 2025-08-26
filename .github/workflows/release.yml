@@ -5,9 +5,17 @@ on:
     branches: ["main"]
 
 env:
-  BUILD_TYPE: Release
   GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
   PYTHONUTF8: 1
+  PYTHON_VERSION: 3.11
+  DOTNET_VERSION: 8.0.x
+  NODE_VERSION: 20
+  JAVA_VERSION: 21
+  GO_VERSION: "^1.21.0"
+  ANDROID_NDK_VERSION: 26.3.11579264
+  ANDROID_SDK_VERSION: 21
+  EMSCRIPTEN_VERSION: 3.1.47
+  MINGW_VERSION: 12.2.0
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -171,18 +179,19 @@ jobs:
         run: git submodule update --init --recursive
 
       - name: Setup CMake
-        uses: jwlawson/actions-setup-cmake@v1.13
+        uses: jwlawson/actions-setup-cmake@v2.0.2
 
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: "^1.19.0"
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
 
       - name: Setup MinGW
         uses: egor-tensin/setup-mingw@v2
         with:
           platform: ${{ matrix.arch }}
-          version: 12.2.0
+          version: ${{ env.MINGW_VERSION }}
 
       - name: Get version
         id: set_version
@@ -224,7 +233,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: "^1.21.0"
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
 
       - name: Get version
         id: set_version
@@ -342,7 +352,7 @@ jobs:
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:
-          version: 3.1.47
+          version: ${{ env.EMSCRIPTEN_VERSION }}
 
       - name: Build WASM with CMake
         run: |
@@ -359,15 +369,9 @@ jobs:
           
           emmake cmake --build build_wasm --config Release
           
-          # Package the WASM artifacts
           cd build_wasm
-          tar -czf ../usearch_wasm_${{ steps.set_version.outputs.version }}.tar.gz \
-            libusearch_c.* \
-            ../c/usearch.h
-          
-          zip -r ../usearch_wasm_${{ steps.set_version.outputs.version }}.zip \
-            libusearch_c.* \
-            ../c/usearch.h
+          tar -czf ../usearch_wasm_${{ steps.set_version.outputs.version }}.tar.gz libusearch_c.* ../c/usearch.h          
+          zip -r ../usearch_wasm_${{ steps.set_version.outputs.version }}.zip libusearch_c.* ../c/usearch.h
 
       - name: Upload archives
         uses: xresloader/upload-to-github-release@v1
@@ -450,7 +454,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.x
+          python-version: ${{ env.PYTHON_VERSION }}
       - name: Setup QEMU
         if: matrix.os == 'ubuntu-latest' # We only need QEMU for Linux builds
         uses: docker/setup-qemu-action@v3
@@ -461,6 +465,7 @@ jobs:
         env:
           CIBW_BUILD: cp${{ matrix.python-version }}-*
           CIBW_ENABLE: cpython-freethreading # No-GIL 3.13t builds
+          CIBW_TEST_SKIP: "*-win_arm64" # Too complex to emulate Windows ARM
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -525,7 +530,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           architecture: ${{ matrix.arch }}
 
       - name: Update compilers
@@ -577,7 +582,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Download prebuilds
         uses: actions/download-artifact@v4
@@ -692,9 +697,9 @@ jobs:
           find temp-natives -name "*libusearch*" -type f | head -20
           
       - name: Set up Java
-        uses: actions/setup-java@v4.5.0
+        uses: actions/setup-java@v5
         with:
-          java-version: "21"
+          java-version: ${{ env.JAVA_VERSION }}
           distribution: "adopt"
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v3.5.0
@@ -776,7 +781,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-14, windows-2022]
+        os: [ubuntu-22.04, macos-15, windows-2022]
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -854,9 +859,9 @@ jobs:
           path: ${{ env.USEARCH_LIBS }}
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Pack project
         run: |
