@@ -173,7 +173,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [x64, x86]
+        arch: [x64, x86, arm64]
     steps:
       - name: Check out refreshed version
         uses: actions/checkout@v4
@@ -192,10 +192,15 @@ jobs:
           cache: false
 
       - name: Setup MinGW
+        if: matrix.arch != 'arm64'
         uses: egor-tensin/setup-mingw@v2
         with:
           platform: ${{ matrix.arch }}
           version: ${{ env.MINGW_VERSION }}
+          
+      - name: Setup MSVC for ARM64
+        if: matrix.arch == 'arm64'
+        uses: microsoft/setup-msbuild@v2
 
       - name: Get version
         id: set_version
@@ -204,11 +209,19 @@ jobs:
           version=$(cat VERSION)
           echo "version=$version" >> $GITHUB_OUTPUT
 
-      - name: Build library
+      - name: Build library (MinGW)
+        if: matrix.arch != 'arm64'
         run: |
           cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_SQLITE=0 -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_BENCH_CPP=0 -B ./build_release
           cmake --build ./build_release --config Release
           tar -cvf usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar .\build_release\libusearch_c.dll .\c\usearch.h
+          
+      - name: Build library (MSVC ARM64)
+        if: matrix.arch == 'arm64'
+        run: |
+          cmake -G "Visual Studio 17 2022" -A ARM64 -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_SQLITE=0 -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_BENCH_CPP=0 -B ./build_release
+          cmake --build ./build_release --config Release
+          tar -cvf usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar .\build_release\Release\libusearch_c.dll .\c\usearch.h
 
       - name: Upload archive
         uses: xresloader/upload-to-github-release@v1
@@ -679,7 +692,12 @@ jobs:
           
       - name: Extract native libraries for all platforms
         run: |
-          mkdir -p temp-extract
+          mkdir -p temp-extract/windows-x86_64
+          mkdir -p temp-extract/windows-arm64
+          mkdir -p temp-extract/macos-arm64
+          mkdir -p temp-extract/macos-x86_64
+          mkdir -p temp-extract/android-arm64
+          mkdir -p temp-extract/android-arm32
           mkdir -p build/libs/usearch/shared/linux-x86_64
           mkdir -p build/libs/usearch/shared/linux-arm64
           mkdir -p build/libs/usearch/shared/windows-x86_64
@@ -690,15 +708,13 @@ jobs:
           mkdir -p build/libs/usearch/shared/android-arm32
           
           echo "=== Extracting Linux libraries ==="
-          find temp-natives -name "*linux*x86_64*.zip" -exec unzip -j {} -d temp-extract/linux-x86_64 \; 2>/dev/null || true
-          find temp-extract/linux-x86_64 -name "libusearch_c.so" -exec cp {} build/libs/usearch/shared/linux-x86_64/ \; 2>/dev/null || true
-          find temp-natives -name "*linux*arm64*.zip" -exec unzip -j {} -d temp-extract/linux-arm64 \; 2>/dev/null || true
-          find temp-extract/linux-arm64 -name "libusearch_c.so" -exec cp {} build/libs/usearch/shared/linux-arm64/ \; 2>/dev/null || true
+          find temp-natives -name "*linux*amd64*.so" -exec cp {} build/libs/usearch/shared/linux-x86_64/libusearch_c.so \; 2>/dev/null || true
+          find temp-natives -name "*linux*arm64*.so" -exec cp {} build/libs/usearch/shared/linux-arm64/libusearch_c.so \; 2>/dev/null || true
           
           echo "=== Extracting Windows libraries ==="
-          find temp-natives -name "*windows*x86_64*.zip" -exec unzip -j {} -d temp-extract/windows-x86_64 \; 2>/dev/null || true
+          find temp-natives -name "*windows*x64*.tar" -exec tar -xf {} -C temp-extract/windows-x86_64 \; 2>/dev/null || true
           find temp-extract/windows-x86_64 -name "libusearch_c.dll" -exec cp {} build/libs/usearch/shared/windows-x86_64/ \; 2>/dev/null || true
-          find temp-natives -name "*windows*arm64*.zip" -exec unzip -j {} -d temp-extract/windows-arm64 \; 2>/dev/null || true
+          find temp-natives -name "*windows*x86*.tar" -exec tar -xf {} -C temp-extract/windows-arm64 \; 2>/dev/null || true
           find temp-extract/windows-arm64 -name "libusearch_c.dll" -exec cp {} build/libs/usearch/shared/windows-arm64/ \; 2>/dev/null || true
           
           echo "=== Extracting macOS libraries ==="
