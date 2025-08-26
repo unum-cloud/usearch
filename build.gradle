@@ -152,6 +152,37 @@ jar {
     from sourceSets.main.output
 }
 
+// Separate task for creating a fat JAR with all platform native libraries
+// This is used in CI/CD where we pre-download all platform libraries
+task fatJar(type: Jar) {
+    archiveClassifier = ''
+    
+    from sourceSets.main.output
+    
+    // Include pre-built native libraries from all platforms
+    from("$buildDir/libs/usearch/shared") {
+        include "**/*"
+        into "usearch-native"
+    }
+    
+    manifest {
+        attributes 'Implementation-Title': 'USearch',
+                   'Implementation-Version': version
+    }
+    
+    // Log what we're packaging for transparency
+    doFirst {
+        def nativeDir = file("$buildDir/libs/usearch/shared")
+        if (nativeDir.exists()) {
+            def platforms = []
+            nativeDir.eachDir { platforms.add(it.name) }
+            println "Packaging native libraries for platforms: ${platforms.join(', ')}"
+        } else {
+            println "WARNING: No native libraries found at $buildDir/libs/usearch/shared"
+        }
+    }
+}
+
 signing {
     def signingKey = findProperty("signingKey")
     def signingPassword = findProperty("signingPassword")

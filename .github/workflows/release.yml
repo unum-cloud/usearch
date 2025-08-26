@@ -747,8 +747,16 @@ jobs:
           distribution: 'adopt'
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v3.5.0
-      - name: Execute Gradle build
-        run: gradle sign && gradle build
+      - name: Package a fat JAR with Gradle
+        run: gradle sign && gradle fatJar
+      - name: Verify fat JAR contents
+        run: |
+          echo "=== Verifying fat JAR contents ==="
+          jar tf build/libs/usearch-*.jar | grep -E "usearch-native.*\.(so|dll|dylib)" | sort
+
+          # List all found platforms
+          echo "=== Platforms found in JAR ==="
+          jar tf build/libs/usearch-*.jar | grep -E "usearch-native/[^/]+/lib" | sed 's|usearch-native/\([^/]*\)/.*|\1|' | sort -u
       - name: Publish package
         run: gradle publish
       - name: Log JAR contents
