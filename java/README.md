@@ -71,3 +71,113 @@ long capacity = index.capacity();
 long dimensions = index.dimensions();
 long connectivity = index.connectivity();
 ```
+
+## Multiple Data Types and Quantization
+
+USearch supports hardware-agnostic `f64`, `f32`, and `i8` quantization for memory efficiency and performance optimization.
+
+```java
+// Double precision (f64) for highest accuracy
+try (Index doubleIndex = new Index.Config()
+        .metric("cos")
+        .dimensions(3)
+        .quantization("f64")
+        .build()) {
+    
+    double[] vector = {0.1, 0.2, 0.3};
+    doubleIndex.add(42L, vector);
+    
+    double[] buffer = new double[3];
+    doubleIndex.getInto(42L, buffer); // Memory-efficient retrieval
+}
+
+// Byte precision (i8) for memory efficiency  
+try (Index byteIndex = new Index.Config()
+        .metric("cos")
+        .dimensions(3)
+        .quantization("i8")
+        .build()) {
+    
+    byte[] vector = {10, 20, 30};
+    byteIndex.add(42L, vector);
+    
+    byte[] buffer = new byte[3];
+    byteIndex.getInto(42L, buffer); // Memory-efficient retrieval
+}
+```
+
+## Batch Operations
+
+USearch automatically detects batch operations when vector arrays contain multiple concatenated vectors:
+
+```java
+try (Index index = new Index.Config()
+        .metric("cos")
+        .dimensions(2)
+        .build()) {
+    
+    // Batch add: 3 vectors in one call
+    float[] batchVectors = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+    index.add(100L, batchVectors); // Adds vectors at keys 100, 101, 102
+    
+    // Verify batch was added correctly
+    System.out.println("Index size: " + index.size()); // Output: 3
+}
+```
+
+## Concurrent Operations
+
+The USearch index is thread-safe and supports high-performance concurrent operations:
+
+```java
+import java.util.concurrent.*;
+
+try (Index index = new Index.Config()
+        .metric("cos")
+        .dimensions(4)
+        .capacity(10000)
+        .build()) {
+    
+    ExecutorService executor = Executors.newFixedThreadPool(8);
+    
+    // Concurrent additions from multiple threads
+    CompletableFuture<Void>[] addTasks = new CompletableFuture[4];
+    for (int t = 0; t < 4; t++) {
+        final int threadId = t;
+        addTasks[t] = CompletableFuture.runAsync(() -> {
+            for (int i = 0; i < 1000; i++) {
+                long key = threadId * 1000L + i;
+                float[] vector = generateRandomVector(4);
+                index.add(key, vector);
+            }
+        }, executor);
+    }
+    
+    // Concurrent searches while adding
+    CompletableFuture<Void>[] searchTasks = new CompletableFuture[4];
+    for (int t = 0; t < 4; t++) {
+        searchTasks[t] = CompletableFuture.runAsync(() -> {
+            for (int i = 0; i < 100; i++) {
+                float[] query = generateRandomVector(4);
+                long[] results = index.search(query, 10);
+                processResults(results);
+            }
+        }, executor);
+    }
+    
+    // Wait for all operations to complete
+    CompletableFuture.allOf(addTasks).join();
+    CompletableFuture.allOf(searchTasks).join();
+    executor.shutdown();
+    
+    System.out.println("Final index size: " + index.size());
+}
+
+private static float[] generateRandomVector(int dimensions) {
+    float[] vector = new float[dimensions];
+    for (int i = 0; i < dimensions; i++) {
+        vector[i] = (float) Math.random();
+    }
+    return vector;
+}
+```

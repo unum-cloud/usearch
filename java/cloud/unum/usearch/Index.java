@@ -241,7 +241,7 @@ public class Index implements AutoCloseable {
     if (c_ptr == 0) {
       throw new IllegalStateException("Index already closed");
     }
-    c_add(c_ptr, key, vector);
+    c_add_f32(c_ptr, key, vector);
   }
 
   /**
@@ -255,7 +255,7 @@ public class Index implements AutoCloseable {
     if (c_ptr == 0) {
       throw new IllegalStateException("Index already closed");
     }
-    return c_search(c_ptr, vector, count);
+    return c_search_f32(c_ptr, vector, count);
   }
 
   /**
@@ -270,6 +270,108 @@ public class Index implements AutoCloseable {
       throw new IllegalStateException("Index already closed");
     }
     return c_get(c_ptr, key);
+  }
+
+  /**
+   * Adds a double precision vector with a specified key to the index.
+   *
+   * @param key    the key associated with the vector
+   * @param vector the double precision vector data
+   */
+  public void add(long key, double vector[]) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    c_add_f64(c_ptr, key, vector);
+  }
+
+  /**
+   * Searches for closest vectors to the specified double precision query vector.
+   *
+   * @param vector the double precision query vector data
+   * @param count  the number of nearest neighbors to search
+   * @return an array of keys of the nearest neighbors
+   */
+  public long[] search(double vector[], long count) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    return c_search_f64(c_ptr, vector, count);
+  }
+
+  /**
+   * Adds an int8 quantized vector with a specified key to the index.
+   *
+   * @param key    the key associated with the vector
+   * @param vector the int8 quantized vector data
+   */
+  public void add(long key, byte vector[]) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    c_add_i8(c_ptr, key, vector);
+  }
+
+  /**
+   * Searches for closest vectors to the specified int8 quantized query vector.
+   *
+   * @param vector the int8 quantized query vector data
+   * @param count  the number of nearest neighbors to search
+   * @return an array of keys of the nearest neighbors
+   */
+  public long[] search(byte vector[], long count) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    return c_search_i8(c_ptr, vector, count);
+  }
+
+  /**
+   * Retrieves the vector at the specified key and populates the provided float
+   * buffer.
+   *
+   * @param key    key to lookup.
+   * @param buffer buffer to populate with vector data.
+   * @throws IllegalArgumentException if key is not available or buffer size is
+   *                                  incorrect.
+   */
+  public void getInto(long key, float[] buffer) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    c_get_into_f32(c_ptr, key, buffer);
+  }
+
+  /**
+   * Retrieves the vector at the specified key and populates the provided double
+   * buffer.
+   *
+   * @param key    key to lookup.
+   * @param buffer buffer to populate with vector data.
+   * @throws IllegalArgumentException if key is not available or buffer size is
+   *                                  incorrect.
+   */
+  public void getInto(long key, double[] buffer) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    c_get_into_f64(c_ptr, key, buffer);
+  }
+
+  /**
+   * Retrieves the vector at the specified key and populates the provided byte
+   * buffer.
+   *
+   * @param key    key to lookup.
+   * @param buffer buffer to populate with vector data.
+   * @throws IllegalArgumentException if key is not available or buffer size is
+   *                                  incorrect.
+   */
+  public void getInto(long key, byte[] buffer) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    c_get_into_i8(c_ptr, key, buffer);
   }
 
   /**
@@ -573,12 +675,6 @@ public class Index implements AutoCloseable {
 
   private static native void c_reserve(long ptr, long capacity);
 
-  private static native void c_add(long ptr, long key, float vector[]);
-
-  private static native long[] c_search(long ptr, float vector[], long count);
-
-  private static native float[] c_get(long ptr, long key);
-
   private static native void c_save(long ptr, String path);
 
   private static native void c_load(long ptr, String path);
@@ -588,4 +684,26 @@ public class Index implements AutoCloseable {
   private static native boolean c_remove(long ptr, long key);
 
   private static native boolean c_rename(long ptr, long from, long to);
+
+  private static native float[] c_get(long ptr, long key);
+
+  // Overloaded methods:
+  private static native void c_add_f32(long ptr, long key, float vector[]);
+
+  private static native void c_add_f64(long ptr, long key, double vector[]);
+
+  private static native void c_add_i8(long ptr, long key, byte vector[]);
+
+  private static native long[] c_search_f32(long ptr, float vector[], long count);
+
+  private static native long[] c_search_f64(long ptr, double vector[], long count);
+
+  private static native long[] c_search_i8(long ptr, byte vector[], long count);
+
+  private static native void c_get_into_f32(long ptr, long key, float buffer[]);
+
+  private static native void c_get_into_f64(long ptr, long key, double buffer[]);
+
+  private static native void c_get_into_i8(long ptr, long key, byte buffer[]);
+
 }

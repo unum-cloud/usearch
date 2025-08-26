@@ -427,32 +427,29 @@ java -cp "$(pwd)/build/classes/java/main" -Djava.library.path="$(pwd)/build/libs
 Or step by-step:
 
 ```sh
-cd java/cloud/unum/usearch
-javac -h . Index.java NativeUtils.java
+javac -cp java -h java/cloud/unum/usearch/ java/cloud/unum/usearch/Index.java
 
 # Ensure JAVA_HOME system environment variable has been set
 # e.g. export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
 
 # Ubuntu:
-g++ -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux -I../../../../include cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
-g++ -shared -fPIC -o libusearch.so cloud_unum_usearch_Index.o -lc
+g++ -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux -Iinclude java/cloud/unum/usearch/cloud_unum_usearch_Index.cpp -o java/cloud/unum/usearch/cloud_unum_usearch_Index.o
+g++ -shared -fPIC -o java/cloud/unum/usearch/libusearch.so java/cloud/unum/usearch/cloud_unum_usearch_Index.o -lc
 
 # Windows
-g++ -c -I%JAVA_HOME%\include -I%JAVA_HOME%\include\win32 cloud_unum_usearch_Index.cpp -I..\..\..\..\include -o cloud_unum_usearch_Index.o
-g++ -shared -o USearchJNI.dll cloud_unum_usearch_Index.o -Wl,--add-stdcall-alias
+g++ -c -I%JAVA_HOME%\include -I%JAVA_HOME%\include\win32 java\cloud\unum\usearch\cloud_unum_usearch_Index.cpp -Iinclude -o java\cloud\unum\usearch\cloud_unum_usearch_Index.o
+g++ -shared -o java\cloud\unum\usearch\USearchJNI.dll java\cloud\unum\usearch\cloud_unum_usearch_Index.o -Wl,--add-stdcall-alias
 
 # MacOS
 g++ -std=c++11 -c -fPIC \
-    -I../../../../include \
-    -I../../../../fp16/include \
-    -I../../../../simsimd/include \
-    -I${JAVA_HOME}/include -I${JAVA_HOME}/include/darwin cloud_unum_usearch_Index.cpp -o cloud_unum_usearch_Index.o
-g++ -dynamiclib -o libusearch.dylib cloud_unum_usearch_Index.o -lc
+    -Iinclude \
+    -Ifp16/include \
+    -Isimsimd/include \
+    -I${JAVA_HOME}/include -I${JAVA_HOME}/include/darwin java/cloud/unum/usearch/cloud_unum_usearch_Index.cpp -o java/cloud/unum/usearch/cloud_unum_usearch_Index.o
+g++ -dynamiclib -o java/cloud/unum/usearch/libusearch.dylib java/cloud/unum/usearch/cloud_unum_usearch_Index.o -lc
 
-# Run linking to that directory
-cd ../../../..
-cp cloud/unum/usearch/libusearch.* .
-java -cp . -Djava.library.path="$(pwd)" cloud.unum.usearch.Index
+# Run from project root
+java -cp java -Djava.library.path="java/cloud/unum/usearch" cloud.unum.usearch.Index
 ```
 
 Or using CMake:

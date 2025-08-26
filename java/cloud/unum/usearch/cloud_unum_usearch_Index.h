@@ -73,30 +73,6 @@ JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1reserve
 
 /*
  * Class:     cloud_unum_usearch_Index
- * Method:    c_add
- * Signature: (JJ[F)V
- */
-JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add
-  (JNIEnv *, jclass, jlong, jlong, jfloatArray);
-
-/*
- * Class:     cloud_unum_usearch_Index
- * Method:    c_search
- * Signature: (J[FJ)[J
- */
-JNIEXPORT jlongArray JNICALL Java_cloud_unum_usearch_Index_c_1search
-  (JNIEnv *, jclass, jlong, jfloatArray, jlong);
-
-/*
- * Class:     cloud_unum_usearch_Index
- * Method:    c_get
- * Signature: (JJ)[F
- */
-JNIEXPORT jfloatArray JNICALL Java_cloud_unum_usearch_Index_c_1get
-  (JNIEnv *, jclass, jlong, jlong);
-
-/*
- * Class:     cloud_unum_usearch_Index
  * Method:    c_save
  * Signature: (JLjava/lang/String;)V
  */
@@ -134,6 +110,86 @@ JNIEXPORT jboolean JNICALL Java_cloud_unum_usearch_Index_c_1remove
  */
 JNIEXPORT jboolean JNICALL Java_cloud_unum_usearch_Index_c_1rename
   (JNIEnv *, jclass, jlong, jlong, jlong);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_get
+ * Signature: (JJ)[F
+ */
+JNIEXPORT jfloatArray JNICALL Java_cloud_unum_usearch_Index_c_1get
+  (JNIEnv *, jclass, jlong, jlong);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_add_f32
+ * Signature: (JJ[F)V
+ */
+JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add_1f32
+  (JNIEnv *, jclass, jlong, jlong, jfloatArray);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_add_f64
+ * Signature: (JJ[D)V
+ */
+JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add_1f64
+  (JNIEnv *, jclass, jlong, jlong, jdoubleArray);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_add_i8
+ * Signature: (JJ[B)V
+ */
+JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add_1i8
+  (JNIEnv *, jclass, jlong, jlong, jbyteArray);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_search_f32
+ * Signature: (J[FJ)[J
+ */
+JNIEXPORT jlongArray JNICALL Java_cloud_unum_usearch_Index_c_1search_1f32
+  (JNIEnv *, jclass, jlong, jfloatArray, jlong);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_search_f64
+ * Signature: (J[DJ)[J
+ */
+JNIEXPORT jlongArray JNICALL Java_cloud_unum_usearch_Index_c_1search_1f64
+  (JNIEnv *, jclass, jlong, jdoubleArray, jlong);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_search_i8
+ * Signature: (J[BJ)[J
+ */
+JNIEXPORT jlongArray JNICALL Java_cloud_unum_usearch_Index_c_1search_1i8
+  (JNIEnv *, jclass, jlong, jbyteArray, jlong);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_get_into_f32
+ * Signature: (JJ[F)V
+ */
+JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1get_1into_1f32
+  (JNIEnv *, jclass, jlong, jlong, jfloatArray);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_get_into_f64
+ * Signature: (JJ[D)V
+ */
+JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1get_1into_1f64
+  (JNIEnv *, jclass, jlong, jlong, jdoubleArray);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_get_into_i8
+ * Signature: (JJ[B)V
+ */
+JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1get_1into_1i8
+  (JNIEnv *, jclass, jlong, jlong, jbyteArray);
 
 #ifdef __cplusplus
 }
