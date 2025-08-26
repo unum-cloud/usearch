@@ -221,7 +221,7 @@ jobs:
         run: |
           cmake -G "Visual Studio 17 2022" -A ARM64 -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_SQLITE=0 -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_BENCH_CPP=0 -B ./build_release
           cmake --build ./build_release --config Release
-          tar -cvf usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar .\build_release\Release\libusearch_c.dll .\c\usearch.h
+          tar -cvf usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar .\build_release\libusearch_c.dll .\c\usearch.h
 
       - name: Upload archive
         uses: xresloader/upload-to-github-release@v1
@@ -714,7 +714,7 @@ jobs:
           echo "=== Extracting Windows libraries ==="
           find temp-natives -name "*windows*x64*.tar" -exec tar -xf {} -C temp-extract/windows-x86_64 \; 2>/dev/null || true
           find temp-extract/windows-x86_64 -name "libusearch_c.dll" -exec cp {} build/libs/usearch/shared/windows-x86_64/ \; 2>/dev/null || true
-          find temp-natives -name "*windows*x86*.tar" -exec tar -xf {} -C temp-extract/windows-arm64 \; 2>/dev/null || true
+          find temp-natives -name "*windows*arm64*.tar" -exec tar -xf {} -C temp-extract/windows-arm64 \; 2>/dev/null || true
           find temp-extract/windows-arm64 -name "libusearch_c.dll" -exec cp {} build/libs/usearch/shared/windows-arm64/ \; 2>/dev/null || true
           
           echo "=== Extracting macOS libraries ==="
@@ -730,7 +730,7 @@ jobs:
           find temp-extract/android-arm32 -name "libusearch_c.so" -exec cp {} build/libs/usearch/shared/android-arm32/ \; 2>/dev/null || true
           
           echo "=== Collected libraries ==="
-          ls -la build/libs/usearch/shared/ || echo "No libraries found"
+          tree build/libs/usearch/shared/
           echo "=== Temp natives directory contents ==="
           find temp-natives -name "*libusearch*" -type f | head -20
           
@@ -745,6 +745,15 @@ jobs:
         run: gradle sign && gradle build
       - name: Publish package
         run: gradle publish
+      - name: Log JAR contents
+        run: |
+          echo "=== JAR files created ==="
+          ls -la build/libs/*.jar
+          for jar in build/libs/*.jar; do
+            echo "=== Contents of $jar ==="
+            jar tf "$jar" | grep -E "(usearch-native|\.so|\.dll|\.dylib)" | sort
+          done
+          
       - name: Upload Java JAR to GitHub Release
         uses: xresloader/upload-to-github-release@v1
         env:
