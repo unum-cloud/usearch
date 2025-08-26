@@ -483,8 +483,8 @@ class f16_bits_t {
     inline operator float() const noexcept { return f16_to_f32(uint16_); }
     inline explicit operator bool() const noexcept { return f16_to_f32(uint16_) > 0.5f; }
 
-    inline f16_bits_t(int v) noexcept : uint16_(f32_to_f16(v)) {}
-    inline f16_bits_t(bool v) noexcept : uint16_(f32_to_f16(v)) {}
+    inline f16_bits_t(int v) noexcept : uint16_(f32_to_f16(static_cast<float>(v))) {}
+    inline f16_bits_t(bool v) noexcept : uint16_(f32_to_f16(static_cast<float>(v))) {}
     inline f16_bits_t(float v) noexcept : uint16_(f32_to_f16(v)) {}
     inline f16_bits_t(double v) noexcept : uint16_(f32_to_f16(static_cast<float>(v))) {}
 
@@ -547,8 +547,8 @@ class bf16_bits_t {
     inline operator float() const noexcept { return bf16_to_f32(uint16_); }
     inline explicit operator bool() const noexcept { return bf16_to_f32(uint16_) > 0.5f; }
 
-    inline bf16_bits_t(int v) noexcept : uint16_(f32_to_bf16(v)) {}
-    inline bf16_bits_t(bool v) noexcept : uint16_(f32_to_bf16(v)) {}
+    inline bf16_bits_t(int v) noexcept : uint16_(f32_to_bf16(static_cast<float>(v))) {}
+    inline bf16_bits_t(bool v) noexcept : uint16_(f32_to_bf16(static_cast<float>(v))) {}
     inline bf16_bits_t(float v) noexcept : uint16_(f32_to_bf16(v)) {}
     inline bf16_bits_t(double v) noexcept : uint16_(f32_to_bf16(static_cast<float>(v))) {}
 
