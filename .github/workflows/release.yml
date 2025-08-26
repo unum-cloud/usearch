@@ -425,7 +425,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: usearch-jni-linux-${{ matrix.arch }}
-          path: build_artifacts/java/libusearch_jni.so
+          path: build_artifacts/libusearch_jni.so
           retention-days: 1
 
   build_jni_windows:
@@ -474,7 +474,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: usearch-jni-windows-${{ matrix.arch }}
-          path: build_artifacts/java/Release/usearch_jni.dll
+          path: build_artifacts/usearch_jni.dll
           retention-days: 1
 
   build_jni_macos:
@@ -522,7 +522,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: usearch-jni-macos-${{ matrix.arch }}
-          path: build_artifacts/java/libusearch_jni.dylib
+          path: build_artifacts/libusearch_jni.dylib
           retention-days: 1
 
   build_jni_android:
@@ -579,7 +579,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: usearch-jni-android-${{ matrix.arch }}
-          path: build_artifacts/java/libusearch_jni.so
+          path: build_artifacts/libusearch_jni.so
           retention-days: 1
 
   create_wasm_library:
