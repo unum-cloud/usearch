@@ -55,13 +55,14 @@
 #endif
 
 // Inferring hardware bitness: 32 vs 64
+// Using compiler predefined macros for is technically safer than including `<cstdint>` and
+// using the commonly advised `UINTPTR_MAX` trick, as that constant is optional in standard C/C++.
 // https://stackoverflow.com/a/5273354
-#if INTPTR_MAX == INT64_MAX
+// https://en.cppreference.com/w/cpp/types/integer.html
+#if defined(_WIN64) || defined(__LP64__) || defined(__x86_64__) || defined(__aarch64__) || defined(__powerpc64__)
 #define USEARCH_64BIT_ENV
-#elif INTPTR_MAX == INT32_MAX
-#define USEARCH_32BIT_ENV
 #else
-#error Unknown pointer size or missing size macros!
+#define USEARCH_32BIT_ENV
 #endif
 
 #if !defined(USEARCH_USE_OPENMP)
