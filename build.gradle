@@ -156,6 +156,7 @@ jar {
 // This is used in CI/CD where we pre-download all platform libraries
 task fatJar(type: Jar) {
     archiveClassifier = ''
+    archiveBaseName = 'usearch'
     
     from sourceSets.main.output
     
@@ -176,9 +177,14 @@ task fatJar(type: Jar) {
         if (nativeDir.exists()) {
             def platforms = []
             nativeDir.eachDir { platforms.add(it.name) }
-            println "Packaging native libraries for platforms: ${platforms.join(', ')}"
+            if (platforms.size() > 0) {
+                println "Packaging native libraries for platforms: ${platforms.join(', ')}"
+            } else {
+                println "ERROR: Native library directory exists but contains no platform subdirectories"
+                throw new GradleException("No platform directories found in $buildDir/libs/usearch/shared")
+            }
         } else {
-            println "WARNING: No native libraries found at $buildDir/libs/usearch/shared"
+            throw new GradleException("Native libraries directory not found at $buildDir/libs/usearch/shared - ensure native libraries are downloaded first")
         }
     }
 }

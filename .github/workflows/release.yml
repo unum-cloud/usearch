@@ -747,18 +747,27 @@ jobs:
           distribution: 'adopt'
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v3.5.0
-      - name: Package a fat JAR with Gradle
-        run: gradle sign && gradle fatJar
+      - name: Build fat JAR with all platforms
+        run: |
+          echo "=== Building fat JAR with pre-downloaded native libraries ==="
+          ls -la build/libs/usearch/shared/
+          gradle fatJar
       - name: Verify fat JAR contents
         run: |
           echo "=== Verifying fat JAR contents ==="
           jar tf build/libs/usearch-*.jar | grep -E "usearch-native.*\.(so|dll|dylib)" | sort
-
-          # List all found platforms
-          echo "=== Platforms found in JAR ==="
-          jar tf build/libs/usearch-*.jar | grep -E "usearch-native/[^/]+/lib" | sed 's|usearch-native/\([^/]*\)/.*|\1|' | sort -u
-      - name: Publish package
-        run: gradle publish
+          
+          # Count native libraries
+          lib_count=$(jar tf build/libs/usearch-*.jar | grep -E "usearch-native.*\.(so|dll|dylib)" | wc -l)
+          echo "Found $lib_count native libraries in fat JAR"
+          
+          if [ "$lib_count" -lt 8 ]; then
+            echo "ERROR: Expected at least 8 platform libraries, found only $lib_count"
+            jar tf build/libs/usearch-*.jar | head -50
+            exit 1
+          fi
+      - name: Sign and publish fat JAR
+        run: gradle signLibraryPublication publish
       - name: Log JAR contents
         run: |
           echo "=== JAR files created ==="
