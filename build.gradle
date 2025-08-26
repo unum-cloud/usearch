@@ -143,26 +143,10 @@ test {
 jar {
     dependsOn("usearchSharedLibrary")
     
-    // Include all native libraries, organized by platform if possible
+    // Include all native libraries with their platform-specific directory structure
     from("$buildDir/libs/usearch/shared") {
-        include "libusearch_c.so", "libusearch_c.dylib", "libusearch_c.dll"
+        include "**/*"
         into "usearch-native"
-        
-        // Organize by platform if we can detect it
-        eachFile { details ->
-            String osName = System.getProperty("os.name").toLowerCase()
-            String osArch = System.getProperty("os.arch").toLowerCase()
-            String archName = osArch.contains("64") ? "x86_64" : 
-                             osArch.contains("aarch") || osArch.contains("arm") ? "arm64" : osArch
-            
-            if (details.name.endsWith("_c.so")) {
-                details.path = "usearch-native/linux-${archName}/${details.name}"
-            } else if (details.name.endsWith("_c.dylib")) {
-                details.path = "usearch-native/darwin-${archName}/${details.name}"
-            } else if (details.name.endsWith("_c.dll")) {
-                details.path = "usearch-native/windows-${archName}/${details.name}"
-            }
-        }
     }
     
     from sourceSets.main.output
