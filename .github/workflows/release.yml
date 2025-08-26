@@ -714,30 +714,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: native-libs-*
-          
-      - name: Organize libraries for Gradle
-        run: |
-          mkdir -p build/libs/usearch/shared/{linux-amd64,linux-arm64,windows-amd64,windows-x86,windows-arm64,darwin-amd64,darwin-arm64,android-arm64,android-arm32}
-          
-          # Linux
-          cp native-libs-linux-amd64/libusearch_c.so build/libs/usearch/shared/linux-amd64/ || true
-          cp native-libs-linux-arm64/libusearch_c.so build/libs/usearch/shared/linux-arm64/ || true
-          
-          # Windows  
-          cp native-libs-windows-x64/libusearch_c.dll build/libs/usearch/shared/windows-amd64/ || true
-          cp native-libs-windows-x86/libusearch_c.dll build/libs/usearch/shared/windows-x86/ || true
-          cp native-libs-windows-arm64/libusearch_c.dll build/libs/usearch/shared/windows-arm64/ || true
-          
-          # macOS
-          cp native-libs-macos-arm64/libusearch_c.dylib build/libs/usearch/shared/darwin-arm64/ || true
-          cp native-libs-macos-x86_64/libusearch_c.dylib build/libs/usearch/shared/darwin-amd64/ || true
-          
-          # Android
-          cp native-libs-android-arm64/libusearch_c.so build/libs/usearch/shared/android-arm64/ || true
-          cp native-libs-android-arm32/libusearch_c.so build/libs/usearch/shared/android-arm32/ || true
-          
-          echo "=== Native libraries ready ==="
-          find build/libs/usearch/shared -name "libusearch_c.*" | sort
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -748,13 +724,39 @@ jobs:
         uses: gradle/gradle-build-action@v3.5.0
       - name: Build fat JAR with all platforms
         run: |
-          echo "=== Building fat JAR with pre-downloaded native libraries ==="
-          ls -la build/libs/usearch/shared/
+          # First build the JAR, which will build local native lib
+          # and overwrite "build/libs/usearch/shared"
+          gradle compileJava processResources
+
+          # Now organize the pre-built libraries to overwrite the local one
+          mkdir -p build/libs/usearch/shared/{linux-amd64,linux-arm64,windows-amd64,windows-x86,windows-arm64,darwin-amd64,darwin-arm64,android-arm64,android-arm32}
+
+          # Linux
+          cp native-libs-linux-amd64/libusearch_c.so build/libs/usearch/shared/linux-amd64/ || true
+          cp native-libs-linux-arm64/libusearch_c.so build/libs/usearch/shared/linux-arm64/ || true
+
+          # Windows  
+          cp native-libs-windows-x64/libusearch_c.dll build/libs/usearch/shared/windows-amd64/ || true
+          cp native-libs-windows-x86/libusearch_c.dll build/libs/usearch/shared/windows-x86/ || true
+          cp native-libs-windows-arm64/libusearch_c.dll build/libs/usearch/shared/windows-arm64/ || true
+
+          # macOS
+          cp native-libs-macos-arm64/libusearch_c.dylib build/libs/usearch/shared/darwin-arm64/ || true
+          cp native-libs-macos-x86_64/libusearch_c.dylib build/libs/usearch/shared/darwin-amd64/ || true
+
+          # Android
+          cp native-libs-android-arm64/libusearch_c.so build/libs/usearch/shared/android-arm64/ || true
+          cp native-libs-android-arm32/libusearch_c.so build/libs/usearch/shared/android-arm32/ || true
+
+          echo "=== Native libraries organized ==="
+          tree build/libs/usearch/shared || find build/libs/usearch/shared -name "libusearch_c.*" | sort
+
+          # Now build the actual fatJar
           gradle fatJar
       - name: Verify fat JAR contents
         run: |
           echo "=== Verifying fat JAR contents ==="
-          jar tf build/libs/usearch-*.jar | grep -E "usearch-native.*\.(so|dll|dylib)" | sort
+          jar tf build/libs/usearch-*.jar
 
           # Count native libraries
           lib_count=$(jar tf build/libs/usearch-*.jar | grep -E "usearch-native.*\.(so|dll|dylib)" | wc -l)
