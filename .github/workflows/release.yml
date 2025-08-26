@@ -806,13 +806,14 @@ jobs:
         if: matrix.os == 'macos-14'
       - name: Extra for cross build
         if: matrix.os == 'ubuntu-24.04'
+        env:
+          CC: aarch64-linux-gnu-gcc
+          CXX: aarch64-linux-gnu-g++
+          AR: aarch64-linux-gnu-ar
+          AS: aarch64-linux-gnu-as
+          LD: aarch64-linux-gnu-ld
+          STRIP: aarch64-linux-gnu-strip
         run: |
-          export CC=aarch64-linux-gnu-gcc
-          export CXX=aarch64-linux-gnu-g++
-          export AR=aarch64-linux-gnu-ar
-          export AS=aarch64-linux-gnu-as
-          export LD=aarch64-linux-gnu-ld
-          export STRIP=aarch64-linux-gnu-strip
           npm run prebuild-arm64
           aarch64-linux-gnu-strip prebuilds/linux-arm64/*node
       - uses: actions/upload-artifact@v4
@@ -1083,9 +1084,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev gcc-12 g++-12
-          export CC=gcc-12
-          export CXX=g++-12
-          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_TEST_C=0 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
+          cmake -B build_artifacts -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc-12 -DCMAKE_CXX_COMPILER=g++-12 -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_TEST_C=0 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_OPENMP=1 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=1
           cmake --build build_artifacts --config Release
           mkdir -p "${{ github.workspace }}/csharp/lib/runtimes/linux-x64/native"
           cp "${{ github.workspace }}/build_artifacts/libusearch_c.so" "${{ github.workspace }}/csharp/lib/runtimes/linux-x64/native"
