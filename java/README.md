@@ -2,15 +2,43 @@
 
 ## Installation
 
-```xml
-<dependency>
-  <groupId>cloud.unum</groupId>
-  <artifactId>usearch</artifactId>
-  <version>2.20.0</version>
-</dependency>
-```
+For the most up-to-date version, automatically download from GitHub releases and build with Gradle:
 
-Add that snippet to your `pom.xml` and hit `mvn install`.
+```groovy
+repositories {
+    mavenCentral()
+    
+    // Custom repository for USearch JAR
+    flatDir {
+        dirs 'lib'
+    }
+}
+
+// Task to download USearch JAR from GitHub releases
+task downloadUSearchJar {
+    doLast {
+        def usearchVersion = '2.20.0'
+        def usearchUrl = "https://github.com/unum-cloud/usearch/releases/download/v${usearchVersion}/usearch-${usearchVersion}.jar"
+        def usearchFile = file("lib/usearch-${usearchVersion}.jar")
+        
+        usearchFile.parentFile.mkdirs()
+        if (!usearchFile.exists()) {
+            new URL(usearchUrl).withInputStream { i ->
+                usearchFile.withOutputStream { it << i }
+            }
+            println "Downloaded USearch JAR: ${usearchFile.name}"
+        }
+    }
+}
+
+// Make compilation depend on downloading USearch
+compileJava.dependsOn downloadUSearchJar
+
+dependencies {
+    // USearch JAR from local lib directory (downloaded automatically)
+    implementation name: 'usearch', version: '2.20.0', ext: 'jar'
+}
+```
 
 ## Quickstart
 
