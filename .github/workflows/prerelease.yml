@@ -472,9 +472,11 @@ jobs:
           - processor: armv7a
             abi: armeabi-v7a
             target: armv7-linux-androideabi
+            arch: arm32
           - processor: aarch64
             abi: arm64-v8a
             target: aarch64-linux-android
+            arch: arm64
     steps:
       - uses: actions/checkout@v4
       - run: git submodule update --init --recursive
@@ -538,3 +540,14 @@ jobs:
           cp build_artifacts/libusearch_c.so build/libs/usearch/shared/
           javac -cp . java/cloud/unum/usearch/*.java
           echo "Java compilation successful with Android NDK library"
+      
+      - name: Package Android libraries for release
+        run: |
+          version=$(cat VERSION)
+          zip -r usearch_android_${{ matrix.arch }}_${version}.zip build_artifacts/libusearch_c.so c/usearch.h
+      
+      - name: Upload Android libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-${{ matrix.abi }}-libraries
+          path: usearch_android_*.zip

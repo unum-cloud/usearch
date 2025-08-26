@@ -261,6 +261,66 @@ jobs:
           file: "*.zip"
           update_latest_release: true
 
+  create_android_library:
+    name: Create Android Libraries
+    runs-on: ubuntu-22.04
+    needs: versioning
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - processor: armv7a
+            abi: armeabi-v7a
+            target: armv7-linux-androideabi
+            arch: arm32
+          - processor: aarch64
+            abi: arm64-v8a
+            target: aarch64-linux-android
+            arch: arm64
+    
+    steps:
+      - name: Check out refreshed version
+        uses: actions/checkout@v4
+        with:
+          ref: "main"
+      - name: Pull Git submodules
+        run: git submodule update --init --recursive
+      
+      - name: Get version
+        id: set_version
+        run: |
+          version=$(cat VERSION)
+          echo "version=$version" >> $GITHUB_OUTPUT
+      
+      - name: Install NDK
+        run: |
+          ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;${{ env.ANDROID_NDK_VERSION }}"
+      
+      - name: Build C/C++
+        run: |
+          cmake -B build_artifacts \
+            -D CMAKE_BUILD_TYPE=Release \
+            -D CMAKE_TOOLCHAIN_FILE=${ANDROID_HOME}/ndk/${{ env.ANDROID_NDK_VERSION }}/build/cmake/android.toolchain.cmake \
+            -D CMAKE_ANDROID_STL_TYPE=c++_static \
+            -D ANDROID_PLATFORM=${{ env.ANDROID_SDK_VERSION }} \
+            -D ANDROID_ABI=${{ matrix.abi }} \
+            -D USEARCH_BUILD_LIB_C=1 \
+            -D USEARCH_BUILD_TEST_CPP=0 \
+            -D USEARCH_BUILD_BENCH_CPP=0
+          cmake --build build_artifacts --config Release
+      
+      - name: Package library
+        run: |
+          zip -r usearch_android_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.zip build_artifacts/libusearch_c.so c/usearch.h
+      
+      - name: Upload archive
+        uses: xresloader/upload-to-github-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          file: "*.zip"
+          update_latest_release: true
+
   create_wasm_library:
     name: WASM builds for C libraries
     runs-on: ${{ matrix.os }}
@@ -663,6 +723,10 @@ jobs:
           find temp-natives -name "*macos*.zip" -exec unzip -j {} -d temp-extract \; 2>/dev/null || true
           find temp-extract -name "libusearch_c.dylib" -exec cp {} build/libs/usearch/shared/ \; 2>/dev/null || true
           find temp-natives -name "*libusearch_c*.dylib" -exec cp {} build/libs/usearch/shared/ \; 2>/dev/null || true
+          
+          echo "=== Extracting Android libraries ==="
+          find temp-natives -name "*android*.zip" -exec unzip -j {} -d temp-extract \; 2>/dev/null || true
+          find temp-extract -name "libusearch_c.so" -exec cp {} build/libs/usearch/shared/ \; 2>/dev/null || true
           
           echo "=== Collected libraries ==="
           ls -la build/libs/usearch/shared/ || echo "No libraries found"
