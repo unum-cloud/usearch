@@ -693,7 +693,7 @@ jobs:
     needs: versioning
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-24.04, macos-14, windows-2022]
         python-version: ['38', '39', '310', '311', '312', '313', '313t']
     steps:
       - name: Check out refreshed version
@@ -701,14 +701,14 @@ jobs:
         with:
           ref: 'main'
       - name: Setup Docker
-        if: matrix.os == 'ubuntu-22.04'
+        if: matrix.os == 'ubuntu-24.04'
         uses: crazy-max/ghaction-setup-docker@v1.0.0
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Setup QEMU
-        if: matrix.os == 'ubuntu-latest' # We only need QEMU for Linux builds
+        if: matrix.os == 'ubuntu-24.04' # We only need QEMU for Linux builds
         uses: docker/setup-qemu-action@v3
       - name: Install cibuildwheel
         run: python -m pip install cibuildwheel
@@ -760,16 +760,16 @@ jobs:
         arch: [x64, x86]
         # Windows pre-build is not working
         # - windows-latest
-        os: [macos-latest, ubuntu-22.04]
+        os: [macos-14, ubuntu-24.04]
         exclude:
           - arch: x86
-            os: macos-latest
+            os: macos-14
           - arch: x86
-            os: ubuntu-22.04
+            os: ubuntu-24.04
     runs-on: ${{ matrix.os }}
     env:
-      CC: gcc-12
-      CXX: g++-12
+      CC: gcc
+      CXX: g++
 
     steps:
       - name: Checkout the latest code
@@ -786,26 +786,26 @@ jobs:
           architecture: ${{ matrix.arch }}
 
       - name: Update compilers
-        if: matrix.os == 'ubuntu-22.04'
+        if: matrix.os == 'ubuntu-24.04'
         run: |
           sudo apt update
-          sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev gcc-12 g++-12
+          sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev
           sudo apt install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu g++-aarch64-linux-gnu
         # NPM installation fails spuriously all the time
       - name: Install Dependencies
         run: |
           npm ci --ignore-scripts || npm ci --ignore-scripts || npm ci --ignore-scripts
       - run: npm run prebuild-single
-        if: matrix.os != 'macos-latest'
+        if: matrix.os != 'macos-14'
       - run: npm run prebuild-darwin-x64+arm64
         env:
           CC: clang
           CXX: clang++
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-14'
       - run: file prebuilds/*/*
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-14'
       - name: Extra for cross build
-        if: matrix.os == 'ubuntu-22.04'
+        if: matrix.os == 'ubuntu-24.04'
         run: |
           export CC=aarch64-linux-gnu-gcc
           export CXX=aarch64-linux-gnu-g++
