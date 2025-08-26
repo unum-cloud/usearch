@@ -322,13 +322,9 @@ jobs:
           update_latest_release: true
 
   create_wasm_library:
-    name: WASM builds for C libraries
-    runs-on: ${{ matrix.os }}
+    name: Create WASM Libraries
+    runs-on: ubuntu-22.04
     needs: versioning
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-22.04, macos-15, windows-2022]
     steps:
       - name: Check out refreshed version
         uses: actions/checkout@v4
@@ -342,69 +338,43 @@ jobs:
         run: |
           version=$(cat VERSION)
           echo "version=$version" >> $GITHUB_OUTPUT
-        shell: bash
 
-      - name: Build library on Ubuntu
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.47
+
+      - name: Build WASM with CMake
         run: |
-          export WASI_VERSION=20
-          export WASI_VERSION_FULL=${WASI_VERSION}.0
-          wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sdk-${WASI_VERSION_FULL}-linux.tar.gz
-          tar xf wasi-sdk-${WASI_VERSION_FULL}-linux.tar.gz
-          rm -rf wasi-sdk-${WASI_VERSION_FULL}-linux.tar.gz
-          export WASI_SDK_PATH=/home/runner/work/usearch/usearch/wasi-sdk-${WASI_VERSION_FULL}
-          archs=("x86_64" "arm64")
-          cd ./c
-          for arch in "${archs[@]}"
-          do
-            ../wasi-sdk-20.0/bin/clang++ --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot -o libusearch_c.so -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared --target=wasm32-wasi-threads  -Wl,--no-entry -nostdlib -D_WASI_EMULATED_MMAN -march="$arch"
-            tar -czvf usearch_wasm_linux_"$arch"_${{ steps.set_version.outputs.version }}.tar.gz libusearch_c.so
-            mv usearch_wasm_linux_"$arch"_${{ steps.set_version.outputs.version }}.tar.gz ../ && rm -rf libusearch_c.so
-          done
-        if: matrix.os == 'ubuntu-22.04'
+          emcmake cmake -B build_wasm \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DUSEARCH_BUILD_LIB_C=ON \
+            -DUSEARCH_BUILD_TEST_CPP=OFF \
+            -DUSEARCH_BUILD_TEST_C=OFF \
+            -DUSEARCH_BUILD_BENCH_CPP=OFF \
+            -DUSEARCH_BUILD_SQLITE=OFF \
+            -DUSEARCH_USE_OPENMP=OFF \
+            -DUSEARCH_USE_SIMSIMD=ON \
+            -DUSEARCH_USE_JEMALLOC=OFF
+          
+          emmake cmake --build build_wasm --config Release
+          
+          # Package the WASM artifacts
+          cd build_wasm
+          tar -czf ../usearch_wasm_${{ steps.set_version.outputs.version }}.tar.gz \
+            libusearch_c.* \
+            ../c/usearch.h
+          
+          zip -r ../usearch_wasm_${{ steps.set_version.outputs.version }}.zip \
+            libusearch_c.* \
+            ../c/usearch.h
 
-      - name: Build library on MacOS
-        run: |
-          export WASI_VERSION=20
-          export WASI_VERSION_FULL=${WASI_VERSION}.0
-          wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sdk-${WASI_VERSION_FULL}-macos.tar.gz
-          tar xf wasi-sdk-${WASI_VERSION_FULL}-macos.tar.gz
-          rm -rf wasi-sdk-${WASI_VERSION_FULL}-macos.tar.gz
-          export WASI_SDK_PATH=/Users/runner/work/usearch/usearch/wasi-sdk-${WASI_VERSION_FULL}
-          archs=("x86_64" "arm64")
-          cd ./c 
-          for arch in "${archs[@]}"
-          do
-            ../wasi-sdk-20.0/bin/clang++ --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot -o libusearch_c.dylib -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared --target=wasm32-wasi-threads  -Wl,--no-entry -nostdlib -D_WASI_EMULATED_MMAN -march="$arch"
-            zip -r usearch_wasm_macos_"$arch"_${{ steps.set_version.outputs.version }}.zip libusearch_c.dylib
-            mv usearch_wasm_macos_"$arch"_${{ steps.set_version.outputs.version }}.zip ../ && rm -rf libusearch_c.dylib
-          done
-        if: matrix.os == 'macos-15'
-
-      - name: Build library on Windows
-        run: |
-          export WASI_VERSION=20
-          export WASI_VERSION_FULL=${WASI_VERSION}.0
-          curl -LOJ https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sdk-${WASI_VERSION_FULL}.m-mingw.tar.gz
-          tar xf wasi-sdk-${WASI_VERSION_FULL}.m-mingw.tar.gz
-          rm -rf wasi-sdk-${WASI_VERSION_FULL}.m-mingw.tar.gz
-          export WASI_SDK_PATH=/d/a/usearch/usearch/wasi-sdk-${WASI_VERSION_FULL}+m
-          archs=("x64" "x86")
-          cd ./c 
-          for arch in "${archs[@]}"
-          do
-            ../wasi-sdk-20.0+m/bin/clang++ --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot -o libusearch_c.so -O3 lib.cpp -I.  -I ../include/  -I ../fp16/include/ -shared --target=wasm32-wasi-threads  -Wl,--no-entry -nostdlib -D_WASI_EMULATED_MMAN -march="$arch"
-            tar -cvf usearch_wasm_windows_"$arch"_${{ steps.set_version.outputs.version }}.tar.gz libusearch_c.so
-            mv usearch_wasm_windows_"$arch"_${{ steps.set_version.outputs.version }}.tar.gz ../ && rm -rf libusearch_c.so
-          done
-        shell: bash
-        if: matrix.os == 'windows-2022'
-
-      - name: Upload archive
+      - name: Upload archives
         uses: xresloader/upload-to-github-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          file: "*.zip;*.tar.gz"
+          file: "usearch_wasm_*.tar.gz;usearch_wasm_*.zip"
           update_latest_release: true
 
   publish_checksums:
