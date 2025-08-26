@@ -63,7 +63,7 @@ model {
 
     components {
         usearch(NativeLibrarySpec) {
-            baseName = "usearch_c"  // Matches the naming convention in CMake builds for convenience
+            baseName = "usearch_jni"  // JNI library for Java bindings
             sources {
                 cpp {
                     source {

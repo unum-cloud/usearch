@@ -455,6 +455,13 @@ cp cloud/unum/usearch/libusearch.* .
 java -cp . -Djava.library.path="$(pwd)" cloud.unum.usearch.Index
 ```
 
+Or using CMake:
+
+```bash
+cmake -B build_artifacts -D USEARCH_BUILD_JNI=1
+cmake --build build_artifacts --config Release -j
+```
+
 ## C#
 
 Setup the .NET environment:

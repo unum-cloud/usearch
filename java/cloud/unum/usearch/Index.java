@@ -474,11 +474,11 @@ public class Index implements AutoCloseable {
 
     String libName;
     if (osName.contains("mac") || osName.contains("darwin")) {
-      libName = "libusearch_c.dylib";
+      libName = "libusearch_jni.dylib";
     } else if (osName.contains("windows")) {
-      libName = "libusearch_c.dll";
+      libName = "libusearch_jni.dll";
     } else {
-      libName = "libusearch_c.so";
+      libName = "libusearch_jni.so";
     }
 
     // Try architecture-specific first, then fall back to generic
