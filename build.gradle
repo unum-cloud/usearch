@@ -161,7 +161,7 @@ task fatJar(type: Jar) {
     from sourceSets.main.output
     
     // Include pre-built native libraries from all platforms
-    from("$buildDir/libs/usearch/shared") {
+    from("build/libs/usearch/shared") {
         include "**/*"
         into "usearch-native"
     }
@@ -173,18 +173,23 @@ task fatJar(type: Jar) {
     
     // Log what we're packaging for transparency
     doFirst {
-        def nativeDir = file("$buildDir/libs/usearch/shared")
+        def nativeDir = file("build/libs/usearch/shared")
+        println "Looking for native libraries in: ${nativeDir.absolutePath}"
+        println "Directory exists: ${nativeDir.exists()}"
         if (nativeDir.exists()) {
             def platforms = []
             nativeDir.eachDir { platforms.add(it.name) }
+            println "Found ${platforms.size()} platform directories: ${platforms}"
             if (platforms.size() > 0) {
                 println "Packaging native libraries for platforms: ${platforms.join(', ')}"
             } else {
                 println "ERROR: Native library directory exists but contains no platform subdirectories"
-                throw new GradleException("No platform directories found in $buildDir/libs/usearch/shared")
+                println "Directory contents:"
+                nativeDir.eachFile { println "  - ${it.name} (${it.isDirectory() ? 'dir' : 'file'})" }
+                throw new GradleException("No platform directories found in build/libs/usearch/shared")
             }
         } else {
-            throw new GradleException("Native libraries directory not found at $buildDir/libs/usearch/shared - ensure native libraries are downloaded first")
+            throw new GradleException("Native libraries directory not found at build/libs/usearch/shared - ensure native libraries are downloaded first")
         }
     }
 }
