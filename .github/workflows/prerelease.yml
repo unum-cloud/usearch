@@ -373,6 +373,29 @@ jobs:
         shell: bash
         working-directory: ${{ github.workspace }}/csharp
 
+  test_windows_arm:
+    name: Windows ARM64
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull Git submodules
+        run: git submodule update --init --recursive
+
+      - name: Setup MSVC for ARM64
+        uses: microsoft/setup-msbuild@v2
+
+        # C/C++
+      - name: Build C/C++ (ARM64)
+        run: |
+          choco install cmake
+          cmake -G "Visual Studio 17 2022" -A ARM64 -B build_artifacts -D CMAKE_BUILD_TYPE=RelWithDebInfo -D USEARCH_BUILD_LIB_C=1 -D USEARCH_BUILD_SQLITE=0 -D USEARCH_BUILD_TEST_CPP=0 -D USEARCH_BUILD_TEST_C=0
+          cmake --build build_artifacts --config RelWithDebInfo
+
+      - name: Verify ARM64 build artifacts
+        run: |
+          if (!(Test-Path "build_artifacts\libusearch_c.dll")) { exit 1 }
+          Write-Host "ARM64 DLL built successfully"
+
   build_docker:
     name: Docker
     runs-on: ubuntu-22.04
