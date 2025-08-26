@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    branches: ["main"]
+    branches: ['main']
 
 concurrency:
   group: release
@@ -15,7 +15,7 @@ env:
   DOTNET_VERSION: 8.0.x
   NODE_VERSION: 20
   JAVA_VERSION: 21
-  GO_VERSION: "^1.21.0"
+  GO_VERSION: '^1.21.0'
   ANDROID_NDK_VERSION: 26.3.11579264
   ANDROID_SDK_VERSION: 21
   EMSCRIPTEN_VERSION: 3.1.47
@@ -41,8 +41,8 @@ jobs:
       - name: Run TinySemVer
         uses: ashvardanian/tinysemver@v2.1.1
         with:
-          verbose: "true"
-          version-file: "VERSION"
+          verbose: 'true'
+          version-file: 'VERSION'
           update-version-in: |
             package.json:"version": "(\d+\.\d+\.\d+)"
             package-lock.json:"usearch",\n\s+"version": "(\d+\.\d+\.\d+)"
@@ -61,9 +61,9 @@ jobs:
             include/usearch/index.hpp:^#define USEARCH_VERSION_MINOR (\d+)
           update-patch-version-in: |
             include/usearch/index.hpp:^#define USEARCH_VERSION_PATCH (\d+)
-          dry-run: "false"
-          push: "true"
-          create-release: "true"
+          dry-run: 'false'
+          push: 'true'
+          create-release: 'true'
           github-token: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
 
   rebase:
@@ -114,7 +114,7 @@ jobs:
       - name: Check out refreshed version
         uses: actions/checkout@v4
         with:
-          ref: "main"
+          ref: 'main'
       - name: Pull Git submodules
         run: git submodule update --init --recursive
 
@@ -163,7 +163,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          file: "*.so;*.deb"
+          file: '*.so;*.deb'
           update_latest_release: true
 
   create_windows_dll_library:
@@ -178,7 +178,7 @@ jobs:
       - name: Check out refreshed version
         uses: actions/checkout@v4
         with:
-          ref: "main"
+          ref: 'main'
       - name: Pull Git submodules
         run: git submodule update --init --recursive
 
@@ -197,7 +197,7 @@ jobs:
         with:
           platform: ${{ matrix.arch }}
           version: ${{ env.MINGW_VERSION }}
-          
+
       - name: Setup MSVC for ARM64
         if: matrix.arch == 'arm64'
         uses: microsoft/setup-msbuild@v2
@@ -215,7 +215,7 @@ jobs:
           cmake -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_BUILD_SQLITE=0 -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_BENCH_CPP=0 -B ./build_release
           cmake --build ./build_release --config Release
           tar -cvf usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar .\build_release\libusearch_c.dll .\c\usearch.h
-          
+
       - name: Build library (MSVC ARM64)
         if: matrix.arch == 'arm64'
         run: |
@@ -228,7 +228,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          file: "usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar"
+          file: 'usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar'
           update_latest_release: true
 
   create_macos_dylib_library:
@@ -243,7 +243,7 @@ jobs:
       - name: Check out refreshed version
         uses: actions/checkout@v4
         with:
-          ref: "main"
+          ref: 'main'
       - name: Pull Git submodules
         run: git submodule update --init --recursive
 
@@ -277,7 +277,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          file: "*.dylib"
+          file: '*.dylib'
           update_latest_release: true
 
       - name: Upload archive
@@ -285,7 +285,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          file: "*.zip"
+          file: '*.zip'
           update_latest_release: true
 
   create_android_library:
@@ -304,25 +304,25 @@ jobs:
             abi: arm64-v8a
             target: aarch64-linux-android
             arch: arm64
-    
+
     steps:
       - name: Check out refreshed version
         uses: actions/checkout@v4
         with:
-          ref: "main"
+          ref: 'main'
       - name: Pull Git submodules
         run: git submodule update --init --recursive
-      
+
       - name: Get version
         id: set_version
         run: |
           version=$(cat VERSION)
           echo "version=$version" >> $GITHUB_OUTPUT
-      
+
       - name: Install NDK
         run: |
           ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;${{ env.ANDROID_NDK_VERSION }}"
-      
+
       - name: Build C/C++
         run: |
           cmake -B build_artifacts \
@@ -335,17 +335,17 @@ jobs:
             -D USEARCH_BUILD_TEST_CPP=0 \
             -D USEARCH_BUILD_BENCH_CPP=0
           cmake --build build_artifacts --config Release
-      
+
       - name: Package library
         run: |
           zip -r usearch_android_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.zip build_artifacts/libusearch_c.so c/usearch.h
-      
+
       - name: Upload archive
         uses: xresloader/upload-to-github-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          file: "*.zip"
+          file: '*.zip'
           update_latest_release: true
 
   create_wasm_library:
@@ -356,7 +356,7 @@ jobs:
       - name: Check out refreshed version
         uses: actions/checkout@v4
         with:
-          ref: "main"
+          ref: 'main'
       - name: Pull Git submodules
         run: git submodule update --init --recursive
 
@@ -383,9 +383,9 @@ jobs:
             -DUSEARCH_USE_OPENMP=OFF \
             -DUSEARCH_USE_SIMSIMD=ON \
             -DUSEARCH_USE_JEMALLOC=OFF
-          
+
           emmake cmake --build build_wasm --config Release
-          
+
           cd build_wasm
           tar -czf ../usearch_wasm_${{ steps.set_version.outputs.version }}.tar.gz libusearch_c.* ../c/usearch.h          
           zip -r ../usearch_wasm_${{ steps.set_version.outputs.version }}.zip libusearch_c.* ../c/usearch.h
@@ -395,7 +395,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          file: "usearch_wasm_*.tar.gz;usearch_wasm_*.zip"
+          file: 'usearch_wasm_*.tar.gz;usearch_wasm_*.zip'
           update_latest_release: true
 
   publish_checksums:
@@ -422,11 +422,10 @@ jobs:
         uses: robinraju/release-downloader@v1.12
         with:
           latest: true
-          fileName: "*"
-          out-file-path: "downloads"
+          fileName: '*'
+          out-file-path: 'downloads'
           tarBall: true
           zipBall: true
-
 
       - name: Generate hash list
         id: hash_list
@@ -482,7 +481,7 @@ jobs:
         env:
           CIBW_BUILD: cp${{ matrix.python-version }}-*
           CIBW_ENABLE: cpython-freethreading # No-GIL 3.13t builds
-          CIBW_TEST_SKIP: "*-win_arm64" # Too complex to emulate Windows ARM
+          CIBW_TEST_SKIP: '*-win_arm64' # Too complex to emulate Windows ARM
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -540,7 +539,7 @@ jobs:
       - name: Checkout the latest code
         uses: actions/checkout@v4
         with:
-          ref: "main"
+          ref: 'main'
       - name: Pull Git submodules
         run: git submodule update --init --recursive
 
@@ -595,7 +594,7 @@ jobs:
       - name: Check out refreshed version
         uses: actions/checkout@v4
         with:
-          ref: "main"
+          ref: 'main'
       - name: Pull Git submodules
         run: git submodule update --init --recursive
 
@@ -642,7 +641,7 @@ jobs:
       - name: Check out refreshed version
         uses: actions/checkout@v4
         with:
-          ref: "main"
+          ref: 'main'
       - name: Pull Git submodules
         run: git submodule update --init --recursive
       - name: Hide submodule Crates
@@ -660,7 +659,14 @@ jobs:
 
   publish_java:
     name: Publish Java
-    needs: [versioning, create_linux_deb_package, create_windows_dll_library, create_macos_dylib_library, create_android_library]
+    needs:
+      [
+        versioning,
+        create_linux_deb_package,
+        create_windows_dll_library,
+        create_macos_dylib_library,
+        create_android_library,
+      ]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -676,20 +682,20 @@ jobs:
       - name: Check out refreshed version
         uses: actions/checkout@v4
         with:
-          ref: "main"
+          ref: 'main'
       - name: Pull Git submodules
         run: git submodule update --init --recursive
-        
+
       - name: Create native libraries directory
         run: mkdir -p build/libs/usearch/shared
-        
+
       - name: Download release assets
         uses: robinraju/release-downloader@v1.12
         with:
           latest: true
-          fileName: "*"
-          out-file-path: "temp-natives"
-          
+          fileName: '*'
+          out-file-path: 'temp-natives'
+
       - name: Extract native libraries for all platforms
         run: |
           mkdir -p temp-extract/windows-x86_64
@@ -706,39 +712,39 @@ jobs:
           mkdir -p build/libs/usearch/shared/darwin-arm64
           mkdir -p build/libs/usearch/shared/android-arm64
           mkdir -p build/libs/usearch/shared/android-arm32
-          
+
           echo "=== Extracting Linux libraries ==="
           find temp-natives -name "*linux*amd64*.so" -exec cp {} build/libs/usearch/shared/linux-x86_64/libusearch_c.so \; 2>/dev/null || true
           find temp-natives -name "*linux*arm64*.so" -exec cp {} build/libs/usearch/shared/linux-arm64/libusearch_c.so \; 2>/dev/null || true
-          
+
           echo "=== Extracting Windows libraries ==="
           find temp-natives -name "*windows*x64*.tar" -exec tar -xf {} -C temp-extract/windows-x86_64 \; 2>/dev/null || true
           find temp-extract/windows-x86_64 -name "libusearch_c.dll" -exec cp {} build/libs/usearch/shared/windows-x86_64/ \; 2>/dev/null || true
           find temp-natives -name "*windows*arm64*.tar" -exec tar -xf {} -C temp-extract/windows-arm64 \; 2>/dev/null || true
           find temp-extract/windows-arm64 -name "libusearch_c.dll" -exec cp {} build/libs/usearch/shared/windows-arm64/ \; 2>/dev/null || true
-          
+
           echo "=== Extracting macOS libraries ==="
           find temp-natives -name "*macos*arm64*.zip" -exec unzip -j {} -d temp-extract/macos-arm64 \; 2>/dev/null || true
           find temp-extract/macos-arm64 -name "libusearch_c.dylib" -exec cp {} build/libs/usearch/shared/darwin-arm64/ \; 2>/dev/null || true
           find temp-natives -name "*macos*x86_64*.zip" -exec unzip -j {} -d temp-extract/macos-x86_64 \; 2>/dev/null || true  
           find temp-extract/macos-x86_64 -name "libusearch_c.dylib" -exec cp {} build/libs/usearch/shared/darwin-x86_64/ \; 2>/dev/null || true
-          
+
           echo "=== Extracting Android libraries ==="
           find temp-natives -name "*android*arm64*.zip" -exec unzip -j {} -d temp-extract/android-arm64 \; 2>/dev/null || true
           find temp-extract/android-arm64 -name "libusearch_c.so" -exec cp {} build/libs/usearch/shared/android-arm64/ \; 2>/dev/null || true
           find temp-natives -name "*android*arm32*.zip" -exec unzip -j {} -d temp-extract/android-arm32 \; 2>/dev/null || true
           find temp-extract/android-arm32 -name "libusearch_c.so" -exec cp {} build/libs/usearch/shared/android-arm32/ \; 2>/dev/null || true
-          
+
           echo "=== Collected libraries ==="
           tree build/libs/usearch/shared/
           echo "=== Temp natives directory contents ==="
           find temp-natives -name "*libusearch*" -type f | head -20
-          
+
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
           java-version: ${{ env.JAVA_VERSION }}
-          distribution: "adopt"
+          distribution: 'adopt'
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v3.5.0
       - name: Execute Gradle build
@@ -753,13 +759,13 @@ jobs:
             echo "=== Contents of $jar ==="
             jar tf "$jar" | grep -E "(usearch-native|\.so|\.dll|\.dylib)" | sort
           done
-          
+
       - name: Upload Java JAR to GitHub Release
         uses: xresloader/upload-to-github-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          file: "build/libs/*.jar"
+          file: 'build/libs/*.jar'
           update_latest_release: true
 
   publish_swift:
@@ -770,7 +776,7 @@ jobs:
       - name: Check out refreshed version
         uses: actions/checkout@v4
         with:
-          ref: "main"
+          ref: 'main'
       - name: Pull Git submodules
         run: git submodule update --init --recursive
       - name: Build
@@ -791,7 +797,7 @@ jobs:
       - name: Check out refreshed version
         uses: actions/checkout@v4
         with:
-          ref: "main"
+          ref: 'main'
       - name: Pull Git submodules
         run: git submodule update --init --recursive
       - name: Login to Docker Hub
@@ -838,7 +844,7 @@ jobs:
       - name: Check out refreshed version
         uses: actions/checkout@v4
         with:
-          ref: "main"
+          ref: 'main'
       - name: Pull Git submodules
         run: git submodule update --init --recursive
 
@@ -894,7 +900,7 @@ jobs:
       - name: Check out refreshed version
         uses: actions/checkout@v4
         with:
-          ref: "main"
+          ref: 'main'
       - name: Pull Git submodules
         run: git submodule update --init --recursive
 
@@ -944,7 +950,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: "main"
+          ref: 'main'
       - name: Install dependencies
         run: |
           sudo apt update && 
@@ -1009,4 +1015,4 @@ jobs:
         uses: fjogeleit/http-request-action@v1
         with:
           url: ${{ secrets.DOCS_VERCEL }}
-          method: "POST"
+          method: 'POST'
