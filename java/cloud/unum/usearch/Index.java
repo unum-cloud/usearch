@@ -509,7 +509,7 @@ public class Index implements AutoCloseable {
     // Normalize architecture names
     String normalizedArch;
     if (osArch.equals("amd64") || osArch.equals("x86_64")) {
-      normalizedArch = "x86_64";
+      normalizedArch = "amd64";
     } else if (osArch.equals("aarch64") || osArch.equals("arm64")) {
       normalizedArch = "arm64";
     } else if (osArch.equals("x86") || osArch.equals("i386")) {

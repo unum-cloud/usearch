@@ -154,6 +154,13 @@ jobs:
           echo -e "Package: usearch\nVersion: ${{ steps.set_version.outputs.version }}\nMaintainer: Ash Vardanian\nArchitecture: ${{ matrix.arch }}\nDescription: Faster & Smaller Single-File Search Engine for Vectors & Texts" > "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}/DEBIAN/control"
           dpkg-deb --build "usearch_linux_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}"
 
+      - name: Upload native library for Java
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-libs-linux-${{ matrix.arch }}
+          path: build_release/libusearch_c.so
+          retention-days: 1
+
       - name: Upload library
         uses: xresloader/upload-to-github-release@v1
         env:
@@ -219,6 +226,13 @@ jobs:
           cmake --build ./build_release --config Release
           tar -cvf usearch_windows_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.tar .\build_release\libusearch_c.dll .\c\usearch.h
 
+      - name: Upload native library for Java
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-libs-windows-${{ matrix.arch }}
+          path: build_release/libusearch_c.dll
+          retention-days: 1
+
       - name: Upload archive
         uses: xresloader/upload-to-github-release@v1
         env:
@@ -267,6 +281,13 @@ jobs:
           cmake --build ./build_release --config Release        
           zip -r usearch_macos_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.zip build_release/libusearch_c.dylib c/usearch.h
           mv build_release/libusearch_sqlite.dylib usearch_sqlite_macos_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.dylib
+
+      - name: Upload native library for Java
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-libs-macos-${{ matrix.arch }}
+          path: build_release/libusearch_c.dylib
+          retention-days: 1
 
       - name: Upload library
         uses: xresloader/upload-to-github-release@v1
@@ -335,6 +356,13 @@ jobs:
       - name: Package library
         run: |
           zip -r usearch_android_${{ matrix.arch }}_${{ steps.set_version.outputs.version }}.zip build_artifacts/libusearch_c.so c/usearch.h
+
+      - name: Upload native library for Java
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-libs-android-${{ matrix.arch }}
+          path: build_artifacts/libusearch_c.so
+          retention-days: 1
 
       - name: Upload archive
         uses: xresloader/upload-to-github-release@v1
@@ -682,59 +710,34 @@ jobs:
       - name: Pull Git submodules
         run: git submodule update --init --recursive
 
-      - name: Create native libraries directory
-        run: mkdir -p build/libs/usearch/shared
-
-      - name: Download release assets
-        uses: robinraju/release-downloader@v1.12
+      - name: Download all native libraries
+        uses: actions/download-artifact@v4
         with:
-          latest: true
-          fileName: '*'
-          out-file-path: 'temp-natives'
-
-      - name: Extract native libraries for all platforms
+          pattern: native-libs-*
+          
+      - name: Organize libraries for Gradle
         run: |
-          mkdir -p temp-extract/windows-x86_64
-          mkdir -p temp-extract/windows-arm64
-          mkdir -p temp-extract/macos-arm64
-          mkdir -p temp-extract/macos-x86_64
-          mkdir -p temp-extract/android-arm64
-          mkdir -p temp-extract/android-arm32
-          mkdir -p build/libs/usearch/shared/linux-x86_64
-          mkdir -p build/libs/usearch/shared/linux-arm64
-          mkdir -p build/libs/usearch/shared/windows-x86_64
-          mkdir -p build/libs/usearch/shared/windows-arm64
-          mkdir -p build/libs/usearch/shared/darwin-x86_64
-          mkdir -p build/libs/usearch/shared/darwin-arm64
-          mkdir -p build/libs/usearch/shared/android-arm64
-          mkdir -p build/libs/usearch/shared/android-arm32
-
-          echo "=== Extracting Linux libraries ==="
-          find temp-natives -name "*linux*amd64*.so" -exec cp {} build/libs/usearch/shared/linux-x86_64/libusearch_c.so \; 2>/dev/null || true
-          find temp-natives -name "*linux*arm64*.so" -exec cp {} build/libs/usearch/shared/linux-arm64/libusearch_c.so \; 2>/dev/null || true
-
-          echo "=== Extracting Windows libraries ==="
-          find temp-natives -name "*windows*x64*.tar" -exec tar -xf {} -C temp-extract/windows-x86_64 \; 2>/dev/null || true
-          find temp-extract/windows-x86_64 -name "libusearch_c.dll" -exec cp {} build/libs/usearch/shared/windows-x86_64/ \; 2>/dev/null || true
-          find temp-natives -name "*windows*arm64*.tar" -exec tar -xf {} -C temp-extract/windows-arm64 \; 2>/dev/null || true
-          find temp-extract/windows-arm64 -name "libusearch_c.dll" -exec cp {} build/libs/usearch/shared/windows-arm64/ \; 2>/dev/null || true
-
-          echo "=== Extracting macOS libraries ==="
-          find temp-natives -name "*macos*arm64*.zip" -exec unzip -j {} -d temp-extract/macos-arm64 \; 2>/dev/null || true
-          find temp-extract/macos-arm64 -name "libusearch_c.dylib" -exec cp {} build/libs/usearch/shared/darwin-arm64/ \; 2>/dev/null || true
-          find temp-natives -name "*macos*x86_64*.zip" -exec unzip -j {} -d temp-extract/macos-x86_64 \; 2>/dev/null || true  
-          find temp-extract/macos-x86_64 -name "libusearch_c.dylib" -exec cp {} build/libs/usearch/shared/darwin-x86_64/ \; 2>/dev/null || true
-
-          echo "=== Extracting Android libraries ==="
-          find temp-natives -name "*android*arm64*.zip" -exec unzip -j {} -d temp-extract/android-arm64 \; 2>/dev/null || true
-          find temp-extract/android-arm64 -name "libusearch_c.so" -exec cp {} build/libs/usearch/shared/android-arm64/ \; 2>/dev/null || true
-          find temp-natives -name "*android*arm32*.zip" -exec unzip -j {} -d temp-extract/android-arm32 \; 2>/dev/null || true
-          find temp-extract/android-arm32 -name "libusearch_c.so" -exec cp {} build/libs/usearch/shared/android-arm32/ \; 2>/dev/null || true
-
-          echo "=== Collected libraries ==="
-          tree build/libs/usearch/shared/
-          echo "=== Temp natives directory contents ==="
-          find temp-natives -name "*libusearch*" -type f | head -20
+          mkdir -p build/libs/usearch/shared/{linux-amd64,linux-arm64,windows-amd64,windows-x86,windows-arm64,darwin-amd64,darwin-arm64,android-arm64,android-arm32}
+          
+          # Linux
+          cp native-libs-linux-amd64/libusearch_c.so build/libs/usearch/shared/linux-amd64/ || true
+          cp native-libs-linux-arm64/libusearch_c.so build/libs/usearch/shared/linux-arm64/ || true
+          
+          # Windows  
+          cp native-libs-windows-x64/libusearch_c.dll build/libs/usearch/shared/windows-amd64/ || true
+          cp native-libs-windows-x86/libusearch_c.dll build/libs/usearch/shared/windows-x86/ || true
+          cp native-libs-windows-arm64/libusearch_c.dll build/libs/usearch/shared/windows-arm64/ || true
+          
+          # macOS
+          cp native-libs-macos-arm64/libusearch_c.dylib build/libs/usearch/shared/darwin-arm64/ || true
+          cp native-libs-macos-x86_64/libusearch_c.dylib build/libs/usearch/shared/darwin-amd64/ || true
+          
+          # Android
+          cp native-libs-android-arm64/libusearch_c.so build/libs/usearch/shared/android-arm64/ || true
+          cp native-libs-android-arm32/libusearch_c.so build/libs/usearch/shared/android-arm32/ || true
+          
+          echo "=== Native libraries ready ==="
+          find build/libs/usearch/shared -name "libusearch_c.*" | sort
 
       - name: Set up Java
         uses: actions/setup-java@v5
