@@ -543,7 +543,10 @@ jobs:
           sudo apt update
           sudo apt install -y cmake build-essential libjemalloc-dev libomp-dev gcc-12 g++-12
           sudo apt install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu g++-aarch64-linux-gnu
-      - run: npm ci --ignore-scripts
+        # NPM installation fails spuriously all the time
+      - name: Install Dependencies
+        run: |
+          npm ci --ignore-scripts || npm ci --ignore-scripts || npm ci --ignore-scripts
       - run: npm run prebuild-single
         if: matrix.os != 'macos-latest'
       - run: npm run prebuild-darwin-x64+arm64
@@ -598,8 +601,10 @@ jobs:
       - name: Look for links
         run: find . -type f -links +1
 
+        # NPM installation fails spuriously all the time
       - name: Install Dependencies
-        run: npm ci --ignore-scripts
+        run: |
+          npm ci --ignore-scripts || npm ci --ignore-scripts || npm ci --ignore-scripts
 
       - name: Build the JS from TS
         run: npm run build-js
@@ -910,9 +915,11 @@ jobs:
           npm install -g jsdoc typedoc
       - name: Install USearch from PyPi
         run: pip install usearch
+
+        # NPM installation fails spuriously all the time
       - name: Build CJS JS
         run: |
-          npm ci --ignore-scripts
+          npm ci --ignore-scripts || npm ci --ignore-scripts || npm ci --ignore-scripts
           npm run build-js
       - name: Build documentation
         run: cd docs && doxygen conf.dox && make html
