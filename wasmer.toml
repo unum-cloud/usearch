@@ -1,6 +1,6 @@
 [package]
 name = "unum/usearch"
-version = "2.19.22"
+version = "2.19.23"
 description = "Smaller & Faster Single-File Vector Search Engine from Unum"
 license = "Apache-2.0"
 readme = "README.md"
