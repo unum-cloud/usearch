@@ -4,10 +4,6 @@ on:
   push:
     branches: ['main']
 
-concurrency:
-  group: release
-  cancel-in-progress: true
-
 env:
   GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
   PYTHONUTF8: 1
@@ -756,11 +752,11 @@ jobs:
         run: |
           echo "=== Verifying fat JAR contents ==="
           jar tf build/libs/usearch-*.jar | grep -E "usearch-native.*\.(so|dll|dylib)" | sort
-          
+
           # Count native libraries
           lib_count=$(jar tf build/libs/usearch-*.jar | grep -E "usearch-native.*\.(so|dll|dylib)" | wc -l)
           echo "Found $lib_count native libraries in fat JAR"
-          
+
           if [ "$lib_count" -lt 8 ]; then
             echo "ERROR: Expected at least 8 platform libraries, found only $lib_count"
             jar tf build/libs/usearch-*.jar | head -50
@@ -881,7 +877,7 @@ jobs:
         if: matrix.os == 'macos-15'
         run: |
           brew update
-          brew install cmake
+          brew reinstall cmake
           cmake -B build_artifacts -DCMAKE_BUILD_TYPE=Release -DUSEARCH_BUILD_TEST_CPP=0 -DUSEARCH_BUILD_TEST_C=0 -DUSEARCH_BUILD_LIB_C=1 -DUSEARCH_USE_OPENMP=0 -DUSEARCH_USE_SIMSIMD=1 -DUSEARCH_USE_JEMALLOC=0
           cmake --build build_artifacts --config Release
           mkdir -p "${{ github.workspace }}/csharp/lib/runtimes/osx-arm64/native"
