@@ -331,9 +331,10 @@ function (setup_target TARGET_NAME)
         target_compile_options(${TARGET_NAME} PRIVATE -w -ferror-limit=1)
 
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        # MSVC has no O3 optimization level
         target_compile_options(${TARGET_NAME} PRIVATE /wd4068 /wd4996)
         target_compile_options(
-            ${TARGET_NAME} PRIVATE $<$<CONFIG:DEBUG>:/DEBUG> $<$<CONFIG:RELEASE>:/O3> $<$<CONFIG:RELWITHDEBINFO>:/O3
+            ${TARGET_NAME} PRIVATE $<$<CONFIG:DEBUG>:/DEBUG> $<$<CONFIG:RELEASE>:/O2> $<$<CONFIG:RELWITHDEBINFO>:/O2
                                    /DEBUG>
         )
     endif ()
