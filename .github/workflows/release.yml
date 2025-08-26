@@ -372,7 +372,7 @@ jobs:
           file: '*.zip'
           update_latest_release: true
 
-  build_artifacts_linux:
+  build_jni_linux:
     name: Build JNI Libraries for Linux
     runs-on: ubuntu-22.04
     needs: versioning
@@ -425,7 +425,7 @@ jobs:
           path: build_artifacts/java/libusearch_jni.so
           retention-days: 1
 
-  build_artifacts_windows:
+  build_jni_windows:
     name: Build JNI Libraries for Windows
     runs-on: windows-2022
     needs: versioning
@@ -471,7 +471,7 @@ jobs:
           path: build_artifacts/java/Release/usearch_jni.dll
           retention-days: 1
 
-  build_artifacts_macos:
+  build_jni_macos:
     name: Build JNI Libraries for macOS
     runs-on: macos-13
     needs: versioning
@@ -516,7 +516,7 @@ jobs:
           path: build_artifacts/java/libusearch_jni.dylib
           retention-days: 1
 
-  build_artifacts_android:
+  build_jni_android:
     name: Build JNI Libraries for Android
     runs-on: ubuntu-22.04
     needs: versioning
@@ -629,7 +629,9 @@ jobs:
         create_linux_deb_package,
         create_windows_dll_library,
         create_macos_dylib_library,
+        create_android_library,
         create_wasm_library,
+        publish_java,
         deploy_docs_pages,
       ]
     steps:
