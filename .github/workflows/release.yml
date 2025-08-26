@@ -4,6 +4,10 @@ on:
   push:
     branches: ["main"]
 
+concurrency:
+  group: release
+  cancel-in-progress: true
+
 env:
   GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
   PYTHONUTF8: 1
