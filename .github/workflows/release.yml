@@ -406,17 +406,21 @@ jobs:
           tarBall: true
           zipBall: true
 
-      - name: Calculate source hashes
-        id: hashes
+
+      - name: Generate hash list
+        id: hash_list
         run: |
-          i=1
           cd $GITHUB_WORKSPACE/downloads
-          for asset_name in $(ls); do
-            asset_hash=$(sha256sum $asset_name | awk '{print $1}')
-            echo "asset_name_$i=$asset_name" >> $GITHUB_OUTPUT
-            echo "asset_hash_$i=$asset_hash" >> $GITHUB_OUTPUT
-            i=$((i+1))
-          done
+          {
+            echo "## Hashes"
+            for asset_name in $(ls); do
+              asset_hash=$(sha256sum $asset_name | awk '{print $1}')
+              echo "* $asset_name : \`$asset_hash\`"
+            done
+          } > hashes.md
+          echo "hash_body<<EOF" >> $GITHUB_OUTPUT
+          cat hashes.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Upload hashes to release
         uses: irongut/EditRelease@v1.2.0
@@ -425,23 +429,7 @@ jobs:
           id: ${{ steps.last_release.outputs.last_release_id }}
           prerelease: false
           replacebody: false
-          body: |
-            ## Hashes
-            * ${{ steps.hashes.outputs.asset_name_1 }} : `${{ steps.hashes.outputs.asset_hash_1 }}`
-            * ${{ steps.hashes.outputs.asset_name_2 }} : `${{ steps.hashes.outputs.asset_hash_2 }}`
-            * ${{ steps.hashes.outputs.asset_name_3 }} : `${{ steps.hashes.outputs.asset_hash_3 }}`
-            * ${{ steps.hashes.outputs.asset_name_4 }} : `${{ steps.hashes.outputs.asset_hash_4 }}`
-            * ${{ steps.hashes.outputs.asset_name_5 }} : `${{ steps.hashes.outputs.asset_hash_5 }}`
-            * ${{ steps.hashes.outputs.asset_name_6 }} : `${{ steps.hashes.outputs.asset_hash_6 }}`
-            * ${{ steps.hashes.outputs.asset_name_7 }} : `${{ steps.hashes.outputs.asset_hash_7 }}`
-            * ${{ steps.hashes.outputs.asset_name_8 }} : `${{ steps.hashes.outputs.asset_hash_8 }}`
-            * ${{ steps.hashes.outputs.asset_name_9 }} : `${{ steps.hashes.outputs.asset_hash_9 }}`
-            * ${{ steps.hashes.outputs.asset_name_10 }} : `${{ steps.hashes.outputs.asset_hash_10 }}`
-            * ${{ steps.hashes.outputs.asset_name_11 }} : `${{ steps.hashes.outputs.asset_hash_11 }}`
-            * ${{ steps.hashes.outputs.asset_name_12 }} : `${{ steps.hashes.outputs.asset_hash_12 }}`
-            * ${{ steps.hashes.outputs.asset_name_13 }} : `${{ steps.hashes.outputs.asset_hash_13 }}`
-            * ${{ steps.hashes.outputs.asset_name_14 }} : `${{ steps.hashes.outputs.asset_hash_14 }}`
-            * ${{ steps.hashes.outputs.asset_name_15 }} : `${{ steps.hashes.outputs.asset_hash_15 }}`
+          body: ${{ steps.hash_list.outputs.hash_body }}
 
   build_wheels:
     name: Build Python Wheels
