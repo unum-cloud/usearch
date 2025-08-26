@@ -77,7 +77,7 @@ class Test: XCTestCase {
         XCTAssertTrue(try index.contains(key: 42))
         XCTAssertEqual(try index.count(key: 42), 2)
         XCTAssertEqual(try index.count(key: 49), 0)
-        try index.rename(from: 42, to: 49)
+        _ = try index.rename(from: 42, to: 49)
         XCTAssertEqual(try index.count(key: 49), 2)
 
         let refetched: [[Float]]? = try index.get(key: 49, count: 2)

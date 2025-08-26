@@ -1,4 +1,4 @@
-// swift-tools-version:5.9
+// swift-tools-version:6.2
 
 import PackageDescription
 
@@ -14,14 +14,14 @@ var targets: [Target] = []
 
 // Conditionally build the Objective-C target only on non-Linux platforms.
 #if !os(Linux)
-targets.append(
-    .target(
-        name: "USearchObjectiveC",
-        path: "objc",
-        sources: ["USearchObjective.mm", "../simsimd/c/lib.c"],
-        cxxSettings: cxxSettings
+    targets.append(
+        .target(
+            name: "USearchObjectiveC",
+            path: "objc",
+            sources: ["USearchObjective.mm", "../simsimd/c/lib.c"],
+            cxxSettings: cxxSettings
+        )
     )
-)
 #endif
 
 // Always build the C and Swift targets.
@@ -46,19 +46,19 @@ targets += [
         dependencies: ["USearch"],
         path: "swift",
         sources: ["Test.swift"]
-    )
+    ),
 ]
 
 // Configure products similarly.
 var products: [Product] = []
 
 #if !os(Linux)
-products.append(
-    .library(
-        name: "USearchObjectiveC",
-        targets: ["USearchObjectiveC"]
+    products.append(
+        .library(
+            name: "USearchObjectiveC",
+            targets: ["USearchObjectiveC"]
+        )
     )
-)
 #endif
 
 products.append(

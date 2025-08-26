@@ -367,6 +367,21 @@ swift-format . -i -r
 The style is controlled by the `.swift-format` JSON file in the root of the repository.
 As there is no standard for Swift formatting, even Apple's own `swift-format` tool and Xcode differ in their formatting rules, and available settings.
 
+---
+
+Running Swift on Linux requires a couple of extra steps - [`swift.org/install` page](https://www.swift.org/install).
+Alternatively, on Linux, the official Swift Docker image can be used for builds and tests:
+
+```bash
+sudo docker run --rm -v "$PWD:/workspace" -w /workspace swift:6.2 /bin/bash -cl "swift build -c release --static-swift-stdlib && swift test -c release --enable-test-discovery"
+```
+
+To format the code on Linux:
+
+```bash
+sudo docker run --rm -v "$PWD:/workspace" -w /workspace swift:6.2 /bin/bash -c "swift format . -i -r"
+```
+
 ## GoLang
 
 USearch provides GoLang bindings, that depend on the C library that must be installed beforehand.

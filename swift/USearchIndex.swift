@@ -99,8 +99,7 @@ public enum USearchError: Error {
 
     static func fromErrorString(_ errorString: String) -> USearchError {
         switch errorString {
-        case
-            "Out of memory!",
+        case "Out of memory!",
             "Out of memory",
             "Out of memory when preparing contexts!",
             "Out of memory, allocating a temporary buffer for batch results",
@@ -126,12 +125,11 @@ public enum USearchError: Error {
             return .keyMissing
         case "Failed to serialize into stream":
             return .serializationError
-        case
-            "Failed to read 32-bit dimensions of the matrix",
+        case "Failed to read 32-bit dimensions of the matrix",
             "Failed to read 64-bit dimensions of the matrix",
             "Failed to allocate memory to address vectors",
             "Failed to read vectors",
-            "Failed to read the index ", // space left intentionally blank
+            "Failed to read the index ",  // space left intentionally blank
             "Magic header mismatch - the file isn't an index",
             "File format may be different, please rebuild",
             "Key type doesn't match, consider rebuilding",
@@ -140,8 +138,7 @@ public enum USearchError: Error {
             "File is corrupted and lacks matrix dimensions",
             "File is corrupted and lacks a header":
             return .deserializationError
-        case
-            "Can't add to an immutable index",
+        case "Can't add to an immutable index",
             "Can't remove from an immutable index":
             return .immutableError
         case "Free keys count mismatch":
@@ -213,8 +210,19 @@ public class USearchIndex: NSObject {
      * Higher connectivity improves quantization, increases memory usage, and reduces construction speed.
      * @param quantization Quantization of internal vector representations. Lower quantization means higher speed.
      */
-    public static func make(metric: USearchMetric, dimensions: UInt32, connectivity: UInt32, quantization: USearchScalar) throws -> USearchIndex {
-        return try make(metric: metric, dimensions: dimensions, connectivity: connectivity, quantization: quantization, multi: false)
+    public static func make(
+        metric: USearchMetric,
+        dimensions: UInt32,
+        connectivity: UInt32,
+        quantization: USearchScalar
+    ) throws -> USearchIndex {
+        return try make(
+            metric: metric,
+            dimensions: dimensions,
+            connectivity: connectivity,
+            quantization: quantization,
+            multi: false
+        )
     }
 
     /**
@@ -226,7 +234,13 @@ public class USearchIndex: NSObject {
      * @param quantization Quantization of internal vector representations. Lower quantization means higher speed.
      * @param multi Enables indexing multiple vectors per key when true.
      */
-    public static func make(metric: USearchMetric, dimensions: UInt32, connectivity: UInt32, quantization: USearchScalar, multi: Bool) throws -> USearchIndex {
+    public static func make(
+        metric: USearchMetric,
+        dimensions: UInt32,
+        connectivity: UInt32,
+        quantization: USearchScalar,
+        multi: Bool
+    ) throws -> USearchIndex {
         let options = usearch_init_options_t(
             metric_kind: metric.toNative(),
             metric: nil,
@@ -237,7 +251,6 @@ public class USearchIndex: NSObject {
             expansion_search: 0,
             multi: multi
         )
-
 
         let optionsPtr = pointer(options)
         let index = try throwing { usearch_init(optionsPtr, $0) }
@@ -256,8 +269,10 @@ public class USearchIndex: NSObject {
 
     override public var description: String {
         do {
-            return try "USearchIndex(dimensions: \(dimensions), connectivity: \(connectivity), length: \(length), capacity: \(capacity), isEmpty: \(isEmpty))"
-        } catch {
+            return try
+                "USearchIndex(dimensions: \(dimensions), connectivity: \(connectivity), length: \(length), capacity: \(capacity), isEmpty: \(isEmpty))"
+        }
+        catch {
             return "USearchIndex(error: \(error))"
         }
     }
@@ -285,8 +300,15 @@ public class USearchIndex: NSObject {
      * @param distances Optional output buffer for (increasing) distances to approximate neighbors.
      * @return Number of matches exported to `keys` and `distances`.
      */
-    public func searchSingle(vector: UnsafePointer<Float32>, count: UInt32, keys: UnsafeMutablePointer<USearchKey>?, distances: UnsafeMutablePointer<Float32>?) throws -> UInt32 {
-        let found = try throwing { usearch_search(nativeIndex, vector, USearchScalar.f32.toNative(), Int(count), keys, distances, $0) }
+    public func searchSingle(
+        vector: UnsafePointer<Float32>,
+        count: UInt32,
+        keys: UnsafeMutablePointer<USearchKey>?,
+        distances: UnsafeMutablePointer<Float32>?
+    ) throws -> UInt32 {
+        let found = try throwing {
+            usearch_search(nativeIndex, vector, USearchScalar.f32.toNative(), Int(count), keys, distances, $0)
+        }
         return UInt32(found)
     }
 
@@ -297,7 +319,9 @@ public class USearchIndex: NSObject {
     * @return Number of vectors exported to `vector`.
     */
     public func getSingle(key: USearchKey, vector: UnsafeMutablePointer<Float32>, count: UInt32) throws -> UInt32 {
-        let result = try throwing { usearch_get(nativeIndex, key, Int(count), vector, USearchScalar.f32.toNative(), $0) }
+        let result = try throwing {
+            usearch_get(nativeIndex, key, Int(count), vector, USearchScalar.f32.toNative(), $0)
+        }
         return UInt32(result)
     }
 
@@ -311,7 +335,13 @@ public class USearchIndex: NSObject {
      * @param distances Optional output buffer for (increasing) distances to approximate neighbors.
      * @return Number of matches exported to `keys` and `distances`.
      */
-    public func filteredSearchSingle(vector: UnsafePointer<Float32>, count: UInt32, filter: @escaping USearchFilterFn, keys: UnsafeMutablePointer<USearchKey>?, distances: UnsafeMutablePointer<Float32>?) throws -> UInt32 {
+    public func filteredSearchSingle(
+        vector: UnsafePointer<Float32>,
+        count: UInt32,
+        filter: @escaping USearchFilterFn,
+        keys: UnsafeMutablePointer<USearchKey>?,
+        distances: UnsafeMutablePointer<Float32>?
+    ) throws -> UInt32 {
         return try filteredSearchGeneric(
             nativeIndex,
             vector: vector,
@@ -339,8 +369,15 @@ public class USearchIndex: NSObject {
      * @param distances Optional output buffer for (increasing) distances to approximate neighbors.
      * @return Number of matches exported to `keys` and `distances`.
      */
-    public func searchDouble(vector: UnsafePointer<Float64>, count: UInt32, keys: UnsafeMutablePointer<USearchKey>?, distances: UnsafeMutablePointer<Float32>?) throws -> UInt32 {
-        let found = try throwing { usearch_search(nativeIndex, vector, USearchScalar.f64.toNative(), Int(count), keys, distances, $0) }
+    public func searchDouble(
+        vector: UnsafePointer<Float64>,
+        count: UInt32,
+        keys: UnsafeMutablePointer<USearchKey>?,
+        distances: UnsafeMutablePointer<Float32>?
+    ) throws -> UInt32 {
+        let found = try throwing {
+            usearch_search(nativeIndex, vector, USearchScalar.f64.toNative(), Int(count), keys, distances, $0)
+        }
         return UInt32(found)
     }
 
@@ -351,7 +388,9 @@ public class USearchIndex: NSObject {
     * @return Number of vectors exported to `vector`.
     */
     public func getDouble(key: USearchKey, vector: UnsafeMutablePointer<Float64>, count: UInt32) throws -> UInt32 {
-        let result = try throwing { usearch_get(nativeIndex, key, Int(count), vector, USearchScalar.f64.toNative(),  $0) }
+        let result = try throwing {
+            usearch_get(nativeIndex, key, Int(count), vector, USearchScalar.f64.toNative(), $0)
+        }
         return UInt32(result)
     }
 
@@ -365,7 +404,13 @@ public class USearchIndex: NSObject {
      * @param distances Optional output buffer for (increasing) distances to approximate neighbors.
      * @return Number of matches exported to `keys` and `distances`.
      */
-    public func filteredSearchDouble(vector: UnsafePointer<Float64>, count: UInt32, filter: @escaping USearchFilterFn, keys: UnsafeMutablePointer<USearchKey>?, distances: UnsafeMutablePointer<Float32>?) throws -> UInt32 {
+    public func filteredSearchDouble(
+        vector: UnsafePointer<Float64>,
+        count: UInt32,
+        filter: @escaping USearchFilterFn,
+        keys: UnsafeMutablePointer<USearchKey>?,
+        distances: UnsafeMutablePointer<Float32>?
+    ) throws -> UInt32 {
         return try filteredSearchGeneric(
             nativeIndex,
             vector: vector,
@@ -395,8 +440,15 @@ public class USearchIndex: NSObject {
      * @return Number of matches exported to `keys` and `distances`.
      */
     @available(iOS 14.0, macOS 11.0, tvOS 14.0, watchOS 7.0, visionOS 1.0, *)
-    public func searchHalf(vector: UnsafePointer<Float16>, count: UInt32, keys: UnsafeMutablePointer<USearchKey>?, distances: UnsafeMutablePointer<Float32>?) throws -> UInt32 {
-        let found = try throwing { usearch_search(nativeIndex, vector, USearchScalar.f16.toNative(), Int(count), keys, distances, $0) }
+    public func searchHalf(
+        vector: UnsafePointer<Float16>,
+        count: UInt32,
+        keys: UnsafeMutablePointer<USearchKey>?,
+        distances: UnsafeMutablePointer<Float32>?
+    ) throws -> UInt32 {
+        let found = try throwing {
+            usearch_search(nativeIndex, vector, USearchScalar.f16.toNative(), Int(count), keys, distances, $0)
+        }
         return UInt32(found)
     }
 
@@ -408,7 +460,9 @@ public class USearchIndex: NSObject {
     */
     @available(iOS 14.0, macOS 11.0, tvOS 14.0, watchOS 7.0, visionOS 1.0, *)
     public func getHalf(key: USearchKey, vector: UnsafeMutablePointer<Float16>, count: UInt32) throws -> UInt32 {
-        let result = try throwing { usearch_get(nativeIndex, key, Int(count), vector, USearchScalar.f16.toNative(), $0) }
+        let result = try throwing {
+            usearch_get(nativeIndex, key, Int(count), vector, USearchScalar.f16.toNative(), $0)
+        }
         return UInt32(result)
     }
 
@@ -423,7 +477,13 @@ public class USearchIndex: NSObject {
      * @return Number of matches exported to `keys` and `distances`.
      */
     @available(iOS 14.0, macOS 11.0, tvOS 14.0, watchOS 7.0, visionOS 1.0, *)
-    public func filteredSearchHalf(vector: UnsafePointer<Float16>, count: UInt32, filter: @escaping USearchFilterFn, keys: UnsafeMutablePointer<USearchKey>?, distances: UnsafeMutablePointer<Float32>?) throws -> UInt32 {
+    public func filteredSearchHalf(
+        vector: UnsafePointer<Float16>,
+        count: UInt32,
+        filter: @escaping USearchFilterFn,
+        keys: UnsafeMutablePointer<USearchKey>?,
+        distances: UnsafeMutablePointer<Float32>?
+    ) throws -> UInt32 {
         return try filteredSearchGeneric(
             nativeIndex,
             vector: vector,

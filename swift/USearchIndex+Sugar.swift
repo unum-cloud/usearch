@@ -156,8 +156,9 @@ extension USearchIndex {
     /// - Parameter filter: Closure used to determine whether to skip a key in the results.
     /// - Returns: Labels and distances to closest approximate matches in decreasing similarity order.
     /// - Throws: If runs out of memory.
-    public func filteredSearch(vector: ArraySlice<Float32>, count: Int, filter: @escaping FilterFn) throws -> ([Key], [Float])
-    {
+    public func filteredSearch(vector: ArraySlice<Float32>, count: Int, filter: @escaping FilterFn) throws -> (
+        [Key], [Float]
+    ) {
         var matches: [Key] = Array(repeating: 0, count: count)
         var distances: [Float] = Array(repeating: 0, count: count)
         let results = try vector.withContiguousStorageIfAvailable {
@@ -191,8 +192,9 @@ extension USearchIndex {
     /// - Parameter filter: Closure used to determine whether to skip a key in the results.
     /// - Returns: Labels and distances to closest approximate matches in decreasing similarity order.
     /// - Throws: If runs out of memory.
-    public func filteredSearch(vector: ArraySlice<Float64>, count: Int, filter: @escaping FilterFn) throws -> ([Key], [Float])
-    {
+    public func filteredSearch(vector: ArraySlice<Float64>, count: Int, filter: @escaping FilterFn) throws -> (
+        [Key], [Float]
+    ) {
         var matches: [Key] = Array(repeating: 0, count: count)
         var distances: [Float] = Array(repeating: 0, count: count)
         let results = try vector.withContiguousStorageIfAvailable {
@@ -252,7 +254,12 @@ extension USearchIndex {
             var matches: [Key] = Array(repeating: 0, count: count)
             var distances: [Float] = Array(repeating: 0, count: count)
             let results = try vector.withContiguousStorageIfAvailable {
-                try searchHalf(vector: $0.baseAddress!, count: CUnsignedInt(count), keys: &matches, distances: &distances)
+                try searchHalf(
+                    vector: $0.baseAddress!,
+                    count: CUnsignedInt(count),
+                    keys: &matches,
+                    distances: &distances
+                )
             }
             matches.removeLast(count - Int(results!))
             distances.removeLast(count - Int(results!))
