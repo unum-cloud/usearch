@@ -373,13 +373,13 @@ Running Swift on Linux requires a couple of extra steps - [`swift.org/install` p
 Alternatively, on Linux, the official Swift Docker image can be used for builds and tests:
 
 ```bash
-sudo docker run --rm -v "$PWD:/workspace" -w /workspace swift:6.2 /bin/bash -cl "swift build -c release --static-swift-stdlib && swift test -c release --enable-test-discovery"
+sudo docker run --rm -v "$PWD:/workspace" -w /workspace swift:6.0 /bin/bash -cl "swift build -c release --static-swift-stdlib && swift test -c release --enable-test-discovery"
 ```
 
 To format the code on Linux:
 
 ```bash
-sudo docker run --rm -v "$PWD:/workspace" -w /workspace swift:6.2 /bin/bash -c "swift format . -i -r"
+sudo docker run --rm -v "$PWD:/workspace" -w /workspace swift:6.0 /bin/bash -c "swift format . -i -r"
 ```
 
 ## GoLang
