@@ -1,3 +1,23 @@
+#!/usr/bin/env -S uv run --quiet --script
+"""
+USearch Index Tests
+
+Comprehensive test suite for USearch index functionality including
+construction, search, serialization, and various data type operations.
+
+Usage:
+    uv run python/scripts/test_index.py
+
+Dependencies listed in the script header for uv to resolve automatically.
+"""
+# /// script
+# dependencies = [
+#   "pytest",
+#   "numpy",
+#   "usearch"
+# ]
+# ///
+
 import os
 from time import time
 
