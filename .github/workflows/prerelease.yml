@@ -44,7 +44,8 @@ jobs:
             Cargo.lock:name = "usearch"\nversion = "(\d+\.\d+\.\d+)"
             wasmer.toml:^version = "(\d+\.\d+\.\d+)"
             conanfile.py:version = "(\d+\.\d+\.\d+)"
-            java/README.md:<version>(\d+\.\d+\.\d+)</version>
+            java/README.md:usearchVersion = '(\d+\.\d+\.\d+)'
+            java/README.md:version: '(\d+\.\d+\.\d+)'
             README.md:version = {(\d+\.\d+\.\d+)}
             csharp/nuget/nuget-package.props:>(\d+\.\d+\.\d+)</Version>
             CMakeLists.txt:VERSION (\d+\.\d+\.\d+)
