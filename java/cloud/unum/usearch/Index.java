@@ -7,7 +7,7 @@
  * 
  * <h2>Key Features:</h2>
  * <ul>
- *   <li>Multiple distance metrics (Cosine, Euclidean, Inner Product, etc.)</li>
+ *   <li>Multiple distance metrics (Cosine, Squared Euclidean, Inner Product, Haversine, etc.)</li>
  *   <li>Multiple quantization types (Float64, Float32, BFloat16, Float16, Int8, Binary)</li>
  *   <li>SIMD-accelerated distance calculations</li>
  *   <li>Memory-efficient storage with configurable precision</li>
@@ -41,7 +41,7 @@
  * <h2>Advanced Configuration:</h2>
  * <pre>{@code
  * Index index = new Index.Config()
- *     .metric(Index.Metric.EUCLIDEAN_SQUARED)    // Distance metric
+ *     .metric(Index.Metric.EUCLIDEAN_SQUARED)    // Distance metric (L2² - no sqrt)
  *     .quantization(Index.Quantization.FLOAT16)  // Storage precision  
  *     .dimensions(768)                           // Vector dimensions
  *     .capacity(1000000)                         // Expected number of vectors
@@ -77,9 +77,7 @@ public class Index implements AutoCloseable {
     public static final String INNER_PRODUCT = "ip";
     /** Cosine similarity for normalized vectors */
     public static final String COSINE = "cos";
-    /** Euclidean distance (L2) */
-    public static final String EUCLIDEAN = "l2";
-    /** Squared Euclidean distance (faster, no sqrt) */
+    /** Squared Euclidean distance (L2²) - faster than true Euclidean, no sqrt */
     public static final String EUCLIDEAN_SQUARED = "l2sq";
     /** Haversine distance for geographic coordinates */
     public static final String HAVERSINE = "haversine";
