@@ -237,35 +237,30 @@ The original dataset can be pulled in a USearch-compatible form from AWS S3:
 
 ```sh
 mkdir -p datasets/spacev_1B/ && \
-    aws s3 cp s3://bigger-ann/spacev-1b/ datasets/spacev_1B/ --recursive
-```
-
-A smaller 100M dataset can be pulled from Hugging Face:
-
-```sh
-mkdir -p datasets/spacev_100M/ && \
-    wget -nc https://huggingface.co/datasets/unum-cloud/ann-spacev-100m/resolve/main/ids.100m.i32bin -P datasets/spacev_100M/ &&
-    wget -nc https://huggingface.co/datasets/unum-cloud/ann-spacev-100m/resolve/main/base.100m.i8bin -P datasets/spacev_100M/ &&
-    wget -nc https://huggingface.co/datasets/unum-cloud/ann-spacev-100m/resolve/main/query.30K.i8bin -P datasets/spacev_100M/ &&
-    wget -nc https://huggingface.co/datasets/unum-cloud/ann-spacev-100m/resolve/main/groundtruth.30K.i32bin -P datasets/spacev_100M/ &&
-    wget -nc https://huggingface.co/datasets/unum-cloud/ann-spacev-100m/resolve/main/groundtruth.30K.f32bin -P datasets/spacev_100M/
-```
-
-The original dataset can be pulled in a USearch-compatible form from AWS S3:
-
-```sh
-aws s3 cp s3://your-bucket/path/to/spacev/ datasets/spacev/
+    aws s3 cp s3://your-bucket/path/to/spacev/ datasets/spacev_1B/ --recursive
 ```
 
 A smaller 100M dataset can be pulled from Hugging Face.
 
 ```sh
-mkdir -p datasets/spacev-100m/ && \
-    wget -nc https://huggingface.co/datasets/unum-cloud/ann-spacev-100m/resolve/main/ids.100m.i32bin -P datasets/spacev-100m/ &&
-    wget -nc https://huggingface.co/datasets/unum-cloud/ann-spacev-100m/resolve/main/base.100m.i8bin -P datasets/spacev-100m/ &&
-    wget -nc https://huggingface.co/datasets/unum-cloud/ann-spacev-100m/resolve/main/query.30K.i8bin -P datasets/spacev-100m/ &&
-    wget -nc https://huggingface.co/datasets/unum-cloud/ann-spacev-100m/resolve/main/groundtruth.30K.i32bin -P datasets/spacev-100m/ &&
-    wget -nc https://huggingface.co/datasets/unum-cloud/ann-spacev-100m/resolve/main/groundtruth.30K.f32bin -P datasets/spacev-100m/
+mkdir -p datasets/spacev_100M/ && \
+    wget -nc https://huggingface.co/datasets/unum-cloud/ann-spacev-100m/resolve/main/ids.100M.i32bin -P datasets/spacev_100M/ &&
+    wget -nc https://huggingface.co/datasets/unum-cloud/ann-spacev-100m/resolve/main/base.100M.i8bin -P datasets/spacev_100M/ &&
+    wget -nc https://huggingface.co/datasets/unum-cloud/ann-spacev-100m/resolve/main/query.30K.i8bin -P datasets/spacev_100M/ &&
+    wget -nc https://huggingface.co/datasets/unum-cloud/ann-spacev-100m/resolve/main/groundtruth.30K.i32bin -P datasets/spacev_100M/ &&
+    wget -nc https://huggingface.co/datasets/unum-cloud/ann-spacev-100m/resolve/main/groundtruth.30K.f32bin -P datasets/spacev_100M/
+```
+
+To run the benchmark on those 100M datasets:
+
+```bash
+build_profile/bench_cpp \
+    --vectors datasets/spacev_100M/base.100M.i8bin \
+    --queries datasets/spacev_100M/query.30K.i8bin \
+    --neighbors datasets/spacev_100M/groundtruth.30K.i32bin \
+    --output datasets/spacev_100M/index.usearch \
+    --i8quant \
+    --l2sq
 ```
 
 ## Profiling
