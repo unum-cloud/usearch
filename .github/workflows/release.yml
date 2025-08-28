@@ -418,7 +418,22 @@ jobs:
             -DUSEARCH_BUILD_BENCH_CPP=0 \
             -DUSEARCH_BUILD_LIB_C=0 \
             -DUSEARCH_USE_FP16LIB=1 \
-            -DUSEARCH_USE_SIMSIMD=1
+            -DUSEARCH_USE_SIMSIMD=1 \
+            -DSIMSIMD_TARGET_HASWELL=1 \
+            -DSIMSIMD_TARGET_SKYLAKE=1 \
+            -DSIMSIMD_TARGET_ICE=1 \
+            -DSIMSIMD_TARGET_GENOA=1 \
+            -DSIMSIMD_TARGET_SAPPHIRE=1 \
+            -DSIMSIMD_TARGET_NEON=1 \
+            -DSIMSIMD_TARGET_NEON_BF16=1 \
+            -DSIMSIMD_TARGET_NEON_F16=1 \
+            -DSIMSIMD_TARGET_NEON_I8=1 \
+            -DSIMSIMD_TARGET_SVE=1 \
+            -DSIMSIMD_TARGET_SVE_BF16=1 \
+            -DSIMSIMD_TARGET_SVE_F16=1 \
+            -DSIMSIMD_TARGET_SVE_I8=1 \
+            -DSIMSIMD_TARGET_SVE2=1 \
+            -DSIMSIMD_DYNAMIC_DISPATCH=1
 
           cmake --build build_artifacts --config Release -j
 
@@ -467,7 +482,13 @@ jobs:
             -DUSEARCH_BUILD_BENCH_CPP=0 `
             -DUSEARCH_BUILD_LIB_C=0 `
             -DUSEARCH_USE_FP16LIB=1 `
-            -DUSEARCH_USE_SIMSIMD=1
+            -DUSEARCH_USE_SIMSIMD=1 `
+            -DSIMSIMD_TARGET_HASWELL=1 `
+            -DSIMSIMD_TARGET_SKYLAKE=1 `
+            -DSIMSIMD_TARGET_ICE=1 `
+            -DSIMSIMD_TARGET_GENOA=1 `
+            -DSIMSIMD_TARGET_SAPPHIRE=1 `
+            -DSIMSIMD_DYNAMIC_DISPATCH=1
 
           cmake --build build_artifacts --config Release
 
@@ -515,7 +536,13 @@ jobs:
             -DUSEARCH_BUILD_BENCH_CPP=0 \
             -DUSEARCH_BUILD_LIB_C=0 \
             -DUSEARCH_USE_FP16LIB=1 \
-            -DUSEARCH_USE_SIMSIMD=1
+            -DUSEARCH_USE_SIMSIMD=1 \
+            -DSIMSIMD_TARGET_HASWELL=1 \
+            -DSIMSIMD_TARGET_NEON=1 \
+            -DSIMSIMD_TARGET_NEON_BF16=1 \
+            -DSIMSIMD_TARGET_NEON_F16=1 \
+            -DSIMSIMD_TARGET_NEON_I8=1 \
+            -DSIMSIMD_DYNAMIC_DISPATCH=1
 
           cmake --build build_artifacts --config Release
 
@@ -572,7 +599,12 @@ jobs:
             -DUSEARCH_BUILD_BENCH_CPP=0 \
             -DUSEARCH_BUILD_LIB_C=0 \
             -DUSEARCH_USE_FP16LIB=1 \
-            -DUSEARCH_USE_SIMSIMD=1
+            -DUSEARCH_USE_SIMSIMD=1 \
+            -DSIMSIMD_TARGET_NEON=1 \
+            -DSIMSIMD_TARGET_NEON_BF16=1 \
+            -DSIMSIMD_TARGET_NEON_F16=1 \
+            -DSIMSIMD_TARGET_NEON_I8=1 \
+            -DSIMSIMD_DYNAMIC_DISPATCH=1
 
           cmake --build build_artifacts --config Release
 
@@ -975,11 +1007,11 @@ jobs:
           # List native libraries found
           echo "=== Native libraries in fat JAR ==="
           jar tf build/libs/usearch-*.jar | grep -E "usearch-native.*\.(so|dll|dylib)" || echo "No native libraries found"
-          
+
           # Count native libraries
           lib_count=$(jar tf build/libs/usearch-*.jar | grep -E "usearch-native.*\.(so|dll|dylib)" | wc -l)
           echo "Found $lib_count native libraries in fat JAR"
-          
+
           # Just warn if count seems low, don't fail the build
           if [ "$lib_count" -lt 5 ]; then
             echo "WARNING: Found fewer native libraries than expected ($lib_count)"
