@@ -259,6 +259,21 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1memory_1usage(JNIEnv*, 
     return static_cast<jlong>(index->memory_usage());
 }
 
+JNIEXPORT jstring JNICALL Java_cloud_unum_usearch_Index_c_1hardware_1acceleration(JNIEnv* env, jclass, jlong c_ptr) {
+    auto index = reinterpret_cast<index_dense_t*>(c_ptr);
+    return env->NewStringUTF(index->metric().isa_name());
+}
+
+JNIEXPORT jstring JNICALL Java_cloud_unum_usearch_Index_c_1metric_1kind(JNIEnv* env, jclass, jlong c_ptr) {
+    auto index = reinterpret_cast<index_dense_t*>(c_ptr);
+    return env->NewStringUTF(metric_kind_name(index->metric().metric_kind()));
+}
+
+JNIEXPORT jstring JNICALL Java_cloud_unum_usearch_Index_c_1scalar_1kind(JNIEnv* env, jclass, jlong c_ptr) {
+    auto index = reinterpret_cast<index_dense_t*>(c_ptr);
+    return env->NewStringUTF(scalar_kind_name(index->metric().scalar_kind()));
+}
+
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add_1f64( //
     JNIEnv* env, jclass, jlong c_ptr, jlong key, jdoubleArray vector) {
 
@@ -699,16 +714,16 @@ JNIEXPORT jint JNICALL Java_cloud_unum_usearch_Index_c_1search_1into_1f32_1buffe
     using vector_key_t = typename index_dense_t::vector_key_t;
     using search_result_t = typename index_dense_t::search_result_t;
 
-    search_result_t result = 
+    search_result_t result =
         reinterpret_cast<index_dense_t*>(c_ptr)->search(query_span, static_cast<std::size_t>(max_count));
 
     if (result) {
         std::size_t found = result.count;
-        
+
         // Copy results directly into the LongBuffer
         auto* keys_ptr = reinterpret_cast<vector_key_t*>(results_data);
         result.dump_to(keys_ptr);
-        
+
         // Advance the LongBuffer position
         jclass bufferClass = env->GetObjectClass(results_buffer);
         jmethodID positionMethod = env->GetMethodID(bufferClass, "position", "(I)Ljava/nio/Buffer;");
@@ -754,16 +769,16 @@ JNIEXPORT jint JNICALL Java_cloud_unum_usearch_Index_c_1search_1into_1f64_1buffe
     using vector_key_t = typename index_dense_t::vector_key_t;
     using search_result_t = typename index_dense_t::search_result_t;
 
-    search_result_t result = 
+    search_result_t result =
         reinterpret_cast<index_dense_t*>(c_ptr)->search(query_span, static_cast<std::size_t>(max_count));
 
     if (result) {
         std::size_t found = result.count;
-        
+
         // Copy results directly into the LongBuffer
         auto* keys_ptr = reinterpret_cast<vector_key_t*>(results_data);
         result.dump_to(keys_ptr);
-        
+
         // Advance the LongBuffer position
         jclass bufferClass = env->GetObjectClass(results_buffer);
         jmethodID positionMethod = env->GetMethodID(bufferClass, "position", "(I)Ljava/nio/Buffer;");
@@ -808,16 +823,16 @@ JNIEXPORT jint JNICALL Java_cloud_unum_usearch_Index_c_1search_1into_1i8_1buffer
     using vector_key_t = typename index_dense_t::vector_key_t;
     using search_result_t = typename index_dense_t::search_result_t;
 
-    search_result_t result = 
+    search_result_t result =
         reinterpret_cast<index_dense_t*>(c_ptr)->search(query_span, static_cast<std::size_t>(max_count));
 
     if (result) {
         std::size_t found = result.count;
-        
+
         // Copy results directly into the LongBuffer
         auto* keys_ptr = reinterpret_cast<vector_key_t*>(results_data);
         result.dump_to(keys_ptr);
-        
+
         // Advance the LongBuffer position
         jclass bufferClass = env->GetObjectClass(results_buffer);
         jmethodID positionMethod = env->GetMethodID(bufferClass, "position", "(I)Ljava/nio/Buffer;");

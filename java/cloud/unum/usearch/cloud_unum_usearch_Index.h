@@ -121,6 +121,30 @@ JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1memory_1usage
 
 /*
  * Class:     cloud_unum_usearch_Index
+ * Method:    c_hardware_acceleration
+ * Signature: (J)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_cloud_unum_usearch_Index_c_1hardware_1acceleration
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_metric_kind
+ * Signature: (J)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_cloud_unum_usearch_Index_c_1metric_1kind
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_scalar_kind
+ * Signature: (J)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_cloud_unum_usearch_Index_c_1scalar_1kind
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     cloud_unum_usearch_Index
  * Method:    c_get
  * Signature: (JJ)[F
  */

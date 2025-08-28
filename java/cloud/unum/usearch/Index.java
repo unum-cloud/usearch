@@ -651,6 +651,46 @@ public class Index implements AutoCloseable {
   }
 
   /**
+   * Retrieves the hardware acceleration information for this index.
+   * This indicates the type of hardware acceleration that is available and
+   * being utilized for the current index configuration, including the metric
+   * kind and number of dimensions.
+   *
+   * @return ISA name describing hardware acceleration ("auto" if none, otherwise
+   *         ISA subset like "neon", "sve", etc.)
+   */
+  public String hardwareAcceleration() {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    return c_hardware_acceleration(c_ptr);
+  }
+
+  /**
+   * Retrieves the metric kind used by this index.
+   *
+   * @return the metric kind as a string (e.g., "cos", "l2sq", "ip", etc.)
+   */
+  public String getMetricKind() {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    return c_metric_kind(c_ptr);
+  }
+
+  /**
+   * Retrieves the scalar quantization type used by this index.
+   *
+   * @return the scalar kind as a string (e.g., "f32", "f16", "bf16", "i8", etc.)
+   */
+  public String getScalarKind() {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    return c_scalar_kind(c_ptr);
+  }
+
+  /**
    * Configuration class for building an Index instance.
    * <p>
    * This class provides a builder pattern to set various configurations for an
@@ -897,6 +937,12 @@ public class Index implements AutoCloseable {
   private static native boolean c_rename(long ptr, long from, long to);
 
   private static native long c_memory_usage(long ptr);
+
+  private static native String c_hardware_acceleration(long ptr);
+
+  private static native String c_metric_kind(long ptr);
+
+  private static native String c_scalar_kind(long ptr);
 
   private static native float[] c_get(long ptr, long key);
 

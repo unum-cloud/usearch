@@ -176,6 +176,28 @@ public class IndexTest {
     }
 
     @Test
+    public void testHardwareAccelerationAPIs() {
+        try (Index index = new Index.Config().metric("cos").quantization("f32").dimensions(10).build()) {
+            // Test hardware acceleration API
+            String hardwareAcceleration = index.hardwareAcceleration();
+            assertNotEquals("Hardware acceleration should not be null", null, hardwareAcceleration);
+            assertTrue("Hardware acceleration should be non-empty", !hardwareAcceleration.isEmpty());
+
+            // Test metric kind API
+            String metricKind = index.getMetricKind();
+            assertEquals("Metric kind should be cos", "cos", metricKind);
+
+            // Test scalar kind API  
+            String scalarKind = index.getScalarKind();
+            assertEquals("Scalar kind should be f32", "f32", scalarKind);
+
+            System.out.println("Hardware acceleration: " + hardwareAcceleration);
+            System.out.println("Metric kind: " + metricKind);
+            System.out.println("Scalar kind: " + scalarKind);
+        }
+    }
+
+    @Test
     public void testDoubleVectorWithFloat64() {
         try (Index index = new Index.Config().metric("cos").dimensions(3).quantization("f64").build()) {
             double[] vec = { 1.0, 2.0, 3.0 };
