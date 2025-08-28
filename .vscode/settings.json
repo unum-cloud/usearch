@@ -11,6 +11,15 @@
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.tabSize": 4
   },
+  "[java]": {
+    "editor.defaultFormatter": "Oracle.oracle-java",
+    "editor.formatOnSave": false,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": false
+    },
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true
+  },
   "files.associations": {
     "__availability": "cpp",
     "__bit_reference": "cpp",
@@ -233,6 +242,8 @@
   "autoDocstring.docstringFormat": "sphinx",
   "dotnet.defaultSolution": "csharp/Cloud.Unum.USearch.sln",
   "java.configuration.updateBuildConfiguration": "automatic",
+  "java.format.enabled": false,
+  "java.saveActions.organizeImports": false,
   "editor.insertSpaces": true,
   "editor.tabSize": 4,
   "prettier.singleQuote": true,

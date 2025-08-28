@@ -1,9 +1,11 @@
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
+import cloud.unum.usearch.Index;
 import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
@@ -11,20 +13,20 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-
 import org.junit.AfterClass;
 import org.junit.Test;
 
-import cloud.unum.usearch.Index;
-
 public class IndexTest {
+
     public static void deleteDirectoryFiles(String path) {
         File directory = new File(path);
-        if (!directory.isDirectory())
+        if (!directory.isDirectory()) {
             return;
+        }
 
-        for (File f : directory.listFiles())
+        for (File f : directory.listFiles()) {
             f.delete();
+        }
     }
 
     @Test
@@ -33,12 +35,11 @@ public class IndexTest {
         deleteDirectoryFiles(path);
 
         try (Index index = new Index.Config().metric("cos").dimensions(2).build()) {
-            float vec[] = { 10, 20 };
+            float vec[] = {10, 20};
             index.reserve(10);
             index.add(42, vec);
             long[] keys = index.search(vec, 5);
         }
-
     }
 
     @AfterClass
@@ -49,7 +50,7 @@ public class IndexTest {
     @Test
     public void testGetSuccess() {
         try (Index index = new Index.Config().metric("cos").dimensions(2).build()) {
-            float vec[] = { 10, 20 };
+            float vec[] = {10, 20};
             index.reserve(10);
             index.add(42, vec);
 
@@ -60,7 +61,7 @@ public class IndexTest {
     @Test
     public void testGetFailed() {
         try (Index index = new Index.Config().metric("cos").dimensions(2).build()) {
-            float vec[] = { 10, 20 };
+            float vec[] = {10, 20};
             index.reserve(10);
             index.add(42, vec);
 
@@ -71,7 +72,7 @@ public class IndexTest {
     @Test
     public void testUseAfterClose() {
         Index index = new Index.Config().metric("cos").dimensions(2).build();
-        float vec[] = { 10, 20 };
+        float vec[] = {10, 20};
         index.reserve(10);
         index.add(42, vec);
         assertEquals(1, index.size());
@@ -83,7 +84,7 @@ public class IndexTest {
     public void testLoadFromPath() throws IOException {
         File indexFile = File.createTempFile("test", "uidx");
 
-        float vec[] = { 10, 20 };
+        float vec[] = {10, 20};
         try (Index index = new Index.Config().metric("cos").dimensions(2).build()) {
             index.reserve(10);
             index.add(42, vec);
@@ -170,24 +171,27 @@ public class IndexTest {
             assertTrue("Memory should increase after adding vectors", afterAdding > afterReserve);
 
             // Memory should be reasonable (not too small, not too large)
-            assertTrue("Memory usage should be reasonable",
+            assertTrue(
+                    "Memory usage should be reasonable",
                     afterAdding > 1000 && afterAdding < 1_000_000_000L);
         }
     }
 
     @Test
     public void testHardwareAccelerationAPIs() {
-        try (Index index = new Index.Config().metric("cos").quantization("f32").dimensions(10).build()) {
+        try (Index index
+                = new Index.Config().metric("cos").quantization("f32").dimensions(10).build()) {
             // Test hardware acceleration API
             String hardwareAcceleration = index.hardwareAcceleration();
             assertNotEquals("Hardware acceleration should not be null", null, hardwareAcceleration);
-            assertTrue("Hardware acceleration should be non-empty", !hardwareAcceleration.isEmpty());
+            assertTrue(
+                    "Hardware acceleration should be non-empty", !hardwareAcceleration.isEmpty());
 
             // Test metric kind API
             String metricKind = index.getMetricKind();
             assertEquals("Metric kind should be cos", "cos", metricKind);
 
-            // Test scalar kind API  
+            // Test scalar kind API
             String scalarKind = index.getScalarKind();
             assertEquals("Scalar kind should be f32", "f32", scalarKind);
 
@@ -199,8 +203,9 @@ public class IndexTest {
 
     @Test
     public void testDoubleVectorWithFloat64() {
-        try (Index index = new Index.Config().metric("cos").dimensions(3).quantization("f64").build()) {
-            double[] vec = { 1.0, 2.0, 3.0 };
+        try (Index index
+                = new Index.Config().metric("cos").dimensions(3).quantization("f64").build()) {
+            double[] vec = {1.0, 2.0, 3.0};
             index.reserve(10);
             index.add(42, vec);
 
@@ -212,8 +217,9 @@ public class IndexTest {
 
     @Test
     public void testByteVectorWithInt8() {
-        try (Index index = new Index.Config().metric("cos").dimensions(4).quantization("i8").build()) {
-            byte[] vec = { 10, 20, 30, 40 };
+        try (Index index
+                = new Index.Config().metric("cos").dimensions(4).quantization("i8").build()) {
+            byte[] vec = {10, 20, 30, 40};
             index.reserve(10);
             index.add(42, vec);
 
@@ -226,7 +232,7 @@ public class IndexTest {
     @Test
     public void testGetIntoBufferMethods() {
         try (Index index = new Index.Config().metric("cos").dimensions(3).build()) {
-            float[] vecF32 = { 1.0f, 2.0f, 3.0f };
+            float[] vecF32 = {1.0f, 2.0f, 3.0f};
             index.reserve(10);
             index.add(42, vecF32);
 
@@ -235,8 +241,9 @@ public class IndexTest {
             assertArrayEquals(vecF32, bufferF32, 0.01f);
         }
 
-        try (Index index = new Index.Config().metric("cos").dimensions(3).quantization("f64").build()) {
-            double[] vecF64 = { 1.0, 2.0, 3.0 };
+        try (Index index
+                = new Index.Config().metric("cos").dimensions(3).quantization("f64").build()) {
+            double[] vecF64 = {1.0, 2.0, 3.0};
             index.reserve(10);
             index.add(43, vecF64);
 
@@ -245,8 +252,9 @@ public class IndexTest {
             assertArrayEquals(vecF64, bufferF64, 0.01);
         }
 
-        try (Index index = new Index.Config().metric("cos").dimensions(4).quantization("i8").build()) {
-            byte[] vecI8 = { 10, 20, 30, 40 };
+        try (Index index
+                = new Index.Config().metric("cos").dimensions(4).quantization("i8").build()) {
+            byte[] vecI8 = {10, 20, 30, 40};
             index.reserve(10);
             index.add(44, vecI8);
 
@@ -267,13 +275,16 @@ public class IndexTest {
 
             for (int t = 0; t < 10; t++) {
                 final int threadId = t;
-                futures[t] = CompletableFuture.runAsync(() -> {
-                    for (int i = 0; i < 50; i++) {
-                        long key = threadId * 50L + i;
-                        float[] vector = randomVector(4);
-                        index.add(key, vector);
-                    }
-                }, executor);
+                futures[t]
+                        = CompletableFuture.runAsync(
+                                () -> {
+                                    for (int i = 0; i < 50; i++) {
+                                        long key = threadId * 50L + i;
+                                        float[] vector = randomVector(4);
+                                        index.add(key, vector);
+                                    }
+                                },
+                                executor);
             }
 
             CompletableFuture.allOf(futures).get(10, TimeUnit.SECONDS);
@@ -298,10 +309,13 @@ public class IndexTest {
             CompletableFuture<long[]>[] futures = new CompletableFuture[5];
 
             for (int t = 0; t < 5; t++) {
-                futures[t] = CompletableFuture.supplyAsync(() -> {
-                    float[] queryVector = randomVector(4);
-                    return index.search(queryVector, 10);
-                }, executor);
+                futures[t]
+                        = CompletableFuture.supplyAsync(
+                                () -> {
+                                    float[] queryVector = randomVector(4);
+                                    return index.search(queryVector, 10);
+                                },
+                                executor);
             }
 
             for (CompletableFuture<long[]> future : futures) {
@@ -328,12 +342,15 @@ public class IndexTest {
             // Add operations
             for (int t = 0; t < 4; t++) {
                 final int threadId = t;
-                addFutures[t] = CompletableFuture.runAsync(() -> {
-                    for (int i = 0; i < 30; i++) {
-                        long key = threadId * 30L + i;
-                        index.add(key, randomVector(3));
-                    }
-                }, executor);
+                addFutures[t]
+                        = CompletableFuture.runAsync(
+                                () -> {
+                                    for (int i = 0; i < 30; i++) {
+                                        long key = threadId * 30L + i;
+                                        index.add(key, randomVector(3));
+                                    }
+                                },
+                                executor);
             }
 
             // Wait for some adds to complete, then start searches
@@ -341,13 +358,16 @@ public class IndexTest {
 
             // Search operations
             for (int t = 0; t < 4; t++) {
-                searchFutures[t] = CompletableFuture.runAsync(() -> {
-                    for (int i = 0; i < 10; i++) {
-                        float[] queryVector = randomVector(3);
-                        long[] results = index.search(queryVector, 5);
-                        assertTrue(results.length >= 0);
-                    }
-                }, executor);
+                searchFutures[t]
+                        = CompletableFuture.runAsync(
+                                () -> {
+                                    for (int i = 0; i < 10; i++) {
+                                        float[] queryVector = randomVector(3);
+                                        long[] results = index.search(queryVector, 5);
+                                        assertTrue(results.length >= 0);
+                                    }
+                                },
+                                executor);
             }
 
             CompletableFuture.allOf(addFutures).get(15, TimeUnit.SECONDS);
@@ -364,55 +384,57 @@ public class IndexTest {
             index.reserve(10);
 
             // Create a batch of 3 vectors concatenated
-            float[] batchVectors = { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f };
+            float[] batchVectors = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
             index.add(100, batchVectors); // Should add keys 100, 101, 102
 
             assertEquals(3, index.size());
 
             // Verify each vector was added correctly
-            assertArrayEquals(new float[] { 1.0f, 2.0f }, index.get(100), 0.01f);
-            assertArrayEquals(new float[] { 3.0f, 4.0f }, index.get(101), 0.01f);
-            assertArrayEquals(new float[] { 5.0f, 6.0f }, index.get(102), 0.01f);
+            assertArrayEquals(new float[]{1.0f, 2.0f}, index.get(100), 0.01f);
+            assertArrayEquals(new float[]{3.0f, 4.0f}, index.get(101), 0.01f);
+            assertArrayEquals(new float[]{5.0f, 6.0f}, index.get(102), 0.01f);
         }
     }
 
     @Test
     public void testBatchAddDouble() {
-        try (Index index = new Index.Config().metric("cos").dimensions(3).quantization("f64").build()) {
+        try (Index index
+                = new Index.Config().metric("cos").dimensions(3).quantization("f64").build()) {
             index.reserve(10);
 
             // Create a batch of 2 double vectors concatenated
-            double[] batchVectors = { 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 };
+            double[] batchVectors = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0};
             index.add(200, batchVectors); // Should add keys 200, 201
 
             assertEquals(2, index.size());
 
             double[] buffer = new double[3];
             index.getInto(200, buffer);
-            assertArrayEquals(new double[] { 1.0, 2.0, 3.0 }, buffer, 0.01);
+            assertArrayEquals(new double[]{1.0, 2.0, 3.0}, buffer, 0.01);
 
             index.getInto(201, buffer);
-            assertArrayEquals(new double[] { 4.0, 5.0, 6.0 }, buffer, 0.01);
+            assertArrayEquals(new double[]{4.0, 5.0, 6.0}, buffer, 0.01);
         }
     }
 
     @Test
     public void testBatchAddByte() {
-        try (Index index = new Index.Config().metric("cos").dimensions(4).quantization("i8").build()) {
+        try (Index index
+                = new Index.Config().metric("cos").dimensions(4).quantization("i8").build()) {
             index.reserve(10);
 
             // Create a batch of 2 byte vectors concatenated
-            byte[] batchVectors = { 10, 20, 30, 40, 50, 60, 70, 80 };
+            byte[] batchVectors = {10, 20, 30, 40, 50, 60, 70, 80};
             index.add(300, batchVectors); // Should add keys 300, 301
 
             assertEquals(2, index.size());
 
             byte[] buffer = new byte[4];
             index.getInto(300, buffer);
-            assertArrayEquals(new byte[] { 10, 20, 30, 40 }, buffer);
+            assertArrayEquals(new byte[]{10, 20, 30, 40}, buffer);
 
             index.getInto(301, buffer);
-            assertArrayEquals(new byte[] { 50, 60, 70, 80 }, buffer);
+            assertArrayEquals(new byte[]{50, 60, 70, 80}, buffer);
         }
     }
 
@@ -422,12 +444,12 @@ public class IndexTest {
             index.reserve(10);
 
             // Valid batch: 4 elements = 2 vectors of dimension 2
-            float[] validBatch = { 1.0f, 2.0f, 3.0f, 4.0f };
+            float[] validBatch = {1.0f, 2.0f, 3.0f, 4.0f};
             index.add(10, validBatch);
             assertEquals(2, index.size());
 
             // Invalid batch: 3 elements, not divisible by dimensions (2)
-            float[] invalidBatch = { 1.0f, 2.0f, 3.0f };
+            float[] invalidBatch = {1.0f, 2.0f, 3.0f};
             assertThrows(IllegalArgumentException.class, () -> index.add(20, invalidBatch));
 
             // Still should be 2 vectors (invalid batch should not have been added)
@@ -441,8 +463,9 @@ public class IndexTest {
             index.reserve(1000);
 
             // Test FloatBuffer operations
-            java.nio.ByteBuffer byteBuffer = java.nio.ByteBuffer.allocateDirect(256 * Float.BYTES)
-                    .order(java.nio.ByteOrder.nativeOrder());
+            java.nio.ByteBuffer byteBuffer
+                    = java.nio.ByteBuffer.allocateDirect(256 * Float.BYTES)
+                            .order(java.nio.ByteOrder.nativeOrder());
             java.nio.FloatBuffer floatBuffer = byteBuffer.asFloatBuffer();
 
             // Fill buffer with test data
@@ -471,11 +494,13 @@ public class IndexTest {
 
     @Test
     public void testByteBufferDoubleOperations() {
-        try (Index index = new Index.Config().metric("cos").dimensions(128).quantization("f64").build()) {
+        try (Index index
+                = new Index.Config().metric("cos").dimensions(128).quantization("f64").build()) {
             index.reserve(100);
 
-            java.nio.ByteBuffer byteBuffer = java.nio.ByteBuffer.allocateDirect(128 * Double.BYTES)
-                    .order(java.nio.ByteOrder.nativeOrder());
+            java.nio.ByteBuffer byteBuffer
+                    = java.nio.ByteBuffer.allocateDirect(128 * Double.BYTES)
+                            .order(java.nio.ByteOrder.nativeOrder());
             java.nio.DoubleBuffer doubleBuffer = byteBuffer.asDoubleBuffer();
 
             // Fill buffer with test data
@@ -492,11 +517,12 @@ public class IndexTest {
 
     @Test
     public void testByteBufferByteOperations() {
-        try (Index index = new Index.Config().metric("cos").dimensions(64).quantization("i8").build()) {
+        try (Index index
+                = new Index.Config().metric("cos").dimensions(64).quantization("i8").build()) {
             index.reserve(50);
 
-            java.nio.ByteBuffer byteBuffer = java.nio.ByteBuffer.allocateDirect(64)
-                    .order(java.nio.ByteOrder.nativeOrder());
+            java.nio.ByteBuffer byteBuffer
+                    = java.nio.ByteBuffer.allocateDirect(64).order(java.nio.ByteOrder.nativeOrder());
 
             // Fill buffer with test data
             for (int i = 0; i < 64; i++) {
@@ -528,8 +554,9 @@ public class IndexTest {
 
             for (int i = 0; i < numVectors; i++) {
                 vectors[i] = randomVector(dimensions);
-                buffers[i] = java.nio.ByteBuffer.allocateDirect(dimensions * Float.BYTES)
-                        .order(java.nio.ByteOrder.nativeOrder());
+                buffers[i]
+                        = java.nio.ByteBuffer.allocateDirect(dimensions * Float.BYTES)
+                                .order(java.nio.ByteOrder.nativeOrder());
                 buffers[i].asFloatBuffer().put(vectors[i]);
             }
 
@@ -541,7 +568,8 @@ public class IndexTest {
             long arrayAddTime = System.nanoTime() - arrayAddStart;
 
             // Clear index for ByteBuffer test
-            try (Index bufferIndex = new Index.Config().metric("cos").dimensions(dimensions).build()) {
+            try (Index bufferIndex
+                    = new Index.Config().metric("cos").dimensions(dimensions).build()) {
                 bufferIndex.reserve(numVectors);
 
                 // Test ByteBuffer-based add performance
@@ -553,8 +581,9 @@ public class IndexTest {
 
                 // Test search performance
                 float[] queryVector = randomVector(dimensions);
-                java.nio.ByteBuffer queryBuffer = java.nio.ByteBuffer.allocateDirect(dimensions * Float.BYTES)
-                        .order(java.nio.ByteOrder.nativeOrder());
+                java.nio.ByteBuffer queryBuffer
+                        = java.nio.ByteBuffer.allocateDirect(dimensions * Float.BYTES)
+                                .order(java.nio.ByteOrder.nativeOrder());
                 queryBuffer.asFloatBuffer().put(queryVector);
 
                 // Array-based search
@@ -573,15 +602,22 @@ public class IndexTest {
 
                 // Print performance results
                 System.out.println("Performance Comparison (ns):");
-                System.out.printf("Array Add: %,d | ByteBuffer Add: %,d (%.2fx faster)%n",
+                System.out.printf(
+                        "Array Add: %,d | ByteBuffer Add: %,d (%.2fx faster)%n",
                         arrayAddTime, bufferAddTime, (double) arrayAddTime / bufferAddTime);
-                System.out.printf("Array Search: %,d | ByteBuffer Search: %,d (%.2fx faster)%n",
-                        arraySearchTime, bufferSearchTime, (double) arraySearchTime / bufferSearchTime);
+                System.out.printf(
+                        "Array Search: %,d | ByteBuffer Search: %,d (%.2fx faster)%n",
+                        arraySearchTime,
+                        bufferSearchTime,
+                        (double) arraySearchTime / bufferSearchTime);
 
                 // Verify correctness - results should be equivalent
                 long[] arrayResults = index.search(queryVector, 10);
                 long[] bufferResults = bufferIndex.search(queryBuffer.asFloatBuffer(), 10);
-                assertEquals("Search results should be equivalent", arrayResults.length, bufferResults.length);
+                assertEquals(
+                        "Search results should be equivalent",
+                        arrayResults.length,
+                        bufferResults.length);
             }
         }
     }
@@ -592,8 +628,9 @@ public class IndexTest {
             index.reserve(100);
 
             // Add some test vectors
-            java.nio.ByteBuffer vectorBuffer = java.nio.ByteBuffer.allocateDirect(128 * Float.BYTES)
-                    .order(java.nio.ByteOrder.nativeOrder());
+            java.nio.ByteBuffer vectorBuffer
+                    = java.nio.ByteBuffer.allocateDirect(128 * Float.BYTES)
+                            .order(java.nio.ByteOrder.nativeOrder());
             java.nio.FloatBuffer floatBuffer = vectorBuffer.asFloatBuffer();
 
             for (int i = 0; i < 10; i++) {
@@ -605,12 +642,14 @@ public class IndexTest {
             }
 
             // Prepare query and results buffers
-            java.nio.ByteBuffer queryBuffer = java.nio.ByteBuffer.allocateDirect(128 * Float.BYTES)
-                    .order(java.nio.ByteOrder.nativeOrder());
+            java.nio.ByteBuffer queryBuffer
+                    = java.nio.ByteBuffer.allocateDirect(128 * Float.BYTES)
+                            .order(java.nio.ByteOrder.nativeOrder());
             java.nio.FloatBuffer queryFloat = queryBuffer.asFloatBuffer();
 
-            java.nio.ByteBuffer resultsBuffer = java.nio.ByteBuffer.allocateDirect(5 * Long.BYTES)
-                    .order(java.nio.ByteOrder.nativeOrder());
+            java.nio.ByteBuffer resultsBuffer
+                    = java.nio.ByteBuffer.allocateDirect(5 * Long.BYTES)
+                            .order(java.nio.ByteOrder.nativeOrder());
             java.nio.LongBuffer resultsLong = resultsBuffer.asLongBuffer();
 
             // Set up query vector (same as vector 3)
@@ -625,7 +664,8 @@ public class IndexTest {
             assertTrue("Should find at most 5 results", found <= 5);
 
             // Verify buffer position was advanced
-            assertEquals("Results buffer position should be advanced", found, resultsLong.position());
+            assertEquals(
+                    "Results buffer position should be advanced", found, resultsLong.position());
 
             // First result should be key 3 (exact match)
             resultsLong.rewind();
@@ -635,11 +675,13 @@ public class IndexTest {
 
     @Test
     public void testSearchIntoDoubleBuffer() {
-        try (Index index = new Index.Config().metric("cos").dimensions(64).quantization("f64").build()) {
+        try (Index index
+                = new Index.Config().metric("cos").dimensions(64).quantization("f64").build()) {
             index.reserve(50);
 
-            java.nio.ByteBuffer vectorBuffer = java.nio.ByteBuffer.allocateDirect(64 * Double.BYTES)
-                    .order(java.nio.ByteOrder.nativeOrder());
+            java.nio.ByteBuffer vectorBuffer
+                    = java.nio.ByteBuffer.allocateDirect(64 * Double.BYTES)
+                            .order(java.nio.ByteOrder.nativeOrder());
             java.nio.DoubleBuffer doubleBuffer = vectorBuffer.asDoubleBuffer();
 
             // Add test vectors
@@ -657,8 +699,9 @@ public class IndexTest {
             }
             doubleBuffer.rewind();
 
-            java.nio.ByteBuffer resultsBuffer = java.nio.ByteBuffer.allocateDirect(3 * Long.BYTES)
-                    .order(java.nio.ByteOrder.nativeOrder());
+            java.nio.ByteBuffer resultsBuffer
+                    = java.nio.ByteBuffer.allocateDirect(3 * Long.BYTES)
+                            .order(java.nio.ByteOrder.nativeOrder());
             java.nio.LongBuffer resultsLong = resultsBuffer.asLongBuffer();
 
             int found = index.searchInto(doubleBuffer, resultsLong, 3);
@@ -669,11 +712,12 @@ public class IndexTest {
 
     @Test
     public void testSearchIntoByteBuffer() {
-        try (Index index = new Index.Config().metric("cos").dimensions(32).quantization("i8").build()) {
+        try (Index index
+                = new Index.Config().metric("cos").dimensions(32).quantization("i8").build()) {
             index.reserve(20);
 
-            java.nio.ByteBuffer vectorBuffer = java.nio.ByteBuffer.allocateDirect(32)
-                    .order(java.nio.ByteOrder.nativeOrder());
+            java.nio.ByteBuffer vectorBuffer
+                    = java.nio.ByteBuffer.allocateDirect(32).order(java.nio.ByteOrder.nativeOrder());
 
             // Add test vectors
             for (int i = 0; i < 3; i++) {
@@ -690,8 +734,9 @@ public class IndexTest {
             }
             vectorBuffer.rewind();
 
-            java.nio.ByteBuffer resultsBuffer = java.nio.ByteBuffer.allocateDirect(2 * Long.BYTES)
-                    .order(java.nio.ByteOrder.nativeOrder());
+            java.nio.ByteBuffer resultsBuffer
+                    = java.nio.ByteBuffer.allocateDirect(2 * Long.BYTES)
+                            .order(java.nio.ByteOrder.nativeOrder());
             java.nio.LongBuffer resultsLong = resultsBuffer.asLongBuffer();
 
             int found = index.searchInto(vectorBuffer, resultsLong, 2);
@@ -699,5 +744,4 @@ public class IndexTest {
             assertEquals("First result should be key 201", 201L, resultsLong.get(0));
         }
     }
-
 }

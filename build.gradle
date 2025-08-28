@@ -61,20 +61,21 @@ dependencies {
 }
 
 spotless {
-    java {
-        target 'java/**/*.java'
-        googleJavaFormat('1.17.0').aosp()  // Use AOSP style (4 spaces instead of 2)
-        removeUnusedImports()
-        trimTrailingWhitespace()
-        endWithNewline()
-    }
-
     format 'gradle', {
         target '*.gradle'
         trimTrailingWhitespace()
         indentWithSpaces(4)
         endWithNewline()
     }
+
+    // Use AOSP style but preserve Javadoc formatting
+    // java {
+    //     target 'java/**/*.java'
+    //     googleJavaFormat('1.17.0').aosp().skipJavadocFormatting()
+    //     removeUnusedImports()
+    //     trimTrailingWhitespace()
+    //     endWithNewline()
+    // }
 }
 
 model {
@@ -191,7 +192,7 @@ model {
                 }
             }
         }
-    }    
+    }
 }
 
 test {
@@ -215,13 +216,13 @@ test {
 
 jar {
     dependsOn("usearchSharedLibrary")
-    
+
     // Include all native libraries with their platform-specific directory structure
     from("$buildDir/libs/usearch/shared") {
         include "**/*"
         into "usearch-native"
     }
-    
+
     from sourceSets.main.output
 }
 
@@ -230,20 +231,20 @@ jar {
 task fatJar(type: Jar) {
     archiveClassifier = ''
     archiveBaseName = 'usearch'
-    
+
     from sourceSets.main.output
-    
+
     // Include pre-built native libraries from all platforms
     from("build/libs/usearch/shared") {
         include "**/*"
         into "usearch-native"
     }
-    
+
     manifest {
         attributes 'Implementation-Title': 'USearch',
                    'Implementation-Version': version
     }
-    
+
     // Log what we're packaging for transparency
     doFirst {
         def nativeDir = file("build/libs/usearch/shared")
@@ -278,7 +279,7 @@ publishing {
     publications {
         library(MavenPublication) {
             from components.java
-            
+
             artifact sourcesJar
             artifact javadocJar
 
@@ -324,7 +325,7 @@ publishing {
             name = "MavenCentral"
             url = "https://central.sonatype.com/api/v1/publisher/upload"
             credentials {
-                username = System.getenv("MAVEN_CENTRAL_USERNAME") 
+                username = System.getenv("MAVEN_CENTRAL_USERNAME")
                 password = System.getenv("MAVEN_CENTRAL_TOKEN")
             }
             authentication {
