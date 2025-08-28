@@ -243,6 +243,23 @@ public class Index implements AutoCloseable {
   }
 
   /**
+   * Adds a vector with a specified key to the index using ByteBuffer (zero-copy).
+   *
+   * @param key    the key associated with the vector
+   * @param vector the vector data as FloatBuffer
+   */
+  public void add(long key, java.nio.FloatBuffer vector) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    if (vector.remaining() != dimensions()) {
+      throw new IllegalArgumentException(String.format(
+          "Vector dimensions mismatch: expected %d but got %d", dimensions(), vector.remaining()));
+    }
+    c_add_f32_buffer(c_ptr, key, vector);
+  }
+
+  /**
    * Searches for closest vectors to the specified query vector.
    *
    * @param vector the query vector data
@@ -254,6 +271,55 @@ public class Index implements AutoCloseable {
       throw new IllegalStateException("Index already closed");
     }
     return c_search_f32(c_ptr, vector, count);
+  }
+
+  /**
+   * Searches for closest vectors to the specified query vector using ByteBuffer
+   * (zero-copy).
+   *
+   * @param vector the query vector data as FloatBuffer
+   * @param count  the number of nearest neighbors to search
+   * @return an array of keys of the nearest neighbors
+   */
+  public long[] search(java.nio.FloatBuffer vector, long count) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    if (vector.remaining() != dimensions()) {
+      throw new IllegalArgumentException(String.format(
+          "Vector dimensions mismatch: expected %d but got %d", dimensions(), vector.remaining()));
+    }
+    return c_search_f32_buffer(c_ptr, vector, count);
+  }
+
+  /**
+   * Searches for closest vectors using zero-copy input and zero-allocation
+   * output.
+   *
+   * @param query    the query vector data as FloatBuffer
+   * @param results  the output buffer for result keys
+   * @param maxCount maximum number of results to find
+   * @return actual number of results found
+   */
+  public int searchInto(java.nio.FloatBuffer query, java.nio.LongBuffer results, long maxCount) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    if (query.remaining() != dimensions()) {
+      throw new IllegalArgumentException(String.format(
+          "Query vector dimensions mismatch: expected %d but got %d", dimensions(), query.remaining()));
+    }
+    if (results.remaining() < maxCount) {
+      throw new IllegalArgumentException(String.format(
+          "Results buffer too small: need %d but only %d remaining", maxCount, results.remaining()));
+    }
+    int found = c_search_into_f32_buffer(c_ptr, query, results, maxCount);
+    // Advance position by the actual number of results, but don't exceed the
+    // buffer's remaining capacity
+    int currentPosition = results.position();
+    int newPosition = Math.min(currentPosition + found, results.limit());
+    results.position(newPosition);
+    return found;
   }
 
   /**
@@ -284,6 +350,24 @@ public class Index implements AutoCloseable {
   }
 
   /**
+   * Adds a double precision vector with a specified key to the index using
+   * ByteBuffer (zero-copy).
+   *
+   * @param key    the key associated with the vector
+   * @param vector the double precision vector data as DoubleBuffer
+   */
+  public void add(long key, java.nio.DoubleBuffer vector) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    if (vector.remaining() != dimensions()) {
+      throw new IllegalArgumentException(String.format(
+          "Vector dimensions mismatch: expected %d but got %d", dimensions(), vector.remaining()));
+    }
+    c_add_f64_buffer(c_ptr, key, vector);
+  }
+
+  /**
    * Searches for closest vectors to the specified double precision query vector.
    *
    * @param vector the double precision query vector data
@@ -295,6 +379,55 @@ public class Index implements AutoCloseable {
       throw new IllegalStateException("Index already closed");
     }
     return c_search_f64(c_ptr, vector, count);
+  }
+
+  /**
+   * Searches for closest vectors to the specified double precision query vector
+   * using ByteBuffer (zero-copy).
+   *
+   * @param vector the double precision query vector data as DoubleBuffer
+   * @param count  the number of nearest neighbors to search
+   * @return an array of keys of the nearest neighbors
+   */
+  public long[] search(java.nio.DoubleBuffer vector, long count) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    if (vector.remaining() != dimensions()) {
+      throw new IllegalArgumentException(String.format(
+          "Vector dimensions mismatch: expected %d but got %d", dimensions(), vector.remaining()));
+    }
+    return c_search_f64_buffer(c_ptr, vector, count);
+  }
+
+  /**
+   * Searches for closest vectors using zero-copy input and zero-allocation
+   * output.
+   *
+   * @param query    the query vector data as DoubleBuffer
+   * @param results  the output buffer for result keys
+   * @param maxCount maximum number of results to find
+   * @return actual number of results found
+   */
+  public int searchInto(java.nio.DoubleBuffer query, java.nio.LongBuffer results, long maxCount) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    if (query.remaining() != dimensions()) {
+      throw new IllegalArgumentException(String.format(
+          "Query vector dimensions mismatch: expected %d but got %d", dimensions(), query.remaining()));
+    }
+    if (results.remaining() < maxCount) {
+      throw new IllegalArgumentException(String.format(
+          "Results buffer too small: need %d but only %d remaining", maxCount, results.remaining()));
+    }
+    int found = c_search_into_f64_buffer(c_ptr, query, results, maxCount);
+    // Advance position by the actual number of results, but don't exceed the
+    // buffer's remaining capacity
+    int currentPosition = results.position();
+    int newPosition = Math.min(currentPosition + found, results.limit());
+    results.position(newPosition);
+    return found;
   }
 
   /**
@@ -311,6 +444,24 @@ public class Index implements AutoCloseable {
   }
 
   /**
+   * Adds an int8 quantized vector with a specified key to the index using
+   * ByteBuffer (zero-copy).
+   *
+   * @param key    the key associated with the vector
+   * @param vector the int8 quantized vector data as ByteBuffer
+   */
+  public void add(long key, java.nio.ByteBuffer vector) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    if (vector.remaining() != dimensions()) {
+      throw new IllegalArgumentException(String.format(
+          "Vector dimensions mismatch: expected %d but got %d", dimensions(), vector.remaining()));
+    }
+    c_add_i8_buffer(c_ptr, key, vector);
+  }
+
+  /**
    * Searches for closest vectors to the specified int8 quantized query vector.
    *
    * @param vector the int8 quantized query vector data
@@ -322,6 +473,55 @@ public class Index implements AutoCloseable {
       throw new IllegalStateException("Index already closed");
     }
     return c_search_i8(c_ptr, vector, count);
+  }
+
+  /**
+   * Searches for closest vectors to the specified int8 quantized query vector
+   * using ByteBuffer (zero-copy).
+   *
+   * @param vector the int8 quantized query vector data as ByteBuffer
+   * @param count  the number of nearest neighbors to search
+   * @return an array of keys of the nearest neighbors
+   */
+  public long[] search(java.nio.ByteBuffer vector, long count) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    if (vector.remaining() != dimensions()) {
+      throw new IllegalArgumentException(String.format(
+          "Vector dimensions mismatch: expected %d but got %d", dimensions(), vector.remaining()));
+    }
+    return c_search_i8_buffer(c_ptr, vector, count);
+  }
+
+  /**
+   * Searches for closest vectors using zero-copy input and zero-allocation
+   * output.
+   *
+   * @param query    the query vector data as ByteBuffer
+   * @param results  the output buffer for result keys
+   * @param maxCount maximum number of results to find
+   * @return actual number of results found
+   */
+  public int searchInto(java.nio.ByteBuffer query, java.nio.LongBuffer results, long maxCount) {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    if (query.remaining() != dimensions()) {
+      throw new IllegalArgumentException(String.format(
+          "Query vector dimensions mismatch: expected %d but got %d", dimensions(), query.remaining()));
+    }
+    if (results.remaining() < maxCount) {
+      throw new IllegalArgumentException(String.format(
+          "Results buffer too small: need %d but only %d remaining", maxCount, results.remaining()));
+    }
+    int found = c_search_into_i8_buffer(c_ptr, query, results, maxCount);
+    // Advance position by the actual number of results, but don't exceed the
+    // buffer's remaining capacity
+    int currentPosition = results.position();
+    int newPosition = Math.min(currentPosition + found, results.limit());
+    results.position(newPosition);
+    return found;
   }
 
   /**
@@ -696,6 +896,8 @@ public class Index implements AutoCloseable {
 
   private static native boolean c_rename(long ptr, long from, long to);
 
+  private static native long c_memory_usage(long ptr);
+
   private static native float[] c_get(long ptr, long key);
 
   // Overloaded methods:
@@ -716,5 +918,28 @@ public class Index implements AutoCloseable {
   private static native void c_get_into_f64(long ptr, long key, double buffer[]);
 
   private static native void c_get_into_i8(long ptr, long key, byte buffer[]);
+
+  // ByteBuffer overloads for zero-copy operations:
+  private static native void c_add_f32_buffer(long ptr, long key, java.nio.FloatBuffer vector);
+
+  private static native void c_add_f64_buffer(long ptr, long key, java.nio.DoubleBuffer vector);
+
+  private static native void c_add_i8_buffer(long ptr, long key, java.nio.ByteBuffer vector);
+
+  private static native long[] c_search_f32_buffer(long ptr, java.nio.FloatBuffer vector, long count);
+
+  private static native long[] c_search_f64_buffer(long ptr, java.nio.DoubleBuffer vector, long count);
+
+  private static native long[] c_search_i8_buffer(long ptr, java.nio.ByteBuffer vector, long count);
+
+  // Zero-allocation searchInto methods:
+  private static native int c_search_into_f32_buffer(long ptr, java.nio.FloatBuffer query, java.nio.LongBuffer results,
+      long maxCount);
+
+  private static native int c_search_into_f64_buffer(long ptr, java.nio.DoubleBuffer query, java.nio.LongBuffer results,
+      long maxCount);
+
+  private static native int c_search_into_i8_buffer(long ptr, java.nio.ByteBuffer query, java.nio.LongBuffer results,
+      long maxCount);
 
 }
