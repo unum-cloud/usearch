@@ -88,23 +88,78 @@ model {
                 buildable = false
             }
             binaries.withType(SharedLibraryBinarySpec) {
-                if (targetPlatform.operatingSystem.linux) {
-                    cppCompiler.args '-I', "${Jvm.current().javaHome}/include/linux"
-                    cppCompiler.args '-D_FILE_OFFSET_BITS=64'
-                    cppCompiler.args '-std=c++11'
-                } else if (targetPlatform.operatingSystem.macOsX) {
-                    cppCompiler.args '-I', "${Jvm.current().javaHome}/include/darwin"
-                    cppCompiler.args '-D_FILE_OFFSET_BITS=64'
-                    cppCompiler.args '-std=c++11'
-                } else if (targetPlatform.operatingSystem.windows){
-                    cppCompiler.args "-I${Jvm.current().javaHome}/include/win32"
-                    cppCompiler.args '/std:c++11'
-                }
                 cppCompiler.args '-DUSEARCH_USE_FP16LIB=1'
                 cppCompiler.args '-DUSEARCH_USE_SIMSIMD=1'
                 cppCompiler.args '-DSIMSIMD_DYNAMIC_DISPATCH=1'
                 cppCompiler.args '-DSIMSIMD_NATIVE_BF16=0'
                 cppCompiler.args '-DSIMSIMD_NATIVE_F16=0'
+
+                if (targetPlatform.operatingSystem.linux) {
+                    cppCompiler.args '-I', "${Jvm.current().javaHome}/include/linux"
+                    cppCompiler.args '-D_FILE_OFFSET_BITS=64'
+                    cppCompiler.args '-std=c++17'
+                    cppCompiler.args '-O2'
+                    cppCompiler.args '-ffast-math'
+                    cppCompiler.args '-Wno-unknown-pragmas'
+
+                    // x86_64 targets for Linux CI
+                    cppCompiler.args '-DSIMSIMD_TARGET_HASWELL=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_SKYLAKE=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_ICE=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_GENOA=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_SAPPHIRE=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_TURIN=0'
+                    cppCompiler.args '-DSIMSIMD_TARGET_SIERRA=0'
+
+                    // ARM targets for Linux ARM64 builds
+                    cppCompiler.args '-DSIMSIMD_TARGET_NEON=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_NEON_BF16=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_NEON_F16=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_NEON_I8=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_SVE=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_SVE_BF16=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_SVE_F16=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_SVE_I8=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_SVE2=1'
+
+                } else if (targetPlatform.operatingSystem.macOsX) {
+                    cppCompiler.args '-I', "${Jvm.current().javaHome}/include/darwin"
+                    cppCompiler.args '-D_FILE_OFFSET_BITS=64'
+                    cppCompiler.args '-mmacosx-version-min=10.15'
+                    cppCompiler.args '-std=c++17'
+                    cppCompiler.args '-O2'
+                    cppCompiler.args '-ffast-math'
+                    cppCompiler.args '-Wno-unknown-pragmas'
+
+                    // ARM targets for Apple Silicon (M1/M2/M3/M4)
+                    cppCompiler.args '-DSIMSIMD_TARGET_NEON=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_NEON_BF16=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_NEON_F16=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_NEON_I8=1'
+
+                    // x86_64 targets for Intel Macs
+                    cppCompiler.args '-DSIMSIMD_TARGET_HASWELL=1'
+
+                } else if (targetPlatform.operatingSystem.windows) {
+                    cppCompiler.args "-I${Jvm.current().javaHome}/include/win32"
+                    cppCompiler.args '/std:c++17'
+                    cppCompiler.args '/O2'
+                    cppCompiler.args '/fp:fast'
+                    cppCompiler.args '/W1'
+
+                } else if (targetPlatform.name.contains("android")) {
+                    // Android support - similar to macOS ARM settings
+                    cppCompiler.args '-std=c++17'
+                    cppCompiler.args '-O2'
+                    cppCompiler.args '-ffast-math'
+                    cppCompiler.args '-Wno-unknown-pragmas'
+
+                    // ARM targets for Android devices
+                    cppCompiler.args '-DSIMSIMD_TARGET_NEON=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_NEON_BF16=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_NEON_F16=1'
+                    cppCompiler.args '-DSIMSIMD_TARGET_NEON_I8=1'
+                }
             }
         }
     }
