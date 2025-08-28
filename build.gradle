@@ -6,6 +6,7 @@ plugins {
     id 'cpp'
     id 'maven-publish'
     id 'signing'
+    id 'com.diffplug.spotless' version '6.25.0'
 }
 
 group = "cloud.unum"
@@ -57,6 +58,23 @@ task javadocJar(type: Jar, dependsOn: javadoc) {
 
 dependencies {
     testImplementation('junit:junit:4.13.2')
+}
+
+spotless {
+    java {
+        target 'java/**/*.java'
+        googleJavaFormat('1.17.0').aosp()  // Use AOSP style (4 spaces instead of 2)
+        removeUnusedImports()
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+
+    format 'gradle', {
+        target '*.gradle'
+        trimTrailingWhitespace()
+        indentWithSpaces(4)
+        endWithNewline()
+    }
 }
 
 model {

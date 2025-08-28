@@ -126,6 +126,8 @@ jobs:
           distribution: 'adopt'
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2.4.2
+      - name: Check Java formatting
+        run: gradle spotlessCheck
       - name: Test Java
         run: gradle clean build
 
@@ -575,6 +577,8 @@ jobs:
 
         # We skip native compilation with Gradle and focus just on the Java part,
         # assuming the we won't be able to tun the tests without emulation
+      - name: Check Java formatting
+        run: gradle spotlessCheck
       - name: Test Java bindings with Android library
         run: |
           mkdir -p build/libs/usearch/shared/

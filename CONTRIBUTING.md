@@ -414,8 +414,9 @@ sdk install gradle
 Afterwards, in a new terminal:
 
 ```sh
-gradle clean build --warning-mode=all
-gradle test
+gradle clean build --warning-mode=all # ensure passing builds
+gradle test                           # pass unit tests
+gradle spotlessApply                  # apply formatting
 ```
 
 Alternatively, to run the `Index.main`:
