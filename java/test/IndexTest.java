@@ -145,18 +145,34 @@ public class IndexTest {
         return vector;
     }
 
-    private static double[] randomVectorDouble(int dimensions) {
-        double[] vector = new double[dimensions];
-        for (int i = 0; i < dimensions; i++) {
-            vector[i] = ThreadLocalRandom.current().nextDouble(2.0);
-        }
-        return vector;
-    }
+    @Test
+    public void testMemoryUsage() {
+        try (Index index = new Index.Config().metric("cos").dimensions(256).build()) {
+            // Test empty index
+            long initialMemory = index.memoryUsage();
+            assertTrue("Initial memory usage should be positive", initialMemory > 0);
 
-    private static byte[] randomVectorByte(int dimensions) {
-        byte[] vector = new byte[dimensions];
-        ThreadLocalRandom.current().nextBytes(vector);
-        return vector;
+            // Add some vectors
+            index.reserve(1000);
+            long afterReserve = index.memoryUsage();
+            assertTrue("Memory should increase after reserve", afterReserve >= initialMemory);
+
+            // Add vectors
+            float[] vector = new float[256];
+            for (int i = 0; i < 100; i++) {
+                for (int j = 0; j < 256; j++) {
+                    vector[j] = (float) Math.random();
+                }
+                index.add(i, vector);
+            }
+
+            long afterAdding = index.memoryUsage();
+            assertTrue("Memory should increase after adding vectors", afterAdding > afterReserve);
+
+            // Memory should be reasonable (not too small, not too large)
+            assertTrue("Memory usage should be reasonable",
+                    afterAdding > 1000 && afterAdding < 1_000_000_000L);
+        }
     }
 
     @Test

@@ -113,6 +113,14 @@ JNIEXPORT jboolean JNICALL Java_cloud_unum_usearch_Index_c_1rename
 
 /*
  * Class:     cloud_unum_usearch_Index
+ * Method:    c_memory_usage
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1memory_1usage
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     cloud_unum_usearch_Index
  * Method:    c_get
  * Signature: (JJ)[F
  */

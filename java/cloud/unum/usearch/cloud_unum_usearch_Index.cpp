@@ -254,6 +254,11 @@ JNIEXPORT jboolean JNICALL Java_cloud_unum_usearch_Index_c_1rename(JNIEnv* env, 
     return result.completed;
 }
 
+JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1memory_1usage(JNIEnv*, jclass, jlong c_ptr) {
+    auto index = reinterpret_cast<index_dense_t*>(c_ptr);
+    return static_cast<jlong>(index->memory_usage());
+}
+
 JNIEXPORT void JNICALL Java_cloud_unum_usearch_Index_c_1add_1f64( //
     JNIEnv* env, jclass, jlong c_ptr, jlong key, jdoubleArray vector) {
 

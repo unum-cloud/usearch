@@ -438,6 +438,19 @@ public class Index implements AutoCloseable {
   }
 
   /**
+   * Retrieves the memory usage of the index in bytes.
+   * This includes both the graph structure and stored vectors.
+   *
+   * @return the total memory usage in bytes
+   */
+  public long memoryUsage() {
+    if (c_ptr == 0) {
+      throw new IllegalStateException("Index already closed");
+    }
+    return c_memory_usage(c_ptr);
+  }
+
+  /**
    * Configuration class for building an Index instance.
    * <p>
    * This class provides a builder pattern to set various configurations for an
