@@ -744,4 +744,51 @@ public class IndexTest {
             assertEquals("First result should be key 201", 201L, resultsLong.get(0));
         }
     }
+
+    @Test
+    public void testPlatformCapabilities() {
+        // Test runtime hardware capabilities
+        String[] available = Index.hardwareAccelerationAvailable();
+        assertNotEquals("Available capabilities should not be null", null, available);
+        assertTrue("Platform should have at least serial capability", available.length > 0);
+        
+        // Test compile-time capabilities
+        String[] compiled = Index.hardwareAccelerationCompiled();
+        assertNotEquals("Compiled capabilities should not be null", null, compiled);
+        assertTrue("Should have at least serial compiled", compiled.length > 0);
+        
+        // Should always include serial as baseline in both
+        boolean hasAvailableSerial = false;
+        boolean hasCompiledSerial = false;
+        
+        for (String cap : available) {
+            if ("serial".equals(cap)) {
+                hasAvailableSerial = true;
+                break;
+            }
+        }
+        
+        for (String cap : compiled) {
+            if ("serial".equals(cap)) {
+                hasCompiledSerial = true;
+                break;
+            }
+        }
+        
+        assertTrue("Platform should always support serial capability", hasAvailableSerial);
+        assertTrue("Serial should always be compiled", hasCompiledSerial);
+
+        // Test library version
+        String version = Index.version();
+        assertNotEquals("Library version should not be null", null, version);
+        assertTrue("Library version should be non-empty", !version.isEmpty());
+
+        // Test dynamic dispatch detection
+        boolean usesDynamicDispatch = Index.usesDynamicDispatch();
+        System.out.println("Uses dynamic dispatch: " + usesDynamicDispatch);
+
+        System.out.println("Available capabilities: " + String.join(", ", available));
+        System.out.println("Compiled capabilities: " + String.join(", ", compiled));
+        System.out.println("Library version: " + version);
+    }
 }

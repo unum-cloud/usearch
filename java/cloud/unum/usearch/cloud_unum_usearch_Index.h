@@ -145,6 +145,38 @@ JNIEXPORT jstring JNICALL Java_cloud_unum_usearch_Index_c_1scalar_1kind
 
 /*
  * Class:     cloud_unum_usearch_Index
+ * Method:    c_hardware_acceleration_available
+ * Signature: ()[Ljava/lang/String;
+ */
+JNIEXPORT jobjectArray JNICALL Java_cloud_unum_usearch_Index_c_1hardware_1acceleration_1available
+  (JNIEnv *, jclass);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_hardware_acceleration_compiled
+ * Signature: ()[Ljava/lang/String;
+ */
+JNIEXPORT jobjectArray JNICALL Java_cloud_unum_usearch_Index_c_1hardware_1acceleration_1compiled
+  (JNIEnv *, jclass);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_library_version
+ * Signature: ()Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_cloud_unum_usearch_Index_c_1library_1version
+  (JNIEnv *, jclass);
+
+/*
+ * Class:     cloud_unum_usearch_Index
+ * Method:    c_uses_dynamic_dispatch
+ * Signature: ()Z
+ */
+JNIEXPORT jboolean JNICALL Java_cloud_unum_usearch_Index_c_1uses_1dynamic_1dispatch
+  (JNIEnv *, jclass);
+
+/*
+ * Class:     cloud_unum_usearch_Index
  * Method:    c_get
  * Signature: (JJ)[F
  */

@@ -415,7 +415,7 @@ Afterwards, in a new terminal:
 
 ```sh
 gradle clean build --warning-mode=all # ensure passing builds
-gradle test                           # pass unit tests
+gradle test --rerun-tasks             # pass unit tests
 gradle spotlessApply                  # apply formatting
 ```
 

@@ -745,6 +745,42 @@ public class Index implements AutoCloseable {
     }
 
     /**
+     * Returns all SIMD capabilities available on the current platform at runtime.
+     *
+     * @return array of runtime capability names (e.g., ["serial", "haswell", "skylake", "neon"])
+     */
+    public static String[] hardwareAccelerationAvailable() {
+        return c_hardware_acceleration_available();
+    }
+
+    /**
+     * Returns all SIMD capabilities compiled into this library build.
+     *
+     * @return array of compiled capability names based on preprocessor macros
+     */
+    public static String[] hardwareAccelerationCompiled() {
+        return c_hardware_acceleration_compiled();
+    }
+
+    /**
+     * Returns the USearch library version.
+     *
+     * @return version string
+     */
+    public static String version() {
+        return c_library_version();
+    }
+
+    /**
+     * Returns whether this USearch build was compiled with dynamic SIMD dispatch.
+     *
+     * @return true if dynamic dispatch is enabled, false if using compile-time selection
+     */
+    public static boolean usesDynamicDispatch() {
+        return c_uses_dynamic_dispatch();
+    }
+
+    /**
      * Builder for configuring Index instances. Uses builder pattern - call
      * {@link #build()} to create Index.
      */
@@ -1004,6 +1040,14 @@ public class Index implements AutoCloseable {
     private static native String c_metric_kind(long ptr);
 
     private static native String c_scalar_kind(long ptr);
+
+    private static native String[] c_hardware_acceleration_available();
+
+    private static native String[] c_hardware_acceleration_compiled();
+
+    private static native String c_library_version();
+
+    private static native boolean c_uses_dynamic_dispatch();
 
     private static native float[] c_get(long ptr, long key);
 
