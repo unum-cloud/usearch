@@ -486,8 +486,8 @@ jobs:
             -DSIMSIMD_TARGET_HASWELL=1 `
             -DSIMSIMD_TARGET_SKYLAKE=1 `
             -DSIMSIMD_TARGET_ICE=1 `
-            -DSIMSIMD_TARGET_GENOA=1 `
-            -DSIMSIMD_TARGET_SAPPHIRE=1 `
+            -DSIMSIMD_TARGET_GENOA=0 `
+            -DSIMSIMD_TARGET_SAPPHIRE=0 `
             -DSIMSIMD_DYNAMIC_DISPATCH=1
 
           cmake --build build_artifacts --config Release

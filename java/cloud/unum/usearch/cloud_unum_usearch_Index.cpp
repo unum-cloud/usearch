@@ -14,6 +14,16 @@ using f64_span_t = unum::usearch::span_gt<double>;
 using i8_span_t = unum::usearch::span_gt<std::int8_t>;
 static_assert(sizeof(jlong) == sizeof(index_dense_t::vector_key_t));
 
+static inline jsize to_jsize(JNIEnv* env, std::size_t n) {
+    if (n > static_cast<std::size_t>(std::numeric_limits<jsize>::max())) {
+        jclass jc = env->FindClass("java/lang/IllegalArgumentException");
+        if (jc)
+            env->ThrowNew(jc, "Size exceeds jsize range");
+        return 0;
+    }
+    return static_cast<jsize>(n);
+}
+
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1create( //
     JNIEnv* env, jclass,                                         //
     jstring metric, jstring quantization,                        //
@@ -187,11 +197,11 @@ JNIEXPORT jfloatArray JNICALL Java_cloud_unum_usearch_Index_c_1get(JNIEnv* env, 
             env->ThrowNew(jc, "key not found");
         }
     }
-    jfloatArray jvector = env->NewFloatArray(dim);
+    jfloatArray jvector = env->NewFloatArray(to_jsize(env, dim));
     if (jvector == nullptr) { // out of memory
         return nullptr;
     }
-    env->SetFloatArrayRegion(jvector, 0, dim, vector.get());
+    env->SetFloatArrayRegion(jvector, 0, to_jsize(env, dim), vector.get());
     return jvector;
 }
 
@@ -211,7 +221,7 @@ JNIEXPORT jlongArray JNICALL Java_cloud_unum_usearch_Index_c_1search_1f32( //
 
     if (result) {
         std::size_t found = result.count;
-        jlongArray matches = (*env).NewLongArray(found);
+        jlongArray matches = (*env).NewLongArray(to_jsize(env, found));
         if (matches == NULL)
             return NULL;
 
@@ -237,7 +247,7 @@ JNIEXPORT jboolean JNICALL Java_cloud_unum_usearch_Index_c_1remove(JNIEnv* env, 
         if (jc)
             (*env).ThrowNew(jc, result.error.release());
     }
-    return result.completed;
+    return result.completed ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jboolean JNICALL Java_cloud_unum_usearch_Index_c_1rename(JNIEnv* env, jclass, jlong c_ptr, jlong from,
@@ -251,7 +261,7 @@ JNIEXPORT jboolean JNICALL Java_cloud_unum_usearch_Index_c_1rename(JNIEnv* env, 
         if (jc)
             (*env).ThrowNew(jc, result.error.release());
     }
-    return result.completed;
+    return result.completed ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jlong JNICALL Java_cloud_unum_usearch_Index_c_1memory_1usage(JNIEnv*, jclass, jlong c_ptr) {
@@ -326,7 +336,7 @@ JNIEXPORT jlongArray JNICALL Java_cloud_unum_usearch_Index_c_1search_1f64( //
 
     if (result) {
         std::size_t found = result.count;
-        jlongArray matches = (*env).NewLongArray(found);
+        jlongArray matches = (*env).NewLongArray(to_jsize(env, found));
         if (matches == NULL)
             return NULL;
 
@@ -412,7 +422,7 @@ JNIEXPORT jlongArray JNICALL Java_cloud_unum_usearch_Index_c_1search_1i8( //
 
     if (result) {
         std::size_t found = result.count;
-        jlongArray matches = (*env).NewLongArray(found);
+        jlongArray matches = (*env).NewLongArray(to_jsize(env, found));
         if (matches == NULL)
             return NULL;
 
@@ -568,7 +578,7 @@ JNIEXPORT jlongArray JNICALL Java_cloud_unum_usearch_Index_c_1search_1f32_1buffe
 
     if (result) {
         std::size_t found = result.count;
-        jlongArray matches = env->NewLongArray(found);
+        jlongArray matches = env->NewLongArray(to_jsize(env, found));
         if (matches == nullptr)
             return nullptr;
 
@@ -610,7 +620,7 @@ JNIEXPORT jlongArray JNICALL Java_cloud_unum_usearch_Index_c_1search_1f64_1buffe
 
     if (result) {
         std::size_t found = result.count;
-        jlongArray matches = env->NewLongArray(found);
+        jlongArray matches = env->NewLongArray(to_jsize(env, found));
         if (matches == nullptr)
             return nullptr;
 
@@ -651,7 +661,7 @@ JNIEXPORT jlongArray JNICALL Java_cloud_unum_usearch_Index_c_1search_1i8_1buffer
 
     if (result) {
         std::size_t found = result.count;
-        jlongArray matches = env->NewLongArray(found);
+        jlongArray matches = env->NewLongArray(to_jsize(env, found));
         if (matches == nullptr)
             return nullptr;
 
