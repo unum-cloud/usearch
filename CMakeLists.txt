@@ -386,6 +386,18 @@ function (setup_target TARGET_NAME)
     target_compile_definitions(${TARGET_NAME} PRIVATE "USEARCH_USE_FP16LIB=$<BOOL:${USEARCH_USE_FP16LIB}>")
     target_compile_definitions(${TARGET_NAME} PRIVATE "USEARCH_USE_SIMSIMD=$<BOOL:${USEARCH_USE_SIMSIMD}>")
 
+    # Pass through SIMSIMD target definitions if they're set
+    foreach(target IN ITEMS HASWELL SKYLAKE ICE GENOA SAPPHIRE TURIN SIERRA NEON NEON_I8 NEON_F16 NEON_BF16 SVE SVE_I8 SVE_F16 SVE_BF16 SVE2)
+        if(DEFINED SIMSIMD_TARGET_${target})
+            target_compile_definitions(${TARGET_NAME} PRIVATE "SIMSIMD_TARGET_${target}=${SIMSIMD_TARGET_${target}}")
+        endif()
+    endforeach()
+
+    # Pass through SIMSIMD_DYNAMIC_DISPATCH if set
+    if(DEFINED SIMSIMD_DYNAMIC_DISPATCH)
+        target_compile_definitions(${TARGET_NAME} PRIVATE "SIMSIMD_DYNAMIC_DISPATCH=${SIMSIMD_DYNAMIC_DISPATCH}")
+    endif()
+
 endfunction ()
 
 # Must be called before "add_subdirectory()". See
