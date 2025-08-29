@@ -27,7 +27,7 @@ If this is your first experience with CMake, use the following commands to get s
 
 ```sh
 sudo apt-get update && sudo apt-get install cmake build-essential libjemalloc-dev g++-12 gcc-12 # Ubuntu
-brew install libomp llvm # MacOS
+brew install libomp llvm # macOS
 ```
 
 Using modern syntax, this is how you build and run the test suite:
@@ -38,7 +38,7 @@ cmake --build build_debug --config Debug
 build_debug/test_cpp
 ```
 
-If there build mode is not specified, the default is `Release`.
+If the build mode is not specified, the default is `Release`.
 
 ```sh
 cmake -D USEARCH_BUILD_TEST_CPP=1 -B build_release
@@ -78,7 +78,7 @@ build_release/test_cpp
 build_release/test_c
 ```
 
-Similarly, to use the most recent Clang compiler version from HomeBrew on MacOS:
+Similarly, to use the most recent Clang compiler version from Homebrew on macOS:
 
 ```sh
 brew install clang++ clang cmake
@@ -106,8 +106,8 @@ Linting:
 ```sh
 cppcheck --enable=all --force --suppress=cstyleCast --suppress=unusedFunction \
     include/usearch/index.hpp \
-    include/index_dense.hpp \
-    include/index_plugins.hpp
+    include/usearch/index_dense.hpp \
+    include/usearch/index_plugins.hpp
 ```
 
 I'd recommend putting the following breakpoints when debugging the code in GDB:
@@ -190,7 +190,7 @@ The resulting `libusearch_c.so` can be used in Android projects by placing it in
 
 ## Python 3
 
-Python bindings are built using PyBind11 and are available on [PyPi](https://pypi.org/project/usearch/).
+Python bindings are built using PyBind11 and are available on [PyPI](https://pypi.org/project/usearch/).
 The compilation settings are controlled by the `setup.py` and are independent from CMake used for C/C++ builds.
 To install USearch locally using `uv`:
 
@@ -227,7 +227,7 @@ ruff --format=github --select=E9,F63,F7,F82 --target-version=py310 python
 ```
 
 Before merging your changes you may want to test your changes against the entire matrix of Python versions USearch supports.
-For that you need the `cibuildwheel`, which is tricky to use on MacOS and Windows, as it would target just the local environment.
+For that you need the `cibuildwheel`, which is tricky to use on macOS and Windows, as it would target just the local environment.
 Still, if you have Docker running on any desktop OS, you can use it to build and test the Python bindings for all Python versions for Linux:
 
 ```sh
@@ -236,7 +236,7 @@ cibuildwheel
 cibuildwheel --platform linux                   # works on any OS and builds all Linux backends
 cibuildwheel --platform linux --archs x86_64    # 64-bit x86, the most common on desktop and servers
 cibuildwheel --platform linux --archs aarch64   # 64-bit Arm for mobile devices, Apple M-series, and AWS Graviton
-cibuildwheel --platform macos                   # works only on MacOS
+cibuildwheel --platform macos                   # works only on macOS
 cibuildwheel --platform windows                 # works only on Windows
 ```
 
@@ -246,7 +246,7 @@ You may need root privileges for multi-architecture builds:
 sudo $(which cibuildwheel) --platform linux
 ```
 
-On Windows and MacOS, to avoid frequent path resolution issues, you may want to use:
+On Windows and macOS, to avoid frequent path resolution issues, you may want to use:
 
 ```sh
 python -m cibuildwheel --platform windows
@@ -282,7 +282,7 @@ RUN yum install tar git python3 cmake gcc-c++ -y && yum groupinstall "Developmen
 
 # Assuming AWS Linux 2 uses old compilers:
 ENV USEARCH_USE_FP16LIB 1
-ENV DUSEARCH_USE_SIMSIMD 1
+ENV USEARCH_USE_SIMSIMD 1
 ENV SIMSIMD_TARGET_HASWELL 1
 ENV SIMSIMD_TARGET_SKYLAKE 0
 ENV SIMSIMD_TARGET_ICE 0
@@ -382,25 +382,24 @@ To format the code on Linux:
 sudo docker run --rm -v "$PWD:/workspace" -w /workspace swift:6.0 /bin/bash -c "swift format . -i -r"
 ```
 
-## GoLang
+## Go
 
-USearch provides GoLang bindings, that depend on the C library that must be installed beforehand.
-So one should first compile the C library, link it with GoLang, and only then run tests.
+USearch provides Go bindings, that depend on the C library that must be installed beforehand.
+So one should first compile the C library, link it with Go, and only then run tests.
 
 ```sh
 cmake -B build_release -D USEARCH_BUILD_LIB_C=1 -D USEARCH_BUILD_TEST_C=1 -D USEARCH_USE_OPENMP=1 -D USEARCH_USE_SIMSIMD=1 
 cmake --build build_release --config Release -j
 
-cp build_release/libusearch_c.so golang/ # or .dylib to install the library on MacOS
-cp c/usearch.h golang/                   # to make the header available to GoLang
+cp build_release/libusearch_c.so golang/ # or .dylib to install the library on macOS
+cp c/usearch.h golang/                   # to make the header available to Go
 
 cd golang && LD_LIBRARY_PATH=. go test -v ; cd ..
 ```
 
 ## Java
 
-USearch provides Java bindings available from the [GitHub Maven registry](https://github.com/unum-cloud/usearch/packages/1867475) and the [Sonatype Maven Central Repository](https://central.sonatype.com/artifact/cloud.unum/usearch).
-The compilation settings are controlled by the `build.gradle` and are independent from CMake used for C/C++ builds.
+USearch provides Java bindings as a fat-JAR published with prebuilt JNI libraries via GitHub releases. Installation via Maven Central is deprecated; prefer downloading the fat-JAR from the latest GitHub release. The compilation settings are controlled by `build.gradle` and are independent from CMake used for C/C++ builds.
 
 To setup the Gradle environment:
 
@@ -441,7 +440,7 @@ g++ -shared -fPIC -o java/cloud/unum/usearch/libusearch.so java/cloud/unum/usear
 g++ -c -I%JAVA_HOME%\include -I%JAVA_HOME%\include\win32 java\cloud\unum\usearch\cloud_unum_usearch_Index.cpp -Iinclude -o java\cloud\unum\usearch\cloud_unum_usearch_Index.o
 g++ -shared -o java\cloud\unum\usearch\USearchJNI.dll java\cloud\unum\usearch\cloud_unum_usearch_Index.o -Wl,--add-stdcall-alias
 
-# MacOS
+# macOS
 g++ -std=c++11 -c -fPIC \
     -Iinclude \
     -Ifp16/include \

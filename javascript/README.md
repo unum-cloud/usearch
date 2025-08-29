@@ -28,6 +28,8 @@ assert.deepEqual(results.distances, new Float32Array([0]));
 index.remove(42n);
 ```
 
+Note: keys are 64-bit integers represented as JavaScript `BigInt` (e.g., `42n`).
+
 ## Serialization
 
 Persist and restore your index with serialization methods:

@@ -2,7 +2,9 @@
 
 ## Installation
 
-For the most up-to-date version, automatically download from GitHub releases and build with Gradle:
+Installation via Maven Central is not supported due to Continuous Delivery complexity and poor support for native builds.
+Gradle installation is the recommended approach.
+For the most up-to-date version, the following Groovy script will download a "fat JAR" containing builds for Linux, Windows, macOS, and Android, compatible with all common hardware platforms:
 
 ```groovy
 repositories {
