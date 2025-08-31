@@ -332,7 +332,7 @@ export class Index {
    * @throws Will throw an error if the length of keys doesn't match the number of vectors
    *         or if it's not a single key.
    */
-  add(keys: bigint | bigint[] | BigUint64Array, vectors: Vector, threads: number = 0): void {
+  add(keys: bigint | bigint[] | BigUint64Array, vectors: VectorOrMatrix, threads: number = 0): void {
     let normalizedKeys = normalizeKeys(keys);
     let normalizedVectors = normalizeVectors(
       vectors,
@@ -386,6 +386,8 @@ export class Index {
    * @throws Will throw an error if `k` is not a positive integer or if the size of the vectors is not a multiple of dimensions.
    * @throws Will throw an error if `vectors` is not a valid input type (TypedArray or an array of TypedArray) or if its flattened size is not a multiple of dimensions.
    */
+  search(vectors: Vector, k: number, threads: number = 0): Matches;
+  search(vectors: Matrix, k: number, threads: number = 0): BatchMatches;
   search(vectors: VectorOrMatrix, k: number, threads: number = 0): Matches | BatchMatches {
     if ((!Number.isNaN(k) && typeof k !== "number") || k <= 0) {
       throw new Error(
