@@ -244,7 +244,7 @@ jobs:
       - name: Build C/C++
         run: |
           brew update
-          brew install cmake
+          brew reinstall cmake
           cmake -B build_artifacts -D CMAKE_BUILD_TYPE=RelWithDebInfo -D USEARCH_BUILD_TEST_CPP=1 -D USEARCH_BUILD_TEST_C=1 -D USEARCH_BUILD_LIB_C=1 -D USEARCH_BUILD_SQLITE=1
           cmake --build build_artifacts --config RelWithDebInfo
       - name: Test C++
