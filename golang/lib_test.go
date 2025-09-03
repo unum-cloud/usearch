@@ -394,10 +394,9 @@ func TestUSearch(t *testing.T) {
 
 func TestUSearchDataType(t *testing.T) {
 
-	t.Run("Test Save and Load With F64", func(t *testing.T) {
+	t.Run("Test Save and Load With F32", func(t *testing.T) {
 		dim := uint(128)
 		conf := DefaultConfig(dim)
-		conf.Quantization = F64
 		ind, err := NewIndex(conf)
 		if err != nil {
 			t.Fatalf("Failed to construct the index: %s", err)
@@ -419,9 +418,9 @@ func TestUSearchDataType(t *testing.T) {
 			t.Fatalf("Failed to reserve capacity: %s", err)
 		}
 
-		vec := make([]float64, dim)
+		vec := make([]float32, dim)
 		for i := uint(0); i < dim; i++ {
-			vec[i] = float64(i) + 0.2
+			vec[i] = float32(i) + 0.2
 			err = ind.AddWithPointer(uint64(i), unsafe.Pointer(&vec[0]))
 			if err != nil {
 				t.Fatalf("Failed to insert: %s", err)
