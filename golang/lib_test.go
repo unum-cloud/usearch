@@ -126,7 +126,7 @@ func TestUSearch(t *testing.T) {
 		vec[0] = 40.0
 		vec[1] = 2.0
 
-		err = ind.AddWithPointer(42, unsafe.Pointer(&vec[0]))
+		err = ind.AddUnsafe(42, unsafe.Pointer(&vec[0]))
 		if err != nil {
 			t.Fatalf("Failed to insert: %s", err)
 		}
@@ -205,12 +205,12 @@ func TestUSearch(t *testing.T) {
 		vec[1] = 2.0
 
 		ptr := unsafe.Pointer(&vec[0])
-		err = ind.AddWithPointer(42, ptr)
+		err = ind.AddUnsafe(42, ptr)
 		if err != nil {
 			t.Fatalf("Failed to insert: %s", err)
 		}
 
-		keys, distances, err := ind.SearchWithPointer(ptr, 10)
+		keys, distances, err := ind.SearchUnsafe(ptr, 10)
 		if err != nil {
 			t.Fatalf("Failed to search: %s", err)
 		}
@@ -334,7 +334,7 @@ func TestUSearch(t *testing.T) {
 		vec := make([]float32, dim)
 		for i := uint(0); i < dim; i++ {
 			vec[i] = float32(i) + 0.2
-			err = ind.AddWithPointer(uint64(i), unsafe.Pointer(&vec[0]))
+			err = ind.AddUnsafe(uint64(i), unsafe.Pointer(&vec[0]))
 			if err != nil {
 				t.Fatalf("Failed to insert: %s", err)
 			}
@@ -421,7 +421,7 @@ func TestUSearchDataType(t *testing.T) {
 		vec := make([]float32, dim)
 		for i := uint(0); i < dim; i++ {
 			vec[i] = float32(i) + 0.2
-			err = ind.AddWithPointer(uint64(i), unsafe.Pointer(&vec[0]))
+			err = ind.AddUnsafe(uint64(i), unsafe.Pointer(&vec[0]))
 			if err != nil {
 				t.Fatalf("Failed to insert: %s", err)
 			}
@@ -476,7 +476,7 @@ func TestUSearchDataType(t *testing.T) {
 		}
 
 		// TODO: Check file save/load/metadata
-		keys, distances, err := ind.SearchWithPointer(unsafe.Pointer(&vec[0]), dim)
+		keys, distances, err := ind.SearchUnsafe(unsafe.Pointer(&vec[0]), dim)
 		if err != nil {
 			t.Fatalf("Failed to search: %s", err)
 		}
@@ -515,7 +515,7 @@ func TestUSearchDataType(t *testing.T) {
 		vec := make([]float64, dim)
 		for i := uint(0); i < dim; i++ {
 			vec[i] = float64(i) + 0.2
-			err = ind.AddWithPointer(uint64(i), unsafe.Pointer(&vec[0]))
+			err = ind.AddUnsafe(uint64(i), unsafe.Pointer(&vec[0]))
 			if err != nil {
 				t.Fatalf("Failed to insert: %s", err)
 			}
@@ -570,7 +570,7 @@ func TestUSearchDataType(t *testing.T) {
 		}
 
 		// TODO: Check file save/load/metadata
-		keys, distances, err := ind.SearchWithPointer(unsafe.Pointer(&vec[0]), dim)
+		keys, distances, err := ind.SearchUnsafe(unsafe.Pointer(&vec[0]), dim)
 		if err != nil {
 			t.Fatalf("Failed to search: %s", err)
 		}
