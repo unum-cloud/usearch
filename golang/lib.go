@@ -207,9 +207,10 @@ func DefaultConfig(dimensions uint) IndexConfig {
 }
 
 // Index represents a USearch approximate nearest neighbor index.
+// It implements io.Closer for idiomatic resource cleanup.
 //
 // The index must be properly initialized with NewIndex() and destroyed
-// with Destroy() when no longer needed to free resources.
+// with Destroy() or Close() when no longer needed to free resources.
 type Index struct {
 	opaque_handle *C.void
 	config        IndexConfig
@@ -407,6 +408,12 @@ func (index *Index) Destroy() error {
 	index.opaque_handle = nil
 	index.config = IndexConfig{}
 	return nil
+}
+
+// Close implements io.Closer interface and calls Destroy() to free resources.
+// This provides idiomatic Go resource cleanup that can be used with defer statements.
+func (index *Index) Close() error {
+	return index.Destroy()
 }
 
 // Reserve reserves memory for a specified number of incoming vectors.
