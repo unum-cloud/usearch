@@ -111,6 +111,25 @@ func (a Quantization) String() string {
 	}
 }
 
+func (a Quantization) CValue() C.usearch_scalar_kind_t {
+	switch a {
+	case F16:
+		return C.usearch_scalar_f16_k
+	case F32:
+		return C.usearch_scalar_f32_k
+	case F64:
+		return C.usearch_scalar_f64_k
+	case I8:
+		return C.usearch_scalar_i8_k
+	case B1:
+		return C.usearch_scalar_b1_k
+	case BF16:
+		return C.usearch_scalar_bf16_k
+	default:
+		return C.usearch_scalar_unknown_k
+	}
+}
+
 // IndexConfig represents the configuration options for initializing a USearch index.
 type IndexConfig struct {
 	Quantization    Quantization // The scalar kind used for quantization of vector data during indexing.
@@ -161,20 +180,7 @@ func NewIndex(conf IndexConfig) (index *Index, err error) {
 	options.metric_kind = conf.Metric.CValue()
 
 	// Map the quantization method
-	switch conf.Quantization {
-	case F16:
-		options.quantization = C.usearch_scalar_f16_k
-	case F32:
-		options.quantization = C.usearch_scalar_f32_k
-	case F64:
-		options.quantization = C.usearch_scalar_f64_k
-	case I8:
-		options.quantization = C.usearch_scalar_i8_k
-	case B1:
-		options.quantization = C.usearch_scalar_b1_k
-	default:
-		options.quantization = C.usearch_scalar_unknown_k
-	}
+	options.quantization = conf.Quantization.CValue()
 
 	var errorMessage *C.char
 	ptr := C.usearch_init(&options, (*C.usearch_error_t)(&errorMessage))
@@ -361,6 +367,20 @@ func (index *Index) Add(key Key, vec []float32) error {
 	return nil
 }
 
+// Add adds a vector with a specified key to the index.
+func (index *Index) AddWithPointer(key Key, vec unsafe.Pointer) error {
+	if index.opaque_handle == nil {
+		panic("Index is uninitialized")
+	}
+
+	var errorMessage *C.char
+	C.usearch_add((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), (C.usearch_key_t)(key), vec, index.config.Quantization.CValue(), (*C.usearch_error_t)(&errorMessage))
+	if errorMessage != nil {
+		return errors.New(C.GoString(errorMessage))
+	}
+	return nil
+}
+
 // Remove removes the vector associated with the given key from the index.
 func (index *Index) Remove(key Key) error {
 	if index.opaque_handle == nil {
@@ -428,6 +448,17 @@ func Distance(vec1 []float32, vec2 []float32, dims uint, metric Metric) (float32
 	return float32(dist), nil
 }
 
+// Distance computes the distance between two vectors
+func DistanceWithPointer(vec1 unsafe.Pointer, vec2 unsafe.Pointer, dims uint, metric Metric, quantization Quantization) (float32, error) {
+
+	var errorMessage *C.char
+	dist := C.usearch_distance(vec1, vec2, quantization.CValue(), C.size_t(dims), metric.CValue(), (*C.usearch_error_t)(&errorMessage))
+	if errorMessage != nil {
+		return 0, errors.New(C.GoString(errorMessage))
+	}
+	return float32(dist), nil
+}
+
 // Search performs k-Approximate Nearest Neighbors Search for the closest vectors to the query vector.
 func (index *Index) Search(query []float32, limit uint) (keys []Key, distances []float32, err error) {
 	if index.opaque_handle == nil {
@@ -441,6 +472,25 @@ func (index *Index) Search(query []float32, limit uint) (keys []Key, distances [
 	distances = make([]float32, limit)
 	var errorMessage *C.char
 	count := uint(C.usearch_search((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), unsafe.Pointer(&query[0]), C.usearch_scalar_f32_k, (C.size_t)(limit), (*C.usearch_key_t)(&keys[0]), (*C.usearch_distance_t)(&distances[0]), (*C.usearch_error_t)(&errorMessage)))
+	if errorMessage != nil {
+		return nil, nil, errors.New(C.GoString(errorMessage))
+	}
+
+	keys = keys[:count]
+	distances = distances[:count]
+	return keys, distances, nil
+}
+
+// Search performs k-Approximate Nearest Neighbors Search for the closest vectors to the query vector.
+func (index *Index) SearchWithPointer(query unsafe.Pointer, limit uint) (keys []Key, distances []float32, err error) {
+	if index.opaque_handle == nil {
+		panic("Index is uninitialized")
+	}
+
+	keys = make([]Key, limit)
+	distances = make([]float32, limit)
+	var errorMessage *C.char
+	count := uint(C.usearch_search((C.usearch_index_t)(unsafe.Pointer(index.opaque_handle)), query, index.config.Quantization.CValue(), (C.size_t)(limit), (*C.usearch_key_t)(&keys[0]), (*C.usearch_distance_t)(&distances[0]), (*C.usearch_error_t)(&errorMessage)))
 	if errorMessage != nil {
 		return nil, nil, errors.New(C.GoString(errorMessage))
 	}
@@ -466,6 +516,26 @@ func ExactSearch(dataset []float32, queries []float32, dataset_size uint, querie
 	var errorMessage *C.char
 	C.usearch_exact_search(unsafe.Pointer(&dataset[0]), C.size_t(dataset_size), C.size_t(dataset_stride), unsafe.Pointer(&queries[0]), C.size_t(queries_size), C.size_t(queries_stride),
 		C.usearch_scalar_f32_k, C.size_t(dims), metric.CValue(), C.size_t(count), C.size_t(threads),
+		(*C.usearch_key_t)(&keys[0]), C.size_t(keys_stride), (*C.usearch_distance_t)(&distances[0]), C.size_t(distances_stride), (*C.usearch_error_t)(&errorMessage))
+	if errorMessage != nil {
+		return nil, nil, errors.New(C.GoString(errorMessage))
+	}
+
+	keys = keys[:count]
+	distances = distances[:count]
+	return keys, distances, nil
+}
+
+// ExactSearch is a multithreaded exact nearest neighbors search
+func ExactSearchWithPointer(dataset unsafe.Pointer, queries unsafe.Pointer, dataset_size uint, queries_size uint,
+	dataset_stride uint, queries_stride uint, dims uint, metric Metric, quantization Quantization,
+	count uint, threads uint, keys_stride uint, distances_stride uint) (keys []Key, distances []float32, err error) {
+
+	keys = make([]Key, count)
+	distances = make([]float32, count)
+	var errorMessage *C.char
+	C.usearch_exact_search(dataset, C.size_t(dataset_size), C.size_t(dataset_stride), queries, C.size_t(queries_size), C.size_t(queries_stride),
+		quantization.CValue(), C.size_t(dims), metric.CValue(), C.size_t(count), C.size_t(threads),
 		(*C.usearch_key_t)(&keys[0]), C.size_t(keys_stride), (*C.usearch_distance_t)(&distances[0]), C.size_t(distances_stride), (*C.usearch_error_t)(&errorMessage))
 	if errorMessage != nil {
 		return nil, nil, errors.New(C.GoString(errorMessage))
