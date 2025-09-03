@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"sync"
 	"unsafe"
 )
 
@@ -215,7 +214,6 @@ func DefaultConfig(dimensions uint) IndexConfig {
 type Index struct {
 	handle C.usearch_index_t
 	config IndexConfig
-	mu     sync.Mutex
 }
 
 // NewIndex creates a new approximate nearest neighbor index with the specified configuration.
@@ -335,7 +333,8 @@ func (index *Index) ChangeExpansionSearch(val uint) error {
 	return nil
 }
 
-// ChangeThreadsAdd sets the threads limit for add
+// ChangeThreadsAdd sets the maximum number of CPU threads used by the index
+// during add/build operations. This controls internal parallelism for indexing.
 func (index *Index) ChangeThreadsAdd(val uint) error {
 	var errorMessage *C.char
 	C.usearch_change_threads_add(index.handle, C.size_t(val), (*C.usearch_error_t)(&errorMessage))
@@ -345,7 +344,8 @@ func (index *Index) ChangeThreadsAdd(val uint) error {
 	return nil
 }
 
-// ChangeThreadsSearch sets the threads limit for search
+// ChangeThreadsSearch sets the maximum number of CPU threads used by the index
+// during search operations. This controls internal parallelism for queries.
 func (index *Index) ChangeThreadsSearch(val uint) error {
 	var errorMessage *C.char
 	C.usearch_change_threads_search(index.handle, C.size_t(val), (*C.usearch_error_t)(&errorMessage))
