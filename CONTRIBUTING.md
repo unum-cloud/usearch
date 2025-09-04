@@ -397,6 +397,15 @@ cp c/usearch.h golang/                   # to make the header available to Go
 cd golang && LD_LIBRARY_PATH=. go test -v ; cd ..
 ```
 
+For static checks:
+
+```sh
+cd golang
+go vet ./...
+staticcheck ./...   # if installed
+golangci-lint run   # if installed
+```
+
 ## Java
 
 USearch provides Java bindings as a fat-JAR published with prebuilt JNI libraries via GitHub releases. Installation via Maven Central is deprecated; prefer downloading the fat-JAR from the latest GitHub release. The compilation settings are controlled by `build.gradle` and are independent from CMake used for C/C++ builds.

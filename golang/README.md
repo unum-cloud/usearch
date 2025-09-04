@@ -64,8 +64,10 @@ func main() {
    	}
    	defer index.Destroy()
 
-   	// Add to Index
+   	// Reserve capacity and configure internal threading
    	err = index.Reserve(uint(vectorsCount))
+   	_ = index.ChangeThreadsAdd(uint(runtime.NumCPU()))
+   	_ = index.ChangeThreadsSearch(uint(runtime.NumCPU()))
    	for i := 0; i < vectorsCount; i++ {
    		err = index.Add(usearch.Key(i), []float32{float32(i), float32(i + 1), float32(i + 2)})
       	if err != nil {
@@ -81,6 +83,10 @@ func main() {
    	fmt.Println(keys, distances)
 }
 ```
+
+Notes:
+- Always call `Reserve(capacity)` before the first write.
+- Prefer single-caller writes with internal parallelism via `ChangeThreadsAdd` and internal parallel searches via `ChangeThreadsSearch`, instead of calling `Add` concurrently.
 
 3. Get USearch:
 

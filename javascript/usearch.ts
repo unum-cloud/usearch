@@ -386,8 +386,8 @@ export class Index {
    * @throws Will throw an error if `k` is not a positive integer or if the size of the vectors is not a multiple of dimensions.
    * @throws Will throw an error if `vectors` is not a valid input type (TypedArray or an array of TypedArray) or if its flattened size is not a multiple of dimensions.
    */
-  search(vectors: Vector, k: number, threads: number = 0): Matches;
-  search(vectors: Matrix, k: number, threads: number = 0): BatchMatches;
+  search(vectors: Vector, k: number, threads: number): Matches;
+  search(vectors: Matrix, k: number, threads: number): BatchMatches;
   search(vectors: VectorOrMatrix, k: number, threads: number = 0): Matches | BatchMatches {
     if ((!Number.isNaN(k) && typeof k !== "number") || k <= 0) {
       throw new Error(
